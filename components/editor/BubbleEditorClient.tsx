@@ -1,6 +1,9 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { BubbleAsset, BubbleSlot, Insets, Markers, PlatformMode, PreviewConfig, Range, StretchPoint } from "./types";
-import { downloadNinePatch, loadNinePatchDataUrl, loadNinePatchFile, mapContentRect, mapStretchRect, renderNinePatch } from "./ninepatch";
+import Link from "next/link";
+import type { BubbleAsset, BubbleSlot, Insets, Markers, PlatformMode, PreviewConfig, Range, StretchPoint } from "@/lib/theme/types";
+import { downloadNinePatch, loadNinePatchDataUrl, loadNinePatchFile, mapContentRect, mapStretchRect, renderNinePatch } from "@/lib/theme/android/ninepatch";
 
 type MarkerSide = keyof Markers;
 type PreviewSizeKey = keyof Pick<PreviewConfig, "maxBubbleWidth" | "minBubbleWidth" | "minBubbleHeight">;
@@ -37,8 +40,8 @@ const initialConfig: PreviewConfig = {
   maxBubbleWidth: previewSizeLimits.maxBubbleWidth.initial,
   minBubbleWidth: previewSizeLimits.minBubbleWidth.initial,
   minBubbleHeight: previewSizeLimits.minBubbleHeight.initial,
-  meMessage: "아 ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ\n나인패치 늘어나는지 테스트",
-  youMessage: "상대 말풍선도 따로 확인",
+  meMessage: "내 말풍선 미리보기\n나인패치 늘어남 확인",
+  youMessage: "상대 말풍선 미리보기",
   showContent: false,
   showStretch: false,
   iosInsets: {
@@ -52,6 +55,7 @@ const initialConfig: PreviewConfig = {
 };
 
 const storageKey = "kakaotalk-theme-maker:v1";
+const editorHandoffKey = "kakaotalk-theme-maker:editor-handoff:v1";
 
 type SavedAsset = {
   name: string;
@@ -63,6 +67,18 @@ type SavedState = {
   activeSlot: BubbleSlot;
   config: PreviewConfig;
   assets: Partial<Record<BubbleSlot, SavedAsset>>;
+};
+
+type EditorHandoff = {
+  slot: BubbleSlot;
+  platform: PlatformMode;
+  name: string;
+  path: string;
+  dataUrl: string;
+  markers?: Markers;
+  insets?: Insets;
+  stretch?: StretchPoint;
+  createdAt: number;
 };
 
 function App() {
@@ -105,6 +121,39 @@ function App() {
 
   useEffect(() => {
     if (!restored) return;
+    let cancelled = false;
+    async function consumeHandoff() {
+      const handoff = readEditorHandoff();
+      if (!handoff) return;
+      try {
+        const asset = await loadNinePatchDataUrl(handoff.dataUrl, handoff.name, handoff.slot);
+        if (cancelled) return;
+        setAssets((current) => ({
+          ...current,
+          [handoff.slot]: handoff.markers ? { ...asset, markers: handoff.markers } : asset,
+        }));
+        setActiveSlot(handoff.slot);
+        setConfig((current) =>
+          sanitizePreviewConfig({
+            ...current,
+            platform: handoff.platform,
+            iosInsets: handoff.insets ? { ...current.iosInsets, [handoff.slot]: handoff.insets } : current.iosInsets,
+            iosStretch: handoff.stretch ? { ...current.iosStretch, [handoff.slot]: handoff.stretch } : current.iosStretch,
+          }),
+        );
+        localStorage.removeItem(editorHandoffKey);
+      } catch {
+        localStorage.removeItem(editorHandoffKey);
+      }
+    }
+    void consumeHandoff();
+    return () => {
+      cancelled = true;
+    };
+  }, [restored]);
+
+  useEffect(() => {
+    if (!restored) return;
     writeSavedState({ activeSlot, config: sanitizePreviewConfig(config), assets });
   }, [activeSlot, assets, config, restored]);
 
@@ -123,9 +172,14 @@ function App() {
         <header className="app-header">
           <div>
             <p className="eyebrow">KakaoTalk Theme Maker</p>
-            <h1>9-Patch 말풍선 편집기</h1>
+            <h1>말풍선 에디터</h1>
           </div>
-          <div className="resolution-badge">1080 x 1920</div>
+          <div className="flex items-center gap-2">
+            <Link className="resolution-badge" href="/template">
+              템플릿으로 돌아가기
+            </Link>
+            <div className="resolution-badge">1080 x 1920</div>
+          </div>
         </header>
 
         <PlatformTabs platform={config.platform} setPlatform={(platform) => setConfig((current) => sanitizePreviewConfig({ ...current, platform }))} />
@@ -184,7 +238,7 @@ function App() {
 
 function PlatformTabs({ platform, setPlatform }: { platform: PlatformMode; setPlatform: (platform: PlatformMode) => void }) {
   return (
-    <div className="segmented platform-tabs" role="tablist" aria-label="platform mode">
+    <div className="segmented platform-tabs" role="tablist" aria-label="bubble slot">
       {(["android", "ios"] as PlatformMode[]).map((mode) => (
         <button
           key={mode}
@@ -255,8 +309,8 @@ function FileDropzone({ slot, onAsset }: { slot: BubbleSlot; onAsset: (slot: Bub
           if (file) void load(file);
         }}
       />
-      <span className="drop-title">{busy ? "불러오는 중" : `${slotLabels[slot]} PNG/.9.png 드롭`}</span>
-      <span className="drop-copy">Figma에서 export한 PNG도 가능하며, marker가 없으면 기본값으로 시작합니다.</span>
+      <span className="drop-title">{busy ? "불러오는 중..." : `${slotLabels[slot]} PNG 또는 .9.png`}</span>
+      <span className="drop-copy">Figma에서 내보낸 PNG나 기존 카카오톡 말풍선 이미지를 넣으세요.</span>
     </label>
   );
 }
@@ -264,8 +318,8 @@ function FileDropzone({ slot, onAsset }: { slot: BubbleSlot; onAsset: (slot: Bub
 function EmptyState() {
   return (
     <div className="empty-state">
-      <strong>파일을 올리면 편집 패널이 열립니다.</strong>
-      <p>먼저 `theme_chatroom_bubble_me_01_image.9.png` 하나로 시작하세요.</p>
+      <strong>편집할 말풍선 이미지를 선택하세요.</strong>
+      <p>PNG 또는 Android .9.png 파일을 사용할 수 있습니다. 템플릿 에디터에서 선택한 말풍선도 여기로 열립니다.</p>
     </div>
   );
 }
@@ -279,11 +333,7 @@ function Diagnostics({ asset }: { asset: BubbleAsset }) {
   return (
     <div className="panel diagnostics">
       <div>
-        <span className="metric-label">파일</span>
-        <strong>{asset.name}</strong>
-      </div>
-      <div>
-        <span className="metric-label">크기</span>
+        <span className="metric-label">Size</span>
         <strong>
           {asset.width} x {asset.height}
         </strong>
@@ -305,10 +355,10 @@ function MarkerEditor({ asset, onChange }: { asset: BubbleAsset; onChange: (mark
   };
   const markerMeta: Record<MarkerSide, { label: string; help: string; max: number }> = useMemo(
     () => ({
-      top: { label: "top", help: "가로 stretch", max: asset.width },
-      left: { label: "left", help: "세로 stretch", max: asset.height },
-      right: { label: "right", help: "텍스트 세로 영역", max: asset.height },
-      bottom: { label: "bottom", help: "텍스트 가로 영역", max: asset.width },
+      top: { label: "top", help: "horizontal stretch", max: asset.width },
+      left: { label: "left", help: "vertical stretch", max: asset.height },
+      right: { label: "right", help: "text vertical area", max: asset.height },
+      bottom: { label: "bottom", help: "text horizontal area", max: asset.width },
     }),
     [asset.height, asset.width],
   );
@@ -317,13 +367,13 @@ function MarkerEditor({ asset, onChange }: { asset: BubbleAsset; onChange: (mark
   return (
     <div className="panel marker-editor">
       <div className="panel-title">
-        <h2>마커 수정</h2>
-        <span>검은 1px 라인을 직접 조절합니다.</span>
+        <h2>마커 편집</h2>
+        <span>Android 1px 나인패치 마커를 수정합니다.</span>
       </div>
 
       <PatchImage asset={asset} activeMarker={activeMarker} />
 
-      <div className="marker-tabs" role="tablist" aria-label="마커 선택">
+      <div className="marker-tabs" role="tablist" aria-label="marker selector">
         {(Object.keys(markerMeta) as MarkerSide[]).map((side) => (
           <button
             key={side}
@@ -397,14 +447,14 @@ function InsetEditor({
     <div className="panel inset-editor">
       <div className="panel-title">
         <h2>iOS inset</h2>
-        <span>background stretch + text edge</span>
+        <span>배경 늘어남 기준</span>
       </div>
 
       <InsetImage asset={asset} insets={safeInsets} stretch={safeStretch} />
 
       <div className="panel-title compact-title">
-        <h2>background stretch</h2>
-        <span>CSS image 2 values</span>
+        <h2>배경 stretch</h2>
+        <span>CSS 이미지 뒤 2개 값</span>
       </div>
       <div className="inset-grid">
         <StretchPointControl label="x" value={safeStretch.x} max={Math.max(0, source.width - 1)} onChange={(value) => setStretch("x", value)} />
@@ -449,7 +499,7 @@ function IosCssPreview({ asset, insets, stretch }: { asset: BubbleAsset; insets:
       </div>
       <div className="scale-table" aria-label="iOS scale converted values">
         <div>
-          <span>기준</span>
+          <span>Source</span>
           <strong>{scaleValues.sourceScale}x</strong>
         </div>
         <div>
@@ -700,7 +750,7 @@ function PreviewControls({
             setConfig((current) => ({ ...current, showContent }));
           }}
         />
-        content 가이드
+        content 영역
       </label>
       <label className="toggle">
         <input
@@ -711,7 +761,7 @@ function PreviewControls({
             setConfig((current) => ({ ...current, showStretch }));
           }}
         />
-        stretch 가이드
+        stretch 영역
       </label>
     </div>
   );
@@ -753,8 +803,8 @@ function drawChatPreview(
 ) {
   const safeConfig = sanitizePreviewConfig(config);
   const rawMessages = [
-    { asset: you, mine: false, text: normalizePreviewText(safeConfig.youMessage, "you message") },
-    { asset: me, mine: true, text: normalizePreviewText(safeConfig.meMessage, "my message") },
+    { asset: you, mine: false, text: normalizePreviewText(safeConfig.youMessage, "상대 메시지") },
+    { asset: me, mine: true, text: normalizePreviewText(safeConfig.meMessage, "내 메시지") },
   ];
   const messages = rawMessages.map((message) => ({
     ...message,
@@ -780,7 +830,7 @@ function drawChatPreview(
   ctx.fillRect(0, 0, previewCanvasWidth, 134);
   ctx.fillStyle = "#14343a";
   ctx.font = "700 38px Segoe UI, sans-serif";
-  ctx.fillText("9-Patch Preview", 54, 84);
+  ctx.fillText("말풍선 미리보기", 54, 84);
   ctx.fillStyle = "#6c7b80";
   ctx.font = "24px Segoe UI, sans-serif";
   ctx.fillText("xxhdpi 1080 x 1920", 760, 84);
@@ -842,12 +892,12 @@ function drawBubble(
     ctx.stroke();
   }
 
-  const content = asset
+  const contentRect = asset
     ? config.platform === "ios"
       ? mapIosContentRect(config.iosInsets[asset.slot], getIosSourceCanvas(asset).width, getIosSourceCanvas(asset).height, x, y, width, height)
       : mapContentRect(asset, x, y, width, height)
     : { x: x + 28, y: y + 20, width: width - 56, height: height - 40 };
-  drawText(ctx, text, content.x + 12, content.y + 10, Math.max(24, content.width - 24), Math.max(24, content.height - 20));
+  drawText(ctx, text, contentRect.x + 12, contentRect.y + 10, Math.max(24, contentRect.width - 24), Math.max(24, contentRect.height - 20));
 }
 
 function drawText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, maxHeight: number) {
@@ -1310,6 +1360,20 @@ function readSavedState(): SavedState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SavedState;
     if (parsed.activeSlot !== "me" && parsed.activeSlot !== "you") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function readEditorHandoff(): EditorHandoff | null {
+  try {
+    const raw = localStorage.getItem(editorHandoffKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as EditorHandoff;
+    if (parsed.slot !== "me" && parsed.slot !== "you") return null;
+    if (parsed.platform !== "android" && parsed.platform !== "ios") return null;
+    if (!parsed.dataUrl || !parsed.name) return null;
     return parsed;
   } catch {
     return null;

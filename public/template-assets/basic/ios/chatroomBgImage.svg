@@ -1,0 +1,19 @@
+<svg width="1170" height="2532" viewBox="0 0 1170 2532" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="iosChat" x1="0" y1="0" x2="1170" y2="2532" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EFF6FF"/>
+      <stop offset="1" stop-color="#E6F5F1"/>
+    </linearGradient>
+  </defs>
+  <rect width="1170" height="2532" fill="url(#iosChat)"/>
+  <g opacity="0.45" stroke="#D6E7F4" stroke-width="4">
+    <path d="M0 320H1170"/>
+    <path d="M0 820H1170"/>
+    <path d="M0 1320H1170"/>
+    <path d="M0 1820H1170"/>
+    <path d="M0 2320H1170"/>
+    <path d="M220 0V2532"/>
+    <path d="M585 0V2532"/>
+    <path d="M950 0V2532"/>
+  </g>
+</svg>

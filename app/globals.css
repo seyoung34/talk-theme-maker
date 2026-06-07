@@ -1,15 +1,17 @@
+@import "tailwindcss";
+
 :root {
-  --ink: #14343a;
-  --muted: #6d7d82;
-  --paper: #f6fbfc;
-  --panel: rgba(255, 255, 255, 0.86);
-  --line: #cfe0e4;
-  --deep: #006b7a;
-  --sea: #00afc7;
-  --sand: #ffe27a;
-  --coral: #ff7448;
-  --bad: #d94b5d;
-  --good: #1f8f62;
+  --ink: #111827;
+  --muted: #6b7280;
+  --paper: #f3f5f8;
+  --panel: rgba(255, 255, 255, 0.94);
+  --line: #d9dee7;
+  --deep: #0f172a;
+  --sea: #2563eb;
+  --sand: #d4ff3f;
+  --coral: #ef4444;
+  --bad: #dc2626;
+  --good: #059669;
   color: var(--ink);
   font-family: "Segoe UI", "Noto Sans KR", sans-serif;
 }
@@ -22,9 +24,8 @@ body {
   margin: 0;
   min-width: 360px;
   background:
-    radial-gradient(circle at 10% 12%, rgba(255, 226, 122, 0.38), transparent 26rem),
-    radial-gradient(circle at 85% 82%, rgba(0, 175, 199, 0.22), transparent 28rem),
-    linear-gradient(140deg, #eefcff 0%, #fbfdfd 44%, #fff6c7 100%);
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 28%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
 button,

@@ -1,4 +1,4 @@
-import type { BubbleAsset, BubbleSlot, InvalidPixel, Markers, Range } from "./types";
+import type { BubbleAsset, BubbleSlot, InvalidPixel, Markers, Range } from "@/lib/theme/types";
 
 const transparent = [0, 0, 0, 0] as const;
 const markerBlack = [0, 0, 0, 255] as const;
