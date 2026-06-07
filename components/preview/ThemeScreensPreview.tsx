@@ -370,7 +370,7 @@ function PhoneFrame({
 }) {
   return (
     <div
-      className={`mx-auto aspect-[9/16] h-full w-full max-w-[360px] overflow-hidden rounded-[36px] border bg-[#f8fdff] shadow-[0_28px_60px_rgba(15,23,42,0.18)] ${selected ? "border-[#60a5fa]" : "border-[#d7ddd8]"}`}
+      className={`mx-auto aspect-[1080/2340] h-full w-full max-w-[310px] overflow-hidden rounded-[32px] border bg-[#f8fdff] shadow-[0_22px_48px_rgba(15,23,42,0.16)] ${selected ? "border-[#60a5fa]" : "border-[#d7ddd8]"}`}
       role="button"
       tabIndex={0}
       onClick={onSelect}

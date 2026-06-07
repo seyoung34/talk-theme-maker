@@ -18,7 +18,7 @@ type Hotspot = {
 };
 
 const previewCanvasWidth = 1080;
-const previewCanvasHeight = 1920;
+const previewCanvasHeight = 2340;
 const headerHeight = 144;
 const inputBarHeightRatio = 86 / 1600;
 const inputBarHeight = Math.round(previewCanvasHeight * inputBarHeightRatio);
@@ -152,7 +152,7 @@ export function ChatroomPreview({
   const sendSlot = slotByRole.chat_send_button_color;
 
   return (
-    <div className="relative aspect-[9/16] h-full w-full max-w-[360px] overflow-hidden rounded-[36px] border border-[#d7ddd8] bg-white shadow-[0_28px_60px_rgba(15,23,42,0.18)]">
+    <div className="relative aspect-[1080/2340] h-full w-full max-w-[310px] overflow-hidden rounded-[32px] border border-[#d7ddd8] bg-white shadow-[0_22px_48px_rgba(15,23,42,0.16)]">
       {backgroundSlot ? (
         <button
           type="button"

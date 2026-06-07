@@ -28,13 +28,13 @@ export function ProjectGroupRail({
   onSelectSlot: (slot: ThemeAssetSlot) => void;
 }) {
   return (
-    <aside className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 rounded-[20px] border border-[#e5e7eb] bg-[#f8fafc] p-3">
+    <aside className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-3">
       <div className="grid gap-2">
         {groups.map((group) => (
           <button
             key={group}
             type="button"
-            className={`rounded-[14px] border px-3 py-2.5 text-left text-sm font-semibold transition ${group === activeGroup ? "border-[#bfdbfe] bg-white text-[#0f172a] shadow-sm" : "border-transparent bg-transparent text-[#6b7280] hover:border-[#e5e7eb] hover:bg-white hover:text-[#111827]"}`}
+            className={`rounded-lg border px-3 py-2.5 text-left text-sm font-semibold transition ${group === activeGroup ? "border-[#bfdbfe] bg-white text-[#0f172a] shadow-sm" : "border-transparent bg-transparent text-[#6b7280] hover:border-[#e5e7eb] hover:bg-white hover:text-[#111827]"}`}
             onClick={() => onSelectGroup(group)}
           >
             {groupLabels[group]}
@@ -47,7 +47,7 @@ export function ProjectGroupRail({
           <button
             key={slot.id}
             type="button"
-            className={`rounded-[16px] border px-3 py-3 text-left transition ${selectedSlotId === slot.id ? "border-[#93c5fd] bg-[#eff6ff] shadow-sm" : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1] hover:bg-[#fcfcfd]"}`}
+            className={`rounded-xl border px-3 py-3 text-left transition ${selectedSlotId === slot.id ? "border-[#93c5fd] bg-[#eff6ff] shadow-sm" : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1] hover:bg-[#fcfcfd]"}`}
             onClick={() => onSelectSlot(slot)}
           >
             <span className="block truncate text-[14px] font-semibold text-[#111827]">{slot.label}</span>

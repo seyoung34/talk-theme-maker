@@ -5,6 +5,10 @@ export type ThemeScreen = "chatroom" | "friends" | "tabs" | "profile";
 export type ThemeSection = "main" | "tabs" | "chatroom";
 export type ThemeSlotGroup = "background" | "header" | "list" | "bar" | "icons" | "bubbles" | "input";
 export type ThemeSlotKind = "image" | "ninepatch" | "color";
+export type ThemeCandidateSourceType = "template-asset" | "template-color" | "session-upload";
+export type ThemeDiagnosticLevel = "info" | "warning" | "error";
+export type ThemeExportMappingType = "file" | "css-image" | "css-color" | "config";
+export type ThemeExportTransform = "copy" | "render-9patch" | "resize" | "write-css";
 
 export type ThemeResourceRole =
   | "chat_background"
@@ -97,4 +101,20 @@ export type ThemeProjectSummary = {
   screens: ThemeScreen[];
   resourceCount: number;
   diagnosticsCount: number;
+};
+
+export type ThemeExportMapping = {
+  type: ThemeExportMappingType;
+  target: string;
+  scaleTargets?: string[];
+  transform?: ThemeExportTransform;
+};
+
+export type ThemeDiagnostic = {
+  level: ThemeDiagnosticLevel;
+  slotId?: string;
+  code: string;
+  message: string;
+  fixHint?: string;
+  filePath?: string;
 };

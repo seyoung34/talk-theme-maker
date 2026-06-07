@@ -88,7 +88,7 @@ export function ProjectQuickEditPanel({
           onSelectCandidate(slot, candidate.id);
         }}
       />
-      <section className="grid min-h-0 content-start gap-5 overflow-auto rounded-[24px] border border-[#e5e7eb] bg-white p-6 shadow-[0_18px_40px_rgba(15,23,42,0.05)]">
+      <section className="grid min-h-0 content-start gap-4 overflow-auto rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
         {/* <div className="grid gap-1">
           <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#94a3b8]">
             {slot.kind === "color" ? "Color token" : slot.kind === "ninepatch" ? "Nine-patch asset" : "Image asset"}
@@ -113,7 +113,7 @@ export function ProjectQuickEditPanel({
               onChange={(event) => onUpload(slot, event.currentTarget.files)}
             />
             <div
-              className={`grid gap-4 rounded-[18px] border-2 border-dashed p-4 transition ${dragActive ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#d7dee8] bg-[#f8fafc]"}`}
+              className={`grid gap-4 rounded-xl border-2 border-dashed p-4 transition ${dragActive ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#d7dee8] bg-[#f8fafc]"}`}
               onDragEnter={(event) => {
                 event.preventDefault();
                 setDragActive(true);
@@ -134,15 +134,15 @@ export function ProjectQuickEditPanel({
                 <p className="mt-1 text-[12px] font-medium text-[#6b7280]">파일을 여기로 드래그하거나 버튼으로 선택합니다.</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1e293b]" onClick={() => fileInputRefs.current[slot.id]?.click()}>
+                <button type="button" className="rounded-lg bg-[#0f172a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1e293b]" onClick={() => fileInputRefs.current[slot.id]?.click()}>
                   이미지 선택
                 </button>
-                <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-3 text-sm font-semibold text-[#374151] transition enabled:hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-45" disabled={uploadEntries.length === 0} onClick={() => onClear(slot)}>
+                <button type="button" className="rounded-lg border border-[#d1d5db] bg-white px-4 py-3 text-sm font-semibold text-[#374151] transition enabled:hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-45" disabled={uploadEntries.length === 0} onClick={() => onClear(slot)}>
                   업로드 비우기
                 </button>
                 {slot.editableInBubbleEditor && (
-                  <button type="button" className="rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-sm font-semibold text-[#1d4ed8] transition enabled:hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-45" disabled={!hasImage} onClick={onOpenAdvanced}>
-                    고급 말풍선 편집
+                  <button type="button" className="rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-sm font-semibold text-[#1d4ed8] transition enabled:hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-45" disabled={!hasImage} onClick={onOpenAdvanced}>
+                    정밀 조정
                   </button>
                 )}
               </div>
@@ -180,8 +180,14 @@ function CandidatePicker({
   onToggle: () => void;
   onApplyCandidate: (candidate: SlotCandidate) => void;
 }) {
+  const groups = [
+    { key: "default" as const, label: "기본값", items: candidates.filter((candidate) => candidate.source === "default") },
+    { key: "upload" as const, label: "내 업로드", items: candidates.filter((candidate) => candidate.source === "upload") },
+    { key: "creator" as const, label: "제작자 후보", items: candidates.filter((candidate) => candidate.source === "creator") },
+  ].filter((group) => group.items.length > 0);
+
   return (
-    <section className="overflow-hidden rounded-[20px] border border-[#e5e7eb] bg-white px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+    <section className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 className="mt-0.5 text-base font-semibold text-[#0f172a]">{slot.label}</h2>
@@ -191,26 +197,52 @@ function CandidatePicker({
         </button>
       </div>
       {isOpen && (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(148px,1fr))] gap-2.5">
-          {candidates.map((candidate) => (
-            <button
-              key={candidate.id}
-              type="button"
-              className={`grid h-[88px] content-between rounded-[14px] border px-3 py-3 text-left transition ${
-                candidate.selected ? "border-[#bfdbfe] bg-[#eff6ff]" : candidate.active ? "border-[#cbd5e1] bg-white" : "border-[#e5e7eb] bg-[#f8fafc]"
-              } hover:border-[#cbd5e1] hover:bg-white`}
-              onClick={() => {
-                onApplyCandidate(candidate);
-              }}
-            >
-              <span className="text-[13px] font-semibold text-[#111827]">{candidate.title}</span>
-              <span className="line-clamp-2 text-[11px] font-medium leading-[1.3] text-[#6b7280]">{candidate.status}</span>
-            </button>
+        <div className="grid gap-3">
+          {groups.map((group) => (
+            <div key={group.key} className="grid gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-[#64748b]">{group.label}</span>
+                <span className="text-[11px] font-medium text-[#94a3b8]">{group.items.length}</span>
+              </div>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-2">
+                {group.items.map((candidate) => (
+                  <button
+                    key={candidate.id}
+                    type="button"
+                    className={`grid min-h-[92px] grid-rows-[34px_1fr] gap-2 rounded-lg border px-2.5 py-2.5 text-left transition ${
+                      candidate.selected ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]" : candidate.active ? "border-[#cbd5e1] bg-white" : "border-[#e5e7eb] bg-[#f8fafc]"
+                    } hover:border-[#cbd5e1] hover:bg-white`}
+                    onClick={() => {
+                      onApplyCandidate(candidate);
+                    }}
+                  >
+                    <span className="flex items-center gap-2">
+                      <CandidateSwatch candidate={candidate} />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[12px] font-semibold text-[#111827]">{candidate.title}</span>
+                        {candidate.selected ? <span className="text-[10px] font-semibold text-[#2563eb]">사용 중</span> : null}
+                      </span>
+                    </span>
+                    <span className="line-clamp-2 text-[11px] font-medium leading-[1.3] text-[#6b7280]">{candidate.status}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
     </section>
   );
+}
+
+function CandidateSwatch({ candidate }: { candidate: SlotCandidate }) {
+  if (candidate.colorValue) {
+    return <span className="h-8 w-8 shrink-0 rounded-md border border-[#d1d5db]" style={{ backgroundColor: candidate.colorValue }} />;
+  }
+  if (candidate.previewUrl) {
+    return <span className="h-8 w-8 shrink-0 rounded-md border border-[#d1d5db] bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${candidate.previewUrl})` }} />;
+  }
+  return <span className="h-8 w-8 shrink-0 rounded-md border border-[#d1d5db] bg-[#e5e7eb]" />;
 }
 
 function ColorEditor({
@@ -223,7 +255,7 @@ function ColorEditor({
   onChange: (slot: ThemeAssetSlot, value: string) => void;
 }) {
   return (
-    <div className="grid gap-4 rounded-[18px] border border-[#e5e7eb] bg-[#f8fafc] p-4">
+    <div className="grid gap-4 rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
       <div className="flex items-center gap-4">
         <input
           type="color"
@@ -244,7 +276,7 @@ function ColorEditor({
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[16px] border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3">
+    <div className="rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3">
       <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#94a3b8]">{label}</span>
       <strong className="mt-1 block break-all text-sm font-semibold text-[#111827]">{value}</strong>
     </div>

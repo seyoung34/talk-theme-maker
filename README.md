@@ -46,3 +46,16 @@ npm run build
 4. Check the 1080 x 1920 chat preview.
 5. Download the corrected `.9.png`.
 6. Replace the matching file in the KakaoTalk theme project manually.
+
+## Development notes
+
+### Preventing broken Korean text
+
+- This repo now pins text files to `UTF-8` and `LF` through `.editorconfig`, `.gitattributes`, and `.vscode/settings.json`.
+- Run `npm run check:text` before or after larger edits. It fails on UTF-8 BOM and replacement characters (`�`).
+- If a file is already broken, fix the original text first instead of re-saving the garbled string with a different encoding.
+
+### In-app browser verification
+
+- The recent `node_repl kernel exited unexpectedly` and `windows sandbox failed: spawn setup refresh` messages come from the Codex desktop browser automation layer, not from this Next.js app.
+- Treat those failures as tooling/runtime issues. Use `npm run build`, local HTTP checks, or manual browser verification as the fallback verification path when the Browser plugin is unavailable.

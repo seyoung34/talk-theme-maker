@@ -29,7 +29,7 @@ export function ProjectSectionRail({
   const completion = getCompletion(slots, uploads, colors, selections, templateId, template);
 
   return (
-    <aside className={`relative grid min-h-0 shrink-0 content-start gap-3  rounded-[24px] border border-[#d9dee7] bg-white/88 p-3 mr-4 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur-sm transition-all ${isOpen ? "w-[188px]" : "w-[76px]"}`}>
+    <aside className={`relative mr-4 grid min-h-0 shrink-0 content-start gap-3 rounded-2xl border border-[#d9dee7] bg-white/92 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm transition-all ${isOpen ? "w-[168px]" : "w-[70px]"}`}>
       <button
         type="button"
         className="absolute right-[-1px] top-1/2 z-20 grid h-16 w-7 -translate-y-1/2 translate-x-full place-items-center rounded-r-[12px] border border-l-0 border-[#d9dee7] bg-white/88 text-[#111827] shadow-[6px_10px_20px_rgba(15,23,42,0.08)] backdrop-blur-sm transition hover:bg-white"
@@ -39,13 +39,18 @@ export function ProjectSectionRail({
         {isOpen ? <ChevronLeft className="w-4 h-4" strokeWidth={2.2} /> : <ChevronRight className="w-4 h-4" strokeWidth={2.2} />}
       </button>
 
-      <div className="hidden">
-        <strong className="block mt-2 text-3xl font-black">
-          {completion.ready}/{completion.total}
-        </strong>
-      </div>
+      {isOpen ? (
+        <div className="rounded-xl border border-[#e5e7eb] bg-[#f8fafc] px-3 py-2">
+          <div className="h-1.5 overflow-hidden rounded-full bg-[#e5e7eb]">
+            <div className="h-full rounded-full bg-[#2563eb]" style={{ width: `${completion.total > 0 ? Math.round((completion.ready / completion.total) * 100) : 0}%` }} />
+          </div>
+          <span className="mt-2 block text-xs font-semibold text-[#64748b]">
+            {completion.ready}/{completion.total} 준비
+          </span>
+        </div>
+      ) : null}
 
-      <nav className="grid gap-2 pr-1" aria-label="섹션 선택">
+      <nav className="grid gap-2 pr-1" aria-label="화면 선택">
         {sectionOrder.map((section) => {
           const sectionSlots = slots.filter((slot) => slot.section === section);
           const ready = sectionSlots.filter((slot) => isSlotReady(slot, uploads, colors, selections, templateId, template)).length;
@@ -54,13 +59,13 @@ export function ProjectSectionRail({
             <button
               key={section}
               type="button"
-              className={`rounded-[16px] border px-4 py-4 text-left transition ${activeSection === section ? "border-[#93c5fd] bg-[#eff6ff] text-[#0f172a] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]" : "border-[#e5e7eb] bg-[#fcfcfd] text-[#374151] hover:border-[#cbd5e1] hover:bg-white"}`}
+              className={`rounded-xl border px-3 py-3 text-left transition ${activeSection === section ? "border-[#93c5fd] bg-[#eff6ff] text-[#0f172a] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]" : "border-[#e5e7eb] bg-[#fcfcfd] text-[#374151] hover:border-[#cbd5e1] hover:bg-white"}`}
               onClick={() => onSelectSection(section)}
             >
               {isOpen ? (
                 <>
                   <span className="block text-[15px] font-bold tracking-[-0.01em]">{sectionLabels[section]}</span>
-                  <span className="hidden mt-1 text-xs font-bold text-[#4d5660]">
+                  <span className="mt-1 block text-xs font-semibold text-[#64748b]">
                     {ready}/{sectionSlots.length} 준비
                   </span>
                 </>

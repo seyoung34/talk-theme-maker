@@ -1,4 +1,4 @@
-import type { ThemePlatform, ThemeProjectSummary, ThemeResourceRole, ThemeScreen } from "@/lib/theme/types";
+import type { ThemeDiagnostic, ThemeExportMapping, ThemePlatform, ThemeProjectSummary, ThemeResourceRole, ThemeScreen } from "@/lib/theme/types";
 
 export type ThemeProjectFile = {
   path: string;
@@ -15,13 +15,10 @@ export type ThemeProjectResource = {
   role: ThemeResourceRole;
   screen: ThemeScreen;
   filePath?: string;
+  exportMapping?: ThemeExportMapping;
 };
 
-export type ThemeProjectDiagnostic = {
-  level: "info" | "warning" | "error";
-  message: string;
-  filePath?: string;
-};
+export type ThemeProjectDiagnostic = ThemeDiagnostic;
 
 export type ThemeProjectAnalysis = {
   summary: ThemeProjectSummary;

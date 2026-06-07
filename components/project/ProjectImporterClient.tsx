@@ -11,8 +11,6 @@ import {
   bubbleSlotFromRole,
   getCompletion,
   getInitialSlotCandidateSelections,
-  getResolvedColor,
-  getResolvedAssetUrl,
   getSectionGroups,
   getSlotFile,
   sectionLabels,
@@ -22,19 +20,26 @@ import {
   type SlotUploads,
 } from "@/components/project/projectModel";
 import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
-import type { ThemeProjectAnalysis, ThemeProjectFile, ThemeProjectResource } from "@/lib/theme/project/types";
+import { exportAndroidThemePackage } from "@/lib/theme/android/export";
+import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
+import { readTemplateStartPayload } from "@/lib/theme/project/state";
+import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
 import {
   getThemeSlots,
   getThemeTemplate,
   templateStartStorageKey,
   type ThemeAssetSlot,
-  type ThemeStartPayload,
   type ThemeTemplate,
   type ThemeTemplateId,
 } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 const editorHandoffKey = "kakaotalk-theme-maker:editor-handoff:v1";
+
+type Notice = {
+  tone: "info" | "success" | "warning" | "error";
+  message: string;
+};
 
 export default function ProjectImporterClient() {
   const router = useRouter();
@@ -48,21 +53,52 @@ export default function ProjectImporterClient() {
   const [candidateSelections, setCandidateSelections] = useState<SlotCandidateSelections>({});
   const [screenRailOpen, setScreenRailOpen] = useState(true);
   const [candidateOpen, setCandidateOpen] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
   const [bubbleInsets, setBubbleInsets] = useState<Partial<Record<string, Insets>>>({});
   const [bubbleStretch, setBubbleStretch] = useState<Partial<Record<string, StretchPoint>>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
-    const payload = readTemplateStartPayload();
+    const payload = readTemplateStartPayload(templateStartStorageKey);
     if (!payload) return;
-    setTemplateId(payload.templateId);
-    setPlatform(payload.platform);
-    setActiveSection("chatroom");
-    setActiveGroup("bubbles");
-    setSelectedSlotId(undefined);
-    setUploads({});
-    setColors({});
+
+    const loadStartedTemplate = async () => {
+      setTemplateId(payload.templateId);
+      setPlatform(payload.platform);
+      setActiveSection("chatroom");
+      setActiveGroup("bubbles");
+      setSelectedSlotId(undefined);
+      setUploads({});
+      setColors({});
+
+      if (!payload.userTemplateId) return;
+
+      try {
+        const savedTemplate = await getUserTemplate(payload.userTemplateId);
+        if (!savedTemplate) {
+          setNotice({ tone: "warning", message: "저장된 내 템플릿을 찾을 수 없어 기본 템플릿으로 시작합니다." });
+          return;
+        }
+
+        setTemplateId(savedTemplate.templateId);
+        setPlatform(savedTemplate.platform);
+        setUploads(savedTemplate.uploads);
+        setColors(savedTemplate.colors);
+        setCandidateSelections(savedTemplate.candidateSelections);
+        setBubbleMarkers(savedTemplate.bubbleEdits.markers);
+        setBubbleInsets(savedTemplate.bubbleEdits.insets);
+        setBubbleStretch(savedTemplate.bubbleEdits.stretch);
+        setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 불러왔습니다.` });
+      } catch (error) {
+        console.error(error);
+        setNotice({ tone: "error", message: "내 템플릿을 불러오는 중 오류가 발생했습니다." });
+      }
+    };
+
+    void loadStartedTemplate();
     localStorage.removeItem(templateStartStorageKey);
   }, []);
 
@@ -73,7 +109,7 @@ export default function ProjectImporterClient() {
   }, [activeTemplate, slots, templateId]);
   const groups = useMemo(() => getSectionGroups(activeSection, slots), [activeSection, slots]);
   const analysis = useMemo(
-    () => createTemplateAnalysis(activeTemplate, platform, slots, uploads, colors, candidateSelections),
+    () => createThemeProjectAnalysis(activeTemplate, platform, slots, uploads, colors, candidateSelections),
     [activeTemplate, platform, slots, uploads, colors, candidateSelections],
   );
 
@@ -181,31 +217,121 @@ export default function ProjectImporterClient() {
     router.push("/editor");
   };
 
+  const exportTheme = async () => {
+    if (platform !== "android") {
+      setNotice({ tone: "warning", message: "iOS 내보내기는 준비 중입니다. 현재는 Android 리소스 패키지만 생성할 수 있습니다." });
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      setNotice({ tone: "info", message: "Android 리소스 패키지를 생성하는 중입니다." });
+      const bubbleEditsBySlotId = Object.fromEntries(
+        slots.map((slot) => [
+          slot.id,
+          {
+            markers: bubbleMarkers[slot.id],
+            insets: bubbleInsets[slot.id],
+            stretch: bubbleStretch[slot.id],
+          },
+        ]),
+      );
+      const { blob, fileName } = await exportAndroidThemePackage({
+        analysis,
+        template: activeTemplate,
+        templateId,
+        slots,
+        uploads,
+        colors,
+        selections: candidateSelections,
+        bubbleEditsBySlotId,
+      });
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(href);
+      setNotice({ tone: "success", message: `${fileName} 파일을 생성했습니다.` });
+    } catch (error) {
+      console.error(error);
+      setNotice({ tone: "error", message: "Android 내보내기 중 오류가 발생했습니다. 콘솔 로그를 확인하세요." });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const saveCurrentTemplate = async () => {
+    const fallbackName = `${activeTemplate.name} 복사본`;
+    const name = window.prompt("내 템플릿 이름을 입력하세요.", fallbackName)?.trim();
+    if (!name) return;
+
+    try {
+      setIsSavingTemplate(true);
+      setNotice({ tone: "info", message: "현재 편집 상태를 내 템플릿으로 저장하는 중입니다." });
+      const savedTemplate = await saveUserTemplate({
+        name,
+        templateId,
+        platform,
+        uploads,
+        colors,
+        candidateSelections,
+        bubbleEdits: {
+          markers: bubbleMarkers,
+          insets: bubbleInsets,
+          stretch: bubbleStretch,
+        },
+      });
+      setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 저장했습니다.` });
+    } catch (error) {
+      console.error(error);
+      setNotice({ tone: "error", message: "내 템플릿 저장 중 오류가 발생했습니다. 브라우저 저장소 권한과 용량을 확인하세요." });
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
   return (
     <main className="h-[100dvh] overflow-hidden px-3 py-3 text-[#111827] md:px-4 md:py-4">
       <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-3 md:gap-4">
-        <header className="flex min-h-[65px] items-center justify-between gap-4 rounded-[24px] border border-[#e5e7eb] bg-white/92 px-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-          <div className="flex items-center min-w-0 gap-5">
-            <Link href="/template" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
+        <header className="relative grid min-h-[56px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-[#e5e7eb] bg-white/95 px-4 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
+
+          <div className="flex min-w-0 items-center justify-self-start gap-4">
+            <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
               &larr;
             </Link>
-            <div className="min-w-0">
-              <h1 className="truncate text-[28px] font-semibold tracking-[-0.02em] text-[#0f172a]">{activeTemplate.name}</h1>
+            <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em] text-[#0f172a]">{activeTemplate.name}</h1>
+          </div>
 
+          <div className="flex min-w-0 items-center justify-self-center gap-3 overflow-hidden">
+            <div className="hidden shrink-0 rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#475569] md:block">{platform === "android" ? "Android" : "iOS"}</div>
+            <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-[#e5e7eb]">
+              <div className="h-full rounded-full bg-[#2563eb]" style={{ width: `${completion.total > 0 ? Math.round((completion.ready / completion.total) * 100) : 0}%` }} />
             </div>
-            <div className="hidden rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-3 py-1.5 text-xs font-semibold text-[#475569] md:block">{platform === "android" ? "Android" : "iOS"}</div>
+            <span className="shrink-0 text-xs font-semibold text-[#64748b]">{completion.ready}/{completion.total} 준비</span>
+            <span className={`hidden shrink-0 text-xs font-semibold lg:inline ${analysis.diagnostics.length > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+              {analysis.diagnostics.length > 0 ? `${analysis.diagnostics.length}개 확인 필요` : "문제 없음"}
+            </span>
+            <span className="hidden min-w-0 truncate text-xs font-medium text-[#64748b] xl:block">
+              {sectionLabels[activeSection]} / {selectedSlot?.label ?? "선택된 요소 없음"}
+            </span>
           </div>
-          <div className="flex flex-wrap justify-end gap-2 shrink-0 md:gap-3">
-            <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-3 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc]" onClick={openAdvancedBubbleEditor}>
-              고급 말풍선 편집
+
+          <div className="flex min-w-0 justify-self-end shrink-0 items-center gap-2">
+            <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc]" onClick={openAdvancedBubbleEditor}>
+              정밀 조정
             </button>
-            <button type="button" className="rounded-xl bg-[#0f172a] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b]">
-              테마 만들기
+            <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60" onClick={saveCurrentTemplate} disabled={isSavingTemplate}>
+              {isSavingTemplate ? "저장 중..." : "내 템플릿으로 저장"}
+            </button>
+            <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60" onClick={exportTheme} disabled={isExporting}>
+              {isExporting ? "내보내는 중..." : platform === "android" ? "Android 리소스 내보내기" : "iOS 내보내기 준비중"}
             </button>
           </div>
+          {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
         </header>
 
-        <section className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_300px] gap-3 lg:grid-cols-[auto_minmax(0,1fr)_300px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_340px] 2xl:grid-cols-[auto_minmax(0,1fr)_380px]">
+        <section className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_300px] gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
           <ProjectSectionRail
             activeSection={activeSection}
             slots={slots}
@@ -219,7 +345,7 @@ export default function ProjectImporterClient() {
             onSelectSection={selectSection}
           />
 
-          <section className="grid min-h-0 min-w-0 grid-cols-[172px_minmax(0,1fr)] overflow-hidden rounded-[24px] border border-[#e5e7eb] bg-white/92 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+          <section className="grid min-h-0 min-w-0 grid-cols-[172px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
             <ProjectGroupRail
               groups={groups}
               activeGroup={activeGroup}
@@ -289,71 +415,24 @@ export default function ProjectImporterClient() {
   );
 }
 
-function createTemplateAnalysis(
-  template: ThemeTemplate,
-  platform: ThemePlatform,
-  slots: ThemeAssetSlot[],
-  uploads: SlotUploads,
-  colors: SlotColors,
-  selections: SlotCandidateSelections,
-): ThemeProjectAnalysis {
-  const files: ThemeProjectFile[] = [];
-  const resources: ThemeProjectResource[] = [];
-  const diagnostics = [];
+function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {
+  const noticeToneClass =
+    notice.tone === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : notice.tone === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : notice.tone === "error"
+          ? "border-rose-200 bg-rose-50 text-rose-800"
+          : "border-sky-200 bg-sky-50 text-sky-800";
 
-  for (const slot of slots) {
-    if (slot.kind === "color") {
-      resources.push({ id: slot.id, slotId: slot.id, platform, role: slot.role, screen: slot.screen });
-      if (slot.required && !getResolvedColor(slot, colors, selections, template.id, template)) {
-        diagnostics.push({ level: "warning" as const, message: `${slot.label} 값이 필요합니다.` });
-      }
-      continue;
-    }
-
-    const upload = (uploads[slot.id] ?? []).find((entry) => entry.id === selections[slot.id])?.file;
-    const sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template);
-    if (slot.path && slot.fileName) {
-      files.push({ path: slot.path, name: slot.fileName, size: upload?.size ?? 0, file: upload, sourceUrl });
-      resources.push({ id: slot.id, slotId: slot.id, platform, role: slot.role, screen: slot.screen, filePath: slot.path });
-    }
-
-    if (slot.required && !upload && !sourceUrl) {
-      diagnostics.push({ level: "warning" as const, message: `${slot.label} 이미지가 필요합니다.`, filePath: slot.path });
-    }
-  }
-
-  return {
-    summary: {
-      platform,
-      rootName: template.name,
-      screens: ["friends", "tabs", "chatroom"],
-      resourceCount: resources.length,
-      diagnosticsCount: diagnostics.length,
-    },
-    files,
-    resources,
-    diagnostics,
-    previewDefaults: {
-      chatBackground: template.defaults.chatBackground,
-      myBubble: template.defaults.myBubble,
-      friendBubble: template.defaults.friendBubble,
-      accent: template.accent,
-    },
-  };
-}
-
-function readTemplateStartPayload(): ThemeStartPayload | null {
-  try {
-    const raw = localStorage.getItem(templateStartStorageKey);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ThemeStartPayload>;
-    if ((parsed.templateId === "basic" || parsed.templateId === "spongebob") && (parsed.platform === "android" || parsed.platform === "ios")) {
-      return { templateId: parsed.templateId, platform: parsed.platform };
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  return (
+    <div className={`absolute bottom-[-34px] right-0 z-40 flex max-w-[420px] items-center gap-3 rounded-xl border px-3 py-2 text-xs font-semibold shadow-[0_10px_24px_rgba(15,23,42,0.08)] ${noticeToneClass}`}>
+      <span className="truncate">{notice.message}</span>
+      <button type="button" className="shrink-0 text-current/70 hover:text-current" onClick={onDismiss} aria-label="알림 닫기">
+        닫기
+      </button>
+    </div>
+  );
 }
 
 function slotEditFromMaps(

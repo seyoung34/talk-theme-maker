@@ -1,18 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { templateStartStorageKey, themeTemplates, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
+import { listUserTemplates, type UserTemplateSummary } from "@/lib/theme/userTemplates";
 import type { ThemePlatform } from "@/lib/theme/types";
 
 export default function TemplateGalleryClient() {
   const router = useRouter();
   const [selectedTemplateId, setSelectedTemplateId] = useState<ThemeTemplateId | null>(null);
+  const [userTemplates, setUserTemplates] = useState<UserTemplateSummary[]>([]);
   const selectedTemplate = themeTemplates.find((template) => template.id === selectedTemplateId) ?? null;
+
+  useEffect(() => {
+    let active = true;
+    listUserTemplates()
+      .then((templates) => {
+        if (active) setUserTemplates(templates);
+      })
+      .catch((error) => {
+        console.error(error);
+        if (active) setUserTemplates([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const start = (template: ThemeTemplate, platform: ThemePlatform) => {
     localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.id, platform }));
+    router.push("/edit");
+  };
+
+  const startUserTemplate = (template: UserTemplateSummary) => {
+    localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.templateId, platform: template.platform, userTemplateId: template.id }));
     router.push("/edit");
   };
 
@@ -31,6 +54,37 @@ export default function TemplateGalleryClient() {
             홈
           </Link>
         </header>
+
+        {userTemplates.length > 0 ? (
+          <section className="grid gap-4 rounded-[30px] border border-[#d7ddd8] bg-white p-5 shadow-[0_18px_60px_rgba(17,17,17,0.06)]">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#5d6670]">saved locally</p>
+                <h2 className="mt-1 text-2xl font-black">내 템플릿</h2>
+              </div>
+              <span className="text-xs font-bold text-[#5d6670]">브라우저 IndexedDB에 저장됨</span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {userTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  className="grid gap-3 rounded-[18px] border border-[#d7ddd8] bg-[#f6f7f5] p-4 text-left transition hover:border-[#111111] hover:bg-white"
+                  onClick={() => startUserTemplate(template)}
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <strong className="truncate text-lg font-black">{template.name}</strong>
+                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-black">{template.platform === "android" ? "Android" : "iOS"}</span>
+                  </span>
+                  <span className="text-xs font-bold leading-5 text-[#5d6670]">
+                    업로드 {template.uploadCount}개 · 색상 변경 {template.colorCount}개 · {formatDate(template.updatedAt)}
+                  </span>
+                  <span className="w-fit rounded-full bg-[#111111] px-4 py-2 text-xs font-black text-white">편집 계속하기</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <section className="grid gap-5 lg:grid-cols-2">
           {themeTemplates.map((template) => (
@@ -172,4 +226,13 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <strong className="mt-1 block text-sm text-[#111111]">{value}</strong>
     </div>
   );
+}
+
+function formatDate(timestamp: number) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(timestamp));
 }

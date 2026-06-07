@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "check:text": "node scripts/check-text-encoding.mjs",
     "build": "next build",
     "start": "next start"
   },

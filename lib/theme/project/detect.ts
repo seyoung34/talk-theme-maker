@@ -125,8 +125,10 @@ function collectDiagnostics(files: ThemeProjectFile[], platform: ThemePlatform):
     if (!hasPath(paths, requiredPath)) {
       diagnostics.push({
         level: "warning",
+        code: "missing-required-resource",
         message: `Missing expected ${platform} resource`,
         filePath: requiredPath,
+        fixHint: "필수 파일이 있는지 확인하고 올바른 경로로 다시 넣으세요.",
       });
     }
   }
@@ -138,7 +140,7 @@ function collectDiagnostics(files: ThemeProjectFile[], platform: ThemePlatform):
   if (platform === "android") {
     const ninePatchNames = files.filter((file) => file.name.endsWith(".9.png"));
     if (ninePatchNames.length === 0) {
-      diagnostics.push({ level: "warning", message: "No Android .9.png resources were found." });
+      diagnostics.push({ level: "warning", code: "missing-ninepatch", message: "No Android .9.png resources were found.", fixHint: "Android 말풍선이나 바 영역용 .9.png 파일을 추가하세요." });
     }
   }
 
@@ -151,10 +153,10 @@ function collectIosScaleDiagnostics(files: ThemeProjectFile[]): ThemeProjectDiag
   for (const name of imageNames) {
     const base = name.replace(/@(?:2|3)x(?=\.png$)/i, "");
     if (name.includes("@3x") && !imageNames.has(base.replace(".png", "@2x.png"))) {
-      diagnostics.push({ level: "info", message: "Missing @2x pair for @3x image", filePath: name });
+      diagnostics.push({ level: "info", code: "missing-2x-pair", message: "Missing @2x pair for @3x image", filePath: name, fixHint: "@3x에 대응하는 @2x 파일을 같이 준비하세요." });
     }
     if (name.includes("@2x") && !imageNames.has(base.replace(".png", "@3x.png"))) {
-      diagnostics.push({ level: "info", message: "Missing @3x pair for @2x image", filePath: name });
+      diagnostics.push({ level: "info", code: "missing-3x-pair", message: "Missing @3x pair for @2x image", filePath: name, fixHint: "@2x에 대응하는 @3x 파일을 같이 준비하세요." });
     }
   }
   return diagnostics;

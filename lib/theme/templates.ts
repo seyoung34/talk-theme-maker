@@ -1,6 +1,28 @@
-import type { ThemePlatform, ThemeResourceRole, ThemeScreen, ThemeSection, ThemeSlotGroup, ThemeSlotKind } from "@/lib/theme/types";
+import androidSlotsManifest from "@/lib/theme/manifest/android.slots.json";
+import iosSlotsManifest from "@/lib/theme/manifest/ios.slots.json";
+import type { ThemeCandidateSourceType, ThemeExportMapping, ThemePlatform, ThemeResourceRole, ThemeScreen, ThemeSection, ThemeSlotGroup, ThemeSlotKind } from "@/lib/theme/types";
 
 export type ThemeTemplateId = "basic" | "spongebob";
+
+export type ThemeTemplateDefaults = {
+  platform: ThemePlatform;
+  chatBackground: string;
+  myBubble: string;
+  friendBubble: string;
+  mainBackground: string;
+  mainHeader: string;
+  mainTitle: string;
+  mainBody: string;
+  tabBackground: string;
+  chatInputBackground: string;
+  chatSendButton: string;
+};
+
+export type ThemeSectionDefinition = {
+  id: ThemeSection;
+  label: string;
+  groups: ThemeSlotGroup[];
+};
 
 export type ThemeTemplate = {
   id: ThemeTemplateId;
@@ -8,32 +30,31 @@ export type ThemeTemplate = {
   description: string;
   accent: string;
   previewNote: string;
-  defaults: {
-    platform: ThemePlatform;
-    chatBackground: string;
-    myBubble: string;
-    friendBubble: string;
-    mainBackground: string;
-    mainHeader: string;
-    mainTitle: string;
-    mainBody: string;
-    tabBackground: string;
-    chatInputBackground: string;
-    chatSendButton: string;
-  };
+  thumbnail?: string;
+  supportedPlatforms: ThemePlatform[];
+  sections: ThemeSectionDefinition[];
+  defaults: ThemeTemplateDefaults;
 };
 
 export type ThemeStartPayload = {
   templateId: ThemeTemplateId;
   platform: ThemePlatform;
+  userTemplateId?: string;
 };
 
 export type ThemeSlotCandidate = {
   id: string;
   label: string;
   note?: string;
+  sourceType: ThemeCandidateSourceType;
   assetUrl?: string;
   colorValue?: string;
+  previewUrl?: string;
+  metadata?: {
+    width?: number;
+    height?: number;
+    scale?: "@2x" | "@3x";
+  };
   isDefault?: boolean;
 };
 
@@ -55,9 +76,16 @@ export type ThemeAssetSlot = {
   defaultColor?: Partial<Record<ThemeTemplateId, string>>;
   defaultAssetUrls?: Partial<Record<ThemeTemplateId, string>>;
   candidates?: Partial<Record<ThemeTemplateId, ThemeSlotCandidate[]>>;
+  export?: Partial<Record<ThemePlatform, ThemeExportMapping>>;
 };
 
 export const templateStartStorageKey = "kakaotalk-theme-maker:template-start:v1";
+
+const sharedSections: ThemeSectionDefinition[] = [
+  { id: "main", label: "메인화면", groups: ["background", "header", "list"] },
+  { id: "tabs", label: "하단 탭", groups: ["bar", "icons"] },
+  { id: "chatroom", label: "채팅방", groups: ["background", "bubbles", "input"] },
+];
 
 export const themeTemplates: ThemeTemplate[] = [
   {
@@ -66,6 +94,8 @@ export const themeTemplates: ThemeTemplate[] = [
     description: "가장 단순한 구조로 테마의 큰 톤을 먼저 잡는 기본 템플릿입니다.",
     previewNote: "색과 이미지를 빠르게 교체해 전체 흐름을 확인하는 시작 템플릿입니다.",
     accent: "#006b7a",
+    supportedPlatforms: ["android", "ios"],
+    sections: sharedSections,
     defaults: {
       platform: "android",
       chatBackground: "#b8f2f7",
@@ -86,6 +116,8 @@ export const themeTemplates: ThemeTemplate[] = [
     description: "기존 Android/iOS 스폰지밥 에셋으로 바로 시작하는 템플릿입니다.",
     previewNote: "배경과 말풍선, 아이콘에 기본 스폰지밥 에셋이 연결됩니다.",
     accent: "#f6c800",
+    supportedPlatforms: ["android", "ios"],
+    sections: sharedSections,
     defaults: {
       platform: "android",
       chatBackground: "#aeeef7",
@@ -102,794 +134,8 @@ export const themeTemplates: ThemeTemplate[] = [
   },
 ];
 
-const androidBubblePath = "src/main/theme/drawable-xxhdpi";
-const iosImagePath = "Images";
-
-export const androidThemeSlots: ThemeAssetSlot[] = [
-  {
-    id: "android-main-background",
-    platform: "android",
-    role: "main_background",
-    section: "main",
-    group: "background",
-    screen: "friends",
-    kind: "image",
-    label: "메인 배경",
-    fileName: "theme_background_image.png",
-    path: `${androidBubblePath}/theme_background_image.png`,
-    required: true,
-    note: "친구 목록과 기본 메인 화면 배경 이미지",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_background_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_background_image.png",
-    },
-  },
-  {
-    id: "android-main-header-color",
-    platform: "android",
-    role: "main_header_color",
-    section: "main",
-    group: "header",
-    screen: "friends",
-    kind: "color",
-    label: "헤더 색상",
-    required: true,
-    note: "상단 헤더 배경색",
-    colorKey: "theme_header_cell_color",
-    defaultColor: { basic: "#ffffff", spongebob: "#ffffff" },
-  },
-  {
-    id: "android-main-title-color",
-    platform: "android",
-    role: "main_title_color",
-    section: "main",
-    group: "list",
-    screen: "friends",
-    kind: "color",
-    label: "제목 색상",
-    required: true,
-    note: "친구 이름과 주요 텍스트 색상",
-    colorKey: "theme_title_color",
-    defaultColor: { basic: "#111111", spongebob: "#111111" },
-  },
-  {
-    id: "android-main-body-color",
-    platform: "android",
-    role: "main_body_color",
-    section: "main",
-    group: "list",
-    screen: "friends",
-    kind: "color",
-    label: "본문 색상",
-    required: true,
-    note: "보조 텍스트와 목록 본문 색상",
-    colorKey: "theme_paragraph_color",
-    defaultColor: { basic: "#4d5660", spongebob: "#37515a" },
-  },
-  {
-    id: "android-tab-background",
-    platform: "android",
-    role: "tab_background",
-    section: "tabs",
-    group: "bar",
-    screen: "tabs",
-    kind: "color",
-    label: "탭 바 배경",
-    required: true,
-    note: "하단 탭 영역 배경색",
-    colorKey: "theme_maintab_cell_color",
-    defaultColor: { basic: "#ffffff", spongebob: "#ffffff" },
-  },
-  {
-    id: "android-tab-friends",
-    platform: "android",
-    role: "tab_icon_friends",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "친구 탭 아이콘",
-    fileName: "theme_maintab_ico_friends_image.png",
-    path: `${androidBubblePath}/theme_maintab_ico_friends_image.png`,
-    required: true,
-    note: "친구 탭 기본 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png",
-    },
-  },
-  {
-    id: "android-tab-friends-focused",
-    platform: "android",
-    role: "tab_icon_friends_focused",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "친구 탭 선택 아이콘",
-    fileName: "theme_maintab_ico_friends_focused_image.png",
-    path: `${androidBubblePath}/theme_maintab_ico_friends_focused_image.png`,
-    required: false,
-    note: "친구 탭 선택 상태 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png",
-    },
-  },
-  {
-    id: "android-tab-chats",
-    platform: "android",
-    role: "tab_icon_chats",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "채팅 탭 아이콘",
-    fileName: "theme_maintab_ico_chats_image.png",
-    path: `${androidBubblePath}/theme_maintab_ico_chats_image.png`,
-    required: false,
-    note: "채팅 탭 기본 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png",
-    },
-  },
-  {
-    id: "android-tab-chats-focused",
-    platform: "android",
-    role: "tab_icon_chats_focused",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "채팅 탭 선택 아이콘",
-    fileName: "theme_maintab_ico_chats_focused_image.png",
-    path: `${androidBubblePath}/theme_maintab_ico_chats_focused_image.png`,
-    required: false,
-    note: "채팅 탭 선택 상태 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png",
-    },
-  },
-  {
-    id: "android-tab-more",
-    platform: "android",
-    role: "tab_icon_more",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "더보기 탭 아이콘",
-    fileName: "theme_maintab_ico_more_image.png",
-    path: `${androidBubblePath}/theme_maintab_ico_more_image.png`,
-    required: false,
-    note: "더보기 탭 기본 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png",
-    },
-  },
-  {
-    id: "android-tab-now",
-    platform: "android",
-    role: "tab_icon_now",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "Now 탭 아이콘",
-    fileName: "theme_maintab_ico_tab3_image.png",
-    path: `${androidBubblePath}/theme_maintab_ico_tab3_image.png`,
-    required: false,
-    note: "하단 탭 세 번째 기본 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png",
-    },
-  },
-  {
-    id: "android-tab-now-focused",
-    platform: "android",
-    role: "tab_icon_now_focused",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "Now 탭 선택 아이콘",
-    fileName: "theme_maintab_ico_tab3_focused_image.png",
-    path: `${androidBubblePath}/theme_maintab_ico_tab3_focused_image.png`,
-    required: false,
-    note: "하단 탭 세 번째 선택 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png",
-    },
-  },
-  {
-    id: "android-tab-shopping",
-    platform: "android",
-    role: "tab_icon_shopping",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "쇼핑 탭 아이콘",
-    fileName: "theme_maintab_ico_tab4_image.png",
-    path: `${androidBubblePath}/theme_maintab_ico_tab4_image.png`,
-    required: false,
-    note: "하단 탭 네 번째 기본 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png",
-    },
-  },
-  {
-    id: "android-tab-shopping-focused",
-    platform: "android",
-    role: "tab_icon_shopping_focused",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "쇼핑 탭 선택 아이콘",
-    fileName: "theme_maintab_ico_tab4_focused_image.png",
-    path: `${androidBubblePath}/theme_maintab_ico_tab4_focused_image.png`,
-    required: false,
-    note: "하단 탭 네 번째 선택 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png",
-    },
-  },
-  {
-    id: "android-tab-more-focused",
-    platform: "android",
-    role: "tab_icon_more_focused",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "더보기 탭 선택 아이콘",
-    fileName: "theme_maintab_ico_more_focused_image.png",
-    path: `${androidBubblePath}/theme_maintab_ico_more_focused_image.png`,
-    required: false,
-    note: "더보기 탭 선택 상태 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png",
-    },
-  },
-  {
-    id: "android-chat-background",
-    platform: "android",
-    role: "chat_background",
-    section: "chatroom",
-    group: "background",
-    screen: "chatroom",
-    kind: "image",
-    label: "채팅방 배경",
-    fileName: "theme_chatroom_background_image.png",
-    path: `${androidBubblePath}/theme_chatroom_background_image.png`,
-    required: true,
-    note: "1080 x 1920 기준 채팅방 배경 이미지",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_chatroom_background_image.svg",
-      spongebob: "/template-assets/spongebob/android/theme_chatroom_background_image.png",
-    },
-  },
-  {
-    id: "android-chat-background-color",
-    platform: "android",
-    role: "chat_background_color",
-    section: "chatroom",
-    group: "background",
-    screen: "chatroom",
-    kind: "color",
-    label: "채팅방 배경색",
-    required: true,
-    note: "채팅방 기본 배경색",
-    colorKey: "theme_chatroom_background_color",
-    defaultColor: { basic: "#b8f2f7", spongebob: "#aeeef7" },
-  },
-  {
-    id: "android-bubble-me-1",
-    platform: "android",
-    role: "bubble_me_1",
-    section: "chatroom",
-    group: "bubbles",
-    screen: "chatroom",
-    kind: "ninepatch",
-    label: "내 말풍선 1",
-    fileName: "theme_chatroom_bubble_me_01_image.9.png",
-    path: `${androidBubblePath}/theme_chatroom_bubble_me_01_image.9.png`,
-    required: true,
-    editableInBubbleEditor: true,
-    note: "Android 9-patch 말풍선",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png",
-      spongebob: "/template-assets/spongebob/android/theme_chatroom_bubble_me_01_image.9.png",
-    },
-  },
-  {
-    id: "android-bubble-me-2",
-    platform: "android",
-    role: "bubble_me_2",
-    section: "chatroom",
-    group: "bubbles",
-    screen: "chatroom",
-    kind: "ninepatch",
-    label: "내 말풍선 2",
-    fileName: "theme_chatroom_bubble_me_02_image.9.png",
-    path: `${androidBubblePath}/theme_chatroom_bubble_me_02_image.9.png`,
-    required: false,
-    editableInBubbleEditor: true,
-    note: "Android 9-patch 말풍선",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png",
-      spongebob: "/template-assets/spongebob/android/theme_chatroom_bubble_me_01_image.9.png",
-    },
-  },
-  {
-    id: "android-bubble-you-1",
-    platform: "android",
-    role: "bubble_you_1",
-    section: "chatroom",
-    group: "bubbles",
-    screen: "chatroom",
-    kind: "ninepatch",
-    label: "상대 말풍선 1",
-    fileName: "theme_chatroom_bubble_you_01_image.9.png",
-    path: `${androidBubblePath}/theme_chatroom_bubble_you_01_image.9.png`,
-    required: true,
-    editableInBubbleEditor: true,
-    note: "Android 9-patch 말풍선",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.9.png",
-      spongebob: "/template-assets/spongebob/android/theme_chatroom_bubble_you_01_image.9.png",
-    },
-  },
-  {
-    id: "android-bubble-you-2",
-    platform: "android",
-    role: "bubble_you_2",
-    section: "chatroom",
-    group: "bubbles",
-    screen: "chatroom",
-    kind: "ninepatch",
-    label: "상대 말풍선 2",
-    fileName: "theme_chatroom_bubble_you_02_image.9.png",
-    path: `${androidBubblePath}/theme_chatroom_bubble_you_02_image.9.png`,
-    required: false,
-    editableInBubbleEditor: true,
-    note: "Android 9-patch 말풍선",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.9.png",
-      spongebob: "/template-assets/spongebob/android/theme_chatroom_bubble_you_01_image.9.png",
-    },
-  },
-  {
-    id: "android-chat-input-background",
-    platform: "android",
-    role: "chat_input_background_color",
-    section: "chatroom",
-    group: "input",
-    screen: "chatroom",
-    kind: "color",
-    label: "입력바 배경",
-    required: true,
-    note: "채팅 입력바 전체 배경색",
-    colorKey: "theme_chatroom_input_bar_background_color",
-    defaultColor: { basic: "#ffffff", spongebob: "#ffffff" },
-  },
-  {
-    id: "android-chat-send-button",
-    platform: "android",
-    role: "chat_send_button_color",
-    section: "chatroom",
-    group: "input",
-    screen: "chatroom",
-    kind: "color",
-    label: "전송 버튼 색상",
-    required: true,
-    note: "채팅 입력 영역의 전송 버튼색",
-    colorKey: "theme_chatroom_input_bar_send_button_color",
-    defaultColor: { basic: "#c9ff3d", spongebob: "#f6c800" },
-  },
-];
-
-export const iosThemeSlots: ThemeAssetSlot[] = [
-  {
-    id: "ios-main-background",
-    platform: "ios",
-    role: "main_background",
-    section: "main",
-    group: "background",
-    screen: "friends",
-    kind: "image",
-    label: "메인 배경",
-    fileName: "mainBgImage@3x.png",
-    path: `${iosImagePath}/mainBgImage@3x.png`,
-    required: true,
-    note: "iOS 메인 배경 이미지",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/mainBgImage.svg",
-      spongebob: "/template-assets/spongebob/ios/mainBgImage@3x.png",
-    },
-  },
-  {
-    id: "ios-main-header-color",
-    platform: "ios",
-    role: "main_header_color",
-    section: "main",
-    group: "header",
-    screen: "friends",
-    kind: "color",
-    label: "헤더 색상",
-    required: true,
-    note: "메인 상단 헤더 색상",
-    colorKey: "mainHeaderColor",
-    defaultColor: { basic: "#ffffff", spongebob: "#ffffff" },
-  },
-  {
-    id: "ios-main-title-color",
-    platform: "ios",
-    role: "main_title_color",
-    section: "main",
-    group: "list",
-    screen: "friends",
-    kind: "color",
-    label: "제목 색상",
-    required: true,
-    note: "리스트 주요 제목 색상",
-    colorKey: "titleTextColor",
-    defaultColor: { basic: "#111111", spongebob: "#111111" },
-  },
-  {
-    id: "ios-main-body-color",
-    platform: "ios",
-    role: "main_body_color",
-    section: "main",
-    group: "list",
-    screen: "friends",
-    kind: "color",
-    label: "본문 색상",
-    required: true,
-    note: "리스트 보조 텍스트 색상",
-    colorKey: "bodyTextColor",
-    defaultColor: { basic: "#4d5660", spongebob: "#37515a" },
-  },
-  {
-    id: "ios-tab-background",
-    platform: "ios",
-    role: "tab_background",
-    section: "tabs",
-    group: "bar",
-    screen: "tabs",
-    kind: "color",
-    label: "탭 바 배경",
-    required: true,
-    note: "하단 탭 배경색",
-    colorKey: "tabBarBackgroundColor",
-    defaultColor: { basic: "#ffffff", spongebob: "#ffffff" },
-  },
-  {
-    id: "ios-tab-friends",
-    platform: "ios",
-    role: "tab_icon_friends",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "친구 탭 아이콘",
-    fileName: "maintabIcoFriends@3x.png",
-    path: `${iosImagePath}/maintabIcoFriends@3x.png`,
-    required: true,
-    note: "친구 탭 기본 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/maintabIcoFriends.svg",
-      spongebob: "/template-assets/spongebob/ios/maintabIcoFriends@3x.png",
-    },
-  },
-  {
-    id: "ios-tab-friends-focused",
-    platform: "ios",
-    role: "tab_icon_friends_focused",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "친구 탭 선택 아이콘",
-    fileName: "maintabIcoFriendsFocused@3x.png",
-    path: `${iosImagePath}/maintabIcoFriendsFocused@3x.png`,
-    required: false,
-    note: "친구 탭 선택 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/maintabIcoFriends.svg",
-      spongebob: "/template-assets/spongebob/ios/maintabIcoFriends@3x.png",
-    },
-  },
-  {
-    id: "ios-tab-chats",
-    platform: "ios",
-    role: "tab_icon_chats",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "채팅 탭 아이콘",
-    fileName: "maintabIcoChats@3x.png",
-    path: `${iosImagePath}/maintabIcoChats@3x.png`,
-    required: false,
-    note: "채팅 탭 기본 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/maintabIcoFriends.svg",
-      spongebob: "/template-assets/spongebob/ios/maintabIcoFriends@3x.png",
-    },
-  },
-  {
-    id: "ios-tab-chats-focused",
-    platform: "ios",
-    role: "tab_icon_chats_focused",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "채팅 탭 선택 아이콘",
-    fileName: "maintabIcoChatsFocused@3x.png",
-    path: `${iosImagePath}/maintabIcoChatsFocused@3x.png`,
-    required: false,
-    note: "채팅 탭 선택 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/maintabIcoFriends.svg",
-      spongebob: "/template-assets/spongebob/ios/maintabIcoFriends@3x.png",
-    },
-  },
-  {
-    id: "ios-tab-more",
-    platform: "ios",
-    role: "tab_icon_more",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "더보기 탭 아이콘",
-    fileName: "maintabIcoMore@3x.png",
-    path: `${iosImagePath}/maintabIcoMore@3x.png`,
-    required: false,
-    note: "더보기 탭 기본 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/maintabIcoFriends.svg",
-      spongebob: "/template-assets/spongebob/ios/maintabIcoFriends@3x.png",
-    },
-  },
-  {
-    id: "ios-tab-now",
-    platform: "ios",
-    role: "tab_icon_now",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "Now 탭 아이콘",
-    fileName: "maintabIcoTab3@3x.png",
-    path: `${iosImagePath}/maintabIcoTab3@3x.png`,
-    required: false,
-    note: "하단 탭 세 번째 기본 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/maintabIcoFriends.svg",
-      spongebob: "/template-assets/spongebob/ios/maintabIcoFriends@3x.png",
-    },
-  },
-  {
-    id: "ios-tab-now-focused",
-    platform: "ios",
-    role: "tab_icon_now_focused",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "Now 탭 선택 아이콘",
-    fileName: "maintabIcoTab3Focused@3x.png",
-    path: `${iosImagePath}/maintabIcoTab3Focused@3x.png`,
-    required: false,
-    note: "하단 탭 세 번째 선택 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/maintabIcoFriends.svg",
-      spongebob: "/template-assets/spongebob/ios/maintabIcoFriends@3x.png",
-    },
-  },
-  {
-    id: "ios-tab-shopping",
-    platform: "ios",
-    role: "tab_icon_shopping",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "쇼핑 탭 아이콘",
-    fileName: "maintabIcoTab4@3x.png",
-    path: `${iosImagePath}/maintabIcoTab4@3x.png`,
-    required: false,
-    note: "하단 탭 네 번째 기본 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/maintabIcoFriends.svg",
-      spongebob: "/template-assets/spongebob/ios/maintabIcoFriends@3x.png",
-    },
-  },
-  {
-    id: "ios-tab-shopping-focused",
-    platform: "ios",
-    role: "tab_icon_shopping_focused",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "쇼핑 탭 선택 아이콘",
-    fileName: "maintabIcoTab4Focused@3x.png",
-    path: `${iosImagePath}/maintabIcoTab4Focused@3x.png`,
-    required: false,
-    note: "하단 탭 네 번째 선택 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/maintabIcoFriends.svg",
-      spongebob: "/template-assets/spongebob/ios/maintabIcoFriends@3x.png",
-    },
-  },
-  {
-    id: "ios-tab-more-focused",
-    platform: "ios",
-    role: "tab_icon_more_focused",
-    section: "tabs",
-    group: "icons",
-    screen: "tabs",
-    kind: "image",
-    label: "더보기 탭 선택 아이콘",
-    fileName: "maintabIcoMoreFocused@3x.png",
-    path: `${iosImagePath}/maintabIcoMoreFocused@3x.png`,
-    required: false,
-    note: "더보기 탭 선택 아이콘",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/maintabIcoFriends.svg",
-      spongebob: "/template-assets/spongebob/ios/maintabIcoFriends@3x.png",
-    },
-  },
-  {
-    id: "ios-chat-background",
-    platform: "ios",
-    role: "chat_background",
-    section: "chatroom",
-    group: "background",
-    screen: "chatroom",
-    kind: "image",
-    label: "채팅방 배경",
-    fileName: "chatroomBgImage@3x.png",
-    path: `${iosImagePath}/chatroomBgImage@3x.png`,
-    required: true,
-    note: "iOS 채팅방 배경 이미지",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/chatroomBgImage.svg",
-      spongebob: "/template-assets/spongebob/ios/chatroomBgImage@3x.png",
-    },
-  },
-  {
-    id: "ios-chat-background-color",
-    platform: "ios",
-    role: "chat_background_color",
-    section: "chatroom",
-    group: "background",
-    screen: "chatroom",
-    kind: "color",
-    label: "채팅방 배경색",
-    required: true,
-    note: "채팅방 기본 배경색",
-    colorKey: "chatroomBackgroundColor",
-    defaultColor: { basic: "#b8f2f7", spongebob: "#aeeef7" },
-  },
-  {
-    id: "ios-bubble-me-1",
-    platform: "ios",
-    role: "bubble_me_1",
-    section: "chatroom",
-    group: "bubbles",
-    screen: "chatroom",
-    kind: "image",
-    label: "내 말풍선 1",
-    fileName: "chatroomBubbleSend01@3x.png",
-    path: `${iosImagePath}/chatroomBubbleSend01@3x.png`,
-    required: true,
-    editableInBubbleEditor: true,
-    note: "iOS 말풍선 이미지",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/chatroomBubbleSend01.svg",
-      spongebob: "/template-assets/spongebob/ios/chatroomBubbleSend01@3x.png",
-    },
-  },
-  {
-    id: "ios-bubble-me-2",
-    platform: "ios",
-    role: "bubble_me_2",
-    section: "chatroom",
-    group: "bubbles",
-    screen: "chatroom",
-    kind: "image",
-    label: "내 말풍선 2",
-    fileName: "chatroomBubbleSend02@3x.png",
-    path: `${iosImagePath}/chatroomBubbleSend02@3x.png`,
-    required: false,
-    editableInBubbleEditor: true,
-    note: "iOS 말풍선 이미지",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/chatroomBubbleSend01.svg",
-      spongebob: "/template-assets/spongebob/ios/chatroomBubbleSend01@3x.png",
-    },
-  },
-  {
-    id: "ios-bubble-you-1",
-    platform: "ios",
-    role: "bubble_you_1",
-    section: "chatroom",
-    group: "bubbles",
-    screen: "chatroom",
-    kind: "image",
-    label: "상대 말풍선 1",
-    fileName: "chatroomBubbleReceive01@3x.png",
-    path: `${iosImagePath}/chatroomBubbleReceive01@3x.png`,
-    required: true,
-    editableInBubbleEditor: true,
-    note: "iOS 말풍선 이미지",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/chatroomBubbleReceive01.svg",
-      spongebob: "/template-assets/spongebob/ios/chatroomBubbleReceive01@3x.png",
-    },
-  },
-  {
-    id: "ios-bubble-you-2",
-    platform: "ios",
-    role: "bubble_you_2",
-    section: "chatroom",
-    group: "bubbles",
-    screen: "chatroom",
-    kind: "image",
-    label: "상대 말풍선 2",
-    fileName: "chatroomBubbleReceive02@3x.png",
-    path: `${iosImagePath}/chatroomBubbleReceive02@3x.png`,
-    required: false,
-    editableInBubbleEditor: true,
-    note: "iOS 말풍선 이미지",
-    defaultAssetUrls: {
-      basic: "/template-assets/basic/ios/chatroomBubbleReceive01.svg",
-      spongebob: "/template-assets/spongebob/ios/chatroomBubbleReceive01@3x.png",
-    },
-  },
-  {
-    id: "ios-chat-input-background",
-    platform: "ios",
-    role: "chat_input_background_color",
-    section: "chatroom",
-    group: "input",
-    screen: "chatroom",
-    kind: "color",
-    label: "입력바 배경",
-    required: true,
-    note: "채팅 입력바 배경색",
-    colorKey: "chatInputBarBackgroundColor",
-    defaultColor: { basic: "#ffffff", spongebob: "#ffffff" },
-  },
-  {
-    id: "ios-chat-send-button",
-    platform: "ios",
-    role: "chat_send_button_color",
-    section: "chatroom",
-    group: "input",
-    screen: "chatroom",
-    kind: "color",
-    label: "전송 버튼 색상",
-    required: true,
-    note: "전송 버튼 강조색",
-    colorKey: "chatSendButtonColor",
-    defaultColor: { basic: "#c9ff3d", spongebob: "#f6c800" },
-  },
-];
+export const androidThemeSlots = androidSlotsManifest as ThemeAssetSlot[];
+export const iosThemeSlots = iosSlotsManifest as ThemeAssetSlot[];
 
 export function getThemeSlots(platform: ThemePlatform) {
   return platform === "ios" ? iosThemeSlots : androidThemeSlots;
