@@ -32,6 +32,7 @@ export type ThemeResourceRole =
   | "main_feature_browse_tab_color"
   | "main_body_secondary_cell_color"
   | "tab_background"
+  | "tab_background_image"
   | "tab_icon_friends"
   | "tab_icon_friends_focused"
   | "tab_icon_chats"

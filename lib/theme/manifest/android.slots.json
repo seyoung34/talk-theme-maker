@@ -256,6 +256,20 @@
     }
   },
   {
+    "id": "android-tab-background-image",
+    "platform": "android",
+    "role": "tab_background_image",
+    "section": "tabs",
+    "group": "bar",
+    "screen": "tabs",
+    "kind": "ninepatch",
+    "label": "탭바 배경 이미지",
+    "fileName": "theme_maintab_cell_image.9.png",
+    "path": "src/main/theme/drawable-xxhdpi/theme_maintab_cell_image.9.png",
+    "required": false,
+    "note": "하단 탭바 영역 배경 9-patch 이미지"
+  },
+  {
     "id": "android-tab-friends",
     "platform": "android",
     "role": "tab_icon_friends",

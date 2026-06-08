@@ -263,7 +263,15 @@ function FriendsScreen({
         </div>
       </div>
 
-      <BottomTabBar active="friends" selectedSlotId={selectedSlotId} slotByRole={slotByRole} urls={urls} tabBackground={preview.tabBackgroundColor} onSelectSlot={onSelectSlot} />
+      <BottomTabBar
+        active="friends"
+        selectedSlotId={selectedSlotId}
+        slotByRole={slotByRole}
+        urls={urls}
+        tabBackground={preview.tabBackgroundColor}
+        tabBackgroundImageUrl={urls.tab_background_image}
+        onSelectSlot={onSelectSlot}
+      />
     </div>
   );
 }
@@ -386,7 +394,15 @@ function ChatsScreen({
         </div>
       </div>
 
-      <BottomTabBar active="chats" selectedSlotId={selectedSlotId} slotByRole={slotByRole} urls={urls} tabBackground={preview.tabBackgroundColor} onSelectSlot={onSelectSlot} />
+      <BottomTabBar
+        active="chats"
+        selectedSlotId={selectedSlotId}
+        slotByRole={slotByRole}
+        urls={urls}
+        tabBackground={preview.tabBackgroundColor}
+        tabBackgroundImageUrl={urls.tab_background_image}
+        onSelectSlot={onSelectSlot}
+      />
     </div>
   );
 }
@@ -431,6 +447,7 @@ function BottomTabBar({
   slotByRole,
   urls,
   tabBackground,
+  tabBackgroundImageUrl,
   onSelectSlot,
 }: {
   active: "friends" | "chats" | "now" | "shopping" | "more";
@@ -438,14 +455,24 @@ function BottomTabBar({
   slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
   urls: RoleUrls;
   tabBackground: string;
+  tabBackgroundImageUrl?: string;
   onSelectSlot?: (slotId: string) => void;
 }) {
   return (
     <div
-      className={`grid grid-cols-5 items-center px-4 ${selectedSlotId === slotByRole.tab_background?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
-      style={{ backgroundColor: hexToRgba(tabBackground, 0.96) }}
+      className={`grid grid-cols-5 items-center px-4 ${selectedSlotId === slotByRole.tab_background?.id || selectedSlotId === slotByRole.tab_background_image?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+      style={{
+        backgroundColor: hexToRgba(tabBackground, 0.96),
+        backgroundImage: tabBackgroundImageUrl ? `url(${tabBackgroundImageUrl})` : undefined,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
       onClick={(event) => {
         event.stopPropagation();
+        if (slotByRole.tab_background_image) {
+          onSelectSlot?.(slotByRole.tab_background_image.id);
+          return;
+        }
         if (slotByRole.tab_background) onSelectSlot?.(slotByRole.tab_background.id);
       }}
     >
@@ -561,6 +588,7 @@ function SectionLabel({ label, color, selected, onClick }: { label: string; colo
 function selectRoleFiles(analysis: ThemeProjectAnalysis): RoleFiles {
   const roles: ThemeResourceRole[] = [
     "main_background",
+    "tab_background_image",
     "tab_icon_friends",
     "tab_icon_friends_focused",
     "tab_icon_chats",

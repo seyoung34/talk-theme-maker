@@ -73,7 +73,7 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
     if (name === "theme_chatroom_bubble_you_01_image.9.png") return "bubble_you_1";
     if (name === "theme_chatroom_bubble_you_02_image.9.png") return "bubble_you_2";
     if (name === "theme_background_image.png") return "main_background";
-    if (name === "theme_maintab_cell_image.9.png") return "tab_background";
+    if (name === "theme_maintab_cell_image.9.png") return "tab_background_image";
     if (name === "theme_maintab_ico_friends_image.png") return "tab_icon_friends";
     if (name === "theme_maintab_ico_friends_focused_image.png") return "tab_icon_friends_focused";
     if (name === "theme_maintab_ico_chats_image.png") return "tab_icon_chats";
@@ -120,7 +120,7 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
 
 function roleToScreen(role: ThemeResourceRole): ThemeScreen {
   if (role === "chat_background" || role.startsWith("bubble_") || role === "chat_input_background_color" || role === "chat_send_button_color") return "chatroom";
-  if (role === "tab_background" || role.startsWith("tab_icon_")) return "tabs";
+  if (role === "tab_background" || role === "tab_background_image" || role.startsWith("tab_icon_")) return "tabs";
   if (role === "main_background" || role === "main_header_color" || role === "main_title_color" || role === "main_body_color") return "friends";
   if (role === "theme_icon" || role === "profile_image" || role.startsWith("profile_image_")) return "profile";
   return "friends";
