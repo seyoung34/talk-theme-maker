@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Gift, MessageCirclePlus, Search, Settings, UserPlus } from "lucide-react";
+import { Gift, MessageCirclePlus, Search, Settings, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getResolvedColor, type SlotCandidateSelections } from "@/components/project/projectModel";
 import { findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
@@ -85,21 +85,9 @@ export function ThemeScreensPreview({
       onSelect={() => onSelectSlot?.(mainBackgroundSlot?.id ?? mainBackgroundColorSlot?.id ?? "")}
     >
       {section === "main" ? (
-        <FriendsScreen
-          selectedSlotId={selectedSlotId}
-          preview={preview}
-          slotByRole={slotByRole}
-          urls={urls}
-          onSelectSlot={onSelectSlot}
-        />
+        <FriendsScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
       ) : (
-        <ChatsScreen
-          selectedSlotId={selectedSlotId}
-          preview={preview}
-          slotByRole={slotByRole}
-          urls={urls}
-          onSelectSlot={onSelectSlot}
-        />
+        <ChatsScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
       )}
     </PhoneFrame>
   );
@@ -147,7 +135,7 @@ function FriendsScreen({
         }}
       >
         <AvatarCircle src={urls.main_background} size="h-6 w-8" />
-        <strong className="block text-base font-semibold" style={{ color: preview.headerForegroundColor }}>
+        <strong className="block text-[13px] font-semibold" style={{ color: preview.headerForegroundColor }}>
           내 프로필
         </strong>
         <div className="flex items-center gap-3" style={{ color: preview.headerForegroundColor }}>
@@ -161,8 +149,8 @@ function FriendsScreen({
       <div className="px-4 pb-3 mt-2 overflow-hidden">
         <div className="grid h-full content-start gap-3 overflow-hidden px-0.5 pb-2">
           <div className="flex gap-2">
-            <Chip active titleColor={preview.titleColor} backgroundColor={preview.mainBackgroundColor}>친구</Chip>
-            <Chip titleColor={preview.titleColor} backgroundColor={preview.mainBackgroundColor}>추천</Chip>
+            <Chip active color={preview.featureBrowseTabColor}>친구</Chip>
+            <Chip color={preview.featureBrowseTabColor}>추천</Chip>
           </div>
 
           <button
@@ -295,82 +283,79 @@ function ChatsScreen({
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_96px]">
       <button
         type="button"
-        className={`flex items-end justify-between px-4 pb-3 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+        className={`flex items-end justify-between px-5 pb-3 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
         style={{ backgroundColor: preview.headerBackgroundColor }}
         onClick={(event) => {
           event.stopPropagation();
           onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? "");
         }}
       >
-        <strong className="text-base font-semibold tracking-[-0.03em]" style={{ color: preview.headerForegroundColor }}>
+        <strong className="text-xl font-semibold tracking-[-0.03em]" style={{ color: preview.headerForegroundColor }}>
           채팅
         </strong>
         <div className="flex items-center gap-4" style={{ color: preview.headerForegroundColor }}>
-          <Search className="w-6 h-6" />
-          <MessageCirclePlus className="w-6 h-6" />
-          <Settings className="w-6 h-6" />
+          <Search className="w-5 h-5" />
+          <MessageCirclePlus className="w-5 h-5" />
+          <Settings className="w-5 h-5" />
         </div>
       </button>
 
-      <div className="grid content-start min-h-0 gap-4 pb-4 overflow-hidden">
-        <div className="px-4 py-4 border-b" style={{ borderColor: hexToRgba(preview.bodyCellBorderColor, 0.4), backgroundColor: preview.featureBrowseTabColor, color: preview.headerForegroundColor }}>
-          <div className="flex items-center gap-3 overflow-hidden">
-            <FilterPill dark color={preview.headerForegroundColor}>전체</FilterPill>
-            <FilterPill color={preview.headerForegroundColor}>
-              <span className="text-xl">◎</span>
+      <div className="grid content-start min-h-0 gap-3 pb-2 overflow-hidden">
+        <div className="px-4 pt-2 pb-3 " style={{ borderColor: hexToRgba(preview.bodyCellBorderColor, 0.28) }}>
+          <div className="flex items-center gap-2 overflow-hidden">
+            <FilterPill compact dark color={preview.headerForegroundColor}>전체</FilterPill>
+            <FilterPill compact color={preview.headerForegroundColor}>
+              <span className="text-[16px]">안읽음</span>
               <BadgeSmall value="12" />
             </FilterPill>
-            <FilterPill wide color={preview.headerForegroundColor}>
-              <span className="text-xl">✦</span>
-              <strong className="text-[14px] font-semibold">ChatGPT</strong>
-              <BadgeSmall value="N" />
+            <FilterPill compact wide color={preview.headerForegroundColor}>
+              <span className="text-[16px]">✦</span>
+              <strong className="text-[13px] font-semibold">ChatGPT</strong>
             </FilterPill>
-            <CircleAction color={preview.headerForegroundColor} icon={<Bell className="w-5 h-5" />} />
-            <CircleAction color={preview.headerForegroundColor} icon={<Search className="w-5 h-5" />} />
           </div>
         </div>
 
-        <div className="px-4">
+        <div className="px-4 pt-1">
           <button
             type="button"
-            className={`w-full rounded-[28px] px-6 py-5 text-left shadow-[0_20px_36px_rgba(15,23,42,0.08)] ${selectedSlotId === slotByRole.main_body_secondary_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+            className={`w-full rounded-[24px] px-5 py-4 text-left shadow-[0_16px_28px_rgba(15,23,42,0.06)] ${selectedSlotId === slotByRole.main_body_secondary_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
             style={{ backgroundColor: preview.bodySecondaryColor }}
             onClick={(event) => {
               event.stopPropagation();
               if (slotByRole.main_body_secondary_cell_color) onSelectSlot?.(slotByRole.main_body_secondary_cell_color.id);
             }}
           >
-            <div className="grid grid-cols-[1fr_112px] items-center gap-4">
+            <div className="grid grid-cols-[1fr_84px] items-center gap-3">
               <div>
                 <span className="text-[11px] font-medium" style={{ color: preview.descriptionColor }}>
                   테스트 배너
                 </span>
-                <strong className="mt-1 block text-[15px] font-semibold" style={{ color: preview.titlePressedColor }}>
+                <strong className="mt-1 block text-[14px] font-semibold leading-[1.35]" style={{ color: preview.titlePressedColor }}>
                   메인 화면 보조 카드 색상을 확인합니다.
                 </strong>
-                <span className="mt-1 block text-[11px] font-medium" style={{ color: preview.descriptionColor }}>
-                  설명 텍스트와 눌림 상태 색상도 함께 점검할 수 있습니다.
+                <span className="mt-1 block text-[10px] font-medium leading-[1.35]" style={{ color: preview.descriptionColor }}>
+                  설명 텍스트와 눌림 상태 색상을 함께 점검합니다.
                 </span>
               </div>
-              <div className="h-[84px] rounded-2xl bg-[linear-gradient(135deg,#e8f8ff,#fff1b6)]" />
+              <div className="h-[64px] rounded-[18px] bg-[linear-gradient(135deg,#e8f8ff,#fff1b6)]" />
             </div>
           </button>
         </div>
 
-        <div className="grid min-h-0 gap-1 px-4 overflow-hidden">
+        <div className="grid min-h-0 gap-0 px-4 overflow-hidden">
           {chatRows.map((row, index) => (
             <button
               key={`${row.name}-${index}`}
               type="button"
-              className={`grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-[20px] px-2 py-2 text-left ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "ring-1 ring-[#60a5fa]" : ""}`}
-              style={{ borderBottom: `1px solid ${preview.bodyCellBorderColor}` }}
+              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-1 py-3 text-left ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "rounded-[18px] ring-1 ring-[#60a5fa]" : ""}`}
+              style={{ borderBottom: `1px solid ${hexToRgba(preview.bodyCellBorderColor, 0.55)}` }}
               onClick={(event) => {
                 event.stopPropagation();
                 if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
               }}
             >
-              <AvatarCircle src={urls.main_background} size={index === 0 ? "h-14 w-14" : "h-12 w-12"} />
-              <div>
+              <AvatarCircle src={urls.main_background} size="h-12 w-12" />
+              <div className="min-w-0">
                 <button
                   type="button"
                   className={`block text-left ${selectedSlotId === slotByRole.main_title_color?.id ? "rounded-md ring-1 ring-[#60a5fa]" : ""}`}
@@ -379,25 +364,25 @@ function ChatsScreen({
                     if (slotByRole.main_title_color) onSelectSlot?.(slotByRole.main_title_color.id);
                   }}
                 >
-                  <strong className="text-[15px] font-semibold" style={{ color: preview.titleColor }}>
+                  <strong className="line-clamp-1 text-[14px] font-semibold" style={{ color: preview.titleColor }}>
                     {row.name}
                   </strong>
                 </button>
                 <button
                   type="button"
-                  className={`mt-1 block text-left ${selectedSlotId === slotByRole.main_description_color?.id ? "rounded-md ring-1 ring-[#60a5fa]" : ""}`}
+                  className={`mt-0.5 block text-left ${selectedSlotId === slotByRole.main_description_color?.id ? "rounded-md ring-1 ring-[#60a5fa]" : ""}`}
                   onClick={(event) => {
                     event.stopPropagation();
                     if (slotByRole.main_description_color) onSelectSlot?.(slotByRole.main_description_color.id);
                   }}
                 >
-                  <span className="line-clamp-2 text-[12px] font-medium leading-[1.35]" style={{ color: preview.descriptionColor }}>
+                  <span className="line-clamp-1 text-[12px] font-medium leading-[1.3]" style={{ color: preview.descriptionColor }}>
                     {row.sub}
                   </span>
                 </button>
               </div>
-              <div className="grid gap-2 pt-1 justify-items-end">
-                <span className="text-[11px] font-medium" style={{ color: preview.bodyColor }}>
+              <div className="grid justify-items-end gap-1 self-start pt-0.5">
+                <span className="text-[10px] font-medium" style={{ color: preview.bodyColor }}>
                   {row.time}
                 </span>
                 {row.badge ? <UnreadBadge value={row.badge} /> : null}
@@ -523,33 +508,38 @@ function AvatarCircle({ src, size }: { src?: string; size: string }) {
   return <span className={`${size} block rounded-full border border-white/70 bg-[#dceff2] bg-cover bg-center shadow-[0_8px_18px_rgba(15,23,42,0.08)]`} style={{ backgroundImage: src ? `url(${src})` : undefined }} />;
 }
 
-function Chip({ active, titleColor, backgroundColor, children }: { active?: boolean; titleColor?: string; backgroundColor?: string; children: ReactNode }) {
+function Chip({ active, color, children }: { active?: boolean; color?: string; children: ReactNode }) {
   return (
     <span
-      className={`inline-flex h-8 items-center rounded-full px-6 text-[14px] font-semibold ${active ? "" : "border"
-        }`}
-      style={
-        active
-          ? {
-            backgroundColor: titleColor ?? "#111111",
-            color: backgroundColor ?? "#ffffff",
-          }
-          : {
-            borderColor: titleColor ?? "#0d5b66",
-            color: titleColor ?? "#0d5b66",
-          }
-      }
+      className={`inline-flex h-8 items-center rounded-full px-6 text-[14px] font-semibold ${active ? "text-white" : "border bg-white/14"}`}
+      style={active ? { backgroundColor: color ?? "#0d5b66" } : { borderColor: hexToRgba(color ?? "#0d5b66", 0.35), color: color ?? "#0d5b66" }}
     >
       {children}
     </span>
   );
 }
 
-function FilterPill({ children, dark, wide, color }: { children: ReactNode; dark?: boolean; wide?: boolean; color?: string }) {
+function FilterPill({
+  children,
+  dark,
+  wide,
+  compact,
+  color,
+}: {
+  children: ReactNode;
+  dark?: boolean;
+  wide?: boolean;
+  compact?: boolean;
+  color?: string;
+}) {
   return (
     <span
-      className={`inline-flex h-10 items-center gap-2 rounded-full border px-5 text-xs font-semibold ${wide ? "min-w-[128px] justify-center" : ""}`}
-      style={dark ? { borderColor: "transparent", backgroundColor: hexToRgba(color ?? "#0d5b66", 0.95), color: "#ffffff" } : { borderColor: hexToRgba(color ?? "#0e8394", 0.28), backgroundColor: "rgba(255,255,255,0.08)", color: color ?? "#0d4f58" }}
+      className={`inline-flex items-center gap-2 rounded-full border px-4 text-xs font-semibold ${compact ? "h-10" : "h-14"} ${wide ? "min-w-[116px] justify-center" : ""}`}
+      style={
+        dark
+          ? { borderColor: "transparent", backgroundColor: hexToRgba(color ?? "#0d5b66", 0.95), color: "#ffffff" }
+          : { borderColor: hexToRgba(color ?? "#0e8394", 0.28), backgroundColor: "rgba(255,255,255,0.08)", color: color ?? "#0d4f58" }
+      }
     >
       {children}
     </span>
@@ -560,12 +550,8 @@ function BadgeSmall({ value }: { value: string }) {
   return <span className="rounded-full bg-[#ff6b37] px-2 py-[3px] text-[11px] font-bold leading-none text-white">{value}</span>;
 }
 
-function CircleAction({ icon, color }: { icon: ReactNode; color?: string }) {
-  return <span className="grid border rounded-full h-14 w-14 place-items-center bg-white/6" style={{ borderColor: hexToRgba(color ?? "#0e8394", 0.28), color: color ?? "#0d4f58" }}>{icon}</span>;
-}
-
 function UnreadBadge({ value }: { value: string }) {
-  return <span className="rounded-full bg-[#ff6b37] px-2.5 py-1 text-[11px] font-bold text-white">{value}</span>;
+  return <span className="rounded-full bg-[#ff6b37] px-2.5 py-1 text-[10px] font-bold text-white">{value}</span>;
 }
 
 function SectionLabel({ label, color, selected, onClick }: { label: string; color: string; selected: boolean; onClick: () => void }) {
