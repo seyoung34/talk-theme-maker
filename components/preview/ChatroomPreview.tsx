@@ -19,7 +19,6 @@ type Hotspot = {
 
 const previewCanvasWidth = 1080;
 const previewCanvasHeight = 2340;
-const headerHeight = 144;
 const inputBarHeightRatio = 86 / 1600;
 const inputBarHeight = Math.round(previewCanvasHeight * inputBarHeightRatio);
 const canvasTopInset = 132;
@@ -38,10 +37,10 @@ const defaultStretch: Record<BubbleSlot, StretchPoint> = {
 };
 
 const sampleMessages = [
-  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "정이지", text: "엥 이게 릴스에서 그거???" },
-  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "한꺼번에 옮겨다니는거" },
-  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "정이지", text: "언덕이라 힘들지더" },
-  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "그럴지도" },
+  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "테스트 친구", text: "이번 미리보기 문구는 전부 샘플 데이터로 바꿨어요." },
+  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "좋아요. 실제 이름 대신 테스트용 문구만 남겨둘게요." },
+  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "테스트 친구", text: "말풍선 크기와 여백 확인에도 무난한 문장 길이예요." },
+  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "이 상태로 테마 QA와 캡처 테스트를 진행하면 됩니다." },
 ];
 
 export function ChatroomPreview({
@@ -182,7 +181,7 @@ export function ChatroomPreview({
       <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 pb-4 pt-9 text-white">
         <div className="flex items-center gap-4">
           <ArrowLeft className="h-7 w-7" strokeWidth={2.2} />
-          <strong className="text-[18px] font-semibold tracking-[-0.02em]">정이지</strong>
+          <strong className="text-[18px] font-semibold tracking-[-0.02em]">테스트 채팅방</strong>
         </div>
         <div className="flex items-center gap-5">
           <Search className="h-6 w-6" strokeWidth={2.1} />

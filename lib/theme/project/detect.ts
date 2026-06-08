@@ -5,6 +5,9 @@ const androidRequired = [
   "src/main/theme/drawable-xxhdpi/theme_chatroom_background_image.png",
   "src/main/theme/drawable-xxhdpi/theme_chatroom_bubble_me_01_image.9.png",
   "src/main/theme/drawable-xxhdpi/theme_chatroom_bubble_you_01_image.9.png",
+  "src/main/theme/drawable-xxhdpi/icon.png",
+  "src/main/theme/drawable-xxhdpi/theme_profile_01_image.png",
+  "src/main/theme/drawable-nodpi/theme_profile_01_image_full.png",
 ];
 
 const iosRequired = [
@@ -63,6 +66,7 @@ function toResource(file: ThemeProjectFile, platform: ThemePlatform): ThemeProje
 
 function detectRole(path: string, name: string, platform: ThemePlatform): ThemeResourceRole {
   if (platform === "android") {
+    if (name === "icon.png") return "theme_icon";
     if (name === "theme_chatroom_background_image.png") return "chat_background";
     if (name === "theme_chatroom_bubble_me_01_image.9.png") return "bubble_me_1";
     if (name === "theme_chatroom_bubble_me_02_image.9.png") return "bubble_me_2";
@@ -74,12 +78,18 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
     if (name === "theme_maintab_ico_friends_focused_image.png") return "tab_icon_friends_focused";
     if (name === "theme_maintab_ico_chats_image.png") return "tab_icon_chats";
     if (name === "theme_maintab_ico_chats_focused_image.png") return "tab_icon_chats_focused";
-    if (name === "theme_maintab_ico_tab3_image.png") return "tab_icon_now";
-    if (name === "theme_maintab_ico_tab3_focused_image.png") return "tab_icon_now_focused";
-    if (name === "theme_maintab_ico_tab4_image.png") return "tab_icon_shopping";
-    if (name === "theme_maintab_ico_tab4_focused_image.png") return "tab_icon_shopping_focused";
+    if (name === "theme_maintab_ico_tab3_image.png" || name === "theme_maintab_ico_now_image.png") return "tab_icon_now";
+    if (name === "theme_maintab_ico_tab3_focused_image.png" || name === "theme_maintab_ico_now_focused_image.png") return "tab_icon_now_focused";
+    if (name === "theme_maintab_ico_tab4_image.png" || name === "theme_maintab_ico_shopping_image.png") return "tab_icon_shopping";
+    if (name === "theme_maintab_ico_tab4_focused_image.png" || name === "theme_maintab_ico_shopping_focused_image.png") return "tab_icon_shopping_focused";
     if (name === "theme_maintab_ico_more_image.png") return "tab_icon_more";
     if (name === "theme_maintab_ico_more_focused_image.png") return "tab_icon_more_focused";
+    if (name === "theme_profile_01_image.png") return "profile_image_1";
+    if (name === "theme_profile_02_image.png") return "profile_image_2";
+    if (name === "theme_profile_03_image.png") return "profile_image_3";
+    if (name === "theme_profile_01_image_full.png") return "profile_image_full_1";
+    if (name === "theme_profile_02_image_full.png") return "profile_image_full_2";
+    if (name === "theme_profile_03_image_full.png") return "profile_image_full_3";
     if (name.startsWith("theme_profile_")) return "profile_image";
     if (name.startsWith("theme_passcode_")) return "passcode";
     if (name === "theme_splash_image.png") return "splash";
@@ -112,7 +122,7 @@ function roleToScreen(role: ThemeResourceRole): ThemeScreen {
   if (role === "chat_background" || role.startsWith("bubble_") || role === "chat_input_background_color" || role === "chat_send_button_color") return "chatroom";
   if (role === "tab_background" || role.startsWith("tab_icon_")) return "tabs";
   if (role === "main_background" || role === "main_header_color" || role === "main_title_color" || role === "main_body_color") return "friends";
-  if (role === "profile_image") return "profile";
+  if (role === "theme_icon" || role === "profile_image" || role.startsWith("profile_image_")) return "profile";
   return "friends";
 }
 

@@ -24,12 +24,13 @@ export type SlotCandidate = {
   colorValue?: string;
 };
 
-export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom"];
+export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom", "common"];
 
 export const sectionLabels: Record<ThemeSection, string> = {
-  main: "메인화면",
+  main: "메인 화면",
   tabs: "하단 탭",
   chatroom: "채팅방",
+  common: "공통 리소스",
 };
 
 export const groupLabels: Record<ThemeSlotGroup, string> = {
@@ -39,7 +40,9 @@ export const groupLabels: Record<ThemeSlotGroup, string> = {
   bar: "탭 바",
   icons: "아이콘",
   bubbles: "말풍선",
-  input: "입력바",
+  input: "입력 바",
+  icon: "대표 아이콘",
+  profiles: "프로필",
 };
 
 export {
@@ -66,7 +69,6 @@ export function getSlotFile(slot: ThemeAssetSlot | undefined, files: ThemeProjec
   return files.find((file) => file.path === slot.path);
 }
 
-
 export function buildSlotCandidates(
   slot: ThemeAssetSlot | undefined,
   uploads: SlotUploads,
@@ -76,6 +78,7 @@ export function buildSlotCandidates(
   template: ThemeTemplate,
 ): SlotCandidate[] {
   if (!slot) return [];
+
   const selected = getSelectedCandidate(slot, selections, templateId, template);
   const uploadEntries = getSlotUploadEntries(slot, uploads);
   const selectedUpload = getSelectedUpload(slot, uploads, selections);

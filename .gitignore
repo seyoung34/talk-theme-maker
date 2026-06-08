@@ -1,7 +1,49 @@
+# Node / Next
 node_modules/
-dist/
 .next/
-.vite/
-*.local
+dist/
+out/
+coverage/
+*.tsbuildinfo
+
+# Logs
 *.log
-docs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env / local config
+.env
+.env.*
+!.env.example
+*.local
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# Android sample build outputs
+android-sample-theme/**/.gradle/
+android-sample-theme/**/build/
+android-sample-theme/**/local.properties
+android-sample-theme/**/*.apk
+android-sample-theme/**/*.aab
+
+# Generic Android / Gradle
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+
+# Temp
+tmp/
+temp/
+*.tmp

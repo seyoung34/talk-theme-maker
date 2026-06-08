@@ -1,4 +1,5 @@
 import { ChatroomPreview } from "@/components/preview/ChatroomPreview";
+import { CommonAssetsPreview } from "@/components/preview/CommonAssetsPreview";
 import { ThemeScreensPreview } from "@/components/preview/ThemeScreensPreview";
 import type { BubbleEditState, SlotCandidateSelections, SlotColors } from "@/components/project/projectModel";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
@@ -43,6 +44,14 @@ export function ProjectPreviewPanel({
           template={template}
           templateId={templateId}
           bubbleEdits={bubbleEdits}
+          onSelectSlot={onSelectSlot}
+        />
+      ) : activeSection === "common" ? (
+        <CommonAssetsPreview
+          analysis={analysis}
+          activeGroup={slots.some((slot) => slot.section === "common" && slot.group === "icon" && slot.id === selectedSlotId) ? "icon" : "profiles"}
+          slots={slots.filter((slot) => slot.section === "common")}
+          selectedSlotId={selectedSlotId}
           onSelectSlot={onSelectSlot}
         />
       ) : (

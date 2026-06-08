@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Dock, House, MessageSquare } from "lucide-react";
+import { AppWindow, ChevronLeft, ChevronRight, Dock, House, MessageSquare } from "lucide-react";
 import { getCompletion, isSlotReady, sectionLabels, sectionOrder, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeSection } from "@/lib/theme/types";
@@ -36,7 +36,7 @@ export function ProjectSectionRail({
         onClick={onToggle}
         aria-label={isOpen ? "사이드바 접기" : "사이드바 펼치기"}
       >
-        {isOpen ? <ChevronLeft className="w-4 h-4" strokeWidth={2.2} /> : <ChevronRight className="w-4 h-4" strokeWidth={2.2} />}
+        {isOpen ? <ChevronLeft className="h-4 w-4" strokeWidth={2.2} /> : <ChevronRight className="h-4 w-4" strokeWidth={2.2} />}
       </button>
 
       {isOpen ? (
@@ -70,9 +70,7 @@ export function ProjectSectionRail({
                   </span>
                 </>
               ) : (
-                <span className="grid min-h-12 place-items-center text-[#475569]">
-                  {section === "main" ? <House className="w-4 h-4" strokeWidth={2.1} /> : section === "tabs" ? <Dock className="w-4 h-4" strokeWidth={2.1} /> : <MessageSquare className="w-4 h-4" strokeWidth={2.1} />}
-                </span>
+                <span className="grid min-h-12 place-items-center text-[#475569]">{getSectionIcon(section)}</span>
               )}
             </button>
           );
@@ -80,4 +78,11 @@ export function ProjectSectionRail({
       </nav>
     </aside>
   );
+}
+
+function getSectionIcon(section: ThemeSection) {
+  if (section === "main") return <House className="h-4 w-4" strokeWidth={2.1} />;
+  if (section === "tabs") return <Dock className="h-4 w-4" strokeWidth={2.1} />;
+  if (section === "chatroom") return <MessageSquare className="h-4 w-4" strokeWidth={2.1} />;
+  return <AppWindow className="h-4 w-4" strokeWidth={2.1} />;
 }

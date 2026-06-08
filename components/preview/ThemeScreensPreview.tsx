@@ -12,19 +12,19 @@ type RoleFiles = Partial<Record<ThemeResourceRole, ThemeProjectFile>>;
 type RoleUrls = Partial<Record<ThemeResourceRole, string>>;
 
 const friendRows = [
-  { name: "류영수", sub: "오늘", cta: "선물하기" },
-  { name: "유예원", sub: "오늘", cta: "선물하기" },
-  { name: "고동욱", sub: "어제", cta: "선물하기" },
-  { name: "최범규", sub: "어제", cta: "선물하기" },
+  { name: "딸기군", sub: "오늘", cta: "선물하기" },
+  { name: "파인애플양", sub: "오늘", cta: "선물하기" },
+  { name: "블루베리군", sub: "어제", cta: "선물하기" },
+  { name: "포도양", sub: "어제", cta: "선물하기" },
 ];
 
 const chatRows = [
-  { name: "조용한 채팅방", sub: "23개의 채팅방", time: "2025.07.22" },
-  { name: "이세영", sub: "장바구니처럼 에셋, 요소들을 담아서 나만의 테마를 만들 수 있는 서비스", time: "어제" },
-  { name: "최승범", sub: "빡세더라~", time: "00:20", badge: "3" },
-  { name: "정이지", sub: "그럴지도", time: "어제" },
-  { name: "19 이종혁", sub: "4,000원을 받았어요. *(안내) 받은 분은 매일 이자 혜택 및 송금 수수료 무료 업데이트 대상자예요.", time: "어제", badge: "1" },
-  { name: "드스그 5", sub: "두현이있어서 한번자를", time: "어제", badge: "70" },
+  { name: "프로젝트 공지방", sub: "23개의 새 메시지", time: "2026.06.08" },
+  { name: "디자인 검수", sub: "테마 색상과 말풍선 상태를 최종 확인해주세요.", time: "어제" },
+  { name: "QA 테스트", sub: "미리보기 텍스트를 더미 데이터로 교체했습니다.", time: "00:20", badge: "3" },
+  { name: "개발 메모", sub: "이번 빌드에서는 내보내기 흐름을 점검합니다.", time: "어제" },
+  { name: "운영 알림", sub: "리소스 패키지 생성 결과를 확인해 주세요.", time: "어제", badge: "1" },
+  { name: "샘플 그룹", sub: "테스트용 채팅 목록입니다.", time: "어제", badge: "5" },
 ];
 
 export function ThemeScreensPreview({
@@ -39,7 +39,7 @@ export function ThemeScreensPreview({
   onSelectSlot,
 }: {
   analysis: ThemeProjectAnalysis;
-  section: Exclude<ThemeSection, "chatroom">;
+  section: Extract<ThemeSection, "main" | "tabs">;
   slots: ThemeAssetSlot[];
   selectedSlotId?: string;
   colors: Record<string, string | undefined>;
@@ -123,47 +123,36 @@ function FriendsScreen({
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_96px]">
       <button
         type="button"
-        className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-6 pb-4 pt-8 text-left ${
-          selectedSlotId === slotByRole.main_header_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""
-        }`}
+        className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-6 pb-4 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""
+          }`}
         style={{ backgroundColor: hexToRgba(headerColor, 0.58) }}
         onClick={(event) => {
           event.stopPropagation();
           if (slotByRole.main_header_color) onSelectSlot?.(slotByRole.main_header_color.id);
         }}
       >
-        <AvatarCircle src={urls.main_background} size="h-14 w-14" />
+        <AvatarCircle src={urls.main_background} size="h-6 w-8" />
         <div>
-          <strong className="block text-[15px] font-semibold" style={{ color: titleColor }}>
-            이세영
+          <strong className="block text-[13px] font-semibold" style={{ color: titleColor }}>
+            내 이름
           </strong>
         </div>
         <div className="flex items-center gap-3 text-[#0b7285]">
-          <Search className="h-5 w-5" />
-          <UserPlus className="h-5 w-5" />
-          <Gift className="h-5 w-5" />
-          <Settings className="h-5 w-5" />
+          <Search className="w-4 h-4" />
+          <UserPlus className="w-4 h-4" />
+          <Gift className="w-4 h-4" />
+          <Settings className="w-4 h-4" />
         </div>
       </button>
-      <div className="overflow-hidden px-4 pb-3">
+      <div className="px-4 pb-3 mt-2 overflow-hidden">
         <div className="grid h-full content-start gap-3 overflow-hidden px-0.5 pb-2">
-          <div className="flex gap-2 px-1 pt-2">
+          <div className="flex gap-2 ">
             <Chip active>친구</Chip>
             <Chip>소식</Chip>
           </div>
 
-          <div className="overflow-hidden rounded-[26px] bg-white/92 px-5 py-5 shadow-[0_18px_32px_rgba(15,23,42,0.08)]">
-            <div className="grid grid-cols-[1fr_156px] items-center gap-4">
-              <div>
-                <strong className="block text-[15px] font-semibold text-[#31343b]">오늘의 카카오가 궁금하다면?</strong>
-                <span className="mt-1 block text-[12px] font-medium text-[#7b818b]">카카오소식 보러가기</span>
-              </div>
-              <div className="flex items-center justify-end gap-3 text-[#0d7786]">
-                <span className="grid h-11 w-11 place-items-center rounded-full bg-[#e9f7f7] text-xl">🟢</span>
-                <span className="grid h-11 w-11 place-items-center rounded-full bg-[#fff5d8] text-xl">📣</span>
-                <span className="grid h-11 w-11 place-items-center rounded-full bg-[#eef2ff] text-xl">📅</span>
-              </div>
-            </div>
+          <div className="overflow-hidden rounded-[10px] bg-white/92 px-5 py-8 shadow-[0_18px_32px_rgba(15,23,42,0.08)] ">
+
           </div>
 
           <button
@@ -179,8 +168,8 @@ function FriendsScreen({
             </span>
           </button>
 
-          <div className="flex gap-3 overflow-hidden px-1">
-            {["내 프로필", "조유민", "이승원", "1/12 준한...", "23 김수빈", "줄"].map((name, index) => (
+          <div className="flex gap-3 px-1 overflow-hidden">
+            {["내 프로필", "테스트 A", "테스트 B", "샘플 C", "샘플 D", "더보기"].map((name, index) => (
               <div key={name} className="grid w-[62px] justify-items-center gap-2">
                 <div className="relative">
                   <AvatarCircle src={urls.main_background} size="h-16 w-16" />
@@ -218,16 +207,16 @@ function FriendsScreen({
                     {row.sub}
                   </span>
                 </div>
-                <button type="button" className="rounded-full border border-[#7aa8af]/35 bg-white/12 px-4 py-2 text-[12px] font-semibold text-[#25636c]">
+                <button type="button" className="rounded-full border border-[#7aa8af]/35 bg-white/12 px-2 py-2 text-[6px] font-semibold text-[#25636c]">
                   {row.cta}
                 </button>
               </div>
             ))}
             <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-              <span className="grid h-12 w-12 place-items-center rounded-[20px] bg-white/70 text-xl">🥳</span>
+              <span className="grid h-12 w-12 place-items-center rounded-[20px] bg-white/70 text-xl">🎂</span>
               <div>
                 <strong className="block text-[14px] font-semibold leading-tight" style={{ color: titleColor }}>
-                  친구의 생일을 확인해 보세요.
+                  친구의 생일 일정을 확인해보세요
                 </strong>
               </div>
               <span className="text-[14px] font-semibold" style={{ color: bodyColor }}>
@@ -276,41 +265,41 @@ function ChatsScreen({
           채팅
         </strong>
         <div className="flex items-center gap-4 text-[#0b7285]">
-          <Search className="h-6 w-6" />
-          <MessageCirclePlus className="h-6 w-6" />
-          <Settings className="h-6 w-6" />
+          <Search className="w-6 h-6" />
+          <MessageCirclePlus className="w-6 h-6" />
+          <Settings className="w-6 h-6" />
         </div>
       </button>
-      <div className="grid min-h-0 content-start gap-4 overflow-hidden pb-4">
+      <div className="grid content-start min-h-0 gap-4 pb-4 overflow-hidden">
         <div className="border-b border-[#5ab0bc]/18 bg-[#18b7d0] px-4 py-4 text-[#104950]">
           <div className="flex items-center gap-3 overflow-hidden">
             <FilterPill dark>전체</FilterPill>
             <FilterPill>
-              <span className="text-xl">💬</span>
-              <BadgeSmall value="415" />
+              <span className="text-xl">📌</span>
+              <BadgeSmall value="12" />
             </FilterPill>
             <FilterPill wide>
-              <span className="text-xl">🌍</span>
+              <span className="text-xl">🤖</span>
               <strong className="text-[14px] font-semibold">ChatGPT</strong>
               <BadgeSmall value="N" />
             </FilterPill>
-            <CircleAction icon={<Bell className="h-5 w-5" />} />
-            <CircleAction icon={<Search className="h-5 w-5" />} />
+            <CircleAction icon={<Bell className="w-5 h-5" />} />
+            <CircleAction icon={<Search className="w-5 h-5" />} />
           </div>
         </div>
         <div className="px-4">
           <div className="rounded-[28px] bg-white/92 px-6 py-5 shadow-[0_20px_36px_rgba(15,23,42,0.08)]">
             <div className="grid grid-cols-[1fr_112px] items-center gap-4">
               <div>
-                <span className="text-[11px] font-medium text-[#8d939a]">드래곤빌리지3 앱다운로드</span>
-                <strong className="mt-1 block text-[15px] font-semibold text-[#2d3137]">전 세계 동시 출시!</strong>
-                <span className="mt-1 block text-[11px] font-medium text-[#9ba1a8]">AD Moloco 광고 · 확률형 아이템 포함</span>
+                <span className="text-[11px] font-medium text-[#8d939a]">테스트 배너</span>
+                <strong className="mt-1 block text-[15px] font-semibold text-[#2d3137]">새 테마 미리보기를 확인하세요</strong>
+                <span className="mt-1 block text-[11px] font-medium text-[#9ba1a8]">실서비스 데이터 대신 샘플 문구를 사용합니다.</span>
               </div>
               <div className="h-[84px] rounded-2xl bg-[linear-gradient(135deg,#e8f8ff,#fff1b6)]" />
             </div>
           </div>
         </div>
-        <div className="grid min-h-0 gap-1 overflow-hidden px-4">
+        <div className="grid min-h-0 gap-1 px-4 overflow-hidden">
           {chatRows.map((row, index) => (
             <div key={`${row.name}-${index}`} className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-[20px] px-2 py-2">
               <AvatarCircle src={urls.main_background} size={index === 0 ? "h-14 w-14" : "h-12 w-12"} />
@@ -340,7 +329,7 @@ function ChatsScreen({
                   </span>
                 </button>
               </div>
-              <div className="grid justify-items-end gap-2 pt-1">
+              <div className="grid gap-2 pt-1 justify-items-end">
                 <span className="text-[11px] font-medium" style={{ color: bodyColor }}>
                   {row.time}
                 </span>
@@ -413,8 +402,8 @@ function BottomTabBar({
         if (slotByRole.tab_background) onSelectSlot?.(slotByRole.tab_background.id);
       }}
     >
-      <TabAsset active={active === "friends"} label="친구" defaultUrl={urls.tab_icon_friends} focusedUrl={urls.tab_icon_friends_focused} slot={slotByRole.tab_icon_friends_focused ?? slotByRole.tab_icon_friends} selected={selectedSlotId === slotByRole.tab_icon_friends?.id || selectedSlotId === slotByRole.tab_icon_friends_focused?.id} badge="415" onSelectSlot={onSelectSlot} />
-      <TabAsset active={active === "chats"} label="채팅" defaultUrl={urls.tab_icon_chats} focusedUrl={urls.tab_icon_chats_focused} slot={slotByRole.tab_icon_chats_focused ?? slotByRole.tab_icon_chats} selected={selectedSlotId === slotByRole.tab_icon_chats?.id || selectedSlotId === slotByRole.tab_icon_chats_focused?.id} badge="615" onSelectSlot={onSelectSlot} />
+      <TabAsset active={active === "friends"} label="친구" defaultUrl={urls.tab_icon_friends} focusedUrl={urls.tab_icon_friends_focused} slot={slotByRole.tab_icon_friends_focused ?? slotByRole.tab_icon_friends} selected={selectedSlotId === slotByRole.tab_icon_friends?.id || selectedSlotId === slotByRole.tab_icon_friends_focused?.id} badge="12" onSelectSlot={onSelectSlot} />
+      <TabAsset active={active === "chats"} label="채팅" defaultUrl={urls.tab_icon_chats} focusedUrl={urls.tab_icon_chats_focused} slot={slotByRole.tab_icon_chats_focused ?? slotByRole.tab_icon_chats} selected={selectedSlotId === slotByRole.tab_icon_chats?.id || selectedSlotId === slotByRole.tab_icon_chats_focused?.id} badge="8" onSelectSlot={onSelectSlot} />
       <TabAsset active={active === "now"} label="Now" defaultUrl={urls.tab_icon_now} focusedUrl={urls.tab_icon_now_focused} slot={slotByRole.tab_icon_now_focused ?? slotByRole.tab_icon_now} selected={selectedSlotId === slotByRole.tab_icon_now?.id || selectedSlotId === slotByRole.tab_icon_now_focused?.id} onSelectSlot={onSelectSlot} />
       <TabAsset active={active === "shopping"} label="쇼핑" defaultUrl={urls.tab_icon_shopping} focusedUrl={urls.tab_icon_shopping_focused} slot={slotByRole.tab_icon_shopping_focused ?? slotByRole.tab_icon_shopping} selected={selectedSlotId === slotByRole.tab_icon_shopping?.id || selectedSlotId === slotByRole.tab_icon_shopping_focused?.id} onSelectSlot={onSelectSlot} />
       <TabAsset active={active === "more"} label="더보기" defaultUrl={urls.tab_icon_more} focusedUrl={urls.tab_icon_more_focused} slot={slotByRole.tab_icon_more_focused ?? slotByRole.tab_icon_more} selected={selectedSlotId === slotByRole.tab_icon_more?.id || selectedSlotId === slotByRole.tab_icon_more_focused?.id} dot onSelectSlot={onSelectSlot} />
@@ -453,7 +442,7 @@ function TabAsset({
       }}
     >
       <span className="relative grid h-12 w-12 place-items-center rounded-full bg-[#aeccfb]/55">
-        <span className="h-8 w-8 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${active ? focusedUrl || defaultUrl || "" : defaultUrl || focusedUrl || ""})` }} />
+        <span className="w-8 h-8 bg-center bg-no-repeat bg-contain" style={{ backgroundImage: `url(${active ? focusedUrl || defaultUrl || "" : defaultUrl || focusedUrl || ""})` }} />
       </span>
       <span className="text-[10px] font-semibold text-[#57737a]">{label}</span>
       {badge ? <span className="absolute left-1/2 top-0 rounded-full bg-[#ff6b37] px-2 py-[1px] text-[10px] font-bold text-white">{badge}</span> : null}
@@ -467,7 +456,7 @@ function AvatarCircle({ src, size }: { src?: string; size: string }) {
 }
 
 function Chip({ active, children }: { active?: boolean; children: ReactNode }) {
-  return <span className={`inline-flex h-10 items-center rounded-full px-6 text-[14px] font-semibold ${active ? "bg-[#0d5b66] text-white" : "border border-[#70aab3]/35 bg-white/14 text-[#0d5b66]"}`}>{children}</span>;
+  return <span className={`inline-flex h-8 items-center rounded-full px-6 text-[14px] font-semibold ${active ? "bg-[#0d5b66] text-white" : "border border-[#70aab3]/35 bg-white/14 text-[#0d5b66]"}`}>{children}</span>;
 }
 
 function FilterPill({ children, dark, wide }: { children: ReactNode; dark?: boolean; wide?: boolean }) {

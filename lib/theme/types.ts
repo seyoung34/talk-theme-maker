@@ -2,8 +2,8 @@ export type BubbleSlot = "me" | "you";
 export type PlatformMode = "android" | "ios";
 export type ThemePlatform = "android" | "ios";
 export type ThemeScreen = "chatroom" | "friends" | "tabs" | "profile";
-export type ThemeSection = "main" | "tabs" | "chatroom";
-export type ThemeSlotGroup = "background" | "header" | "list" | "bar" | "icons" | "bubbles" | "input";
+export type ThemeSection = "main" | "tabs" | "chatroom" | "common";
+export type ThemeSlotGroup = "background" | "header" | "list" | "bar" | "icons" | "bubbles" | "input" | "icon" | "profiles";
 export type ThemeSlotKind = "image" | "ninepatch" | "color";
 export type ThemeCandidateSourceType = "template-asset" | "template-color" | "session-upload";
 export type ThemeDiagnosticLevel = "info" | "warning" | "error";
@@ -34,6 +34,13 @@ export type ThemeResourceRole =
   | "tab_icon_more_focused"
   | "chat_input_background_color"
   | "chat_send_button_color"
+  | "theme_icon"
+  | "profile_image_1"
+  | "profile_image_2"
+  | "profile_image_3"
+  | "profile_image_full_1"
+  | "profile_image_full_2"
+  | "profile_image_full_3"
   | "profile_image"
   | "passcode"
   | "splash"

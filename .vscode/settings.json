@@ -1,5 +1,14 @@
 {
   "files.encoding": "utf8",
   "files.autoGuessEncoding": false,
-  "files.eol": "\n"
+  "files.eol": "\n",
+  "editor.quickSuggestions": {
+    "strings": "on"
+  },
+  "tailwindCSS.experimental.configFile": "app/globals.css",
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascript"
+  },
+  "css.validate": false
 }

@@ -1,9 +1,8 @@
 import { exportNinePatch, loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
 import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
-import { blobFile, createStoredZip, textFile } from "@/lib/theme/project/zip";
-import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
+import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
+import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { ThemePlatform } from "@/lib/theme/types";
 
 type AndroidExportOptions = {
   analysis: ThemeProjectAnalysis;
@@ -16,25 +15,30 @@ type AndroidExportOptions = {
   bubbleEditsBySlotId: Partial<Record<string, BubbleEditState>>;
 };
 
-export async function exportAndroidThemePackage(options: AndroidExportOptions) {
+export type AndroidExportFile = {
+  path: string;
+  blob: Blob;
+};
+
+export async function buildAndroidThemeExportFiles(options: AndroidExportOptions): Promise<AndroidExportFile[]> {
   const { analysis, template, templateId, slots, uploads, colors, selections, bubbleEditsBySlotId } = options;
   const androidSlots = slots.filter((slot) => slot.platform === "android");
-  const entries = [];
+  const files: AndroidExportFile[] = [];
 
   for (const slot of androidSlots) {
     if (slot.kind === "color" || !slot.path) continue;
     const blob = await resolveAndroidSlotBlob(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id]);
     if (!blob) continue;
-    entries.push(await blobFile(slot.path, blob));
+    files.push({ path: slot.path, blob });
   }
 
-  entries.push(
-    textFile("src/main/theme/values/colors.xml", buildAndroidColorsXml(template, androidSlots, colors, selections, templateId)),
-    textFile("src/main/theme/values/strings.xml", buildAndroidStringsXml(template.name)),
-    textFile("src/main/theme/values-ko/strings.xml", buildAndroidStringsXml(template.name)),
-    textFile("src/main/theme/values-ja/strings.xml", buildAndroidStringsXml(template.name)),
-    textFile("theme-export-report.json", JSON.stringify({ exportedAt: new Date().toISOString(), templateId, platform: "android", diagnostics: analysis.diagnostics }, null, 2)),
-    textFile(
+  files.push(
+    textBlobFile("src/main/theme/values/colors.xml", buildAndroidColorsXml(template, androidSlots, colors, selections, templateId)),
+    textBlobFile("src/main/theme/values/strings.xml", buildAndroidStringsXml(template.name)),
+    textBlobFile("src/main/theme/values-ko/strings.xml", buildAndroidStringsXml(template.name)),
+    textBlobFile("src/main/theme/values-ja/strings.xml", buildAndroidStringsXml(template.name)),
+    textBlobFile("theme-export-report.json", JSON.stringify({ exportedAt: new Date().toISOString(), templateId, platform: "android", diagnostics: analysis.diagnostics }, null, 2)),
+    textBlobFile(
       "README-export.txt",
       [
         "This zip contains Android theme resource files exported from KakaoTalk Theme Maker.",
@@ -45,6 +49,14 @@ export async function exportAndroidThemePackage(options: AndroidExportOptions) {
       ].join("\n"),
     ),
   );
+
+  return files;
+}
+
+export async function exportAndroidThemePackage(options: AndroidExportOptions) {
+  const { template } = options;
+  const files = await buildAndroidThemeExportFiles(options);
+  const entries = await Promise.all(files.map((file) => blobFile(file.path, file.blob)));
 
   const fileName = `${slugify(template.name)}-android-theme-resources.zip`;
   const blob = createStoredZip(entries);
@@ -61,7 +73,7 @@ async function resolveAndroidSlotBlob(
 ) {
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   if (slot.kind === "ninepatch") {
-    const sourceDataUrl = selectedUpload ? await readBlobAsDataUrl(selectedUpload.file) : await assetUrlToDataUrl(getResolvedAssetUrl(slot, uploads, selections, templateId, template));
+    const sourceDataUrl = selectedUpload ? await readThemeProjectFileAsDataUrl(selectedUpload.file) : await assetUrlToDataUrl(getResolvedAssetUrl(slot, uploads, selections, templateId, template));
     if (!sourceDataUrl) return null;
     const asset = await loadNinePatchDataUrl(sourceDataUrl, slot.fileName ?? `${slot.id}.9.png`, slot.role.includes("_me_") ? "me" : "you");
     const nextAsset = bubbleEdit?.markers ? { ...asset, markers: bubbleEdit.markers } : asset;
@@ -220,4 +232,16 @@ function slugify(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9가-힣]+/g, "-")
     .replace(/^-+|-+$/g, "") || "kakaotalk-theme";
+}
+
+function textBlobFile(path: string, text: string): AndroidExportFile {
+  return {
+    path,
+    blob: new Blob([text], { type: "text/plain;charset=utf-8" }),
+  };
+}
+
+function readThemeProjectFileAsDataUrl(file: ThemeProjectFile["file"]) {
+  if (!file) return Promise.resolve("");
+  return readBlobAsDataUrl(file);
 }

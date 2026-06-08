@@ -52,11 +52,13 @@ export function createThemeProjectAnalysis(
     }
   }
 
+  const screens = Array.from(new Set(resources.map((resource) => resource.screen)));
+
   return {
     summary: {
       platform,
       rootName: template.name,
-      screens: ["friends", "tabs", "chatroom"],
+      screens: screens.length > 0 ? screens : ["friends", "tabs", "chatroom"],
       resourceCount: resources.length,
       diagnosticsCount: diagnostics.length,
     },

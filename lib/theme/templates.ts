@@ -82,17 +82,18 @@ export type ThemeAssetSlot = {
 export const templateStartStorageKey = "kakaotalk-theme-maker:template-start:v1";
 
 const sharedSections: ThemeSectionDefinition[] = [
-  { id: "main", label: "메인화면", groups: ["background", "header", "list"] },
+  { id: "main", label: "메인 화면", groups: ["background", "header", "list"] },
   { id: "tabs", label: "하단 탭", groups: ["bar", "icons"] },
   { id: "chatroom", label: "채팅방", groups: ["background", "bubbles", "input"] },
+  { id: "common", label: "공통 리소스", groups: ["icon", "profiles"] },
 ];
 
 export const themeTemplates: ThemeTemplate[] = [
   {
     id: "basic",
     name: "기본 템플릿",
-    description: "가장 단순한 구조로 테마의 큰 톤을 먼저 잡는 기본 템플릿입니다.",
-    previewNote: "색과 이미지를 빠르게 교체해 전체 흐름을 확인하는 시작 템플릿입니다.",
+    description: "가장 단순한 구조로 테마 화면을 먼저 점검하는 기본 템플릿입니다.",
+    previewNote: "색상과 이미지를 빠르게 교체하면서 전체 흐름을 확인하는 시작 템플릿입니다.",
     accent: "#006b7a",
     supportedPlatforms: ["android", "ios"],
     sections: sharedSections,
@@ -114,7 +115,7 @@ export const themeTemplates: ThemeTemplate[] = [
     id: "spongebob",
     name: "스폰지밥 템플릿",
     description: "기존 Android/iOS 스폰지밥 에셋으로 바로 시작하는 템플릿입니다.",
-    previewNote: "배경과 말풍선, 아이콘에 기본 스폰지밥 에셋이 연결됩니다.",
+    previewNote: "배경과 말풍선, 탭 아이콘에 기본 스폰지밥 에셋을 연결해 둡니다.",
     accent: "#f6c800",
     supportedPlatforms: ["android", "ios"],
     sections: sharedSections,

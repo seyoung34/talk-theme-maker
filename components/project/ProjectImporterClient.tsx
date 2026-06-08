@@ -20,7 +20,7 @@ import {
   type SlotUploads,
 } from "@/components/project/projectModel";
 import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
-import { exportAndroidThemePackage } from "@/lib/theme/android/export";
+import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
 import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
@@ -29,7 +29,6 @@ import {
   getThemeTemplate,
   templateStartStorageKey,
   type ThemeAssetSlot,
-  type ThemeTemplate,
   type ThemeTemplateId,
 } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
@@ -104,9 +103,11 @@ export default function ProjectImporterClient() {
 
   const activeTemplate = getThemeTemplate(templateId);
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
+
   useEffect(() => {
     setCandidateSelections(getInitialSlotCandidateSelections(slots, templateId, activeTemplate));
   }, [activeTemplate, slots, templateId]);
+
   const groups = useMemo(() => getSectionGroups(activeSection, slots), [activeSection, slots]);
   const analysis = useMemo(
     () => createThemeProjectAnalysis(activeTemplate, platform, slots, uploads, colors, candidateSelections),
@@ -190,16 +191,19 @@ export default function ProjectImporterClient() {
       router.push("/editor");
       return;
     }
+
     const bubbleSlot = bubbleSlotFromRole(selectedSlot.role);
     if (!bubbleSlot) {
       router.push("/editor");
       return;
     }
+
     const dataUrl = await dataUrlForThemeFile(selectedFile);
     if (!dataUrl) {
       router.push("/editor");
       return;
     }
+
     localStorage.setItem(
       editorHandoffKey,
       JSON.stringify({
@@ -219,13 +223,14 @@ export default function ProjectImporterClient() {
 
   const exportTheme = async () => {
     if (platform !== "android") {
-      setNotice({ tone: "warning", message: "iOS 내보내기는 준비 중입니다. 현재는 Android 리소스 패키지만 생성할 수 있습니다." });
+      setNotice({ tone: "warning", message: "iOS 내보내기는 준비 중입니다. 현재는 Android APK 빌드만 지원합니다." });
       return;
     }
 
     try {
       setIsExporting(true);
-      setNotice({ tone: "info", message: "Android 리소스 패키지를 생성하는 중입니다." });
+      setNotice({ tone: "info", message: "Android APK를 빌드하는 중입니다." });
+
       const bubbleEditsBySlotId = Object.fromEntries(
         slots.map((slot) => [
           slot.id,
@@ -236,7 +241,8 @@ export default function ProjectImporterClient() {
           },
         ]),
       );
-      const { blob, fileName } = await exportAndroidThemePackage({
+
+      const exportFiles = await buildAndroidThemeExportFiles({
         analysis,
         template: activeTemplate,
         templateId,
@@ -246,6 +252,29 @@ export default function ProjectImporterClient() {
         selections: candidateSelections,
         bubbleEditsBySlotId,
       });
+
+      const formData = new FormData();
+      const manifest = exportFiles.map((file, index) => {
+        const field = `file-${index}`;
+        formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
+        return { field, path: file.path };
+      });
+      formData.append("manifest", JSON.stringify(manifest));
+      formData.append("apkBaseName", activeTemplate.name);
+
+      const response = await fetch("/api/export/android-apk", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(errorBody?.error ?? "Android APK build failed.");
+      }
+
+      const blob = await response.blob();
+      const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${activeTemplate.name}-android-debug.apk`;
+
       const href = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = href;
@@ -255,7 +284,7 @@ export default function ProjectImporterClient() {
       setNotice({ tone: "success", message: `${fileName} 파일을 생성했습니다.` });
     } catch (error) {
       console.error(error);
-      setNotice({ tone: "error", message: "Android 내보내기 중 오류가 발생했습니다. 콘솔 로그를 확인하세요." });
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Android APK 빌드 중 오류가 발생했습니다." });
     } finally {
       setIsExporting(false);
     }
@@ -293,9 +322,10 @@ export default function ProjectImporterClient() {
 
   return (
     <main className="h-[100dvh] overflow-hidden px-3 py-3 text-[#111827] md:px-4 md:py-4">
-      <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-3 md:gap-4">
-        <header className="relative grid min-h-[56px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-[#e5e7eb] bg-white/95 px-4 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
+      {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
 
+      <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-3 md:gap-4">
+        <header className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-[#e5e7eb] bg-white/95 px-4 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
           <div className="flex min-w-0 items-center justify-self-start gap-4">
             <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
               &larr;
@@ -308,7 +338,9 @@ export default function ProjectImporterClient() {
             <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-[#e5e7eb]">
               <div className="h-full rounded-full bg-[#2563eb]" style={{ width: `${completion.total > 0 ? Math.round((completion.ready / completion.total) * 100) : 0}%` }} />
             </div>
-            <span className="shrink-0 text-xs font-semibold text-[#64748b]">{completion.ready}/{completion.total} 준비</span>
+            <span className="shrink-0 text-xs font-semibold text-[#64748b]">
+              {completion.ready}/{completion.total} 준비
+            </span>
             <span className={`hidden shrink-0 text-xs font-semibold lg:inline ${analysis.diagnostics.length > 0 ? "text-amber-700" : "text-emerald-700"}`}>
               {analysis.diagnostics.length > 0 ? `${analysis.diagnostics.length}개 확인 필요` : "문제 없음"}
             </span>
@@ -317,18 +349,24 @@ export default function ProjectImporterClient() {
             </span>
           </div>
 
-          <div className="flex min-w-0 justify-self-end shrink-0 items-center gap-2">
-            <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc]" onClick={openAdvancedBubbleEditor}>
-              정밀 조정
-            </button>
-            <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60" onClick={saveCurrentTemplate} disabled={isSavingTemplate}>
+          <div className="flex min-w-0 shrink-0 items-center justify-self-end gap-2">
+            <button
+              type="button"
+              className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
+              onClick={saveCurrentTemplate}
+              disabled={isSavingTemplate}
+            >
               {isSavingTemplate ? "저장 중..." : "내 템플릿으로 저장"}
             </button>
-            <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60" onClick={exportTheme} disabled={isExporting}>
-              {isExporting ? "내보내는 중..." : platform === "android" ? "Android 리소스 내보내기" : "iOS 내보내기 준비중"}
+            <button
+              type="button"
+              className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60"
+              onClick={exportTheme}
+              disabled={isExporting}
+            >
+              {isExporting ? "빌드 중..." : platform === "android" ? "Android APK 내보내기" : "iOS 내보내기 준비중"}
             </button>
           </div>
-          {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
         </header>
 
         <section className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_300px] gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
@@ -363,7 +401,8 @@ export default function ProjectImporterClient() {
                 setActiveGroup(slot.group);
               }}
             />
-            <div className="grid min-w-0 min-h-0 px-3">
+
+            <div className="grid min-h-0 min-w-0 px-3">
               <ProjectQuickEditPanel
                 slot={selectedSlot}
                 file={selectedFile}
@@ -416,6 +455,11 @@ export default function ProjectImporterClient() {
 }
 
 function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {
+  useEffect(() => {
+    const timeout = window.setTimeout(onDismiss, 3200);
+    return () => window.clearTimeout(timeout);
+  }, [notice.message, notice.tone, onDismiss]);
+
   const noticeToneClass =
     notice.tone === "success"
       ? "border-emerald-200 bg-emerald-50 text-emerald-800"
@@ -426,7 +470,7 @@ function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => 
           : "border-sky-200 bg-sky-50 text-sky-800";
 
   return (
-    <div className={`absolute bottom-[-34px] right-0 z-40 flex max-w-[420px] items-center gap-3 rounded-xl border px-3 py-2 text-xs font-semibold shadow-[0_10px_24px_rgba(15,23,42,0.08)] ${noticeToneClass}`}>
+    <div className={`pointer-events-auto fixed left-1/2 top-4 z-[90] flex w-[min(92vw,460px)] -translate-x-1/2 items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur-sm ${noticeToneClass}`}>
       <span className="truncate">{notice.message}</span>
       <button type="button" className="shrink-0 text-current/70 hover:text-current" onClick={onDismiss} aria-label="알림 닫기">
         닫기
@@ -444,10 +488,18 @@ function slotEditFromMaps(
 ): BubbleEditState | undefined {
   const slot = slots.find((item) => roles.includes(item.role));
   if (!slot) return undefined;
+
   const next = {
     markers: bubbleMarkers[slot.id],
     insets: bubbleInsets[slot.id],
     stretch: bubbleStretch[slot.id],
   };
+
   return next.markers || next.insets || next.stretch ? next : undefined;
+}
+
+function getDownloadFileName(contentDisposition: string | null) {
+  if (!contentDisposition) return null;
+  const match = /filename="([^"]+)"/i.exec(contentDisposition);
+  return match?.[1] ?? null;
 }
