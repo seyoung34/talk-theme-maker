@@ -29,15 +29,30 @@ import {
   getThemeTemplate,
   templateStartStorageKey,
   type ThemeAssetSlot,
+  type ThemeTemplate,
   type ThemeTemplateId,
 } from "@/lib/theme/templates";
-import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
+import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 const editorHandoffKey = "kakaotalk-theme-maker:editor-handoff:v1";
 
 type Notice = {
   tone: "info" | "success" | "warning" | "error";
   message: string;
+};
+
+type AndroidExportPayloadOptions = {
+  analysis: ReturnType<typeof createThemeProjectAnalysis>;
+  template: ThemeTemplate;
+  templateId: ThemeTemplateId;
+  slots: ThemeAssetSlot[];
+  uploads: SlotUploads;
+  colors: SlotColors;
+  selections: SlotCandidateSelections;
+  bubbleMarkers: Partial<Record<string, Markers>>;
+  bubbleInsets: Partial<Record<string, Insets>>;
+  bubbleStretch: Partial<Record<string, StretchPoint>>;
+  nameField: "apkBaseName" | "projectBaseName";
 };
 
 export default function ProjectImporterClient() {
@@ -53,6 +68,7 @@ export default function ProjectImporterClient() {
   const [screenRailOpen, setScreenRailOpen] = useState(true);
   const [candidateOpen, setCandidateOpen] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingProject, setIsExportingProject] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
@@ -78,7 +94,7 @@ export default function ProjectImporterClient() {
       try {
         const savedTemplate = await getUserTemplate(payload.userTemplateId);
         if (!savedTemplate) {
-          setNotice({ tone: "warning", message: "저장된 내 템플릿을 찾을 수 없어 기본 템플릿으로 시작합니다." });
+          setNotice({ tone: "warning", message: "저장한 템플릿을 찾을 수 없어 기본 템플릿으로 시작합니다." });
           return;
         }
 
@@ -93,7 +109,7 @@ export default function ProjectImporterClient() {
         setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 불러왔습니다.` });
       } catch (error) {
         console.error(error);
-        setNotice({ tone: "error", message: "내 템플릿을 불러오는 중 오류가 발생했습니다." });
+        setNotice({ tone: "error", message: "저장한 템플릿을 불러오는 중 오류가 발생했습니다." });
       }
     };
 
@@ -145,6 +161,7 @@ export default function ProjectImporterClient() {
   const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | null) => {
     const file = fileList?.[0];
     if (!file) return;
+
     const uploadId = `${slot.id}:upload:${Date.now()}`;
     setUploads((current) => ({
       ...current,
@@ -223,7 +240,7 @@ export default function ProjectImporterClient() {
 
   const exportTheme = async () => {
     if (platform !== "android") {
-      setNotice({ tone: "warning", message: "iOS 내보내기는 준비 중입니다. 현재는 Android APK 빌드만 지원합니다." });
+      setNotice({ tone: "warning", message: "iOS 내보내기는 아직 준비 중입니다. 현재는 Android APK 빌드만 지원합니다." });
       return;
     }
 
@@ -231,18 +248,7 @@ export default function ProjectImporterClient() {
       setIsExporting(true);
       setNotice({ tone: "info", message: "Android APK를 빌드하는 중입니다." });
 
-      const bubbleEditsBySlotId = Object.fromEntries(
-        slots.map((slot) => [
-          slot.id,
-          {
-            markers: bubbleMarkers[slot.id],
-            insets: bubbleInsets[slot.id],
-            stretch: bubbleStretch[slot.id],
-          },
-        ]),
-      );
-
-      const exportFiles = await buildAndroidThemeExportFiles({
+      const formData = await createAndroidExportFormData({
         analysis,
         template: activeTemplate,
         templateId,
@@ -250,17 +256,11 @@ export default function ProjectImporterClient() {
         uploads,
         colors,
         selections: candidateSelections,
-        bubbleEditsBySlotId,
+        bubbleMarkers,
+        bubbleInsets,
+        bubbleStretch,
+        nameField: "apkBaseName",
       });
-
-      const formData = new FormData();
-      const manifest = exportFiles.map((file, index) => {
-        const field = `file-${index}`;
-        formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
-        return { field, path: file.path };
-      });
-      formData.append("manifest", JSON.stringify(manifest));
-      formData.append("apkBaseName", activeTemplate.name);
 
       const response = await fetch("/api/export/android-apk", {
         method: "POST",
@@ -274,13 +274,7 @@ export default function ProjectImporterClient() {
 
       const blob = await response.blob();
       const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${activeTemplate.name}-android-debug.apk`;
-
-      const href = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = href;
-      anchor.download = fileName;
-      anchor.click();
-      URL.revokeObjectURL(href);
+      triggerDownload(blob, fileName);
       setNotice({ tone: "success", message: `${fileName} 파일을 생성했습니다.` });
     } catch (error) {
       console.error(error);
@@ -290,9 +284,55 @@ export default function ProjectImporterClient() {
     }
   };
 
+  const exportAndroidProject = async () => {
+    if (platform !== "android") {
+      setNotice({ tone: "warning", message: "iOS 프로젝트 내보내기는 아직 준비 중입니다." });
+      return;
+    }
+
+    try {
+      setIsExportingProject(true);
+      setNotice({ tone: "info", message: "Android 프로젝트 ZIP을 생성하는 중입니다." });
+
+      const formData = await createAndroidExportFormData({
+        analysis,
+        template: activeTemplate,
+        templateId,
+        slots,
+        uploads,
+        colors,
+        selections: candidateSelections,
+        bubbleMarkers,
+        bubbleInsets,
+        bubbleStretch,
+        nameField: "projectBaseName",
+      });
+
+      const response = await fetch("/api/export/android-project", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(errorBody?.error ?? "Android project export failed.");
+      }
+
+      const blob = await response.blob();
+      const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${activeTemplate.name}-android-project.zip`;
+      triggerDownload(blob, fileName);
+      setNotice({ tone: "success", message: `${fileName} 파일을 생성했습니다.` });
+    } catch (error) {
+      console.error(error);
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Android 프로젝트 ZIP 생성 중 오류가 발생했습니다." });
+    } finally {
+      setIsExportingProject(false);
+    }
+  };
+
   const saveCurrentTemplate = async () => {
     const fallbackName = `${activeTemplate.name} 복사본`;
-    const name = window.prompt("내 템플릿 이름을 입력하세요.", fallbackName)?.trim();
+    const name = window.prompt("저장할 템플릿 이름을 입력하세요.", fallbackName)?.trim();
     if (!name) return;
 
     try {
@@ -314,7 +354,7 @@ export default function ProjectImporterClient() {
       setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 저장했습니다.` });
     } catch (error) {
       console.error(error);
-      setNotice({ tone: "error", message: "내 템플릿 저장 중 오류가 발생했습니다. 브라우저 저장소 권한과 용량을 확인하세요." });
+      setNotice({ tone: "error", message: "내 템플릿 저장 중 오류가 발생했습니다. 브라우저 저장소 권한을 확인하세요." });
     } finally {
       setIsSavingTemplate(false);
     }
@@ -334,7 +374,9 @@ export default function ProjectImporterClient() {
           </div>
 
           <div className="flex min-w-0 items-center justify-self-center gap-3 overflow-hidden">
-            <div className="hidden shrink-0 rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#475569] md:block">{platform === "android" ? "Android" : "iOS"}</div>
+            <div className="hidden shrink-0 rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#475569] md:block">
+              {platform === "android" ? "Android" : "iOS"}
+            </div>
             <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-[#e5e7eb]">
               <div className="h-full rounded-full bg-[#2563eb]" style={{ width: `${completion.total > 0 ? Math.round((completion.ready / completion.total) * 100) : 0}%` }} />
             </div>
@@ -356,7 +398,15 @@ export default function ProjectImporterClient() {
               onClick={saveCurrentTemplate}
               disabled={isSavingTemplate}
             >
-              {isSavingTemplate ? "저장 중..." : "내 템플릿으로 저장"}
+              {isSavingTemplate ? "저장 중.." : "내 템플릿으로 저장"}
+            </button>
+            <button
+              type="button"
+              className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
+              onClick={exportAndroidProject}
+              disabled={isExportingProject}
+            >
+              {isExportingProject ? "ZIP 생성 중.." : platform === "android" ? "Android 프로젝트 내보내기" : "iOS 프로젝트 준비중"}
             </button>
             <button
               type="button"
@@ -364,7 +414,7 @@ export default function ProjectImporterClient() {
               onClick={exportTheme}
               disabled={isExporting}
             >
-              {isExporting ? "빌드 중..." : platform === "android" ? "Android APK 내보내기" : "iOS 내보내기 준비중"}
+              {isExporting ? "빌드 중.." : platform === "android" ? "Android APK 내보내기" : "iOS 내보내기 준비중"}
             </button>
           </div>
         </header>
@@ -502,4 +552,61 @@ function getDownloadFileName(contentDisposition: string | null) {
   if (!contentDisposition) return null;
   const match = /filename="([^"]+)"/i.exec(contentDisposition);
   return match?.[1] ?? null;
+}
+
+async function createAndroidExportFormData({
+  analysis,
+  template,
+  templateId,
+  slots,
+  uploads,
+  colors,
+  selections,
+  bubbleMarkers,
+  bubbleInsets,
+  bubbleStretch,
+  nameField,
+}: AndroidExportPayloadOptions) {
+  const bubbleEditsBySlotId = Object.fromEntries(
+    slots.map((slot) => [
+      slot.id,
+      {
+        markers: bubbleMarkers[slot.id],
+        insets: bubbleInsets[slot.id],
+        stretch: bubbleStretch[slot.id],
+      },
+    ]),
+  );
+
+  const exportFiles = await buildAndroidThemeExportFiles({
+    analysis,
+    template,
+    templateId,
+    slots,
+    uploads,
+    colors,
+    selections,
+    bubbleEditsBySlotId,
+  });
+
+  const formData = new FormData();
+  const manifest = exportFiles.map((file, index) => {
+    const field = `file-${index}`;
+    formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
+    return { field, path: file.path };
+  });
+
+  formData.append("manifest", JSON.stringify(manifest));
+  formData.append(nameField, template.name);
+
+  return formData;
+}
+
+function triggerDownload(blob: Blob, fileName: string) {
+  const href = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(href);
 }

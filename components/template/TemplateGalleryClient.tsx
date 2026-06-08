@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Trash2 } from "lucide-react";
+import { ArrowRight, Clock3, Search } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
+import UserTemplateCard from "@/components/template/UserTemplateCard";
 import { templateStartStorageKey, themeTemplates, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import { deleteUserTemplate, listUserTemplates, type UserTemplateSummary } from "@/lib/theme/userTemplates";
 import type { ThemePlatform } from "@/lib/theme/types";
@@ -14,6 +15,7 @@ export default function TemplateGalleryClient() {
   const [userTemplates, setUserTemplates] = useState<UserTemplateSummary[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const selectedTemplate = themeTemplates.find((template) => template.id === selectedTemplateId) ?? null;
+  const hasSavedTemplates = userTemplates.length > 0;
 
   useEffect(() => {
     let active = true;
@@ -66,94 +68,112 @@ export default function TemplateGalleryClient() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f7f8f5] text-[#111111]">
+    <main className="min-h-screen bg-[var(--color-background)] text-[var(--color-on-background)]">
       <SiteHeader currentPath="/template" />
 
-      <div className="grid gap-5 px-5 py-6 mx-auto max-w-7xl md:px-8 md:py-8">
-
-        <section className="grid gap-4 px-5 py-2 md:px-6 ">
-          <h1 className="mt-2 text-3xl font-black text-[#111111] md:text-4xl uppercase">template</h1>
-          {notice ? (
-            <div className="rounded-[16px] border border-[#d7ddd8] bg-[#f6f7f5] px-4 py-3 text-sm font-bold text-[#334155]">
-              {notice}
-            </div>
-          ) : null}
+      <div className="grid gap-8 px-5 py-8 mx-auto max-w-7xl md:px-8 md:py-10">
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_360px] lg:items-end">
+          <strong className="text-2xl uppercase">template</strong>
         </section>
 
-        {userTemplates.length > 0 ? (
-          <section className="grid gap-4 rounded-[28px] border border-[#d7ddd8] bg-white px-5 py-5 shadow-[0_18px_60px_rgba(17,17,17,0.05)] md:px-6">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#5d6670]"></p>
-                <h2 className="mt-1 text-2xl font-black text-[#111111]">내 템플릿</h2>
-              </div>
-            </div>
+        {/* <section className="grid gap-3 rounded-[24px] border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
+          <div className="flex items-center gap-3 rounded-[18px] bg-white/88 px-4 py-3 text-sm font-semibold text-[var(--color-on-surface-variant)]">
+            <Search className="w-4 h-4" />
+            <span>검색 / 태그 / 정렬 영역 예정</span>
+          </div>
+          <span className="inline-flex justify-center rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">
+            Preview first
+          </span>
+          <span className="inline-flex justify-center rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">
+            Saved first
+          </span>
+        </section> */}
 
-            <div className="grid gap-3 overflow-x-auto sm:grid-cols-2 xl:grid-cols-4">
-              {userTemplates.map((template) => (
-                <article
-                  key={template.id}
-                  className="grid min-h-[176px] content-between rounded-[20px] border border-[#d7ddd8] bg-[#f6f7f5] p-4 transition hover:border-[#111111] hover:bg-white"
-                >
-                  <div className="grid gap-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <strong className="block truncate text-base font-black text-[#111111]">{template.name}</strong>
-                        <span className="mt-1 block text-xs font-bold text-[#5d6670]">
-                          업로드 {template.uploadCount}개 · 색상 {template.colorCount}개
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        aria-label={`${template.name} 삭제`}
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#d7ddd8] bg-white text-[#5d6670] transition hover:border-[#ef4444] hover:text-[#b91c1c]"
-                        onClick={(event) => handleDeleteUserTemplate(event, template)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-3 text-xs font-bold text-[#5d6670]">
-                      <span className="rounded-full bg-white px-2.5 py-1">{template.platform === "android" ? "Android" : "iOS"}</span>
-                      <span>{formatDate(template.updatedAt)}</span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="inline-flex w-fit rounded-full bg-white px-3.5 py-2 text-xs font-black border border-black/50 text-black hover:bg-[]"
-                    onClick={() => startUserTemplate(template)}
-                  >
-                    편집 계속하기
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
+        {notice ? (
+          <div className="rounded-[18px] border border-[var(--color-outline-variant)] bg-white px-4 py-3 text-sm font-bold text-[var(--color-on-surface-variant)] shadow-[0_12px_28px_rgba(42,103,103,0.06)]">
+            {notice}
+          </div>
         ) : null}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {themeTemplates.map((template) => (
-            <button
-              key={template.id}
-              type="button"
-              className="group grid min-h-[308px] content-between rounded-[24px] border border-[#d7ddd8] bg-white p-4 text-left shadow-[0_16px_42px_rgba(17,17,17,0.06)] transition hover:-translate-y-1 hover:border-[#111111]"
-              onClick={() => setSelectedTemplateId(template.id)}
-            >
-              <div className="grid gap-4">
-                <TemplateMiniPreview template={template} />
-                <div>
-                  <span className="mb-2 inline-flex rounded-full bg-[#eeee00] px-2.5 py-1 text-[11px] font-black">미리보기 가능</span>
-                  <strong className="block text-2xl font-black text-[#111111]">{template.name}</strong>
-                  <span className="mt-2 line-clamp-2 block text-sm font-semibold leading-6 text-[#5d6670]">{template.description}</span>
-                </div>
-              </div>
+        <section className="grid gap-5 rounded-[32px] border border-[var(--color-outline-variant)] bg-white/92 p-5 shadow-[0_18px_48px_rgba(42,103,103,0.08)] md:p-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="mt-2 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">내 템플릿</h2>
 
-              <span className="mt-4 inline-flex w-fit rounded-full bg-[#111111] px-4 py-2.5 text-sm font-black text-white transition group-hover:bg-[#c9ff3d] group-hover:text-[#111111]">
-                템플릿 확인
-              </span>
-            </button>
-          ))}
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-surface-low)] px-3 py-2 text-xs font-bold text-[var(--color-on-surface-variant)]">
+              <Clock3 className="w-4 h-4" />
+              최근 수정순
+            </div>
+          </div>
+
+          {hasSavedTemplates ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {userTemplates.map((template) => (
+                <UserTemplateCard
+                  key={template.id}
+                  template={template}
+                  formattedDate={formatDate(template.updatedAt)}
+                  onDelete={handleDeleteUserTemplate}
+                  onContinue={startUserTemplate}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 rounded-[24px] border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+              <div>
+                <strong className="block text-lg font-black text-[var(--color-on-surface)]">저장된 템플릿이 아직 없습니다.</strong>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-on-surface-variant)]">
+                  기본 템플릿으로 시작해 편집 상태를 저장하면, 다음부터는 이 영역에서 바로 이어서 작업할 수 있습니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-4 py-2.5 text-sm font-black text-[var(--color-inverse-on-surface)]"
+                onClick={() => setSelectedTemplateId(themeTemplates[0]?.id ?? null)}
+              >
+                기본 템플릿 보기
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </section>
+
+        <section className="grid gap-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+
+              <h2 className="mt-2 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">기본 템플릿</h2>
+
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {themeTemplates.map((template) => (
+              <button
+                key={template.id}
+                type="button"
+                className="group grid min-h-[356px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/92 p-4 text-left shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)]"
+                onClick={() => setSelectedTemplateId(template.id)}
+              >
+                <div className="grid gap-4">
+                  <TemplateMiniPreview template={template} />
+                  <div className="grid gap-2">
+                    <span className="inline-flex w-fit rounded-full bg-[var(--color-tertiary-container)]/50 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-tertiary-container)]">
+                      미리보기 가능
+                    </span>
+                    <strong className="font-[var(--font-display)] text-[28px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.name}</strong>
+                    <span className="line-clamp-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.description}</span>
+                  </div>
+                </div>
+
+                <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
+                  템플릿 확인
+                  <ArrowRight className="w-4 h-4" />
+                </span>
+              </button>
+            ))}
+          </div>
         </section>
       </div>
 
@@ -168,6 +188,15 @@ export default function TemplateGalleryClient() {
   );
 }
 
+function StatusRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-[18px] bg-[var(--color-surface-low)] px-4 py-3">
+      <span className="text-sm font-semibold text-[var(--color-on-surface-variant)]">{label}</span>
+      <strong className="text-sm font-black text-[var(--color-on-surface)]">{value}</strong>
+    </div>
+  );
+}
+
 function TemplatePreviewModal({
   template,
   onClose,
@@ -178,15 +207,15 @@ function TemplatePreviewModal({
   onStart: (platform: ThemePlatform) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[#111111]/50 p-4" role="dialog" aria-modal="true" aria-label={`${template.name} 미리보기`}>
-      <section className="grid max-h-[92vh] w-full max-w-5xl overflow-auto rounded-[30px] bg-white shadow-2xl shadow-[#111111]/35">
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[#d7ddd8] px-6 py-5">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${template.name} 미리보기`}>
+      <section className="grid max-h-[92vh] w-full max-w-5xl overflow-auto rounded-[32px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)]">
+        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--color-outline-variant)] px-6 py-5">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#5d6670]">Template preview</p>
-            <h2 className="mt-1 text-3xl font-black">{template.name}</h2>
-            <p className="mt-2 max-w-2xl text-sm font-bold leading-6 text-[#5d6670]">{template.previewNote}</p>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Template preview</p>
+            <h2 className="mt-1 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">{template.name}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.previewNote}</p>
           </div>
-          <button className="rounded-full border border-[#d7ddd8] bg-[#f6f7f5] px-4 py-2 text-sm font-black text-[#5d6670] transition hover:bg-white" type="button" onClick={onClose}>
+          <button className="rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-2 text-sm font-black text-[var(--color-on-surface-variant)] transition hover:bg-white" type="button" onClick={onClose}>
             닫기
           </button>
         </header>
@@ -201,10 +230,10 @@ function TemplatePreviewModal({
               <InfoRow label="기본 시작 플랫폼" value={template.defaults.platform === "android" ? "Android" : "iOS"} />
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <button className="rounded-full bg-[#111111] px-5 py-4 text-sm font-black text-white transition hover:scale-[0.98]" type="button" onClick={() => onStart("android")}>
+              <button className="rounded-full bg-[var(--color-inverse-surface)] px-5 py-4 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("android")}>
                 Android로 시작
               </button>
-              <button className="rounded-full bg-[#c9ff3d] px-5 py-4 text-sm font-black text-[#111111] transition hover:scale-[0.98]" type="button" onClick={() => onStart("ios")}>
+              <button className="rounded-full bg-[var(--color-primary-container)] px-5 py-4 text-sm font-black text-[var(--color-on-primary-container)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("ios")}>
                 iOS로 시작
               </button>
             </div>
@@ -219,7 +248,7 @@ function TemplateMiniPreview({ template }: { template: ThemeTemplate }) {
   const assets = spongebobPreviewAssets(template);
   return (
     <div
-      className="h-40 overflow-hidden rounded-[18px] border border-[#d7ddd8] bg-cover bg-center"
+      className="aspect-[4/3] overflow-hidden rounded-[22px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
       style={{ backgroundColor: template.defaults.chatBackground, backgroundImage: assets.chatBackground ? `url(${assets.chatBackground})` : undefined }}
     >
       <div className="h-8 bg-white/86" />
@@ -236,12 +265,12 @@ function TemplatePhonePreview({ template }: { template: ThemeTemplate }) {
   const assets = spongebobPreviewAssets(template);
   return (
     <div
-      className="mx-auto grid h-[620px] w-full max-w-[350px] content-start overflow-hidden rounded-[32px] border border-[#d7ddd8] bg-cover bg-center shadow-2xl shadow-[#111111]/16"
+      className="mx-auto grid h-[620px] w-full max-w-[350px] content-start overflow-hidden rounded-[32px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[0_22px_52px_rgba(42,103,103,0.14)]"
       style={{ backgroundColor: template.defaults.chatBackground, backgroundImage: assets.chatBackground ? `url(${assets.chatBackground})` : undefined }}
     >
       <div className="flex items-center justify-between px-5 text-sm font-black h-14 bg-white/90">
         <span>테마 미리보기</span>
-        <span className="text-xs text-[#5d6670]">{template.name}</span>
+        <span className="text-xs text-[var(--color-on-surface-variant)]">{template.name}</span>
       </div>
       <div className="grid gap-4 p-4">
         <div className="justify-self-center rounded-full bg-[#14343a]/18 px-5 py-1 text-xs font-bold text-white">Today</div>
@@ -270,9 +299,9 @@ function spongebobPreviewAssets(template: ThemeTemplate) {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[18px] bg-[#f6f7f5] px-4 py-3">
-      <span className="block text-xs font-black uppercase text-[#5d6670]">{label}</span>
-      <strong className="mt-1 block text-sm text-[#111111]">{value}</strong>
+    <div className="rounded-[18px] bg-[var(--color-surface-low)] px-4 py-3">
+      <span className="block text-xs font-black uppercase text-[var(--color-on-surface-variant)]">{label}</span>
+      <strong className="mt-1 block text-sm text-[var(--color-on-surface)]">{value}</strong>
     </div>
   );
 }

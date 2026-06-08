@@ -94,7 +94,7 @@ export const themeTemplates: ThemeTemplate[] = [
     name: "기본 템플릿",
     description: "가장 단순한 구조로 테마 화면을 먼저 점검하는 기본 템플릿입니다.",
     previewNote: "색상과 이미지를 빠르게 교체하면서 전체 흐름을 확인하는 시작 템플릿입니다.",
-    accent: "#006b7a",
+    accent: "#6a5f00",
     supportedPlatforms: ["android", "ios"],
     sections: sharedSections,
     defaults: {

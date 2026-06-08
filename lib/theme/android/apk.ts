@@ -2,6 +2,7 @@ import { mkdtemp, cp, mkdir, writeFile, readFile, rm, readdir, stat, access } fr
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { createStoredZip } from "@/lib/theme/project/zip";
 
 const sampleProjectRoot = path.resolve("android-sample-theme", "apeach-26.1.0-source");
 
@@ -11,22 +12,13 @@ export type AndroidBuildInputFile = {
 };
 
 export async function buildAndroidApk(files: AndroidBuildInputFile[], apkBaseName: string) {
-  const tempRoot = await mkdtemp(path.join(tmpdir(), "kt-theme-apk-"));
-  const projectRoot = path.join(tempRoot, "project");
+  const prepared = await prepareAndroidProject(files);
 
   try {
-    await cp(sampleProjectRoot, projectRoot, { recursive: true });
-    await writeAndroidLocalProperties(projectRoot);
+    await writeAndroidLocalProperties(prepared.projectRoot);
+    await runGradle(prepared.projectRoot, ["assembleDebug"]);
 
-    for (const file of files) {
-      const targetPath = ensureInsideProject(projectRoot, file.path);
-      await mkdir(path.dirname(targetPath), { recursive: true });
-      await writeFile(targetPath, file.bytes);
-    }
-
-    await runGradle(projectRoot, ["assembleDebug"]);
-
-    const apkPath = await findLatestApk(path.join(projectRoot, "build", "outputs", "apk"));
+    const apkPath = await findLatestApk(path.join(prepared.projectRoot, "build", "outputs", "apk"));
     if (!apkPath) {
       throw new Error("APK output was not found after Gradle build.");
     }
@@ -36,8 +28,40 @@ export async function buildAndroidApk(files: AndroidBuildInputFile[], apkBaseNam
       fileName: `${sanitizeFileName(apkBaseName)}-android-debug.apk`,
     };
   } finally {
-    await rm(tempRoot, { recursive: true, force: true });
+    await prepared.cleanup();
   }
+}
+
+export async function exportAndroidProjectZip(files: AndroidBuildInputFile[], projectBaseName: string) {
+  const prepared = await prepareAndroidProject(files);
+
+  try {
+    const zipBytes = await zipProjectDirectory(prepared.projectRoot);
+    return {
+      zipBytes,
+      fileName: `${sanitizeFileName(projectBaseName)}-android-project.zip`,
+    };
+  } finally {
+    await prepared.cleanup();
+  }
+}
+
+async function prepareAndroidProject(files: AndroidBuildInputFile[]) {
+  const tempRoot = await mkdtemp(path.join(tmpdir(), "kt-theme-apk-"));
+  const projectRoot = path.join(tempRoot, "project");
+
+  await cp(sampleProjectRoot, projectRoot, { recursive: true });
+
+  for (const file of files) {
+    const targetPath = ensureInsideProject(projectRoot, file.path);
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await writeFile(targetPath, file.bytes);
+  }
+
+  return {
+    projectRoot,
+    cleanup: () => rm(tempRoot, { recursive: true, force: true }),
+  };
 }
 
 async function writeAndroidLocalProperties(projectRoot: string) {
@@ -144,4 +168,47 @@ function sanitizeFileName(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "kakaotalk-theme";
+}
+
+async function zipProjectDirectory(projectRoot: string) {
+  const entries = await collectZipEntries(projectRoot, projectRoot);
+  return new Uint8Array(await createStoredZip(entries).arrayBuffer());
+}
+
+async function collectZipEntries(root: string, currentDir: string): Promise<Array<{ path: string; bytes: Uint8Array }>> {
+  const dirEntries = await readdir(currentDir, { withFileTypes: true });
+  const results: Array<{ path: string; bytes: Uint8Array }> = [];
+
+  for (const entry of dirEntries) {
+    const fullPath = path.join(currentDir, entry.name);
+    const relativePath = path.relative(root, fullPath).replaceAll("\\", "/");
+
+    if (shouldSkipProjectEntry(relativePath, entry.isDirectory())) {
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      results.push(...(await collectZipEntries(root, fullPath)));
+      continue;
+    }
+
+    if (!entry.isFile()) continue;
+    results.push({
+      path: relativePath,
+      bytes: new Uint8Array(await readFile(fullPath)),
+    });
+  }
+
+  return results;
+}
+
+function shouldSkipProjectEntry(relativePath: string, isDirectory: boolean) {
+  const normalized = relativePath.replaceAll("\\", "/");
+
+  if (normalized === "local.properties") return true;
+  if (normalized === ".gradle" || normalized.startsWith(".gradle/")) return true;
+  if (normalized === "build" || normalized.startsWith("build/")) return true;
+  if (!isDirectory && (normalized.endsWith(".apk") || normalized.endsWith(".aab"))) return true;
+
+  return false;
 }

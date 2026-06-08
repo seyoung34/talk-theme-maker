@@ -8,11 +8,12 @@ const navItems = [{ href: "/template", label: "템플릿" }];
 
 export default function SiteHeader({ currentPath }: SiteHeaderProps) {
   return (
-    <header className="sticky top-0 z-40 border-b border-[#dbe2ea] bg-white/88 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-[var(--color-outline-variant)]/70 bg-[color:rgba(251,249,244,0.86)] backdrop-blur">
       <div className="flex items-center justify-between px-5 py-4 mx-auto max-w-7xl md:px-8">
         <Link href="/" className="min-w-0">
-          <strong className="text-[14px] font-extrabold uppercase tracking-[0.18em] text-[#64748b]">KakaoTalk Theme Maker</strong>
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-[var(--color-on-surface-variant)]">KakaoTalk Theme Maker</p>
         </Link>
+
         <nav className="flex items-center gap-2">
           {navItems.map((item) => {
             const isActive = currentPath === item.href;
@@ -21,8 +22,8 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
                 key={item.href}
                 href={item.href}
                 className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-black transition ${isActive
-                  ? "bg-[#111827] text-white shadow-[0_12px_24px_rgba(15,23,42,0.16)]"
-                  : "border border-[#d7dee8] bg-white text-[#334155] hover:border-[#94a3b8] hover:bg-[#f8fafc]"
+                    ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)] shadow-[0_14px_28px_rgba(42,103,103,0.16)]"
+                    : "border border-[var(--color-outline-variant)] bg-white/90 text-[var(--color-on-surface-variant)] hover:-translate-y-px hover:bg-white"
                   }`}
               >
                 {item.label}
