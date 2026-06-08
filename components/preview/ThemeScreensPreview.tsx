@@ -1,6 +1,6 @@
 "use client";
 
-import { Gift, MessageCirclePlus, Search, Settings, UserPlus } from "lucide-react";
+import { Gift, MessageCirclePlus, Search, Settings, UserPlus, ListPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getResolvedColor, type SlotCandidateSelections } from "@/components/project/projectModel";
 import { findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
@@ -22,7 +22,9 @@ const chatRows = [
   { name: "프로젝트 공지", sub: "템플릿 미리보기를 최종 점검해 주세요.", time: "09:40" },
   { name: "내부 QA", sub: "메인 화면 색상과 아이콘 상태를 다시 확인합니다.", time: "어제" },
   { name: "디자인 리뷰", sub: "후보 카드와 공통 리소스 프리뷰를 정리했습니다.", time: "어제", badge: "3" },
+  { name: "블루베리군", sub: "블루베리가 크고 맛있다", time: "어제", badge: "2" },
   { name: "개발 노트", sub: "Android 프로젝트 ZIP 내보내기까지 연결되었습니다.", time: "어제" },
+  { name: "딸기양", sub: "딸기는 맛있다", time: "어제" },
 ];
 
 export function ThemeScreensPreview({
@@ -280,10 +282,10 @@ function ChatsScreen({
   onSelectSlot?: (slotId: string) => void;
 }) {
   return (
-    <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_96px]">
+    <div className="grid h-full">
       <button
         type="button"
-        className={`flex items-end justify-between px-5 pb-3 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+        className={`flex items-end justify-between px-5 pb-2 pt-3 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
         style={{ backgroundColor: preview.headerBackgroundColor }}
         onClick={(event) => {
           event.stopPropagation();
@@ -300,45 +302,37 @@ function ChatsScreen({
         </div>
       </button>
 
-      <div className="grid content-start min-h-0 gap-3 pb-2 overflow-hidden">
-        <div className="px-4 pt-2 pb-3 " style={{ borderColor: hexToRgba(preview.bodyCellBorderColor, 0.28) }}>
+      <div className="grid content-start min-h-0 gap-3 pb-1 overflow-hidden">
+        <div className="px-4 pt-2 " style={{ borderColor: hexToRgba(preview.bodyCellBorderColor, 0.28) }}>
           <div className="flex items-center gap-2 overflow-hidden">
             <FilterPill compact dark color={preview.headerForegroundColor}>전체</FilterPill>
             <FilterPill compact color={preview.headerForegroundColor}>
-              <span className="text-[16px]">안읽음</span>
+              <span className="text-sm">안읽음</span>
+              <BadgeSmall value="40" />
+            </FilterPill>
+            <FilterPill compact color={preview.headerForegroundColor}>
+              <strong className="text-[13px] font-semibold">친구</strong>
               <BadgeSmall value="12" />
             </FilterPill>
-            <FilterPill compact wide color={preview.headerForegroundColor}>
-              <span className="text-[16px]">✦</span>
-              <strong className="text-[13px] font-semibold">ChatGPT</strong>
+            <FilterPill compact color={preview.headerForegroundColor}>
+              <ListPlus className="w-4 h-4" />
             </FilterPill>
           </div>
         </div>
 
-        <div className="px-4 pt-1">
+        <div className="px-4">
           <button
             type="button"
-            className={`w-full rounded-[24px] px-5 py-4 text-left shadow-[0_16px_28px_rgba(15,23,42,0.06)] ${selectedSlotId === slotByRole.main_body_secondary_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+            className={`w-full overflow-hidden rounded-[12px] px-5 py-4 text-left shadow-[0_18px_32px_rgba(15,23,42,0.08)] ${selectedSlotId === slotByRole.main_body_secondary_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
             style={{ backgroundColor: preview.bodySecondaryColor }}
             onClick={(event) => {
               event.stopPropagation();
               if (slotByRole.main_body_secondary_cell_color) onSelectSlot?.(slotByRole.main_body_secondary_cell_color.id);
             }}
           >
-            <div className="grid grid-cols-[1fr_84px] items-center gap-3">
-              <div>
-                <span className="text-[11px] font-medium" style={{ color: preview.descriptionColor }}>
-                  테스트 배너
-                </span>
-                <strong className="mt-1 block text-[14px] font-semibold leading-[1.35]" style={{ color: preview.titlePressedColor }}>
-                  메인 화면 보조 카드 색상을 확인합니다.
-                </strong>
-                <span className="mt-1 block text-[10px] font-medium leading-[1.35]" style={{ color: preview.descriptionColor }}>
-                  설명 텍스트와 눌림 상태 색상을 함께 점검합니다.
-                </span>
-              </div>
-              <div className="h-[64px] rounded-[18px] bg-[linear-gradient(135deg,#e8f8ff,#fff1b6)]" />
-            </div>
+            <strong className="mt-2 block text-[15px] font-semibold" style={{ color: preview.titlePressedColor }}>
+              나만의 테마 만들기
+            </strong>
           </button>
         </div>
 
@@ -347,8 +341,8 @@ function ChatsScreen({
             <button
               key={`${row.name}-${index}`}
               type="button"
-              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-1 py-3 text-left ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "rounded-[18px] ring-1 ring-[#60a5fa]" : ""}`}
-              style={{ borderBottom: `1px solid ${hexToRgba(preview.bodyCellBorderColor, 0.55)}` }}
+              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-1 py-2 text-left ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "rounded-[18px] ring-1 ring-[#60a5fa]" : ""}`}
+              style={{}}
               onClick={(event) => {
                 event.stopPropagation();
                 if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
@@ -448,7 +442,7 @@ function BottomTabBar({
 }) {
   return (
     <div
-      className={`grid grid-cols-5 items-center px-4 py-3 ${selectedSlotId === slotByRole.tab_background?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+      className={`grid grid-cols-5 items-center px-4 ${selectedSlotId === slotByRole.tab_background?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
       style={{ backgroundColor: hexToRgba(tabBackground, 0.96) }}
       onClick={(event) => {
         event.stopPropagation();
@@ -488,18 +482,18 @@ function TabAsset({
   return (
     <button
       type="button"
-      className={`relative grid justify-items-center gap-1 rounded-[22px] px-1 py-1.5 ${selected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+      className={`relative grid justify-items-center gap-1 rounded-[22px] px-1 py-1 ${selected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
       onClick={(event) => {
         event.stopPropagation();
         if (slot) onSelectSlot?.(slot.id);
       }}
     >
-      <span className="relative grid h-12 w-12 place-items-center rounded-full bg-[#aeccfb]/55">
+      <span className="relative grid h-10 w-10 place-items-center rounded-full bg-[#aeccfb]/55">
         <span className="w-8 h-8 bg-center bg-no-repeat bg-contain" style={{ backgroundImage: `url(${active ? focusedUrl || defaultUrl || "" : defaultUrl || focusedUrl || ""})` }} />
       </span>
       <span className="text-[10px] font-semibold text-[#57737a]">{label}</span>
       {badge ? <span className="absolute left-1/2 top-0 rounded-full bg-[#ff6b37] px-2 py-[1px] text-[10px] font-bold text-white">{badge}</span> : null}
-      {dot ? <span className="absolute right-5 top-1 h-2 w-2 rounded-full bg-[#ff6b37]" /> : null}
+      {dot ? <span className="absolute right-2 top-1 h-2 w-2 rounded-full bg-[#ff6b37]" /> : null}
     </button>
   );
 }
@@ -534,7 +528,7 @@ function FilterPill({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border px-4 text-xs font-semibold ${compact ? "h-10" : "h-14"} ${wide ? "min-w-[116px] justify-center" : ""}`}
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 text-xs font-semibold ${compact ? "h-8" : "h-10"} ${wide ? "min-w-[116px] justify-center" : ""}`}
       style={
         dark
           ? { borderColor: "transparent", backgroundColor: hexToRgba(color ?? "#0d5b66", 0.95), color: "#ffffff" }
@@ -547,11 +541,11 @@ function FilterPill({
 }
 
 function BadgeSmall({ value }: { value: string }) {
-  return <span className="rounded-full bg-[#ff6b37] px-2 py-[3px] text-[11px] font-bold leading-none text-white">{value}</span>;
+  return <span className="rounded-full bg-[#ff6b37] px-1 py-[3px] text-[11px] leading-none text-white">{value}</span>;
 }
 
 function UnreadBadge({ value }: { value: string }) {
-  return <span className="rounded-full bg-[#ff6b37] px-2.5 py-1 text-[10px] font-bold text-white">{value}</span>;
+  return <span className="rounded-full bg-[#ff6b37] px-2 py-1 text-[10px] font-bold text-white">{value}</span>;
 }
 
 function SectionLabel({ label, color, selected, onClick }: { label: string; color: string; selected: boolean; onClick: () => void }) {
