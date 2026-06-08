@@ -222,7 +222,7 @@ function PatchImage({ asset, activeMarker }: { asset: BubbleAsset; activeMarker:
     drawMarkerOverlay(ctx, asset, scale, activeMarker);
   }, [activeMarker, asset]);
 
-  return <canvas className="patch-image !mb-0 max-h-[260px]" ref={canvasRef} aria-label="9-patch preview" />;
+  return <canvas className="mb-0 block w-full max-h-[260px] rounded-lg border border-[#d5e4e8] object-contain" ref={canvasRef} aria-label="9-patch preview" />;
 }
 
 function InsetImage({ asset, insets, stretch }: { asset: BubbleAsset; insets: Insets; stretch: StretchPoint }) {
@@ -244,7 +244,7 @@ function InsetImage({ asset, insets, stretch }: { asset: BubbleAsset; insets: In
     drawInsetOverlay(ctx, insets, stretch, source.width, source.height, scale);
   }, [asset, insets, stretch]);
 
-  return <canvas className="patch-image !mb-0 max-h-[260px]" ref={canvasRef} aria-label="iOS inset preview" />;
+  return <canvas className="mb-0 block w-full max-h-[260px] rounded-lg border border-[#d5e4e8] object-contain" ref={canvasRef} aria-label="iOS inset preview" />;
 }
 
 function MarkerControl({
@@ -287,13 +287,13 @@ function MarkerControl({
 
 function InsetControl({ label, value, max, onChange }: { label: InsetSide; value: number; max: number; onChange: (value: number) => void }) {
   return (
-    <label className="inset-control">
-      <span>
+    <label className="grid gap-2 rounded-lg border border-[#e2ecef] bg-white/80 p-3">
+      <span className="flex justify-between gap-2 text-xs font-semibold uppercase text-[#5d6670]">
         {label}
-        <strong>{value}px</strong>
+        <strong className="font-semibold normal-case text-[#111111]">{value}px</strong>
       </span>
-      <input type="range" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
-      <input type="number" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
+      <input className="w-full accent-[var(--color-inverse-surface)]" type="range" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
+      <input className="w-full rounded-md border border-[var(--color-outline-variant)] bg-white px-2.5 py-2 text-[var(--color-on-surface)]" type="number" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
     </label>
   );
 }
@@ -310,13 +310,13 @@ function StretchPointControl({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="inset-control stretch-point-control">
-      <span>
+    <label className="grid gap-2 rounded-lg border border-[color:rgba(42,103,103,0.26)] bg-[var(--color-secondary-container)]/30 p-3">
+      <span className="flex justify-between gap-2 text-xs font-semibold uppercase text-[#5d6670]">
         {label}
-        <strong>{value}px</strong>
+        <strong className="font-semibold normal-case text-[#111111]">{value}px</strong>
       </span>
-      <input type="range" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
-      <input type="number" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
+      <input className="w-full accent-[var(--color-inverse-surface)]" type="range" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
+      <input className="w-full rounded-md border border-[var(--color-outline-variant)] bg-white px-2.5 py-2 text-[var(--color-on-surface)]" type="number" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
     </label>
   );
 }
@@ -327,20 +327,20 @@ function IosCssPreview({ asset, insets, stretch }: { asset: BubbleAsset; insets:
   const css = getIosCssValues(insets, stretch, source.width, source.height, sourceScale);
   const imageBaseName = getIosCssImageName(asset);
   return (
-    <div className="ios-css-preview">
-      <div className="ios-css-row">
+    <div className="grid gap-2 rounded-lg border border-[color:rgba(42,103,103,0.22)] bg-[var(--color-secondary-container)]/30 p-3">
+      <div className="flex justify-between gap-3 text-xs font-extrabold text-[#5d6670]">
         <span>CSS point stretch</span>
-        <strong>
+        <strong className="text-[#111111]">
           {css.stretchX}px {css.stretchY}px
         </strong>
       </div>
-      <div className="ios-css-row">
+      <div className="flex justify-between gap-3 text-xs font-extrabold text-[#5d6670]">
         <span>title edgeInsets</span>
-        <strong>
+        <strong className="text-[#111111]">
           {css.edgeTop}px {css.edgeLeft}px {css.edgeBottom}px {css.edgeRight}px
         </strong>
       </div>
-      <pre>{`-ios-background-image: '${imageBaseName}' ${css.stretchX}px ${css.stretchY}px;
+      <pre className="overflow-auto rounded-lg bg-white p-2.5 text-xs leading-[1.45] text-[#111111]">{`-ios-background-image: '${imageBaseName}' ${css.stretchX}px ${css.stretchY}px;
 -ios-title-edgeinsets: ${css.edgeTop}px ${css.edgeLeft}px ${css.edgeBottom}px ${css.edgeRight}px;`}</pre>
     </div>
   );

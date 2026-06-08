@@ -167,18 +167,18 @@ function App() {
   };
 
   return (
-    <main className="app-shell">
-      <section className="workbench">
-        <header className="app-header">
+    <main className="grid h-screen gap-[18px] overflow-hidden p-[18px] min-[1281px]:grid-cols-[minmax(360px,460px)_minmax(430px,1fr)_minmax(280px,340px)] max-[1280px]:h-auto max-[1280px]:overflow-visible max-[1280px]:grid-cols-[minmax(360px,460px)_minmax(390px,1fr)] max-[620px]:grid-cols-1 max-[620px]:p-3">
+      <section className="grid w-fit min-w-0 max-h-[calc(100vh-36px)] content-start gap-3 overflow-auto pr-0.5 max-[1280px]:max-h-none max-[1280px]:overflow-visible">
+        <header className="flex items-end justify-between gap-4 max-[620px]:flex-col max-[620px]:items-start">
           <div>
-            <p className="eyebrow">KakaoTalk Theme Maker</p>
-            <h1>말풍선 에디터</h1>
+            <p className="mb-1 text-xs font-extrabold uppercase text-[var(--color-on-surface)]">KakaoTalk Theme Maker</p>
+            <h1 className="text-[28px] font-black tracking-normal text-[var(--color-on-surface)]">말풍선 에디터</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Link className="resolution-badge" href="/template">
+            <Link className="whitespace-nowrap rounded-full border border-[color:rgba(42,103,103,0.18)] bg-white/80 px-3 py-2 text-[13px] font-extrabold text-[var(--color-on-surface)]" href="/template">
               템플릿으로 돌아가기
             </Link>
-            <div className="resolution-badge">1080 x 1920</div>
+            <div className="whitespace-nowrap rounded-full border border-[color:rgba(42,103,103,0.18)] bg-white/80 px-3 py-2 text-[13px] font-extrabold text-[var(--color-on-surface)]">1080 x 1920</div>
           </div>
         </header>
 
@@ -225,11 +225,11 @@ function App() {
         )}
       </section>
 
-      <section className="preview-stage">
+      <section className="grid min-h-0">
         <ChatPreview me={assets.me ?? null} you={assets.you ?? null} config={config} />
       </section>
 
-      <aside className="control-rail">
+      <aside className="max-h-[calc(100vh-36px)] overflow-auto max-[1280px]:col-span-full max-[1280px]:max-h-none max-[1280px]:overflow-visible">
         <PreviewControls config={config} setConfig={setConfig} />
       </aside>
     </main>
@@ -238,11 +238,11 @@ function App() {
 
 function PlatformTabs({ platform, setPlatform }: { platform: PlatformMode; setPlatform: (platform: PlatformMode) => void }) {
   return (
-    <div className="segmented platform-tabs" role="tablist" aria-label="bubble slot">
+    <div className="grid grid-cols-2 gap-1 rounded-xl border border-[var(--color-outline-variant)] bg-white/80 p-1" role="tablist" aria-label="bubble slot">
       {(["android", "ios"] as PlatformMode[]).map((mode) => (
         <button
           key={mode}
-          className={platform === mode ? "active" : ""}
+          className={`rounded-lg px-3 py-2.5 text-sm font-extrabold ${platform === mode ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)]"}`}
           type="button"
           onClick={() => setPlatform(mode)}
         >
@@ -255,11 +255,11 @@ function PlatformTabs({ platform, setPlatform }: { platform: PlatformMode; setPl
 
 function SlotTabs({ activeSlot, setActiveSlot }: { activeSlot: BubbleSlot; setActiveSlot: (slot: BubbleSlot) => void }) {
   return (
-    <div className="segmented" role="tablist" aria-label="말풍선 슬롯">
+    <div className="grid grid-cols-2 gap-1 rounded-xl border border-[var(--color-outline-variant)] bg-white/80 p-1" role="tablist" aria-label="말풍선 슬롯">
       {(["me", "you"] as BubbleSlot[]).map((slot) => (
         <button
           key={slot}
-          className={activeSlot === slot ? "active" : ""}
+          className={`rounded-lg px-3 py-2.5 text-sm font-extrabold ${activeSlot === slot ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)]"}`}
           type="button"
           onClick={() => setActiveSlot(slot)}
         >
@@ -286,7 +286,7 @@ function FileDropzone({ slot, onAsset }: { slot: BubbleSlot; onAsset: (slot: Bub
 
   return (
     <label
-      className={`dropzone ${dragging ? "dragging" : ""}`}
+      className={`grid gap-1.5 rounded-2xl border bg-white px-4 py-4 shadow-[0_16px_40px_rgba(42,103,103,0.08)] transition ${dragging ? "border-[var(--color-secondary)] bg-[var(--color-secondary-container)]/35 -translate-y-px" : "border-[var(--color-outline-variant)]"}`}
       htmlFor={inputId}
       onDragOver={(event) => {
         event.preventDefault();
@@ -301,6 +301,7 @@ function FileDropzone({ slot, onAsset }: { slot: BubbleSlot; onAsset: (slot: Bub
       }}
     >
       <input
+        className="hidden"
         id={inputId}
         type="file"
         accept="image/png,.png"
@@ -309,16 +310,16 @@ function FileDropzone({ slot, onAsset }: { slot: BubbleSlot; onAsset: (slot: Bub
           if (file) void load(file);
         }}
       />
-      <span className="drop-title">{busy ? "불러오는 중..." : `${slotLabels[slot]} PNG 또는 .9.png`}</span>
-      <span className="drop-copy">Figma에서 내보낸 PNG나 기존 카카오톡 말풍선 이미지를 넣으세요.</span>
+      <span className="font-black">{busy ? "불러오는 중..." : `${slotLabels[slot]} PNG 또는 .9.png`}</span>
+      <span className="text-sm leading-5 text-[var(--color-on-surface-variant)]">Figma에서 내보낸 PNG나 기존 카카오톡 말풍선 이미지를 넣으세요.</span>
     </label>
   );
 }
 
 function EmptyState() {
   return (
-    <div className="empty-state">
-      <strong>편집할 말풍선 이미지를 선택하세요.</strong>
+    <div className="rounded-2xl border border-dashed border-[var(--color-outline)] bg-white/70 p-[18px] text-[var(--color-on-surface-variant)]">
+      <strong className="mb-1.5 block text-[var(--color-on-surface)]">편집할 말풍선 이미지를 선택하세요.</strong>
       <p>PNG 또는 Android .9.png 파일을 사용할 수 있습니다. 템플릿 에디터에서 선택한 말풍선도 여기로 열립니다.</p>
     </div>
   );
@@ -331,18 +332,18 @@ function Diagnostics({ asset }: { asset: BubbleAsset }) {
     .join("\n");
 
   return (
-    <div className="panel diagnostics">
+    <div className="grid grid-cols-3 gap-2.5 rounded-2xl border border-[var(--color-outline-variant)] bg-white/94 p-3.5 shadow-[0_16px_40px_rgba(42,103,103,0.08)] max-[620px]:grid-cols-1">
       <div>
-        <span className="metric-label">Size</span>
+        <span className="mb-1 block text-xs font-semibold text-[var(--color-on-surface-variant)]">Size</span>
         <strong>
           {asset.width} x {asset.height}
         </strong>
       </div>
-      <div className={asset.invalidPixels.length ? "metric bad" : "metric good"}>
-        <span className="metric-label">invalid border pixel</span>
-        <strong>{asset.invalidPixels.length}</strong>
+      <div>
+        <span className="mb-1 block text-xs font-semibold text-[var(--color-on-surface-variant)]">invalid border pixel</span>
+        <strong className={asset.invalidPixels.length ? "text-[var(--color-error)]" : "text-emerald-700"}>{asset.invalidPixels.length}</strong>
       </div>
-      {invalidPreview && <pre className="invalid-list">{invalidPreview}</pre>}
+      {invalidPreview && <pre className="col-span-full overflow-auto rounded-lg bg-rose-50 p-2 text-xs text-rose-800">{invalidPreview}</pre>}
     </div>
   );
 }
@@ -365,24 +366,24 @@ function MarkerEditor({ asset, onChange }: { asset: BubbleAsset; onChange: (mark
   const activeMeta = markerMeta[activeMarker];
 
   return (
-    <div className="panel marker-editor">
-      <div className="panel-title">
-        <h2>마커 편집</h2>
-        <span>Android 1px 나인패치 마커를 수정합니다.</span>
+    <div className="rounded-2xl border border-[var(--color-outline-variant)] bg-white/94 p-3.5 shadow-[0_16px_40px_rgba(42,103,103,0.08)]">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="text-[17px] font-black">마커 편집</h2>
+        <span className="text-xs text-[var(--color-on-surface-variant)]">Android 1px 나인패치 마커를 수정합니다.</span>
       </div>
 
       <PatchImage asset={asset} activeMarker={activeMarker} />
 
-      <div className="marker-tabs" role="tablist" aria-label="marker selector">
+      <div className="mb-3 grid grid-cols-4 gap-1.5 max-[620px]:grid-cols-2" role="tablist" aria-label="marker selector">
         {(Object.keys(markerMeta) as MarkerSide[]).map((side) => (
           <button
             key={side}
             type="button"
-            className={activeMarker === side ? "active" : ""}
+            className={`grid min-w-0 gap-1 rounded-lg border px-2 py-2 text-left ${activeMarker === side ? "border-orange-300 bg-amber-50 text-[var(--color-on-surface)] shadow-[inset_0_0_0_1px_rgba(251,146,60,0.24)]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
             onClick={() => setActiveMarker(side)}
           >
-            <strong>{markerMeta[side].label}</strong>
-            <span>{markerMeta[side].help}</span>
+            <strong className="text-[13px] uppercase">{markerMeta[side].label}</strong>
+            <span className="truncate text-[11px]">{markerMeta[side].help}</span>
           </button>
         ))}
       </div>
@@ -417,7 +418,7 @@ function PatchImage({ asset, activeMarker }: { asset: BubbleAsset; activeMarker:
     drawMarkerOverlay(ctx, asset, scale, activeMarker);
   }, [asset, activeMarker]);
 
-  return <canvas className="patch-image" ref={canvasRef} aria-label="9-patch marker preview" />;
+  return <canvas className="mb-3 block w-full max-h-[260px] rounded-lg border border-[#d5e4e8] object-contain" ref={canvasRef} aria-label="9-patch marker preview" />;
 }
 
 function InsetEditor({
@@ -444,29 +445,29 @@ function InsetEditor({
   };
 
   return (
-    <div className="panel inset-editor">
-      <div className="panel-title">
-        <h2>iOS inset</h2>
-        <span>배경 늘어남 기준</span>
+    <div className="grid gap-3 rounded-2xl border border-[var(--color-outline-variant)] bg-white/94 p-3.5 shadow-[0_16px_40px_rgba(42,103,103,0.08)]">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[17px] font-black">iOS inset</h2>
+        <span className="text-xs text-[var(--color-on-surface-variant)]">배경 늘어남 기준</span>
       </div>
 
       <InsetImage asset={asset} insets={safeInsets} stretch={safeStretch} />
 
-      <div className="panel-title compact-title">
-        <h2>배경 stretch</h2>
-        <span>CSS 이미지 뒤 2개 값</span>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-sm font-black">배경 stretch</h2>
+        <span className="text-xs text-[var(--color-on-surface-variant)]">CSS 이미지 뒤 2개 값</span>
       </div>
-      <div className="inset-grid">
+      <div className="grid grid-cols-2 gap-2.5">
         <StretchPointControl label="x" value={safeStretch.x} max={Math.max(0, source.width - 1)} onChange={(value) => setStretch("x", value)} />
         <StretchPointControl label="y" value={safeStretch.y} max={Math.max(0, source.height - 1)} onChange={(value) => setStretch("y", value)} />
       </div>
 
-      <div className="panel-title compact-title">
-        <h2>title edgeInsets</h2>
-        <span>top right bottom left</span>
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-sm font-black">title edgeInsets</h2>
+        <span className="text-xs text-[var(--color-on-surface-variant)]">top right bottom left</span>
       </div>
 
-      <div className="inset-grid">
+      <div className="grid grid-cols-2 gap-2.5">
         {(["top", "right", "bottom", "left"] as InsetSide[]).map((side) => (
           <InsetControl key={side} label={side} value={safeInsets[side]} max={insetMax(source, safeInsets, side)} onChange={(value) => setInset(side, value)} />
         ))}
@@ -484,62 +485,62 @@ function IosCssPreview({ asset, insets, stretch }: { asset: BubbleAsset; insets:
   const scaleValues = getIosScaleValues(asset, insets, stretch);
   const imageBaseName = getIosCssImageName(asset);
   return (
-    <div className="ios-css-preview">
-      <div className="ios-css-row">
+    <div className="grid gap-2 rounded-lg border border-[color:rgba(42,103,103,0.22)] bg-[var(--color-secondary-container)]/30 p-3">
+      <div className="flex justify-between gap-3 text-xs font-extrabold text-[var(--color-on-surface-variant)]">
         <span>CSS point stretch</span>
-        <strong>
+        <strong className="text-[var(--color-on-surface)]">
           {css.stretchX}px {css.stretchY}px
         </strong>
       </div>
-      <div className="ios-css-row">
+      <div className="flex justify-between gap-3 text-xs font-extrabold text-[var(--color-on-surface-variant)]">
         <span>title edgeInsets</span>
-        <strong>
+        <strong className="text-[var(--color-on-surface)]">
           {css.edgeTop}px {css.edgeLeft}px {css.edgeBottom}px {css.edgeRight}px
         </strong>
       </div>
-      <div className="scale-table" aria-label="iOS scale converted values">
-        <div>
+      <div className="grid grid-cols-2 gap-1.5 rounded-lg bg-white/80 p-2" aria-label="iOS scale converted values">
+        <div className="flex justify-between gap-2 text-xs font-extrabold text-[var(--color-on-surface-variant)]">
           <span>Source</span>
-          <strong>{scaleValues.sourceScale}x</strong>
+          <strong className="text-right text-[var(--color-on-surface)]">{scaleValues.sourceScale}x</strong>
         </div>
-        <div>
+        <div className="flex justify-between gap-2 text-xs font-extrabold text-[var(--color-on-surface-variant)]">
           <span>@3x stretch</span>
-          <strong>
+          <strong className="text-right text-[var(--color-on-surface)]">
             {scaleValues.stretch3x.x}px {scaleValues.stretch3x.y}px
           </strong>
         </div>
-        <div>
+        <div className="flex justify-between gap-2 text-xs font-extrabold text-[var(--color-on-surface-variant)]">
           <span>@2x stretch</span>
-          <strong>
+          <strong className="text-right text-[var(--color-on-surface)]">
             {scaleValues.stretch2x.x}px {scaleValues.stretch2x.y}px
           </strong>
         </div>
-        <div>
+        <div className="flex justify-between gap-2 text-xs font-extrabold text-[var(--color-on-surface-variant)]">
           <span>CSS point</span>
-          <strong>
+          <strong className="text-right text-[var(--color-on-surface)]">
             {scaleValues.stretchPoint.x}px {scaleValues.stretchPoint.y}px
           </strong>
         </div>
-        <div className="wide-scale-row">
+        <div className="col-span-full flex justify-between gap-2 text-xs font-extrabold text-[var(--color-on-surface-variant)]">
           <span>@3x edgeInsets</span>
-          <strong>
+          <strong className="text-right text-[var(--color-on-surface)]">
             {formatInsets(scaleValues.insets3x)}
           </strong>
         </div>
-        <div className="wide-scale-row">
+        <div className="col-span-full flex justify-between gap-2 text-xs font-extrabold text-[var(--color-on-surface-variant)]">
           <span>@2x edgeInsets</span>
-          <strong>
+          <strong className="text-right text-[var(--color-on-surface)]">
             {formatInsets(scaleValues.insets2x)}
           </strong>
         </div>
-        <div className="wide-scale-row">
+        <div className="col-span-full flex justify-between gap-2 text-xs font-extrabold text-[var(--color-on-surface-variant)]">
           <span>CSS edgeInsets</span>
-          <strong>
+          <strong className="text-right text-[var(--color-on-surface)]">
             {formatInsets(scaleValues.insetsPoint)}
           </strong>
         </div>
       </div>
-      <pre>{`-ios-background-image: '${imageBaseName}' ${css.stretchX}px ${css.stretchY}px;
+      <pre className="overflow-auto rounded-lg bg-white p-2.5 text-xs leading-[1.45] text-[var(--color-on-surface)]">{`-ios-background-image: '${imageBaseName}' ${css.stretchX}px ${css.stretchY}px;
 -ios-title-edgeinsets: ${css.edgeTop}px ${css.edgeLeft}px ${css.edgeBottom}px ${css.edgeRight}px;`}</pre>
     </div>
   );
@@ -565,18 +566,18 @@ function InsetImage({ asset, insets, stretch }: { asset: BubbleAsset; insets: In
     drawInsetOverlay(ctx, insets, stretch, source.width, source.height, scale);
   }, [asset, insets, stretch]);
 
-  return <canvas className="patch-image" ref={canvasRef} aria-label="iOS cap inset preview" />;
+  return <canvas className="mb-3 block w-full max-h-[260px] rounded-lg border border-[#d5e4e8] object-contain" ref={canvasRef} aria-label="iOS cap inset preview" />;
 }
 
 function InsetControl({ label, value, max, onChange }: { label: InsetSide; value: number; max: number; onChange: (value: number) => void }) {
   return (
-    <label className="inset-control">
-      <span>
+    <label className="grid gap-2 rounded-lg border border-[#e2ecef] bg-white/80 p-3">
+      <span className="flex justify-between gap-2 text-xs font-semibold uppercase text-[var(--color-on-surface-variant)]">
         {label}
-        <strong>{value}px</strong>
+        <strong className="font-semibold normal-case text-[var(--color-on-surface)]">{value}px</strong>
       </span>
-      <input type="range" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
-      <input type="number" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
+      <input className="w-full accent-[var(--color-inverse-surface)]" type="range" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
+      <input className="w-full rounded-md border border-[var(--color-outline-variant)] bg-white px-2.5 py-2 text-[var(--color-on-surface)]" type="number" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
     </label>
   );
 }
@@ -593,13 +594,13 @@ function StretchPointControl({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="inset-control stretch-point-control">
-      <span>
+    <label className="grid gap-2 rounded-lg border border-[color:rgba(42,103,103,0.26)] bg-[var(--color-secondary-container)]/30 p-3">
+      <span className="flex justify-between gap-2 text-xs font-semibold uppercase text-[var(--color-on-surface-variant)]">
         {label}
-        <strong>{value}px</strong>
+        <strong className="font-semibold normal-case text-[var(--color-on-surface)]">{value}px</strong>
       </span>
-      <input type="range" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
-      <input type="number" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
+      <input className="w-full accent-[var(--color-inverse-surface)]" type="range" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
+      <input className="w-full rounded-md border border-[var(--color-outline-variant)] bg-white px-2.5 py-2 text-[var(--color-on-surface)]" type="number" min={0} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
     </label>
   );
 }
@@ -619,13 +620,14 @@ function MarkerControl({
 }) {
   const usableMax = Math.max(2, max - 1);
   return (
-    <div className="marker-control">
-      <div className="marker-head">
-        <strong>{label}</strong>
-        <span>{help}</span>
+    <div className="grid gap-2 rounded-lg border border-[#e2ecef] bg-white/80 p-3">
+      <div className="flex items-center justify-between gap-2.5">
+        <strong className="text-sm uppercase">{label}</strong>
+        <span className="text-xs text-[var(--color-on-surface-variant)]">{help}</span>
       </div>
-      <div className="range-row">
+      <div className="grid gap-1">
         <input
+          className="w-full accent-[var(--color-inverse-surface)]"
           type="range"
           min={1}
           max={usableMax}
@@ -633,6 +635,7 @@ function MarkerControl({
           onChange={(event) => onChange({ ...range, start: Number(event.currentTarget.value) })}
         />
         <input
+          className="w-full accent-[var(--color-inverse-surface)]"
           type="range"
           min={1}
           max={usableMax}
@@ -640,10 +643,11 @@ function MarkerControl({
           onChange={(event) => onChange({ ...range, end: Number(event.currentTarget.value) })}
         />
       </div>
-      <div className="number-row">
-        <label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="grid gap-1 text-xs font-semibold text-[var(--color-on-surface-variant)]">
           start
           <input
+            className="w-full rounded-md border border-[var(--color-outline-variant)] bg-white px-2.5 py-2 text-[var(--color-on-surface)]"
             type="number"
             min={1}
             max={usableMax}
@@ -651,9 +655,10 @@ function MarkerControl({
             onChange={(event) => onChange({ ...range, start: Number(event.currentTarget.value) })}
           />
         </label>
-        <label>
+        <label className="grid gap-1 text-xs font-semibold text-[var(--color-on-surface-variant)]">
           end
           <input
+            className="w-full rounded-md border border-[var(--color-outline-variant)] bg-white px-2.5 py-2 text-[var(--color-on-surface)]"
             type="number"
             min={1}
             max={usableMax}
@@ -674,12 +679,12 @@ function DownloadPanel({ asset, slot }: { asset: BubbleAsset; slot: BubbleSlot }
   }, [slot]);
 
   return (
-    <div className="panel download-panel">
-      <label>
+    <div className="grid grid-cols-[1fr_auto] items-end gap-2.5 rounded-2xl border border-[var(--color-outline-variant)] bg-white/94 p-3.5 shadow-[0_16px_40px_rgba(42,103,103,0.08)] max-[620px]:grid-cols-1">
+      <label className="grid gap-1 text-xs font-semibold text-[var(--color-on-surface-variant)]">
         다운로드 파일명
-        <input value={name} onChange={(event) => setName(event.currentTarget.value)} />
+        <input className="w-full rounded-md border border-[var(--color-outline-variant)] bg-white px-2.5 py-2 text-[var(--color-on-surface)]" value={name} onChange={(event) => setName(event.currentTarget.value)} />
       </label>
-      <button className="primary-button" type="button" onClick={() => downloadNinePatch(asset, name)}>
+      <button className="whitespace-nowrap rounded-md bg-[var(--color-inverse-surface)] px-3.5 py-2.5 font-black text-[var(--color-inverse-on-surface)]" type="button" onClick={() => downloadNinePatch(asset, name)}>
         .9.png 다운로드
       </button>
     </div>
@@ -699,7 +704,7 @@ function PreviewControls({
   const safeConfig = sanitizePreviewConfig(config);
 
   return (
-    <div className="preview-controls">
+    <div className="grid grid-cols-1 content-start gap-2.5 rounded-2xl border border-[var(--color-outline-variant)] bg-white/88 p-3.5 shadow-[0_16px_40px_rgba(42,103,103,0.08)] max-[1280px]:grid-cols-[repeat(4,1fr)_auto_auto] max-[620px]:grid-cols-1">
       <SizeSlider
         label="최대 너비"
         value={safeConfig.maxBubbleWidth}
@@ -721,9 +726,10 @@ function PreviewControls({
         max={previewSizeLimits.minBubbleHeight.max}
         onChange={(value) => setNumber("minBubbleHeight", value)}
       />
-      <label className="wide">
+      <label className="grid min-w-[180px] gap-1 text-xs font-semibold text-[var(--color-on-surface-variant)]">
         내 말풍선 문구
         <textarea
+          className="min-h-[76px] w-full resize-y rounded-md border border-[var(--color-outline-variant)] bg-white px-2.5 py-2 leading-[1.45] text-[var(--color-on-surface)]"
           value={config.meMessage}
           onChange={(event) => {
             const meMessage = event.currentTarget.value;
@@ -731,9 +737,10 @@ function PreviewControls({
           }}
         />
       </label>
-      <label className="wide">
+      <label className="grid min-w-[180px] gap-1 text-xs font-semibold text-[var(--color-on-surface-variant)]">
         상대 말풍선 문구
         <textarea
+          className="min-h-[76px] w-full resize-y rounded-md border border-[var(--color-outline-variant)] bg-white px-2.5 py-2 leading-[1.45] text-[var(--color-on-surface)]"
           value={config.youMessage}
           onChange={(event) => {
             const youMessage = event.currentTarget.value;
@@ -741,8 +748,9 @@ function PreviewControls({
           }}
         />
       </label>
-      <label className="toggle">
+      <label className="flex min-h-9 items-center gap-1.5 self-end whitespace-nowrap text-[var(--color-on-surface)]">
         <input
+          className="w-auto accent-[var(--color-inverse-surface)]"
           type="checkbox"
           checked={config.showContent}
           onChange={(event) => {
@@ -752,8 +760,9 @@ function PreviewControls({
         />
         content 영역
       </label>
-      <label className="toggle">
+      <label className="flex min-h-9 items-center gap-1.5 self-end whitespace-nowrap text-[var(--color-on-surface)]">
         <input
+          className="w-auto accent-[var(--color-inverse-surface)]"
           type="checkbox"
           checked={config.showStretch}
           onChange={(event) => {
@@ -769,12 +778,12 @@ function PreviewControls({
 
 function SizeSlider({ label, value, min, max, onChange }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
   return (
-    <label className="size-slider">
-      <span>
+    <label className="grid gap-1.5">
+      <span className="flex justify-between gap-2 text-xs font-semibold text-[var(--color-on-surface-variant)]">
         {label}
-        <strong>{value}px</strong>
+        <strong className="text-[var(--color-on-surface)]">{value}px</strong>
       </span>
-      <input type="range" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
+      <input className="w-full accent-[var(--color-inverse-surface)]" type="range" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
     </label>
   );
 }
@@ -791,8 +800,8 @@ function ChatPreview({ me, you, config }: { me: BubbleAsset | null; you: BubbleA
   }, [me, you, config]);
 
   return (
-    <div className="phone-frame">
-      <canvas ref={canvasRef} width={previewCanvasWidth} height={1920} />
+    <div className="grid min-h-0 overflow-auto p-2.5 [place-items:start_center]">
+      <canvas className="h-auto w-[min(50vh,430px)] rounded-3xl bg-[#d9f8ff] shadow-[0_28px_84px_rgba(20,52,58,0.26)] max-[1280px]:w-[min(58vh,430px)]" ref={canvasRef} width={previewCanvasWidth} height={1920} />
     </div>
   );
 }

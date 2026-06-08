@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Search, Trash2 } from "lucide-react";
+import SiteHeader from "@/components/layout/SiteHeader";
 import { templateStartStorageKey, themeTemplates, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
-import { listUserTemplates, type UserTemplateSummary } from "@/lib/theme/userTemplates";
+import { deleteUserTemplate, listUserTemplates, type UserTemplateSummary } from "@/lib/theme/userTemplates";
 import type { ThemePlatform } from "@/lib/theme/types";
 
 export default function TemplateGalleryClient() {
   const router = useRouter();
   const [selectedTemplateId, setSelectedTemplateId] = useState<ThemeTemplateId | null>(null);
   const [userTemplates, setUserTemplates] = useState<UserTemplateSummary[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
   const selectedTemplate = themeTemplates.find((template) => template.id === selectedTemplateId) ?? null;
 
   useEffect(() => {
@@ -21,13 +23,22 @@ export default function TemplateGalleryClient() {
       })
       .catch((error) => {
         console.error(error);
-        if (active) setUserTemplates([]);
+        if (active) {
+          setUserTemplates([]);
+          setNotice("내 템플릿 목록을 불러오지 못했습니다.");
+        }
       });
 
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 2800);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   const start = (template: ThemeTemplate, platform: ThemePlatform) => {
     localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.id, platform }));
@@ -39,68 +50,106 @@ export default function TemplateGalleryClient() {
     router.push("/edit");
   };
 
+  const handleDeleteUserTemplate = async (event: React.MouseEvent<HTMLButtonElement>, template: UserTemplateSummary) => {
+    event.stopPropagation();
+    const confirmed = window.confirm(`"${template.name}" 템플릿을 삭제하시겠습니까?`);
+    if (!confirmed) return;
+
+    try {
+      await deleteUserTemplate(template.id);
+      setUserTemplates((current) => current.filter((item) => item.id !== template.id));
+      setNotice("내 템플릿을 삭제했습니다.");
+    } catch (error) {
+      console.error(error);
+      setNotice("템플릿을 삭제하지 못했습니다.");
+    }
+  };
+
   return (
-    <main className="min-h-screen bg-[#f7f8f5] px-5 py-6 text-[#111111]">
-      <div className="mx-auto grid max-w-7xl gap-6">
-        <header className="grid gap-5 rounded-[30px] border border-[#d7ddd8] bg-white p-6 shadow-[0_18px_60px_rgba(17,17,17,0.08)] md:grid-cols-[1fr_auto] md:items-end">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[#5d6670]">template first</p>
-            <h1 className="mt-2 text-4xl font-black">템플릿 선택</h1>
-            <p className="mt-3 max-w-2xl text-base font-bold leading-7 text-[#5d6670]">
-              원하는 테마의 기본값을 먼저 고릅니다. 템플릿과 플랫폼은 편집 화면에 들어가면 고정되고, 정해진 Android/iOS 파일 슬롯만 교체합니다.
-            </p>
-          </div>
-          <Link className="rounded-full border border-[#d7ddd8] bg-[#f6f7f5] px-5 py-3 text-sm font-black transition hover:bg-white" href="/">
-            홈
-          </Link>
-        </header>
+    <main className="min-h-screen bg-[#f7f8f5] text-[#111111]">
+      <SiteHeader currentPath="/template" />
+
+      <div className="grid gap-5 px-5 py-6 mx-auto max-w-7xl md:px-8 md:py-8">
+
+        <section className="grid gap-4 px-5 py-2 md:px-6 ">
+          <h1 className="mt-2 text-3xl font-black text-[#111111] md:text-4xl uppercase">template</h1>
+          {notice ? (
+            <div className="rounded-[16px] border border-[#d7ddd8] bg-[#f6f7f5] px-4 py-3 text-sm font-bold text-[#334155]">
+              {notice}
+            </div>
+          ) : null}
+        </section>
 
         {userTemplates.length > 0 ? (
-          <section className="grid gap-4 rounded-[30px] border border-[#d7ddd8] bg-white p-5 shadow-[0_18px_60px_rgba(17,17,17,0.06)]">
+          <section className="grid gap-4 rounded-[28px] border border-[#d7ddd8] bg-white px-5 py-5 shadow-[0_18px_60px_rgba(17,17,17,0.05)] md:px-6">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#5d6670]">saved locally</p>
-                <h2 className="mt-1 text-2xl font-black">내 템플릿</h2>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#5d6670]"></p>
+                <h2 className="mt-1 text-2xl font-black text-[#111111]">내 템플릿</h2>
               </div>
-              <span className="text-xs font-bold text-[#5d6670]">브라우저 IndexedDB에 저장됨</span>
             </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+
+            <div className="grid gap-3 overflow-x-auto sm:grid-cols-2 xl:grid-cols-4">
               {userTemplates.map((template) => (
-                <button
+                <article
                   key={template.id}
-                  type="button"
-                  className="grid gap-3 rounded-[18px] border border-[#d7ddd8] bg-[#f6f7f5] p-4 text-left transition hover:border-[#111111] hover:bg-white"
-                  onClick={() => startUserTemplate(template)}
+                  className="grid min-h-[176px] content-between rounded-[20px] border border-[#d7ddd8] bg-[#f6f7f5] p-4 transition hover:border-[#111111] hover:bg-white"
                 >
-                  <span className="flex items-center justify-between gap-3">
-                    <strong className="truncate text-lg font-black">{template.name}</strong>
-                    <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-black">{template.platform === "android" ? "Android" : "iOS"}</span>
-                  </span>
-                  <span className="text-xs font-bold leading-5 text-[#5d6670]">
-                    업로드 {template.uploadCount}개 · 색상 변경 {template.colorCount}개 · {formatDate(template.updatedAt)}
-                  </span>
-                  <span className="w-fit rounded-full bg-[#111111] px-4 py-2 text-xs font-black text-white">편집 계속하기</span>
-                </button>
+                  <div className="grid gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <strong className="block truncate text-base font-black text-[#111111]">{template.name}</strong>
+                        <span className="mt-1 block text-xs font-bold text-[#5d6670]">
+                          업로드 {template.uploadCount}개 · 색상 {template.colorCount}개
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label={`${template.name} 삭제`}
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[#d7ddd8] bg-white text-[#5d6670] transition hover:border-[#ef4444] hover:text-[#b91c1c]"
+                        onClick={(event) => handleDeleteUserTemplate(event, template)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 text-xs font-bold text-[#5d6670]">
+                      <span className="rounded-full bg-white px-2.5 py-1">{template.platform === "android" ? "Android" : "iOS"}</span>
+                      <span>{formatDate(template.updatedAt)}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="inline-flex w-fit rounded-full bg-white px-3.5 py-2 text-xs font-black border border-black/50 text-black hover:bg-[]"
+                    onClick={() => startUserTemplate(template)}
+                  >
+                    편집 계속하기
+                  </button>
+                </article>
               ))}
             </div>
           </section>
         ) : null}
 
-        <section className="grid gap-5 lg:grid-cols-2">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {themeTemplates.map((template) => (
             <button
               key={template.id}
               type="button"
-              className="group grid min-h-[430px] content-between rounded-[28px] border border-[#d7ddd8] bg-white p-5 text-left shadow-[0_18px_60px_rgba(17,17,17,0.07)] transition hover:-translate-y-1 hover:border-[#111111]"
+              className="group grid min-h-[308px] content-between rounded-[24px] border border-[#d7ddd8] bg-white p-4 text-left shadow-[0_16px_42px_rgba(17,17,17,0.06)] transition hover:-translate-y-1 hover:border-[#111111]"
               onClick={() => setSelectedTemplateId(template.id)}
             >
-              <TemplateMiniPreview template={template} />
-              <span>
-                <span className="mb-3 inline-flex rounded-full bg-[#eeee00] px-3 py-1 text-xs font-black">미리보기 가능</span>
-                <strong className="block text-3xl font-black">{template.name}</strong>
-                <span className="mt-3 block text-base font-bold leading-7 text-[#5d6670]">{template.description}</span>
-              </span>
-              <span className="mt-5 inline-flex w-fit rounded-full bg-[#111111] px-5 py-3 text-sm font-black text-white transition group-hover:bg-[#c9ff3d] group-hover:text-[#111111]">
+              <div className="grid gap-4">
+                <TemplateMiniPreview template={template} />
+                <div>
+                  <span className="mb-2 inline-flex rounded-full bg-[#eeee00] px-2.5 py-1 text-[11px] font-black">미리보기 가능</span>
+                  <strong className="block text-2xl font-black text-[#111111]">{template.name}</strong>
+                  <span className="mt-2 line-clamp-2 block text-sm font-semibold leading-6 text-[#5d6670]">{template.description}</span>
+                </div>
+              </div>
+
+              <span className="mt-4 inline-flex w-fit rounded-full bg-[#111111] px-4 py-2.5 text-sm font-black text-white transition group-hover:bg-[#c9ff3d] group-hover:text-[#111111]">
                 템플릿 확인
               </span>
             </button>
@@ -108,13 +157,13 @@ export default function TemplateGalleryClient() {
         </section>
       </div>
 
-      {selectedTemplate && (
+      {selectedTemplate ? (
         <TemplatePreviewModal
           template={selectedTemplate}
           onClose={() => setSelectedTemplateId(null)}
           onStart={(platform) => start(selectedTemplate, platform)}
         />
-      )}
+      ) : null}
     </main>
   );
 }
@@ -170,14 +219,14 @@ function TemplateMiniPreview({ template }: { template: ThemeTemplate }) {
   const assets = spongebobPreviewAssets(template);
   return (
     <div
-      className="mb-6 h-56 overflow-hidden rounded-[18px] border border-[#d7ddd8] bg-cover bg-center"
+      className="h-40 overflow-hidden rounded-[18px] border border-[#d7ddd8] bg-cover bg-center"
       style={{ backgroundColor: template.defaults.chatBackground, backgroundImage: assets.chatBackground ? `url(${assets.chatBackground})` : undefined }}
     >
-      <div className="h-10 bg-white/86" />
-      <div className="grid gap-3 p-4">
-        <span className="h-9 w-32 rounded-xl bg-white bg-[length:100%_100%] bg-no-repeat" style={{ backgroundImage: assets.friendBubble ? `url(${assets.friendBubble})` : undefined }} />
-        <span className="h-9 w-36 justify-self-end rounded-xl bg-[length:100%_100%] bg-no-repeat" style={{ backgroundColor: template.defaults.myBubble, backgroundImage: assets.myBubble ? `url(${assets.myBubble})` : undefined }} />
-        <span className="h-9 w-48 rounded-xl bg-[length:100%_100%] bg-no-repeat" style={{ backgroundColor: template.defaults.friendBubble, backgroundImage: assets.friendBubble ? `url(${assets.friendBubble})` : undefined }} />
+      <div className="h-8 bg-white/86" />
+      <div className="grid gap-2.5 p-3">
+        <span className="h-7 w-24 rounded-xl bg-white bg-[length:100%_100%] bg-no-repeat" style={{ backgroundImage: assets.friendBubble ? `url(${assets.friendBubble})` : undefined }} />
+        <span className="h-7 w-28 justify-self-end rounded-xl bg-[length:100%_100%] bg-no-repeat" style={{ backgroundColor: template.defaults.myBubble, backgroundImage: assets.myBubble ? `url(${assets.myBubble})` : undefined }} />
+        <span className="h-7 w-36 rounded-xl bg-[length:100%_100%] bg-no-repeat" style={{ backgroundColor: template.defaults.friendBubble, backgroundImage: assets.friendBubble ? `url(${assets.friendBubble})` : undefined }} />
       </div>
     </div>
   );
@@ -190,7 +239,7 @@ function TemplatePhonePreview({ template }: { template: ThemeTemplate }) {
       className="mx-auto grid h-[620px] w-full max-w-[350px] content-start overflow-hidden rounded-[32px] border border-[#d7ddd8] bg-cover bg-center shadow-2xl shadow-[#111111]/16"
       style={{ backgroundColor: template.defaults.chatBackground, backgroundImage: assets.chatBackground ? `url(${assets.chatBackground})` : undefined }}
     >
-      <div className="flex h-14 items-center justify-between bg-white/90 px-5 text-sm font-black">
+      <div className="flex items-center justify-between px-5 text-sm font-black h-14 bg-white/90">
         <span>테마 미리보기</span>
         <span className="text-xs text-[#5d6670]">{template.name}</span>
       </div>

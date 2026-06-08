@@ -1,211 +1,167 @@
+﻿---
+name: Aura Canvas
+colors:
+  surface: '#fbf9f4'
+  surface-dim: '#dbdad5'
+  surface-bright: '#fbf9f4'
+  surface-container-lowest: '#ffffff'
+  surface-container-low: '#f5f3ee'
+  surface-container: '#f0eee9'
+  surface-container-high: '#eae8e3'
+  surface-container-highest: '#e4e2dd'
+  on-surface: '#1b1c19'
+  on-surface-variant: '#4b4732'
+  inverse-surface: '#30312e'
+  inverse-on-surface: '#f2f1ec'
+  outline: '#7c775f'
+  outline-variant: '#cdc7aa'
+  surface-tint: '#6a5f00'
+  primary: '#6a5f00'
+  on-primary: '#ffffff'
+  primary-container: '#fee500'
+  on-primary-container: '#716600'
+  inverse-primary: '#dec800'
+  secondary: '#2a6767'
+  on-secondary: '#ffffff'
+  secondary-container: '#aeebea'
+  on-secondary-container: '#2f6c6b'
+  tertiary: '#735c00'
+  on-tertiary: '#ffffff'
+  tertiary-container: '#ffe18e'
+  on-tertiary-container: '#7b6200'
+  error: '#ba1a1a'
+  on-error: '#ffffff'
+  error-container: '#ffdad6'
+  on-error-container: '#93000a'
+  primary-fixed: '#fde400'
+  primary-fixed-dim: '#dec800'
+  on-primary-fixed: '#201c00'
+  on-primary-fixed-variant: '#504700'
+  secondary-fixed: '#b1eeed'
+  secondary-fixed-dim: '#95d1d0'
+  on-secondary-fixed: '#002020'
+  on-secondary-fixed-variant: '#064f4f'
+  tertiary-fixed: '#ffe088'
+  tertiary-fixed-dim: '#e9c349'
+  on-tertiary-fixed: '#241a00'
+  on-tertiary-fixed-variant: '#574500'
+  background: '#fbf9f4'
+  on-background: '#1b1c19'
+  surface-variant: '#e4e2dd'
+typography:
+  display-lg:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 48px
+    fontWeight: '700'
+    lineHeight: 56px
+    letterSpacing: -0.02em
+  headline-lg:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 32px
+    fontWeight: '600'
+    lineHeight: 40px
+    letterSpacing: -0.01em
+  headline-lg-mobile:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 24px
+    fontWeight: '600'
+    lineHeight: 32px
+  title-md:
+    fontFamily: Plus Jakarta Sans
+    fontSize: 20px
+    fontWeight: '600'
+    lineHeight: 28px
+  body-lg:
+    fontFamily: Manrope
+    fontSize: 18px
+    fontWeight: '400'
+    lineHeight: 28px
+  body-md:
+    fontFamily: Manrope
+    fontSize: 16px
+    fontWeight: '400'
+    lineHeight: 24px
+  label-sm:
+    fontFamily: Manrope
+    fontSize: 12px
+    fontWeight: '600'
+    lineHeight: 16px
+    letterSpacing: 0.05em
+rounded:
+  sm: 0.25rem
+  DEFAULT: 0.5rem
+  md: 0.75rem
+  lg: 1rem
+  xl: 1.5rem
+  full: 9999px
+spacing:
+  base: 8px
+  container-max: 1200px
+  gutter: 24px
+  margin-mobile: 20px
+  margin-desktop: 40px
+  stack-sm: 12px
+  stack-md: 24px
+  stack-lg: 48px
 ---
-version: 0.1
-name: KakaoTalk Theme Maker
-inspiration:
-  primary: VoltAgent awesome-design-md / Figma DESIGN.md
-  secondary: VoltAgent awesome-design-md / Miro DESIGN.md
-purpose: Internal web tool for assembling and previewing Android and iOS KakaoTalk themes.
----
 
-# KakaoTalk Theme Maker Design
+## Brand & Style
 
-## Product Intent
+The design system is a high-end creative utility that balances professional precision with emotional warmth. It is designed for creators who treat digital themes as a form of personal expression. The aesthetic direction is **Modern Minimalist with Tactile Warmth**, prioritizing a "gallery" feel where the user's creations are the focal point.
 
-KakaoTalk Theme Maker is not a marketing site. It is an internal production tool for choosing a theme template, replacing required Android/iOS theme assets, checking previews, and moving into advanced bubble editing when precision is needed.
+The visual language avoids the coldness of traditional SaaS by using soft, organic curves and a sophisticated, low-contrast foundation. It evokes a sense of calm focus, inviting users into a flow state of creation. Every interaction should feel intentional, premium, and polished, reflecting the quality of the themes being produced.
 
-The UI should feel like a design workspace: calm, clear, visual, and task-focused. It can use playful color because the product handles character themes, but the controls must stay stable and readable.
+## Colors
 
-## Reference Choice
+The palette is anchored in a refined interpretation of the iconic Kakao identity, elevated for a premium audience.
 
-Use the Figma-inspired direction as the primary system:
-
-- clean black/white editor frame
-- large visual work areas
-- soft pastel color blocks for grouped work zones
-- confident typography and clear action hierarchy
-- minimal shadows, strong spacing, clear selected states
-
-Borrow only a small amount from the Miro-inspired direction:
-
-- board-like asset areas
-- sticky-note-like template/slot thumbnails
-- bright accent color for the primary workflow action
-
-Do not copy either brand directly. This file translates those references into a local product language for KakaoTalk theme production.
-
-## Visual Theme
-
-The app should look like a practical theme workshop.
-
-- Backgrounds are mostly white or very light neutral.
-- Editing zones can use large pale color blocks.
-- Preview surfaces should look like real phone/theme surfaces, not decorative cards.
-- The user should immediately understand three things: selected template, selected platform, selected editable asset.
-- Avoid marketing hero layouts inside the tool.
-
-## Color Tokens
-
-Core:
-
-- `ink`: `#111111` for primary text.
-- `muted`: `#5d6670` for secondary text.
-- `canvas`: `#ffffff` for page and panel foregrounds.
-- `surface`: `#f6f7f5` for quiet tool surfaces.
-- `surface-strong`: `#e1e4e0` for structural rails and editor bands.
-- `hairline`: `#d7ddd8` for borders and dividers.
-
-Workflow accents:
-
-- `action`: `#c9ff3d` for the main "테마 만들기" action.
-- `action-ink`: `#111111` for text on `action`.
-- `select`: `#68a0ff` for selected navigation state.
-- `focus`: `#452cff` for active asset outline.
-- `danger`: `#f45b61` for back/close/destructive emphasis.
-- `note-yellow`: `#eeee00` for small guide controls and board notes.
-- `note-lime`: `#cddd7d` for asset thumbnails.
-
-Template preview accents may come from the selected template, but controls should keep the above neutral system.
+- **Primary (Core Yellow):** A vibrant but controlled yellow (#FEE500), used sparingly for primary actions and brand recognition.
+- **Secondary (Deep Teal):** A sophisticated dark teal (#004C4C) provides a grounded, professional contrast to the yellow, used for text and heavy structural elements.
+- **Tertiary (Soft Gold):** An elegant gold (#D4AF37) used for highlights, premium features, and subtle "creative" accents.
+- **Neutral (Warm Sand):** The base is a soft off-white (#F9F7F2) rather than pure white, creating an inviting, paper-like surface that reduces eye strain.
+- **Status:** Use muted, low-saturation tones for Success (sage), Warning (ochre), and Error (dusty rose) to maintain the premium feel.
 
 ## Typography
 
-Use system Korean-friendly UI fonts:
+This design system utilizes a dual-font pairing to achieve a balance of modern energy and professional clarity. 
 
-```css
-font-family: "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
-```
+**Plus Jakarta Sans** is used for headings and display text. Its soft, geometric curves mirror the rounded UI elements, creating a cohesive visual rhythm. **Manrope** is used for body text and functional labels, chosen for its exceptional readability and neutral, modern structure.
 
-Rules:
+Maintain a strong hierarchy by using significant weight differences rather than just size. Labels should often use uppercase with slight tracking (0.05em) to differentiate functional metadata from narrative content.
 
-- Use Korean labels by default.
-- Use short labels in controls: `채팅방`, `이미지 업로드`, `고급 말풍선 편집`.
-- Use dense but readable editor typography.
-- Do not use viewport-scaled font sizes.
-- Do not use negative letter spacing in this app.
+## Layout & Spacing
 
-Suggested scale:
+The layout philosophy is built on **Generous Breathing Room**. To convey a premium feel, the design system utilizes larger-than-average margins and padding, ensuring elements never feel cramped.
 
-- Page title: `40px`, weight `800-900`.
-- Section title: `24px-32px`, weight `800`.
-- Control label: `14px-16px`, weight `700-800`.
-- Detail text: `12px-14px`, weight `600-700`.
-- Preview text: match KakaoTalk-like message sizes, usually `13px-16px`.
+- **Grid:** A 12-column fluid grid for desktop with 24px gutters. On mobile, a single-column layout with 20px side margins.
+- **Rhythm:** All spacing must be multiples of the 8px base unit. 
+- **White Space:** Use `stack-lg` (48px) to separate major sections, encouraging the user to focus on one creative task at a time.
+- **Alignment:** Content is generally center-aligned or left-aligned within a max-width container to maintain a focused, editorial appearance.
 
-## Layout Principles
+## Elevation & Depth
 
-The main editor uses a three-zone workspace:
+This design system uses a **Soft Tonal Layering** approach combined with **Ambient Shadows**. Instead of harsh borders, depth is created through subtle shifts in background color and highly diffused shadows.
 
-- Left rail: screen categories such as `메인 화면`, `채팅 목록`, `채팅방`, `더보기`.
-- Center workspace: selected screen slots, asset thumbnails, and quick edit controls.
-- Right preview: phone-like theme preview for the currently selected screen.
+- **Level 0 (Base):** Warm Sand (#F9F7F2) background.
+- **Level 1 (Cards/Panels):** Pure White (#FFFFFF) surfaces with a very soft, 15% opacity Deep Teal shadow (blur: 20px, y: 4px).
+- **Level 2 (Modals/Popovers):** Pure White with a more pronounced, "floating" shadow (blur: 40px, y: 12px) and a subtle 1px border in a slightly darker neutral tone (5% opacity secondary).
+- **Interactions:** Hover states should not use "glows," but rather a slight upward lift (y-axis shift) and a deepening of the ambient shadow.
 
-Rules:
+## Shapes
 
-- Keep the preview visible while editing.
-- Keep the selected asset visually obvious.
-- Use stable dimensions for rails, thumbnails, buttons, and preview frames.
-- Allow scrolling inside overflowing regions instead of shrinking important text.
-- Do not nest cards inside cards. Use rails, panels, and work zones.
-- Use rounded corners intentionally: large structural panels can be rounder; repeated asset thumbnails should stay tighter.
+The shape language is defined by **Friendly Sophistication**. Avoid sharp corners entirely to maintain emotional warmth.
 
-## Component Rules
+- **Standard Elements:** 16px radius for buttons, input fields, and small cards.
+- **Large Containers:** 24px-32px radius for main editor panels and image previews to create a soft, framed effect.
+- **Pill Shapes:** Used exclusively for tags, chips, and the primary "floating" navigation elements.
+- **Borders:** When used, borders should be 1.5px wide and colored with a 10% opacity of the Secondary color to ensure they feel "drawn" rather than "engineered."
 
-Buttons:
+## Components
 
-- Primary workflow action: lime filled pill or rounded button.
-- Advanced/technical action: black filled button.
-- Back/destructive action: coral/red circular or compact button.
-- Secondary action: white or light neutral with border.
-- Disabled action: low-contrast neutral, no hover emphasis.
+- **Buttons:** Primary buttons use the Core Yellow with Deep Teal text. They should have a 16px corner radius and a subtle "lift" on hover. Secondary buttons are ghost-style with a 1.5px teal border.
+- **Creative Cards:** Used for theme previews. These should have a 24px radius, no visible border, and a soft ambient shadow. Typography within cards should be strictly hierarchical.
+- **Input Fields:** Large, 16px rounded containers with a Soft Sand background. The focus state uses a 2px Deep Teal border to signal precision.
+- **Chips & Tags:** Pill-shaped with a 10% opacity tint of the Secondary or Tertiary color. Used for categorizing theme styles (e.g., "Minimal", "Pastel").
+- **Lists:** Clean, spacious rows with subtle dividers (1px, 5% opacity Secondary). Each row should have a minimum height of 64px to feel premium.
+- **Live Preview Toggle:** A specialized component that allows users to switch between "Edit" and "Preview" modes, utilizing a pill-shaped segmented control with a sliding high-contrast indicator.
 
-Navigation:
-
-- Active screen tab uses blue fill.
-- Inactive tabs use white fill on a gray rail.
-- Platform and template are locked once `/edit` starts; show them as read-only metadata, not editable controls.
-
-Asset thumbnails:
-
-- Use a board-like layout with visible selected outline.
-- Show whether the asset is template default, uploaded by user, required, or optional.
-- Thumbnail surfaces may use pale lime/yellow note colors, but file/path information should remain in neutral detail rows.
-
-Inputs:
-
-- Image upload buttons should be prominent inside the selected slot panel.
-- Numeric precision controls for 9-patch or iOS inset should live in the advanced bubble editor unless explicitly promoted into quick edit.
-
-Preview:
-
-- Phone preview should be an actual preview surface, not a decorative card.
-- Chat bubbles must respect text content, minimum/maximum width, and stretch/inset behavior.
-- Non-chat screens should communicate slot placement even when the exact KakaoTalk UI is not fully implemented yet.
-
-## Route Rules
-
-`/template`:
-
-- Show templates as cards.
-- Clicking a template opens a modal preview.
-- Modal bottom has separate `Android로 시작` and `iOS로 시작` actions.
-- Template cards should emphasize preview imagery, not long explanation.
-
-`/edit`:
-
-- Main production workspace.
-- Template and platform are locked.
-- User selects screen, then slot, then uploads/replaces an image.
-- Bubble slots can hand off to `/editor` for advanced adjustment.
-- The right preview follows the active screen.
-
-`/editor`:
-
-- Advanced bubble editor only.
-- Android: `.9.png` marker inspection and download.
-- iOS: inset/stretch value inspection.
-- It may be denser than `/edit`, but it should still keep preview and controls separated.
-
-`/project`:
-
-- Legacy compatibility route only. It should redirect to `/template`.
-
-## Android And iOS Asset Rules
-
-Android:
-
-- Prefer xxhdpi 1080 x 1920 based previews when possible.
-- `.9.png` files need visible marker editing and stretch/content preview.
-- Asset slot labels must map to official KakaoTalk theme file names.
-
-iOS:
-
-- Show CSS point values and scale-specific pixel values when editing insets.
-- `@2x` and `@3x` assets may use different pixel values, but the UI should explain the point conversion.
-- CSS `background-image` inset values should be previewable before export.
-
-## Do
-
-- Use Korean UI copy.
-- Make the selected item impossible to miss.
-- Keep action hierarchy stable across routes.
-- Use template assets as the visual personality.
-- Use neutral controls so SpongeBob or later character templates can define their own mood.
-- Keep dense production information readable.
-
-## Do Not
-
-- Do not turn the internal editor into a marketing landing page.
-- Do not use brand-heavy Figma or Miro colors as literal branding.
-- Do not allow template/platform switching inside `/edit` after start.
-- Do not hide the preview when editing core image slots.
-- Do not use decorative gradient blobs or vague abstract backgrounds.
-- Do not add export promises before Android APK and iOS ktheme pipelines are implemented.
-
-## Agent Prompt Guide
-
-When modifying UI, follow this prompt:
-
-> Apply `DESIGN.md` as the source of truth. Keep the app as a Korean internal production tool. Use a Figma-like clean editor frame with Miro-like asset-board clarity. Preserve template/platform locking in `/edit`, keep the preview visible, and use neutral controls with lime/blue/focus accents for workflow state.
-
-## Source Notes
-
-This local design guide is adapted from the structure and intent of VoltAgent's `awesome-design-md` collection. The repository describes `DESIGN.md` as a markdown design-system document for agents, and its files include visual theme, color, typography, components, layout, elevation, do/don't rules, responsive behavior, and prompt guidance.

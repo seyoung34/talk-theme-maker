@@ -95,3 +95,7 @@ export async function listUserTemplates(): Promise<UserTemplateSummary[]> {
     }))
     .sort((a, b) => b.updatedAt - a.updatedAt);
 }
+
+export async function deleteUserTemplate(id: string) {
+  await withStore<undefined>("readwrite", (store) => store.delete(id));
+}
