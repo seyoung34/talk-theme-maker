@@ -59,7 +59,7 @@ export default function ProjectImporterClient() {
   const router = useRouter();
   const [templateId, setTemplateId] = useState<ThemeTemplateId>("basic");
   const [platform, setPlatform] = useState<ThemePlatform>("android");
-  const [activeSection, setActiveSection] = useState<ThemeSection>("chatroom");
+  const [activeSection, setActiveSection] = useState<ThemeSection>("main");
   const [activeGroup, setActiveGroup] = useState<ThemeSlotGroup>("bubbles");
   const [selectedSlotId, setSelectedSlotId] = useState<string | undefined>();
   const [uploads, setUploads] = useState<SlotUploads>({});
@@ -366,14 +366,14 @@ export default function ProjectImporterClient() {
 
       <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-3 md:gap-4">
         <header className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-[#e5e7eb] bg-white/95 px-4 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
-          <div className="flex min-w-0 items-center justify-self-start gap-4">
+          <div className="flex items-center min-w-0 gap-4 justify-self-start">
             <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
               &larr;
             </Link>
             <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em] text-[#0f172a]">{activeTemplate.name}</h1>
           </div>
 
-          <div className="flex min-w-0 items-center justify-self-center gap-3 overflow-hidden">
+          <div className="flex items-center min-w-0 gap-3 overflow-hidden justify-self-center">
             <div className="hidden shrink-0 rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#475569] md:block">
               {platform === "android" ? "Android" : "iOS"}
             </div>
@@ -391,7 +391,7 @@ export default function ProjectImporterClient() {
             </span>
           </div>
 
-          <div className="flex min-w-0 shrink-0 items-center justify-self-end gap-2">
+          <div className="flex items-center min-w-0 gap-2 shrink-0 justify-self-end">
             <button
               type="button"
               className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
@@ -452,7 +452,7 @@ export default function ProjectImporterClient() {
               }}
             />
 
-            <div className="grid min-h-0 min-w-0 px-3">
+            <div className="grid min-w-0 min-h-0 px-3">
               <ProjectQuickEditPanel
                 slot={selectedSlot}
                 file={selectedFile}

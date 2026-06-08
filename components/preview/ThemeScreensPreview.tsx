@@ -12,19 +12,17 @@ type RoleFiles = Partial<Record<ThemeResourceRole, ThemeProjectFile>>;
 type RoleUrls = Partial<Record<ThemeResourceRole, string>>;
 
 const friendRows = [
-  { name: "딸기군", sub: "오늘", cta: "선물하기" },
-  { name: "파인애플양", sub: "오늘", cta: "선물하기" },
-  { name: "블루베리군", sub: "어제", cta: "선물하기" },
-  { name: "포도양", sub: "어제", cta: "선물하기" },
+  { name: "테스트 프로필", sub: "오늘", cta: "추가" },
+  { name: "샘플 그룹", sub: "어제", cta: "초대" },
+  { name: "워크스페이스", sub: "어제", cta: "보기" },
+  { name: "디자인 리뷰", sub: "최근", cta: "열기" },
 ];
 
 const chatRows = [
-  { name: "프로젝트 공지방", sub: "23개의 새 메시지", time: "2026.06.08" },
-  { name: "디자인 검수", sub: "테마 색상과 말풍선 상태를 최종 확인해주세요.", time: "어제" },
-  { name: "QA 테스트", sub: "미리보기 텍스트를 더미 데이터로 교체했습니다.", time: "00:20", badge: "3" },
-  { name: "개발 메모", sub: "이번 빌드에서는 내보내기 흐름을 점검합니다.", time: "어제" },
-  { name: "운영 알림", sub: "리소스 패키지 생성 결과를 확인해 주세요.", time: "어제", badge: "1" },
-  { name: "샘플 그룹", sub: "테스트용 채팅 목록입니다.", time: "어제", badge: "5" },
+  { name: "프로젝트 공지", sub: "템플릿 미리보기를 최종 점검해 주세요.", time: "09:40" },
+  { name: "내부 QA", sub: "메인 화면 색상과 아이콘 상태를 다시 확인합니다.", time: "어제" },
+  { name: "디자인 리뷰", sub: "후보 카드와 공통 리소스 프리뷰를 정리했습니다.", time: "어제", badge: "3" },
+  { name: "개발 노트", sub: "Android 프로젝트 ZIP 내보내기까지 연결되었습니다.", time: "어제" },
 ];
 
 export function ThemeScreensPreview({
@@ -55,31 +53,41 @@ export function ThemeScreensPreview({
     [slots],
   );
 
-  const mainBackground = slotByRole.main_background;
-  const headerSlot = slotByRole.main_header_color;
-  const titleSlot = slotByRole.main_title_color;
-  const bodySlot = slotByRole.main_body_color;
-  const tabBackgroundSlot = slotByRole.tab_background;
+  const preview = useMemo(() => {
+    const getColor = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback;
 
-  const headerColor = getResolvedColor(headerSlot, colors, selections, templateId, template) ?? template.defaults.mainHeader;
-  const titleColor = getResolvedColor(titleSlot, colors, selections, templateId, template) ?? template.defaults.mainTitle;
-  const bodyColor = getResolvedColor(bodySlot, colors, selections, templateId, template) ?? template.defaults.mainBody;
-  const tabBackground = getResolvedColor(tabBackgroundSlot, colors, selections, templateId, template) ?? template.defaults.tabBackground;
+    return {
+      mainBackgroundColor: getColor("main_background_color", template.defaults.mainBackground),
+      headerBackgroundColor: getColor("main_header_color", template.defaults.mainHeader),
+      headerForegroundColor: getColor("main_header_foreground_color", template.defaults.mainTitle),
+      titleColor: getColor("main_title_color", template.defaults.mainTitle),
+      titlePressedColor: getColor("main_title_pressed_color", template.defaults.mainTitle),
+      descriptionColor: getColor("main_description_color", template.defaults.mainBody),
+      bodyColor: getColor("main_body_color", template.defaults.mainBody),
+      bodyPressedColor: getColor("main_paragraph_pressed_color", template.defaults.mainBody),
+      bodyCellPressedColor: getColor("main_body_cell_pressed_color", withAlpha(template.defaults.mainBackground, "99")),
+      bodyCellBorderColor: getColor("main_body_cell_border_color", withAlpha(template.defaults.mainTitle, "33")),
+      sectionTitleColor: getColor("main_section_title_color", template.defaults.mainTitle),
+      featureBrowseTabColor: getColor("main_feature_browse_tab_color", template.defaults.tabBackground),
+      bodySecondaryColor: getColor("main_body_secondary_cell_color", lighten(template.defaults.mainBackground, 0.06)),
+      tabBackgroundColor: getColor("tab_background", template.defaults.tabBackground),
+    };
+  }, [colors, selections, slotByRole, templateId, template]);
+
+  const mainBackgroundSlot = slotByRole.main_background;
+  const mainBackgroundColorSlot = slotByRole.main_background_color;
 
   return (
     <PhoneFrame
       backgroundUrl={urls.main_background}
-      fallbackBackground={template.defaults.mainBackground}
-      selected={selectedSlotId === mainBackground?.id}
-      onSelect={() => mainBackground && onSelectSlot?.(mainBackground.id)}
+      fallbackBackground={preview.mainBackgroundColor}
+      selected={selectedSlotId === mainBackgroundSlot?.id || selectedSlotId === mainBackgroundColorSlot?.id}
+      onSelect={() => onSelectSlot?.(mainBackgroundSlot?.id ?? mainBackgroundColorSlot?.id ?? "")}
     >
       {section === "main" ? (
         <FriendsScreen
           selectedSlotId={selectedSlotId}
-          titleColor={titleColor}
-          bodyColor={bodyColor}
-          headerColor={headerColor}
-          tabBackground={tabBackground}
+          preview={preview}
           slotByRole={slotByRole}
           urls={urls}
           onSelectSlot={onSelectSlot}
@@ -87,10 +95,7 @@ export function ThemeScreensPreview({
       ) : (
         <ChatsScreen
           selectedSlotId={selectedSlotId}
-          titleColor={titleColor}
-          bodyColor={bodyColor}
-          headerColor={headerColor}
-          tabBackground={tabBackground}
+          preview={preview}
           slotByRole={slotByRole}
           urls={urls}
           onSelectSlot={onSelectSlot}
@@ -100,21 +105,32 @@ export function ThemeScreensPreview({
   );
 }
 
+type MainPreviewPalette = {
+  mainBackgroundColor: string;
+  headerBackgroundColor: string;
+  headerForegroundColor: string;
+  titleColor: string;
+  titlePressedColor: string;
+  descriptionColor: string;
+  bodyColor: string;
+  bodyPressedColor: string;
+  bodyCellPressedColor: string;
+  bodyCellBorderColor: string;
+  sectionTitleColor: string;
+  featureBrowseTabColor: string;
+  bodySecondaryColor: string;
+  tabBackgroundColor: string;
+};
+
 function FriendsScreen({
   selectedSlotId,
-  titleColor,
-  bodyColor,
-  headerColor,
-  tabBackground,
+  preview,
   slotByRole,
   urls,
   onSelectSlot,
 }: {
   selectedSlotId?: string;
-  titleColor: string;
-  bodyColor: string;
-  headerColor: string;
-  tabBackground: string;
+  preview: MainPreviewPalette;
   slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
   urls: RoleUrls;
   onSelectSlot?: (slotId: string) => void;
@@ -123,68 +139,80 @@ function FriendsScreen({
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_96px]">
       <button
         type="button"
-        className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-6 pb-4 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""
-          }`}
-        style={{ backgroundColor: hexToRgba(headerColor, 0.58) }}
+        className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-6 pb-4 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+        style={{ backgroundColor: hexToRgba(preview.headerBackgroundColor, 0.72) }}
         onClick={(event) => {
           event.stopPropagation();
-          if (slotByRole.main_header_color) onSelectSlot?.(slotByRole.main_header_color.id);
+          onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? "");
         }}
       >
         <AvatarCircle src={urls.main_background} size="h-6 w-8" />
-        <div>
-          <strong className="block text-[13px] font-semibold" style={{ color: titleColor }}>
-            내 이름
-          </strong>
-        </div>
-        <div className="flex items-center gap-3 text-[#0b7285]">
+        <strong className="block text-base font-semibold" style={{ color: preview.headerForegroundColor }}>
+          내 프로필
+        </strong>
+        <div className="flex items-center gap-3" style={{ color: preview.headerForegroundColor }}>
           <Search className="w-4 h-4" />
           <UserPlus className="w-4 h-4" />
           <Gift className="w-4 h-4" />
           <Settings className="w-4 h-4" />
         </div>
       </button>
+
       <div className="px-4 pb-3 mt-2 overflow-hidden">
         <div className="grid h-full content-start gap-3 overflow-hidden px-0.5 pb-2">
-          <div className="flex gap-2 ">
-            <Chip active>친구</Chip>
-            <Chip>소식</Chip>
-          </div>
-
-          <div className="overflow-hidden rounded-[10px] bg-white/92 px-5 py-8 shadow-[0_18px_32px_rgba(15,23,42,0.08)] ">
-
+          <div className="flex gap-2">
+            <Chip active titleColor={preview.titleColor} backgroundColor={preview.mainBackgroundColor}>친구</Chip>
+            <Chip titleColor={preview.titleColor} backgroundColor={preview.mainBackgroundColor}>추천</Chip>
           </div>
 
           <button
             type="button"
-            className={`px-1 text-left ${selectedSlotId === slotByRole.main_title_color?.id ? "rounded-lg ring-2 ring-[#60a5fa]" : ""}`}
+            className={`overflow-hidden rounded-[12px] px-5 py-6 text-left shadow-[0_18px_32px_rgba(15,23,42,0.08)] ${selectedSlotId === slotByRole.main_body_secondary_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+            style={{ backgroundColor: preview.bodySecondaryColor }}
             onClick={(event) => {
               event.stopPropagation();
-              if (slotByRole.main_title_color) onSelectSlot?.(slotByRole.main_title_color.id);
+              if (slotByRole.main_body_secondary_cell_color) onSelectSlot?.(slotByRole.main_body_secondary_cell_color.id);
             }}
           >
-            <span className="text-[14px] font-semibold" style={{ color: titleColor }}>
+            <span className="block text-[11px] font-semibold" style={{ color: preview.descriptionColor }}>
+              추천 카드
+            </span>
+            <strong className="mt-2 block text-[15px] font-semibold" style={{ color: preview.titlePressedColor }}>
+              새 메인 화면 요소를 바로 점검할 수 있습니다.
+            </strong>
+          </button>
+
+          <button
+            type="button"
+            className={`px-1 text-left ${selectedSlotId === slotByRole.main_section_title_color?.id ? "rounded-lg ring-2 ring-[#60a5fa]" : ""}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (slotByRole.main_section_title_color) onSelectSlot?.(slotByRole.main_section_title_color.id);
+            }}
+          >
+            <span className="text-[14px] font-semibold" style={{ color: preview.sectionTitleColor }}>
               업데이트 프로필 12
             </span>
           </button>
 
           <div className="flex gap-3 px-1 overflow-hidden">
-            {["내 프로필", "테스트 A", "테스트 B", "샘플 C", "샘플 D", "더보기"].map((name, index) => (
+            {["샘플 A", "샘플 B", "샘플 C", "샘플 D", "더보기"].map((name, index) => (
               <div key={name} className="grid w-[62px] justify-items-center gap-2">
                 <div className="relative">
                   <AvatarCircle src={urls.main_background} size="h-16 w-16" />
                   {index > 0 ? <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[#ff7246]" /> : null}
                 </div>
-                <span
-                  className={`line-clamp-2 text-center text-[11px] font-medium leading-[1.15] ${selectedSlotId === slotByRole.main_body_color?.id ? "rounded-md bg-white/70 px-1 py-0.5 ring-1 ring-[#60a5fa]" : ""}`}
-                  style={{ color: bodyColor }}
+                <button
+                  type="button"
+                  className={`line-clamp-2 text-center text-[11px] font-medium leading-[1.15] ${selectedSlotId === slotByRole.main_description_color?.id ? "rounded-md bg-white/70 px-1 py-0.5 ring-1 ring-[#60a5fa]" : ""}`}
+                  style={{ color: preview.descriptionColor }}
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (slotByRole.main_body_color) onSelectSlot?.(slotByRole.main_body_color.id);
+                    if (slotByRole.main_description_color) onSelectSlot?.(slotByRole.main_description_color.id);
                   }}
                 >
                   {name}
-                </span>
+                </button>
               </div>
             ))}
           </div>
@@ -192,60 +220,73 @@ function FriendsScreen({
           <div className="grid gap-3 px-1">
             <SectionLabel
               label="생일인 친구 4"
-              selected={selectedSlotId === slotByRole.main_title_color?.id}
-              onClick={() => slotByRole.main_title_color && onSelectSlot?.(slotByRole.main_title_color.id)}
-              color={titleColor}
+              color={preview.sectionTitleColor}
+              selected={selectedSlotId === slotByRole.main_section_title_color?.id}
+              onClick={() => slotByRole.main_section_title_color && onSelectSlot?.(slotByRole.main_section_title_color.id)}
             />
             {friendRows.map((row) => (
-              <div key={row.name} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b border-white/20 pb-2">
+              <button
+                key={row.name}
+                type="button"
+                className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b pb-2 text-left ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "rounded-lg ring-1 ring-[#60a5fa]" : ""}`}
+                style={{ borderColor: preview.bodyCellBorderColor }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
+                }}
+              >
                 <AvatarCircle src={urls.main_background} size="h-12 w-12" />
                 <div>
-                  <strong className="block text-[14px] font-semibold leading-none" style={{ color: titleColor }}>
+                  <strong className="block text-[14px] font-semibold leading-none" style={{ color: preview.titleColor }}>
                     {row.name}
                   </strong>
-                  <span className="mt-1 block text-[11px] font-medium leading-none" style={{ color: bodyColor }}>
+                  <span className="mt-1 block text-[11px] font-medium leading-none" style={{ color: preview.descriptionColor }}>
                     {row.sub}
                   </span>
                 </div>
-                <button type="button" className="rounded-full border border-[#7aa8af]/35 bg-white/12 px-2 py-2 text-[6px] font-semibold text-[#25636c]">
+                <span className="rounded-full border border-[#7aa8af]/35 bg-white/12 px-2 py-2 text-[10px] font-semibold" style={{ color: preview.bodyPressedColor }}>
                   {row.cta}
-                </button>
-              </div>
+                </span>
+              </button>
             ))}
-            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-              <span className="grid h-12 w-12 place-items-center rounded-[20px] bg-white/70 text-xl">🎂</span>
+
+            <button
+              type="button"
+              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[16px] px-1 py-1 text-left ${selectedSlotId === slotByRole.main_body_cell_pressed_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+              style={{ backgroundColor: preview.bodyCellPressedColor }}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (slotByRole.main_body_cell_pressed_color) onSelectSlot?.(slotByRole.main_body_cell_pressed_color.id);
+              }}
+            >
+              <span className="grid h-12 w-12 place-items-center rounded-[20px] bg-white/70 text-xl">★</span>
               <div>
-                <strong className="block text-[14px] font-semibold leading-tight" style={{ color: titleColor }}>
-                  친구의 생일 일정을 확인해보세요
+                <strong className="block text-[14px] font-semibold leading-tight" style={{ color: preview.titleColor }}>
+                  친구의 생일 일정을 확인해 보세요
                 </strong>
               </div>
-              <span className="text-[14px] font-semibold" style={{ color: bodyColor }}>
+              <span className="text-[14px] font-semibold" style={{ color: preview.descriptionColor }}>
                 19
               </span>
-            </div>
+            </button>
           </div>
         </div>
       </div>
-      <BottomTabBar active="friends" selectedSlotId={selectedSlotId} slotByRole={slotByRole} urls={urls} tabBackground={tabBackground} onSelectSlot={onSelectSlot} />
+
+      <BottomTabBar active="friends" selectedSlotId={selectedSlotId} slotByRole={slotByRole} urls={urls} tabBackground={preview.tabBackgroundColor} onSelectSlot={onSelectSlot} />
     </div>
   );
 }
 
 function ChatsScreen({
   selectedSlotId,
-  titleColor,
-  bodyColor,
-  headerColor,
-  tabBackground,
+  preview,
   slotByRole,
   urls,
   onSelectSlot,
 }: {
   selectedSlotId?: string;
-  titleColor: string;
-  bodyColor: string;
-  headerColor: string;
-  tabBackground: string;
+  preview: MainPreviewPalette;
   slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
   urls: RoleUrls;
   onSelectSlot?: (slotId: string) => void;
@@ -254,54 +295,80 @@ function ChatsScreen({
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_96px]">
       <button
         type="button"
-        className={`flex items-end justify-between px-6 pb-5 pt-8 text-left ${selectedSlotId === slotByRole.main_header_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
-        style={{ backgroundColor: hexToRgba(headerColor, 0.72) }}
+        className={`flex items-end justify-between px-4 pb-3 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+        style={{ backgroundColor: preview.headerBackgroundColor }}
         onClick={(event) => {
           event.stopPropagation();
-          if (slotByRole.main_header_color) onSelectSlot?.(slotByRole.main_header_color.id);
+          onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? "");
         }}
       >
-        <strong className="text-[28px] font-semibold tracking-[-0.03em]" style={{ color: titleColor }}>
+        <strong className="text-base font-semibold tracking-[-0.03em]" style={{ color: preview.headerForegroundColor }}>
           채팅
         </strong>
-        <div className="flex items-center gap-4 text-[#0b7285]">
+        <div className="flex items-center gap-4" style={{ color: preview.headerForegroundColor }}>
           <Search className="w-6 h-6" />
           <MessageCirclePlus className="w-6 h-6" />
           <Settings className="w-6 h-6" />
         </div>
       </button>
+
       <div className="grid content-start min-h-0 gap-4 pb-4 overflow-hidden">
-        <div className="border-b border-[#5ab0bc]/18 bg-[#18b7d0] px-4 py-4 text-[#104950]">
+        <div className="px-4 py-4 border-b" style={{ borderColor: hexToRgba(preview.bodyCellBorderColor, 0.4), backgroundColor: preview.featureBrowseTabColor, color: preview.headerForegroundColor }}>
           <div className="flex items-center gap-3 overflow-hidden">
-            <FilterPill dark>전체</FilterPill>
-            <FilterPill>
-              <span className="text-xl">📌</span>
+            <FilterPill dark color={preview.headerForegroundColor}>전체</FilterPill>
+            <FilterPill color={preview.headerForegroundColor}>
+              <span className="text-xl">◎</span>
               <BadgeSmall value="12" />
             </FilterPill>
-            <FilterPill wide>
-              <span className="text-xl">🤖</span>
+            <FilterPill wide color={preview.headerForegroundColor}>
+              <span className="text-xl">✦</span>
               <strong className="text-[14px] font-semibold">ChatGPT</strong>
               <BadgeSmall value="N" />
             </FilterPill>
-            <CircleAction icon={<Bell className="w-5 h-5" />} />
-            <CircleAction icon={<Search className="w-5 h-5" />} />
+            <CircleAction color={preview.headerForegroundColor} icon={<Bell className="w-5 h-5" />} />
+            <CircleAction color={preview.headerForegroundColor} icon={<Search className="w-5 h-5" />} />
           </div>
         </div>
+
         <div className="px-4">
-          <div className="rounded-[28px] bg-white/92 px-6 py-5 shadow-[0_20px_36px_rgba(15,23,42,0.08)]">
+          <button
+            type="button"
+            className={`w-full rounded-[28px] px-6 py-5 text-left shadow-[0_20px_36px_rgba(15,23,42,0.08)] ${selectedSlotId === slotByRole.main_body_secondary_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+            style={{ backgroundColor: preview.bodySecondaryColor }}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (slotByRole.main_body_secondary_cell_color) onSelectSlot?.(slotByRole.main_body_secondary_cell_color.id);
+            }}
+          >
             <div className="grid grid-cols-[1fr_112px] items-center gap-4">
               <div>
-                <span className="text-[11px] font-medium text-[#8d939a]">테스트 배너</span>
-                <strong className="mt-1 block text-[15px] font-semibold text-[#2d3137]">새 테마 미리보기를 확인하세요</strong>
-                <span className="mt-1 block text-[11px] font-medium text-[#9ba1a8]">실서비스 데이터 대신 샘플 문구를 사용합니다.</span>
+                <span className="text-[11px] font-medium" style={{ color: preview.descriptionColor }}>
+                  테스트 배너
+                </span>
+                <strong className="mt-1 block text-[15px] font-semibold" style={{ color: preview.titlePressedColor }}>
+                  메인 화면 보조 카드 색상을 확인합니다.
+                </strong>
+                <span className="mt-1 block text-[11px] font-medium" style={{ color: preview.descriptionColor }}>
+                  설명 텍스트와 눌림 상태 색상도 함께 점검할 수 있습니다.
+                </span>
               </div>
               <div className="h-[84px] rounded-2xl bg-[linear-gradient(135deg,#e8f8ff,#fff1b6)]" />
             </div>
-          </div>
+          </button>
         </div>
+
         <div className="grid min-h-0 gap-1 px-4 overflow-hidden">
           {chatRows.map((row, index) => (
-            <div key={`${row.name}-${index}`} className="grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-[20px] px-2 py-2">
+            <button
+              key={`${row.name}-${index}`}
+              type="button"
+              className={`grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-[20px] px-2 py-2 text-left ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "ring-1 ring-[#60a5fa]" : ""}`}
+              style={{ borderBottom: `1px solid ${preview.bodyCellBorderColor}` }}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
+              }}
+            >
               <AvatarCircle src={urls.main_background} size={index === 0 ? "h-14 w-14" : "h-12 w-12"} />
               <div>
                 <button
@@ -312,34 +379,35 @@ function ChatsScreen({
                     if (slotByRole.main_title_color) onSelectSlot?.(slotByRole.main_title_color.id);
                   }}
                 >
-                  <strong className="text-[15px] font-semibold" style={{ color: titleColor }}>
+                  <strong className="text-[15px] font-semibold" style={{ color: preview.titleColor }}>
                     {row.name}
                   </strong>
                 </button>
                 <button
                   type="button"
-                  className={`mt-1 block text-left ${selectedSlotId === slotByRole.main_body_color?.id ? "rounded-md ring-1 ring-[#60a5fa]" : ""}`}
+                  className={`mt-1 block text-left ${selectedSlotId === slotByRole.main_description_color?.id ? "rounded-md ring-1 ring-[#60a5fa]" : ""}`}
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (slotByRole.main_body_color) onSelectSlot?.(slotByRole.main_body_color.id);
+                    if (slotByRole.main_description_color) onSelectSlot?.(slotByRole.main_description_color.id);
                   }}
                 >
-                  <span className="line-clamp-2 text-[12px] font-medium leading-[1.35]" style={{ color: bodyColor }}>
+                  <span className="line-clamp-2 text-[12px] font-medium leading-[1.35]" style={{ color: preview.descriptionColor }}>
                     {row.sub}
                   </span>
                 </button>
               </div>
               <div className="grid gap-2 pt-1 justify-items-end">
-                <span className="text-[11px] font-medium" style={{ color: bodyColor }}>
+                <span className="text-[11px] font-medium" style={{ color: preview.bodyColor }}>
                   {row.time}
                 </span>
                 {row.badge ? <UnreadBadge value={row.badge} /> : null}
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
-      <BottomTabBar active="chats" selectedSlotId={selectedSlotId} slotByRole={slotByRole} urls={urls} tabBackground={tabBackground} onSelectSlot={onSelectSlot} />
+
+      <BottomTabBar active="chats" selectedSlotId={selectedSlotId} slotByRole={slotByRole} urls={urls} tabBackground={preview.tabBackgroundColor} onSelectSlot={onSelectSlot} />
     </div>
   );
 }
@@ -359,7 +427,7 @@ function PhoneFrame({
 }) {
   return (
     <div
-      className={`mx-auto aspect-[1080/2340] h-full w-full max-w-[310px] overflow-hidden rounded-[32px] border bg-[#f8fdff] shadow-[0_22px_48px_rgba(15,23,42,0.16)] ${selected ? "border-[#60a5fa]" : "border-[#d7ddd8]"}`}
+      className={`mx-auto aspect-[1080/2340] h-full w-full max-w-[310px] overflow-hidden rounded-[32px] border shadow-[0_22px_48px_rgba(15,23,42,0.16)] ${selected ? "border-[#60a5fa]" : "border-[#d7ddd8]"}`}
       role="button"
       tabIndex={0}
       onClick={onSelect}
@@ -455,20 +523,45 @@ function AvatarCircle({ src, size }: { src?: string; size: string }) {
   return <span className={`${size} block rounded-full border border-white/70 bg-[#dceff2] bg-cover bg-center shadow-[0_8px_18px_rgba(15,23,42,0.08)]`} style={{ backgroundImage: src ? `url(${src})` : undefined }} />;
 }
 
-function Chip({ active, children }: { active?: boolean; children: ReactNode }) {
-  return <span className={`inline-flex h-8 items-center rounded-full px-6 text-[14px] font-semibold ${active ? "bg-[#0d5b66] text-white" : "border border-[#70aab3]/35 bg-white/14 text-[#0d5b66]"}`}>{children}</span>;
+function Chip({ active, titleColor, backgroundColor, children }: { active?: boolean; titleColor?: string; backgroundColor?: string; children: ReactNode }) {
+  return (
+    <span
+      className={`inline-flex h-8 items-center rounded-full px-6 text-[14px] font-semibold ${active ? "" : "border"
+        }`}
+      style={
+        active
+          ? {
+            backgroundColor: titleColor ?? "#111111",
+            color: backgroundColor ?? "#ffffff",
+          }
+          : {
+            borderColor: titleColor ?? "#0d5b66",
+            color: titleColor ?? "#0d5b66",
+          }
+      }
+    >
+      {children}
+    </span>
+  );
 }
 
-function FilterPill({ children, dark, wide }: { children: ReactNode; dark?: boolean; wide?: boolean }) {
-  return <span className={`inline-flex h-14 items-center gap-2 rounded-full border border-[#0e8394]/28 px-5 text-[15px] font-semibold ${dark ? "bg-[#0d5b66] text-white" : "bg-white/6 text-[#0d4f58]"} ${wide ? "min-w-[128px] justify-center" : ""}`}>{children}</span>;
+function FilterPill({ children, dark, wide, color }: { children: ReactNode; dark?: boolean; wide?: boolean; color?: string }) {
+  return (
+    <span
+      className={`inline-flex h-10 items-center gap-2 rounded-full border px-5 text-xs font-semibold ${wide ? "min-w-[128px] justify-center" : ""}`}
+      style={dark ? { borderColor: "transparent", backgroundColor: hexToRgba(color ?? "#0d5b66", 0.95), color: "#ffffff" } : { borderColor: hexToRgba(color ?? "#0e8394", 0.28), backgroundColor: "rgba(255,255,255,0.08)", color: color ?? "#0d4f58" }}
+    >
+      {children}
+    </span>
+  );
 }
 
 function BadgeSmall({ value }: { value: string }) {
   return <span className="rounded-full bg-[#ff6b37] px-2 py-[3px] text-[11px] font-bold leading-none text-white">{value}</span>;
 }
 
-function CircleAction({ icon }: { icon: ReactNode }) {
-  return <span className="grid h-14 w-14 place-items-center rounded-full border border-[#0e8394]/28 bg-white/6">{icon}</span>;
+function CircleAction({ icon, color }: { icon: ReactNode; color?: string }) {
+  return <span className="grid border rounded-full h-14 w-14 place-items-center bg-white/6" style={{ borderColor: hexToRgba(color ?? "#0e8394", 0.28), color: color ?? "#0d4f58" }}>{icon}</span>;
 }
 
 function UnreadBadge({ value }: { value: string }) {
@@ -533,10 +626,31 @@ function useRoleUrls(files: RoleFiles): RoleUrls {
 
 function hexToRgba(hex: string, alpha: number) {
   const normalized = hex.replace("#", "");
+  if (normalized.length === 8) {
+    const r = Number.parseInt(normalized.slice(2, 4), 16);
+    const g = Number.parseInt(normalized.slice(4, 6), 16);
+    const b = Number.parseInt(normalized.slice(6, 8), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
   const full = normalized.length === 3 ? normalized.split("").map((char) => `${char}${char}`).join("") : normalized;
   const value = Number.parseInt(full, 16);
   const r = (value >> 16) & 255;
   const g = (value >> 8) & 255;
   const b = value & 255;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function withAlpha(color: string, alphaHex: string) {
+  const normalized = color.trim().replace("#", "");
+  const base = normalized.length === 3 ? normalized.split("").map((char) => char + char).join("") : normalized.slice(-6);
+  return `#${alphaHex}${base}`.toUpperCase();
+}
+
+function lighten(color: string, amount: number) {
+  const normalized = color.trim().replace("#", "");
+  const base = normalized.length === 3 ? normalized.split("").map((char) => char + char).join("") : normalized.slice(-6);
+  const [r, g, b] = [0, 2, 4].map((offset) => Number.parseInt(base.slice(offset, offset + 2), 16));
+  const adjust = (channel: number) => Math.max(0, Math.min(255, Math.round(channel + 255 * amount)));
+  return `#${[adjust(r), adjust(g), adjust(b)].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`.toUpperCase();
 }

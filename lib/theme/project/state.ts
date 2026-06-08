@@ -50,10 +50,30 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
       return template.defaults.chatBackground;
     case "main_header_color":
       return template.defaults.mainHeader;
+    case "main_background_color":
+      return template.defaults.mainBackground;
+    case "main_header_foreground_color":
+      return template.defaults.mainTitle;
     case "main_title_color":
       return template.defaults.mainTitle;
+    case "main_title_pressed_color":
+      return template.defaults.mainTitle;
+    case "main_description_color":
+      return template.defaults.mainBody;
     case "main_body_color":
       return template.defaults.mainBody;
+    case "main_paragraph_pressed_color":
+      return template.defaults.mainBody;
+    case "main_body_cell_pressed_color":
+      return "#99F4FAFB";
+    case "main_body_cell_border_color":
+      return "#33111111";
+    case "main_section_title_color":
+      return template.defaults.mainTitle;
+    case "main_feature_browse_tab_color":
+      return template.defaults.tabBackground;
+    case "main_body_secondary_cell_color":
+      return "#FFFFFF";
     case "tab_background":
       return template.defaults.tabBackground;
     case "chat_input_background_color":

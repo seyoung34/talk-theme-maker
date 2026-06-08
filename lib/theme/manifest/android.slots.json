@@ -69,6 +69,176 @@
     }
   },
   {
+    "id": "android-main-background-color",
+    "platform": "android",
+    "role": "main_background_color",
+    "section": "main",
+    "group": "background",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 배경 색상",
+    "required": false,
+    "note": "메인 화면 기본 배경 색상",
+    "colorKey": "theme_background_color",
+    "defaultColor": {
+      "basic": "#F4FAFB",
+      "spongebob": "#B7EEF7"
+    }
+  },
+  {
+    "id": "android-main-header-foreground-color",
+    "platform": "android",
+    "role": "main_header_foreground_color",
+    "section": "main",
+    "group": "header",
+    "screen": "friends",
+    "kind": "color",
+    "label": "헤더 아이콘 색상",
+    "required": false,
+    "note": "상단 헤더 텍스트와 아이콘 색상",
+    "colorKey": "theme_header_color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "android-main-title-pressed-color",
+    "platform": "android",
+    "role": "main_title_pressed_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "제목 눌림 색상",
+    "required": false,
+    "note": "제목 영역의 pressed 상태 색상",
+    "colorKey": "theme_title_pressed_color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "android-main-description-color",
+    "platform": "android",
+    "role": "main_description_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "설명 색상",
+    "required": false,
+    "note": "설명 텍스트와 보조 정보 색상",
+    "colorKey": "theme_description_color",
+    "defaultColor": {
+      "basic": "#4D5660",
+      "spongebob": "#37515A"
+    }
+  },
+  {
+    "id": "android-main-paragraph-pressed-color",
+    "platform": "android",
+    "role": "main_paragraph_pressed_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "본문 눌림 색상",
+    "required": false,
+    "note": "본문 텍스트의 pressed 상태 색상",
+    "colorKey": "theme_paragraph_pressed_color",
+    "defaultColor": {
+      "basic": "#4D5660",
+      "spongebob": "#37515A"
+    }
+  },
+  {
+    "id": "android-main-body-cell-pressed-color",
+    "platform": "android",
+    "role": "main_body_cell_pressed_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "리스트 눌림 배경",
+    "required": false,
+    "note": "리스트 셀 pressed 배경 색상",
+    "colorKey": "theme_body_cell_pressed_color",
+    "defaultColor": {
+      "basic": "#99F4FAFB",
+      "spongebob": "#99B7EEF7"
+    }
+  },
+  {
+    "id": "android-main-body-cell-border-color",
+    "platform": "android",
+    "role": "main_body_cell_border_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "리스트 경계선 색상",
+    "required": false,
+    "note": "리스트 셀 구분선과 경계선 색상",
+    "colorKey": "theme_body_cell_border_color",
+    "defaultColor": {
+      "basic": "#33111111",
+      "spongebob": "#33111111"
+    }
+  },
+  {
+    "id": "android-main-section-title-color",
+    "platform": "android",
+    "role": "main_section_title_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "섹션 제목 색상",
+    "required": false,
+    "note": "섹션 제목과 그룹 라벨 색상",
+    "colorKey": "theme_section_title_color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "android-main-feature-browse-tab-color",
+    "platform": "android",
+    "role": "main_feature_browse_tab_color",
+    "section": "main",
+    "group": "header",
+    "screen": "friends",
+    "kind": "color",
+    "label": "탐색 탭 색상",
+    "required": false,
+    "note": "상단 탐색 탭과 필터 칩 색상",
+    "colorKey": "theme_feature_browse_tab_color",
+    "defaultColor": {
+      "basic": "#FFFFFF",
+      "spongebob": "#FFFFFF"
+    }
+  },
+  {
+    "id": "android-main-body-secondary-cell-color",
+    "platform": "android",
+    "role": "main_body_secondary_cell_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "보조 셀 배경 색상",
+    "required": false,
+    "note": "보조 카드와 secondary 셀 배경 색상",
+    "colorKey": "theme_body_secondary_cell_color",
+    "defaultColor": {
+      "basic": "#FFFFFF",
+      "spongebob": "#CCF6FB"
+    }
+  },
+  {
     "id": "android-tab-background",
     "platform": "android",
     "role": "tab_background",

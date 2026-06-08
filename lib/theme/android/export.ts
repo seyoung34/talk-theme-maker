@@ -95,9 +95,41 @@ function buildAndroidColorsXml(
 ) {
   const slotByRole = Object.fromEntries(slots.map((slot) => [slot.role, slot])) as Record<string, ThemeAssetSlot | undefined>;
   const mainHeader = getResolvedColor(slotByRole.main_header_color, colors, selections, templateId, template) ?? template.defaults.mainHeader;
+  const mainHeaderForeground =
+    getResolvedColor(slotByRole.main_header_foreground_color, colors, selections, templateId, template) ??
+    getResolvedColor(slotByRole.main_title_color, colors, selections, templateId, template) ??
+    template.defaults.mainTitle;
   const mainTitle = getResolvedColor(slotByRole.main_title_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
+  const mainTitlePressed =
+    getResolvedColor(slotByRole.main_title_pressed_color, colors, selections, templateId, template) ??
+    mainTitle;
+  const mainDescription =
+    getResolvedColor(slotByRole.main_description_color, colors, selections, templateId, template) ??
+    getResolvedColor(slotByRole.main_body_color, colors, selections, templateId, template) ??
+    template.defaults.mainBody;
   const mainBody = getResolvedColor(slotByRole.main_body_color, colors, selections, templateId, template) ?? template.defaults.mainBody;
-  const mainBackground = template.defaults.mainBackground;
+  const mainParagraphPressed =
+    getResolvedColor(slotByRole.main_paragraph_pressed_color, colors, selections, templateId, template) ??
+    mainBody;
+  const mainBackground =
+    getResolvedColor(slotByRole.main_background_color, colors, selections, templateId, template) ??
+    template.defaults.mainBackground;
+  const mainBodyCellPressed =
+    getResolvedColor(slotByRole.main_body_cell_pressed_color, colors, selections, templateId, template) ??
+    withAlpha(mainBackground, "99");
+  const mainBodyCellBorder =
+    getResolvedColor(slotByRole.main_body_cell_border_color, colors, selections, templateId, template) ??
+    withAlpha(mainTitle, "33");
+  const mainSectionTitle =
+    getResolvedColor(slotByRole.main_section_title_color, colors, selections, templateId, template) ??
+    mainTitle;
+  const mainFeatureBrowseTab =
+    getResolvedColor(slotByRole.main_feature_browse_tab_color, colors, selections, templateId, template) ??
+    getResolvedColor(slotByRole.tab_background, colors, selections, templateId, template) ??
+    template.defaults.tabBackground;
+  const mainBodySecondary =
+    getResolvedColor(slotByRole.main_body_secondary_cell_color, colors, selections, templateId, template) ??
+    lighten(mainBackground, 0.06);
   const chatBackground = getResolvedColor(slotByRole.chat_background_color, colors, selections, templateId, template) ?? template.defaults.chatBackground;
   const tabBackground = getResolvedColor(slotByRole.tab_background, colors, selections, templateId, template) ?? template.defaults.tabBackground;
   const chatInputBackground = getResolvedColor(slotByRole.chat_input_background_color, colors, selections, templateId, template) ?? template.defaults.chatInputBackground;
@@ -105,26 +137,26 @@ function buildAndroidColorsXml(
   const accent = template.accent;
 
   const palette: Record<string, string> = {
-    theme_header_color: mainHeader,
-    theme_section_title_color: mainTitle,
+    theme_header_color: mainHeaderForeground,
+    theme_section_title_color: mainSectionTitle,
     theme_title_color: mainTitle,
-    theme_title_pressed_color: mainTitle,
+    theme_title_pressed_color: mainTitlePressed,
     theme_paragraph_color: mainBody,
-    theme_paragraph_pressed_color: mainBody,
-    theme_description_color: mainBody,
-    theme_description_pressed_color: mainBody,
+    theme_paragraph_pressed_color: mainParagraphPressed,
+    theme_description_color: mainDescription,
+    theme_description_pressed_color: mainDescription,
     theme_feature_primary_color: accent,
     theme_feature_primary_pressed_color: accent,
-    theme_feature_browse_tab_color: tabBackground,
+    theme_feature_browse_tab_color: mainFeatureBrowseTab,
     theme_feature_browse_tab_focused_color: mainTitle,
     theme_background_color: mainBackground,
     theme_chatroom_background_color: chatBackground,
     theme_passcode_background_color: template.defaults.myBubble,
     theme_header_cell_color: mainHeader,
     theme_body_cell_color: withAlpha(mainBackground, "00"),
-    theme_body_cell_pressed_color: withAlpha(mainBackground, "99"),
-    theme_body_cell_border_color: withAlpha(mainTitle, "33"),
-    theme_body_secondary_cell_color: lighten(mainBackground, 0.06),
+    theme_body_cell_pressed_color: mainBodyCellPressed,
+    theme_body_cell_border_color: mainBodyCellBorder,
+    theme_body_secondary_cell_color: mainBodySecondary,
     theme_maintab_cell_color: tabBackground,
     theme_tab_lightbannerbadge_background_color: accent,
     theme_tab_bannerbadge_background_color: accent,
