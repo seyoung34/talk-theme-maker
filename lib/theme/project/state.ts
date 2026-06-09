@@ -48,6 +48,12 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
   switch (slot.role) {
     case "chat_background_color":
       return template.defaults.chatBackground;
+    case "chat_bubble_me_color":
+      return template.defaults.mainTitle;
+    case "chat_bubble_you_color":
+      return template.defaults.mainTitle;
+    case "chat_unread_count_color":
+      return template.accent;
     case "main_header_color":
       return template.defaults.mainHeader;
     case "main_background_color":

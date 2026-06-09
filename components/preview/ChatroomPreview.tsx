@@ -79,6 +79,9 @@ export function ChatroomPreview({
   const inputBackground = getResolvedColor(slotByRole.chat_input_background_color, colors, selections, templateId, template) ?? template.defaults.chatInputBackground;
   const sendButtonColor = getResolvedColor(slotByRole.chat_send_button_color, colors, selections, templateId, template) ?? template.defaults.chatSendButton;
   const chatBackgroundColor = getResolvedColor(slotByRole.chat_background_color, colors, selections, templateId, template) ?? template.defaults.chatBackground;
+  const myBubbleColor = getResolvedColor(slotByRole.chat_bubble_me_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
+  const friendBubbleColor = getResolvedColor(slotByRole.chat_bubble_you_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
+  const unreadCountColor = getResolvedColor(slotByRole.chat_unread_count_color, colors, selections, templateId, template) ?? template.accent;
 
   useEffect(() => {
     let cancelled = false;
@@ -142,9 +145,12 @@ export function ChatroomPreview({
       bubbleAssets,
       bubbleEdits,
       chatBackgroundColor,
+      myBubbleColor,
+      friendBubbleColor,
+      unreadCountColor,
       onHotspotsChange: setHotspots,
     });
-  }, [analysis.previewDefaults, backgroundImage, bubbleAssets, bubbleEdits, chatBackgroundColor, platform, selectedSlotId, slotByRole]);
+  }, [analysis.previewDefaults, backgroundImage, bubbleAssets, bubbleEdits, chatBackgroundColor, friendBubbleColor, myBubbleColor, platform, selectedSlotId, slotByRole, unreadCountColor]);
 
   const backgroundSlot = slotByRole.chat_background;
   const inputSlot = slotByRole.chat_input_background_color;
@@ -243,10 +249,13 @@ function drawChatPreview(
     bubbleAssets: Record<string, BubbleAsset | undefined>;
     bubbleEdits: Partial<Record<ThemeResourceRole, BubbleEditState>>;
     chatBackgroundColor: string;
+    myBubbleColor: string;
+    friendBubbleColor: string;
+    unreadCountColor: string;
     onHotspotsChange: (hotspots: Hotspot[]) => void;
   },
 ) {
-  const { backgroundImage, defaults, platform, slots, selectedSlotId, bubbleAssets, bubbleEdits, chatBackgroundColor, onHotspotsChange } = options;
+  const { backgroundImage, defaults, platform, slots, selectedSlotId, bubbleAssets, bubbleEdits, chatBackgroundColor, myBubbleColor, friendBubbleColor, unreadCountColor, onHotspotsChange } = options;
 
   ctx.clearRect(0, 0, previewCanvasWidth, previewCanvasHeight);
   ctx.fillStyle = chatBackgroundColor || defaults?.chatBackground || "#b8f2f7";
@@ -285,16 +294,21 @@ function drawChatPreview(
       width: size.width,
       height: size.height,
       text: message.text,
-      fill: message.mine ? defaults?.myBubble ?? "#facc15" : defaults?.friendBubble ?? "#ffffff",
+      fill: message.mine ? (myBubbleColor ?? defaults?.myBubble ?? "#facc15") : (friendBubbleColor ?? defaults?.friendBubble ?? "#ffffff"),
       selected: selectedSlotId === slot?.id,
     });
 
     if (slot) hotspots.push({ slotId: slot.id, x, y, width: size.width, height: size.height });
 
+    const unreadCount = message.mine ? 0 : message.role === "bubble_you_1" ? 2 : 8;
+    if (unreadCount > 0) {
+      drawUnreadBadge(ctx, x + size.width + 14, y + size.height - 38, unreadCountColor, unreadCount);
+    }
+
     ctx.fillStyle = "rgba(255,255,255,0.78)";
     ctx.font = "26px Segoe UI, sans-serif";
     ctx.textAlign = message.mine ? "right" : "left";
-    ctx.fillText(message.mine ? "23:55" : "19:47", message.mine ? x - 20 : x + size.width + 20, y + size.height - 8);
+    ctx.fillText(message.mine ? "23:55" : "19:47", message.mine ? x - 20 : x + size.width + 72, y + size.height - 8);
     ctx.textAlign = "left";
 
     y += size.height + (message.mine ? 56 : 72);
@@ -505,6 +519,20 @@ function drawAvatar(ctx: CanvasRenderingContext2D, x: number, y: number, size: n
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.restore();
+}
+
+function drawUnreadBadge(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, count: number) {
+  const label = String(count);
+  const width = Math.max(42, 24 + label.length * 16);
+  const height = 34;
+  ctx.fillStyle = color;
+  roundRect(ctx, x, y, width, height, 17);
+  ctx.fill();
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = "bold 20px Segoe UI, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(label, x + width / 2, y + 23);
+  ctx.textAlign = "left";
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {

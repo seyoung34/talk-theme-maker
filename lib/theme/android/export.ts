@@ -130,11 +130,20 @@ function buildAndroidColorsXml(
   const mainBodySecondary =
     getResolvedColor(slotByRole.main_body_secondary_cell_color, colors, selections, templateId, template) ??
     lighten(mainBackground, 0.06);
+  const accent = template.accent;
   const chatBackground = getResolvedColor(slotByRole.chat_background_color, colors, selections, templateId, template) ?? template.defaults.chatBackground;
+  const chatBubbleMeColor =
+    getResolvedColor(slotByRole.chat_bubble_me_color, colors, selections, templateId, template) ??
+    mainTitle;
+  const chatBubbleYouColor =
+    getResolvedColor(slotByRole.chat_bubble_you_color, colors, selections, templateId, template) ??
+    mainTitle;
+  const chatUnreadCountColor =
+    getResolvedColor(slotByRole.chat_unread_count_color, colors, selections, templateId, template) ??
+    accent;
   const tabBackground = getResolvedColor(slotByRole.tab_background, colors, selections, templateId, template) ?? template.defaults.tabBackground;
   const chatInputBackground = getResolvedColor(slotByRole.chat_input_background_color, colors, selections, templateId, template) ?? template.defaults.chatInputBackground;
   const chatSendButton = getResolvedColor(slotByRole.chat_send_button_color, colors, selections, templateId, template) ?? template.defaults.chatSendButton;
-  const accent = template.accent;
 
   const palette: Record<string, string> = {
     theme_header_color: mainHeaderForeground,
@@ -172,9 +181,9 @@ function buildAndroidColorsXml(
     theme_passcode_keypad_background_color: lighten(template.defaults.myBubble, 0.1),
     theme_passcode_keypad_pressed_background_color: withAlpha(mainBackground, "99"),
     theme_passcode_pattern_line_color: accent,
-    theme_chatroom_bubble_me_color: mainTitle,
-    theme_chatroom_bubble_you_color: mainTitle,
-    theme_chatroom_unread_count_color: accent,
+    theme_chatroom_bubble_me_color: chatBubbleMeColor,
+    theme_chatroom_bubble_you_color: chatBubbleYouColor,
+    theme_chatroom_unread_count_color: chatUnreadCountColor,
     theme_chatroom_input_bar_color: mainTitle,
     theme_chatroom_input_bar_background_color: chatInputBackground,
     theme_chatroom_input_bar_menu_icon_color: mainBody,

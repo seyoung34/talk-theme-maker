@@ -561,6 +561,45 @@
     }
   },
   {
+    "id": "android-chat-bubble-me-color",
+    "platform": "android",
+    "role": "chat_bubble_me_color",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "내 말풍선 색상",
+    "required": false,
+    "note": "theme_chatroom_bubble_me_color 값",
+    "colorKey": "theme_chatroom_bubble_me_color"
+  },
+  {
+    "id": "android-chat-bubble-you-color",
+    "platform": "android",
+    "role": "chat_bubble_you_color",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "상대 말풍선 색상",
+    "required": false,
+    "note": "theme_chatroom_bubble_you_color 값",
+    "colorKey": "theme_chatroom_bubble_you_color"
+  },
+  {
+    "id": "android-chat-unread-count-color",
+    "platform": "android",
+    "role": "chat_unread_count_color",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "안읽음 개수 색상",
+    "required": false,
+    "note": "theme_chatroom_unread_count_color 값",
+    "colorKey": "theme_chatroom_unread_count_color"
+  },
+  {
     "id": "android-chat-input-background",
     "platform": "android",
     "role": "chat_input_background_color",
