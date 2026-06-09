@@ -491,8 +491,10 @@ export default function ProjectImporterClient() {
             colors={colors}
             selections={candidateSelections}
             bubbleEdits={{
-              me: slotEditFromMaps(["bubble_me_1", "bubble_me_2"], slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-              you: slotEditFromMaps(["bubble_you_1", "bubble_you_2"], slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+              bubble_me_1: slotEditFromRole("bubble_me_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+              bubble_me_2: slotEditFromRole("bubble_me_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+              bubble_you_1: slotEditFromRole("bubble_you_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+              bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
             }}
             selectedSlotId={selectedSlot?.id}
             className="col-span-2 lg:col-span-1 lg:row-start-auto"
@@ -529,14 +531,14 @@ function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => 
   );
 }
 
-function slotEditFromMaps(
-  roles: ThemeResourceRole[],
+function slotEditFromRole(
+  role: ThemeResourceRole,
   slots: ThemeAssetSlot[],
   bubbleMarkers: Partial<Record<string, Markers>>,
   bubbleInsets: Partial<Record<string, Insets>>,
   bubbleStretch: Partial<Record<string, StretchPoint>>,
 ): BubbleEditState | undefined {
-  const slot = slots.find((item) => roles.includes(item.role));
+  const slot = slots.find((item) => item.role === role);
   if (!slot) return undefined;
 
   const next = {

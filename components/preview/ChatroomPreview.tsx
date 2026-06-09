@@ -62,7 +62,7 @@ export function ChatroomPreview({
   selections: SlotCandidateSelections;
   template: ThemeTemplate;
   templateId: ThemeTemplateId;
-  bubbleEdits: Partial<Record<BubbleSlot, BubbleEditState>>;
+  bubbleEdits: Partial<Record<ThemeResourceRole, BubbleEditState>>;
   selectedSlotId?: string;
   onSelectSlot?: (slotId: string) => void;
 }) {
@@ -114,7 +114,7 @@ export function ChatroomPreview({
         const dataUrl = await dataUrlForThemeFile(file);
         const bubbleSlot = role.includes("_me_") ? "me" : "you";
         const asset = await loadNinePatchDataUrl(dataUrl, file.name, bubbleSlot);
-        const edits = bubbleEdits[bubbleSlot];
+        const edits = bubbleEdits[role];
         nextAssets[slot.id] = edits?.markers ? { ...asset, markers: edits.markers } : asset;
       }
 
@@ -241,7 +241,7 @@ function drawChatPreview(
     slots: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
     selectedSlotId?: string;
     bubbleAssets: Record<string, BubbleAsset | undefined>;
-    bubbleEdits: Partial<Record<BubbleSlot, BubbleEditState>>;
+    bubbleEdits: Partial<Record<ThemeResourceRole, BubbleEditState>>;
     chatBackgroundColor: string;
     onHotspotsChange: (hotspots: Hotspot[]) => void;
   },
@@ -263,7 +263,7 @@ function drawChatPreview(
 
   for (const message of sampleMessages) {
     const slot = slots[message.role];
-    const edit = bubbleEdits[message.slot];
+    const edit = bubbleEdits[message.role];
     const asset = slot ? bubbleAssets[slot.id] ?? null : null;
     const size = getAutoBubbleSize(ctx, asset, platform, edit, message.text);
     const x = message.mine ? previewCanvasWidth - bubbleRightInset - size.width : bubbleLeftInset + 94;

@@ -210,7 +210,7 @@ function CandidatePicker({
 
   useEffect(() => {
     setActiveTab(selectedCandidate?.source ?? groups[0]?.key);
-  }, [slot.id, selectedCandidate?.source, groups]);
+  }, [slot.id]);
 
   const activeGroup = groups.find((group) => group.key === activeTab) ?? groups[0];
 

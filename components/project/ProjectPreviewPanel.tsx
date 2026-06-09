@@ -4,7 +4,7 @@ import { ThemeScreensPreview } from "@/components/preview/ThemeScreensPreview";
 import type { BubbleEditState, SlotCandidateSelections, SlotColors } from "@/components/project/projectModel";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { BubbleSlot, ThemeSection } from "@/lib/theme/types";
+import type { ThemeResourceRole, ThemeSection } from "@/lib/theme/types";
 
 export function ProjectPreviewPanel({
   analysis,
@@ -26,7 +26,7 @@ export function ProjectPreviewPanel({
   slots: ThemeAssetSlot[];
   colors: SlotColors;
   selections: SlotCandidateSelections;
-  bubbleEdits: Partial<Record<BubbleSlot, BubbleEditState>>;
+  bubbleEdits: Partial<Record<ThemeResourceRole, BubbleEditState>>;
   selectedSlotId?: string;
   className?: string;
   onSelectSlot: (slotId: string | undefined) => void;
