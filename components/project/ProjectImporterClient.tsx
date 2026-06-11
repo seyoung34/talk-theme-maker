@@ -51,6 +51,9 @@ type AndroidExportPayloadOptions = {
   analysis: ReturnType<typeof createThemeProjectAnalysis>;
   template: ThemeTemplate;
   templateId: ThemeTemplateId;
+  exportName: string;
+  versionName: string;
+  mode: "project" | "apk" | "apk-zip";
   slots: ThemeAssetSlot[];
   uploads: SlotUploads;
   colors: SlotColors;
@@ -58,7 +61,6 @@ type AndroidExportPayloadOptions = {
   bubbleMarkers: Partial<Record<string, Markers>>;
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;
-  nameField: "apkBaseName" | "projectBaseName";
 };
 
 export default function ProjectImporterClient() {
@@ -74,12 +76,16 @@ export default function ProjectImporterClient() {
   const [screenRailOpen, setScreenRailOpen] = useState(true);
   const [candidateOpen, setCandidateOpen] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
-  const [isExportingProject, setIsExportingProject] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveMode, setSaveMode] = useState<"overwrite" | "saveAs">("saveAs");
   const [saveName, setSaveName] = useState("");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportMode, setExportMode] = useState<"project" | "apk" | "apk-zip">("apk");
+  const [exportName, setExportName] = useState("");
+  const [exportVersionName, setExportVersionName] = useState("");
+  const [exportProgressStep, setExportProgressStep] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
   const [bubbleInsets, setBubbleInsets] = useState<Partial<Record<string, Insets>>>({});
@@ -98,6 +104,7 @@ export default function ProjectImporterClient() {
       setSelectedSlotId(undefined);
       setUploads({});
       setColors({});
+      setActiveUserTemplate(null);
 
       if (!payload.userTemplateId) return;
 
@@ -249,98 +256,6 @@ export default function ProjectImporterClient() {
     router.push("/editor");
   };
 
-  const exportTheme = async () => {
-    if (platform !== "android") {
-      setNotice({ tone: "warning", message: "iOS 내보내기는 아직 준비 중입니다. 현재는 Android APK 빌드만 지원합니다." });
-      return;
-    }
-
-    try {
-      setIsExporting(true);
-      setNotice({ tone: "info", message: "Android APK를 빌드하는 중입니다." });
-
-      const formData = await createAndroidExportFormData({
-        analysis,
-        template: activeTemplate,
-        templateId,
-        slots,
-        uploads,
-        colors,
-        selections: candidateSelections,
-        bubbleMarkers,
-        bubbleInsets,
-        bubbleStretch,
-        nameField: "apkBaseName",
-      });
-
-      const response = await fetch("/api/export/android-apk", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(errorBody?.error ?? "Android APK build failed.");
-      }
-
-      const blob = await response.blob();
-      const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${activeTemplate.name}-android-debug.apk`;
-      triggerDownload(blob, fileName);
-      setNotice({ tone: "success", message: `${fileName} 파일을 생성했습니다.` });
-    } catch (error) {
-      console.error(error);
-      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Android APK 빌드 중 오류가 발생했습니다." });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const exportAndroidProject = async () => {
-    if (platform !== "android") {
-      setNotice({ tone: "warning", message: "iOS 프로젝트 내보내기는 아직 준비 중입니다." });
-      return;
-    }
-
-    try {
-      setIsExportingProject(true);
-      setNotice({ tone: "info", message: "Android 프로젝트 ZIP을 생성하는 중입니다." });
-
-      const formData = await createAndroidExportFormData({
-        analysis,
-        template: activeTemplate,
-        templateId,
-        slots,
-        uploads,
-        colors,
-        selections: candidateSelections,
-        bubbleMarkers,
-        bubbleInsets,
-        bubbleStretch,
-        nameField: "projectBaseName",
-      });
-
-      const response = await fetch("/api/export/android-project", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(errorBody?.error ?? "Android project export failed.");
-      }
-
-      const blob = await response.blob();
-      const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${activeTemplate.name}-android-project.zip`;
-      triggerDownload(blob, fileName);
-      setNotice({ tone: "success", message: `${fileName} 파일을 생성했습니다.` });
-    } catch (error) {
-      console.error(error);
-      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Android 프로젝트 ZIP 생성 중 오류가 발생했습니다." });
-    } finally {
-      setIsExportingProject(false);
-    }
-  };
-
   const openSaveDialog = () => {
     const fallbackName = `${activeTemplate.name} 복사본`;
     setSaveMode(activeUserTemplate ? "overwrite" : "saveAs");
@@ -381,6 +296,88 @@ export default function ProjectImporterClient() {
     }
   };
 
+  const openExportDialog = async () => {
+    if (platform !== "android") {
+      setNotice({ tone: "warning", message: "iOS 내보내기는 아직 준비 중입니다. 현재는 Android export만 지원합니다." });
+      return;
+    }
+
+    try {
+      if (!exportVersionName) {
+        const response = await fetch("/api/export/android");
+        const payload = (await response.json()) as { versionName?: string; error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Android sample config read failed.");
+        }
+        setExportVersionName(payload.versionName ?? "1.0.0");
+      }
+      setExportName(activeTemplate.name);
+      setExportMode("apk");
+      setExportProgressStep(0);
+      setExportDialogOpen(true);
+    } catch (error) {
+      console.error(error);
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Android export 설정을 불러오는 중 오류가 발생했습니다." });
+    }
+  };
+
+  const submitExport = async () => {
+    const progressSteps = getExportProgressSteps(exportMode);
+    let progressTimer: number | null = null;
+
+    try {
+      setIsExporting(true);
+      setExportProgressStep(0);
+      setNotice({ tone: "info", message: getExportNotice(exportMode) });
+      progressTimer = window.setInterval(() => {
+        setExportProgressStep((current) => (current >= progressSteps.length - 2 ? current : current + 1));
+      }, 850);
+
+      const formData = await createAndroidExportFormData({
+        analysis,
+        template: activeTemplate,
+        templateId,
+        exportName,
+        versionName: exportVersionName,
+        mode: exportMode,
+        slots,
+        uploads,
+        colors,
+        selections: candidateSelections,
+        bubbleMarkers,
+        bubbleInsets,
+        bubbleStretch,
+      });
+
+      const response = await fetch("/api/export/android", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(errorBody?.error ?? "Android export failed.");
+      }
+
+      if (progressTimer) {
+        window.clearInterval(progressTimer);
+        progressTimer = null;
+      }
+      setExportProgressStep(progressSteps.length - 1);
+      const blob = await response.blob();
+      const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${exportName}-android-export`;
+      triggerDownload(blob, fileName);
+      setExportDialogOpen(false);
+      setNotice({ tone: "success", message: `${fileName} 파일을 생성했습니다.` });
+    } catch (error) {
+      console.error(error);
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Android export 중 오류가 발생했습니다." });
+    } finally {
+      if (progressTimer) window.clearInterval(progressTimer);
+      setIsExporting(false);
+    }
+  };
+
   return (
     <main className="h-[100dvh] overflow-hidden px-3 py-3 text-[#111827] md:px-4 md:py-4">
       {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
@@ -398,17 +395,36 @@ export default function ProjectImporterClient() {
           onSubmit={() => void saveCurrentTemplate()}
         />
       ) : null}
+      {exportDialogOpen ? (
+        <ExportDialog
+          isExporting={isExporting}
+          exportMode={exportMode}
+          exportName={exportName}
+          exportVersionName={exportVersionName}
+          progressStep={exportProgressStep}
+          onClose={() => {
+            if (!isExporting) {
+              setExportDialogOpen(false);
+              setExportProgressStep(0);
+            }
+          }}
+          onModeChange={setExportMode}
+          onNameChange={setExportName}
+          onVersionNameChange={setExportVersionName}
+          onSubmit={() => void submitExport()}
+        />
+      ) : null}
 
       <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-3 md:gap-4">
         <header className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-[#e5e7eb] bg-white/95 px-4 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
-          <div className="flex items-center min-w-0 gap-4 justify-self-start">
+          <div className="flex min-w-0 items-center gap-4 justify-self-start">
             <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
               &larr;
             </Link>
             <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em] text-[#0f172a]">{activeTemplate.name}</h1>
           </div>
 
-          <div className="flex items-center min-w-0 gap-3 overflow-hidden justify-self-center">
+          <div className="flex min-w-0 items-center gap-3 overflow-hidden justify-self-center">
             <div className="hidden shrink-0 rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#475569] md:block">
               {platform === "android" ? "Android" : "iOS"}
             </div>
@@ -426,10 +442,10 @@ export default function ProjectImporterClient() {
             </span>
           </div>
 
-          <div className="flex items-center min-w-0 gap-2 shrink-0 justify-self-end">
+          <div className="flex min-w-0 items-center gap-2 shrink-0 justify-self-end">
             <button
               type="button"
-              className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-1 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
+              className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
               onClick={openSaveDialog}
               disabled={isSavingTemplate}
             >
@@ -437,24 +453,16 @@ export default function ProjectImporterClient() {
             </button>
             <button
               type="button"
-              className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-1 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
-              onClick={exportAndroidProject}
-              disabled={isExportingProject}
-            >
-              {isExportingProject ? "ZIP 생성 중.." : platform === "android" ? "Android 프로젝트 내보내기" : "iOS 프로젝트 준비중"}
-            </button>
-            <button
-              type="button"
-              className="rounded-xl border border-[#d1d5db] bg-white px-4 py-1 text-xl font-semibold text-[#334155] shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[--var--color-primary-container] disabled:cursor-wait disabled:opacity-60"
-              onClick={exportTheme}
+              className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60"
+              onClick={() => void openExportDialog()}
               disabled={isExporting}
             >
-              {isExporting ? "빌드 중.." : platform === "android" ? "Android APK 보내기" : "iOS 내보내기 준비중"}
+              {isExporting ? "내보내는 중.." : platform === "android" ? "내보내기" : "iOS 내보내기 준비중"}
             </button>
           </div>
         </header>
 
-        <section className=" grid min-h-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_300px] gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
+        <section className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_300px] gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
           <ProjectSectionRail
             activeSection={activeSection}
             slots={slots}
@@ -487,7 +495,7 @@ export default function ProjectImporterClient() {
               }}
             />
 
-            <div className="grid min-w-0 min-h-0 px-3">
+            <div className="grid min-h-0 min-w-0 px-3">
               <ProjectQuickEditPanel
                 slot={selectedSlot}
                 file={selectedFile}
@@ -648,6 +656,142 @@ function SaveTemplateDialog({
   );
 }
 
+function ExportDialog({
+  isExporting,
+  exportMode,
+  exportName,
+  exportVersionName,
+  progressStep,
+  onClose,
+  onModeChange,
+  onNameChange,
+  onVersionNameChange,
+  onSubmit,
+}: {
+  isExporting: boolean;
+  exportMode: "project" | "apk" | "apk-zip";
+  exportName: string;
+  exportVersionName: string;
+  progressStep: number;
+  onClose: () => void;
+  onModeChange: (mode: "project" | "apk" | "apk-zip") => void;
+  onNameChange: (value: string) => void;
+  onVersionNameChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  const steps = getExportProgressSteps(exportMode);
+  const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0;
+
+  return (
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.42)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="내보내기">
+      <section className="grid w-full max-w-[520px] gap-5 rounded-[28px] border border-[#e5e7eb] bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid gap-1">
+            <h2 className="text-lg font-semibold text-[#0f172a]">내보내기</h2>
+            <p className="text-sm text-[#64748b]">이름, 버전, 결과물을 설정합니다.</p>
+          </div>
+          <button type="button" className="rounded-full border border-[#e5e7eb] px-3 py-1 text-sm font-semibold text-[#475569]" onClick={onClose} disabled={isExporting}>
+            닫기
+          </button>
+        </div>
+
+        <div className="grid gap-3">
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-[#0f172a]">이름</span>
+            <input
+              type="text"
+              value={exportName}
+              onChange={(event) => onNameChange(event.currentTarget.value)}
+              disabled={isExporting}
+              className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]"
+            />
+          </label>
+          <label className="grid gap-2">
+            <span className="text-sm font-semibold text-[#0f172a]">versionName</span>
+            <input
+              type="text"
+              value={exportVersionName}
+              onChange={(event) => onVersionNameChange(event.currentTarget.value)}
+              disabled={isExporting}
+              className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]"
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-2">
+          <button
+            type="button"
+            className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "project" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+            onClick={() => onModeChange("project")}
+            disabled={isExporting}
+          >
+            <span className="block text-sm font-semibold text-[#0f172a]">빌드 전 프로젝트 내보내기</span>
+          </button>
+          <button
+            type="button"
+            className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+            onClick={() => onModeChange("apk")}
+            disabled={isExporting}
+          >
+            <span className="block text-sm font-semibold text-[#0f172a]">Android APK로 내보내기</span>
+          </button>
+          <button
+            type="button"
+            className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk-zip" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+            onClick={() => onModeChange("apk-zip")}
+            disabled={isExporting}
+          >
+            <span className="block text-sm font-semibold text-[#0f172a]">Android APK ZIP으로 내보내기</span>
+          </button>
+        </div>
+
+        <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-4">
+          <div className="h-2 overflow-hidden rounded-full bg-[#e5e7eb]">
+            <div className="h-full rounded-full bg-[#2563eb] transition-all" style={{ width: `${((progressStep + 1) / steps.length) * 100}%` }} />
+          </div>
+          <div className="grid gap-1">
+            {steps.map((step, index) => (
+              <div key={step} className={`text-sm ${index === progressStep ? "font-semibold text-[#0f172a]" : index < progressStep ? "text-[#2563eb]" : "text-[#94a3b8]"}`}>
+                {step}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={isExporting}>
+            취소
+          </button>
+          <button
+            type="button"
+            className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={onSubmit}
+            disabled={!canSubmit || isExporting}
+          >
+            {isExporting ? "내보내는 중.." : "내보내기"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function getExportProgressSteps(mode: "project" | "apk" | "apk-zip") {
+  if (mode === "project") {
+    return ["리소스 준비", "프로젝트 생성", "메타데이터 반영", "압축 정리", "다운로드 준비"];
+  }
+  if (mode === "apk-zip") {
+    return ["리소스 준비", "프로젝트 생성", "APK 빌드", "ZIP 압축", "다운로드 준비"];
+  }
+  return ["리소스 준비", "프로젝트 생성", "APK 빌드", "결과물 정리", "다운로드 준비"];
+}
+
+function getExportNotice(mode: "project" | "apk" | "apk-zip") {
+  if (mode === "project") return "Android 프로젝트 ZIP을 생성하는 중입니다.";
+  if (mode === "apk-zip") return "Android APK ZIP을 생성하는 중입니다.";
+  return "Android APK를 빌드하는 중입니다.";
+}
+
 function slotEditFromRole(
   role: ThemeResourceRole,
   slots: ThemeAssetSlot[],
@@ -677,6 +821,9 @@ async function createAndroidExportFormData({
   analysis,
   template,
   templateId,
+  exportName,
+  versionName,
+  mode,
   slots,
   uploads,
   colors,
@@ -684,7 +831,6 @@ async function createAndroidExportFormData({
   bubbleMarkers,
   bubbleInsets,
   bubbleStretch,
-  nameField,
 }: AndroidExportPayloadOptions) {
   const bubbleEditsBySlotId = Object.fromEntries(
     slots.map((slot) => [
@@ -701,6 +847,7 @@ async function createAndroidExportFormData({
     analysis,
     template,
     templateId,
+    exportName,
     slots,
     uploads,
     colors,
@@ -716,7 +863,9 @@ async function createAndroidExportFormData({
   });
 
   formData.append("manifest", JSON.stringify(manifest));
-  formData.append(nameField, template.name);
+  formData.append("exportName", exportName);
+  formData.append("versionName", versionName);
+  formData.append("mode", mode);
 
   return formData;
 }

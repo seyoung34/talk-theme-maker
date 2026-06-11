@@ -11,8 +11,8 @@ export type AndroidBuildInputFile = {
   bytes: Uint8Array;
 };
 
-export async function buildAndroidApk(files: AndroidBuildInputFile[], apkBaseName: string) {
-  const prepared = await prepareAndroidProject(files);
+export async function buildAndroidApk(files: AndroidBuildInputFile[], apkBaseName: string, versionName?: string) {
+  const prepared = await prepareAndroidProject(files, versionName);
 
   try {
     await writeAndroidLocalProperties(prepared.projectRoot);
@@ -32,8 +32,8 @@ export async function buildAndroidApk(files: AndroidBuildInputFile[], apkBaseNam
   }
 }
 
-export async function exportAndroidProjectZip(files: AndroidBuildInputFile[], projectBaseName: string) {
-  const prepared = await prepareAndroidProject(files);
+export async function exportAndroidProjectZip(files: AndroidBuildInputFile[], projectBaseName: string, versionName?: string) {
+  const prepared = await prepareAndroidProject(files, versionName);
 
   try {
     const zipBytes = await zipProjectDirectory(prepared.projectRoot);
@@ -46,11 +46,29 @@ export async function exportAndroidProjectZip(files: AndroidBuildInputFile[], pr
   }
 }
 
-async function prepareAndroidProject(files: AndroidBuildInputFile[]) {
+export async function exportAndroidApkZip(files: AndroidBuildInputFile[], apkBaseName: string, versionName?: string) {
+  const { apkBytes, fileName } = await buildAndroidApk(files, apkBaseName, versionName);
+  const zipBlob = createStoredZip([{ path: fileName, bytes: apkBytes }]);
+  return {
+    zipBytes: new Uint8Array(await zipBlob.arrayBuffer()),
+    fileName: `${sanitizeFileName(apkBaseName)}-android-debug.zip`,
+  };
+}
+
+export async function getAndroidSampleVersionName() {
+  const buildScript = await readFile(path.join(sampleProjectRoot, "build.gradle.kts"), "utf8");
+  const match = buildScript.match(/versionName\s*=\s*"([^"]+)"/);
+  return match?.[1] ?? "1.0.0";
+}
+
+async function prepareAndroidProject(files: AndroidBuildInputFile[], versionName?: string) {
   const tempRoot = await mkdtemp(path.join(tmpdir(), "kt-theme-apk-"));
   const projectRoot = path.join(tempRoot, "project");
 
   await cp(sampleProjectRoot, projectRoot, { recursive: true });
+  if (versionName?.trim()) {
+    await writeProjectVersionName(projectRoot, versionName.trim());
+  }
 
   for (const file of files) {
     const targetPath = ensureInsideProject(projectRoot, file.path);
@@ -62,6 +80,13 @@ async function prepareAndroidProject(files: AndroidBuildInputFile[]) {
     projectRoot,
     cleanup: () => rm(tempRoot, { recursive: true, force: true }),
   };
+}
+
+async function writeProjectVersionName(projectRoot: string, versionName: string) {
+  const buildScriptPath = path.join(projectRoot, "build.gradle.kts");
+  const current = await readFile(buildScriptPath, "utf8");
+  const next = current.replace(/versionName\s*=\s*"([^"]+)"/, `versionName = "${versionName.replaceAll('"', '\\"')}"`);
+  await writeFile(buildScriptPath, next, "utf8");
 }
 
 async function writeAndroidLocalProperties(projectRoot: string) {

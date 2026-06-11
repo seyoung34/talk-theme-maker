@@ -8,6 +8,7 @@ type AndroidExportOptions = {
   analysis: ThemeProjectAnalysis;
   template: ThemeTemplate;
   templateId: ThemeTemplateId;
+  exportName?: string;
   slots: ThemeAssetSlot[];
   uploads: SlotUploads;
   colors: SlotColors;
@@ -21,7 +22,7 @@ export type AndroidExportFile = {
 };
 
 export async function buildAndroidThemeExportFiles(options: AndroidExportOptions): Promise<AndroidExportFile[]> {
-  const { analysis, template, templateId, slots, uploads, colors, selections, bubbleEditsBySlotId } = options;
+  const { analysis, template, templateId, exportName, slots, uploads, colors, selections, bubbleEditsBySlotId } = options;
   const androidSlots = slots.filter((slot) => slot.platform === "android");
   const files: AndroidExportFile[] = [];
 
@@ -34,9 +35,9 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
 
   files.push(
     textBlobFile("src/main/theme/values/colors.xml", buildAndroidColorsXml(template, androidSlots, colors, selections, templateId)),
-    textBlobFile("src/main/theme/values/strings.xml", buildAndroidStringsXml(template.name)),
-    textBlobFile("src/main/theme/values-ko/strings.xml", buildAndroidStringsXml(template.name)),
-    textBlobFile("src/main/theme/values-ja/strings.xml", buildAndroidStringsXml(template.name)),
+    textBlobFile("src/main/theme/values/strings.xml", buildAndroidStringsXml(exportName ?? template.name)),
+    textBlobFile("src/main/theme/values-ko/strings.xml", buildAndroidStringsXml(exportName ?? template.name)),
+    textBlobFile("src/main/theme/values-ja/strings.xml", buildAndroidStringsXml(exportName ?? template.name)),
     textBlobFile("theme-export-report.json", JSON.stringify({ exportedAt: new Date().toISOString(), templateId, platform: "android", diagnostics: analysis.diagnostics }, null, 2)),
     textBlobFile(
       "README-export.txt",
