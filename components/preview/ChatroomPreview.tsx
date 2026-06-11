@@ -78,6 +78,7 @@ export function ChatroomPreview({
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   const [bubbleAssets, setBubbleAssets] = useState<Record<string, BubbleAsset | undefined>>({});
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
+  const [headerForeground, setHeaderForeground] = useState("#ffffff");
 
   const inputBackground = getResolvedColor(slotByRole.chat_input_background_color, colors, selections, templateId, template) ?? template.defaults.chatInputBackground;
   const sendButtonColor = getResolvedColor(slotByRole.chat_send_button_color, colors, selections, templateId, template) ?? template.defaults.chatSendButton;
@@ -107,6 +108,20 @@ export function ChatroomPreview({
       for (const url of objectUrls) URL.revokeObjectURL(url);
     };
   }, [selectedFiles.chat_background]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveHeaderColor = async () => {
+      const nextColor = backgroundImage ? getContrastingHeaderColor(backgroundImage) : getReadableTextColor(chatBackgroundColor);
+      if (!cancelled) setHeaderForeground(nextColor);
+    };
+
+    void resolveHeaderColor();
+    return () => {
+      cancelled = true;
+    };
+  }, [backgroundImage, chatBackgroundColor]);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,7 +204,7 @@ export function ChatroomPreview({
       ))}
 
       {/* 채팅방 헤더 */}
-      <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 pb-4 text-white pt-9">
+      <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 pb-4 pt-9" style={{ color: headerForeground }}>
         <div className="flex items-center gap-4">
           <ArrowLeft className="h-7 w-7" strokeWidth={2.2} />
           <strong className="text-[18px] font-semibold tracking-[-0.02em]">채팅방</strong>
@@ -583,4 +598,51 @@ function hexToRgba(hex: string, alpha: number) {
   const g = (value >> 8) & 255;
   const b = value & 255;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function getReadableTextColor(hex: string) {
+  const normalized = normalizeHexForContrast(hex);
+  const value = Number.parseInt(normalized, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.62 ? "#111827" : "#FFFFFF";
+}
+
+function getContrastingHeaderColor(image: HTMLImageElement) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 36;
+  canvas.height = 24;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "#FFFFFF";
+
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let luminanceTotal = 0;
+  let sampleCount = 0;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const alpha = data[index + 3] / 255;
+    if (alpha <= 0) continue;
+    const r = data[index];
+    const g = data[index + 1];
+    const b = data[index + 2];
+    luminanceTotal += (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    sampleCount += 1;
+  }
+
+  if (sampleCount === 0) return "#FFFFFF";
+  return luminanceTotal / sampleCount > 0.62 ? "#111827" : "#FFFFFF";
+}
+
+function normalizeHexForContrast(hex: string) {
+  const normalized = hex.replace("#", "");
+  if (normalized.length === 3) {
+    return normalized.split("").map((char) => `${char}${char}`).join("");
+  }
+  if (normalized.length === 8) {
+    return normalized.slice(2);
+  }
+  return normalized.slice(-6);
 }

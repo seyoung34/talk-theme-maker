@@ -7,7 +7,6 @@ import { findBestFile, imageUrlForThemeFile } from "@/components/preview/preview
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeResourceRole, ThemeSection } from "@/lib/theme/types";
-import { text } from "node:stream/consumers";
 
 type RoleFiles = Partial<Record<ThemeResourceRole, ThemeProjectFile>>;
 type RoleUrls = Partial<Record<ThemeResourceRole, string>>;
@@ -56,6 +55,7 @@ export function ThemeScreensPreview({
     () => Object.fromEntries(slots.map((slot) => [slot.role, slot])) as Partial<Record<ThemeResourceRole, ThemeAssetSlot>>,
     [slots],
   );
+  const profileUrls = useMemo(() => getProfilePreviewUrls(urls), [urls]);
 
   const preview = useMemo(() => {
     const getColor = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback;
@@ -89,9 +89,9 @@ export function ThemeScreensPreview({
       onSelect={() => onSelectSlot?.(mainBackgroundSlot?.id ?? mainBackgroundColorSlot?.id ?? "")}
     >
       {section === "main" ? (
-        <FriendsScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
+        <FriendsScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} profileUrls={profileUrls} onSelectSlot={onSelectSlot} />
       ) : (
-        <ChatsScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
+        <ChatsScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} profileUrls={profileUrls} onSelectSlot={onSelectSlot} />
       )}
     </PhoneFrame>
   );
@@ -120,12 +120,14 @@ function FriendsScreen({
   preview,
   slotByRole,
   urls,
+  profileUrls,
   onSelectSlot,
 }: {
   selectedSlotId?: string;
   preview: MainPreviewPalette;
   slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
   urls: RoleUrls;
+  profileUrls: string[];
   onSelectSlot?: (slotId: string) => void;
 }) {
   return (
@@ -192,7 +194,7 @@ function FriendsScreen({
             {["샘플 A", "샘플 B", "샘플 C", "샘플 D", "더보기"].map((name, index) => (
               <div key={name} className="grid w-[62px] justify-items-center gap-2">
                 <div className="relative">
-                  <AvatarCircle src={urls.main_background} size="h-16 w-16" />
+                  <AvatarCircle src={profileUrls[index % profileUrls.length]} size="h-16 w-16" />
                   {index > 0 ? <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[#ff7246]" /> : null}
                 </div>
                 <button
@@ -228,7 +230,7 @@ function FriendsScreen({
                   if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
                 }}
               >
-                <AvatarCircle src={urls.main_background} size="h-12 w-12" />
+                <AvatarCircle src={profileUrls[friendRows.indexOf(row) % profileUrls.length]} size="h-12 w-12" />
                 <div>
                   <strong className="block text-[14px] font-semibold leading-none" style={{ color: preview.titleColor }}>
                     {row.name}
@@ -285,12 +287,14 @@ function ChatsScreen({
   preview,
   slotByRole,
   urls,
+  profileUrls,
   onSelectSlot,
 }: {
   selectedSlotId?: string;
   preview: MainPreviewPalette;
   slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
   urls: RoleUrls;
+  profileUrls: string[];
   onSelectSlot?: (slotId: string) => void;
 }) {
   return (
@@ -360,7 +364,7 @@ function ChatsScreen({
                 if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
               }}
             >
-              <AvatarCircle src={urls.main_background} size="h-12 w-12" />
+              <AvatarCircle src={profileUrls[index % profileUrls.length]} size="h-12 w-12" />
               <div className="min-w-0">
                 <button
                   type="button"
@@ -606,6 +610,9 @@ function selectRoleFiles(analysis: ThemeProjectAnalysis): RoleFiles {
     "tab_icon_shopping_focused",
     "tab_icon_more",
     "tab_icon_more_focused",
+    "profile_image_1",
+    "profile_image_2",
+    "profile_image_3",
   ];
 
   return Object.fromEntries(roles.map((role) => [role, findBestFile(analysis, role)])) as RoleFiles;
@@ -637,6 +644,12 @@ function useRoleUrls(files: RoleFiles): RoleUrls {
   }, [files]);
 
   return urls;
+}
+
+function getProfilePreviewUrls(urls: RoleUrls) {
+  const ordered = [urls.profile_image_1, urls.profile_image_2, urls.profile_image_3].filter((value): value is string => Boolean(value));
+  if (ordered.length > 0) return ordered;
+  return [urls.main_background ?? ""];
 }
 
 function hexToRgba(hex: string, alpha: number) {
