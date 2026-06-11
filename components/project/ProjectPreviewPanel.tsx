@@ -32,7 +32,7 @@ export function ProjectPreviewPanel({
   onSelectSlot: (slotId: string | undefined) => void;
 }) {
   return (
-    <aside className={`grid min-h-0 place-items-center overflow-hidden bg-transparent ${className ?? ""}`}>
+    <aside className={`grid min-h-0 place-items-center  overflow-hidden  ${className ?? ""}`}>
       {activeSection === "chatroom" ? (
         <ChatroomPreview
           analysis={analysis}

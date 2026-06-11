@@ -7,6 +7,7 @@ import { findBestFile, imageUrlForThemeFile } from "@/components/preview/preview
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeResourceRole, ThemeSection } from "@/lib/theme/types";
+import { text } from "node:stream/consumers";
 
 type RoleFiles = Partial<Record<ThemeResourceRole, ThemeProjectFile>>;
 type RoleUrls = Partial<Record<ThemeResourceRole, string>>;
@@ -27,6 +28,7 @@ const chatRows = [
   { name: "딸기양", sub: "딸기는 맛있다", time: "어제" },
 ];
 
+//메인
 export function ThemeScreensPreview({
   analysis,
   section,
@@ -112,6 +114,7 @@ type MainPreviewPalette = {
   tabBackgroundColor: string;
 };
 
+//친구탭
 function FriendsScreen({
   selectedSlotId,
   preview,
@@ -151,8 +154,8 @@ function FriendsScreen({
       <div className="px-4 pb-3 mt-2 overflow-hidden">
         <div className="grid h-full content-start gap-3 overflow-hidden px-0.5 pb-2">
           <div className="flex gap-2">
-            <Chip active color={preview.featureBrowseTabColor}>친구</Chip>
-            <Chip color={preview.featureBrowseTabColor}>추천</Chip>
+            <Chip active backgroundColor={preview.titleColor} textColor={preview.mainBackgroundColor}>친구</Chip>
+            <Chip textColor={preview.mainBackgroundColor}>추천</Chip>
           </div>
 
           <button
@@ -276,6 +279,7 @@ function FriendsScreen({
   );
 }
 
+//채팅탭
 function ChatsScreen({
   selectedSlotId,
   preview,
@@ -441,6 +445,7 @@ function PhoneFrame({
   );
 }
 
+//탭바
 function BottomTabBar({
   active,
   selectedSlotId,
@@ -529,11 +534,13 @@ function AvatarCircle({ src, size }: { src?: string; size: string }) {
   return <span className={`${size} block rounded-full border border-white/70 bg-[#dceff2] bg-cover bg-center shadow-[0_8px_18px_rgba(15,23,42,0.08)]`} style={{ backgroundImage: src ? `url(${src})` : undefined }} />;
 }
 
-function Chip({ active, color, children }: { active?: boolean; color?: string; children: ReactNode }) {
+function Chip({ active, backgroundColor, textColor, children }: { active?: boolean; backgroundColor?: string; textColor?: string; children: ReactNode }) {
   return (
     <span
       className={`inline-flex h-8 items-center rounded-full px-6 text-[14px] font-semibold ${active ? "text-white" : "border bg-white/14"}`}
-      style={active ? { backgroundColor: color ?? "#0d5b66" } : { borderColor: hexToRgba(color ?? "#0d5b66", 0.35), color: color ?? "#0d5b66" }}
+      style={active
+        ? { backgroundColor: backgroundColor ?? "#0d5b66", color: textColor ?? "#ffffff" }
+        : { borderColor: textColor ?? "#0d5b66", color: textColor ?? "#ffffff" }}
     >
       {children}
     </span>

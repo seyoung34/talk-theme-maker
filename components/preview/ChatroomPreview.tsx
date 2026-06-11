@@ -18,11 +18,14 @@ type Hotspot = {
 };
 
 const previewCanvasWidth = 1080;
-const previewCanvasHeight = 2340;
-const inputBarHeightRatio = 86 / 1600;
-const inputBarHeight = Math.round(previewCanvasHeight * inputBarHeightRatio);
+// const previewCanvasHeight = 2340;
+const previewCanvasHeight = 2123;
+const inputBarHeightRatio = 86 / 1600; //0.05375
+const inputBarHeight = Math.round(previewCanvasHeight * inputBarHeightRatio); //내 폰 기준 168px 
+
 const canvasTopInset = 132;
 const canvasBottomInset = inputBarHeight + 44;
+
 const bubbleLeftInset = 44;
 const bubbleRightInset = 44;
 
@@ -157,7 +160,7 @@ export function ChatroomPreview({
   const sendSlot = slotByRole.chat_send_button_color;
 
   return (
-    <div className="relative aspect-[1080/2340] h-full w-full max-w-[310px] overflow-hidden rounded-[32px] border border-[#d7ddd8] bg-white shadow-[0_22px_48px_rgba(15,23,42,0.16)]">
+    <div className="relative aspect-1080/2123 h-full w-full max-w-[310px] overflow-hidden rounded-xl border border-[#d7ddd8] bg-white shadow-[0_22px_48px_rgba(15,23,42,0.16)]">
       {backgroundSlot ? (
         <button
           type="button"
@@ -166,7 +169,9 @@ export function ChatroomPreview({
           onClick={() => onSelectSlot?.(backgroundSlot.id)}
         />
       ) : null}
-      <canvas ref={canvasRef} className="relative z-10 h-full w-full" width={previewCanvasWidth} height={previewCanvasHeight} />
+      <canvas ref={canvasRef} className="relative z-10 w-full h-full" width={previewCanvasWidth} height={previewCanvasHeight} />
+
+      {/* 클릭영역 */}
       {hotspots.map((hotspot) => (
         <button
           key={hotspot.slotId}
@@ -183,16 +188,16 @@ export function ChatroomPreview({
         />
       ))}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-30 h-[116px] bg-[linear-gradient(180deg,rgba(28,32,41,0.34),rgba(28,32,41,0.08),transparent)]" />
-      <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 pb-4 pt-9 text-white">
+      {/* 채팅방 헤더 */}
+      <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 pb-4 text-white pt-9">
         <div className="flex items-center gap-4">
           <ArrowLeft className="h-7 w-7" strokeWidth={2.2} />
-          <strong className="text-[18px] font-semibold tracking-[-0.02em]">테스트 채팅방</strong>
+          <strong className="text-[18px] font-semibold tracking-[-0.02em]">채팅방</strong>
         </div>
         <div className="flex items-center gap-5">
-          <Search className="h-6 w-6" strokeWidth={2.1} />
-          <Phone className="h-6 w-6" strokeWidth={2.1} />
-          <Menu className="h-6 w-6" strokeWidth={2.1} />
+          <Search className="w-6 h-6" strokeWidth={2.1} />
+          <Phone className="w-6 h-6" strokeWidth={2.1} />
+          <Menu className="w-6 h-6" strokeWidth={2.1} />
         </div>
       </div>
 
@@ -211,15 +216,15 @@ export function ChatroomPreview({
             if (inputSlot) onSelectSlot?.(inputSlot.id);
           }}
         />
-        <div className="relative flex h-full items-center gap-2 px-3 py-2">
+        <div className="relative flex items-center h-full gap-2 px-3 py-2">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#edf3f6] text-[#1781a3]">
-            <Plus className="h-5 w-5" />
+            <Plus className="w-5 h-5" />
           </span>
           <div className="flex h-10 flex-1 items-center rounded-full bg-white/92 px-4 shadow-[inset_0_0_0_1px_rgba(203,213,225,0.85)]">
             <span className="text-[14px] font-medium text-[#b3c0ca]">메시지 입력</span>
           </div>
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#edf3f6] text-[#5b7682]">
-            <Smile className="h-5 w-5" />
+            <Smile className="w-5 h-5" />
           </span>
           <button
             type="button"
@@ -230,7 +235,7 @@ export function ChatroomPreview({
               if (sendSlot) onSelectSlot?.(sendSlot.id);
             }}
           >
-            <Hash className="h-5 w-5" />
+            <Hash className="w-5 h-5" />
           </button>
         </div>
       </div>

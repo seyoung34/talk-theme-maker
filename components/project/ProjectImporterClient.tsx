@@ -59,7 +59,7 @@ export default function ProjectImporterClient() {
   const router = useRouter();
   const [templateId, setTemplateId] = useState<ThemeTemplateId>("basic");
   const [platform, setPlatform] = useState<ThemePlatform>("android");
-  const [activeSection, setActiveSection] = useState<ThemeSection>("main");
+  const [activeSection, setActiveSection] = useState<ThemeSection>("chatroom");
   const [activeGroup, setActiveGroup] = useState<ThemeSlotGroup>("bubbles");
   const [selectedSlotId, setSelectedSlotId] = useState<string | undefined>();
   const [uploads, setUploads] = useState<SlotUploads>({});
@@ -394,7 +394,7 @@ export default function ProjectImporterClient() {
           <div className="flex items-center min-w-0 gap-2 shrink-0 justify-self-end">
             <button
               type="button"
-              className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
+              className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-1 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
               onClick={saveCurrentTemplate}
               disabled={isSavingTemplate}
             >
@@ -402,7 +402,7 @@ export default function ProjectImporterClient() {
             </button>
             <button
               type="button"
-              className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2.5 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
+              className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-1 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
               onClick={exportAndroidProject}
               disabled={isExportingProject}
             >
@@ -410,16 +410,16 @@ export default function ProjectImporterClient() {
             </button>
             <button
               type="button"
-              className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60"
+              className="rounded-xl border border-[#d1d5db] bg-white px-4 py-1 text-xl font-semibold text-[#334155] shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[--var--color-primary-container] disabled:cursor-wait disabled:opacity-60"
               onClick={exportTheme}
               disabled={isExporting}
             >
-              {isExporting ? "빌드 중.." : platform === "android" ? "Android APK 내보내기" : "iOS 내보내기 준비중"}
+              {isExporting ? "빌드 중.." : platform === "android" ? "Android APK 보내기" : "iOS 내보내기 준비중"}
             </button>
           </div>
         </header>
 
-        <section className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_300px] gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
+        <section className=" grid min-h-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_300px] gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
           <ProjectSectionRail
             activeSection={activeSection}
             slots={slots}
