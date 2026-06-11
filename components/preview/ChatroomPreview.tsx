@@ -18,16 +18,18 @@ type Hotspot = {
 };
 
 const previewCanvasWidth = 1080;
-// const previewCanvasHeight = 2340;
 const previewCanvasHeight = 2123;
-const inputBarHeightRatio = 86 / 1600; //0.05375
-const inputBarHeight = Math.round(previewCanvasHeight * inputBarHeightRatio); //내 폰 기준 168px 
+const minScrollCanvasHeight = 3180;
+const inputBarHeightRatio = 86 / 1600;
+const inputBarHeight = Math.round(previewCanvasHeight * inputBarHeightRatio);
 
 const canvasTopInset = 132;
 const canvasBottomInset = inputBarHeight + 44;
 
 const bubbleLeftInset = 44;
 const bubbleRightInset = 44;
+const bubbleTextFontSize = 36;
+const bubbleTextLineHeight = 48;
 
 const defaultInsets: Record<BubbleSlot, Insets> = {
   me: { top: 24, right: 28, bottom: 24, left: 28 },
@@ -44,6 +46,13 @@ const sampleMessages = [
   { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "좋아요. 실제 이름 대신 테스트용 문구만 남겨둘게요." },
   { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "테스트 친구", text: "말풍선 크기와 여백 확인에도 무난한 문장 길이예요." },
   { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "이 상태로 테마 QA와 캡처 테스트를 진행하면 됩니다." },
+
+  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "프로젝트 QA", text: "헤더와 입력바는 고정하고, 메시지 영역만 실제 채팅방처럼 움직이게 만들자." },
+  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "디자인 리뷰", text: "스크롤 상태에서도 말풍선 선택 영역이 정확히 따라오는지만 같이 보면 되겠다." },
+  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "좋아. 스크롤 레일은 투명하게 두고, 스크롤바는 아주 얇게만 보이게 처리할게." },
+  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "지금 프리뷰는 실제 사용감에 더 가깝게 조정하는 중이야. 긴 대화도 문제없이 확인 가능해야 해." },
+  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "테스트 친구", text: "세로 길이를 조금 더 확보하면 위아래로 충분히 움직이는 느낌이 날 거야." },
+  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "응. 이제 배경, 말풍선, 읽지 않음 배지까지 스크롤 안에서 같이 검수할 수 있어." },
 ];
 
 export function ChatroomPreview({
@@ -76,8 +85,10 @@ export function ChatroomPreview({
   const selectedFiles = useMemo(() => selectPreviewFiles(analysis), [analysis]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
   const [bubbleAssets, setBubbleAssets] = useState<Record<string, BubbleAsset | undefined>>({});
   const [hotspots, setHotspots] = useState<Hotspot[]>([]);
+  const [contentCanvasHeight, setContentCanvasHeight] = useState(minScrollCanvasHeight);
   const [headerForeground, setHeaderForeground] = useState("#ffffff");
 
   const inputBackground = getResolvedColor(slotByRole.chat_input_background_color, colors, selections, templateId, template) ?? template.defaults.chatInputBackground;
@@ -93,13 +104,18 @@ export function ChatroomPreview({
 
     async function load() {
       let nextBackgroundImage: HTMLImageElement | null = null;
+      let nextBackgroundImageUrl: string | null = null;
       if (selectedFiles.chat_background) {
         const nextBackgroundUrl = await imageUrlForThemeFile(selectedFiles.chat_background, false);
         if (nextBackgroundUrl.startsWith("blob:")) objectUrls.push(nextBackgroundUrl);
+        nextBackgroundImageUrl = nextBackgroundUrl;
         nextBackgroundImage = await loadImage(nextBackgroundUrl);
       }
 
-      if (!cancelled) setBackgroundImage(nextBackgroundImage);
+      if (!cancelled) {
+        setBackgroundImage(nextBackgroundImage);
+        setBackgroundImageUrl(nextBackgroundImageUrl);
+      }
     }
 
     void load();
@@ -155,20 +171,20 @@ export function ChatroomPreview({
     if (!ctx) return;
 
     drawChatPreview(ctx, {
-      backgroundImage,
       defaults: analysis.previewDefaults,
       platform,
       slots: slotByRole,
       selectedSlotId,
       bubbleAssets,
       bubbleEdits,
-      chatBackgroundColor,
       myBubbleColor,
       friendBubbleColor,
       unreadCountColor,
+      canvasHeight: contentCanvasHeight,
       onHotspotsChange: setHotspots,
+      onCanvasHeightChange: setContentCanvasHeight,
     });
-  }, [analysis.previewDefaults, backgroundImage, bubbleAssets, bubbleEdits, chatBackgroundColor, friendBubbleColor, myBubbleColor, platform, selectedSlotId, slotByRole, unreadCountColor]);
+  }, [analysis.previewDefaults, bubbleAssets, bubbleEdits, contentCanvasHeight, friendBubbleColor, myBubbleColor, platform, selectedSlotId, slotByRole, unreadCountColor]);
 
   const backgroundSlot = slotByRole.chat_background;
   const inputSlot = slotByRole.chat_input_background_color;
@@ -184,27 +200,47 @@ export function ChatroomPreview({
           onClick={() => onSelectSlot?.(backgroundSlot.id)}
         />
       ) : null}
-      <canvas ref={canvasRef} className="relative z-10 w-full h-full" width={previewCanvasWidth} height={previewCanvasHeight} />
 
-      {/* 클릭영역 */}
-      {hotspots.map((hotspot) => (
-        <button
-          key={hotspot.slotId}
-          type="button"
-          className="absolute z-20 bg-transparent"
-          style={{
-            left: `${(hotspot.x / previewCanvasWidth) * 100}%`,
-            top: `${(hotspot.y / previewCanvasHeight) * 100}%`,
-            width: `${(hotspot.width / previewCanvasWidth) * 100}%`,
-            height: `${(hotspot.height / previewCanvasHeight) * 100}%`,
-          }}
-          aria-label={hotspot.slotId}
-          onClick={() => onSelectSlot?.(hotspot.slotId)}
-        />
-      ))}
+      <div
+        className="absolute inset-0 z-[1]"
+        style={{
+          backgroundColor: chatBackgroundColor || template.defaults.chatBackground,
+          backgroundImage: backgroundImageUrl ? `url("${backgroundImageUrl}")` : undefined,
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundSize: "cover",
+        }}
+      />
 
-      {/* 채팅방 헤더 */}
-      <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 pb-4 pt-9" style={{ color: headerForeground }}>
+      <div
+        className="absolute inset-x-0 z-10 overflow-x-hidden overflow-y-auto chatroom-scroll"
+        style={{
+          top: `${(canvasTopInset / previewCanvasHeight) * 100}%`,
+          bottom: `${(canvasBottomInset / previewCanvasHeight) * 100}%`,
+        }}
+      >
+        <div className="relative w-full" style={{ aspectRatio: `${previewCanvasWidth} / ${contentCanvasHeight}` }}>
+          <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" width={previewCanvasWidth} height={contentCanvasHeight} />
+          {hotspots.map((hotspot, index) => (
+            <button
+              key={`${hotspot.slotId}-${index}-${hotspot.y}`}
+              type="button"
+              className="absolute z-20 bg-transparent"
+              style={{
+                left: `${(hotspot.x / previewCanvasWidth) * 100}%`,
+                top: `${(hotspot.y / contentCanvasHeight) * 100}%`,
+                width: `${(hotspot.width / previewCanvasWidth) * 100}%`,
+                height: `${(hotspot.height / contentCanvasHeight) * 100}%`,
+              }}
+              aria-label={hotspot.slotId}
+              onClick={() => onSelectSlot?.(hotspot.slotId)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* 헤더 */}
+      <div className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-5 pt-4 pb-4" style={{ color: headerForeground }}>
         <div className="flex items-center gap-4">
           <ArrowLeft className="h-7 w-7" strokeWidth={2.2} />
           <strong className="text-[18px] font-semibold tracking-[-0.02em]">채팅방</strong>
@@ -216,8 +252,9 @@ export function ChatroomPreview({
         </div>
       </div>
 
+      {/* 입력바  */}
       <div
-        className={`absolute inset-x-0 bottom-0 z-30 border-t border-white/20 ${selectedSlotId === inputSlot?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+        className={` absolute inset-x-0 bottom-0 z-30 border-t border-white/20 ${selectedSlotId === inputSlot?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
         style={{
           height: `${inputBarHeightRatio * 100}%`,
           backgroundColor: hexToRgba(inputBackground, 0.96),
@@ -232,15 +269,19 @@ export function ChatroomPreview({
           }}
         />
         <div className="relative flex items-center h-full gap-2 px-3 py-2">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#edf3f6] text-[#1781a3]">
+
+          <span className="grid h-10 w-9 shrink-0 place-items-center rounded-full bg-[#edf3f6] text-[#1781a3]">
             <Plus className="w-5 h-5" />
           </span>
+
           <div className="flex h-10 flex-1 items-center rounded-full bg-white/92 px-4 shadow-[inset_0_0_0_1px_rgba(203,213,225,0.85)]">
             <span className="text-[14px] font-medium text-[#b3c0ca]">메시지 입력</span>
           </div>
+
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#edf3f6] text-[#5b7682]">
             <Smile className="w-5 h-5" />
           </span>
+
           <button
             type="button"
             className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[#0b6070] ${selectedSlotId === sendSlot?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
@@ -254,6 +295,26 @@ export function ChatroomPreview({
           </button>
         </div>
       </div>
+
+      <style jsx>{`
+        .chatroom-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(15, 23, 42, 0.26) transparent;
+        }
+
+        .chatroom-scroll::-webkit-scrollbar {
+          width: 4px;
+        }
+
+        .chatroom-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .chatroom-scroll::-webkit-scrollbar-thumb {
+          border-radius: 999px;
+          background: rgba(15, 23, 42, 0.26);
+        }
+      `}</style>
     </div>
   );
 }
@@ -261,32 +322,26 @@ export function ChatroomPreview({
 function drawChatPreview(
   ctx: CanvasRenderingContext2D,
   options: {
-    backgroundImage: HTMLImageElement | null;
     defaults?: ThemeProjectAnalysis["previewDefaults"];
     platform: ThemePlatform;
     slots: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
     selectedSlotId?: string;
     bubbleAssets: Record<string, BubbleAsset | undefined>;
     bubbleEdits: Partial<Record<ThemeResourceRole, BubbleEditState>>;
-    chatBackgroundColor: string;
     myBubbleColor: string;
     friendBubbleColor: string;
     unreadCountColor: string;
+    canvasHeight: number;
     onHotspotsChange: (hotspots: Hotspot[]) => void;
+    onCanvasHeightChange: (height: number) => void;
   },
 ) {
-  const { backgroundImage, defaults, platform, slots, selectedSlotId, bubbleAssets, bubbleEdits, chatBackgroundColor, myBubbleColor, friendBubbleColor, unreadCountColor, onHotspotsChange } = options;
+  const { defaults, platform, slots, selectedSlotId, bubbleAssets, bubbleEdits, myBubbleColor, friendBubbleColor, unreadCountColor, canvasHeight, onHotspotsChange, onCanvasHeightChange } = options;
 
-  ctx.clearRect(0, 0, previewCanvasWidth, previewCanvasHeight);
-  ctx.fillStyle = chatBackgroundColor || defaults?.chatBackground || "#b8f2f7";
-  ctx.fillRect(0, 0, previewCanvasWidth, previewCanvasHeight);
-
-  if (backgroundImage) {
-    ctx.drawImage(backgroundImage, 0, 0, previewCanvasWidth, previewCanvasHeight);
-  }
+  ctx.clearRect(0, 0, previewCanvasWidth, canvasHeight);
 
   const hotspots: Hotspot[] = [];
-  let y = canvasTopInset + 62;
+  let y = 62;
 
   drawTimelineStamp(ctx, y - 24, "19:47");
 
@@ -334,7 +389,12 @@ function drawChatPreview(
     y += size.height + (message.mine ? 56 : 72);
   }
 
-  drawTimelineStamp(ctx, previewCanvasHeight - canvasBottomInset - 48, "23:55");
+  const requiredCanvasHeight = Math.max(minScrollCanvasHeight, y + 140);
+  if (Math.abs(requiredCanvasHeight - canvasHeight) > 1) {
+    onCanvasHeightChange(requiredCanvasHeight);
+  }
+
+  drawTimelineStamp(ctx, Math.min(canvasHeight - 56, y + 26), "23:55");
   onHotspotsChange(hotspots);
 }
 
@@ -393,21 +453,23 @@ function getAutoBubbleSize(ctx: CanvasRenderingContext2D, asset: BubbleAsset | n
   let width = minWidth;
   let height = minHeight;
 
-  for (let index = 0; index < 12; index += 1) {
+  ctx.font = `${bubbleTextFontSize}px Segoe UI, Noto Sans KR, sans-serif`;
+  const longestRawLine = Math.max(0, ...String(text).split("\n").map((line) => ctx.measureText(line).width));
+
+  for (let index = 0; index < 8; index += 1) {
     const content = getPreviewContentRect(asset, platform, edit, 0, 0, width, height);
-    const lines = wrapTextLines(ctx, text, Math.max(24, content.width - 24));
-    const requiredContentHeight = lines.length * 44 + 30;
-    const longestLine = Math.max(0, ...lines.map((line) => ctx.measureText(line).width));
-    const widthDeficit = longestLine + 34 - content.width;
+    const widthDeficit = longestRawLine + 28 - content.width;
+    if (widthDeficit <= 0 || width >= maxWidth) break;
+    width = clamp(width + Math.ceil(widthDeficit), minWidth, maxWidth);
+  }
+
+  for (let index = 0; index < 8; index += 1) {
+    const content = getPreviewContentRect(asset, platform, edit, 0, 0, width, height);
+    const lines = wrapTextLines(ctx, text, Math.max(24, content.width - 28));
+    const requiredContentHeight = lines.length * bubbleTextLineHeight + 32;
     const heightDeficit = requiredContentHeight - content.height;
-    if (widthDeficit <= 0 && heightDeficit <= 0) break;
-    if (widthDeficit > 0 && width < maxWidth) {
-      width = clamp(width + Math.ceil(widthDeficit), 112, maxWidth);
-    } else if (heightDeficit > 0) {
-      height = clamp(height + Math.ceil(heightDeficit), 72, 1400);
-    } else {
-      break;
-    }
+    if (heightDeficit <= 0) break;
+    height = clamp(height + Math.ceil(heightDeficit), minHeight, 1400);
   }
 
   return { width, height };
@@ -424,12 +486,12 @@ function getPreviewContentRect(asset: BubbleAsset | null, platform: ThemePlatfor
 
 function drawText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, maxHeight: number) {
   ctx.fillStyle = "#14343a";
-  ctx.font = "34px Segoe UI, Noto Sans KR, sans-serif";
-  const lineHeight = 44;
+  ctx.font = `${bubbleTextFontSize}px Segoe UI, Noto Sans KR, sans-serif`;
+  const lineHeight = bubbleTextLineHeight;
   const lines = wrapTextLines(ctx, text, maxWidth);
   const maxLines = Math.max(1, Math.min(lines.length, Math.floor(maxHeight / lineHeight)));
   lines.slice(0, maxLines).forEach((line, index) => {
-    ctx.fillText(line, x, y + 34 + index * lineHeight);
+    ctx.fillText(line, x, y + bubbleTextFontSize + index * lineHeight);
   });
 }
 
@@ -543,15 +605,10 @@ function drawAvatar(ctx: CanvasRenderingContext2D, x: number, y: number, size: n
 
 function drawUnreadBadge(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, count: number) {
   const label = String(count);
-  const width = Math.max(42, 24 + label.length * 16);
-  const height = 34;
   ctx.fillStyle = color;
-  roundRect(ctx, x, y, width, height, 17);
-  ctx.fill();
-  ctx.fillStyle = "#FFFFFF";
-  ctx.font = "bold 20px Segoe UI, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText(label, x + width / 2, y + 23);
+  ctx.font = "bold 22px Segoe UI, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(label, x, y + 24);
   ctx.textAlign = "left";
 }
 
@@ -612,28 +669,55 @@ function getReadableTextColor(hex: string) {
 
 function getContrastingHeaderColor(image: HTMLImageElement) {
   const canvas = document.createElement("canvas");
-  canvas.width = 36;
-  canvas.height = 24;
+
+  const sampleWidth = 36;
+  const sampleHeight = 24;
+
+  canvas.width = sampleWidth;
+  canvas.height = sampleHeight;
+
   const ctx = canvas.getContext("2d");
   if (!ctx) return "#FFFFFF";
 
-  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const sourceX = 0;
+  const sourceY = 0;
+  const sourceWidth = image.naturalWidth;
+  const sourceHeight = image.naturalHeight * 0.08; // 상단 8%만 사용
+
+  ctx.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    0,
+    0,
+    sampleWidth,
+    sampleHeight
+  );
+
+  const { data } = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
+
   let luminanceTotal = 0;
   let sampleCount = 0;
 
   for (let index = 0; index < data.length; index += 4) {
     const alpha = data[index + 3] / 255;
     if (alpha <= 0) continue;
+
     const r = data[index];
     const g = data[index + 1];
     const b = data[index + 2];
+
     luminanceTotal += (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     sampleCount += 1;
   }
 
   if (sampleCount === 0) return "#FFFFFF";
-  return luminanceTotal / sampleCount > 0.62 ? "#111827" : "#FFFFFF";
+
+  const averageLuminance = luminanceTotal / sampleCount;
+
+  return averageLuminance > 0.55 ? "#191919" : "#FFFFFF";
 }
 
 function normalizeHexForContrast(hex: string) {

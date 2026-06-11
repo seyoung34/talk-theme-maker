@@ -157,7 +157,7 @@ function FriendsScreen({
         <div className="grid h-full content-start gap-3 overflow-hidden px-0.5 pb-2">
           <div className="flex gap-2">
             <Chip active backgroundColor={preview.titleColor} textColor={preview.mainBackgroundColor}>친구</Chip>
-            <Chip textColor={preview.mainBackgroundColor}>추천</Chip>
+            <Chip textColor={preview.titleColor}>추천</Chip>
           </div>
 
           <button
