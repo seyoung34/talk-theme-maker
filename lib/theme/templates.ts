@@ -85,7 +85,7 @@ const sharedSections: ThemeSectionDefinition[] = [
   { id: "main", label: "메인 화면", groups: ["background", "header", "list"] },
   { id: "tabs", label: "하단 탭", groups: ["bar", "icons"] },
   { id: "chatroom", label: "채팅방", groups: ["background", "bubbles", "input"] },
-  { id: "common", label: "공통 리소스", groups: ["icon", "profiles"] },
+  { id: "common", label: "공통 리소스", groups: ["icon", "profiles", "launcher"] },
 ];
 
 export const themeTemplates: ThemeTemplate[] = [

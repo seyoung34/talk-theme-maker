@@ -4,7 +4,7 @@ import { ThemeScreensPreview } from "@/components/preview/ThemeScreensPreview";
 import type { BubbleEditState, SlotCandidateSelections, SlotColors } from "@/components/project/projectModel";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { ThemeResourceRole, ThemeSection } from "@/lib/theme/types";
+import type { ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 export function ProjectPreviewPanel({
   analysis,
@@ -49,7 +49,7 @@ export function ProjectPreviewPanel({
       ) : activeSection === "common" ? (
         <CommonAssetsPreview
           analysis={analysis}
-          activeGroup={slots.some((slot) => slot.section === "common" && slot.group === "icon" && slot.id === selectedSlotId) ? "icon" : "profiles"}
+          activeGroup={getCommonActiveGroup(slots, selectedSlotId)}
           slots={slots.filter((slot) => slot.section === "common")}
           selectedSlotId={selectedSlotId}
           onSelectSlot={onSelectSlot}
@@ -59,4 +59,10 @@ export function ProjectPreviewPanel({
       )}
     </aside>
   );
+}
+
+function getCommonActiveGroup(slots: ThemeAssetSlot[], selectedSlotId?: string): Extract<ThemeSlotGroup, "icon" | "profiles" | "launcher"> {
+  const selected = slots.find((slot) => slot.section === "common" && slot.id === selectedSlotId);
+  if (selected?.group === "icon" || selected?.group === "launcher" || selected?.group === "profiles") return selected.group;
+  return "profiles";
 }

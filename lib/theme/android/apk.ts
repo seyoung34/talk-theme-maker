@@ -25,7 +25,7 @@ export async function buildAndroidApk(files: AndroidBuildInputFile[], apkBaseNam
 
     return {
       apkBytes: await readFile(apkPath),
-      fileName: `${sanitizeFileName(apkBaseName)}-android-debug.apk`,
+      fileName: `${buildExportBaseName(apkBaseName, versionName)}.apk`,
     };
   } finally {
     await prepared.cleanup();
@@ -39,7 +39,7 @@ export async function exportAndroidProjectZip(files: AndroidBuildInputFile[], pr
     const zipBytes = await zipProjectDirectory(prepared.projectRoot);
     return {
       zipBytes,
-      fileName: `${sanitizeFileName(projectBaseName)}-android-project.zip`,
+      fileName: `${buildExportBaseName(projectBaseName, versionName)}.zip`,
     };
   } finally {
     await prepared.cleanup();
@@ -51,7 +51,7 @@ export async function exportAndroidApkZip(files: AndroidBuildInputFile[], apkBas
   const zipBlob = createStoredZip([{ path: fileName, bytes: apkBytes }]);
   return {
     zipBytes: new Uint8Array(await zipBlob.arrayBuffer()),
-    fileName: `${sanitizeFileName(apkBaseName)}-android-debug.zip`,
+    fileName: `${buildExportBaseName(apkBaseName, versionName)}.zip`,
   };
 }
 
@@ -66,6 +66,7 @@ async function prepareAndroidProject(files: AndroidBuildInputFile[], versionName
   const projectRoot = path.join(tempRoot, "project");
 
   await cp(sampleProjectRoot, projectRoot, { recursive: true });
+  await removeBundledTabBarBackgrounds(projectRoot);
   if (versionName?.trim()) {
     await writeProjectVersionName(projectRoot, versionName.trim());
   }
@@ -80,6 +81,21 @@ async function prepareAndroidProject(files: AndroidBuildInputFile[], versionName
     projectRoot,
     cleanup: () => rm(tempRoot, { recursive: true, force: true }),
   };
+}
+
+async function removeBundledTabBarBackgrounds(projectRoot: string) {
+  const bundledPaths = [
+    "src/main/theme/drawable-sw600dp/theme_maintab_cell_image.9.png",
+    "src/main/theme/drawable-xxhdpi/theme_maintab_cell_image.9.png",
+  ];
+
+  await Promise.all(
+    bundledPaths.map((relativePath) =>
+      rm(path.join(projectRoot, relativePath), {
+        force: true,
+      }),
+    ),
+  );
 }
 
 async function writeProjectVersionName(projectRoot: string, versionName: string) {
@@ -188,11 +204,19 @@ async function walkForApks(root: string): Promise<Array<{ filePath: string; mtim
   return results;
 }
 
-function sanitizeFileName(value: string) {
+function buildExportBaseName(name: string, versionName?: string) {
+  const safeName = sanitizeFileNamePart(name, "kakaotalk-theme");
+  const safeVersion = sanitizeFileNamePart(versionName ?? "1.0.0", "1.0.0");
+  return `${safeName}_${safeVersion}`;
+}
+
+function sanitizeFileNamePart(value: string, fallback: string) {
   return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "kakaotalk-theme";
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001F]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[._-]+|[._-]+$/g, "") || fallback;
 }
 
 async function zipProjectDirectory(projectRoot: string) {

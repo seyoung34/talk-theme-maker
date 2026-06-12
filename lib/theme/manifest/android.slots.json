@@ -685,6 +685,134 @@
     }
   },
   {
+    "id": "android-launcher-icon",
+    "platform": "android",
+    "role": "launcher_icon",
+    "section": "common",
+    "group": "launcher",
+    "screen": "profile",
+    "kind": "image",
+    "label": "런처 아이콘",
+    "fileName": "ic_launcher.png",
+    "path": "src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+    "required": true,
+    "note": "Android 앱 런처 아이콘",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/launcher/ic_launcher.png",
+      "spongebob": "/template-assets/basic/android/launcher/ic_launcher.png"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+        "scaleTargets": [
+          "src/main/res/mipmap-mdpi/ic_launcher.png",
+          "src/main/res/mipmap-hdpi/ic_launcher.png",
+          "src/main/res/mipmap-xhdpi/ic_launcher.png",
+          "src/main/res/mipmap-xxhdpi/ic_launcher.png",
+          "src/main/res/mipmap-xxxhdpi/ic_launcher.png"
+        ],
+        "transform": "copy"
+      }
+    }
+  },
+  {
+    "id": "android-launcher-round",
+    "platform": "android",
+    "role": "launcher_round",
+    "section": "common",
+    "group": "launcher",
+    "screen": "profile",
+    "kind": "image",
+    "label": "런처 라운드 아이콘",
+    "fileName": "ic_launcher_round.png",
+    "path": "src/main/res/mipmap-xxxhdpi/ic_launcher_round.png",
+    "required": true,
+    "note": "Android 라운드 런처 아이콘",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/launcher/ic_launcher_round.png",
+      "spongebob": "/template-assets/basic/android/launcher/ic_launcher_round.png"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/res/mipmap-xxxhdpi/ic_launcher_round.png",
+        "scaleTargets": [
+          "src/main/res/mipmap-mdpi/ic_launcher_round.png",
+          "src/main/res/mipmap-hdpi/ic_launcher_round.png",
+          "src/main/res/mipmap-xhdpi/ic_launcher_round.png",
+          "src/main/res/mipmap-xxhdpi/ic_launcher_round.png",
+          "src/main/res/mipmap-xxxhdpi/ic_launcher_round.png"
+        ],
+        "transform": "copy"
+      }
+    }
+  },
+  {
+    "id": "android-launcher-background",
+    "platform": "android",
+    "role": "launcher_background",
+    "section": "common",
+    "group": "launcher",
+    "screen": "profile",
+    "kind": "image",
+    "label": "런처 배경",
+    "fileName": "ic_launcher_background.png",
+    "path": "src/main/res/mipmap-xxxhdpi/ic_launcher_background.png",
+    "required": true,
+    "note": "Android adaptive launcher background",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/launcher/ic_launcher_background.png",
+      "spongebob": "/template-assets/basic/android/launcher/ic_launcher_background.png"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/res/mipmap-xxxhdpi/ic_launcher_background.png",
+        "scaleTargets": [
+          "src/main/res/mipmap-mdpi/ic_launcher_background.png",
+          "src/main/res/mipmap-hdpi/ic_launcher_background.png",
+          "src/main/res/mipmap-xhdpi/ic_launcher_background.png",
+          "src/main/res/mipmap-xxhdpi/ic_launcher_background.png",
+          "src/main/res/mipmap-xxxhdpi/ic_launcher_background.png"
+        ],
+        "transform": "copy"
+      }
+    }
+  },
+  {
+    "id": "android-launcher-foreground",
+    "platform": "android",
+    "role": "launcher_foreground",
+    "section": "common",
+    "group": "launcher",
+    "screen": "profile",
+    "kind": "image",
+    "label": "런처 전경",
+    "fileName": "ic_launcher_foreground.png",
+    "path": "src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png",
+    "required": true,
+    "note": "Android adaptive launcher foreground",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/launcher/ic_launcher_foreground.png",
+      "spongebob": "/template-assets/basic/android/launcher/ic_launcher_foreground.png"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png",
+        "scaleTargets": [
+          "src/main/res/mipmap-mdpi/ic_launcher_foreground.png",
+          "src/main/res/mipmap-hdpi/ic_launcher_foreground.png",
+          "src/main/res/mipmap-xhdpi/ic_launcher_foreground.png",
+          "src/main/res/mipmap-xxhdpi/ic_launcher_foreground.png",
+          "src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png"
+        ],
+        "transform": "copy"
+      }
+    }
+  },
+  {
     "id": "android-common-profile-1",
     "platform": "android",
     "role": "profile_image_1",

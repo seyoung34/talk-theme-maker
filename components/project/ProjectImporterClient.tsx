@@ -815,6 +815,14 @@ function slotEditFromRole(
 
 function getDownloadFileName(contentDisposition: string | null) {
   if (!contentDisposition) return null;
+  const encodedMatch = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
+  if (encodedMatch?.[1]) {
+    try {
+      return decodeURIComponent(encodedMatch[1]);
+    } catch {
+      // Fall back to the ASCII filename below.
+    }
+  }
   const match = /filename="([^"]+)"/i.exec(contentDisposition);
   return match?.[1] ?? null;
 }

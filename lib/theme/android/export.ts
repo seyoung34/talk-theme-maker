@@ -30,7 +30,9 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
     if (slot.kind === "color" || !slot.path) continue;
     const blob = await resolveAndroidSlotBlob(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id]);
     if (!blob) continue;
-    files.push({ path: slot.path, blob });
+    for (const path of getAndroidSlotExportPaths(slot)) {
+      files.push({ path, blob });
+    }
   }
 
   files.push(
@@ -52,6 +54,10 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
   );
 
   return files;
+}
+
+function getAndroidSlotExportPaths(slot: ThemeAssetSlot) {
+  return Array.from(new Set([slot.path, ...(slot.export?.android?.scaleTargets ?? [])].filter((path): path is string => Boolean(path))));
 }
 
 export async function exportAndroidThemePackage(options: AndroidExportOptions) {

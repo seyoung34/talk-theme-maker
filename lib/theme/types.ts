@@ -3,7 +3,7 @@ export type PlatformMode = "android" | "ios";
 export type ThemePlatform = "android" | "ios";
 export type ThemeScreen = "chatroom" | "friends" | "tabs" | "profile";
 export type ThemeSection = "main" | "tabs" | "chatroom" | "common";
-export type ThemeSlotGroup = "background" | "header" | "list" | "bar" | "icons" | "bubbles" | "input" | "icon" | "profiles";
+export type ThemeSlotGroup = "background" | "header" | "list" | "bar" | "icons" | "bubbles" | "input" | "icon" | "profiles" | "launcher";
 export type ThemeSlotKind = "image" | "ninepatch" | "color";
 export type ThemeCandidateSourceType = "template-asset" | "template-color" | "session-upload";
 export type ThemeDiagnosticLevel = "info" | "warning" | "error";
@@ -51,6 +51,10 @@ export type ThemeResourceRole =
   | "chat_input_text_color"
   | "chat_send_icon_color"
   | "theme_icon"
+  | "launcher_background"
+  | "launcher_foreground"
+  | "launcher_round"
+  | "launcher_icon"
   | "profile_image_1"
   | "profile_image_2"
   | "profile_image_3"

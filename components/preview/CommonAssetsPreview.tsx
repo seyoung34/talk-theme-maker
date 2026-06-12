@@ -1,12 +1,13 @@
 "use client";
 
-import { ImageIcon, UserRound } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ImageIcon, Rocket, UserRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
-import type { ThemeResourceRole } from "@/lib/theme/types";
+import type { ThemeResourceRole, ThemeSlotGroup } from "@/lib/theme/types";
 
+type CommonAssetsGroup = Extract<ThemeSlotGroup, "icon" | "profiles" | "launcher">;
 type RoleFiles = Partial<Record<ThemeResourceRole, ThemeProjectFile>>;
 type RoleUrls = Partial<Record<ThemeResourceRole, string>>;
 
@@ -19,6 +20,7 @@ const profileRoles: ThemeResourceRole[] = [
   "profile_image_full_2",
   "profile_image_full_3",
 ];
+const launcherRoles: ThemeResourceRole[] = ["launcher_icon", "launcher_round", "launcher_background", "launcher_foreground"];
 
 export function CommonAssetsPreview({
   analysis,
@@ -28,7 +30,7 @@ export function CommonAssetsPreview({
   onSelectSlot,
 }: {
   analysis: ThemeProjectAnalysis;
-  activeGroup: "icon" | "profiles";
+  activeGroup: CommonAssetsGroup;
   slots: ThemeAssetSlot[];
   selectedSlotId?: string;
   onSelectSlot?: (slotId: string) => void;
@@ -43,13 +45,15 @@ export function CommonAssetsPreview({
   return (
     <section className="grid h-full w-full max-w-[920px] min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-4 rounded-[28px] border border-[#d7ddd8] bg-white/96 p-5 shadow-[0_22px_48px_rgba(15,23,42,0.12)]">
       <header className="flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-[#0f172a]">{activeGroup === "icon" ? "대표 아이콘" : "프로필 이미지"}</h2>
-        <span className="rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-3 py-1 text-xs font-semibold text-[#475569]">{activeGroup === "icon" ? "icon" : "profiles"}</span>
+        <h2 className="text-lg font-semibold text-[#0f172a]">{activeGroup === "icon" ? "대표 아이콘" : activeGroup === "launcher" ? "런처 아이콘" : "프로필 이미지"}</h2>
+        <span className="rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-3 py-1 text-xs font-semibold text-[#475569]">{activeGroup}</span>
       </header>
 
       <div className="min-h-0 overflow-auto">
         {activeGroup === "icon" ? (
           <CommonIconPreview slotByRole={slotByRole} urls={urls} selectedSlotId={selectedSlotId} onSelectSlot={onSelectSlot} />
+        ) : activeGroup === "launcher" ? (
+          <LauncherIconPreview slotByRole={slotByRole} urls={urls} selectedSlotId={selectedSlotId} onSelectSlot={onSelectSlot} />
         ) : (
           <CommonProfilePreview slotByRole={slotByRole} urls={urls} selectedSlotId={selectedSlotId} onSelectSlot={onSelectSlot} />
         )}
@@ -99,6 +103,77 @@ function CommonIconPreview({
           )}
         </div>
       </button>
+    </div>
+  );
+}
+
+function LauncherIconPreview({
+  slotByRole,
+  urls,
+  selectedSlotId,
+  onSelectSlot,
+}: {
+  slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
+  urls: RoleUrls;
+  selectedSlotId?: string;
+  onSelectSlot?: (slotId: string) => void;
+}) {
+  const launcherSlots = launcherRoles.map((role) => slotByRole[role]).filter((slot): slot is ThemeAssetSlot => Boolean(slot));
+  const activeSlot = launcherSlots.find((slot) => slot.id === selectedSlotId) ?? launcherSlots[0];
+  if (!activeSlot) return null;
+
+  const activeUrl = urls[activeSlot.role];
+
+  return (
+    <div className="grid min-h-full content-center justify-items-center gap-4 px-4 py-6">
+      <button
+        type="button"
+        className={`grid w-full max-w-[420px] gap-5 rounded-[28px] border p-6 text-left transition ${
+          selectedSlotId === activeSlot.id ? "border-[#60a5fa] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]" : "border-[#e5e7eb] bg-white"
+        }`}
+        onClick={() => onSelectSlot?.(activeSlot.id)}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <strong className="block text-base font-semibold text-[#0f172a]">{activeSlot.fileName}</strong>
+          {activeSlot.required ? <span className="rounded-full bg-[#dbeafe] px-2.5 py-1 text-[11px] font-semibold text-[#1d4ed8]">필수</span> : null}
+        </div>
+
+        <div className="grid place-items-center rounded-[24px] border border-[#e5e7eb] bg-[linear-gradient(180deg,#f8fafc,#eef2f7)] py-8">
+          {activeUrl ? (
+            <span
+              className="block h-[184px] w-[184px] rounded-[40px] border border-[#d1d5db] bg-white bg-contain bg-center bg-no-repeat shadow-[0_18px_34px_rgba(15,23,42,0.12)]"
+              style={{ backgroundImage: `url(${activeUrl})` }}
+            />
+          ) : (
+            <span className="grid h-[184px] w-[184px] place-items-center rounded-[40px] border border-dashed border-[#cbd5e1] bg-white">
+              <Rocket className="h-12 w-12 text-[#94a3b8]" />
+            </span>
+          )}
+        </div>
+      </button>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {launcherSlots.map((slot) => {
+          const slotUrl = urls[slot.role];
+          return (
+            <button
+              key={slot.id}
+              type="button"
+              className={`grid h-20 w-20 place-items-center overflow-hidden rounded-2xl border bg-white transition ${
+                slot.id === activeSlot.id ? "border-[#60a5fa] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]" : "border-[#e5e7eb] hover:border-[#cbd5e1]"
+              }`}
+              onClick={() => onSelectSlot?.(slot.id)}
+              aria-label={slot.fileName}
+            >
+              {slotUrl ? (
+                <span className="block h-12 w-12 rounded-xl bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${slotUrl})` }} />
+              ) : (
+                <Rocket className="h-5 w-5 text-[#94a3b8]" />
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -183,7 +258,7 @@ function CommonProfilePreview({
 }
 
 function selectRoleFiles(analysis: ThemeProjectAnalysis): RoleFiles {
-  const roles: ThemeResourceRole[] = [...iconRoles, ...profileRoles];
+  const roles: ThemeResourceRole[] = [...iconRoles, ...profileRoles, ...launcherRoles];
   return Object.fromEntries(roles.map((role) => [role, findBestFile(analysis, role)])) as RoleFiles;
 }
 

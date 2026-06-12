@@ -13,6 +13,7 @@ export function findBestFile(analysis: ThemeProjectAnalysis, role: ThemeResource
     .filter((file): file is ThemeProjectFile => Boolean(file?.file || file?.sourceUrl));
 
   return (
+    candidates.find((file) => file.path.includes("mipmap-xxxhdpi")) ??
     candidates.find((file) => file.path.includes("drawable-xxhdpi") && file.name.includes("_01_")) ??
     candidates.find((file) => file.name.includes("@3x") && file.name.includes("01")) ??
     candidates.find((file) => file.name.includes("@3x")) ??

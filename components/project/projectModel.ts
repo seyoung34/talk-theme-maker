@@ -45,6 +45,7 @@ export const groupLabels: Record<ThemeSlotGroup, string> = {
   input: "입력 바",
   icon: "대표 아이콘",
   profiles: "프로필",
+  launcher: "런처 아이콘",
 };
 
 export {

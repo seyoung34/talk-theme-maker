@@ -84,6 +84,10 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
     if (name === "theme_maintab_ico_tab4_focused_image.png" || name === "theme_maintab_ico_shopping_focused_image.png") return "tab_icon_shopping_focused";
     if (name === "theme_maintab_ico_more_image.png") return "tab_icon_more";
     if (name === "theme_maintab_ico_more_focused_image.png") return "tab_icon_more_focused";
+    if (name === "ic_launcher.png") return "launcher_icon";
+    if (name === "ic_launcher_round.png") return "launcher_round";
+    if (name === "ic_launcher_background.png") return "launcher_background";
+    if (name === "ic_launcher_foreground.png") return "launcher_foreground";
     if (name === "theme_profile_01_image.png") return "profile_image_1";
     if (name === "theme_profile_02_image.png") return "profile_image_2";
     if (name === "theme_profile_03_image.png") return "profile_image_3";
@@ -130,7 +134,7 @@ function roleToScreen(role: ThemeResourceRole): ThemeScreen {
     return "chatroom";
   if (role === "tab_background" || role === "tab_background_image" || role.startsWith("tab_icon_")) return "tabs";
   if (role === "main_background" || role === "main_header_color" || role === "main_title_color" || role === "main_body_color") return "friends";
-  if (role === "theme_icon" || role === "profile_image" || role.startsWith("profile_image_")) return "profile";
+  if (role === "theme_icon" || role.startsWith("launcher_") || role === "profile_image" || role.startsWith("profile_image_")) return "profile";
   return "friends";
 }
 
