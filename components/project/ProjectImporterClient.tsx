@@ -21,6 +21,7 @@ import {
 } from "@/components/project/projectModel";
 import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
+import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
 import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
@@ -47,6 +48,8 @@ type ActiveUserTemplate = {
   createdAt: number;
 };
 
+type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
+
 type AndroidExportPayloadOptions = {
   analysis: ReturnType<typeof createThemeProjectAnalysis>;
   template: ThemeTemplate;
@@ -61,6 +64,14 @@ type AndroidExportPayloadOptions = {
   bubbleMarkers: Partial<Record<string, Markers>>;
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;
+};
+
+type IosExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
+  mode: "theme-zip" | "ktheme";
+};
+
+type ExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
+  mode: ExportMode;
 };
 
 export default function ProjectImporterClient() {
@@ -82,7 +93,7 @@ export default function ProjectImporterClient() {
   const [saveMode, setSaveMode] = useState<"overwrite" | "saveAs">("saveAs");
   const [saveName, setSaveName] = useState("");
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportMode, setExportMode] = useState<"project" | "apk" | "apk-zip">("apk");
+  const [exportMode, setExportMode] = useState<ExportMode>("apk");
   const [exportName, setExportName] = useState("");
   const [exportVersionName, setExportVersionName] = useState("");
   const [exportProgressStep, setExportProgressStep] = useState(0);
@@ -298,14 +309,14 @@ export default function ProjectImporterClient() {
   };
 
   const openExportDialog = async () => {
-    if (platform !== "android") {
+    if (false && platform !== "android") {
       setNotice({ tone: "warning", message: "iOS 내보내기는 아직 준비 중입니다. 현재는 Android export만 지원합니다." });
       return;
     }
 
     try {
       if (!exportVersionName) {
-        const response = await fetch("/api/export/android");
+        const response = await fetch(platform === "android" ? "/api/export/android" : "/api/export/ios");
         const payload = (await response.json()) as { versionName?: string; error?: string };
         if (!response.ok) {
           throw new Error(payload.error ?? "Android sample config read failed.");
@@ -313,7 +324,7 @@ export default function ProjectImporterClient() {
         setExportVersionName(payload.versionName ?? "1.0.0");
       }
       setExportName(displayTemplateName);
-      setExportMode("apk");
+      setExportMode(platform === "android" ? "apk" : "ktheme");
       setExportProgressStep(0);
       setExportDialogOpen(true);
     } catch (error) {
@@ -334,7 +345,7 @@ export default function ProjectImporterClient() {
         setExportProgressStep((current) => (current >= progressSteps.length - 2 ? current : current + 1));
       }, 850);
 
-      const formData = await createAndroidExportFormData({
+      const formData = await createExportFormData({
         analysis,
         template: activeTemplate,
         templateId,
@@ -350,7 +361,7 @@ export default function ProjectImporterClient() {
         bubbleStretch,
       });
 
-      const response = await fetch("/api/export/android", {
+      const response = await fetch(platform === "android" ? "/api/export/android" : "/api/export/ios", {
         method: "POST",
         body: formData,
       });
@@ -399,6 +410,7 @@ export default function ProjectImporterClient() {
       {exportDialogOpen ? (
         <ExportDialog
           isExporting={isExporting}
+          platform={platform}
           exportMode={exportMode}
           exportName={exportName}
           exportVersionName={exportVersionName}
@@ -660,6 +672,7 @@ function SaveTemplateDialog({
 
 function ExportDialog({
   isExporting,
+  platform,
   exportMode,
   exportName,
   exportVersionName,
@@ -671,12 +684,13 @@ function ExportDialog({
   onSubmit,
 }: {
   isExporting: boolean;
-  exportMode: "project" | "apk" | "apk-zip";
+  platform: ThemePlatform;
+  exportMode: ExportMode;
   exportName: string;
   exportVersionName: string;
   progressStep: number;
   onClose: () => void;
-  onModeChange: (mode: "project" | "apk" | "apk-zip") => void;
+  onModeChange: (mode: ExportMode) => void;
   onNameChange: (value: string) => void;
   onVersionNameChange: (value: string) => void;
   onSubmit: () => void;
@@ -721,6 +735,27 @@ function ExportDialog({
         </div>
 
         <div className="grid gap-2">
+          {platform === "ios" ? (
+            <>
+              <button
+                type="button"
+                className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "ktheme" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                onClick={() => onModeChange("ktheme")}
+                disabled={isExporting}
+              >
+                <span className="block text-sm font-semibold text-[#0f172a]">iOS .ktheme</span>
+              </button>
+              <button
+                type="button"
+                className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "theme-zip" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                onClick={() => onModeChange("theme-zip")}
+                disabled={isExporting}
+              >
+                <span className="block text-sm font-semibold text-[#0f172a]">iOS 테마 ZIP</span>
+              </button>
+            </>
+          ) : (
+            <>
           <button
             type="button"
             className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "project" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
@@ -745,6 +780,8 @@ function ExportDialog({
           >
             <span className="block text-sm font-semibold text-[#0f172a]">Android APK ZIP으로 내보내기</span>
           </button>
+            </>
+          )}
         </div>
 
         <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-4">
@@ -778,7 +815,13 @@ function ExportDialog({
   );
 }
 
-function getExportProgressSteps(mode: "project" | "apk" | "apk-zip") {
+function getExportProgressSteps(mode: ExportMode) {
+  if (mode === "ktheme") {
+    return ["CSS 생성", "이미지 정리", ".ktheme 패키징", "다운로드 준비"];
+  }
+  if (mode === "theme-zip") {
+    return ["CSS 생성", "이미지 정리", "ZIP 패키징", "다운로드 준비"];
+  }
   if (mode === "project") {
     return ["리소스 준비", "프로젝트 생성", "메타데이터 반영", "압축 정리", "다운로드 준비"];
   }
@@ -788,7 +831,9 @@ function getExportProgressSteps(mode: "project" | "apk" | "apk-zip") {
   return ["리소스 준비", "프로젝트 생성", "APK 빌드", "결과물 정리", "다운로드 준비"];
 }
 
-function getExportNotice(mode: "project" | "apk" | "apk-zip") {
+function getExportNotice(mode: ExportMode) {
+  if (mode === "ktheme") return "iOS .ktheme 파일을 생성하는 중입니다.";
+  if (mode === "theme-zip") return "iOS 테마 ZIP 파일을 생성하는 중입니다.";
   if (mode === "project") return "Android 프로젝트 ZIP을 생성하는 중입니다.";
   if (mode === "apk-zip") return "Android APK ZIP을 생성하는 중입니다.";
   return "Android APK를 빌드하는 중입니다.";
@@ -825,6 +870,75 @@ function getDownloadFileName(contentDisposition: string | null) {
   }
   const match = /filename="([^"]+)"/i.exec(contentDisposition);
   return match?.[1] ?? null;
+}
+
+async function createExportFormData(options: ExportPayloadOptions) {
+  if (isIosExportMode(options.mode)) {
+    return createIosExportFormData({ ...options, mode: options.mode });
+  }
+  return createAndroidExportFormData({ ...options, mode: isAndroidExportMode(options.mode) ? options.mode : "apk" });
+}
+
+function isAndroidExportMode(mode: ExportMode): mode is "project" | "apk" | "apk-zip" {
+  return mode === "project" || mode === "apk" || mode === "apk-zip";
+}
+
+function isIosExportMode(mode: ExportMode): mode is "theme-zip" | "ktheme" {
+  return mode === "theme-zip" || mode === "ktheme";
+}
+
+async function createIosExportFormData({
+  analysis,
+  template,
+  templateId,
+  exportName,
+  versionName,
+  mode,
+  slots,
+  uploads,
+  colors,
+  selections,
+  bubbleMarkers,
+  bubbleInsets,
+  bubbleStretch,
+}: IosExportPayloadOptions) {
+  const bubbleEditsBySlotId = Object.fromEntries(
+    slots.map((slot) => [
+      slot.id,
+      {
+        markers: bubbleMarkers[slot.id],
+        insets: bubbleInsets[slot.id],
+        stretch: bubbleStretch[slot.id],
+      },
+    ]),
+  );
+
+  const exportFiles = await buildIosThemeExportFiles({
+    analysis,
+    template,
+    templateId,
+    exportName,
+    versionName,
+    slots,
+    uploads,
+    colors,
+    selections,
+    bubbleEditsBySlotId,
+  });
+
+  const formData = new FormData();
+  const manifest = exportFiles.map((file, index) => {
+    const field = `file-${index}`;
+    formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
+    return { field, path: file.path };
+  });
+
+  formData.append("manifest", JSON.stringify(manifest));
+  formData.append("exportName", exportName);
+  formData.append("versionName", versionName);
+  formData.append("mode", mode);
+
+  return formData;
 }
 
 async function createAndroidExportFormData({
