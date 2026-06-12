@@ -267,9 +267,10 @@ function buildMessageCellCss(
 function getIosCssValues(edit: BubbleEditState | undefined, fallbackInsets: Insets, fallbackStretch: StretchPoint) {
   const insets = edit?.insets ?? fallbackInsets;
   const stretch = edit?.stretch ?? fallbackStretch;
+  const scale = edit ? 3 : 1;
   return {
-    stretch: `${Math.round(stretch.x)}px ${Math.round(stretch.y)}px`,
-    insets: `${Math.round(insets.top)}px ${Math.round(insets.left)}px ${Math.round(insets.bottom)}px ${Math.round(insets.right)}px`,
+    stretch: `${Math.round(stretch.x / scale)}px ${Math.round(stretch.y / scale)}px`,
+    insets: `${Math.round(insets.top / scale)}px ${Math.round(insets.left / scale)}px ${Math.round(insets.bottom / scale)}px ${Math.round(insets.right / scale)}px`,
   };
 }
 
