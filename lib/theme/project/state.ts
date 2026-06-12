@@ -47,6 +47,7 @@ export function bubbleSlotFromRole(role: ThemeResourceRole): BubbleSlot | null {
 export function getImageColorFallbackRole(role: ThemeResourceRole): ThemeResourceRole | undefined {
   if (role === "main_background") return "main_background_color";
   if (role === "chat_background") return "chat_background_color";
+  if (role === "passcode_background") return "passcode_background_color";
   if (role === "tab_background_image") return "tab_background";
   if (role === "bubble_me_1" || role === "bubble_me_2") return "chat_bubble_me_color";
   if (role === "bubble_you_1" || role === "bubble_you_2") return "chat_bubble_you_color";
@@ -56,6 +57,7 @@ export function getImageColorFallbackRole(role: ThemeResourceRole): ThemeResourc
 export function getColorImageFallbackRole(role: ThemeResourceRole): ThemeResourceRole | undefined {
   if (role === "main_background_color") return "main_background";
   if (role === "chat_background_color") return "chat_background";
+  if (role === "passcode_background_color") return "passcode_background";
   if (role === "tab_background") return "tab_background_image";
   if (role === "chat_bubble_me_color") return "bubble_me_1";
   if (role === "chat_bubble_you_color") return "bubble_you_1";
@@ -118,6 +120,20 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
       return template.defaults.mainTitle;
     case "chat_send_icon_color":
       return template.defaults.mainTitle;
+    case "passcode_background_color":
+      return "#FCC5C5";
+    case "passcode_color":
+      return "#664242";
+    case "passcode_keypad_color":
+      return "#664242";
+    case "passcode_keypad_pressed_color":
+      return "#CCB8B8";
+    case "passcode_keypad_background_color":
+      return "#FFF2F2";
+    case "passcode_keypad_pressed_background_color":
+      return "#99FFDEDE";
+    case "passcode_pattern_line_color":
+      return "#FCC5C5";
     default:
       return "#ffffff";
   }

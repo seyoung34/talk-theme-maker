@@ -85,6 +85,7 @@ const sharedSections: ThemeSectionDefinition[] = [
   { id: "main", label: "메인 화면", groups: ["background", "header", "list"] },
   { id: "tabs", label: "하단 탭", groups: ["bar", "icons"] },
   { id: "chatroom", label: "채팅방", groups: ["background", "bubbles", "input"] },
+  { id: "passcode", label: "잠금화면", groups: ["background", "text", "keypad", "pattern"] },
   { id: "common", label: "공통 리소스", groups: ["icon", "profiles", "launcher"] },
 ];
 

@@ -153,6 +153,13 @@ function buildAndroidColorsXml(
   const chatSendButton = getResolvedColor(slotByRole.chat_send_button_color, colors, selections, templateId, template) ?? template.defaults.chatSendButton;
   const chatInputText = getResolvedColor(slotByRole.chat_input_text_color, colors, selections, templateId, template) ?? mainTitle;
   const chatSendIcon = getResolvedColor(slotByRole.chat_send_icon_color, colors, selections, templateId, template) ?? mainTitle;
+  const passcodeBackground = getResolvedColor(slotByRole.passcode_background_color, colors, selections, templateId, template) ?? "#FCC5C5";
+  const passcodeColor = getResolvedColor(slotByRole.passcode_color, colors, selections, templateId, template) ?? "#664242";
+  const passcodeKeypad = getResolvedColor(slotByRole.passcode_keypad_color, colors, selections, templateId, template) ?? "#664242";
+  const passcodeKeypadPressed = getResolvedColor(slotByRole.passcode_keypad_pressed_color, colors, selections, templateId, template) ?? "#CCB8B8";
+  const passcodeKeypadBackground = getResolvedColor(slotByRole.passcode_keypad_background_color, colors, selections, templateId, template) ?? "#FFF2F2";
+  const passcodeKeypadPressedBackground = getResolvedColor(slotByRole.passcode_keypad_pressed_background_color, colors, selections, templateId, template) ?? "#99FFDEDE";
+  const passcodePatternLine = getResolvedColor(slotByRole.passcode_pattern_line_color, colors, selections, templateId, template) ?? passcodeBackground;
 
   const palette: Record<string, string> = {
     theme_header_color: mainHeaderForeground,
@@ -169,7 +176,7 @@ function buildAndroidColorsXml(
     theme_feature_browse_tab_focused_color: mainTitle,
     theme_background_color: mainBackground,
     theme_chatroom_background_color: chatBackground,
-    theme_passcode_background_color: template.defaults.myBubble,
+    theme_passcode_background_color: passcodeBackground,
     theme_header_cell_color: mainHeader,
     theme_body_cell_color: withAlpha(mainBackground, "00"),
     theme_body_cell_pressed_color: mainBodyCellPressed,
@@ -184,12 +191,12 @@ function buildAndroidColorsXml(
     theme_notification_color: mainTitle,
     theme_notification_background_color: template.defaults.friendBubble,
     theme_notification_background_pressed_color: lighten(template.defaults.friendBubble, -0.04),
-    theme_passcode_color: mainTitle,
-    theme_passcode_keypad_color: mainTitle,
-    theme_passcode_keypad_pressed_color: mainBody,
-    theme_passcode_keypad_background_color: lighten(template.defaults.myBubble, 0.1),
-    theme_passcode_keypad_pressed_background_color: withAlpha(mainBackground, "99"),
-    theme_passcode_pattern_line_color: accent,
+    theme_passcode_color: passcodeColor,
+    theme_passcode_keypad_color: passcodeKeypad,
+    theme_passcode_keypad_pressed_color: passcodeKeypadPressed,
+    theme_passcode_keypad_background_color: passcodeKeypadBackground,
+    theme_passcode_keypad_pressed_background_color: passcodeKeypadPressedBackground,
+    theme_passcode_pattern_line_color: passcodePatternLine,
     theme_chatroom_bubble_me_color: chatBubbleMeColor,
     theme_chatroom_bubble_you_color: chatBubbleYouColor,
     theme_chatroom_unread_count_color: chatUnreadCountColor,

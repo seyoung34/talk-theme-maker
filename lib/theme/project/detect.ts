@@ -95,6 +95,7 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
     if (name === "theme_profile_02_image_full.png") return "profile_image_full_2";
     if (name === "theme_profile_03_image_full.png") return "profile_image_full_3";
     if (name.startsWith("theme_profile_")) return "profile_image";
+    if (name === "theme_passcode_background_image.png") return "passcode_background";
     if (name.startsWith("theme_passcode_")) return "passcode";
     if (name === "theme_splash_image.png") return "splash";
     return "unknown";
@@ -134,6 +135,7 @@ function roleToScreen(role: ThemeResourceRole): ThemeScreen {
     return "chatroom";
   if (role === "tab_background" || role === "tab_background_image" || role.startsWith("tab_icon_")) return "tabs";
   if (role === "main_background" || role === "main_header_color" || role === "main_title_color" || role === "main_body_color") return "friends";
+  if (role === "passcode" || role.startsWith("passcode_")) return "passcode";
   if (role === "theme_icon" || role.startsWith("launcher_") || role === "profile_image" || role.startsWith("profile_image_")) return "profile";
   return "friends";
 }

@@ -1,5 +1,6 @@
 import { ChatroomPreview } from "@/components/preview/ChatroomPreview";
 import { CommonAssetsPreview } from "@/components/preview/CommonAssetsPreview";
+import { PasscodePreview } from "@/components/preview/PasscodePreview";
 import { ThemeScreensPreview } from "@/components/preview/ThemeScreensPreview";
 import type { BubbleEditState, SlotCandidateSelections, SlotColors } from "@/components/project/projectModel";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
@@ -54,6 +55,8 @@ export function ProjectPreviewPanel({
           selectedSlotId={selectedSlotId}
           onSelectSlot={onSelectSlot}
         />
+      ) : activeSection === "passcode" ? (
+        <PasscodePreview analysis={analysis} slots={slots} selectedSlotId={selectedSlotId} colors={colors} selections={selections} template={template} templateId={templateId} onSelectSlot={onSelectSlot} />
       ) : (
         <ThemeScreensPreview analysis={analysis} section={activeSection} slots={slots} selectedSlotId={selectedSlotId} colors={colors} selections={selections} template={template} templateId={templateId} onSelectSlot={onSelectSlot} />
       )}

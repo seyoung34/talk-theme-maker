@@ -668,6 +668,154 @@
     }
   },
   {
+    "id": "android-passcode-background",
+    "platform": "android",
+    "role": "passcode_background",
+    "section": "passcode",
+    "group": "background",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "잠금화면 배경 이미지",
+    "fileName": "theme_passcode_background_image.png",
+    "path": "src/main/theme/drawable-xxhdpi/theme_passcode_background_image.png",
+    "required": false,
+    "note": "잠금화면 배경 이미지",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_background_image.png",
+      "spongebob": "/template-assets/spongebob/android/theme_background_image.png"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_passcode_background_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_passcode_background_image.png",
+          "src/main/theme/drawable-sw600dp/theme_passcode_background_image.png"
+        ],
+        "transform": "copy"
+      }
+    }
+  },
+  {
+    "id": "android-passcode-background-color",
+    "platform": "android",
+    "role": "passcode_background_color",
+    "section": "passcode",
+    "group": "background",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "잠금화면 배경색",
+    "required": true,
+    "note": "theme_passcode_background_color 값",
+    "colorKey": "theme_passcode_background_color",
+    "defaultColor": {
+      "basic": "#FCC5C5",
+      "spongebob": "#FCC5C5"
+    }
+  },
+  {
+    "id": "android-passcode-color",
+    "platform": "android",
+    "role": "passcode_color",
+    "section": "passcode",
+    "group": "text",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "잠금화면 텍스트",
+    "required": true,
+    "note": "theme_passcode_color 값",
+    "colorKey": "theme_passcode_color",
+    "defaultColor": {
+      "basic": "#664242",
+      "spongebob": "#664242"
+    }
+  },
+  {
+    "id": "android-passcode-keypad-color",
+    "platform": "android",
+    "role": "passcode_keypad_color",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "키패드 숫자",
+    "required": true,
+    "note": "theme_passcode_keypad_color 값",
+    "colorKey": "theme_passcode_keypad_color",
+    "defaultColor": {
+      "basic": "#664242",
+      "spongebob": "#664242"
+    }
+  },
+  {
+    "id": "android-passcode-keypad-pressed-color",
+    "platform": "android",
+    "role": "passcode_keypad_pressed_color",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "키패드 숫자 pressed",
+    "required": true,
+    "note": "theme_passcode_keypad_pressed_color 값",
+    "colorKey": "theme_passcode_keypad_pressed_color",
+    "defaultColor": {
+      "basic": "#CCB8B8",
+      "spongebob": "#CCB8B8"
+    }
+  },
+  {
+    "id": "android-passcode-keypad-background-color",
+    "platform": "android",
+    "role": "passcode_keypad_background_color",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "키패드 배경",
+    "required": true,
+    "note": "theme_passcode_keypad_background_color 값",
+    "colorKey": "theme_passcode_keypad_background_color",
+    "defaultColor": {
+      "basic": "#FFF2F2",
+      "spongebob": "#FFF2F2"
+    }
+  },
+  {
+    "id": "android-passcode-keypad-pressed-background-color",
+    "platform": "android",
+    "role": "passcode_keypad_pressed_background_color",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "키패드 pressed 배경",
+    "required": true,
+    "note": "theme_passcode_keypad_pressed_background_color 값",
+    "colorKey": "theme_passcode_keypad_pressed_background_color",
+    "defaultColor": {
+      "basic": "#99FFDEDE",
+      "spongebob": "#99FFDEDE"
+    }
+  },
+  {
+    "id": "android-passcode-pattern-line-color",
+    "platform": "android",
+    "role": "passcode_pattern_line_color",
+    "section": "passcode",
+    "group": "pattern",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "패턴 라인",
+    "required": true,
+    "note": "theme_passcode_pattern_line_color 값",
+    "colorKey": "theme_passcode_pattern_line_color",
+    "defaultColor": {
+      "basic": "#FCC5C5",
+      "spongebob": "#FCC5C5"
+    }
+  },
+  {
     "id": "android-common-theme-icon",
     "platform": "android",
     "role": "theme_icon",

@@ -1,4 +1,4 @@
-import { AppWindow, ChevronLeft, ChevronRight, Dock, House, MessageSquare } from "lucide-react";
+import { AppWindow, ChevronLeft, ChevronRight, Dock, House, LockKeyhole, MessageSquare } from "lucide-react";
 import { getCompletion, isSlotReady, sectionLabels, sectionOrder, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeSection } from "@/lib/theme/types";
@@ -84,5 +84,6 @@ function getSectionIcon(section: ThemeSection) {
   if (section === "main") return <House className="h-4 w-4" strokeWidth={2.1} />;
   if (section === "tabs") return <Dock className="h-4 w-4" strokeWidth={2.1} />;
   if (section === "chatroom") return <MessageSquare className="h-4 w-4" strokeWidth={2.1} />;
+  if (section === "passcode") return <LockKeyhole className="h-4 w-4" strokeWidth={2.1} />;
   return <AppWindow className="h-4 w-4" strokeWidth={2.1} />;
 }

@@ -26,12 +26,13 @@ export type SlotCandidate = {
   colorValue?: string;
 };
 
-export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom", "common"];
+export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom", "passcode", "common"];
 
 export const sectionLabels: Record<ThemeSection, string> = {
   main: "메인 화면",
   tabs: "하단 탭",
   chatroom: "채팅방",
+  passcode: "잠금화면",
   common: "공통 리소스",
 };
 
@@ -46,6 +47,9 @@ export const groupLabels: Record<ThemeSlotGroup, string> = {
   icon: "대표 아이콘",
   profiles: "프로필",
   launcher: "런처 아이콘",
+  text: "텍스트",
+  keypad: "키패드",
+  pattern: "패턴",
 };
 
 export {

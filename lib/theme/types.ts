@@ -1,9 +1,9 @@
 export type BubbleSlot = "me" | "you";
 export type PlatformMode = "android" | "ios";
 export type ThemePlatform = "android" | "ios";
-export type ThemeScreen = "chatroom" | "friends" | "tabs" | "profile";
-export type ThemeSection = "main" | "tabs" | "chatroom" | "common";
-export type ThemeSlotGroup = "background" | "header" | "list" | "bar" | "icons" | "bubbles" | "input" | "icon" | "profiles" | "launcher";
+export type ThemeScreen = "chatroom" | "friends" | "tabs" | "profile" | "passcode";
+export type ThemeSection = "main" | "tabs" | "chatroom" | "passcode" | "common";
+export type ThemeSlotGroup = "background" | "header" | "list" | "bar" | "icons" | "bubbles" | "input" | "icon" | "profiles" | "launcher" | "text" | "keypad" | "pattern";
 export type ThemeSlotKind = "image" | "ninepatch" | "color";
 export type ThemeCandidateSourceType = "template-asset" | "template-color" | "session-upload";
 export type ThemeDiagnosticLevel = "info" | "warning" | "error";
@@ -50,6 +50,14 @@ export type ThemeResourceRole =
   | "chat_send_button_color"
   | "chat_input_text_color"
   | "chat_send_icon_color"
+  | "passcode_background"
+  | "passcode_background_color"
+  | "passcode_color"
+  | "passcode_keypad_color"
+  | "passcode_keypad_pressed_color"
+  | "passcode_keypad_background_color"
+  | "passcode_keypad_pressed_background_color"
+  | "passcode_pattern_line_color"
   | "theme_icon"
   | "launcher_background"
   | "launcher_foreground"
