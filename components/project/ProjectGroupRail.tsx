@@ -51,7 +51,7 @@ export function ProjectGroupRail({
             onClick={() => onSelectSlot(slot)}
           >
             <span className="block truncate text-[14px] font-semibold text-[#111827]">{slot.label}</span>
-            <span className="mt-1 block text-[11px] font-medium text-[#6b7280]">{slotStatusLabel(slot, uploads, colors, selections, templateId, template)}</span>
+            <span className="mt-1 block text-[11px] font-medium text-[#6b7280]">{slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)}</span>
           </button>
         ))}
       </div>

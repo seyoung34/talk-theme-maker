@@ -136,6 +136,7 @@ export default function ProjectImporterClient() {
   }, []);
 
   const activeTemplate = getThemeTemplate(templateId);
+  const displayTemplateName = activeUserTemplate?.name ?? activeTemplate.name;
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
 
   useEffect(() => {
@@ -259,7 +260,7 @@ export default function ProjectImporterClient() {
   const openSaveDialog = () => {
     const fallbackName = `${activeTemplate.name} 복사본`;
     setSaveMode(activeUserTemplate ? "overwrite" : "saveAs");
-    setSaveName(activeUserTemplate?.name ?? fallbackName);
+    setSaveName(activeUserTemplate?.name ?? `${displayTemplateName} 복사본`);
     setSaveDialogOpen(true);
   };
 
@@ -311,7 +312,7 @@ export default function ProjectImporterClient() {
         }
         setExportVersionName(payload.versionName ?? "1.0.0");
       }
-      setExportName(activeTemplate.name);
+      setExportName(displayTemplateName);
       setExportMode("apk");
       setExportProgressStep(0);
       setExportDialogOpen(true);
@@ -421,7 +422,7 @@ export default function ProjectImporterClient() {
             <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
               &larr;
             </Link>
-            <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em] text-[#0f172a]">{activeTemplate.name}</h1>
+            <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em] text-[#0f172a]">{displayTemplateName}</h1>
           </div>
 
           <div className="flex min-w-0 items-center gap-3 overflow-hidden justify-self-center">
@@ -498,6 +499,7 @@ export default function ProjectImporterClient() {
             <div className="grid min-h-0 min-w-0 px-3">
               <ProjectQuickEditPanel
                 slot={selectedSlot}
+                slots={slots}
                 file={selectedFile}
                 uploads={uploads}
                 colors={colors}

@@ -1,6 +1,8 @@
 import type { ThemeAssetSlot, ThemeSlotCandidate, ThemeStartPayload, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
+export const disabledImageCandidateId = "__none__";
+
 export type SlotUploadEntry = {
   id: string;
   file: File;
@@ -40,6 +42,32 @@ export function bubbleSlotFromRole(role: ThemeResourceRole): BubbleSlot | null {
   if (role === "bubble_me_1" || role === "bubble_me_2") return "me";
   if (role === "bubble_you_1" || role === "bubble_you_2") return "you";
   return null;
+}
+
+export function getImageColorFallbackRole(role: ThemeResourceRole): ThemeResourceRole | undefined {
+  if (role === "main_background") return "main_background_color";
+  if (role === "chat_background") return "chat_background_color";
+  if (role === "tab_background_image") return "tab_background";
+  if (role === "bubble_me_1" || role === "bubble_me_2") return "chat_bubble_me_color";
+  if (role === "bubble_you_1" || role === "bubble_you_2") return "chat_bubble_you_color";
+  return undefined;
+}
+
+export function getColorImageFallbackRole(role: ThemeResourceRole): ThemeResourceRole | undefined {
+  if (role === "main_background_color") return "main_background";
+  if (role === "chat_background_color") return "chat_background";
+  if (role === "tab_background") return "tab_background_image";
+  if (role === "chat_bubble_me_color") return "bubble_me_1";
+  if (role === "chat_bubble_you_color") return "bubble_you_1";
+  return undefined;
+}
+
+export function canDisableImageSlot(slot: ThemeAssetSlot | undefined) {
+  return Boolean(slot && slot.kind !== "color" && getImageColorFallbackRole(slot.role));
+}
+
+export function isImageSlotDisabled(slot: ThemeAssetSlot | undefined, selections: SlotCandidateSelections) {
+  return Boolean(slot && canDisableImageSlot(slot) && selections[slot.id] === disabledImageCandidateId);
 }
 
 export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateId, template: ThemeTemplate) {
@@ -86,6 +114,10 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
       return template.defaults.chatInputBackground;
     case "chat_send_button_color":
       return template.defaults.chatSendButton;
+    case "chat_input_text_color":
+      return template.defaults.mainTitle;
+    case "chat_send_icon_color":
+      return template.defaults.mainTitle;
     default:
       return "#ffffff";
   }
@@ -111,9 +143,30 @@ export function getSlotCandidates(slot: ThemeAssetSlot | undefined, templateId: 
   }
 
   const assetUrl = slot.defaultAssetUrls?.[templateId];
-  if (!assetUrl) return [];
+  if (!assetUrl) {
+    return canDisableImageSlot(slot)
+      ? [
+          {
+            id: disabledImageCandidateId,
+            label: "이미지 사용 안 함",
+            note: "대응 색상 슬롯 값을 사용합니다.",
+            sourceType: "template-asset",
+          },
+        ]
+      : [];
+  }
 
   return [
+    ...(canDisableImageSlot(slot)
+      ? [
+          {
+            id: disabledImageCandidateId,
+            label: "이미지 사용 안 함",
+            note: "대응 색상 슬롯 값을 사용합니다.",
+            sourceType: "template-asset" as const,
+          },
+        ]
+      : []),
     {
       id: `${slot.id}:base`,
       label: "기본값",
@@ -154,6 +207,7 @@ export function getSelectedCandidate(
 
 export function getSelectedUpload(slot: ThemeAssetSlot | undefined, uploads: SlotUploads, selections: SlotCandidateSelections) {
   if (!slot) return undefined;
+  if (isImageSlotDisabled(slot, selections)) return undefined;
   const uploadEntries = uploads[slot.id] ?? [];
   const selectedId = selections[slot.id];
   return uploadEntries.find((entry) => entry.id === selectedId);
@@ -167,8 +221,25 @@ export function getResolvedAssetUrl(
   template: ThemeTemplate,
 ) {
   if (!slot || slot.kind === "color") return undefined;
+  if (isImageSlotDisabled(slot, selections)) return undefined;
   if (getSelectedUpload(slot, uploads, selections)) return undefined;
   return getSelectedCandidate(slot, selections, templateId, template)?.assetUrl;
+}
+
+export function isColorSlotDisabledByImage(
+  slot: ThemeAssetSlot | undefined,
+  allSlots: ThemeAssetSlot[],
+  uploads: SlotUploads,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+) {
+  if (!slot || slot.kind !== "color") return false;
+  const imageRole = getColorImageFallbackRole(slot.role);
+  if (!imageRole) return false;
+  const imageSlot = allSlots.find((candidate) => candidate.platform === slot.platform && candidate.role === imageRole);
+  if (!imageSlot || isImageSlotDisabled(imageSlot, selections)) return false;
+  return Boolean(getSelectedUpload(imageSlot, uploads, selections) || getResolvedAssetUrl(imageSlot, uploads, selections, templateId, template));
 }
 
 export function getResolvedColor(
@@ -184,6 +255,7 @@ export function getResolvedColor(
 
 export function isSlotReady(slot: ThemeAssetSlot, uploads: SlotUploads, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate) {
   if (slot.kind === "color") return Boolean(getResolvedColor(slot, colors, selections, templateId, template));
+  if (isImageSlotDisabled(slot, selections) && canDisableImageSlot(slot)) return true;
   return Boolean(getSelectedUpload(slot, uploads, selections) || getResolvedAssetUrl(slot, uploads, selections, templateId, template));
 }
 
@@ -201,11 +273,13 @@ export function getCompletion(
   };
 }
 
-export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate) {
+export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[] = []) {
   if (slot.kind === "color") {
+    if (isColorSlotDisabledByImage(slot, allSlots, uploads, selections, templateId, template)) return "색상 사용 안함";
     const color = getResolvedColor(slot, colors, selections, templateId, template);
     return color ? color.toUpperCase() : "값 필요";
   }
+  if (isImageSlotDisabled(slot, selections)) return "색상 사용 중";
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   if (selectedUpload) return selectedUpload.file.name;
   const selected = getSelectedCandidate(slot, selections, templateId, template);

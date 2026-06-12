@@ -354,12 +354,19 @@ function ChatsScreen({
 
         <div className="grid min-h-0 gap-0 px-4 overflow-hidden">
           {chatRows.map((row, index) => (
-            <button
+            <div
               key={`${row.name}-${index}`}
-              type="button"
+              role="button"
+              tabIndex={0}
               className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-1 py-2 text-left ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "rounded-[18px] ring-1 ring-[#60a5fa]" : ""}`}
               style={{}}
               onClick={(event) => {
+                event.stopPropagation();
+                if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
                 event.stopPropagation();
                 if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
               }}
@@ -397,7 +404,7 @@ function ChatsScreen({
                 </span>
                 {row.badge ? <UnreadBadge value={row.badge} /> : null}
               </div>
-            </button>
+            </div>
           ))}
         </div>
       </div>

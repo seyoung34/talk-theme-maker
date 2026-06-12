@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Hash, Menu, Phone, Plus, Search, Smile } from "lucide-react";
+import { ArrowLeft, SendHorizontal, Menu, Phone, Plus, Search, Smile } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getResolvedColor, type BubbleEditState, type SlotCandidateSelections } from "@/components/project/projectModel";
 import { dataUrlForThemeFile, findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
@@ -97,6 +97,8 @@ export function ChatroomPreview({
   const myBubbleColor = getResolvedColor(slotByRole.chat_bubble_me_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
   const friendBubbleColor = getResolvedColor(slotByRole.chat_bubble_you_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
   const unreadCountColor = getResolvedColor(slotByRole.chat_unread_count_color, colors, selections, templateId, template) ?? template.accent;
+  const inputTextColor = getResolvedColor(slotByRole.chat_input_text_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
+  const sendIconColor = getResolvedColor(slotByRole.chat_send_icon_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
 
   useEffect(() => {
     let cancelled = false;
@@ -180,15 +182,18 @@ export function ChatroomPreview({
       myBubbleColor,
       friendBubbleColor,
       unreadCountColor,
+      authorColor: headerForeground,
       canvasHeight: contentCanvasHeight,
       onHotspotsChange: setHotspots,
       onCanvasHeightChange: setContentCanvasHeight,
     });
-  }, [analysis.previewDefaults, bubbleAssets, bubbleEdits, contentCanvasHeight, friendBubbleColor, myBubbleColor, platform, selectedSlotId, slotByRole, unreadCountColor]);
+  }, [analysis.previewDefaults, bubbleAssets, bubbleEdits, contentCanvasHeight, friendBubbleColor, headerForeground, myBubbleColor, platform, selectedSlotId, slotByRole, unreadCountColor]);
 
   const backgroundSlot = slotByRole.chat_background;
   const inputSlot = slotByRole.chat_input_background_color;
   const sendSlot = slotByRole.chat_send_button_color;
+  const inputTextSlot = slotByRole.chat_input_text_color;
+  const sendIconSlot = slotByRole.chat_send_icon_color;
 
   return (
     <div className="relative aspect-1080/2123 h-full w-full max-w-[310px] overflow-hidden rounded-xl border border-[#d7ddd8] bg-white shadow-[0_22px_48px_rgba(15,23,42,0.16)]">
@@ -252,49 +257,18 @@ export function ChatroomPreview({
         </div>
       </div>
 
-      {/* 입력바  */}
-      <div
-        className={` absolute inset-x-0 bottom-0 z-30 border-t border-white/20 ${selectedSlotId === inputSlot?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
-        style={{
-          height: `${inputBarHeightRatio * 100}%`,
-          backgroundColor: hexToRgba(inputBackground, 0.96),
-        }}
-      >
-        <button
-          type="button"
-          className="absolute inset-0"
-          aria-label="입력바 선택"
-          onClick={() => {
-            if (inputSlot) onSelectSlot?.(inputSlot.id);
-          }}
-        />
-        <div className="relative flex items-center h-full gap-2 px-3 py-2">
-
-          <span className="grid h-10 w-9 shrink-0 place-items-center rounded-full bg-[#edf3f6] text-[#1781a3]">
-            <Plus className="w-5 h-5" />
-          </span>
-
-          <div className="flex h-10 flex-1 items-center rounded-full bg-white/92 px-4 shadow-[inset_0_0_0_1px_rgba(203,213,225,0.85)]">
-            <span className="text-[14px] font-medium text-[#b3c0ca]">메시지 입력</span>
-          </div>
-
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#edf3f6] text-[#5b7682]">
-            <Smile className="w-5 h-5" />
-          </span>
-
-          <button
-            type="button"
-            className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-[#0b6070] ${selectedSlotId === sendSlot?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
-            style={{ backgroundColor: sendButtonColor }}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (sendSlot) onSelectSlot?.(sendSlot.id);
-            }}
-          >
-            <Hash className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
+      <ChatroomInputBarV2
+        inputBackground={inputBackground}
+        sendButtonColor={sendButtonColor}
+        inputTextColor={inputTextColor}
+        sendIconColor={sendIconColor}
+        inputSlot={inputSlot}
+        sendSlot={sendSlot}
+        inputTextSlot={inputTextSlot}
+        sendIconSlot={sendIconSlot}
+        selectedSlotId={selectedSlotId}
+        onSelectSlot={onSelectSlot}
+      />
 
       <style jsx>{`
         .chatroom-scroll {
@@ -319,6 +293,160 @@ export function ChatroomPreview({
   );
 }
 
+function ChatroomInputBarV2({
+  inputBackground,
+  sendButtonColor,
+  inputTextColor,
+  sendIconColor,
+  inputSlot,
+  sendSlot,
+  inputTextSlot,
+  sendIconSlot,
+  selectedSlotId,
+  onSelectSlot,
+}: {
+  inputBackground: string;
+  sendButtonColor: string;
+  inputTextColor: string;
+  sendIconColor: string;
+  inputSlot?: ThemeAssetSlot;
+  sendSlot?: ThemeAssetSlot;
+  inputTextSlot?: ThemeAssetSlot;
+  sendIconSlot?: ThemeAssetSlot;
+  selectedSlotId?: string;
+  onSelectSlot?: (slotId: string) => void;
+}) {
+  return (
+    <div
+      className={`absolute inset-x-0 bottom-0 z-30 border-t border-white/25 ${selectedSlotId === inputSlot?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+      style={{
+        height: `${inputBarHeightRatio * 100}%`,
+        backgroundColor: hexToRgba(inputBackground, 0.96),
+      }}
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        aria-label="입력바 선택"
+        onClick={() => {
+          if (inputSlot) onSelectSlot?.(inputSlot.id);
+        }}
+      />
+
+      <div className="relative flex h-full items-center gap-[clamp(0.45rem,2.8%,0.75rem)] px-[clamp(0.65rem,4%,1rem)] py-[clamp(0.35rem,2.2%,0.65rem)] [container-type:inline-size]">
+        <span className="grid aspect-square h-[clamp(2rem,70%,2.65rem)] shrink-0 place-items-center rounded-full bg-[#edf6f8] text-[#078aa3]">
+          <Plus className="h-[58%] w-[58%]" strokeWidth={2.4} />
+        </span>
+
+        <div className="flex h-[clamp(2rem,72%,2.8rem)] min-w-0 flex-1 items-center gap-[clamp(0.35rem,2.4%,0.6rem)] rounded-full bg-[#edf6f8] pl-[clamp(0.85rem,5%,1.35rem)] pr-[clamp(0.35rem,2%,0.5rem)]">
+          <button
+            type="button"
+            className={`min-w-0 flex-1 truncate text-left text-[clamp(0.98rem,4.2cqw,1.55rem)] font-medium ${selectedSlotId === inputTextSlot?.id ? "rounded-full ring-2 ring-[#60a5fa]" : ""}`}
+            style={{ color: inputTextColor }}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (inputTextSlot) onSelectSlot?.(inputTextSlot.id);
+            }}
+          >
+            사용자 입력
+          </button>
+          <span className="grid aspect-square h-[82%] shrink-0 place-items-center rounded-full bg-[#dbecef] text-[#386f79]">
+            <Smile className="h-[58%] w-[58%]" strokeWidth={2.2} />
+          </span>
+        </div>
+
+        <button
+          type="button"
+          className={`grid aspect-square h-[clamp(2rem,70%,2.65rem)] shrink-0 place-items-center rounded-full ${selectedSlotId === sendSlot?.id || selectedSlotId === sendIconSlot?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+          style={{ backgroundColor: sendButtonColor }}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (sendSlot) onSelectSlot?.(sendSlot.id);
+          }}
+        >
+          <SendHorizontal
+            className="h-[58%] w-[58%]"
+            strokeWidth={3}
+            style={{ color: sendIconColor }}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (sendIconSlot) onSelectSlot?.(sendIconSlot.id);
+            }}
+          />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ChatroomInputBar({
+  inputBackground,
+  sendButtonColor,
+  inputTextColor,
+  sendIconColor,
+  inputSlot,
+  sendSlot,
+  inputTextSlot,
+  sendIconSlot,
+  selectedSlotId,
+  onSelectSlot,
+}: {
+  inputBackground: string;
+  sendButtonColor: string;
+  inputTextColor: string;
+  sendIconColor: string;
+  inputSlot?: ThemeAssetSlot;
+  sendSlot?: ThemeAssetSlot;
+  inputTextSlot?: ThemeAssetSlot;
+  sendIconSlot?: ThemeAssetSlot;
+  selectedSlotId?: string;
+  onSelectSlot?: (slotId: string) => void;
+}) {
+  return (
+    <div
+      className={`absolute inset-x-0 bottom-0 z-30 border-t border-white/25 ${selectedSlotId === inputSlot?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+      style={{
+        height: `${inputBarHeightRatio * 100}%`,
+        backgroundColor: hexToRgba(inputBackground, 0.96),
+      }}
+    >
+      <button
+        type="button"
+        className="absolute inset-0"
+        aria-label="입력바 선택"
+        onClick={() => {
+          if (inputSlot) onSelectSlot?.(inputSlot.id);
+        }}
+      />
+
+      <div className="relative flex h-full items-center gap-[clamp(0.45rem,2.8%,0.75rem)] px-[clamp(0.65rem,4%,1rem)] py-[clamp(0.35rem,2.2%,0.65rem)] [container-type:inline-size]">
+        <span className="grid aspect-square h-[clamp(2rem,70%,2.65rem)] shrink-0 place-items-center rounded-full bg-[#edf6f8] text-[#078aa3]">
+          <Plus className="h-[58%] w-[58%]" strokeWidth={2.4} />
+        </span>
+
+        <div className="flex h-[clamp(2rem,72%,2.8rem)] min-w-0 flex-1 items-center gap-[clamp(0.35rem,2.4%,0.6rem)] rounded-full bg-[#edf6f8] pl-[clamp(0.85rem,5%,1.35rem)] pr-[clamp(0.35rem,2%,0.5rem)]">
+          <span className="min-w-0 flex-1 truncate text-[clamp(0.98rem,4.2cqw,1.55rem)] font-medium text-[#a8c1c8] ">메시지 입력</span>
+          <span className="grid aspect-square h-[82%] shrink-0 place-items-center rounded-full bg-[#dbecef] text-[#386f79]">
+            <Smile className="h-[58%] w-[58%]" strokeWidth={2.2} />
+          </span>
+        </div>
+
+        <button
+          type="button"
+          className={`grid aspect-square h-[clamp(2rem,70%,2.65rem)] shrink-0 place-items-center rounded-full text-[#078aa3] ${selectedSlotId === sendSlot?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+          style={{ backgroundColor: sendButtonColor }}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (sendSlot) onSelectSlot?.(sendSlot.id);
+          }}
+        >
+          <SendHorizontal className="h-[58%] w-[58%]" strokeWidth={3} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function drawChatPreview(
   ctx: CanvasRenderingContext2D,
   options: {
@@ -331,12 +459,13 @@ function drawChatPreview(
     myBubbleColor: string;
     friendBubbleColor: string;
     unreadCountColor: string;
+    authorColor: string;
     canvasHeight: number;
     onHotspotsChange: (hotspots: Hotspot[]) => void;
     onCanvasHeightChange: (height: number) => void;
   },
 ) {
-  const { defaults, platform, slots, selectedSlotId, bubbleAssets, bubbleEdits, myBubbleColor, friendBubbleColor, unreadCountColor, canvasHeight, onHotspotsChange, onCanvasHeightChange } = options;
+  const { defaults, platform, slots, selectedSlotId, bubbleAssets, bubbleEdits, myBubbleColor, friendBubbleColor, unreadCountColor, authorColor, canvasHeight, onHotspotsChange, onCanvasHeightChange } = options;
 
   ctx.clearRect(0, 0, previewCanvasWidth, canvasHeight);
 
@@ -355,7 +484,7 @@ function drawChatPreview(
 
     if (!message.mine) {
       drawAvatar(ctx, avatarX, y + 12, 74);
-      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.fillStyle = authorColor;
       ctx.font = "32px Segoe UI, Noto Sans KR, sans-serif";
       ctx.fillText(message.author, x, y - 16);
     }

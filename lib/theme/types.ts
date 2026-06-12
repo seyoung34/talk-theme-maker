@@ -48,6 +48,8 @@ export type ThemeResourceRole =
   | "tab_icon_more_focused"
   | "chat_input_background_color"
   | "chat_send_button_color"
+  | "chat_input_text_color"
+  | "chat_send_icon_color"
   | "theme_icon"
   | "profile_image_1"
   | "profile_image_2"

@@ -145,6 +145,8 @@ function buildAndroidColorsXml(
   const tabBackground = getResolvedColor(slotByRole.tab_background, colors, selections, templateId, template) ?? template.defaults.tabBackground;
   const chatInputBackground = getResolvedColor(slotByRole.chat_input_background_color, colors, selections, templateId, template) ?? template.defaults.chatInputBackground;
   const chatSendButton = getResolvedColor(slotByRole.chat_send_button_color, colors, selections, templateId, template) ?? template.defaults.chatSendButton;
+  const chatInputText = getResolvedColor(slotByRole.chat_input_text_color, colors, selections, templateId, template) ?? mainTitle;
+  const chatSendIcon = getResolvedColor(slotByRole.chat_send_icon_color, colors, selections, templateId, template) ?? mainTitle;
 
   const palette: Record<string, string> = {
     theme_header_color: mainHeaderForeground,
@@ -185,11 +187,11 @@ function buildAndroidColorsXml(
     theme_chatroom_bubble_me_color: chatBubbleMeColor,
     theme_chatroom_bubble_you_color: chatBubbleYouColor,
     theme_chatroom_unread_count_color: chatUnreadCountColor,
-    theme_chatroom_input_bar_color: mainTitle,
+    theme_chatroom_input_bar_color: chatInputText,
     theme_chatroom_input_bar_background_color: chatInputBackground,
     theme_chatroom_input_bar_menu_icon_color: mainBody,
     theme_chatroom_input_bar_menu_button_color: withAlpha(mainBody, "14"),
-    theme_chatroom_input_bar_send_icon_color: mainTitle,
+    theme_chatroom_input_bar_send_icon_color: chatSendIcon,
     theme_chatroom_input_bar_send_button_color: chatSendButton,
   };
 

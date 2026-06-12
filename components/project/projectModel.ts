@@ -4,6 +4,8 @@ import {
   getSelectedUpload,
   getSlotCandidates,
   getSlotUploadEntries,
+  disabledImageCandidateId,
+  isColorSlotDisabledByImage,
   type BubbleEditState,
   type SlotCandidateSelections,
   type SlotColors,
@@ -76,6 +78,7 @@ export function buildSlotCandidates(
   selections: SlotCandidateSelections,
   templateId: ThemeTemplateId,
   template: ThemeTemplate,
+  allSlots: ThemeAssetSlot[] = [],
 ): SlotCandidate[] {
   if (!slot) return [];
 
@@ -83,14 +86,15 @@ export function buildSlotCandidates(
   const uploadEntries = getSlotUploadEntries(slot, uploads);
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   const candidates = getSlotCandidates(slot, templateId, template);
+  const colorDisabledByImage = isColorSlotDisabledByImage(slot, allSlots, uploads, selections, templateId, template);
 
   const baseItems = candidates.map((candidate) => ({
     id: candidate.id,
     title: candidate.label,
-    status: slot.kind === "color" ? (candidate.colorValue ?? getResolvedColor(slot, colors, selections, templateId, template) ?? "값 없음").toUpperCase() : candidate.note ?? slot.note,
+    status: colorDisabledByImage ? "색상 사용 안함" : slot.kind === "color" ? (candidate.colorValue ?? getResolvedColor(slot, colors, selections, templateId, template) ?? "값 없음").toUpperCase() : candidate.note ?? slot.note,
     active: selected?.id === candidate.id,
     selected: selected?.id === candidate.id && !selectedUpload,
-    source: candidate.isDefault ? ("default" as const) : ("creator" as const),
+    source: candidate.isDefault || candidate.id === disabledImageCandidateId ? ("default" as const) : ("creator" as const),
     previewUrl: candidate.previewUrl ?? candidate.assetUrl,
     colorValue: candidate.colorValue,
   }));

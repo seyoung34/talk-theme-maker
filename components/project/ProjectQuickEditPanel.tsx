@@ -9,6 +9,7 @@ import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@
 
 export function ProjectQuickEditPanel({
   slot,
+  slots,
   file,
   uploads,
   colors,
@@ -34,6 +35,7 @@ export function ProjectQuickEditPanel({
   onToggleCandidates,
 }: {
   slot?: ThemeAssetSlot;
+  slots: ThemeAssetSlot[];
   file?: ThemeProjectFile;
   uploads: SlotUploads;
   colors: SlotColors;
@@ -63,8 +65,8 @@ export function ProjectQuickEditPanel({
   if (!slot) return null;
 
   const hasImage = Boolean(file?.file || file?.sourceUrl);
-  const status = slotStatusLabel(slot, uploads, colors, selections, templateId, template);
-  const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template);
+  const status = slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots);
+  const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots);
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
   const uploadEntries = getSlotUploadEntries(slot, uploads);
@@ -216,17 +218,16 @@ function CandidatePicker({
 
   return (
     <section className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 mb-3">
         <div>
           <h2 className="mt-0.5 inline text-base font-semibold text-[#0f172a]">{slot.label}</h2>
-          <div className="ml-6 inline flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center inline gap-2 ml-6">
             {groups.map((group) => (
               <button
                 key={group.key}
                 type="button"
-                className={`inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[12px] font-semibold transition ${
-                  activeGroup.key === group.key ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#e5e7eb] bg-[#f8fafc] text-[#475569] hover:bg-white"
-                }`}
+                className={`inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[12px] font-semibold transition ${activeGroup.key === group.key ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#e5e7eb] bg-[#f8fafc] text-[#475569] hover:bg-white"
+                  }`}
                 onClick={() => setActiveTab(group.key)}
               >
                 <span>{group.label}</span>
@@ -253,13 +254,12 @@ function CandidatePicker({
               <button
                 key={candidate.id}
                 type="button"
-                className={`flex h-[104px] w-[148px] shrink-0 flex-col justify-between rounded-xl border px-3 py-3 text-left transition ${
-                  candidate.selected
-                    ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]"
-                    : candidate.active
-                      ? "border-[#cbd5e1] bg-white"
-                      : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1]"
-                }`}
+                className={`flex h-[104px] w-40 shrink-0 flex-col justify-between rounded-xl border px-3 py-3 text-left transition ${candidate.selected
+                  ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]"
+                  : candidate.active
+                    ? "border-[#cbd5e1] bg-white"
+                    : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1]"
+                  }`}
                 onClick={() => {
                   onApplyCandidate(candidate);
                 }}

@@ -239,6 +239,20 @@
     }
   },
   {
+    "id": "android-tab-background-image",
+    "platform": "android",
+    "role": "tab_background_image",
+    "section": "tabs",
+    "group": "bar",
+    "screen": "tabs",
+    "kind": "ninepatch",
+    "label": "탭바 배경 이미지",
+    "fileName": "theme_maintab_cell_image.9.png",
+    "path": "src/main/theme/drawable-xxhdpi/theme_maintab_cell_image.9.png",
+    "required": false,
+    "note": "하단 탭바 영역 배경 9-patch 이미지"
+  },
+  {
     "id": "android-tab-background",
     "platform": "android",
     "role": "tab_background",
@@ -254,20 +268,6 @@
       "basic": "#ffffff",
       "spongebob": "#ffffff"
     }
-  },
-  {
-    "id": "android-tab-background-image",
-    "platform": "android",
-    "role": "tab_background_image",
-    "section": "tabs",
-    "group": "bar",
-    "screen": "tabs",
-    "kind": "ninepatch",
-    "label": "탭바 배경 이미지",
-    "fileName": "theme_maintab_cell_image.9.png",
-    "path": "src/main/theme/drawable-xxhdpi/theme_maintab_cell_image.9.png",
-    "required": false,
-    "note": "하단 탭바 영역 배경 9-patch 이미지"
   },
   {
     "id": "android-tab-friends",
@@ -631,6 +631,40 @@
     "defaultColor": {
       "basic": "#c9ff3d",
       "spongebob": "#f6c800"
+    }
+  },
+  {
+    "id": "android-chat-input-text-color",
+    "platform": "android",
+    "role": "chat_input_text_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "입력 텍스트 색상",
+    "required": false,
+    "note": "theme_chatroom_input_bar_color 값",
+    "colorKey": "theme_chatroom_input_bar_color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "android-chat-send-icon-color",
+    "platform": "android",
+    "role": "chat_send_icon_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "전송 아이콘 색상",
+    "required": false,
+    "note": "theme_chatroom_input_bar_send_icon_color 값",
+    "colorKey": "theme_chatroom_input_bar_send_icon_color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
     }
   },
   {

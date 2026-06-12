@@ -119,7 +119,15 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
 }
 
 function roleToScreen(role: ThemeResourceRole): ThemeScreen {
-  if (role === "chat_background" || role.startsWith("bubble_") || role === "chat_input_background_color" || role === "chat_send_button_color") return "chatroom";
+  if (
+    role === "chat_background" ||
+    role.startsWith("bubble_") ||
+    role === "chat_input_background_color" ||
+    role === "chat_send_button_color" ||
+    role === "chat_input_text_color" ||
+    role === "chat_send_icon_color"
+  )
+    return "chatroom";
   if (role === "tab_background" || role === "tab_background_image" || role.startsWith("tab_icon_")) return "tabs";
   if (role === "main_background" || role === "main_header_color" || role === "main_title_color" || role === "main_body_color") return "friends";
   if (role === "theme_icon" || role === "profile_image" || role.startsWith("profile_image_")) return "profile";

@@ -1,4 +1,4 @@
-import { getResolvedAssetUrl, getResolvedColor, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { canDisableImageSlot, getResolvedAssetUrl, getResolvedColor, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { getSlotExportMapping } from "@/lib/theme/project/export";
 import type { ThemeProjectAnalysis, ThemeProjectFile, ThemeProjectResource } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate } from "@/lib/theme/templates";
@@ -33,14 +33,15 @@ export function createThemeProjectAnalysis(
       continue;
     }
 
-    const upload = (uploads[slot.id] ?? []).find((entry) => entry.id === selections[slot.id])?.file;
+    const imageDisabled = isImageSlotDisabled(slot, selections);
+    const upload = imageDisabled ? undefined : (uploads[slot.id] ?? []).find((entry) => entry.id === selections[slot.id])?.file;
     const sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template);
-    if (slot.path && slot.fileName) {
+    if (!imageDisabled && slot.path && slot.fileName) {
       files.push({ path: slot.path, name: slot.fileName, size: upload?.size ?? 0, file: upload, sourceUrl });
       resources.push({ id: slot.id, slotId: slot.id, platform, role: slot.role, screen: slot.screen, filePath: slot.path, exportMapping });
     }
 
-    if (slot.required && !upload && !sourceUrl) {
+    if (slot.required && !upload && !sourceUrl && !(imageDisabled && canDisableImageSlot(slot))) {
       diagnostics.push({
         level: "warning",
         code: "missing-asset",
