@@ -309,11 +309,6 @@ export default function ProjectImporterClient() {
   };
 
   const openExportDialog = async () => {
-    if (false && platform !== "android") {
-      setNotice({ tone: "warning", message: "iOS 내보내기는 아직 준비 중입니다. 현재는 Android export만 지원합니다." });
-      return;
-    }
-
     try {
       if (!exportVersionName) {
         const response = await fetch(platform === "android" ? "/api/export/android" : "/api/export/ios");
@@ -470,7 +465,7 @@ export default function ProjectImporterClient() {
               onClick={() => void openExportDialog()}
               disabled={isExporting}
             >
-              {isExporting ? "내보내는 중.." : platform === "android" ? "내보내기" : "iOS 내보내기 준비중"}
+              {isExporting ? "내보내는 중.." : "내보내기"}
             </button>
           </div>
         </header>
