@@ -104,6 +104,10 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
       return "#99F4FAFB";
     case "main_body_cell_border_color":
       return "#33111111";
+    case "main_body_cell_border_alpha":
+      return "0.18";
+    case "main_selected_background_alpha":
+      return "0.05";
     case "main_section_title_color":
       return template.defaults.mainTitle;
     case "main_feature_browse_tab_color":
@@ -112,13 +116,27 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
       return "#FFFFFF";
     case "tab_background":
       return template.defaults.tabBackground;
+    case "tab_text_color":
+      return template.defaults.mainBody;
     case "chat_input_background_color":
       return template.defaults.chatInputBackground;
+    case "chat_button_text_color":
+      return template.defaults.mainTitle;
+    case "chat_button_foreground_color":
+      return template.defaults.mainBody;
+    case "chat_button_highlighted_foreground_color":
+      return template.defaults.mainTitle;
+    case "chat_button_background_color":
+      return "#0FFFFFFF";
     case "chat_send_button_color":
       return template.defaults.chatSendButton;
+    case "chat_send_highlighted_button_color":
+      return template.accent;
     case "chat_input_text_color":
       return template.defaults.mainTitle;
     case "chat_send_icon_color":
+      return template.defaults.mainTitle;
+    case "chat_send_highlighted_icon_color":
       return template.defaults.mainTitle;
     case "passcode_background_color":
       return "#FCC5C5";

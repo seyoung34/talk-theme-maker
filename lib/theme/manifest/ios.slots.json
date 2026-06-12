@@ -1,25 +1,783 @@
 [
-  { "id": "ios-main-background", "platform": "ios", "role": "main_background", "section": "main", "group": "background", "screen": "friends", "kind": "image", "label": "메인 배경", "fileName": "mainBgImage@3x.png", "path": "Images/mainBgImage@3x.png", "required": true, "note": "iOS 메인 배경 이미지", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/mainBgImage.svg", "spongebob": "/template-assets/spongebob/ios/mainBgImage@3x.png" } },
-  { "id": "ios-main-header-color", "platform": "ios", "role": "main_header_color", "section": "main", "group": "header", "screen": "friends", "kind": "color", "label": "헤더 색상", "required": true, "note": "메인 상단 헤더 색상", "colorKey": "mainHeaderColor", "defaultColor": { "basic": "#ffffff", "spongebob": "#ffffff" } },
-  { "id": "ios-main-title-color", "platform": "ios", "role": "main_title_color", "section": "main", "group": "list", "screen": "friends", "kind": "color", "label": "제목 색상", "required": true, "note": "리스트 주요 제목 색상", "colorKey": "titleTextColor", "defaultColor": { "basic": "#111111", "spongebob": "#111111" } },
-  { "id": "ios-main-body-color", "platform": "ios", "role": "main_body_color", "section": "main", "group": "list", "screen": "friends", "kind": "color", "label": "본문 색상", "required": true, "note": "리스트 보조 텍스트 색상", "colorKey": "bodyTextColor", "defaultColor": { "basic": "#4d5660", "spongebob": "#37515a" } },
-  { "id": "ios-tab-background", "platform": "ios", "role": "tab_background", "section": "tabs", "group": "bar", "screen": "tabs", "kind": "color", "label": "탭 바 배경", "required": true, "note": "하단 탭 배경색", "colorKey": "tabBarBackgroundColor", "defaultColor": { "basic": "#ffffff", "spongebob": "#ffffff" } },
-  { "id": "ios-tab-friends", "platform": "ios", "role": "tab_icon_friends", "section": "tabs", "group": "icons", "screen": "tabs", "kind": "image", "label": "친구 탭 아이콘", "fileName": "maintabIcoFriends@3x.png", "path": "Images/maintabIcoFriends@3x.png", "required": true, "note": "친구 탭 기본 아이콘", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/maintabIcoFriends.svg", "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png" } },
-  { "id": "ios-tab-friends-focused", "platform": "ios", "role": "tab_icon_friends_focused", "section": "tabs", "group": "icons", "screen": "tabs", "kind": "image", "label": "친구 탭 선택 아이콘", "fileName": "maintabIcoFriendsFocused@3x.png", "path": "Images/maintabIcoFriendsFocused@3x.png", "required": false, "note": "친구 탭 선택 아이콘", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/maintabIcoFriends.svg", "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png" } },
-  { "id": "ios-tab-chats", "platform": "ios", "role": "tab_icon_chats", "section": "tabs", "group": "icons", "screen": "tabs", "kind": "image", "label": "채팅 탭 아이콘", "fileName": "maintabIcoChats@3x.png", "path": "Images/maintabIcoChats@3x.png", "required": false, "note": "채팅 탭 기본 아이콘", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/maintabIcoFriends.svg", "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png" } },
-  { "id": "ios-tab-chats-focused", "platform": "ios", "role": "tab_icon_chats_focused", "section": "tabs", "group": "icons", "screen": "tabs", "kind": "image", "label": "채팅 탭 선택 아이콘", "fileName": "maintabIcoChatsFocused@3x.png", "path": "Images/maintabIcoChatsFocused@3x.png", "required": false, "note": "채팅 탭 선택 아이콘", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/maintabIcoFriends.svg", "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png" } },
-  { "id": "ios-tab-now", "platform": "ios", "role": "tab_icon_now", "section": "tabs", "group": "icons", "screen": "tabs", "kind": "image", "label": "Now 탭 아이콘", "fileName": "maintabIcoNow@3x.png", "path": "Images/maintabIcoNow@3x.png", "required": false, "note": "Now 탭 기본 아이콘", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/maintabIcoFriends.svg", "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png" } },
-  { "id": "ios-tab-now-focused", "platform": "ios", "role": "tab_icon_now_focused", "section": "tabs", "group": "icons", "screen": "tabs", "kind": "image", "label": "Now 탭 선택 아이콘", "fileName": "maintabIcoNowFocused@3x.png", "path": "Images/maintabIcoNowFocused@3x.png", "required": false, "note": "Now 탭 선택 아이콘", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/maintabIcoFriends.svg", "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png" } },
-  { "id": "ios-tab-shopping", "platform": "ios", "role": "tab_icon_shopping", "section": "tabs", "group": "icons", "screen": "tabs", "kind": "image", "label": "쇼핑 탭 아이콘", "fileName": "maintabIcoShopping@3x.png", "path": "Images/maintabIcoShopping@3x.png", "required": false, "note": "쇼핑 탭 기본 아이콘", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/maintabIcoFriends.svg", "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png" } },
-  { "id": "ios-tab-shopping-focused", "platform": "ios", "role": "tab_icon_shopping_focused", "section": "tabs", "group": "icons", "screen": "tabs", "kind": "image", "label": "쇼핑 탭 선택 아이콘", "fileName": "maintabIcoShoppingFocused@3x.png", "path": "Images/maintabIcoShoppingFocused@3x.png", "required": false, "note": "쇼핑 탭 선택 아이콘", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/maintabIcoFriends.svg", "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png" } },
-  { "id": "ios-tab-more", "platform": "ios", "role": "tab_icon_more", "section": "tabs", "group": "icons", "screen": "tabs", "kind": "image", "label": "더보기 탭 아이콘", "fileName": "maintabIcoMore@3x.png", "path": "Images/maintabIcoMore@3x.png", "required": false, "note": "더보기 탭 기본 아이콘", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/maintabIcoFriends.svg", "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png" } },
-  { "id": "ios-tab-more-focused", "platform": "ios", "role": "tab_icon_more_focused", "section": "tabs", "group": "icons", "screen": "tabs", "kind": "image", "label": "더보기 탭 선택 아이콘", "fileName": "maintabIcoMoreFocused@3x.png", "path": "Images/maintabIcoMoreFocused@3x.png", "required": false, "note": "더보기 탭 선택 아이콘", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/maintabIcoFriends.svg", "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png" } },
-  { "id": "ios-chat-background", "platform": "ios", "role": "chat_background", "section": "chatroom", "group": "background", "screen": "chatroom", "kind": "image", "label": "채팅방 배경", "fileName": "chatroomBgImage@3x.png", "path": "Images/chatroomBgImage@3x.png", "required": true, "note": "iOS 채팅방 배경 이미지", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/chatroomBgImage.svg", "spongebob": "/template-assets/spongebob/ios/chatroomBgImage@3x.png" } },
-  { "id": "ios-chat-background-color", "platform": "ios", "role": "chat_background_color", "section": "chatroom", "group": "background", "screen": "chatroom", "kind": "color", "label": "채팅방 배경색", "required": true, "note": "채팅방 기본 배경색", "colorKey": "chatroomBackgroundColor", "defaultColor": { "basic": "#b8f2f7", "spongebob": "#aeeef7" } },
-  { "id": "ios-bubble-me-1", "platform": "ios", "role": "bubble_me_1", "section": "chatroom", "group": "bubbles", "screen": "chatroom", "kind": "image", "label": "내 말풍선 1", "fileName": "chatroomBubbleSend01@3x.png", "path": "Images/chatroomBubbleSend01@3x.png", "required": true, "editableInBubbleEditor": true, "note": "iOS 말풍선 이미지", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/chatroomBubbleSend01.svg", "spongebob": "/template-assets/spongebob/ios/chatroomBubbleSend01@3x.png" } },
-  { "id": "ios-bubble-me-2", "platform": "ios", "role": "bubble_me_2", "section": "chatroom", "group": "bubbles", "screen": "chatroom", "kind": "image", "label": "내 말풍선 2", "fileName": "chatroomBubbleSend02@3x.png", "path": "Images/chatroomBubbleSend02@3x.png", "required": false, "editableInBubbleEditor": true, "note": "iOS 말풍선 이미지", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/chatroomBubbleSend01.svg", "spongebob": "/template-assets/spongebob/ios/chatroomBubbleSend01@3x.png" } },
-  { "id": "ios-bubble-you-1", "platform": "ios", "role": "bubble_you_1", "section": "chatroom", "group": "bubbles", "screen": "chatroom", "kind": "image", "label": "상대 말풍선 1", "fileName": "chatroomBubbleReceive01@3x.png", "path": "Images/chatroomBubbleReceive01@3x.png", "required": true, "editableInBubbleEditor": true, "note": "iOS 말풍선 이미지", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.svg", "spongebob": "/template-assets/spongebob/ios/chatroomBubbleReceive01@3x.png" } },
-  { "id": "ios-bubble-you-2", "platform": "ios", "role": "bubble_you_2", "section": "chatroom", "group": "bubbles", "screen": "chatroom", "kind": "image", "label": "상대 말풍선 2", "fileName": "chatroomBubbleReceive02@3x.png", "path": "Images/chatroomBubbleReceive02@3x.png", "required": false, "editableInBubbleEditor": true, "note": "iOS 말풍선 이미지", "defaultAssetUrls": { "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.svg", "spongebob": "/template-assets/spongebob/ios/chatroomBubbleReceive01@3x.png" } },
-  { "id": "ios-chat-input-background", "platform": "ios", "role": "chat_input_background_color", "section": "chatroom", "group": "input", "screen": "chatroom", "kind": "color", "label": "입력바 배경", "required": true, "note": "채팅 입력바 배경색", "colorKey": "chatInputBarBackgroundColor", "defaultColor": { "basic": "#ffffff", "spongebob": "#ffffff" } },
-  { "id": "ios-chat-send-button", "platform": "ios", "role": "chat_send_button_color", "section": "chatroom", "group": "input", "screen": "chatroom", "kind": "color", "label": "전송 버튼 색상", "required": true, "note": "전송 버튼 강조색", "colorKey": "chatSendButtonColor", "defaultColor": { "basic": "#c9ff3d", "spongebob": "#f6c800" } }
+  {
+    "id": "ios-main-background-image",
+    "platform": "ios",
+    "role": "main_background",
+    "section": "main",
+    "group": "background",
+    "screen": "friends",
+    "kind": "image",
+    "label": "메인 배경 이미지",
+    "fileName": "mainBgImage.png",
+    "path": "Images/mainBgImage.png",
+    "required": true,
+    "note": "MainViewStyle-Primary -ios-background-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/mainBgImage.svg",
+      "spongebob": "/template-assets/spongebob/ios/mainBgImage@3x.png"
+    }
+  },
+  {
+    "id": "ios-main-background-color",
+    "platform": "ios",
+    "role": "main_background_color",
+    "section": "main",
+    "group": "background",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 배경색",
+    "required": true,
+    "note": "MainViewStyle-Primary background-color",
+    "colorKey": "background-color",
+    "defaultColor": {
+      "basic": "#f4fafb",
+      "spongebob": "#b7eef7"
+    }
+  },
+  {
+    "id": "ios-main-text-color",
+    "platform": "ios",
+    "role": "main_title_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 텍스트",
+    "required": true,
+    "note": "MainViewStyle-Primary -ios-text-color",
+    "colorKey": "-ios-text-color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "ios-main-description-color",
+    "platform": "ios",
+    "role": "main_description_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 보조 텍스트",
+    "required": true,
+    "note": "MainViewStyle-Primary -ios-description-text-color",
+    "colorKey": "-ios-description-text-color",
+    "defaultColor": {
+      "basic": "#4d5660",
+      "spongebob": "#37515a"
+    }
+  },
+  {
+    "id": "ios-main-highlighted-text-color",
+    "platform": "ios",
+    "role": "main_title_pressed_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 pressed 텍스트",
+    "required": false,
+    "note": "MainViewStyle-Primary -ios-highlighted-text-color",
+    "colorKey": "-ios-highlighted-text-color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "ios-main-paragraph-color",
+    "platform": "ios",
+    "role": "main_body_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 문단 텍스트",
+    "required": true,
+    "note": "MainViewStyle-Primary -ios-paragraph-text-color",
+    "colorKey": "-ios-paragraph-text-color",
+    "defaultColor": {
+      "basic": "#4d5660",
+      "spongebob": "#37515a"
+    }
+  },
+  {
+    "id": "ios-main-paragraph-highlighted-color",
+    "platform": "ios",
+    "role": "main_paragraph_pressed_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 문단 pressed",
+    "required": false,
+    "note": "MainViewStyle-Primary -ios-paragraph-highlighted-text-color",
+    "colorKey": "-ios-paragraph-highlighted-text-color",
+    "defaultColor": {
+      "basic": "#4d5660",
+      "spongebob": "#37515a"
+    }
+  },
+  {
+    "id": "ios-main-selected-background-color",
+    "platform": "ios",
+    "role": "main_body_cell_pressed_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 선택 배경",
+    "required": false,
+    "note": "MainViewStyle-Primary -ios-selected-background-color",
+    "colorKey": "-ios-selected-background-color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "ios-main-selected-background-alpha",
+    "platform": "ios",
+    "role": "main_selected_background_alpha",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 선택 배경 alpha",
+    "required": false,
+    "note": "MainViewStyle-Primary -ios-selected-background-alpha",
+    "colorKey": "-ios-selected-background-alpha",
+    "defaultColor": {
+      "basic": "0.05",
+      "spongebob": "0.05"
+    }
+  },
+  {
+    "id": "ios-main-border-color",
+    "platform": "ios",
+    "role": "main_body_cell_border_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 보더",
+    "required": false,
+    "note": "SectionTitleStyle-Main border-color",
+    "colorKey": "border-color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "ios-main-border-alpha",
+    "platform": "ios",
+    "role": "main_body_cell_border_alpha",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "메인 보더 alpha",
+    "required": false,
+    "note": "SectionTitleStyle-Main border-alpha",
+    "colorKey": "border-alpha",
+    "defaultColor": {
+      "basic": "0.18",
+      "spongebob": "0.18"
+    }
+  },
+  {
+    "id": "ios-tab-background-image",
+    "platform": "ios",
+    "role": "tab_background_image",
+    "section": "tabs",
+    "group": "bar",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "탭바 배경 이미지",
+    "fileName": "maintabBgImage.png",
+    "path": "Images/maintabBgImage.png",
+    "required": false,
+    "note": "TabbarStyle-Main -ios-background-image"
+  },
+  {
+    "id": "ios-tab-background-color",
+    "platform": "ios",
+    "role": "tab_background",
+    "section": "tabs",
+    "group": "bar",
+    "screen": "tabs",
+    "kind": "color",
+    "label": "탭바 배경색",
+    "required": true,
+    "note": "TabbarStyle-Main background-color",
+    "colorKey": "background-color",
+    "defaultColor": {
+      "basic": "#ffffff",
+      "spongebob": "#ffffff"
+    }
+  },
+  {
+    "id": "ios-tab-text-color",
+    "platform": "ios",
+    "role": "tab_text_color",
+    "section": "tabs",
+    "group": "bar",
+    "screen": "tabs",
+    "kind": "color",
+    "label": "탭 텍스트",
+    "required": false,
+    "note": "HeaderStyle-Main -ios-tab-text-color",
+    "colorKey": "-ios-tab-text-color",
+    "defaultColor": {
+      "basic": "#4d5660",
+      "spongebob": "#37515a"
+    }
+  },
+  {
+    "id": "ios-tab-friends",
+    "platform": "ios",
+    "role": "tab_icon_friends",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "친구 탭 아이콘",
+    "fileName": "maintabIcoFriends.png",
+    "path": "Images/maintabIcoFriends.png",
+    "required": true,
+    "note": "TabbarStyle-Main -ios-friends-normal-icon-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
+      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
+    }
+  },
+  {
+    "id": "ios-tab-friends-focused",
+    "platform": "ios",
+    "role": "tab_icon_friends_focused",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "친구 탭 선택 아이콘",
+    "fileName": "maintabIcoFriendsSelected.png",
+    "path": "Images/maintabIcoFriendsSelected.png",
+    "required": false,
+    "note": "TabbarStyle-Main -ios-friends-selected-icon-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
+      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
+    }
+  },
+  {
+    "id": "ios-tab-chats",
+    "platform": "ios",
+    "role": "tab_icon_chats",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "채팅 탭 아이콘",
+    "fileName": "maintabIcoChats.png",
+    "path": "Images/maintabIcoChats.png",
+    "required": false,
+    "note": "TabbarStyle-Main -ios-chats-normal-icon-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
+      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
+    }
+  },
+  {
+    "id": "ios-tab-chats-focused",
+    "platform": "ios",
+    "role": "tab_icon_chats_focused",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "채팅 탭 선택 아이콘",
+    "fileName": "maintabIcoChatsSelected.png",
+    "path": "Images/maintabIcoChatsSelected.png",
+    "required": false,
+    "note": "TabbarStyle-Main -ios-chats-selected-icon-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
+      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
+    }
+  },
+  {
+    "id": "ios-tab-now",
+    "platform": "ios",
+    "role": "tab_icon_now",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "Now 탭 아이콘",
+    "fileName": "maintabIcoNow.png",
+    "path": "Images/maintabIcoNow.png",
+    "required": false,
+    "note": "TabbarStyle-Main -ios-openchats-normal-icon-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
+      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
+    }
+  },
+  {
+    "id": "ios-tab-now-focused",
+    "platform": "ios",
+    "role": "tab_icon_now_focused",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "Now 탭 선택 아이콘",
+    "fileName": "maintabIcoNowSelected.png",
+    "path": "Images/maintabIcoNowSelected.png",
+    "required": false,
+    "note": "TabbarStyle-Main -ios-openchats-selected-icon-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
+      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
+    }
+  },
+  {
+    "id": "ios-tab-shopping",
+    "platform": "ios",
+    "role": "tab_icon_shopping",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "쇼핑 탭 아이콘",
+    "fileName": "maintabIcoShopping.png",
+    "path": "Images/maintabIcoShopping.png",
+    "required": false,
+    "note": "TabbarStyle-Main -ios-shopping-normal-icon-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
+      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
+    }
+  },
+  {
+    "id": "ios-tab-shopping-focused",
+    "platform": "ios",
+    "role": "tab_icon_shopping_focused",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "쇼핑 탭 선택 아이콘",
+    "fileName": "maintabIcoShoppingSelected.png",
+    "path": "Images/maintabIcoShoppingSelected.png",
+    "required": false,
+    "note": "TabbarStyle-Main -ios-shopping-selected-icon-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
+      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
+    }
+  },
+  {
+    "id": "ios-tab-more",
+    "platform": "ios",
+    "role": "tab_icon_more",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "더보기 탭 아이콘",
+    "fileName": "maintabIcoMore.png",
+    "path": "Images/maintabIcoMore.png",
+    "required": false,
+    "note": "TabbarStyle-Main -ios-more-normal-icon-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
+      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
+    }
+  },
+  {
+    "id": "ios-tab-more-focused",
+    "platform": "ios",
+    "role": "tab_icon_more_focused",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "더보기 탭 선택 아이콘",
+    "fileName": "maintabIcoMoreSelected.png",
+    "path": "Images/maintabIcoMoreSelected.png",
+    "required": false,
+    "note": "TabbarStyle-Main -ios-more-selected-icon-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
+      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
+    }
+  },
+  {
+    "id": "ios-chat-background-image",
+    "platform": "ios",
+    "role": "chat_background",
+    "section": "chatroom",
+    "group": "background",
+    "screen": "chatroom",
+    "kind": "image",
+    "label": "채팅방 배경 이미지",
+    "fileName": "chatroomBgImage.png",
+    "path": "Images/chatroomBgImage.png",
+    "required": true,
+    "note": "BackgroundStyle-ChatRoom -ios-background-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/chatroomBgImage.svg",
+      "spongebob": "/template-assets/spongebob/ios/chatroomBgImage@3x.png"
+    }
+  },
+  {
+    "id": "ios-chat-background-color",
+    "platform": "ios",
+    "role": "chat_background_color",
+    "section": "chatroom",
+    "group": "background",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "채팅방 배경색",
+    "required": true,
+    "note": "BackgroundStyle-ChatRoom background-color",
+    "colorKey": "background-color",
+    "defaultColor": {
+      "basic": "#b8f2f7",
+      "spongebob": "#aeeef7"
+    }
+  },
+  {
+    "id": "ios-bubble-me-1",
+    "platform": "ios",
+    "role": "bubble_me_1",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "image",
+    "label": "내 말풍선 1",
+    "fileName": "chatroomBubbleSend01.png",
+    "path": "Images/chatroomBubbleSend01.png",
+    "required": true,
+    "editableInBubbleEditor": true,
+    "note": "MessageCellStyle-Send -ios-background-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/chatroomBubbleSend01.svg",
+      "spongebob": "/template-assets/spongebob/ios/chatroomBubbleSend01@3x.png"
+    }
+  },
+  {
+    "id": "ios-bubble-me-2",
+    "platform": "ios",
+    "role": "bubble_me_2",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "image",
+    "label": "내 말풍선 2",
+    "fileName": "chatroomBubbleSend02.png",
+    "path": "Images/chatroomBubbleSend02.png",
+    "required": false,
+    "editableInBubbleEditor": true,
+    "note": "MessageCellStyle-Send -ios-group-background-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/chatroomBubbleSend01.svg",
+      "spongebob": "/template-assets/spongebob/ios/chatroomBubbleSend01@3x.png"
+    }
+  },
+  {
+    "id": "ios-bubble-you-1",
+    "platform": "ios",
+    "role": "bubble_you_1",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "image",
+    "label": "상대 말풍선 1",
+    "fileName": "chatroomBubbleReceive01.png",
+    "path": "Images/chatroomBubbleReceive01.png",
+    "required": true,
+    "editableInBubbleEditor": true,
+    "note": "MessageCellStyle-Receive -ios-background-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.svg",
+      "spongebob": "/template-assets/spongebob/ios/chatroomBubbleReceive01@3x.png"
+    }
+  },
+  {
+    "id": "ios-bubble-you-2",
+    "platform": "ios",
+    "role": "bubble_you_2",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "image",
+    "label": "상대 말풍선 2",
+    "fileName": "chatroomBubbleReceive02.png",
+    "path": "Images/chatroomBubbleReceive02.png",
+    "required": false,
+    "editableInBubbleEditor": true,
+    "note": "MessageCellStyle-Receive -ios-group-background-image",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.svg",
+      "spongebob": "/template-assets/spongebob/ios/chatroomBubbleReceive01@3x.png"
+    }
+  },
+  {
+    "id": "ios-chat-bubble-me-color",
+    "platform": "ios",
+    "role": "chat_bubble_me_color",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "내 말풍선 텍스트",
+    "required": false,
+    "note": "MessageCellStyle-Send -ios-text-color",
+    "colorKey": "-ios-text-color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "ios-chat-bubble-you-color",
+    "platform": "ios",
+    "role": "chat_bubble_you_color",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "상대 말풍선 텍스트",
+    "required": false,
+    "note": "MessageCellStyle-Receive -ios-text-color",
+    "colorKey": "-ios-text-color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "ios-chat-unread-count-color",
+    "platform": "ios",
+    "role": "chat_unread_count_color",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "읽지 않음 숫자",
+    "required": false,
+    "note": "MessageCellStyle unread text color",
+    "colorKey": "-ios-unread-text-color",
+    "defaultColor": {
+      "basic": "#6a5f00",
+      "spongebob": "#f6c800"
+    }
+  },
+  {
+    "id": "ios-chat-input-background",
+    "platform": "ios",
+    "role": "chat_input_background_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "입력바 배경",
+    "required": true,
+    "note": "InputBarStyle-Chat background-color",
+    "colorKey": "background-color",
+    "defaultColor": {
+      "basic": "#ffffff",
+      "spongebob": "#ffffff"
+    }
+  },
+  {
+    "id": "ios-chat-button-text-color",
+    "platform": "ios",
+    "role": "chat_button_text_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "입력바 텍스트",
+    "required": false,
+    "note": "InputBarStyle-Chat -ios-button-text-color",
+    "colorKey": "-ios-button-text-color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "ios-chat-button-foreground-color",
+    "platform": "ios",
+    "role": "chat_button_foreground_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "메뉴 아이콘",
+    "required": false,
+    "note": "InputBarStyle-Chat -ios-button-normal-foreground-color",
+    "colorKey": "-ios-button-normal-foreground-color",
+    "defaultColor": {
+      "basic": "#4d5660",
+      "spongebob": "#37515a"
+    }
+  },
+  {
+    "id": "ios-chat-button-highlighted-foreground-color",
+    "platform": "ios",
+    "role": "chat_button_highlighted_foreground_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "메뉴 아이콘 pressed",
+    "required": false,
+    "note": "InputBarStyle-Chat -ios-button-highlighted-foreground-color",
+    "colorKey": "-ios-button-highlighted-foreground-color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "ios-chat-button-background-color",
+    "platform": "ios",
+    "role": "chat_button_background_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "메뉴 버튼 배경",
+    "required": false,
+    "note": "InputBarStyle-Chat -ios-button-normal-background-color",
+    "colorKey": "-ios-button-normal-background-color",
+    "defaultColor": {
+      "basic": "#0FFFFFFF",
+      "spongebob": "#0FFFFFFF"
+    }
+  },
+  {
+    "id": "ios-chat-send-button",
+    "platform": "ios",
+    "role": "chat_send_button_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "전송 버튼 배경",
+    "required": true,
+    "note": "InputBarStyle-Chat -ios-send-normal-background-color",
+    "colorKey": "-ios-send-normal-background-color",
+    "defaultColor": {
+      "basic": "#c9ff3d",
+      "spongebob": "#f6c800"
+    }
+  },
+  {
+    "id": "ios-chat-send-icon-color",
+    "platform": "ios",
+    "role": "chat_send_icon_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "전송 아이콘",
+    "required": false,
+    "note": "InputBarStyle-Chat -ios-send-normal-foreground-color",
+    "colorKey": "-ios-send-normal-foreground-color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "ios-chat-send-highlighted-button",
+    "platform": "ios",
+    "role": "chat_send_highlighted_button_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "전송 버튼 pressed 배경",
+    "required": false,
+    "note": "InputBarStyle-Chat -ios-send-highlighted-background-color",
+    "colorKey": "-ios-send-highlighted-background-color",
+    "defaultColor": {
+      "basic": "#c9ff3d",
+      "spongebob": "#f6c800"
+    }
+  },
+  {
+    "id": "ios-chat-send-highlighted-icon",
+    "platform": "ios",
+    "role": "chat_send_highlighted_icon_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "전송 아이콘 pressed",
+    "required": false,
+    "note": "InputBarStyle-Chat -ios-send-highlighted-foreground-color",
+    "colorKey": "-ios-send-highlighted-foreground-color",
+    "defaultColor": {
+      "basic": "#111111",
+      "spongebob": "#111111"
+    }
+  },
+  {
+    "id": "ios-common-theme-icon",
+    "platform": "ios",
+    "role": "theme_icon",
+    "section": "common",
+    "group": "icon",
+    "screen": "profile",
+    "kind": "image",
+    "label": "테마 대표 아이콘",
+    "fileName": "commonIcoTheme.png",
+    "path": "Images/commonIcoTheme.png",
+    "required": true,
+    "note": "테마 목록 대표 아이콘",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/icon.png",
+      "spongebob": "/template-assets/basic/android/icon.png"
+    }
+  },
+  {
+    "id": "ios-common-profile-1",
+    "platform": "ios",
+    "role": "profile_image_1",
+    "section": "common",
+    "group": "profiles",
+    "screen": "profile",
+    "kind": "image",
+    "label": "기본 프로필 이미지",
+    "fileName": "profileImg01.png",
+    "path": "Images/profileImg01.png",
+    "required": true,
+    "note": "DefaultProfileStyle -ios-profile-images",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_profile_01_image.png",
+      "spongebob": "/template-assets/spongebob/ios/profileImg01@3x.png"
+    }
+  },
+  {
+    "id": "ios-find-add-friend",
+    "platform": "ios",
+    "role": "find_add_friend",
+    "section": "common",
+    "group": "icon",
+    "screen": "profile",
+    "kind": "image",
+    "label": "친구 추가 버튼",
+    "fileName": "findBtnAddFriend.png",
+    "path": "Images/findBtnAddFriend.png",
+    "required": false,
+    "note": "ButtonStyle-AddFriend -ios-image"
+  }
 ]

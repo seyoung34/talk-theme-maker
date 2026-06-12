@@ -11,10 +11,10 @@ const androidRequired = [
 ];
 
 const iosRequired = [
-  "KakaoTalkTheme.css",
-  "Images/chatroomBgImage@3x.png",
-  "Images/chatroomBubbleSend01@3x.png",
-  "Images/chatroomBubbleReceive01@3x.png",
+  "Kakao Talk Theme.css",
+  "Images/chatroomBgImage.png",
+  "Images/chatroomBubbleSend01.png",
+  "Images/chatroomBubbleReceive01.png",
 ];
 
 export function analyzeThemeProject(files: ThemeProjectFile[], rootName = "Selected folder"): ThemeProjectAnalysis {
@@ -40,7 +40,7 @@ export function analyzeThemeProject(files: ThemeProjectFile[], rootName = "Selec
 
 function detectPlatform(files: ThemeProjectFile[]): ThemePlatform {
   const paths = files.map((file) => file.path);
-  const hasIosCss = paths.some((path) => path.endsWith("KakaoTalkTheme.css"));
+  const hasIosCss = paths.some((path) => path.endsWith("KakaoTalkTheme.css") || path.endsWith("Kakao Talk Theme.css"));
   const hasIosImages = paths.some((path) => path.includes("/Images/") || path.startsWith("Images/"));
   const hasAndroidTheme = paths.some((path) => path.includes("/src/main/theme/") || path.startsWith("src/main/theme/"));
   const hasAndroidManifest = paths.some((path) => path.endsWith("AndroidManifest.xml"));
@@ -101,25 +101,29 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
     return "unknown";
   }
 
+  if (name.startsWith("commonIcoTheme")) return "theme_icon";
+  if (name.startsWith("profileImg01")) return "profile_image_1";
+  if (name.startsWith("findBtnAddFriend")) return "find_add_friend";
   if (name.startsWith("chatroomBgImage")) return "chat_background";
   if (name.startsWith("chatroomBubbleSend01")) return "bubble_me_1";
   if (name.startsWith("chatroomBubbleSend02")) return "bubble_me_2";
   if (name.startsWith("chatroomBubbleReceive01")) return "bubble_you_1";
   if (name.startsWith("chatroomBubbleReceive02")) return "bubble_you_2";
   if (name.startsWith("mainBgImage")) return "main_background";
-  if (name.startsWith("maintabIcoFriendsFocused")) return "tab_icon_friends_focused";
+  if (name.startsWith("maintabBgImage")) return "tab_background_image";
+  if (name.startsWith("maintabIcoFriendsSelected") || name.startsWith("maintabIcoFriendsFocused")) return "tab_icon_friends_focused";
   if (name.startsWith("maintabIcoFriends")) return "tab_icon_friends";
-  if (name.startsWith("maintabIcoChatsFocused")) return "tab_icon_chats_focused";
+  if (name.startsWith("maintabIcoChatsSelected") || name.startsWith("maintabIcoChatsFocused")) return "tab_icon_chats_focused";
   if (name.startsWith("maintabIcoChats")) return "tab_icon_chats";
-  if (name.startsWith("maintabIcoTab3Focused")) return "tab_icon_now_focused";
-  if (name.startsWith("maintabIcoTab3")) return "tab_icon_now";
-  if (name.startsWith("maintabIcoTab4Focused")) return "tab_icon_shopping_focused";
-  if (name.startsWith("maintabIcoTab4")) return "tab_icon_shopping";
-  if (name.startsWith("maintabIcoMoreFocused")) return "tab_icon_more_focused";
+  if (name.startsWith("maintabIcoNowSelected") || name.startsWith("maintabIcoTab3Focused")) return "tab_icon_now_focused";
+  if (name.startsWith("maintabIcoNow") || name.startsWith("maintabIcoTab3")) return "tab_icon_now";
+  if (name.startsWith("maintabIcoShoppingSelected") || name.startsWith("maintabIcoTab4Focused")) return "tab_icon_shopping_focused";
+  if (name.startsWith("maintabIcoShopping") || name.startsWith("maintabIcoTab4")) return "tab_icon_shopping";
+  if (name.startsWith("maintabIcoMoreSelected") || name.startsWith("maintabIcoMoreFocused")) return "tab_icon_more_focused";
   if (name.startsWith("maintabIcoMore")) return "tab_icon_more";
   if (name.startsWith("profileImg")) return "profile_image";
   if (name.startsWith("passcode")) return "passcode";
-  if (path.endsWith("KakaoTalkTheme.css")) return "unknown";
+  if (path.endsWith("KakaoTalkTheme.css") || path.endsWith("Kakao Talk Theme.css")) return "unknown";
   return "unknown";
 }
 

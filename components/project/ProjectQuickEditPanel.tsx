@@ -303,10 +303,14 @@ function ColorEditor({
   value: string;
   onChange: (slot: ThemeAssetSlot, value: string) => void;
 }) {
+  const canUseColorPicker = /^#[0-9a-f]{6}$/i.test(value);
+
   return (
     <div className="grid gap-4 rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
       <div className="flex items-center gap-4">
-        <input type="color" value={value} className="h-12 w-16 cursor-pointer rounded-lg border border-[#d1d5db] bg-white p-1" onChange={(event) => onChange(slot, event.currentTarget.value)} />
+        {canUseColorPicker ? (
+          <input type="color" value={value} className="h-12 w-16 cursor-pointer rounded-lg border border-[#d1d5db] bg-white p-1" onChange={(event) => onChange(slot, event.currentTarget.value)} />
+        ) : null}
         <input
           type="text"
           value={value}
