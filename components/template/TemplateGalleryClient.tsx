@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Clock3, Search } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import UserTemplateCard from "@/components/template/UserTemplateCard";
+import { localSystemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { templateStartStorageKey, themeTemplates, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import { deleteUserTemplate, listUserTemplates, type UserTemplateSummary } from "@/lib/theme/userTemplates";
 import type { ThemePlatform } from "@/lib/theme/types";
@@ -13,8 +14,11 @@ export default function TemplateGalleryClient() {
   const router = useRouter();
   const [selectedTemplateId, setSelectedTemplateId] = useState<ThemeTemplateId | null>(null);
   const [userTemplates, setUserTemplates] = useState<UserTemplateSummary[]>([]);
+  const [systemTemplates, setSystemTemplates] = useState<SystemTemplateSummary[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const selectedTemplate = themeTemplates.find((template) => template.id === selectedTemplateId) ?? null;
+  const baseTemplates = themeTemplates.filter((template) => template.id === "basic");
+  const seedSystemTemplates = themeTemplates.filter((template) => template.id === "spongebob");
   const hasSavedTemplates = userTemplates.length > 0;
 
   useEffect(() => {
@@ -37,6 +41,26 @@ export default function TemplateGalleryClient() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    localSystemTemplateRepository
+      .list()
+      .then((templates) => {
+        if (active) setSystemTemplates(templates);
+      })
+      .catch((error) => {
+        console.error(error);
+        if (active) {
+          setSystemTemplates([]);
+          setNotice("System templates could not be loaded.");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), 2800);
     return () => window.clearTimeout(timer);
@@ -49,6 +73,11 @@ export default function TemplateGalleryClient() {
 
   const startUserTemplate = (template: UserTemplateSummary) => {
     localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.templateId, platform: template.platform, userTemplateId: template.id }));
+    router.push("/edit");
+  };
+
+  const startSystemTemplate = (template: SystemTemplateSummary) => {
+    localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.baseTemplateId, platform: template.platform, systemTemplateId: template.id, editMode: "user" }));
     router.push("/edit");
   };
 
@@ -130,13 +159,50 @@ export default function TemplateGalleryClient() {
               <button
                 type="button"
                 className="inline-flex items-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-4 py-2.5 text-sm font-black text-[var(--color-inverse-on-surface)]"
-                onClick={() => setSelectedTemplateId(themeTemplates[0]?.id ?? null)}
+                onClick={() => setSelectedTemplateId(baseTemplates[0]?.id ?? null)}
               >
                 기본 템플릿 보기
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           )}
+        </section>
+
+        <section className="grid gap-5">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="mt-2 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">System Templates</h2>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {seedSystemTemplates.map((template) => (
+              <button
+                key={template.id}
+                type="button"
+                className="group grid min-h-[356px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/92 p-4 text-left shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)]"
+                onClick={() => setSelectedTemplateId(template.id)}
+              >
+                <div className="grid gap-4">
+                  <TemplateMiniPreview template={template} />
+                  <div className="grid gap-2">
+                    <span className="inline-flex w-fit rounded-full bg-[var(--color-tertiary-container)]/50 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-tertiary-container)]">System seed</span>
+                    <strong className="font-[var(--font-display)] text-[28px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.name}</strong>
+                    <span className="line-clamp-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.description}</span>
+                  </div>
+                </div>
+
+                <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
+                  Template preview
+                  <ArrowRight className="w-4 h-4" />
+                </span>
+              </button>
+            ))}
+
+            {systemTemplates.map((template) => (
+              <SystemTemplateCard key={template.id} template={template} onStart={startSystemTemplate} />
+            ))}
+          </div>
         </section>
 
         <section className="grid gap-5">
@@ -149,7 +215,7 @@ export default function TemplateGalleryClient() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {themeTemplates.map((template) => (
+            {baseTemplates.map((template) => (
               <button
                 key={template.id}
                 type="button"
@@ -194,6 +260,43 @@ function StatusRow({ label, value }: { label: string; value: string }) {
       <span className="text-sm font-semibold text-[var(--color-on-surface-variant)]">{label}</span>
       <strong className="text-sm font-black text-[var(--color-on-surface)]">{value}</strong>
     </div>
+  );
+}
+
+function SystemTemplateCard({ template, onStart }: { template: SystemTemplateSummary; onStart: (template: SystemTemplateSummary) => void }) {
+  return (
+    <article className="grid min-h-[244px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/92 p-4 shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)]">
+      <div className="grid gap-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex w-fit rounded-full bg-[var(--color-tertiary-container)]/50 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-tertiary-container)]">System</span>
+          <span className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-black uppercase text-[var(--color-on-surface-variant)]">{template.platform}</span>
+        </div>
+        <div className="grid gap-2">
+          <strong className="font-[var(--font-display)] text-[26px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.title}</strong>
+          {template.description ? <span className="line-clamp-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.description}</span> : null}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <StatusRow label="Colors" value={`${template.colorCount}`} />
+          <StatusRow label="Uploads" value={`${template.uploadCount}`} />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {template.tags.slice(0, 3).map((tag) => (
+            <span key={tag} className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-bold text-[var(--color-on-surface-variant)]">
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)] hover:text-[var(--color-on-primary-container)]"
+        onClick={() => onStart(template)}
+      >
+        Open
+        <ArrowRight className="w-4 h-4" />
+      </button>
+    </article>
   );
 }
 
