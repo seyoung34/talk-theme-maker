@@ -11,6 +11,7 @@ import {
   type SlotColors,
   type SlotUploads,
 } from "@/lib/theme/project/state";
+import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
@@ -21,9 +22,10 @@ export type SlotCandidate = {
   status: string;
   active: boolean;
   selected: boolean;
-  source: "default" | "creator" | "upload";
+  source: "default" | "creator" | "upload" | "palette" | "admin";
   previewUrl?: string;
   colorValue?: string;
+  adminAsset?: AdminAssetCandidate;
 };
 
 export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom", "passcode", "common"];
@@ -84,6 +86,7 @@ export function buildSlotCandidates(
   templateId: ThemeTemplateId,
   template: ThemeTemplate,
   allSlots: ThemeAssetSlot[] = [],
+  adminAssets: AdminAssetCandidate[] = [],
 ): SlotCandidate[] {
   if (!slot) return [];
 
@@ -116,5 +119,67 @@ export function buildSlotCandidates(
       source: "upload" as const,
     }));
 
-  return [...uploadItems, ...baseItems];
+  const paletteItems = slot.kind === "color" ? buildPaletteCandidates(slot, allSlots, uploads, colors, selections, templateId, template) : [];
+  const adminItems = slot.kind !== "color" ? buildAdminCandidates(slot, selectedUpload?.id, adminAssets) : [];
+
+  return [...uploadItems, ...adminItems, ...paletteItems, ...baseItems];
+}
+
+function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | undefined, adminAssets: Array<AdminAssetCandidate & { previewUrl?: string }>): SlotCandidate[] {
+  return adminAssets
+    .filter((asset) => asset.enabled && asset.slotRole === slot.role && (asset.platform === "all" || asset.platform === slot.platform))
+    .map((asset) => ({
+      id: asset.id,
+      title: asset.title,
+      status: asset.tags.length > 0 ? asset.tags.join(", ") : asset.fileName,
+      active: selectedUploadId === asset.id,
+      selected: selectedUploadId === asset.id,
+      source: "admin" as const,
+      previewUrl: asset.previewUrl,
+      adminAsset: asset,
+    }));
+}
+
+function buildPaletteCandidates(
+  activeSlot: ThemeAssetSlot,
+  allSlots: ThemeAssetSlot[],
+  uploads: SlotUploads,
+  colors: SlotColors,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+): SlotCandidate[] {
+  const currentColor = getResolvedColor(activeSlot, colors, selections, templateId, template);
+  const map = new Map<string, { color: string; count: number }>();
+
+  for (const slot of allSlots) {
+    if (slot.kind !== "color") continue;
+    if (isColorSlotDisabledByImage(slot, allSlots, uploads, selections, templateId, template)) continue;
+    const color = getResolvedColor(slot, colors, selections, templateId, template);
+    if (!color) continue;
+
+    const key = normalizeColor(color);
+    const item = map.get(key);
+    if (item) {
+      item.count += 1;
+    } else {
+      map.set(key, { color, count: 1 });
+    }
+  }
+
+  return Array.from(map.values())
+    .sort((a, b) => b.count - a.count || a.color.localeCompare(b.color))
+    .map((item) => ({
+      id: `${activeSlot.id}:palette:${item.color}`,
+      title: item.color.toUpperCase(),
+      status: `${item.count}개 슬롯에서 사용 중`,
+      active: normalizeColor(currentColor) === normalizeColor(item.color),
+      selected: false,
+      source: "palette" as const,
+      colorValue: item.color,
+    }));
+}
+
+function normalizeColor(value?: string) {
+  return value?.trim().toUpperCase() ?? "";
 }

@@ -21,6 +21,7 @@ import {
 } from "@/components/project/projectModel";
 import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
+import { listAdminAssetCandidates, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
@@ -101,6 +102,8 @@ export default function ProjectImporterClient() {
   const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
   const [bubbleInsets, setBubbleInsets] = useState<Partial<Record<string, Insets>>>({});
   const [bubbleStretch, setBubbleStretch] = useState<Partial<Record<string, StretchPoint>>>({});
+  const [adminAssets, setAdminAssets] = useState<AdminAssetCandidate[]>([]);
+  const [adminAssetsWithPreview, setAdminAssetsWithPreview] = useState<Array<AdminAssetCandidate & { previewUrl: string }>>([]);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
@@ -145,6 +148,27 @@ export default function ProjectImporterClient() {
     void loadStartedTemplate();
     localStorage.removeItem(templateStartStorageKey);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    listAdminAssetCandidates()
+      .then((records) => {
+        if (active) setAdminAssets(records);
+      })
+      .catch((error) => console.error(error));
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const next = adminAssets.map((asset) => ({ ...asset, previewUrl: URL.createObjectURL(asset.blob) }));
+    setAdminAssetsWithPreview(next);
+    return () => {
+      next.forEach((asset) => URL.revokeObjectURL(asset.previewUrl));
+    };
+  }, [adminAssets]);
 
   const activeTemplate = getThemeTemplate(templateId);
   const displayTemplateName = activeUserTemplate?.name ?? activeTemplate.name;
@@ -231,6 +255,19 @@ export default function ProjectImporterClient() {
         return next;
       });
     }
+  };
+
+  const selectAdminAsset = (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => {
+    const file = new File([asset.blob], asset.fileName, { type: asset.mimeType });
+    setUploads((current) => {
+      const entries = current[slot.id] ?? [];
+      const nextEntries = entries.some((entry) => entry.id === asset.id) ? entries : [...entries, { id: asset.id, file }];
+      return { ...current, [slot.id]: nextEntries };
+    });
+    setCandidateSelections((current) => ({ ...current, [slot.id]: asset.id }));
+    setSelectedSlotId(slot.id);
+    setActiveSection(slot.section);
+    setActiveGroup(slot.group);
   };
 
   const openAdvancedBubbleEditor = async () => {
@@ -511,6 +548,7 @@ export default function ProjectImporterClient() {
                 uploads={uploads}
                 colors={colors}
                 selections={candidateSelections}
+                adminAssets={adminAssetsWithPreview}
                 templateId={templateId}
                 template={activeTemplate}
                 platform={platform}
@@ -523,6 +561,7 @@ export default function ProjectImporterClient() {
                 onClear={clearSlot}
                 onColorChange={changeColor}
                 onSelectCandidate={selectCandidate}
+                onSelectAdminAsset={selectAdminAsset}
                 onOpenAdvanced={openAdvancedBubbleEditor}
                 onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
                 onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}

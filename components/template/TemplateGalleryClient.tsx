@@ -208,32 +208,32 @@ function TemplatePreviewModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${template.name} 미리보기`}>
-      <section className="grid max-h-[92vh] w-full max-w-5xl overflow-auto rounded-[32px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)]">
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--color-outline-variant)] px-6 py-5">
+      <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
+        <header className="flex items-start justify-between gap-3 border-b border-[var(--color-outline-variant)] px-4 py-3 sm:px-5 sm:py-4">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Template preview</p>
-            <h2 className="mt-1 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">{template.name}</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.previewNote}</p>
+            <h2 className="mt-1 font-[var(--font-display)] text-2xl font-semibold leading-tight text-[var(--color-on-surface)] sm:text-3xl">{template.name}</h2>
+            <p className="mt-1 line-clamp-2 max-w-2xl text-xs leading-5 text-[var(--color-on-surface-variant)] sm:text-sm">{template.previewNote}</p>
           </div>
-          <button className="rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-2 text-sm font-black text-[var(--color-on-surface-variant)] transition hover:bg-white" type="button" onClick={onClose}>
+          <button className="shrink-0 rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-white sm:px-4 sm:text-sm" type="button" onClick={onClose}>
             닫기
           </button>
         </header>
 
-        <div className="grid gap-6 p-6 lg:grid-cols-[380px_1fr]">
+        <div className="grid min-h-0 gap-3 p-3 sm:grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)] sm:p-4 lg:grid-cols-[340px_1fr]">
           <TemplatePhonePreview template={template} />
-          <div className="grid content-between gap-4">
-            <div className="grid gap-3">
+          <div className="grid min-h-0 content-between gap-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               <InfoRow label="기본 채팅방 배경" value={template.defaults.chatBackground} />
               <InfoRow label="내 말풍선 색" value={template.defaults.myBubble} />
               <InfoRow label="상대 말풍선 색" value={template.defaults.friendBubble} />
               <InfoRow label="기본 시작 플랫폼" value={template.defaults.platform === "android" ? "Android" : "iOS"} />
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <button className="rounded-full bg-[var(--color-inverse-surface)] px-5 py-4 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("android")}>
+              <button className="rounded-full bg-[var(--color-inverse-surface)] px-4 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("android")}>
                 Android로 시작
               </button>
-              <button className="rounded-full bg-[var(--color-primary-container)] px-5 py-4 text-sm font-black text-[var(--color-on-primary-container)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("ios")}>
+              <button className="rounded-full bg-[var(--color-primary-container)] px-4 py-3 text-sm font-black text-[var(--color-on-primary-container)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("ios")}>
                 iOS로 시작
               </button>
             </div>
@@ -265,14 +265,14 @@ function TemplatePhonePreview({ template }: { template: ThemeTemplate }) {
   const assets = spongebobPreviewAssets(template);
   return (
     <div
-      className="mx-auto grid h-[620px] w-full max-w-[350px] content-start overflow-hidden rounded-[32px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[0_22px_52px_rgba(42,103,103,0.14)]"
+      className="mx-auto grid h-[min(48dvh,500px)] min-h-[250px] w-full max-w-[310px] content-start overflow-hidden rounded-[28px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[0_22px_52px_rgba(42,103,103,0.14)] sm:h-[min(68dvh,540px)] sm:max-w-[330px] sm:rounded-[32px] lg:max-w-[340px]"
       style={{ backgroundColor: template.defaults.chatBackground, backgroundImage: assets.chatBackground ? `url(${assets.chatBackground})` : undefined }}
     >
-      <div className="flex items-center justify-between px-5 text-sm font-black h-14 bg-white/90">
+      <div className="flex h-12 items-center justify-between px-4 text-xs font-black bg-white/90 sm:h-14 sm:px-5 sm:text-sm">
         <span>테마 미리보기</span>
         <span className="text-xs text-[var(--color-on-surface-variant)]">{template.name}</span>
       </div>
-      <div className="grid gap-4 p-4">
+      <div className="grid gap-3 p-3 sm:gap-4 sm:p-4">
         <div className="justify-self-center rounded-full bg-[#14343a]/18 px-5 py-1 text-xs font-bold text-white">Today</div>
         <span className="max-w-[80%] rounded-xl bg-white bg-[length:100%_100%] bg-no-repeat px-4 py-3 text-sm" style={{ backgroundImage: assets.friendBubble ? `url(${assets.friendBubble})` : undefined }}>
           상대 말풍선

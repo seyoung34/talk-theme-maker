@@ -3,6 +3,7 @@
 import { useEffect, useState, type DragEvent, type MutableRefObject } from "react";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import { buildSlotCandidates, getDefaultColor, getSelectedCandidate, getSlotUploadEntries, slotStatusLabel, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
@@ -14,6 +15,7 @@ export function ProjectQuickEditPanel({
   uploads,
   colors,
   selections,
+  adminAssets,
   templateId,
   template,
   platform,
@@ -26,6 +28,7 @@ export function ProjectQuickEditPanel({
   onClear,
   onColorChange,
   onSelectCandidate,
+  onSelectAdminAsset,
   onOpenAdvanced,
   onMarkersChange,
   onInsetsChange,
@@ -40,6 +43,7 @@ export function ProjectQuickEditPanel({
   uploads: SlotUploads;
   colors: SlotColors;
   selections: SlotCandidateSelections;
+  adminAssets: Array<AdminAssetCandidate & { previewUrl?: string }>;
   templateId: ThemeTemplateId;
   template: ThemeTemplate;
   platform: ThemePlatform;
@@ -52,6 +56,7 @@ export function ProjectQuickEditPanel({
   onClear: (slot: ThemeAssetSlot) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
+  onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
   onOpenAdvanced: () => void;
   onMarkersChange: (markers: Markers) => void;
   onInsetsChange: (insets: Insets) => void;
@@ -66,7 +71,7 @@ export function ProjectQuickEditPanel({
 
   const hasImage = Boolean(file?.file || file?.sourceUrl);
   const status = slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots);
-  const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots);
+  const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets);
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
   const uploadEntries = getSlotUploadEntries(slot, uploads);
@@ -89,6 +94,14 @@ export function ProjectQuickEditPanel({
         isOpen={candidateOpen}
         onToggle={onToggleCandidates}
         onApplyCandidate={(candidate) => {
+          if (slot.kind === "color" && candidate.source === "palette" && candidate.colorValue) {
+            onColorChange(slot, candidate.colorValue);
+            return;
+          }
+          if (candidate.source === "admin" && candidate.adminAsset) {
+            onSelectAdminAsset(slot, candidate.adminAsset);
+            return;
+          }
           onSelectCandidate(slot, candidate.id);
         }}
       />
@@ -195,14 +208,20 @@ function CandidatePicker({
   onToggle: () => void;
   onApplyCandidate: (candidate: SlotCandidate) => void;
 }) {
-  const groups = [
+  type CandidateGroup = { key: SlotCandidate["source"]; label: string; items: SlotCandidate[] };
+  const groups: CandidateGroup[] = [
+    { key: "palette" as const, label: "팔레트", items: candidates.filter((candidate) => candidate.source === "palette") },
     { key: "default" as const, label: "기본값", items: candidates.filter((candidate) => candidate.source === "default") },
     { key: "upload" as const, label: "내 업로드", items: candidates.filter((candidate) => candidate.source === "upload") },
     { key: "creator" as const, label: "제작자 후보", items: candidates.filter((candidate) => candidate.source === "creator") },
   ].filter((group) => group.items.length > 0);
+  const adminItems = candidates.filter((candidate) => candidate.source === "admin");
+  if (adminItems.length > 0 && !groups.some((group) => group.key === "admin")) {
+    groups.splice(Math.max(0, groups.length - 1), 0, { key: "admin", label: "관리 후보", items: adminItems });
+  }
 
-  const preferredTab = selectedCandidate?.source ?? groups[0]?.key;
-  const [activeTab, setActiveTab] = useState<(typeof groups)[number]["key"] | undefined>(preferredTab);
+  const preferredTab = slot.kind === "color" ? groups[0]?.key : (selectedCandidate?.source ?? groups[0]?.key);
+  const [activeTab, setActiveTab] = useState<CandidateGroup["key"] | undefined>(preferredTab);
 
   useEffect(() => {
     if (!groups.some((group) => group.key === activeTab)) {
@@ -211,7 +230,7 @@ function CandidatePicker({
   }, [activeTab, groups, preferredTab]);
 
   useEffect(() => {
-    setActiveTab(selectedCandidate?.source ?? groups[0]?.key);
+    setActiveTab(slot.kind === "color" ? groups[0]?.key : (selectedCandidate?.source ?? groups[0]?.key));
   }, [slot.id]);
 
   const activeGroup = groups.find((group) => group.key === activeTab) ?? groups[0];
@@ -249,7 +268,7 @@ function CandidatePicker({
 
       {isOpen && activeGroup ? (
         <div className="grid gap-3">
-          <div className="flex flex-wrap content-start gap-2">
+          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
             {activeGroup.items.map((candidate) => (
               <button
                 key={candidate.id}
@@ -286,7 +305,8 @@ function CandidatePicker({
 
 function CandidateSwatch({ candidate }: { candidate: SlotCandidate }) {
   if (candidate.colorValue) {
-    return <span className="h-8 w-8 shrink-0 rounded-md border border-[#d1d5db]" style={{ backgroundColor: candidate.colorValue }} />;
+    const swatch = toCssSwatch(candidate.colorValue);
+    return <span className="h-8 w-8 shrink-0 rounded-md border border-[#d1d5db] bg-white" style={{ backgroundColor: swatch.backgroundColor, opacity: swatch.opacity }} />;
   }
   if (candidate.previewUrl) {
     return <span className="h-8 w-8 shrink-0 rounded-md border border-[#d1d5db] bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${candidate.previewUrl})` }} />;
@@ -331,7 +351,21 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function toCssSwatch(value: string) {
+  const normalized = value.trim();
+  if (/^#[0-9a-f]{6}$/i.test(normalized)) {
+    return { backgroundColor: normalized, opacity: 1 };
+  }
+  if (/^#[0-9a-f]{8}$/i.test(normalized)) {
+    const alpha = Number.parseInt(normalized.slice(1, 3), 16) / 255;
+    return { backgroundColor: `#${normalized.slice(3)}`, opacity: Math.max(0.2, alpha) };
+  }
+  return { backgroundColor: "#f1f5f9", opacity: 1 };
+}
+
 function groupSourceLabel(source: SlotCandidate["source"]) {
+  if (source === "admin") return "관리 후보";
+  if (source === "palette") return "팔레트";
   if (source === "default") return "기본";
   if (source === "upload") return "업로드";
   return "후보";
