@@ -23,7 +23,27 @@ export type IosExportFile = {
 
 type IosImageMap = Partial<Record<ThemeResourceRole, string>>;
 const iosThemeCssFileName = "KakaoTalkTheme.css";
-const iosBubbleImageRoles = new Set<ThemeResourceRole>(["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"]);
+const iosScaleTargetsByRole: Partial<Record<ThemeResourceRole, number[]>> = {
+  main_background: [3],
+  tab_background_image: [2, 3],
+  tab_icon_friends: [2, 3],
+  tab_icon_friends_focused: [2, 3],
+  tab_icon_chats: [2, 3],
+  tab_icon_chats_focused: [2, 3],
+  tab_icon_now: [2, 3],
+  tab_icon_now_focused: [2, 3],
+  tab_icon_shopping: [2, 3],
+  tab_icon_shopping_focused: [2, 3],
+  tab_icon_more: [2, 3],
+  tab_icon_more_focused: [2, 3],
+  chat_background: [3],
+  bubble_me_1: [2, 3],
+  bubble_me_2: [2, 3],
+  bubble_you_1: [2, 3],
+  bubble_you_2: [2, 3],
+  profile_image_1: [3],
+  find_add_friend: [2, 3],
+};
 
 export async function buildIosThemeExportFiles(options: IosExportOptions): Promise<IosExportFile[]> {
   const { analysis, template, templateId, exportName, versionName, slots, uploads, selections } = options;
@@ -35,7 +55,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
     if (slot.kind === "color" || !slot.path) continue;
     const blob = await resolveIosSlotBlob(slot, uploads, selections, templateId, template);
     if (!blob) continue;
-    files.push(...(await createIosImageExportFiles(slot, blob, selections)));
+    files.push(...(await createIosImageExportFiles(slot, blob, selections, templateId)));
     imageMap[slot.role] = slot.fileName ?? slot.path.split("/").at(-1) ?? "";
   }
 
@@ -68,22 +88,27 @@ async function resolveIosSlotBlob(slot: ThemeAssetSlot, uploads: SlotUploads, se
   return normalizeIosImageBlob(slot, blob, assetUrl);
 }
 
-async function createIosImageExportFiles(slot: ThemeAssetSlot, blob: Blob, selections: SlotCandidateSelections): Promise<IosExportFile[]> {
-  if (!slot.path || !isIosBubbleImageSlot(slot)) return [{ path: slot.path ?? slot.fileName ?? "Images/image.png", blob }];
+async function createIosImageExportFiles(slot: ThemeAssetSlot, blob: Blob, selections: SlotCandidateSelections, templateId: ThemeTemplateId): Promise<IosExportFile[]> {
+  const scaleTargets = getIosScaleTargets(slot);
+  if (!slot.path || scaleTargets.length === 0) return [{ path: slot.path ?? slot.fileName ?? "Images/image.png", blob }];
 
   const basePath = stripPngExtension(stripScaleSuffix(slot.path));
-  const sourceScale = detectIosSourceScale(selections[slot.id]) ?? detectIosSourceScale(slot.defaultAssetUrls?.basic) ?? 3;
-  const image3x = sourceScale === 3 ? blob : await resizePngBlob(blob, 3 / sourceScale);
-  const image2x = sourceScale === 2 ? blob : await resizePngBlob(blob, 2 / sourceScale);
+  const sourceScale = detectIosSourceScale(selections[slot.id]) ?? detectIosSourceScale(slot.defaultAssetUrls?.[templateId]) ?? 3;
+  const entries: IosExportFile[] = [];
 
-  return [
-    { path: `${basePath}@2x.png`, blob: image2x },
-    { path: `${basePath}@3x.png`, blob: image3x },
-  ];
+  for (const targetScale of scaleTargets) {
+    entries.push({
+      path: targetScale === 1 ? `${basePath}.png` : `${basePath}@${targetScale}x.png`,
+      blob: targetScale === sourceScale ? blob : await resizePngBlob(blob, targetScale / sourceScale),
+    });
+  }
+
+  return entries;
 }
 
-function isIosBubbleImageSlot(slot: ThemeAssetSlot) {
-  return iosBubbleImageRoles.has(slot.role) && Boolean(slot.path?.toLowerCase().endsWith(".png"));
+function getIosScaleTargets(slot: ThemeAssetSlot) {
+  if (!slot.path?.toLowerCase().endsWith(".png")) return [];
+  return iosScaleTargetsByRole[slot.role] ?? [];
 }
 
 function buildIosThemeCss({
