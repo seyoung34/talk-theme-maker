@@ -3,9 +3,10 @@ import type { ThemeTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
 const databaseName = "kakaotalk-theme-maker";
-const databaseVersion = 2;
+const databaseVersion = 3;
 const storeName = "user-templates";
 const adminAssetsStoreName = "admin-assets";
+const systemTemplatesStoreName = "system-templates";
 
 export type UserTemplateBubbleEdits = {
   markers: Partial<Record<string, Markers>>;
@@ -42,6 +43,9 @@ function openDatabase() {
       }
       if (!database.objectStoreNames.contains(adminAssetsStoreName)) {
         database.createObjectStore(adminAssetsStoreName, { keyPath: "id" });
+      }
+      if (!database.objectStoreNames.contains(systemTemplatesStoreName)) {
+        database.createObjectStore(systemTemplatesStoreName, { keyPath: "id" });
       }
     };
 

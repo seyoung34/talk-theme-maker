@@ -2,7 +2,8 @@ import androidSlotsManifest from "@/lib/theme/manifest/android.slots.json";
 import iosSlotsManifest from "@/lib/theme/manifest/ios.slots.json";
 import type { ThemeCandidateSourceType, ThemeExportMapping, ThemePlatform, ThemeResourceRole, ThemeScreen, ThemeSection, ThemeSlotGroup, ThemeSlotKind } from "@/lib/theme/types";
 
-export type ThemeTemplateId = "basic" | "spongebob";
+export type BaseTemplateId = "basic";
+export type ThemeTemplateId = BaseTemplateId | "spongebob";
 
 export type ThemeTemplateDefaults = {
   platform: ThemePlatform;
@@ -40,6 +41,8 @@ export type ThemeStartPayload = {
   templateId: ThemeTemplateId;
   platform: ThemePlatform;
   userTemplateId?: string;
+  systemTemplateId?: string;
+  editMode?: "user" | "admin";
 };
 
 export type ThemeSlotCandidate = {

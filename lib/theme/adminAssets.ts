@@ -1,8 +1,9 @@
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 const databaseName = "kakaotalk-theme-maker";
-const databaseVersion = 2;
+const databaseVersion = 3;
 const userTemplatesStoreName = "user-templates";
+const systemTemplatesStoreName = "system-templates";
 const storeName = "admin-assets";
 
 export type AdminAssetCandidate = {
@@ -36,6 +37,9 @@ function openDatabase() {
       }
       if (!database.objectStoreNames.contains(storeName)) {
         database.createObjectStore(storeName, { keyPath: "id" });
+      }
+      if (!database.objectStoreNames.contains(systemTemplatesStoreName)) {
+        database.createObjectStore(systemTemplatesStoreName, { keyPath: "id" });
       }
     };
 
