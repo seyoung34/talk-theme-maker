@@ -10,6 +10,18 @@ import { templateStartStorageKey, themeTemplates, type ThemeTemplate, type Theme
 import { deleteUserTemplate, listUserTemplates, type UserTemplateSummary } from "@/lib/theme/userTemplates";
 import type { ThemePlatform } from "@/lib/theme/types";
 
+type TemplatePreviewModel = {
+  title: string;
+  description?: string;
+  eyebrow: string;
+  closeLabel: string;
+  androidLabel: string;
+  iosLabel: string;
+  baseTemplate: ThemeTemplate;
+  rows: Array<{ label: string; value: string }>;
+  onStart: (platform: ThemePlatform) => void;
+};
+
 export default function TemplateGalleryClient() {
   const router = useRouter();
   const [selectedTemplateId, setSelectedTemplateId] = useState<ThemeTemplateId | null>(null);
@@ -19,6 +31,11 @@ export default function TemplateGalleryClient() {
   const [notice, setNotice] = useState<string | null>(null);
   const selectedTemplate = themeTemplates.find((template) => template.id === selectedTemplateId) ?? null;
   const selectedSystemTemplate = systemTemplates.find((template) => template.id === selectedSystemTemplateId) ?? null;
+  const previewModel = selectedTemplate
+    ? createThemeTemplatePreviewModel(selectedTemplate, (platform) => start(selectedTemplate, platform))
+    : selectedSystemTemplate
+      ? createSystemTemplatePreviewModel(selectedSystemTemplate, (platform) => startSystemTemplateWithPlatform(selectedSystemTemplate, platform))
+      : null;
   const baseTemplates = themeTemplates.filter((template) => template.id === "basic");
   const seedSystemTemplates = themeTemplates.filter((template) => template.id === "spongebob");
   const hasSavedTemplates = userTemplates.length > 0;
@@ -245,18 +262,13 @@ export default function TemplateGalleryClient() {
         </section>
       </div>
 
-      {selectedTemplate ? (
+      {previewModel ? (
         <TemplatePreviewModal
-          template={selectedTemplate}
-          onClose={() => setSelectedTemplateId(null)}
-          onStart={(platform) => start(selectedTemplate, platform)}
-        />
-      ) : null}
-      {selectedSystemTemplate ? (
-        <SystemTemplatePreviewModal
-          template={selectedSystemTemplate}
-          onClose={() => setSelectedSystemTemplateId(null)}
-          onStart={(platform) => startSystemTemplateWithPlatform(selectedSystemTemplate, platform)}
+          preview={previewModel}
+          onClose={() => {
+            setSelectedTemplateId(null);
+            setSelectedSystemTemplateId(null);
+          }}
         />
       ) : null}
     </main>
@@ -270,6 +282,45 @@ function StatusRow({ label, value }: { label: string; value: string }) {
       <strong className="text-sm font-black text-[var(--color-on-surface)]">{value}</strong>
     </div>
   );
+}
+
+function createThemeTemplatePreviewModel(template: ThemeTemplate, onStart: (platform: ThemePlatform) => void): TemplatePreviewModel {
+  return {
+    title: template.name,
+    description: template.previewNote,
+    eyebrow: "Template preview",
+    closeLabel: "닫기",
+    androidLabel: "Android로 시작",
+    iosLabel: "iOS로 시작",
+    baseTemplate: template,
+    rows: [
+      { label: "기본 채팅방 배경", value: template.defaults.chatBackground },
+      { label: "내 말풍선", value: template.defaults.myBubble },
+      { label: "상대 말풍선", value: template.defaults.friendBubble },
+      { label: "기본 시작 플랫폼", value: template.defaults.platform === "android" ? "Android" : "iOS" },
+    ],
+    onStart,
+  };
+}
+
+function createSystemTemplatePreviewModel(template: SystemTemplateSummary, onStart: (platform: ThemePlatform) => void): TemplatePreviewModel {
+  const baseTemplate = themeTemplates.find((item) => item.id === template.baseTemplateId) ?? themeTemplates[0];
+  return {
+    title: template.title,
+    description: template.description,
+    eyebrow: "System template preview",
+    closeLabel: "Close",
+    androidLabel: "Android start",
+    iosLabel: "iOS start",
+    baseTemplate,
+    rows: [
+      { label: "Base", value: template.baseTemplateId },
+      { label: "Saved platform", value: template.platform === "android" ? "Android" : "iOS" },
+      { label: "Colors", value: `${template.colorCount}` },
+      { label: "Uploads", value: `${template.uploadCount}` },
+    ],
+    onStart,
+  };
 }
 
 function SystemTemplateCard({ template, onPreview }: { template: SystemTemplateSummary; onPreview: (templateId: string) => void }) {
@@ -309,46 +360,35 @@ function SystemTemplateCard({ template, onPreview }: { template: SystemTemplateS
   );
 }
 
-function SystemTemplatePreviewModal({
-  template,
-  onClose,
-  onStart,
-}: {
-  template: SystemTemplateSummary;
-  onClose: () => void;
-  onStart: (platform: ThemePlatform) => void;
-}) {
-  const baseTemplate = themeTemplates.find((item) => item.id === template.baseTemplateId) ?? themeTemplates[0];
-
+function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewModel; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${template.title} preview`}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${preview.title} preview`}>
       <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
         <header className="flex items-start justify-between gap-3 border-b border-[var(--color-outline-variant)] px-4 py-3 sm:px-5 sm:py-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">System template preview</p>
-            <h2 className="mt-1 font-[var(--font-display)] text-2xl font-semibold leading-tight text-[var(--color-on-surface)] sm:text-3xl">{template.title}</h2>
-            {template.description ? <p className="mt-1 line-clamp-2 max-w-2xl text-xs leading-5 text-[var(--color-on-surface-variant)] sm:text-sm">{template.description}</p> : null}
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">{preview.eyebrow}</p>
+            <h2 className="mt-1 font-[var(--font-display)] text-2xl font-semibold leading-tight text-[var(--color-on-surface)] sm:text-3xl">{preview.title}</h2>
+            {preview.description ? <p className="mt-1 line-clamp-2 max-w-2xl text-xs leading-5 text-[var(--color-on-surface-variant)] sm:text-sm">{preview.description}</p> : null}
           </div>
           <button className="shrink-0 rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-white sm:px-4 sm:text-sm" type="button" onClick={onClose}>
-            Close
+            {preview.closeLabel}
           </button>
         </header>
 
         <div className="grid min-h-0 gap-3 p-3 sm:grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)] sm:p-4 lg:grid-cols-[340px_1fr]">
-          <TemplatePhonePreview template={baseTemplate} />
+          <TemplatePhonePreview template={preview.baseTemplate} />
           <div className="grid min-h-0 content-between gap-3">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              <InfoRow label="Base" value={template.baseTemplateId} />
-              <InfoRow label="Saved platform" value={template.platform === "android" ? "Android" : "iOS"} />
-              <InfoRow label="Colors" value={`${template.colorCount}`} />
-              <InfoRow label="Uploads" value={`${template.uploadCount}`} />
+              {preview.rows.map((row) => (
+                <InfoRow key={row.label} label={row.label} value={row.value} />
+              ))}
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <button className="rounded-full bg-[var(--color-inverse-surface)] px-4 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("android")}>
-                Android start
+              <button className="rounded-full bg-[var(--color-inverse-surface)] px-4 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:scale-[0.98]" type="button" onClick={() => preview.onStart("android")}>
+                {preview.androidLabel}
               </button>
-              <button className="rounded-full bg-[var(--color-primary-container)] px-4 py-3 text-sm font-black text-[var(--color-on-primary-container)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("ios")}>
-                iOS start
+              <button className="rounded-full bg-[var(--color-primary-container)] px-4 py-3 text-sm font-black text-[var(--color-on-primary-container)] transition hover:scale-[0.98]" type="button" onClick={() => preview.onStart("ios")}>
+                {preview.iosLabel}
               </button>
             </div>
           </div>
@@ -357,54 +397,6 @@ function SystemTemplatePreviewModal({
     </div>
   );
 }
-
-function TemplatePreviewModal({
-  template,
-  onClose,
-  onStart,
-}: {
-  template: ThemeTemplate;
-  onClose: () => void;
-  onStart: (platform: ThemePlatform) => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${template.name} 미리보기`}>
-      <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
-        <header className="flex items-start justify-between gap-3 border-b border-[var(--color-outline-variant)] px-4 py-3 sm:px-5 sm:py-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Template preview</p>
-            <h2 className="mt-1 font-[var(--font-display)] text-2xl font-semibold leading-tight text-[var(--color-on-surface)] sm:text-3xl">{template.name}</h2>
-            <p className="mt-1 line-clamp-2 max-w-2xl text-xs leading-5 text-[var(--color-on-surface-variant)] sm:text-sm">{template.previewNote}</p>
-          </div>
-          <button className="shrink-0 rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-white sm:px-4 sm:text-sm" type="button" onClick={onClose}>
-            닫기
-          </button>
-        </header>
-
-        <div className="grid min-h-0 gap-3 p-3 sm:grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)] sm:p-4 lg:grid-cols-[340px_1fr]">
-          <TemplatePhonePreview template={template} />
-          <div className="grid min-h-0 content-between gap-3">
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              <InfoRow label="기본 채팅방 배경" value={template.defaults.chatBackground} />
-              <InfoRow label="내 말풍선 색" value={template.defaults.myBubble} />
-              <InfoRow label="상대 말풍선 색" value={template.defaults.friendBubble} />
-              <InfoRow label="기본 시작 플랫폼" value={template.defaults.platform === "android" ? "Android" : "iOS"} />
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <button className="rounded-full bg-[var(--color-inverse-surface)] px-4 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("android")}>
-                Android로 시작
-              </button>
-              <button className="rounded-full bg-[var(--color-primary-container)] px-4 py-3 text-sm font-black text-[var(--color-on-primary-container)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("ios")}>
-                iOS로 시작
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function TemplateMiniPreview({ template }: { template: ThemeTemplate }) {
   const assets = spongebobPreviewAssets(template);
   return (
