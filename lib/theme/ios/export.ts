@@ -23,6 +23,7 @@ export type IosExportFile = {
 
 type IosImageMap = Partial<Record<ThemeResourceRole, string>>;
 const iosThemeCssFileName = "KakaoTalkTheme.css";
+const iosBubbleImageRoles = new Set<ThemeResourceRole>(["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"]);
 
 export async function buildIosThemeExportFiles(options: IosExportOptions): Promise<IosExportFile[]> {
   const { analysis, template, templateId, exportName, versionName, slots, uploads, selections } = options;
@@ -34,7 +35,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
     if (slot.kind === "color" || !slot.path) continue;
     const blob = await resolveIosSlotBlob(slot, uploads, selections, templateId, template);
     if (!blob) continue;
-    files.push({ path: slot.path, blob });
+    files.push(...(await createIosImageExportFiles(slot, blob, selections)));
     imageMap[slot.role] = slot.fileName ?? slot.path.split("/").at(-1) ?? "";
   }
 
@@ -65,6 +66,24 @@ async function resolveIosSlotBlob(slot: ThemeAssetSlot, uploads: SlotUploads, se
   if (!assetUrl) return null;
   const blob = await fetchAssetBlob(assetUrl);
   return normalizeIosImageBlob(slot, blob, assetUrl);
+}
+
+async function createIosImageExportFiles(slot: ThemeAssetSlot, blob: Blob, selections: SlotCandidateSelections): Promise<IosExportFile[]> {
+  if (!slot.path || !isIosBubbleImageSlot(slot)) return [{ path: slot.path ?? slot.fileName ?? "Images/image.png", blob }];
+
+  const basePath = stripPngExtension(stripScaleSuffix(slot.path));
+  const sourceScale = detectIosSourceScale(selections[slot.id]) ?? detectIosSourceScale(slot.defaultAssetUrls?.basic) ?? 3;
+  const image3x = sourceScale === 3 ? blob : await resizePngBlob(blob, 3 / sourceScale);
+  const image2x = sourceScale === 2 ? blob : await resizePngBlob(blob, 2 / sourceScale);
+
+  return [
+    { path: `${basePath}@2x.png`, blob: image2x },
+    { path: `${basePath}@3x.png`, blob: image3x },
+  ];
+}
+
+function isIosBubbleImageSlot(slot: ThemeAssetSlot) {
+  return iosBubbleImageRoles.has(slot.role) && Boolean(slot.path?.toLowerCase().endsWith(".png"));
 }
 
 function buildIosThemeCss({
@@ -300,6 +319,31 @@ async function rasterizeSvgBlob(blob: Blob) {
   }
 }
 
+async function resizePngBlob(blob: Blob, scale: number) {
+  if (typeof document === "undefined" || Math.abs(scale - 1) < 0.001) return blob;
+
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = await loadImage(url);
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    if (!sourceWidth || !sourceHeight) return blob;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return blob;
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return (await canvasToPngBlob(canvas)) ?? blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 function loadImage(url: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
@@ -313,6 +357,20 @@ function canvasToPngBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/png");
   });
+}
+
+function detectIosSourceScale(value: string | undefined) {
+  if (!value) return null;
+  const match = value.match(/@([23])x(?=\.[a-z0-9]+$|$)/i);
+  return match ? Number(match[1]) : null;
+}
+
+function stripScaleSuffix(path: string) {
+  return path.replace(/@(?:2x|3x)(?=\.png$)/i, "");
+}
+
+function stripPngExtension(path: string) {
+  return path.replace(/\.png$/i, "");
 }
 
 function cssLine(property: string, value: string | undefined) {
