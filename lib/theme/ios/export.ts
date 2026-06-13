@@ -22,6 +22,7 @@ export type IosExportFile = {
 };
 
 type IosImageMap = Partial<Record<ThemeResourceRole, string>>;
+const iosThemeCssFileName = "KakaoTalkTheme.css";
 
 export async function buildIosThemeExportFiles(options: IosExportOptions): Promise<IosExportFile[]> {
   const { analysis, template, templateId, exportName, versionName, slots, uploads, selections } = options;
@@ -39,7 +40,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
 
   files.push(
     textBlobFile(
-      "Kakao Talk Theme.css",
+      iosThemeCssFileName,
       buildIosThemeCss({
         template,
         templateId,
@@ -52,16 +53,6 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
         bubbleEditsBySlotId: options.bubbleEditsBySlotId,
       }),
     ),
-    textBlobFile("theme-export-report.json", JSON.stringify({ exportedAt: new Date().toISOString(), templateId, platform: "ios", diagnostics: analysis.diagnostics }, null, 2)),
-    textBlobFile(
-      "README-export.txt",
-      [
-        "This package contains iOS KakaoTalk theme files exported from KakaoTalk Theme Maker.",
-        "",
-        "Installable packages use the same ZIP payload with a .ktheme extension.",
-        "The root CSS file is Kakao Talk Theme.css and image resources are under Images/.",
-      ].join("\n"),
-    ),
   );
 
   return files;
@@ -69,10 +60,11 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
 
 async function resolveIosSlotBlob(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate) {
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
-  if (selectedUpload) return selectedUpload.file;
+  if (selectedUpload) return normalizeIosImageBlob(slot, selectedUpload.file, selectedUpload.file.name);
   const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template);
   if (!assetUrl) return null;
-  return fetchAssetBlob(assetUrl);
+  const blob = await fetchAssetBlob(assetUrl);
+  return normalizeIosImageBlob(slot, blob, assetUrl);
 }
 
 function buildIosThemeCss({
@@ -278,6 +270,49 @@ async function fetchAssetBlob(assetUrl: string) {
   const response = await fetch(assetUrl);
   if (!response.ok) throw new Error(`Failed to fetch asset: ${assetUrl}`);
   return response.blob();
+}
+
+async function normalizeIosImageBlob(slot: ThemeAssetSlot, blob: Blob, sourceName: string) {
+  const expectsPng = slot.path?.toLowerCase().endsWith(".png");
+  const isSvg = blob.type.includes("svg") || sourceName.toLowerCase().endsWith(".svg");
+  if (!expectsPng || !isSvg) return blob;
+  return rasterizeSvgBlob(blob);
+}
+
+async function rasterizeSvgBlob(blob: Blob) {
+  if (typeof document === "undefined") return blob;
+
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = await loadImage(url);
+    const width = image.naturalWidth || image.width || 512;
+    const height = image.naturalHeight || image.height || 512;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return blob;
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+    return (await canvasToPngBlob(canvas)) ?? blob;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function loadImage(url: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to rasterize SVG asset for iOS export."));
+    image.src = url;
+  });
+}
+
+function canvasToPngBlob(canvas: HTMLCanvasElement) {
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
 }
 
 function cssLine(property: string, value: string | undefined) {
