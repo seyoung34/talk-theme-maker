@@ -352,6 +352,8 @@ export function readTemplateStartPayload(storageKey: string): ThemeStartPayload 
         templateId: parsed.templateId,
         platform: parsed.platform,
         userTemplateId: typeof parsed.userTemplateId === "string" ? parsed.userTemplateId : undefined,
+        systemTemplateId: typeof parsed.systemTemplateId === "string" ? parsed.systemTemplateId : undefined,
+        editMode: parsed.editMode === "admin" || parsed.editMode === "user" ? parsed.editMode : undefined,
       };
     }
     return null;

@@ -25,6 +25,7 @@ import { listAdminAssetCandidates, type AdminAssetCandidate } from "@/lib/theme/
 import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
+import { localSystemTemplateRepository, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
 import {
   getThemeSlots,
@@ -46,6 +47,12 @@ type Notice = {
 type ActiveUserTemplate = {
   id: string;
   name: string;
+  createdAt: number;
+};
+
+type ActiveSystemTemplate = {
+  id: string;
+  title: string;
   createdAt: number;
 };
 
@@ -75,7 +82,12 @@ type ExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
   mode: ExportMode;
 };
 
-export default function ProjectImporterClient() {
+type ProjectImporterClientProps = {
+  mode?: "user" | "admin";
+};
+
+export default function ProjectImporterClient({ mode = "user" }: ProjectImporterClientProps) {
+  const isAdminMode = mode === "admin";
   const router = useRouter();
   const [templateId, setTemplateId] = useState<ThemeTemplateId>("basic");
   const [platform, setPlatform] = useState<ThemePlatform>("android");
@@ -90,9 +102,20 @@ export default function ProjectImporterClient() {
   const [isExporting, setIsExporting] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
+  const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveMode, setSaveMode] = useState<"overwrite" | "saveAs">("saveAs");
   const [saveName, setSaveName] = useState("");
+  const [systemSaveDialogOpen, setSystemSaveDialogOpen] = useState(false);
+  const [systemTitle, setSystemTitle] = useState("");
+  const [systemDescription, setSystemDescription] = useState("");
+  const [systemTags, setSystemTags] = useState("");
+  const [systemStatus, setSystemStatus] = useState<SystemTemplateStatus>("draft");
+  const [systemVisibility, setSystemVisibility] = useState<SystemTemplateVisibility>("private");
+  const [systemPricingType, setSystemPricingType] = useState<SystemTemplatePricingType>("free");
+  const [systemPriceAmount, setSystemPriceAmount] = useState("");
+  const [systemCreditCost, setSystemCreditCost] = useState("");
+  const [isSavingSystemTemplate, setIsSavingSystemTemplate] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportMode, setExportMode] = useState<ExportMode>("apk");
   const [exportName, setExportName] = useState("");
@@ -105,6 +128,7 @@ export default function ProjectImporterClient() {
   const [adminAssets, setAdminAssets] = useState<AdminAssetCandidate[]>([]);
   const [adminAssetsWithPreview, setAdminAssetsWithPreview] = useState<Array<AdminAssetCandidate & { previewUrl: string }>>([]);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const skipDefaultSelectionResetRef = useRef(false);
 
   useEffect(() => {
     const payload = readTemplateStartPayload(templateStartStorageKey);
@@ -119,6 +143,33 @@ export default function ProjectImporterClient() {
       setUploads({});
       setColors({});
       setActiveUserTemplate(null);
+      setActiveSystemTemplate(null);
+
+      if (payload.systemTemplateId) {
+        try {
+          const savedTemplate = await localSystemTemplateRepository.get(payload.systemTemplateId);
+          if (!savedTemplate) {
+            setNotice({ tone: "warning", message: "?쒖뒪???쒗뵆由우쓣 李얠쓣 ???놁뼱 湲곕낯 ?쒗뵆由우쑝濡??쒖옉?⑸땲??" });
+            return;
+          }
+
+          skipDefaultSelectionResetRef.current = true;
+          setTemplateId(savedTemplate.baseTemplateId);
+          setPlatform(savedTemplate.platform);
+          setUploads(savedTemplate.overrides.uploads);
+          setColors(savedTemplate.overrides.colors);
+          setCandidateSelections(savedTemplate.overrides.candidateSelections);
+          setBubbleMarkers(savedTemplate.overrides.bubbleEdits.markers);
+          setBubbleInsets(savedTemplate.overrides.bubbleEdits.insets);
+          setBubbleStretch(savedTemplate.overrides.bubbleEdits.stretch);
+          setActiveSystemTemplate({ id: savedTemplate.id, title: savedTemplate.title, createdAt: savedTemplate.createdAt });
+          setNotice({ tone: "success", message: `${savedTemplate.title} ?쒖뒪???쒗뵆由우쓣 遺덈윭?붿뒿?덈떎.` });
+        } catch (error) {
+          console.error(error);
+          setNotice({ tone: "error", message: "?쒖뒪???쒗뵆由우쓣 遺덈윭?ㅻ뒗 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." });
+        }
+        return;
+      }
 
       if (!payload.userTemplateId) return;
 
@@ -129,6 +180,7 @@ export default function ProjectImporterClient() {
           return;
         }
 
+        skipDefaultSelectionResetRef.current = true;
         setTemplateId(savedTemplate.templateId);
         setPlatform(savedTemplate.platform);
         setUploads(savedTemplate.uploads);
@@ -171,10 +223,14 @@ export default function ProjectImporterClient() {
   }, [adminAssets]);
 
   const activeTemplate = getThemeTemplate(templateId);
-  const displayTemplateName = activeUserTemplate?.name ?? activeTemplate.name;
+  const displayTemplateName = activeUserTemplate?.name ?? activeSystemTemplate?.title ?? activeTemplate.name;
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
 
   useEffect(() => {
+    if (skipDefaultSelectionResetRef.current) {
+      skipDefaultSelectionResetRef.current = false;
+      return;
+    }
     setCandidateSelections(getInitialSlotCandidateSelections(slots, templateId, activeTemplate));
   }, [activeTemplate, slots, templateId]);
 
@@ -345,6 +401,60 @@ export default function ProjectImporterClient() {
     }
   };
 
+  const openSystemSaveDialog = () => {
+    setSystemTitle(displayTemplateName);
+    setSystemDescription("");
+    setSystemTags("");
+    setSystemStatus("draft");
+    setSystemVisibility("private");
+    setSystemPricingType("free");
+    setSystemPriceAmount("");
+    setSystemCreditCost("");
+    setSystemSaveDialogOpen(true);
+  };
+
+  const saveSystemTemplate = async () => {
+    const title = systemTitle.trim();
+    if (!title) return;
+
+    try {
+      setIsSavingSystemTemplate(true);
+      setNotice({ tone: "info", message: "시스템 템플릿을 저장하는 중입니다." });
+      const savedTemplate = await localSystemTemplateRepository.save({
+        title,
+        description: systemDescription.trim() || undefined,
+        baseTemplateId: "basic",
+        platform,
+        status: systemStatus,
+        visibility: systemVisibility,
+        pricingType: systemPricingType,
+        priceAmount: systemPricingType === "paid" ? Number(systemPriceAmount) || 0 : undefined,
+        creditCost: systemPricingType === "credit" ? Number(systemCreditCost) || 0 : undefined,
+        tags: systemTags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+        overrides: {
+          colors,
+          uploads,
+          candidateSelections,
+          bubbleEdits: {
+            markers: bubbleMarkers,
+            insets: bubbleInsets,
+            stretch: bubbleStretch,
+          },
+        },
+      });
+      setSystemSaveDialogOpen(false);
+      setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 저장했습니다.` });
+    } catch (error) {
+      console.error(error);
+      setNotice({ tone: "error", message: "시스템 템플릿 저장 중 오류가 발생했습니다." });
+    } finally {
+      setIsSavingSystemTemplate(false);
+    }
+  };
+
   const openExportDialog = async () => {
     try {
       if (!exportVersionName) {
@@ -459,6 +569,31 @@ export default function ProjectImporterClient() {
           onSubmit={() => void submitExport()}
         />
       ) : null}
+      {systemSaveDialogOpen ? (
+        <SystemTemplateSaveDialog
+          isSaving={isSavingSystemTemplate}
+          title={systemTitle}
+          description={systemDescription}
+          tags={systemTags}
+          status={systemStatus}
+          visibility={systemVisibility}
+          pricingType={systemPricingType}
+          priceAmount={systemPriceAmount}
+          creditCost={systemCreditCost}
+          onClose={() => {
+            if (!isSavingSystemTemplate) setSystemSaveDialogOpen(false);
+          }}
+          onTitleChange={setSystemTitle}
+          onDescriptionChange={setSystemDescription}
+          onTagsChange={setSystemTags}
+          onStatusChange={setSystemStatus}
+          onVisibilityChange={setSystemVisibility}
+          onPricingTypeChange={setSystemPricingType}
+          onPriceAmountChange={setSystemPriceAmount}
+          onCreditCostChange={setSystemCreditCost}
+          onSubmit={() => void saveSystemTemplate()}
+        />
+      ) : null}
 
       <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-3 md:gap-4">
         <header className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-[#e5e7eb] bg-white/95 px-4 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
@@ -488,9 +623,19 @@ export default function ProjectImporterClient() {
           </div>
 
           <div className="flex min-w-0 items-center gap-2 shrink-0 justify-self-end">
+            {isAdminMode ? (
+              <button
+                type="button"
+                className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60"
+                onClick={openSystemSaveDialog}
+                disabled={isSavingSystemTemplate}
+              >
+                {isSavingSystemTemplate ? "저장 중.." : "시스템 템플릿으로 저장"}
+              </button>
+            ) : null}
             <button
               type="button"
-              className="rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60"
+              className={`${isAdminMode ? "hidden" : ""} rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60`}
               onClick={openSaveDialog}
               disabled={isSavingTemplate}
             >
@@ -498,7 +643,7 @@ export default function ProjectImporterClient() {
             </button>
             <button
               type="button"
-              className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60"
+              className={`${isAdminMode ? "hidden" : ""} rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60`}
               onClick={() => void openExportDialog()}
               disabled={isExporting}
             >
@@ -701,6 +846,120 @@ function SaveTemplateDialog({
         </div>
       </section>
     </div>
+  );
+}
+
+function SystemTemplateSaveDialog({
+  isSaving,
+  title,
+  description,
+  tags,
+  status,
+  visibility,
+  pricingType,
+  priceAmount,
+  creditCost,
+  onClose,
+  onTitleChange,
+  onDescriptionChange,
+  onTagsChange,
+  onStatusChange,
+  onVisibilityChange,
+  onPricingTypeChange,
+  onPriceAmountChange,
+  onCreditCostChange,
+  onSubmit,
+}: {
+  isSaving: boolean;
+  title: string;
+  description: string;
+  tags: string;
+  status: SystemTemplateStatus;
+  visibility: SystemTemplateVisibility;
+  pricingType: SystemTemplatePricingType;
+  priceAmount: string;
+  creditCost: string;
+  onClose: () => void;
+  onTitleChange: (value: string) => void;
+  onDescriptionChange: (value: string) => void;
+  onTagsChange: (value: string) => void;
+  onStatusChange: (value: SystemTemplateStatus) => void;
+  onVisibilityChange: (value: SystemTemplateVisibility) => void;
+  onPricingTypeChange: (value: SystemTemplatePricingType) => void;
+  onPriceAmountChange: (value: string) => void;
+  onCreditCostChange: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  const canSubmit = title.trim().length > 0;
+
+  return (
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.42)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="시스템 템플릿 저장">
+      <section className="grid w-full max-w-[560px] gap-5 rounded-[28px] border border-[#e5e7eb] bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid gap-1">
+            <h2 className="text-lg font-semibold text-[#0f172a]">시스템 템플릿으로 저장</h2>
+            <p className="text-sm text-[#64748b]">현재 편집 상태를 basic 기반 overrides로 저장합니다.</p>
+          </div>
+          <button type="button" className="rounded-full border border-[#e5e7eb] px-3 py-1 text-sm font-semibold text-[#475569]" onClick={onClose} disabled={isSaving}>
+            닫기
+          </button>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="grid gap-2 md:col-span-2">
+            <span className="text-sm font-semibold text-[#0f172a]">Title</span>
+            <input type="text" value={title} onChange={(event) => onTitleChange(event.currentTarget.value)} disabled={isSaving} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" />
+          </label>
+          <label className="grid gap-2 md:col-span-2">
+            <span className="text-sm font-semibold text-[#0f172a]">Description</span>
+            <textarea value={description} onChange={(event) => onDescriptionChange(event.currentTarget.value)} disabled={isSaving} className="min-h-20 rounded-xl border border-[#d1d5db] bg-white px-3 py-2 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" />
+          </label>
+          <label className="grid gap-2 md:col-span-2">
+            <span className="text-sm font-semibold text-[#0f172a]">Tags</span>
+            <input type="text" value={tags} onChange={(event) => onTagsChange(event.currentTarget.value)} disabled={isSaving} placeholder="쉼표로 구분" className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" />
+          </label>
+          <SelectField label="Status" value={status} options={["draft", "published", "archived"]} disabled={isSaving} onChange={(value) => onStatusChange(value as SystemTemplateStatus)} />
+          <SelectField label="Visibility" value={visibility} options={["private", "public", "unlisted"]} disabled={isSaving} onChange={(value) => onVisibilityChange(value as SystemTemplateVisibility)} />
+          <SelectField label="Pricing" value={pricingType} options={["free", "paid", "credit"]} disabled={isSaving} onChange={(value) => onPricingTypeChange(value as SystemTemplatePricingType)} />
+          {pricingType === "paid" ? (
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-[#0f172a]">Price</span>
+              <input type="number" min="0" value={priceAmount} onChange={(event) => onPriceAmountChange(event.currentTarget.value)} disabled={isSaving} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" />
+            </label>
+          ) : null}
+          {pricingType === "credit" ? (
+            <label className="grid gap-2">
+              <span className="text-sm font-semibold text-[#0f172a]">Credit cost</span>
+              <input type="number" min="0" value={creditCost} onChange={(event) => onCreditCostChange(event.currentTarget.value)} disabled={isSaving} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" />
+            </label>
+          ) : null}
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={isSaving}>
+            취소
+          </button>
+          <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" onClick={onSubmit} disabled={!canSubmit || isSaving}>
+            {isSaving ? "저장 중.." : "저장"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SelectField({ label, value, options, disabled, onChange }: { label: string; value: string; options: string[]; disabled: boolean; onChange: (value: string) => void }) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-semibold text-[#0f172a]">{label}</span>
+      <select value={value} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]">
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
