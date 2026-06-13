@@ -13,10 +13,12 @@ import type { ThemePlatform } from "@/lib/theme/types";
 export default function TemplateGalleryClient() {
   const router = useRouter();
   const [selectedTemplateId, setSelectedTemplateId] = useState<ThemeTemplateId | null>(null);
+  const [selectedSystemTemplateId, setSelectedSystemTemplateId] = useState<string | null>(null);
   const [userTemplates, setUserTemplates] = useState<UserTemplateSummary[]>([]);
   const [systemTemplates, setSystemTemplates] = useState<SystemTemplateSummary[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const selectedTemplate = themeTemplates.find((template) => template.id === selectedTemplateId) ?? null;
+  const selectedSystemTemplate = systemTemplates.find((template) => template.id === selectedSystemTemplateId) ?? null;
   const baseTemplates = themeTemplates.filter((template) => template.id === "basic");
   const seedSystemTemplates = themeTemplates.filter((template) => template.id === "spongebob");
   const hasSavedTemplates = userTemplates.length > 0;
@@ -76,8 +78,8 @@ export default function TemplateGalleryClient() {
     router.push("/edit");
   };
 
-  const startSystemTemplate = (template: SystemTemplateSummary) => {
-    localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.baseTemplateId, platform: template.platform, systemTemplateId: template.id, editMode: "user" }));
+  const startSystemTemplateWithPlatform = (template: SystemTemplateSummary, platform: ThemePlatform) => {
+    localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.baseTemplateId, platform, systemTemplateId: template.id, editMode: "user" }));
     router.push("/edit");
   };
 
@@ -200,7 +202,7 @@ export default function TemplateGalleryClient() {
             ))}
 
             {systemTemplates.map((template) => (
-              <SystemTemplateCard key={template.id} template={template} onStart={startSystemTemplate} />
+              <SystemTemplateCard key={template.id} template={template} onPreview={setSelectedSystemTemplateId} />
             ))}
           </div>
         </section>
@@ -250,6 +252,13 @@ export default function TemplateGalleryClient() {
           onStart={(platform) => start(selectedTemplate, platform)}
         />
       ) : null}
+      {selectedSystemTemplate ? (
+        <SystemTemplatePreviewModal
+          template={selectedSystemTemplate}
+          onClose={() => setSelectedSystemTemplateId(null)}
+          onStart={(platform) => startSystemTemplateWithPlatform(selectedSystemTemplate, platform)}
+        />
+      ) : null}
     </main>
   );
 }
@@ -263,7 +272,7 @@ function StatusRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SystemTemplateCard({ template, onStart }: { template: SystemTemplateSummary; onStart: (template: SystemTemplateSummary) => void }) {
+function SystemTemplateCard({ template, onPreview }: { template: SystemTemplateSummary; onPreview: (templateId: string) => void }) {
   return (
     <article className="grid min-h-[244px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/92 p-4 shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)]">
       <div className="grid gap-4">
@@ -291,12 +300,61 @@ function SystemTemplateCard({ template, onStart }: { template: SystemTemplateSum
       <button
         type="button"
         className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)] hover:text-[var(--color-on-primary-container)]"
-        onClick={() => onStart(template)}
+        onClick={() => onPreview(template.id)}
       >
-        Open
+        Template preview
         <ArrowRight className="w-4 h-4" />
       </button>
     </article>
+  );
+}
+
+function SystemTemplatePreviewModal({
+  template,
+  onClose,
+  onStart,
+}: {
+  template: SystemTemplateSummary;
+  onClose: () => void;
+  onStart: (platform: ThemePlatform) => void;
+}) {
+  const baseTemplate = themeTemplates.find((item) => item.id === template.baseTemplateId) ?? themeTemplates[0];
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${template.title} preview`}>
+      <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
+        <header className="flex items-start justify-between gap-3 border-b border-[var(--color-outline-variant)] px-4 py-3 sm:px-5 sm:py-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">System template preview</p>
+            <h2 className="mt-1 font-[var(--font-display)] text-2xl font-semibold leading-tight text-[var(--color-on-surface)] sm:text-3xl">{template.title}</h2>
+            {template.description ? <p className="mt-1 line-clamp-2 max-w-2xl text-xs leading-5 text-[var(--color-on-surface-variant)] sm:text-sm">{template.description}</p> : null}
+          </div>
+          <button className="shrink-0 rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-white sm:px-4 sm:text-sm" type="button" onClick={onClose}>
+            Close
+          </button>
+        </header>
+
+        <div className="grid min-h-0 gap-3 p-3 sm:grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)] sm:p-4 lg:grid-cols-[340px_1fr]">
+          <TemplatePhonePreview template={baseTemplate} />
+          <div className="grid min-h-0 content-between gap-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+              <InfoRow label="Base" value={template.baseTemplateId} />
+              <InfoRow label="Saved platform" value={template.platform === "android" ? "Android" : "iOS"} />
+              <InfoRow label="Colors" value={`${template.colorCount}`} />
+              <InfoRow label="Uploads" value={`${template.uploadCount}`} />
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button className="rounded-full bg-[var(--color-inverse-surface)] px-4 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("android")}>
+                Android start
+              </button>
+              <button className="rounded-full bg-[var(--color-primary-container)] px-4 py-3 text-sm font-black text-[var(--color-on-primary-container)] transition hover:scale-[0.98]" type="button" onClick={() => onStart("ios")}>
+                iOS start
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import AdminSystemTemplateList from "@/components/admin/AdminSystemTemplateList";
 import SiteHeader from "@/components/layout/SiteHeader";
 
 export default function AdminPage() {
@@ -42,6 +43,8 @@ export default function AdminPage() {
             </span>
           </Link>
         </section>
+
+        <AdminSystemTemplateList />
       </div>
     </main>
   );

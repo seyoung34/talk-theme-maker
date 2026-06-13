@@ -53,6 +53,13 @@ type ActiveUserTemplate = {
 type ActiveSystemTemplate = {
   id: string;
   title: string;
+  description?: string;
+  tags: string[];
+  status: SystemTemplateStatus;
+  visibility: SystemTemplateVisibility;
+  pricingType: SystemTemplatePricingType;
+  priceAmount?: number;
+  creditCost?: number;
   createdAt: number;
 };
 
@@ -155,14 +162,25 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
           skipDefaultSelectionResetRef.current = true;
           setTemplateId(savedTemplate.baseTemplateId);
-          setPlatform(savedTemplate.platform);
+          setPlatform(payload.platform);
           setUploads(savedTemplate.overrides.uploads);
           setColors(savedTemplate.overrides.colors);
           setCandidateSelections(savedTemplate.overrides.candidateSelections);
           setBubbleMarkers(savedTemplate.overrides.bubbleEdits.markers);
           setBubbleInsets(savedTemplate.overrides.bubbleEdits.insets);
           setBubbleStretch(savedTemplate.overrides.bubbleEdits.stretch);
-          setActiveSystemTemplate({ id: savedTemplate.id, title: savedTemplate.title, createdAt: savedTemplate.createdAt });
+          setActiveSystemTemplate({
+            id: savedTemplate.id,
+            title: savedTemplate.title,
+            description: savedTemplate.description,
+            tags: savedTemplate.tags,
+            status: savedTemplate.status,
+            visibility: savedTemplate.visibility,
+            pricingType: savedTemplate.pricingType,
+            priceAmount: savedTemplate.priceAmount,
+            creditCost: savedTemplate.creditCost,
+            createdAt: savedTemplate.createdAt,
+          });
           setNotice({ tone: "success", message: `${savedTemplate.title} ?쒖뒪???쒗뵆由우쓣 遺덈윭?붿뒿?덈떎.` });
         } catch (error) {
           console.error(error);
@@ -403,13 +421,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const openSystemSaveDialog = () => {
     setSystemTitle(displayTemplateName);
-    setSystemDescription("");
-    setSystemTags("");
-    setSystemStatus("draft");
-    setSystemVisibility("private");
-    setSystemPricingType("free");
-    setSystemPriceAmount("");
-    setSystemCreditCost("");
+    setSystemDescription(activeSystemTemplate?.description ?? "");
+    setSystemTags(activeSystemTemplate?.tags.join(", ") ?? "");
+    setSystemStatus(activeSystemTemplate?.status ?? "draft");
+    setSystemVisibility(activeSystemTemplate?.visibility ?? "private");
+    setSystemPricingType(activeSystemTemplate?.pricingType ?? "free");
+    setSystemPriceAmount(activeSystemTemplate?.priceAmount ? String(activeSystemTemplate.priceAmount) : "");
+    setSystemCreditCost(activeSystemTemplate?.creditCost ? String(activeSystemTemplate.creditCost) : "");
     setSystemSaveDialogOpen(true);
   };
 
@@ -421,6 +439,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       setIsSavingSystemTemplate(true);
       setNotice({ tone: "info", message: "시스템 템플릿을 저장하는 중입니다." });
       const savedTemplate = await localSystemTemplateRepository.save({
+        id: activeSystemTemplate?.id,
+        createdAt: activeSystemTemplate?.createdAt,
         title,
         description: systemDescription.trim() || undefined,
         baseTemplateId: "basic",
@@ -444,6 +464,18 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             stretch: bubbleStretch,
           },
         },
+      });
+      setActiveSystemTemplate({
+        id: savedTemplate.id,
+        title: savedTemplate.title,
+        description: savedTemplate.description,
+        tags: savedTemplate.tags,
+        status: savedTemplate.status,
+        visibility: savedTemplate.visibility,
+        pricingType: savedTemplate.pricingType,
+        priceAmount: savedTemplate.priceAmount,
+        creditCost: savedTemplate.creditCost,
+        createdAt: savedTemplate.createdAt,
       });
       setSystemSaveDialogOpen(false);
       setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 저장했습니다.` });
