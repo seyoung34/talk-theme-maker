@@ -71,6 +71,7 @@ type AndroidExportPayloadOptions = {
   templateId: ThemeTemplateId;
   exportName: string;
   versionName: string;
+  applicationId: string;
   mode: "project" | "apk" | "apk-zip";
   slots: ThemeAssetSlot[];
   uploads: SlotUploads;
@@ -127,6 +128,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [exportMode, setExportMode] = useState<ExportMode>("apk");
   const [exportName, setExportName] = useState("");
   const [exportVersionName, setExportVersionName] = useState("");
+  const [exportApplicationId, setExportApplicationId] = useState("");
+  const [applicationIdEdited, setApplicationIdEdited] = useState(false);
   const [exportProgressStep, setExportProgressStep] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
@@ -498,6 +501,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         setExportVersionName(payload.versionName ?? "1.0.0");
       }
       setExportName(displayTemplateName);
+      setExportApplicationId(createAndroidApplicationId(displayTemplateName));
+      setApplicationIdEdited(false);
       setExportMode(platform === "android" ? "apk" : "ktheme");
       setExportProgressStep(0);
       setExportDialogOpen(true);
@@ -525,6 +530,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         templateId,
         exportName,
         versionName: exportVersionName,
+        applicationId: exportApplicationId,
         mode: exportMode,
         slots,
         uploads,
@@ -588,6 +594,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           exportMode={exportMode}
           exportName={exportName}
           exportVersionName={exportVersionName}
+          exportApplicationId={exportApplicationId}
           progressStep={exportProgressStep}
           onClose={() => {
             if (!isExporting) {
@@ -596,8 +603,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             }
           }}
           onModeChange={setExportMode}
-          onNameChange={setExportName}
+          onNameChange={(value) => {
+            setExportName(value);
+            if (platform === "android" && !applicationIdEdited) {
+              setExportApplicationId(createAndroidApplicationId(value));
+            }
+          }}
           onVersionNameChange={setExportVersionName}
+          onApplicationIdChange={(value) => {
+            setApplicationIdEdited(true);
+            setExportApplicationId(value);
+          }}
           onSubmit={() => void submitExport()}
         />
       ) : null}
@@ -1001,11 +1017,13 @@ function ExportDialog({
   exportMode,
   exportName,
   exportVersionName,
+  exportApplicationId,
   progressStep,
   onClose,
   onModeChange,
   onNameChange,
   onVersionNameChange,
+  onApplicationIdChange,
   onSubmit,
 }: {
   isExporting: boolean;
@@ -1013,15 +1031,19 @@ function ExportDialog({
   exportMode: ExportMode;
   exportName: string;
   exportVersionName: string;
+  exportApplicationId: string;
   progressStep: number;
   onClose: () => void;
   onModeChange: (mode: ExportMode) => void;
   onNameChange: (value: string) => void;
   onVersionNameChange: (value: string) => void;
+  onApplicationIdChange: (value: string) => void;
   onSubmit: () => void;
 }) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const steps = getExportProgressSteps(exportMode);
-  const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0;
+  const applicationIdError = platform === "android" ? getAndroidApplicationIdError(exportApplicationId) : null;
+  const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0 && !applicationIdError;
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.42)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="내보내기">
@@ -1057,6 +1079,35 @@ function ExportDialog({
               className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]"
             />
           </label>
+          {platform === "android" ? (
+            <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3">
+              <button
+                type="button"
+                className="flex items-center justify-between gap-3 text-left text-sm font-semibold text-[#0f172a]"
+                onClick={() => setAdvancedOpen((current) => !current)}
+                disabled={isExporting}
+              >
+                <span>Android 고급 옵션</span>
+                <span className="text-xs text-[#64748b]">{advancedOpen ? "접기" : "열기"}</span>
+              </button>
+              {advancedOpen ? (
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold text-[#0f172a]">applicationId</span>
+                  <input
+                    type="text"
+                    value={exportApplicationId}
+                    onChange={(event) => onApplicationIdChange(event.currentTarget.value)}
+                    disabled={isExporting}
+                    spellCheck={false}
+                    className={`h-11 rounded-xl border bg-white px-3 font-mono text-sm text-[#111827] outline-none transition focus:border-[#2563eb] ${
+                      applicationIdError ? "border-[#ef4444]" : "border-[#d1d5db]"
+                    }`}
+                  />
+                  {applicationIdError ? <span className="text-xs font-medium text-[#dc2626]">{applicationIdError}</span> : null}
+                </label>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="grid gap-2">
@@ -1272,6 +1323,7 @@ async function createAndroidExportFormData({
   templateId,
   exportName,
   versionName,
+  applicationId,
   mode,
   slots,
   uploads,
@@ -1314,9 +1366,91 @@ async function createAndroidExportFormData({
   formData.append("manifest", JSON.stringify(manifest));
   formData.append("exportName", exportName);
   formData.append("versionName", versionName);
+  formData.append("applicationId", applicationId);
   formData.append("mode", mode);
 
   return formData;
+}
+
+const androidPackageSegmentReservedWords = new Set([
+  "abstract",
+  "assert",
+  "boolean",
+  "break",
+  "byte",
+  "case",
+  "catch",
+  "char",
+  "class",
+  "const",
+  "continue",
+  "default",
+  "do",
+  "double",
+  "else",
+  "enum",
+  "extends",
+  "final",
+  "finally",
+  "float",
+  "for",
+  "goto",
+  "if",
+  "implements",
+  "import",
+  "instanceof",
+  "int",
+  "interface",
+  "long",
+  "native",
+  "new",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "return",
+  "short",
+  "static",
+  "strictfp",
+  "super",
+  "switch",
+  "synchronized",
+  "this",
+  "throw",
+  "throws",
+  "transient",
+  "try",
+  "void",
+  "volatile",
+  "while",
+]);
+
+function createAndroidApplicationId(name: string) {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const safeSlug = slug && /^[a-z_]/.test(slug) && !androidPackageSegmentReservedWords.has(slug) ? slug : "custom_theme";
+  return `com.kakao.talk.theme.${safeSlug}`;
+}
+
+function getAndroidApplicationIdError(value: string) {
+  const applicationId = value.trim();
+  if (!applicationId) return "applicationId를 입력하세요.";
+  if (!/^[a-z0-9_.]+$/.test(applicationId)) return "소문자 영문, 숫자, _, .만 사용할 수 있습니다.";
+
+  const segments = applicationId.split(".");
+  if (segments.length < 2) return "최소 2개 이상의 segment가 필요합니다.";
+
+  for (const segment of segments) {
+    if (!segment) return "빈 segment는 사용할 수 없습니다.";
+    if (!/^[a-z_][a-z0-9_]*$/.test(segment)) return "각 segment는 소문자 영문 또는 _로 시작해야 합니다.";
+    if (androidPackageSegmentReservedWords.has(segment)) return `예약어 '${segment}'는 사용할 수 없습니다.`;
+  }
+
+  return null;
 }
 
 function triggerDownload(blob: Blob, fileName: string) {

@@ -14,6 +14,8 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const manifestRaw = formData.get("manifest");
     const apkBaseNameRaw = formData.get("apkBaseName");
+    const versionNameRaw = formData.get("versionName");
+    const applicationIdRaw = formData.get("applicationId");
 
     if (typeof manifestRaw !== "string") {
       return NextResponse.json({ error: "Missing upload manifest." }, { status: 400 });
@@ -21,6 +23,8 @@ export async function POST(request: Request) {
 
     const manifest = JSON.parse(manifestRaw) as UploadManifest;
     const apkBaseName = typeof apkBaseNameRaw === "string" && apkBaseNameRaw.trim().length > 0 ? apkBaseNameRaw : "kakaotalk-theme";
+    const versionName = typeof versionNameRaw === "string" && versionNameRaw.trim().length > 0 ? versionNameRaw.trim() : undefined;
+    const applicationId = typeof applicationIdRaw === "string" && applicationIdRaw.trim().length > 0 ? applicationIdRaw.trim() : undefined;
 
     const files: AndroidBuildInputFile[] = [];
     for (const item of manifest) {
@@ -34,7 +38,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const { apkBytes, fileName } = await buildAndroidApk(files, apkBaseName);
+    const { apkBytes, fileName } = await buildAndroidApk(files, apkBaseName, { versionName, applicationId });
     return new NextResponse(apkBytes, {
       status: 200,
       headers: {

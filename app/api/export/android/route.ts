@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     const manifestRaw = formData.get("manifest");
     const exportNameRaw = formData.get("exportName");
     const versionNameRaw = formData.get("versionName");
+    const applicationIdRaw = formData.get("applicationId");
     const modeRaw = formData.get("mode");
 
     if (typeof manifestRaw !== "string") {
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
     const mode = isExportMode(modeRaw) ? modeRaw : "apk";
     const exportName = typeof exportNameRaw === "string" && exportNameRaw.trim().length > 0 ? exportNameRaw.trim() : "kakaotalk-theme";
     const versionName = typeof versionNameRaw === "string" && versionNameRaw.trim().length > 0 ? versionNameRaw.trim() : undefined;
+    const applicationId = typeof applicationIdRaw === "string" && applicationIdRaw.trim().length > 0 ? applicationIdRaw.trim() : undefined;
     const manifest = JSON.parse(manifestRaw) as UploadManifest;
 
     const files: AndroidBuildInputFile[] = [];
@@ -51,7 +53,7 @@ export async function POST(request: Request) {
     }
 
     if (mode === "project") {
-      const { zipBytes, fileName } = await exportAndroidProjectZip(files, exportName, versionName);
+      const { zipBytes, fileName } = await exportAndroidProjectZip(files, exportName, { versionName, applicationId });
       return new NextResponse(zipBytes, {
         status: 200,
         headers: {
@@ -62,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     if (mode === "apk-zip") {
-      const { zipBytes, fileName } = await exportAndroidApkZip(files, exportName, versionName);
+      const { zipBytes, fileName } = await exportAndroidApkZip(files, exportName, { versionName, applicationId });
       return new NextResponse(zipBytes, {
         status: 200,
         headers: {
@@ -72,7 +74,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const { apkBytes, fileName } = await buildAndroidApk(files, exportName, versionName);
+    const { apkBytes, fileName } = await buildAndroidApk(files, exportName, { versionName, applicationId });
     return new NextResponse(apkBytes, {
       status: 200,
       headers: {
