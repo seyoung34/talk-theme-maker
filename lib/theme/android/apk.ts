@@ -111,15 +111,11 @@ async function writeProjectApplicationId(projectRoot: string, applicationId: str
 
   const buildScriptPath = path.join(projectRoot, "build.gradle.kts");
   const buildScript = await readFile(buildScriptPath, "utf8");
-  const nextBuildScript = buildScript
-    .replace(/namespace\s*=\s*"([^"]+)"/, `namespace = "${applicationId}"`)
-    .replace(/applicationId\s*=\s*"([^"]+)"/, `applicationId = "${applicationId}"`);
+  const nextBuildScript = buildScript.replace(/applicationId\s*=\s*"([^"]+)"/, `applicationId = "${applicationId}"`);
+  if (nextBuildScript === buildScript) {
+    throw new Error("Android applicationId field was not found in build.gradle.kts.");
+  }
   await writeFile(buildScriptPath, nextBuildScript, "utf8");
-
-  const manifestPath = path.join(projectRoot, "src", "main", "AndroidManifest.xml");
-  const manifest = await readFile(manifestPath, "utf8");
-  const nextManifest = manifest.replace(/package="([^"]+)"/, `package="${applicationId}"`);
-  await writeFile(manifestPath, nextManifest, "utf8");
 }
 
 async function writeProjectVersion(projectRoot: string, versionName: string) {

@@ -11,7 +11,7 @@ import {
   type SlotColors,
   type SlotUploads,
 } from "@/lib/theme/project/state";
-import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { describeAdminAssetAnalysis, getAdminAssetKindLabel, isAdminAssetRecommendedForSlot, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
@@ -127,11 +127,11 @@ export function buildSlotCandidates(
 
 function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | undefined, adminAssets: Array<AdminAssetCandidate & { previewUrl?: string }>): SlotCandidate[] {
   return adminAssets
-    .filter((asset) => asset.enabled && asset.slotRole === slot.role && (asset.platform === "all" || asset.platform === slot.platform))
+    .filter((asset) => isAdminAssetRecommendedForSlot(slot, asset))
     .map((asset) => ({
       id: asset.id,
       title: asset.title,
-      status: asset.tags.length > 0 ? asset.tags.join(", ") : asset.fileName,
+      status: asset.slotRole === slot.role ? (asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : asset.fileName) : `${asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : "유사 에셋"} · ${describeAdminAssetAnalysis(asset.analysis)}`,
       active: selectedUploadId === asset.id,
       selected: selectedUploadId === asset.id,
       source: "admin" as const,

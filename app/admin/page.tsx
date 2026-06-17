@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import AdminSystemTemplateEntryCard from "@/components/admin/AdminSystemTemplateEntryCard";
 import AdminSystemTemplateList from "@/components/admin/AdminSystemTemplateList";
 import SiteHeader from "@/components/layout/SiteHeader";
 
@@ -15,19 +16,7 @@ export default function AdminPage() {
         </header>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <Link
-            href="/admin/edit"
-            className="group grid min-h-[160px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white p-5 shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)]"
-          >
-            <div>
-              <strong className="font-[var(--font-display)] text-2xl font-semibold text-[var(--color-on-surface)]">시스템 템플릿</strong>
-              <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">시스템 템플릿 편집하기.</p>
-            </div>
-            <span className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)]">
-              열기
-              <ArrowRight className="h-4 w-4" />
-            </span>
-          </Link>
+          <AdminSystemTemplateEntryCard />
 
           <Link
             href="/admin/assets"

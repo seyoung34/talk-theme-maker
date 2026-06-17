@@ -56,6 +56,7 @@ export default function AdminSystemTemplateList() {
         templateId: template.baseTemplateId,
         platform: template.platform,
         systemTemplateId: template.id,
+        systemTemplateBundleId: template.bundleId ?? template.id,
         editMode: "admin",
       }),
     );
@@ -70,6 +71,7 @@ export default function AdminSystemTemplateList() {
         templateId: fallback?.baseTemplateId ?? "basic",
         platform,
         systemTemplateBundleId: bundle.id,
+        sourceSystemTemplateId: fallback?.id,
         editMode: "admin",
       }),
     );

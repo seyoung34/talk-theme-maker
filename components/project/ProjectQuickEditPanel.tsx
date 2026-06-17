@@ -217,7 +217,7 @@ function CandidatePicker({
   ].filter((group) => group.items.length > 0);
   const adminItems = candidates.filter((candidate) => candidate.source === "admin");
   if (adminItems.length > 0 && !groups.some((group) => group.key === "admin")) {
-    groups.splice(Math.max(0, groups.length - 1), 0, { key: "admin", label: "관리 후보", items: adminItems });
+    groups.splice(Math.max(0, groups.length - 1), 0, { key: "admin", label: "추천 에셋", items: adminItems });
   }
 
   const preferredTab = slot.kind === "color" ? groups[0]?.key : (selectedCandidate?.source ?? groups[0]?.key);

@@ -354,6 +354,7 @@ export function readTemplateStartPayload(storageKey: string): ThemeStartPayload 
         userTemplateId: typeof parsed.userTemplateId === "string" ? parsed.userTemplateId : undefined,
         systemTemplateId: typeof parsed.systemTemplateId === "string" ? parsed.systemTemplateId : undefined,
         systemTemplateBundleId: typeof parsed.systemTemplateBundleId === "string" ? parsed.systemTemplateBundleId : undefined,
+        sourceSystemTemplateId: typeof parsed.sourceSystemTemplateId === "string" ? parsed.sourceSystemTemplateId : undefined,
         editMode: parsed.editMode === "admin" || parsed.editMode === "user" ? parsed.editMode : undefined,
       };
     }

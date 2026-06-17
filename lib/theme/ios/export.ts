@@ -9,6 +9,7 @@ type IosExportOptions = {
   templateId: ThemeTemplateId;
   exportName?: string;
   versionName?: string;
+  themeIdentifier?: string;
   slots: ThemeAssetSlot[];
   uploads: SlotUploads;
   colors: SlotColors;
@@ -67,6 +68,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
         templateId,
         exportName: exportName ?? template.name,
         versionName: versionName ?? "1.0.0",
+        themeIdentifier: options.themeIdentifier,
         slots: iosSlots,
         colors: options.colors,
         selections,
@@ -116,6 +118,7 @@ function buildIosThemeCss({
   templateId,
   exportName,
   versionName,
+  themeIdentifier,
   slots,
   colors,
   selections,
@@ -126,6 +129,7 @@ function buildIosThemeCss({
   templateId: ThemeTemplateId;
   exportName: string;
   versionName: string;
+  themeIdentifier?: string;
   slots: ThemeAssetSlot[];
   colors: SlotColors;
   selections: SlotCandidateSelections;
@@ -154,7 +158,7 @@ function buildIosThemeCss({
     cssLine("-kakaotalk-theme-version", quote(versionName)),
     cssLine("-kakaotalk-theme-url", quote("")),
     cssLine("-kakaotalk-author-name", quote("KakaoTalk Theme Maker")),
-    cssLine("-kakaotalk-theme-id", quote(`com.kakaotalk.theme.${slugify(exportName)}`)),
+    cssLine("-kakaotalk-theme-id", quote(themeIdentifier?.trim() || `com.kakaotalk.theme.${slugify(exportName)}`)),
     "}",
     "",
     "/* TabBar Style */",

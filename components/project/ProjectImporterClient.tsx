@@ -26,6 +26,7 @@ import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
 import { localSystemTemplateRepository, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
+import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
 import {
   getThemeSlots,
@@ -85,10 +86,12 @@ type AndroidExportPayloadOptions = {
 
 type IosExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
   mode: "theme-zip" | "ktheme";
+  themeIdentifier: string;
 };
 
 type ExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
   mode: ExportMode;
+  themeIdentifier: string;
 };
 
 type ProjectImporterClientProps = {
@@ -132,6 +135,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [exportVersionName, setExportVersionName] = useState("");
   const [exportApplicationId, setExportApplicationId] = useState("");
   const [applicationIdEdited, setApplicationIdEdited] = useState(false);
+  const [exportThemeIdentifier, setExportThemeIdentifier] = useState("");
+  const [themeIdentifierEdited, setThemeIdentifierEdited] = useState(false);
   const [exportProgressStep, setExportProgressStep] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
@@ -192,6 +197,48 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         } catch (error) {
           console.error(error);
           setNotice({ tone: "error", message: "시스템 템플릿을 불러오는 중 오류가 발생했습니다." });
+        }
+        return;
+      }
+
+      if (payload.sourceSystemTemplateId && payload.systemTemplateBundleId) {
+        try {
+          const sourceTemplate = await localSystemTemplateRepository.get(payload.sourceSystemTemplateId);
+          if (!sourceTemplate) {
+            setNotice({ tone: "warning", message: "원본 시스템 템플릿을 찾을 수 없어 기본 템플릿으로 시작합니다." });
+            return;
+          }
+
+          const baseTemplate = getThemeTemplate(sourceTemplate.baseTemplateId);
+          const converted = convertSystemTemplateOverridesByRole({
+            sourceOverrides: sourceTemplate.overrides,
+            sourceSlots: getThemeSlots(sourceTemplate.platform),
+            targetSlots: getThemeSlots(payload.platform),
+            templateId: sourceTemplate.baseTemplateId,
+            template: baseTemplate,
+          });
+
+          skipDefaultSelectionResetRef.current = true;
+          setTemplateId(sourceTemplate.baseTemplateId);
+          setPlatform(payload.platform);
+          setUploads(converted.uploads);
+          setColors(converted.colors);
+          setCandidateSelections(converted.candidateSelections);
+          setBubbleMarkers(converted.bubbleEdits.markers);
+          setBubbleInsets(converted.bubbleEdits.insets);
+          setBubbleStretch(converted.bubbleEdits.stretch);
+          setSystemTitle(sourceTemplate.title);
+          setSystemDescription(sourceTemplate.description ?? "");
+          setSystemTags(sourceTemplate.tags.join(", "));
+          setSystemStatus(sourceTemplate.status);
+          setSystemVisibility(sourceTemplate.visibility);
+          setSystemPricingType(sourceTemplate.pricingType);
+          setSystemPriceAmount(sourceTemplate.priceAmount ? String(sourceTemplate.priceAmount) : "");
+          setSystemCreditCost(sourceTemplate.creditCost ? String(sourceTemplate.creditCost) : "");
+          setNotice({ tone: "success", message: `${sourceTemplate.title} 시스템 템플릿을 ${payload.platform === "android" ? "Android" : "iOS"} 기준으로 변환했습니다.` });
+        } catch (error) {
+          console.error(error);
+          setNotice({ tone: "error", message: "시스템 템플릿 변환 중 오류가 발생했습니다." });
         }
         return;
       }
@@ -345,6 +392,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       const nextEntries = entries.some((entry) => entry.id === asset.id) ? entries : [...entries, { id: asset.id, file }];
       return { ...current, [slot.id]: nextEntries };
     });
+    if (asset.bubbleAdjustment) {
+      if (asset.bubbleAdjustment.markers) {
+        setBubbleMarkers((current) => ({ ...current, [slot.id]: asset.bubbleAdjustment?.markers }));
+      }
+      if (asset.bubbleAdjustment.insets) {
+        setBubbleInsets((current) => ({ ...current, [slot.id]: asset.bubbleAdjustment?.insets }));
+      }
+      if (asset.bubbleAdjustment.stretch) {
+        setBubbleStretch((current) => ({ ...current, [slot.id]: asset.bubbleAdjustment?.stretch }));
+      }
+    }
     setCandidateSelections((current) => ({ ...current, [slot.id]: asset.id }));
     setSelectedSlotId(slot.id);
     setActiveSection(slot.section);
@@ -427,14 +485,15 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const openSystemSaveDialog = () => {
-    setSystemTitle(displayTemplateName);
-    setSystemDescription(activeSystemTemplate?.description ?? "");
-    setSystemTags(activeSystemTemplate?.tags.join(", ") ?? "");
-    setSystemStatus(activeSystemTemplate?.status ?? "draft");
-    setSystemVisibility(activeSystemTemplate?.visibility ?? "private");
-    setSystemPricingType(activeSystemTemplate?.pricingType ?? "free");
-    setSystemPriceAmount(activeSystemTemplate?.priceAmount ? String(activeSystemTemplate.priceAmount) : "");
-    setSystemCreditCost(activeSystemTemplate?.creditCost ? String(activeSystemTemplate.creditCost) : "");
+    const currentSystemTitle = activeSystemTemplate?.title ?? (systemTitle.trim() || displayTemplateName);
+    setSystemTitle(currentSystemTitle);
+    setSystemDescription(activeSystemTemplate?.description ?? systemDescription);
+    setSystemTags(activeSystemTemplate?.tags.join(", ") ?? systemTags);
+    setSystemStatus(activeSystemTemplate?.status ?? systemStatus);
+    setSystemVisibility(activeSystemTemplate?.visibility ?? systemVisibility);
+    setSystemPricingType(activeSystemTemplate?.pricingType ?? systemPricingType);
+    setSystemPriceAmount(activeSystemTemplate?.priceAmount ? String(activeSystemTemplate.priceAmount) : systemPriceAmount);
+    setSystemCreditCost(activeSystemTemplate?.creditCost ? String(activeSystemTemplate.creditCost) : systemCreditCost);
     setSystemSaveDialogOpen(true);
   };
 
@@ -509,7 +568,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       }
       setExportName(displayTemplateName);
       setExportApplicationId(createAndroidApplicationId(displayTemplateName));
+      setExportThemeIdentifier(createIosThemeIdentifier(displayTemplateName));
       setApplicationIdEdited(false);
+      setThemeIdentifierEdited(false);
       setExportMode(platform === "android" ? "apk" : "ktheme");
       setExportProgressStep(0);
       setExportDialogOpen(true);
@@ -538,6 +599,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         exportName,
         versionName: exportVersionName,
         applicationId: exportApplicationId,
+        themeIdentifier: exportThemeIdentifier,
         mode: exportMode,
         slots,
         uploads,
@@ -602,6 +664,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           exportName={exportName}
           exportVersionName={exportVersionName}
           exportApplicationId={exportApplicationId}
+          exportThemeIdentifier={exportThemeIdentifier}
           progressStep={exportProgressStep}
           onClose={() => {
             if (!isExporting) {
@@ -615,11 +678,18 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             if (platform === "android" && !applicationIdEdited) {
               setExportApplicationId(createAndroidApplicationId(value));
             }
+            if (platform === "ios" && !themeIdentifierEdited) {
+              setExportThemeIdentifier(createIosThemeIdentifier(value));
+            }
           }}
           onVersionNameChange={setExportVersionName}
           onApplicationIdChange={(value) => {
             setApplicationIdEdited(true);
             setExportApplicationId(value);
+          }}
+          onThemeIdentifierChange={(value) => {
+            setThemeIdentifierEdited(true);
+            setExportThemeIdentifier(value);
           }}
           onSubmit={() => void submitExport()}
         />
@@ -946,6 +1016,7 @@ function SystemTemplateSaveDialog({
   onSubmit: () => void;
 }) {
   const canSubmit = title.trim().length > 0;
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.42)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="시스템 템플릿 저장">
@@ -973,21 +1044,31 @@ function SystemTemplateSaveDialog({
             <span className="text-sm font-semibold text-[#0f172a]">Tags</span>
             <input type="text" value={tags} onChange={(event) => onTagsChange(event.currentTarget.value)} disabled={isSaving} placeholder="쉼표로 구분" className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" />
           </label>
-          <SelectField label="Status" value={status} options={["draft", "published", "archived"]} disabled={isSaving} onChange={(value) => onStatusChange(value as SystemTemplateStatus)} />
-          <SelectField label="Visibility" value={visibility} options={["private", "public", "unlisted"]} disabled={isSaving} onChange={(value) => onVisibilityChange(value as SystemTemplateVisibility)} />
-          <SelectField label="Pricing" value={pricingType} options={["free", "paid", "credit"]} disabled={isSaving} onChange={(value) => onPricingTypeChange(value as SystemTemplatePricingType)} />
-          {pricingType === "paid" ? (
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold text-[#0f172a]">Price</span>
-              <input type="number" min="0" value={priceAmount} onChange={(event) => onPriceAmountChange(event.currentTarget.value)} disabled={isSaving} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" />
-            </label>
-          ) : null}
-          {pricingType === "credit" ? (
-            <label className="grid gap-2">
-              <span className="text-sm font-semibold text-[#0f172a]">Credit cost</span>
-              <input type="number" min="0" value={creditCost} onChange={(event) => onCreditCostChange(event.currentTarget.value)} disabled={isSaving} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" />
-            </label>
-          ) : null}
+          <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 md:col-span-2">
+            <button type="button" className="flex items-center justify-between gap-3 text-left text-sm font-semibold text-[#0f172a]" onClick={() => setAdvancedOpen((current) => !current)} disabled={isSaving}>
+              <span>고급 설정</span>
+              <span className="text-xs text-[#64748b]">{advancedOpen ? "접기" : "열기"}</span>
+            </button>
+            {advancedOpen ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                <SelectField label="상태" value={status} options={["draft", "published", "archived"]} optionLabels={systemTemplateStatusLabels} disabled={isSaving} onChange={(value) => onStatusChange(value as SystemTemplateStatus)} />
+                <SelectField label="공개 범위" value={visibility} options={["private", "public", "unlisted"]} optionLabels={systemTemplateVisibilityLabels} disabled={isSaving} onChange={(value) => onVisibilityChange(value as SystemTemplateVisibility)} />
+                <SelectField label="가격 정책" value={pricingType} options={["free", "paid", "credit"]} optionLabels={systemTemplatePricingLabels} disabled={isSaving} onChange={(value) => onPricingTypeChange(value as SystemTemplatePricingType)} />
+                {pricingType === "paid" ? (
+                  <label className="grid gap-2">
+                    <span className="text-sm font-semibold text-[#0f172a]">판매 가격</span>
+                    <input type="number" min="0" value={priceAmount} onChange={(event) => onPriceAmountChange(event.currentTarget.value)} disabled={isSaving} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" />
+                  </label>
+                ) : null}
+                {pricingType === "credit" ? (
+                  <label className="grid gap-2">
+                    <span className="text-sm font-semibold text-[#0f172a]">필요 크레딧</span>
+                    <input type="number" min="0" value={creditCost} onChange={(event) => onCreditCostChange(event.currentTarget.value)} disabled={isSaving} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" />
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className="flex justify-end gap-2">
@@ -1003,14 +1084,46 @@ function SystemTemplateSaveDialog({
   );
 }
 
-function SelectField({ label, value, options, disabled, onChange }: { label: string; value: string; options: string[]; disabled: boolean; onChange: (value: string) => void }) {
+const systemTemplateStatusLabels: Record<SystemTemplateStatus, string> = {
+  draft: "초안",
+  published: "게시됨",
+  archived: "보관됨",
+};
+
+const systemTemplateVisibilityLabels: Record<SystemTemplateVisibility, string> = {
+  private: "비공개",
+  public: "공개",
+  unlisted: "일부 공개",
+};
+
+const systemTemplatePricingLabels: Record<SystemTemplatePricingType, string> = {
+  free: "무료",
+  paid: "유료 결제",
+  credit: "크레딧",
+};
+
+function SelectField({
+  label,
+  value,
+  options,
+  optionLabels,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  optionLabels?: Record<string, string>;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
   return (
     <label className="grid gap-2">
       <span className="text-sm font-semibold text-[#0f172a]">{label}</span>
       <select value={value} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]">
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {optionLabels?.[option] ?? option}
           </option>
         ))}
       </select>
@@ -1025,12 +1138,14 @@ function ExportDialog({
   exportName,
   exportVersionName,
   exportApplicationId,
+  exportThemeIdentifier,
   progressStep,
   onClose,
   onModeChange,
   onNameChange,
   onVersionNameChange,
   onApplicationIdChange,
+  onThemeIdentifierChange,
   onSubmit,
 }: {
   isExporting: boolean;
@@ -1039,18 +1154,21 @@ function ExportDialog({
   exportName: string;
   exportVersionName: string;
   exportApplicationId: string;
+  exportThemeIdentifier: string;
   progressStep: number;
   onClose: () => void;
   onModeChange: (mode: ExportMode) => void;
   onNameChange: (value: string) => void;
   onVersionNameChange: (value: string) => void;
   onApplicationIdChange: (value: string) => void;
+  onThemeIdentifierChange: (value: string) => void;
   onSubmit: () => void;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const steps = getExportProgressSteps(exportMode);
   const applicationIdError = platform === "android" ? getAndroidApplicationIdError(exportApplicationId) : null;
-  const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0 && !applicationIdError;
+  const themeIdentifierError = platform === "ios" ? getIosThemeIdentifierError(exportThemeIdentifier) : null;
+  const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0 && !applicationIdError && !themeIdentifierError;
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.42)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="내보내기">
@@ -1113,7 +1231,34 @@ function ExportDialog({
                 </label>
               ) : null}
             </div>
-          ) : null}
+          ) : (
+            <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3">
+              <button
+                type="button"
+                className="flex items-center justify-between gap-3 text-left text-sm font-semibold text-[#0f172a]"
+                onClick={() => setAdvancedOpen((current) => !current)}
+                disabled={isExporting}
+              >
+                <span>iOS 고급 옵션</span>
+                <span className="text-xs text-[#64748b]">{advancedOpen ? "접기" : "열기"}</span>
+              </button>
+              {advancedOpen ? (
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold text-[#0f172a]">identifier</span>
+                  <input
+                    type="text"
+                    value={exportThemeIdentifier}
+                    onChange={(event) => onThemeIdentifierChange(event.currentTarget.value)}
+                    disabled={isExporting}
+                    spellCheck={false}
+                    className={`h-11 rounded-xl border bg-white px-3 font-mono text-sm text-[#111827] outline-none transition focus:border-[#2563eb] ${themeIdentifierError ? "border-[#ef4444]" : "border-[#d1d5db]"
+                      }`}
+                  />
+                  {themeIdentifierError ? <span className="text-xs font-medium text-[#dc2626]">{themeIdentifierError}</span> : <span className="text-xs font-medium text-[#64748b]">KakaoTalkTheme.css의 -kakaotalk-theme-id로 내보냅니다.</span>}
+                </label>
+              ) : null}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-2">
@@ -1275,6 +1420,7 @@ async function createIosExportFormData({
   templateId,
   exportName,
   versionName,
+  themeIdentifier,
   mode,
   slots,
   uploads,
@@ -1301,6 +1447,7 @@ async function createIosExportFormData({
     templateId,
     exportName,
     versionName,
+    themeIdentifier,
     slots,
     uploads,
     colors,
@@ -1440,6 +1587,32 @@ function createAndroidApplicationId(name: string) {
     .replace(/^_+|_+$/g, "");
   const safeSlug = slug && /^[a-z_]/.test(slug) && !androidPackageSegmentReservedWords.has(slug) ? slug : "custom_theme";
   return `com.kakao.talk.theme.${safeSlug}`;
+}
+
+function createIosThemeIdentifier(name: string) {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/\.+/g, ".")
+    .replace(/^\.+|\.+$/g, "");
+  return `com.kakao.talk.theme.${slug || "custom"}`;
+}
+
+function getIosThemeIdentifierError(value: string) {
+  const identifier = value.trim();
+  if (!identifier) return "identifier를 입력하세요.";
+  if (!/^[a-z0-9.]+$/.test(identifier)) return "소문자 영문, 숫자, .만 사용할 수 있습니다.";
+
+  const segments = identifier.split(".");
+  if (segments.length < 2) return "최소 2개 이상의 segment가 필요합니다.";
+
+  for (const segment of segments) {
+    if (!segment) return "빈 segment는 사용할 수 없습니다.";
+    if (!/^[a-z][a-z0-9]*$/.test(segment)) return "각 segment는 소문자 영문으로 시작해야 합니다.";
+  }
+
+  return null;
 }
 
 function getAndroidApplicationIdError(value: string) {
