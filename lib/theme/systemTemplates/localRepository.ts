@@ -61,6 +61,7 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
     const record: SystemTemplateRecord = {
       ...input,
       id: input.id ?? `system-template:${now}:${Math.random().toString(36).slice(2, 8)}`,
+      bundleId: input.bundleId ?? input.id ?? `system-template-bundle:${now}:${Math.random().toString(36).slice(2, 8)}`,
       createdAt: input.createdAt ?? now,
       updatedAt: now,
     };
@@ -76,6 +77,7 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
 function toSummary(record: SystemTemplateRecord): SystemTemplateSummary {
   return {
     id: record.id,
+    bundleId: record.bundleId ?? record.id,
     title: record.title,
     description: record.description,
     baseTemplateId: record.baseTemplateId,

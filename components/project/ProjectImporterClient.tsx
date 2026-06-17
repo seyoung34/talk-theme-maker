@@ -52,6 +52,7 @@ type ActiveUserTemplate = {
 
 type ActiveSystemTemplate = {
   id: string;
+  bundleId?: string;
   title: string;
   description?: string;
   tags: string[];
@@ -99,8 +100,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const router = useRouter();
   const [templateId, setTemplateId] = useState<ThemeTemplateId>("basic");
   const [platform, setPlatform] = useState<ThemePlatform>("android");
-  const [activeSection, setActiveSection] = useState<ThemeSection>("chatroom");
-  const [activeGroup, setActiveGroup] = useState<ThemeSlotGroup>("bubbles");
+  const [activeSection, setActiveSection] = useState<ThemeSection>("main");
+  const [activeGroup, setActiveGroup] = useState<ThemeSlotGroup>("background");
   const [selectedSlotId, setSelectedSlotId] = useState<string | undefined>();
   const [uploads, setUploads] = useState<SlotUploads>({});
   const [colors, setColors] = useState<SlotColors>({});
@@ -111,6 +112,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
+  const [systemTemplateBundleId, setSystemTemplateBundleId] = useState<string | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveMode, setSaveMode] = useState<"overwrite" | "saveAs">("saveAs");
   const [saveName, setSaveName] = useState("");
@@ -147,19 +149,20 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     const loadStartedTemplate = async () => {
       setTemplateId(payload.templateId);
       setPlatform(payload.platform);
-      setActiveSection("chatroom");
-      setActiveGroup("bubbles");
+      setActiveSection("main");
+      setActiveGroup("background");
       setSelectedSlotId(undefined);
       setUploads({});
       setColors({});
       setActiveUserTemplate(null);
       setActiveSystemTemplate(null);
+      setSystemTemplateBundleId(payload.systemTemplateBundleId ?? null);
 
       if (payload.systemTemplateId) {
         try {
           const savedTemplate = await localSystemTemplateRepository.get(payload.systemTemplateId);
           if (!savedTemplate) {
-            setNotice({ tone: "warning", message: "?쒖뒪???쒗뵆由우쓣 李얠쓣 ???놁뼱 湲곕낯 ?쒗뵆由우쑝濡??쒖옉?⑸땲??" });
+            setNotice({ tone: "warning", message: "시스템 템플릿을 찾을 수 없어 기본 템플릿으로 시작합니다." });
             return;
           }
 
@@ -174,6 +177,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           setBubbleStretch(savedTemplate.overrides.bubbleEdits.stretch);
           setActiveSystemTemplate({
             id: savedTemplate.id,
+            bundleId: savedTemplate.bundleId ?? savedTemplate.id,
             title: savedTemplate.title,
             description: savedTemplate.description,
             tags: savedTemplate.tags,
@@ -184,10 +188,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             creditCost: savedTemplate.creditCost,
             createdAt: savedTemplate.createdAt,
           });
-          setNotice({ tone: "success", message: `${savedTemplate.title} ?쒖뒪???쒗뵆由우쓣 遺덈윭?붿뒿?덈떎.` });
+          setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 불러왔습니다.` });
         } catch (error) {
           console.error(error);
-          setNotice({ tone: "error", message: "?쒖뒪???쒗뵆由우쓣 遺덈윭?ㅻ뒗 以??ㅻ쪟媛 諛쒖깮?덉뒿?덈떎." });
+          setNotice({ tone: "error", message: "시스템 템플릿을 불러오는 중 오류가 발생했습니다." });
         }
         return;
       }
@@ -443,6 +447,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       setNotice({ tone: "info", message: "시스템 템플릿을 저장하는 중입니다." });
       const savedTemplate = await localSystemTemplateRepository.save({
         id: activeSystemTemplate?.id,
+        bundleId: activeSystemTemplate?.bundleId ?? systemTemplateBundleId ?? undefined,
         createdAt: activeSystemTemplate?.createdAt,
         title,
         description: systemDescription.trim() || undefined,
@@ -470,6 +475,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       });
       setActiveSystemTemplate({
         id: savedTemplate.id,
+        bundleId: savedTemplate.bundleId ?? savedTemplate.id,
         title: savedTemplate.title,
         description: savedTemplate.description,
         tags: savedTemplate.tags,
@@ -480,6 +486,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         creditCost: savedTemplate.creditCost,
         createdAt: savedTemplate.createdAt,
       });
+      setSystemTemplateBundleId(savedTemplate.bundleId ?? savedTemplate.id);
       setSystemSaveDialogOpen(false);
       setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 저장했습니다.` });
     } catch (error) {
@@ -1099,9 +1106,8 @@ function ExportDialog({
                     onChange={(event) => onApplicationIdChange(event.currentTarget.value)}
                     disabled={isExporting}
                     spellCheck={false}
-                    className={`h-11 rounded-xl border bg-white px-3 font-mono text-sm text-[#111827] outline-none transition focus:border-[#2563eb] ${
-                      applicationIdError ? "border-[#ef4444]" : "border-[#d1d5db]"
-                    }`}
+                    className={`h-11 rounded-xl border bg-white px-3 font-mono text-sm text-[#111827] outline-none transition focus:border-[#2563eb] ${applicationIdError ? "border-[#ef4444]" : "border-[#d1d5db]"
+                      }`}
                   />
                   {applicationIdError ? <span className="text-xs font-medium text-[#dc2626]">{applicationIdError}</span> : null}
                 </label>
@@ -1132,30 +1138,30 @@ function ExportDialog({
             </>
           ) : (
             <>
-          <button
-            type="button"
-            className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "project" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-            onClick={() => onModeChange("project")}
-            disabled={isExporting}
-          >
-            <span className="block text-sm font-semibold text-[#0f172a]">빌드 전 프로젝트 내보내기</span>
-          </button>
-          <button
-            type="button"
-            className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-            onClick={() => onModeChange("apk")}
-            disabled={isExporting}
-          >
-            <span className="block text-sm font-semibold text-[#0f172a]">Android APK로 내보내기</span>
-          </button>
-          <button
-            type="button"
-            className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk-zip" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-            onClick={() => onModeChange("apk-zip")}
-            disabled={isExporting}
-          >
-            <span className="block text-sm font-semibold text-[#0f172a]">Android APK ZIP으로 내보내기</span>
-          </button>
+              <button
+                type="button"
+                className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "project" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                onClick={() => onModeChange("project")}
+                disabled={isExporting}
+              >
+                <span className="block text-sm font-semibold text-[#0f172a]">빌드 전 프로젝트 내보내기</span>
+              </button>
+              <button
+                type="button"
+                className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                onClick={() => onModeChange("apk")}
+                disabled={isExporting}
+              >
+                <span className="block text-sm font-semibold text-[#0f172a]">Android APK로 내보내기</span>
+              </button>
+              <button
+                type="button"
+                className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk-zip" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                onClick={() => onModeChange("apk-zip")}
+                disabled={isExporting}
+              >
+                <span className="block text-sm font-semibold text-[#0f172a]">Android APK ZIP으로 내보내기</span>
+              </button>
             </>
           )}
         </div>

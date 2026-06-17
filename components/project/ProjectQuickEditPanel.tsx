@@ -245,7 +245,7 @@ function CandidatePicker({
               <button
                 key={group.key}
                 type="button"
-                className={`inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[12px] font-semibold transition ${activeGroup.key === group.key ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#e5e7eb] bg-[#f8fafc] text-[#475569] hover:bg-white"
+                className={`inline-flex h-9 items-center gap-2 rounded-full border px-3.5 mr-2 text-[12px] font-semibold transition ${activeGroup.key === group.key ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#e5e7eb] bg-[#f8fafc] text-[#475569] hover:bg-white"
                   }`}
                 onClick={() => setActiveTab(group.key)}
               >

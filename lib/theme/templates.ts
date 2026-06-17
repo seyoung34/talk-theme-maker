@@ -42,6 +42,7 @@ export type ThemeStartPayload = {
   platform: ThemePlatform;
   userTemplateId?: string;
   systemTemplateId?: string;
+  systemTemplateBundleId?: string;
   editMode?: "user" | "admin";
 };
 

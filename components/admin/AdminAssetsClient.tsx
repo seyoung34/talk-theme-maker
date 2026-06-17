@@ -9,6 +9,7 @@ import type { ThemePlatform } from "@/lib/theme/types";
 
 export default function AdminAssetsClient() {
   const [platform, setPlatform] = useState<ThemePlatform>("android");
+  const [assetPlatformScope, setAssetPlatformScope] = useState<ThemePlatform | "all">("android");
   const [selectedSlotId, setSelectedSlotId] = useState("");
   const [assets, setAssets] = useState<AdminAssetCandidate[]>([]);
   const [title, setTitle] = useState("");
@@ -18,11 +19,19 @@ export default function AdminAssetsClient() {
 
   const slots = useMemo(() => getThemeSlots(platform).filter((slot) => slot.kind === "image" || slot.kind === "ninepatch"), [platform]);
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? slots[0];
+  const canUseCommonScope = Boolean(selectedSlot && getThemeSlots(platform === "android" ? "ios" : "android").some((slot) => slot.role === selectedSlot.role && slot.kind === selectedSlot.kind));
   const visibleAssets = assets.filter((asset) => selectedSlot && asset.slotRole === selectedSlot.role && (asset.platform === "all" || asset.platform === selectedSlot.platform));
 
   useEffect(() => {
     setSelectedSlotId(slots[0]?.id ?? "");
+    setAssetPlatformScope(platform);
   }, [platform, slots]);
+
+  useEffect(() => {
+    if (!canUseCommonScope && assetPlatformScope === "all") {
+      setAssetPlatformScope(platform);
+    }
+  }, [assetPlatformScope, canUseCommonScope, platform]);
 
   useEffect(() => {
     void refreshAssets();
@@ -43,7 +52,7 @@ export default function AdminAssetsClient() {
     try {
       await saveAdminAssetCandidate({
         slotRole: selectedSlot.role,
-        platform: selectedSlot.platform,
+        platform: assetPlatformScope,
         title: title.trim() || file.name,
         note: selectedSlot.label,
         tags: tags
@@ -130,6 +139,26 @@ export default function AdminAssetsClient() {
                 <span className="text-sm font-black text-[var(--color-on-surface)]">이미지 파일</span>
                 <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setFile(event.currentTarget.files?.[0] ?? null)} />
               </label>
+              <div className="grid gap-2 md:col-span-2">
+                <span className="text-sm font-black text-[var(--color-on-surface)]">적용 범위</span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={`rounded-full px-4 py-2 text-sm font-black ${assetPlatformScope !== "all" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
+                    onClick={() => setAssetPlatformScope(platform)}
+                  >
+                    현재 플랫폼
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-full px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40 ${assetPlatformScope === "all" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
+                    onClick={() => setAssetPlatformScope("all")}
+                    disabled={!canUseCommonScope}
+                  >
+                    Android/iOS 공통
+                  </button>
+                </div>
+              </div>
               <button className="rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] disabled:cursor-not-allowed disabled:opacity-40 md:col-span-2" type="button" disabled={!file || !selectedSlot} onClick={() => void submit()}>
                 관리 후보 추가
               </button>
@@ -162,6 +191,7 @@ function AdminAssetCard({ asset, slot, onDelete }: { asset: AdminAssetCandidate;
       <div className="min-w-0">
         <strong className="block truncate text-sm font-black text-[var(--color-on-surface)]">{asset.title}</strong>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{slot?.label ?? asset.slotRole}</span>
+        <span className="mt-1 block truncate text-xs font-black uppercase text-[var(--color-on-surface-variant)]">{asset.platform === "all" ? "Android/iOS" : asset.platform}</span>
       </div>
       <div className="flex flex-wrap gap-1">
         {asset.tags.map((tag) => (

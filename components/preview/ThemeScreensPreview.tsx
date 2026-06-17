@@ -131,7 +131,7 @@ function FriendsScreen({
   onSelectSlot?: (slotId: string) => void;
 }) {
   return (
-    <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_96px]">
+    <MainScreenFrame>
       <button
         type="button"
         className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-6 pb-4 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
@@ -268,16 +268,15 @@ function FriendsScreen({
         </div>
       </div>
 
-      <BottomTabBar
+      <MainBottomTabBar
         active="friends"
         selectedSlotId={selectedSlotId}
+        preview={preview}
         slotByRole={slotByRole}
         urls={urls}
-        tabBackground={preview.tabBackgroundColor}
-        tabBackgroundImageUrl={urls.tab_background_image}
         onSelectSlot={onSelectSlot}
       />
-    </div>
+    </MainScreenFrame>
   );
 }
 
@@ -298,7 +297,7 @@ function ChatsScreen({
   onSelectSlot?: (slotId: string) => void;
 }) {
   return (
-    <div className="grid h-full">
+    <MainScreenFrame>
       <button
         type="button"
         className={`flex items-end justify-between px-5 pb-2 pt-3 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
@@ -409,16 +408,47 @@ function ChatsScreen({
         </div>
       </div>
 
-      <BottomTabBar
+      <MainBottomTabBar
         active="chats"
         selectedSlotId={selectedSlotId}
+        preview={preview}
         slotByRole={slotByRole}
         urls={urls}
-        tabBackground={preview.tabBackgroundColor}
-        tabBackgroundImageUrl={urls.tab_background_image}
         onSelectSlot={onSelectSlot}
       />
-    </div>
+    </MainScreenFrame>
+  );
+}
+
+function MainScreenFrame({ children }: { children: ReactNode }) {
+  return <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_96px]">{children}</div>;
+}
+
+function MainBottomTabBar({
+  active,
+  selectedSlotId,
+  preview,
+  slotByRole,
+  urls,
+  onSelectSlot,
+}: {
+  active: "friends" | "chats" | "now" | "shopping" | "more";
+  selectedSlotId?: string;
+  preview: MainPreviewPalette;
+  slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
+  urls: RoleUrls;
+  onSelectSlot?: (slotId: string) => void;
+}) {
+  return (
+    <BottomTabBar
+      active={active}
+      selectedSlotId={selectedSlotId}
+      slotByRole={slotByRole}
+      urls={urls}
+      tabBackground={preview.tabBackgroundColor}
+      tabBackgroundImageUrl={urls.tab_background_image}
+      onSelectSlot={onSelectSlot}
+    />
   );
 }
 

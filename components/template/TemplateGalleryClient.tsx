@@ -1,14 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Clock3, Search } from "lucide-react";
+import { ArrowRight, Clock3, Hash, MessageCircle, Plus, Search, Settings, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import UserTemplateCard from "@/components/template/UserTemplateCard";
-import { localSystemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
-import { templateStartStorageKey, themeTemplates, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
+import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { localSystemTemplateRepository, type SystemTemplateRecord } from "@/lib/theme/systemTemplates";
+import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import { deleteUserTemplate, listUserTemplates, type UserTemplateSummary } from "@/lib/theme/userTemplates";
-import type { ThemePlatform } from "@/lib/theme/types";
+import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+
+type GalleryTemplateItem =
+  | {
+      id: string;
+      kind: "base" | "seed";
+      title: string;
+      description?: string;
+      badge: string;
+      baseTemplate: ThemeTemplate;
+      visual: TemplatePreviewVisual;
+    }
+  | {
+      id: string;
+      kind: "system";
+      title: string;
+      description?: string;
+      badge: string;
+      baseTemplate: ThemeTemplate;
+      variants: Partial<Record<ThemePlatform, SystemTemplateRecord>>;
+      previewTemplate: SystemTemplateRecord;
+      visual: TemplatePreviewVisual;
+    };
 
 type TemplatePreviewModel = {
   title: string;
@@ -18,26 +41,51 @@ type TemplatePreviewModel = {
   androidLabel: string;
   iosLabel: string;
   baseTemplate: ThemeTemplate;
+  visual: TemplatePreviewVisual;
+  availablePlatforms?: ThemePlatform[];
   rows: Array<{ label: string; value: string }>;
   onStart: (platform: ThemePlatform) => void;
 };
 
+type TemplatePreviewVisual = {
+  chatBackgroundColor: string;
+  mainBackgroundColor: string;
+  tabBackgroundColor: string;
+  myBubbleColor: string;
+  friendBubbleColor: string;
+  chatBackgroundImage?: string;
+  mainBackgroundImage?: string;
+  tabBackgroundImage?: string;
+  myBubbleImage?: string;
+  friendBubbleImage?: string;
+  profileImage?: string;
+};
+
 export default function TemplateGalleryClient() {
   const router = useRouter();
-  const [selectedTemplateId, setSelectedTemplateId] = useState<ThemeTemplateId | null>(null);
-  const [selectedSystemTemplateId, setSelectedSystemTemplateId] = useState<string | null>(null);
+  const [selectedGalleryTemplateId, setSelectedGalleryTemplateId] = useState<string | null>(null);
   const [userTemplates, setUserTemplates] = useState<UserTemplateSummary[]>([]);
-  const [systemTemplates, setSystemTemplates] = useState<SystemTemplateSummary[]>([]);
+  const [systemTemplates, setSystemTemplates] = useState<SystemTemplateRecord[]>([]);
+  const [systemUploadPreviewUrls, setSystemUploadPreviewUrls] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState<string | null>(null);
-  const selectedTemplate = themeTemplates.find((template) => template.id === selectedTemplateId) ?? null;
-  const selectedSystemTemplate = systemTemplates.find((template) => template.id === selectedSystemTemplateId) ?? null;
-  const previewModel = selectedTemplate
-    ? createThemeTemplatePreviewModel(selectedTemplate, (platform) => start(selectedTemplate, platform))
-    : selectedSystemTemplate
-      ? createSystemTemplatePreviewModel(selectedSystemTemplate, (platform) => startSystemTemplateWithPlatform(selectedSystemTemplate, platform))
-      : null;
-  const baseTemplates = themeTemplates.filter((template) => template.id === "basic");
-  const seedSystemTemplates = themeTemplates.filter((template) => template.id === "spongebob");
+  const galleryTemplates = useMemo(
+    () =>
+      createGalleryTemplates(systemTemplates, systemUploadPreviewUrls).map((item) => ({
+        ...item,
+        onStart: (platform: ThemePlatform) => {
+          if (item.kind === "system") {
+            const variant = item.variants[platform];
+            if (variant) startSystemTemplateWithPlatform(variant, platform);
+          } else {
+            start(item.baseTemplate, platform);
+          }
+        },
+      })),
+    [systemTemplates, systemUploadPreviewUrls],
+  );
+  const selectedGalleryTemplate = galleryTemplates.find((template) => template.id === selectedGalleryTemplateId) ?? null;
+  const previewModel = selectedGalleryTemplate ? createGalleryTemplatePreviewModel(selectedGalleryTemplate, selectedGalleryTemplate.onStart) : null;
+  const basicGalleryTemplateId = "base:basic";
   const hasSavedTemplates = userTemplates.length > 0;
 
   useEffect(() => {
@@ -63,8 +111,9 @@ export default function TemplateGalleryClient() {
     let active = true;
     localSystemTemplateRepository
       .list()
-      .then((templates) => {
-        if (active) setSystemTemplates(templates);
+      .then(async (templates) => {
+        const records = await Promise.all(templates.map((template) => localSystemTemplateRepository.get(template.id)));
+        if (active) setSystemTemplates(records.filter((template): template is SystemTemplateRecord => Boolean(template)));
       })
       .catch((error) => {
         console.error(error);
@@ -78,6 +127,24 @@ export default function TemplateGalleryClient() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const entries: Array<[string, string]> = [];
+    for (const template of systemTemplates) {
+      for (const uploadEntries of Object.values(template.overrides.uploads)) {
+        for (const entry of uploadEntries ?? []) {
+          entries.push([systemUploadKey(template.id, entry.id), URL.createObjectURL(entry.file)]);
+        }
+      }
+    }
+
+    const next = Object.fromEntries(entries);
+    setSystemUploadPreviewUrls(next);
+
+    return () => {
+      for (const url of Object.values(next)) URL.revokeObjectURL(url);
+    };
+  }, [systemTemplates]);
 
   useEffect(() => {
     if (!notice) return;
@@ -95,7 +162,7 @@ export default function TemplateGalleryClient() {
     router.push("/edit");
   };
 
-  const startSystemTemplateWithPlatform = (template: SystemTemplateSummary, platform: ThemePlatform) => {
+  const startSystemTemplateWithPlatform = (template: SystemTemplateRecord, platform: ThemePlatform) => {
     localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.baseTemplateId, platform, systemTemplateId: template.id, editMode: "user" }));
     router.push("/edit");
   };
@@ -178,7 +245,7 @@ export default function TemplateGalleryClient() {
               <button
                 type="button"
                 className="inline-flex items-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-4 py-2.5 text-sm font-black text-[var(--color-inverse-on-surface)]"
-                onClick={() => setSelectedTemplateId(baseTemplates[0]?.id ?? null)}
+                onClick={() => setSelectedGalleryTemplateId(basicGalleryTemplateId)}
               >
                 기본 템플릿 보기
                 <ArrowRight className="w-4 h-4" />
@@ -190,73 +257,13 @@ export default function TemplateGalleryClient() {
         <section className="grid gap-5">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h2 className="mt-2 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">System Templates</h2>
+              <h2 className="mt-2 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">템플릿 갤러리</h2>
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {seedSystemTemplates.map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                className="group grid min-h-[356px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/92 p-4 text-left shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)]"
-                onClick={() => setSelectedTemplateId(template.id)}
-              >
-                <div className="grid gap-4">
-                  <TemplateMiniPreview template={template} />
-                  <div className="grid gap-2">
-                    <span className="inline-flex w-fit rounded-full bg-[var(--color-tertiary-container)]/50 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-tertiary-container)]">System seed</span>
-                    <strong className="font-[var(--font-display)] text-[28px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.name}</strong>
-                    <span className="line-clamp-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.description}</span>
-                  </div>
-                </div>
-
-                <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
-                  Template preview
-                  <ArrowRight className="w-4 h-4" />
-                </span>
-              </button>
-            ))}
-
-            {systemTemplates.map((template) => (
-              <SystemTemplateCard key={template.id} template={template} onPreview={setSelectedSystemTemplateId} />
-            ))}
-          </div>
-        </section>
-
-        <section className="grid gap-5">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-
-              <h2 className="mt-2 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">기본 템플릿</h2>
-
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {baseTemplates.map((template) => (
-              <button
-                key={template.id}
-                type="button"
-                className="group grid min-h-[356px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/92 p-4 text-left shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)]"
-                onClick={() => setSelectedTemplateId(template.id)}
-              >
-                <div className="grid gap-4">
-                  <TemplateMiniPreview template={template} />
-                  <div className="grid gap-2">
-                    <span className="inline-flex w-fit rounded-full bg-[var(--color-tertiary-container)]/50 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-tertiary-container)]">
-                      미리보기 가능
-                    </span>
-                    <strong className="font-[var(--font-display)] text-[28px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.name}</strong>
-                    <span className="line-clamp-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.description}</span>
-                  </div>
-                </div>
-
-                <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
-                  템플릿 확인
-                  <ArrowRight className="w-4 h-4" />
-                </span>
-              </button>
+            {galleryTemplates.map((template) => (
+              <GalleryTemplateCard key={template.id} template={template} onPreview={setSelectedGalleryTemplateId} />
             ))}
           </div>
         </section>
@@ -266,8 +273,7 @@ export default function TemplateGalleryClient() {
         <TemplatePreviewModal
           preview={previewModel}
           onClose={() => {
-            setSelectedTemplateId(null);
-            setSelectedSystemTemplateId(null);
+            setSelectedGalleryTemplateId(null);
           }}
         />
       ) : null}
@@ -275,92 +281,119 @@ export default function TemplateGalleryClient() {
   );
 }
 
-function StatusRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-[18px] bg-[var(--color-surface-low)] px-4 py-3">
-      <span className="text-sm font-semibold text-[var(--color-on-surface-variant)]">{label}</span>
-      <strong className="text-sm font-black text-[var(--color-on-surface)]">{value}</strong>
-    </div>
-  );
+function createGalleryTemplates(systemTemplates: SystemTemplateRecord[], uploadPreviewUrls: Record<string, string>): GalleryTemplateItem[] {
+  const basicTemplate = themeTemplates.find((template) => template.id === "basic") ?? themeTemplates[0];
+  const seedTemplates = themeTemplates.filter((template) => template.id !== "basic");
+
+  return [
+    {
+      id: `base:${basicTemplate.id}`,
+      kind: "base",
+      title: basicTemplate.name,
+      description: basicTemplate.description,
+      badge: "기본",
+      baseTemplate: basicTemplate,
+      visual: createTemplatePreviewVisual(basicTemplate, basicTemplate.defaults.platform),
+    },
+    ...seedTemplates.map((template) => ({
+      id: `seed:${template.id}`,
+      kind: "seed" as const,
+      title: template.name,
+      description: template.description,
+      badge: "시스템",
+      baseTemplate: template,
+      visual: createTemplatePreviewVisual(template, template.defaults.platform),
+    })),
+    ...groupSystemTemplateRecords(systemTemplates).map((bundle) => {
+      const previewTemplate = bundle.variants.android ?? bundle.variants.ios!;
+      const baseTemplate = themeTemplates.find((item) => item.id === previewTemplate.baseTemplateId) ?? basicTemplate;
+      return {
+        id: `system:${bundle.id}`,
+        kind: "system" as const,
+        title: previewTemplate.title,
+        description: previewTemplate.description,
+        badge: "시스템",
+        baseTemplate,
+        variants: bundle.variants,
+        previewTemplate,
+        visual: createTemplatePreviewVisual(baseTemplate, previewTemplate.platform, previewTemplate, (entryId) => uploadPreviewUrls[systemUploadKey(previewTemplate.id, entryId)]),
+      };
+    }),
+  ];
 }
 
-function createThemeTemplatePreviewModel(template: ThemeTemplate, onStart: (platform: ThemePlatform) => void): TemplatePreviewModel {
+function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStart: (platform: ThemePlatform) => void): TemplatePreviewModel {
+  if (template.kind === "system") {
+    return {
+      title: template.title,
+      description: template.description,
+      eyebrow: "Template preview",
+      closeLabel: "닫기",
+      androidLabel: "Android로 시작",
+      iosLabel: "iOS로 시작",
+      baseTemplate: template.baseTemplate,
+      visual: template.visual,
+      availablePlatforms: Object.keys(template.variants) as ThemePlatform[],
+      rows: [
+        { label: "기반", value: template.baseTemplate.name },
+        { label: "플랫폼", value: Object.keys(template.variants).map((value) => (value === "android" ? "Android" : "iOS")).join(" / ") },
+        { label: "색상", value: `${Object.values(template.previewTemplate.overrides.colors).filter(Boolean).length}` },
+        { label: "이미지", value: `${Object.values(template.previewTemplate.overrides.uploads).reduce((count, entries) => count + (entries?.length ?? 0), 0)}` },
+      ],
+      onStart,
+    };
+  }
+
   return {
-    title: template.name,
-    description: template.previewNote,
+    title: template.title,
+    description: template.baseTemplate.previewNote,
     eyebrow: "Template preview",
     closeLabel: "닫기",
     androidLabel: "Android로 시작",
     iosLabel: "iOS로 시작",
-    baseTemplate: template,
+    baseTemplate: template.baseTemplate,
+    visual: template.visual,
+    availablePlatforms: ["android", "ios"],
     rows: [
-      { label: "기본 채팅방 배경", value: template.defaults.chatBackground },
-      { label: "내 말풍선", value: template.defaults.myBubble },
-      { label: "상대 말풍선", value: template.defaults.friendBubble },
-      { label: "기본 시작 플랫폼", value: template.defaults.platform === "android" ? "Android" : "iOS" },
+      { label: "채팅방 배경", value: template.visual.chatBackgroundColor },
+      { label: "내 말풍선", value: template.visual.myBubbleColor },
+      { label: "상대 말풍선", value: template.visual.friendBubbleColor },
+      { label: "플랫폼", value: template.baseTemplate.defaults.platform === "android" ? "Android" : "iOS" },
     ],
     onStart,
   };
 }
 
-function createSystemTemplatePreviewModel(template: SystemTemplateSummary, onStart: (platform: ThemePlatform) => void): TemplatePreviewModel {
-  const baseTemplate = themeTemplates.find((item) => item.id === template.baseTemplateId) ?? themeTemplates[0];
-  return {
-    title: template.title,
-    description: template.description,
-    eyebrow: "System template preview",
-    closeLabel: "Close",
-    androidLabel: "Android start",
-    iosLabel: "iOS start",
-    baseTemplate,
-    rows: [
-      { label: "Base", value: template.baseTemplateId },
-      { label: "Saved platform", value: template.platform === "android" ? "Android" : "iOS" },
-      { label: "Colors", value: `${template.colorCount}` },
-      { label: "Uploads", value: `${template.uploadCount}` },
-    ],
-    onStart,
-  };
-}
-
-function SystemTemplateCard({ template, onPreview }: { template: SystemTemplateSummary; onPreview: (templateId: string) => void }) {
+function GalleryTemplateCard({ template, onPreview }: { template: GalleryTemplateItem; onPreview: (templateId: string) => void }) {
   return (
-    <article className="grid min-h-[244px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/92 p-4 shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)]">
+    <button
+      type="button"
+      className="group grid min-h-[392px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/92 p-4 text-left shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)]"
+      onClick={() => onPreview(template.id)}
+    >
       <div className="grid gap-4">
-        <div className="flex items-center justify-between gap-3">
-          <span className="inline-flex w-fit rounded-full bg-[var(--color-tertiary-container)]/50 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-tertiary-container)]">System</span>
-          <span className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-black uppercase text-[var(--color-on-surface-variant)]">{template.platform}</span>
-        </div>
+        <TemplateMiniPreview visual={template.visual} />
         <div className="grid gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex w-fit rounded-full bg-[var(--color-tertiary-container)]/50 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-tertiary-container)]">{template.badge}</span>
+            {template.kind === "system" ? <span className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-black uppercase text-[var(--color-on-surface-variant)]">{Object.keys(template.variants).join(" / ")}</span> : null}
+          </div>
           <strong className="font-[var(--font-display)] text-[26px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.title}</strong>
           {template.description ? <span className="line-clamp-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.description}</span> : null}
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <StatusRow label="Colors" value={`${template.colorCount}`} />
-          <StatusRow label="Uploads" value={`${template.uploadCount}`} />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {template.tags.slice(0, 3).map((tag) => (
-            <span key={tag} className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-bold text-[var(--color-on-surface-variant)]">
-              {tag}
-            </span>
-          ))}
-        </div>
       </div>
 
-      <button
-        type="button"
-        className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)] hover:text-[var(--color-on-primary-container)]"
-        onClick={() => onPreview(template.id)}
-      >
-        Template preview
+      <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
+        템플릿 확인
         <ArrowRight className="w-4 h-4" />
-      </button>
-    </article>
+      </span>
+    </button>
   );
 }
 
 function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewModel; onClose: () => void }) {
+  const canStartAndroid = preview.availablePlatforms?.includes("android") ?? true;
+  const canStartIos = preview.availablePlatforms?.includes("ios") ?? true;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${preview.title} preview`}>
       <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
@@ -376,7 +409,7 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
         </header>
 
         <div className="grid min-h-0 gap-3 p-3 sm:grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)] sm:p-4 lg:grid-cols-[340px_1fr]">
-          <TemplatePhonePreview template={preview.baseTemplate} />
+          <TemplatePhonePreview template={preview.baseTemplate} visual={preview.visual} />
           <div className="grid min-h-0 content-between gap-3">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               {preview.rows.map((row) => (
@@ -384,10 +417,10 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
               ))}
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              <button className="rounded-full bg-[var(--color-inverse-surface)] px-4 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:scale-[0.98]" type="button" onClick={() => preview.onStart("android")}>
+              <button className="rounded-full bg-[var(--color-inverse-surface)] px-4 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40" type="button" onClick={() => preview.onStart("android")} disabled={!canStartAndroid}>
                 {preview.androidLabel}
               </button>
-              <button className="rounded-full bg-[var(--color-primary-container)] px-4 py-3 text-sm font-black text-[var(--color-on-primary-container)] transition hover:scale-[0.98]" type="button" onClick={() => preview.onStart("ios")}>
+              <button className="rounded-full bg-[var(--color-primary-container)] px-4 py-3 text-sm font-black text-[var(--color-on-primary-container)] transition hover:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40" type="button" onClick={() => preview.onStart("ios")} disabled={!canStartIos}>
                 {preview.iosLabel}
               </button>
             </div>
@@ -397,56 +430,236 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
     </div>
   );
 }
-function TemplateMiniPreview({ template }: { template: ThemeTemplate }) {
-  const assets = spongebobPreviewAssets(template);
+function TemplateMiniPreview({ visual }: { visual: TemplatePreviewVisual }) {
   return (
     <div
-      className="aspect-[4/3] overflow-hidden rounded-[22px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
-      style={{ backgroundColor: template.defaults.chatBackground, backgroundImage: assets.chatBackground ? `url(${assets.chatBackground})` : undefined }}
+      className="relative aspect-[4/3] overflow-hidden rounded-[22px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
+      style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
     >
-      <div className="h-8 bg-white/86" />
-      <div className="grid gap-2.5 p-3">
-        <span className="h-7 w-24 rounded-xl bg-white bg-[length:100%_100%] bg-no-repeat" style={{ backgroundImage: assets.friendBubble ? `url(${assets.friendBubble})` : undefined }} />
-        <span className="h-7 w-28 justify-self-end rounded-xl bg-[length:100%_100%] bg-no-repeat" style={{ backgroundColor: template.defaults.myBubble, backgroundImage: assets.myBubble ? `url(${assets.myBubble})` : undefined }} />
-        <span className="h-7 w-36 rounded-xl bg-[length:100%_100%] bg-no-repeat" style={{ backgroundColor: template.defaults.friendBubble, backgroundImage: assets.friendBubble ? `url(${assets.friendBubble})` : undefined }} />
+      <div className="absolute inset-0 bg-gradient-to-b from-white/76 via-white/16 to-white/54" />
+      <div className="relative grid h-full grid-cols-[0.84fr_1fr] gap-2.5 p-3">
+        <div className="grid min-h-0 overflow-hidden rounded-[18px] bg-white/70 shadow-[0_12px_26px_rgba(42,103,103,0.08)]">
+          <div className="flex h-9 items-center justify-between px-3">
+            <strong className="text-sm font-black text-[var(--color-on-surface)]">채팅</strong>
+            <div className="flex items-center gap-1.5 text-[var(--color-on-surface)]">
+              <Search className="h-3.5 w-3.5" />
+              <Settings className="h-3.5 w-3.5" />
+            </div>
+          </div>
+          <div className="grid gap-2 px-3 pb-3">
+            <span className="h-8 rounded-[14px] bg-white/82" />
+            <MiniFriendRow visual={visual} width="w-[74%]" />
+            <MiniFriendRow visual={visual} width="w-[92%]" />
+          </div>
+          <MiniTabBar visual={visual} compact />
+        </div>
+
+        <div
+          className="grid min-h-0 content-between overflow-hidden rounded-[18px] bg-cover bg-center p-2.5 shadow-[0_12px_26px_rgba(42,103,103,0.08)]"
+          style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
+        >
+          <div className="flex h-7 items-center justify-between rounded-full bg-white/84 px-2.5 text-[10px] font-black text-[var(--color-on-surface)]">
+            <span>테마</span>
+            <MessageCircle className="h-3.5 w-3.5" />
+          </div>
+          <div className="grid gap-1.5">
+            <MiniBubble visual={visual} tone="friend" width="w-[72%]" />
+            <MiniBubble visual={visual} tone="me" width="w-[78%]" />
+            <MiniBubble visual={visual} tone="friend" width="w-[88%]" />
+          </div>
+          <div className="grid grid-cols-[18px_minmax(0,1fr)_18px] items-center gap-1.5 rounded-full bg-white/82 p-1.5">
+            <Plus className="h-3.5 w-3.5 justify-self-center text-[var(--color-on-surface-variant)]" />
+            <span className="h-3 rounded-full bg-black/8" />
+            <Hash className="h-3.5 w-3.5 justify-self-center text-[var(--color-on-surface-variant)]" />
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function TemplatePhonePreview({ template }: { template: ThemeTemplate }) {
-  const assets = spongebobPreviewAssets(template);
+function TemplatePhonePreview({ template, visual }: { template: ThemeTemplate; visual: TemplatePreviewVisual }) {
   return (
     <div
-      className="mx-auto grid h-[min(48dvh,500px)] min-h-[250px] w-full max-w-[310px] content-start overflow-hidden rounded-[28px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[0_22px_52px_rgba(42,103,103,0.14)] sm:h-[min(68dvh,540px)] sm:max-w-[330px] sm:rounded-[32px] lg:max-w-[340px]"
-      style={{ backgroundColor: template.defaults.chatBackground, backgroundImage: assets.chatBackground ? `url(${assets.chatBackground})` : undefined }}
+      className="mx-auto grid h-[min(48dvh,500px)] min-h-[250px] w-full max-w-[310px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[28px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[0_22px_52px_rgba(42,103,103,0.14)] sm:h-[min(68dvh,540px)] sm:max-w-[330px] sm:rounded-[32px] lg:max-w-[340px]"
+      style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
     >
-      <div className="flex h-12 items-center justify-between px-4 text-xs font-black bg-white/90 sm:h-14 sm:px-5 sm:text-sm">
-        <span>테마 미리보기</span>
-        <span className="text-xs text-[var(--color-on-surface-variant)]">{template.name}</span>
+      <div className="flex h-12 items-center justify-between bg-white/90 px-4 text-xs font-black text-[var(--color-on-surface)] sm:h-14 sm:px-5 sm:text-sm">
+        <span>{template.name}</span>
+        <div className="flex items-center gap-3">
+          <Search className="h-4 w-4" />
+          <Settings className="h-4 w-4" />
+        </div>
       </div>
-      <div className="grid gap-3 p-3 sm:gap-4 sm:p-4">
+      <div className="grid min-h-0 content-start gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4">
         <div className="justify-self-center rounded-full bg-[#14343a]/18 px-5 py-1 text-xs font-bold text-white">Today</div>
-        <span className="max-w-[80%] rounded-xl bg-white bg-[length:100%_100%] bg-no-repeat px-4 py-3 text-sm" style={{ backgroundImage: assets.friendBubble ? `url(${assets.friendBubble})` : undefined }}>
-          상대 말풍선
-        </span>
-        <span className="max-w-[80%] justify-self-end rounded-xl bg-[length:100%_100%] bg-no-repeat px-4 py-3 text-sm" style={{ backgroundColor: template.defaults.myBubble, backgroundImage: assets.myBubble ? `url(${assets.myBubble})` : undefined }}>
-          내 말풍선
-        </span>
-        <span className="max-w-[82%] rounded-xl bg-[length:100%_100%] bg-no-repeat px-4 py-3 text-sm" style={{ backgroundColor: template.defaults.friendBubble, backgroundImage: assets.friendBubble ? `url(${assets.friendBubble})` : undefined }}>
-          템플릿 기본값으로 시작합니다.
-        </span>
+        <PreviewMessage visual={visual} mine={false} text="테마 분위기를 확인합니다." />
+        <PreviewMessage visual={visual} mine text="말풍선과 배경을 함께 볼 수 있어요." />
+        <PreviewMessage visual={visual} mine={false} text="저장된 색상과 이미지가 반영됩니다." />
+        <PreviewMessage visual={visual} mine text="이 템플릿으로 시작할게요." />
+      </div>
+      <div className="grid grid-cols-[36px_minmax(0,1fr)_36px] items-center gap-2 bg-white/90 px-3 py-2">
+        <Plus className="h-5 w-5 justify-self-center text-[var(--color-on-surface-variant)]" />
+        <span className="rounded-full bg-[var(--color-surface-low)] px-4 py-2 text-sm font-semibold text-[var(--color-on-surface-variant)]">사용자 입력</span>
+        <Hash className="h-5 w-5 justify-self-center text-[var(--color-on-surface-variant)]" />
       </div>
     </div>
   );
+}
+
+function MiniFriendRow({ visual, width }: { visual: TemplatePreviewVisual; width: string }) {
+  return (
+    <div className={`grid grid-cols-[22px_minmax(0,1fr)] items-center gap-2 ${width}`}>
+      <MiniAvatar src={visual.profileImage} />
+      <span className="h-4 rounded-full bg-black/10" />
+    </div>
+  );
+}
+
+function MiniAvatar({ src }: { src?: string }) {
+  return (
+    <span className="grid h-6 w-6 place-items-center overflow-hidden rounded-full bg-[var(--color-primary-container)]/55">
+      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <UserRound className="h-3.5 w-3.5 text-[var(--color-on-primary-container)]" />}
+    </span>
+  );
+}
+
+function MiniTabBar({ visual, compact = false }: { visual: TemplatePreviewVisual; compact?: boolean }) {
+  return (
+    <div
+      className={`grid grid-cols-5 items-center bg-cover bg-center ${compact ? "h-8 px-2" : "h-12 px-3"}`}
+      style={{ backgroundColor: visual.tabBackgroundColor, backgroundImage: visual.tabBackgroundImage ? `url(${visual.tabBackgroundImage})` : undefined }}
+    >
+      {Array.from({ length: 5 }).map((_, index) => (
+        <span key={index} className={`justify-self-center rounded-full ${index === 1 ? "bg-[var(--color-primary-container)]" : "bg-black/14"} ${compact ? "h-3.5 w-3.5" : "h-5 w-5"}`} />
+      ))}
+    </div>
+  );
+}
+
+function MiniBubble({ visual, tone, width }: { visual: TemplatePreviewVisual; tone: "me" | "friend"; width: string }) {
+  const mine = tone === "me";
+  return (
+    <span
+      className={`${width} h-7 rounded-[12px] bg-[length:100%_100%] bg-no-repeat ${mine ? "justify-self-end" : ""}`}
+      style={{
+        backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor,
+        backgroundImage: mine ? (visual.myBubbleImage ? `url(${visual.myBubbleImage})` : undefined) : visual.friendBubbleImage ? `url(${visual.friendBubbleImage})` : undefined,
+      }}
+    />
+  );
+}
+
+function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual; mine: boolean; text: string }) {
+  return (
+    <div className={`grid gap-1.5 ${mine ? "justify-items-end" : "grid-cols-[28px_minmax(0,1fr)] items-end"}`}>
+      {!mine ? <MiniAvatar src={visual.profileImage} /> : null}
+      <span
+        className={`max-w-[84%] rounded-[18px] bg-[length:100%_100%] bg-no-repeat px-4 py-3 text-sm font-semibold leading-5 text-[var(--color-on-surface)] ${mine ? "justify-self-end" : ""}`}
+        style={{
+          backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor,
+          backgroundImage: mine ? (visual.myBubbleImage ? `url(${visual.myBubbleImage})` : undefined) : visual.friendBubbleImage ? `url(${visual.friendBubbleImage})` : undefined,
+        }}
+      >
+        {text}
+      </span>
+    </div>
+  );
+}
+
+function createTemplatePreviewVisual(
+  template: ThemeTemplate,
+  platform: ThemePlatform,
+  systemTemplate?: SystemTemplateRecord,
+  uploadPreviewUrl?: (entryId: string) => string | undefined,
+): TemplatePreviewVisual {
+  const slots = getThemeSlots(platform);
+  const templateId = template.id;
+  const colors = systemTemplate?.overrides.colors ?? {};
+  const uploads = systemTemplate?.overrides.uploads ?? {};
+  const selections = systemTemplate?.overrides.candidateSelections ?? {};
+  const seedAssets = spongebobPreviewAssets(template);
+
+  return {
+    chatBackgroundColor: resolveColor(slots, "chat_background_color", colors, selections, templateId, template, template.defaults.chatBackground),
+    mainBackgroundColor: resolveColor(slots, "main_background_color", colors, selections, templateId, template, template.defaults.mainBackground),
+    tabBackgroundColor: resolveColor(slots, "tab_background", colors, selections, templateId, template, template.defaults.tabBackground),
+    myBubbleColor: resolveColor(slots, "chat_bubble_me_color", colors, selections, templateId, template, template.defaults.myBubble),
+    friendBubbleColor: resolveColor(slots, "chat_bubble_you_color", colors, selections, templateId, template, template.defaults.friendBubble),
+    chatBackgroundImage: resolveImage(slots, "chat_background", uploads, selections, templateId, template, uploadPreviewUrl) ?? seedAssets.chatBackground,
+    mainBackgroundImage: resolveImage(slots, "main_background", uploads, selections, templateId, template, uploadPreviewUrl) ?? seedAssets.mainBackground,
+    tabBackgroundImage: resolveImage(slots, "tab_background_image", uploads, selections, templateId, template, uploadPreviewUrl),
+    myBubbleImage: resolveImage(slots, "bubble_me_1", uploads, selections, templateId, template, uploadPreviewUrl) ?? seedAssets.myBubble,
+    friendBubbleImage: resolveImage(slots, "bubble_you_1", uploads, selections, templateId, template, uploadPreviewUrl) ?? seedAssets.friendBubble,
+    profileImage: resolveImage(slots, "profile_image_1", uploads, selections, templateId, template, uploadPreviewUrl) ?? seedAssets.profileImage,
+  };
+}
+
+function resolveColor(
+  slots: ThemeAssetSlot[],
+  role: ThemeResourceRole,
+  colors: SlotColors,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  fallback: string,
+) {
+  const slot = findSlotByRole(slots, role);
+  return getResolvedColor(slot, colors, selections, templateId, template) ?? fallback;
+}
+
+function resolveImage(
+  slots: ThemeAssetSlot[],
+  role: ThemeResourceRole,
+  uploads: SlotUploads,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  uploadPreviewUrl?: (entryId: string) => string | undefined,
+) {
+  const slot = findSlotByRole(slots, role);
+  const selectedUpload = getSelectedUpload(slot, uploads, selections);
+  if (selectedUpload) return uploadPreviewUrl?.(selectedUpload.id);
+  return getResolvedAssetUrl(slot, uploads, selections, templateId, template);
+}
+
+function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {
+  return slots.find((slot) => slot.role === role);
+}
+
+function systemUploadKey(templateId: string, entryId: string) {
+  return `${templateId}:${entryId}`;
+}
+
+function groupSystemTemplateRecords(templates: SystemTemplateRecord[]) {
+  const map = new Map<string, { id: string; variants: Partial<Record<ThemePlatform, SystemTemplateRecord>>; updatedAt: number }>();
+
+  for (const template of templates) {
+    const bundleId = template.bundleId ?? template.id;
+    const current = map.get(bundleId);
+    if (current) {
+      current.variants[template.platform] = template;
+      current.updatedAt = Math.max(current.updatedAt, template.updatedAt);
+      continue;
+    }
+    map.set(bundleId, {
+      id: bundleId,
+      variants: { [template.platform]: template },
+      updatedAt: template.updatedAt,
+    });
+  }
+
+  return Array.from(map.values()).sort((left, right) => right.updatedAt - left.updatedAt);
 }
 
 function spongebobPreviewAssets(template: ThemeTemplate) {
   if (template.id !== "spongebob") return {};
   return {
+    mainBackground: "/template-assets/spongebob/android/theme_background_image.png",
     chatBackground: "/template-assets/spongebob/android/theme_chatroom_background_image.png",
     myBubble: "/template-assets/spongebob/android/theme_chatroom_bubble_me_01_image.9.png",
     friendBubble: "/template-assets/spongebob/android/theme_chatroom_bubble_you_01_image.9.png",
+    profileImage: "/template-assets/spongebob/android/theme_profile_01_image.png",
   };
 }
 

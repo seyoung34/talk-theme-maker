@@ -19,6 +19,7 @@ export type ThemeEditOverrides = {
 
 export type SystemTemplateRecord = {
   id: string;
+  bundleId?: string;
   title: string;
   description?: string;
   baseTemplateId: BaseTemplateId;
@@ -36,7 +37,7 @@ export type SystemTemplateRecord = {
 
 export type SystemTemplateSaveInput = Omit<SystemTemplateRecord, "id" | "createdAt" | "updatedAt"> & Partial<Pick<SystemTemplateRecord, "id" | "createdAt">>;
 
-export type SystemTemplateSummary = Pick<SystemTemplateRecord, "id" | "title" | "description" | "baseTemplateId" | "platform" | "status" | "visibility" | "pricingType" | "priceAmount" | "creditCost" | "tags" | "createdAt" | "updatedAt"> & {
+export type SystemTemplateSummary = Pick<SystemTemplateRecord, "id" | "bundleId" | "title" | "description" | "baseTemplateId" | "platform" | "status" | "visibility" | "pricingType" | "priceAmount" | "creditCost" | "tags" | "createdAt" | "updatedAt"> & {
   uploadCount: number;
   colorCount: number;
 };
