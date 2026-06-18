@@ -251,6 +251,7 @@ async function remoteUploadsToSlotUploads(uploadRefs: RemoteSlotUploads, slotIds
       entries.map(async (entry) => ({
         id: entry.id,
         file: await storagePathToFile(entry.storagePath, entry.fileName, entry.mimeType),
+        source: "template" as const,
       })),
     );
   }

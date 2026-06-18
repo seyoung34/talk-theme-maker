@@ -66,15 +66,32 @@ export function ProjectQuickEditPanel({
   onToggleCandidates: () => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
+  const [uploadPreviewUrls, setUploadPreviewUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const entries = Object.values(uploads).flatMap((items) => items ?? []);
+    const next = Object.fromEntries(entries.map((entry) => [entry.id, URL.createObjectURL(entry.file)]));
+    setUploadPreviewUrls(next);
+    return () => {
+      Object.values(next).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [uploads]);
 
   if (!slot) return null;
 
   const hasImage = Boolean(file?.file || file?.sourceUrl);
   const status = slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots);
-  const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets);
+  const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets, uploadPreviewUrls);
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
-  const uploadEntries = getSlotUploadEntries(slot, uploads);
+  const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
+  const uploadEntries = getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id));
+  const displayStatus =
+    selectedPickerCandidate?.source === "admin"
+      ? `추천 에셋 · ${selectedPickerCandidate.title}`
+      : selectedPickerCandidate?.source === "template"
+        ? `템플릿 에셋 · ${selectedPickerCandidate.status}`
+        : status;
 
   const handleDrop = (event: DragEvent<HTMLButtonElement | HTMLDivElement>) => {
     event.preventDefault();
@@ -109,7 +126,7 @@ export function ProjectQuickEditPanel({
       <section className="grid min-h-0 content-start gap-4 overflow-auto rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
         <div className="grid gap-3 lg:grid-cols-2">
           <DetailRow label={slot.kind === "color" ? "설정 키" : "파일명"} value={slot.kind === "color" ? slot.colorKey ?? "-" : slot.fileName ?? "-"} />
-          <DetailRow label="상태" value={status} />
+          <DetailRow label="상태" value={displayStatus} />
         </div>
 
         {slot.kind === "color" ? (
@@ -144,7 +161,7 @@ export function ProjectQuickEditPanel({
               onDrop={handleDrop}
             >
               <div>
-                <p className="text-sm font-semibold text-[#0f172a]">이미지 업로드</p>
+                <p className="text-sm font-semibold text-[#0f172a]">직접 업로드</p>
                 <p className="mt-1 text-[12px] font-medium text-[#6b7280]">파일을 여기에 끌어오거나 버튼으로 직접 선택합니다.</p>
               </div>
 
@@ -158,7 +175,7 @@ export function ProjectQuickEditPanel({
                   disabled={uploadEntries.length === 0}
                   onClick={() => onClear(slot)}
                 >
-                  업로드 비우기
+                  직접 업로드 비우기
                 </button>
                 {slot.editableInBubbleEditor ? (
                   <button
@@ -212,6 +229,7 @@ function CandidatePicker({
   const groups: CandidateGroup[] = [
     { key: "palette" as const, label: "팔레트", items: candidates.filter((candidate) => candidate.source === "palette") },
     { key: "default" as const, label: "기본값", items: candidates.filter((candidate) => candidate.source === "default") },
+    { key: "template" as const, label: "템플릿 에셋", items: candidates.filter((candidate) => candidate.source === "template") },
     { key: "upload" as const, label: "내 업로드", items: candidates.filter((candidate) => candidate.source === "upload") },
     { key: "creator" as const, label: "제작자 후보", items: candidates.filter((candidate) => candidate.source === "creator") },
   ].filter((group) => group.items.length > 0);
@@ -365,6 +383,7 @@ function toCssSwatch(value: string) {
 
 function groupSourceLabel(source: SlotCandidate["source"]) {
   if (source === "admin") return "관리 후보";
+  if (source === "template") return "템플릿";
   if (source === "palette") return "팔레트";
   if (source === "default") return "기본";
   if (source === "upload") return "업로드";

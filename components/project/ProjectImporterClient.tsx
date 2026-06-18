@@ -69,7 +69,13 @@ type ActiveSystemTemplate = {
 };
 
 type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
-type InitialLoadState = { status: "idle" | "ready" | "loading" | "error"; message?: string };
+type InitialLoadState = {
+  status: "idle" | "ready" | "loading" | "error";
+  message?: string;
+  detail?: string;
+  current?: number;
+  total?: number;
+};
 
 type AndroidExportPayloadOptions = {
   analysis: ReturnType<typeof createThemeProjectAnalysis>;
@@ -174,7 +180,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
 
     const requiresSystemTemplateLoad = Boolean(payload.systemTemplateId || (payload.sourceSystemTemplateId && payload.systemTemplateBundleId));
-    setInitialLoadState(requiresSystemTemplateLoad ? { status: "loading", message: "시스템 템플릿 에셋을 불러오는 중입니다." } : { status: "ready" });
+    setInitialLoadState(requiresSystemTemplateLoad ? createInitialLoadProgress("템플릿 정보를 확인하는 중입니다.", 0, 3) : { status: "ready" });
 
     const loadStartedTemplate = async () => {
       setTemplateId(payload.templateId);
@@ -192,6 +198,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
       if (payload.systemTemplateId) {
         try {
+          setInitialLoadState(createInitialLoadProgress("템플릿 정보를 확인하는 중입니다.", 0, 3));
           const savedTemplate = await systemTemplateRepository.getMetadata(payload.systemTemplateId);
           if (!active) return;
           if (!savedTemplate) {
@@ -202,8 +209,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           skipDefaultSelectionResetRef.current = true;
           setTemplateId(savedTemplate.baseTemplateId);
           setPlatform(payload.platform);
-          const previewUploads = await systemTemplateRepository.hydrateUploads(savedTemplate.overrides.uploadRefs, getInitialPreviewSlotIds(savedTemplate.platform, savedTemplate.overrides.uploadRefs));
+          const previewSlotIds = getInitialPreviewSlotIds(savedTemplate.platform, savedTemplate.overrides.uploadRefs);
+          const progressTotal = Math.max(3, previewSlotIds.length + 2);
+          setInitialLoadState(
+            createInitialLoadProgress("미리보기 에셋을 준비하는 중입니다.", 1, progressTotal, previewSlotIds.length ? `${previewSlotIds.length}개 핵심 에셋을 불러옵니다.` : "저장된 색상과 기본 에셋으로 미리보기를 준비합니다."),
+          );
+          const previewUploads = await hydrateUploadSlotsWithProgress(savedTemplate.overrides.uploadRefs, previewSlotIds, (completed, total) => {
+            if (!active) return;
+            setInitialLoadState(createInitialLoadProgress("미리보기 에셋을 준비하는 중입니다.", 1 + completed, Math.max(3, total + 2), `${completed}/${total}개 에셋 완료`));
+          });
           if (!active) return;
+          setInitialLoadState(createInitialLoadProgress("편집 화면을 구성하는 중입니다.", progressTotal - 1, progressTotal));
           remoteUploadRefsRef.current = savedTemplate.overrides.uploadRefs;
           setRemoteUploadRefs(savedTemplate.overrides.uploadRefs);
           setUploads(previewUploads);
@@ -376,6 +392,23 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const ensureSystemTemplateUploadsHydrated = () => hydrateSystemTemplateUploads(remoteUploadRefsRef.current);
 
+  const hydrateUploadSlotsWithProgress = async (uploadRefs: RemoteSlotUploads, slotIds: string[], onProgress: (completed: number, total: number) => void) => {
+    if (slotIds.length === 0) {
+      return {};
+    }
+
+    let nextUploads: SlotUploads = {};
+    let completed = 0;
+    onProgress(completed, slotIds.length);
+    for (const slotId of slotIds) {
+      const hydrated = await systemTemplateRepository.hydrateUploads(uploadRefs, [slotId]);
+      nextUploads = mergeSlotUploads(nextUploads, hydrated);
+      completed += 1;
+      onProgress(completed, slotIds.length);
+    }
+    return nextUploads;
+  };
+
   useEffect(() => {
     if (initialLoadState.status !== "ready" || !selectedSlot) return;
     void hydrateSystemTemplateUploads(remoteUploadRefsRef.current, [selectedSlot.id]).catch((error) => console.error(error));
@@ -424,7 +457,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     const uploadId = `${slot.id}:upload:${Date.now()}`;
     setUploads((current) => ({
       ...current,
-      [slot.id]: [...(current[slot.id] ?? []), { id: uploadId, file }],
+      [slot.id]: [...(current[slot.id] ?? []), { id: uploadId, file, source: "user" as const }],
     }));
     setRemoteUploadRefs((current) => {
       const next = { ...current };
@@ -478,7 +511,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     const file = await adminAssetToFile(asset);
     setUploads((current) => {
       const entries = current[slot.id] ?? [];
-      const nextEntries = entries.some((entry) => entry.id === asset.id) ? entries : [...entries, { id: asset.id, file }];
+      const nextEntries = entries.some((entry) => entry.id === asset.id) ? entries : [...entries, { id: asset.id, file, source: "admin" as const }];
       return { ...current, [slot.id]: nextEntries };
     });
     setRemoteUploadRefs((current) => {
@@ -826,7 +859,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         />
       ) : null}
 
-      {initialLoadState.status === "loading" ? <InitialTemplateLoadingPanel message={initialLoadState.message ?? "템플릿을 불러오는 중입니다."} /> : null}
+      {initialLoadState.status === "loading" ? (
+        <InitialTemplateLoadingPanel
+          message={initialLoadState.message ?? "템플릿을 불러오는 중입니다."}
+          detail={initialLoadState.detail}
+          current={initialLoadState.current}
+          total={initialLoadState.total}
+        />
+      ) : null}
       {initialLoadState.status === "error" ? <InitialTemplateErrorPanel message={initialLoadState.message ?? "템플릿을 불러오지 못했습니다."} onStartDefault={startDefaultTemplate} /> : null}
 
       {initialLoadState.status === "ready" ? (
@@ -978,14 +1018,41 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   );
 }
 
-function InitialTemplateLoadingPanel({ message }: { message: string }) {
+function InitialTemplateLoadingPanel({
+  message,
+  detail,
+  current,
+  total,
+}: {
+  message: string;
+  detail?: string;
+  current?: number;
+  total?: number;
+}) {
+  const hasProgress = typeof current === "number" && typeof total === "number" && total > 0;
+  const progressValue = hasProgress ? Math.max(0, Math.min(100, Math.round((current / total) * 100))) : 18;
+
   return (
     <div className="grid h-full place-items-center px-5">
       <section className="grid w-full max-w-3xl gap-5 rounded-[28px] border border-[#e5e7eb] bg-white/95 p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#64748b]">Loading template</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-[#0f172a]">{message}</h1>
-          <p className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">저장된 이미지와 말풍선 에셋을 모두 받은 뒤 편집 화면을 엽니다.</p>
+          <p className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">{detail ?? "미리보기에 필요한 에셋을 먼저 준비한 뒤 편집 화면을 엽니다."}</p>
+          <div className="mt-5 grid gap-2">
+            <div className="flex items-center justify-between gap-3 text-xs font-bold text-[#64748b]">
+              <span>초기 준비</span>
+              <span>{hasProgress ? `${progressValue}%` : "준비 중"}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-[#e5e7eb]">
+              <div className="h-full rounded-full bg-[#2563eb] transition-all duration-300" style={{ width: `${progressValue}%` }} />
+            </div>
+            {hasProgress ? (
+              <p className="text-[11px] font-semibold text-[#94a3b8]">
+                {current}/{total} 단계 완료
+              </p>
+            ) : null}
+          </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-[220px_minmax(0,1fr)]">
           <div className="aspect-[9/16] animate-pulse rounded-[28px] bg-[#f1f5f9]" />
@@ -1036,6 +1103,16 @@ function takeTemplateStartPayload() {
 
   consumedTemplateStartPayload = { payload: null, consumedAt: Date.now() };
   return null;
+}
+
+function createInitialLoadProgress(message: string, current: number, total: number, detail?: string): InitialLoadState {
+  return {
+    status: "loading",
+    message,
+    detail,
+    current,
+    total,
+  };
 }
 
 function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {

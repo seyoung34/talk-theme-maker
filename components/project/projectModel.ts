@@ -22,7 +22,7 @@ export type SlotCandidate = {
   status: string;
   active: boolean;
   selected: boolean;
-  source: "default" | "creator" | "upload" | "palette" | "admin";
+  source: "default" | "creator" | "upload" | "template" | "palette" | "admin";
   previewUrl?: string;
   colorValue?: string;
   adminAsset?: AdminAssetCandidate;
@@ -87,6 +87,7 @@ export function buildSlotCandidates(
   template: ThemeTemplate,
   allSlots: ThemeAssetSlot[] = [],
   adminAssets: AdminAssetCandidate[] = [],
+  uploadPreviewUrls: Record<string, string> = {},
 ): SlotCandidate[] {
   if (!slot) return [];
 
@@ -95,6 +96,7 @@ export function buildSlotCandidates(
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   const candidates = getSlotCandidates(slot, templateId, template);
   const colorDisabledByImage = isColorSlotDisabledByImage(slot, allSlots, uploads, selections, templateId, template);
+  const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
 
   const baseItems = candidates.map((candidate) => ({
     id: candidate.id,
@@ -108,6 +110,7 @@ export function buildSlotCandidates(
   }));
 
   const uploadItems = uploadEntries
+    .filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id))
     .slice()
     .reverse()
     .map((entry) => ({
@@ -117,12 +120,26 @@ export function buildSlotCandidates(
       active: selectedUpload?.id === entry.id,
       selected: selectedUpload?.id === entry.id,
       source: "upload" as const,
+      previewUrl: uploadPreviewUrls[entry.id],
+    }));
+  const templateItems = uploadEntries
+    .filter((entry) => entry.source === "template")
+    .slice()
+    .reverse()
+    .map((entry) => ({
+      id: entry.id,
+      title: "템플릿 에셋",
+      status: entry.file.name,
+      active: selectedUpload?.id === entry.id,
+      selected: selectedUpload?.id === entry.id,
+      source: "template" as const,
+      previewUrl: uploadPreviewUrls[entry.id],
     }));
 
   const paletteItems = slot.kind === "color" ? buildPaletteCandidates(slot, allSlots, uploads, colors, selections, templateId, template) : [];
   const adminItems = slot.kind !== "color" ? buildAdminCandidates(slot, selectedUpload?.id, adminAssets) : [];
 
-  return [...uploadItems, ...adminItems, ...paletteItems, ...baseItems];
+  return [...templateItems, ...uploadItems, ...adminItems, ...paletteItems, ...baseItems];
 }
 
 function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | undefined, adminAssets: Array<AdminAssetCandidate & { previewUrl?: string }>): SlotCandidate[] {

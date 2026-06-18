@@ -3,9 +3,12 @@ import type { BubbleSlot, Insets, Markers, StretchPoint, ThemeResourceRole, Them
 
 export const disabledImageCandidateId = "__none__";
 
+export type SlotUploadSource = "user" | "template" | "admin";
+
 export type SlotUploadEntry = {
   id: string;
   file: File;
+  source?: SlotUploadSource;
 };
 
 export type SlotUploads = Record<string, SlotUploadEntry[] | undefined>;
