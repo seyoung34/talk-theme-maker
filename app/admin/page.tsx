@@ -3,8 +3,13 @@ import { ArrowRight } from "lucide-react";
 import AdminSystemTemplateEntryCard from "@/components/admin/AdminSystemTemplateEntryCard";
 import AdminSystemTemplateList from "@/components/admin/AdminSystemTemplateList";
 import SiteHeader from "@/components/layout/SiteHeader";
+import { requireAdmin } from "@/lib/supabase/auth";
 
-export default function AdminPage() {
+export const dynamic = "force-dynamic";
+
+export default async function AdminPage() {
+  await requireAdmin("/admin");
+
   return (
     <main className="min-h-screen bg-[var(--color-background)] text-[var(--color-on-background)]">
       <SiteHeader currentPath="/admin" />

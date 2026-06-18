@@ -1,5 +1,5 @@
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
-import type { SystemTemplateRecord, SystemTemplateSaveInput, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
+import type { RemoteSlotUploads, SystemTemplateMetadataRecord, SystemTemplateRecord, SystemTemplateSaveInput, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 
 const databaseName = "kakaotalk-theme-maker";
 const databaseVersion = 3;
@@ -51,9 +51,19 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
     return records.map(toSummary).sort((a, b) => b.updatedAt - a.updatedAt);
   },
 
+  async getMetadata(id: string) {
+    const record = await withStore<SystemTemplateRecord | undefined>("readonly", (store) => store.get(id));
+    return record ? toMetadataRecord(record) : null;
+  },
+
   async get(id: string) {
     const record = await withStore<SystemTemplateRecord | undefined>("readonly", (store) => store.get(id));
     return record ?? null;
+  },
+
+  async hydrateUploads(uploadRefs: RemoteSlotUploads) {
+    void uploadRefs;
+    return {};
   },
 
   async save(input: SystemTemplateSaveInput) {
@@ -92,5 +102,19 @@ function toSummary(record: SystemTemplateRecord): SystemTemplateSummary {
     updatedAt: record.updatedAt,
     uploadCount: Object.values(record.overrides.uploads).reduce((count, entries) => count + (entries?.length ?? 0), 0),
     colorCount: Object.values(record.overrides.colors).filter(Boolean).length,
+    colors: record.overrides.colors,
+    candidateSelections: record.overrides.candidateSelections,
+    uploadRefs: {},
+    previewMetadata: { colors: {}, refs: {} },
+  };
+}
+
+function toMetadataRecord(record: SystemTemplateRecord): SystemTemplateMetadataRecord {
+  return {
+    ...record,
+    overrides: {
+      ...record.overrides,
+      uploadRefs: {},
+    },
   };
 }

@@ -342,17 +342,9 @@ function groupSlotsByAssetKind(slots: ThemeAssetSlot[]) {
 }
 
 function AdminAssetCard({ asset, slot, onDelete }: { asset: AdminAssetCandidate; slot?: ThemeAssetSlot; onDelete: () => void }) {
-  const [previewUrl, setPreviewUrl] = useState("");
-
-  useEffect(() => {
-    const url = URL.createObjectURL(asset.blob);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [asset.blob]);
-
   return (
     <article className="grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)]">
-      <div className="aspect-[4/3] rounded-[18px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: previewUrl ? `url(${previewUrl})` : undefined }} />
+      <div className="aspect-[4/3] rounded-[18px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} />
       <div className="min-w-0">
         <strong className="block truncate text-sm font-black text-[var(--color-on-surface)]">{asset.title}</strong>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : slot?.label ?? asset.slotRole}</span>

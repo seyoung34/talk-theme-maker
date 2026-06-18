@@ -37,7 +37,33 @@ export type SystemTemplateRecord = {
 
 export type SystemTemplateSaveInput = Omit<SystemTemplateRecord, "id" | "createdAt" | "updatedAt"> & Partial<Pick<SystemTemplateRecord, "id" | "createdAt">>;
 
+export type RemoteUploadEntry = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  storagePath: string;
+};
+
+export type RemoteSlotUploads = Record<string, RemoteUploadEntry[] | undefined>;
+
+export type SystemTemplatePreviewMetadata = {
+  colors?: Partial<Record<"chatBackground" | "mainBackground" | "tabBackground" | "myBubble" | "friendBubble", string>>;
+  refs?: Partial<Record<"chatBackground" | "mainBackground" | "tabBackground" | "myBubble" | "friendBubble" | "profileImage", string>>;
+};
+
 export type SystemTemplateSummary = Pick<SystemTemplateRecord, "id" | "bundleId" | "title" | "description" | "baseTemplateId" | "platform" | "status" | "visibility" | "pricingType" | "priceAmount" | "creditCost" | "tags" | "createdAt" | "updatedAt"> & {
   uploadCount: number;
   colorCount: number;
+  colors: SlotColors;
+  candidateSelections: SlotCandidateSelections;
+  uploadRefs: RemoteSlotUploads;
+  previewMetadata: SystemTemplatePreviewMetadata;
+};
+
+export type SystemTemplateMetadataRecord = Omit<SystemTemplateRecord, "overrides"> & {
+  overrides: Omit<ThemeEditOverrides, "uploads"> & {
+    uploads: SlotUploads;
+    uploadRefs: RemoteSlotUploads;
+  };
 };

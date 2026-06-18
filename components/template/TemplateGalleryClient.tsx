@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Clock3, Hash, SendHorizontal, Plus, Search, Settings, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import UserTemplateCard from "@/components/template/UserTemplateCard";
-import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
-import { localSystemTemplateRepository, type SystemTemplateRecord } from "@/lib/theme/systemTemplates";
-import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
+import { createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
+import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
+import { templateStartStorageKey, themeTemplates, type ThemeTemplate } from "@/lib/theme/templates";
 import { deleteUserTemplate, listUserTemplates, type UserTemplateSummary } from "@/lib/theme/userTemplates";
-import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import type { ThemePlatform } from "@/lib/theme/types";
 
 type GalleryTemplateItem =
   | {
@@ -29,8 +29,8 @@ type GalleryTemplateItem =
     badge: string;
     baseTemplate: ThemeTemplate;
     bundleId: string;
-    variants: Partial<Record<ThemePlatform, SystemTemplateRecord>>;
-    previewTemplate: SystemTemplateRecord;
+    variants: Partial<Record<ThemePlatform, SystemTemplateSummary>>;
+    previewTemplate: SystemTemplateSummary;
     visual: TemplatePreviewVisual;
   };
 
@@ -48,26 +48,13 @@ type TemplatePreviewModel = {
   onStart: (platform: ThemePlatform) => void;
 };
 
-type TemplatePreviewVisual = {
-  chatBackgroundColor: string;
-  mainBackgroundColor: string;
-  tabBackgroundColor: string;
-  myBubbleColor: string;
-  friendBubbleColor: string;
-  chatBackgroundImage?: string;
-  mainBackgroundImage?: string;
-  tabBackgroundImage?: string;
-  myBubbleImage?: string;
-  friendBubbleImage?: string;
-  profileImage?: string;
-};
-
 export default function TemplateGalleryClient() {
   const router = useRouter();
   const [selectedGalleryTemplateId, setSelectedGalleryTemplateId] = useState<string | null>(null);
   const [userTemplates, setUserTemplates] = useState<UserTemplateSummary[]>([]);
-  const [systemTemplates, setSystemTemplates] = useState<SystemTemplateRecord[]>([]);
-  const [systemUploadPreviewUrls, setSystemUploadPreviewUrls] = useState<Record<string, string>>({});
+  const [systemTemplates, setSystemTemplates] = useState<SystemTemplateSummary[]>([]);
+  const [systemUploadPreviewUrls, setSystemUploadPreviewUrls] = useState<SignedUrlCache>({});
+  const [isSystemTemplatesLoading, setIsSystemTemplatesLoading] = useState(true);
   const [notice, setNotice] = useState<string | null>(null);
   const galleryTemplates = useMemo(
     () =>
@@ -110,16 +97,14 @@ export default function TemplateGalleryClient() {
 
   useEffect(() => {
     let active = true;
-    localSystemTemplateRepository
+    systemTemplateRepository
       .list()
       .then(async (templates) => {
-        const records = await Promise.all(templates.map((template) => localSystemTemplateRepository.get(template.id)));
+        const publicTemplates = templates.filter((template) => template.status === "published" && template.visibility === "public");
+        const previewUrls = await createSystemTemplatePreviewUrls(publicTemplates, systemUploadPreviewUrls);
         if (active) {
-          setSystemTemplates(
-            records.filter(
-              (template): template is SystemTemplateRecord => Boolean(template && template.status === "published" && template.visibility === "public"),
-            ),
-          );
+          setSystemTemplates(publicTemplates);
+          setSystemUploadPreviewUrls(previewUrls);
         }
       })
       .catch((error) => {
@@ -128,30 +113,15 @@ export default function TemplateGalleryClient() {
           setSystemTemplates([]);
           setNotice("System templates could not be loaded.");
         }
+      })
+      .finally(() => {
+        if (active) setIsSystemTemplatesLoading(false);
       });
 
     return () => {
       active = false;
     };
   }, []);
-
-  useEffect(() => {
-    const entries: Array<[string, string]> = [];
-    for (const template of systemTemplates) {
-      for (const uploadEntries of Object.values(template.overrides.uploads)) {
-        for (const entry of uploadEntries ?? []) {
-          entries.push([systemUploadKey(template.id, entry.id), URL.createObjectURL(entry.file)]);
-        }
-      }
-    }
-
-    const next = Object.fromEntries(entries);
-    setSystemUploadPreviewUrls(next);
-
-    return () => {
-      for (const url of Object.values(next)) URL.revokeObjectURL(url);
-    };
-  }, [systemTemplates]);
 
   useEffect(() => {
     if (!notice) return;
@@ -169,7 +139,7 @@ export default function TemplateGalleryClient() {
     router.push("/edit");
   };
 
-  const startSystemTemplateWithPlatform = (template: SystemTemplateRecord, platform: ThemePlatform) => {
+  const startSystemTemplateWithPlatform = (template: SystemTemplateSummary, platform: ThemePlatform) => {
     localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.baseTemplateId, platform, systemTemplateId: template.id, systemTemplateBundleId: template.bundleId ?? template.id, editMode: "user" }));
     router.push("/edit");
   };
@@ -269,6 +239,7 @@ export default function TemplateGalleryClient() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {isSystemTemplatesLoading ? <TemplateGallerySkeletonCards count={3} /> : null}
             {galleryTemplates.map((template) => (
               <GalleryTemplateCard key={template.id} template={template} onPreview={setSelectedGalleryTemplateId} />
             ))}
@@ -288,7 +259,7 @@ export default function TemplateGalleryClient() {
   );
 }
 
-function createGalleryTemplates(systemTemplates: SystemTemplateRecord[], uploadPreviewUrls: Record<string, string>): GalleryTemplateItem[] {
+function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], uploadPreviewUrls: SignedUrlCache): GalleryTemplateItem[] {
   const basicTemplate = themeTemplates.find((template) => template.id === "basic") ?? themeTemplates[0];
   const seedTemplates = themeTemplates.filter((template) => template.id !== "basic");
 
@@ -300,7 +271,7 @@ function createGalleryTemplates(systemTemplates: SystemTemplateRecord[], uploadP
       description: basicTemplate.description,
       badge: "기본",
       baseTemplate: basicTemplate,
-      visual: createTemplatePreviewVisual(basicTemplate, basicTemplate.defaults.platform),
+      visual: createBaseTemplatePreviewVisual(basicTemplate),
     },
     ...seedTemplates.map((template) => ({
       id: `seed:${template.id}`,
@@ -309,7 +280,7 @@ function createGalleryTemplates(systemTemplates: SystemTemplateRecord[], uploadP
       description: template.description,
       badge: "시스템",
       baseTemplate: template,
-      visual: createTemplatePreviewVisual(template, template.defaults.platform),
+      visual: createBaseTemplatePreviewVisual(template),
     })),
     ...groupSystemTemplateRecords(systemTemplates).map((bundle) => {
       const previewTemplate = bundle.variants.android ?? bundle.variants.ios!;
@@ -324,7 +295,13 @@ function createGalleryTemplates(systemTemplates: SystemTemplateRecord[], uploadP
         bundleId: bundle.id,
         variants: bundle.variants,
         previewTemplate,
-        visual: createTemplatePreviewVisual(baseTemplate, previewTemplate.platform, previewTemplate, (entryId) => uploadPreviewUrls[systemUploadKey(previewTemplate.id, entryId)]),
+        visual: createSystemTemplatePreviewVisual({
+          template: baseTemplate,
+          platform: previewTemplate.platform,
+          summary: previewTemplate,
+          signedUrls: uploadPreviewUrls,
+          seedAssets: spongebobPreviewAssets(baseTemplate),
+        }),
       };
     }),
   ];
@@ -345,8 +322,8 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
       rows: [
         { label: "기반", value: template.baseTemplate.name },
         { label: "저장된 플랫폼", value: Object.keys(template.variants).map((value) => (value === "android" ? "Android" : "iOS")).join(" / ") || "없음" },
-        { label: "색상", value: `${Object.values(template.previewTemplate.overrides.colors).filter(Boolean).length}` },
-        { label: "이미지", value: `${Object.values(template.previewTemplate.overrides.uploads).reduce((count, entries) => count + (entries?.length ?? 0), 0)}` },
+        { label: "색상", value: `${template.previewTemplate.colorCount}` },
+        { label: "이미지", value: `${template.previewTemplate.uploadCount}` },
       ],
       onStart,
     };
@@ -396,6 +373,27 @@ function GalleryTemplateCard({ template, onPreview }: { template: GalleryTemplat
         <ArrowRight className="w-4 h-4" />
       </span>
     </button>
+  );
+}
+
+function TemplateGallerySkeletonCards({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, index) => (
+        <div key={index} className="grid min-h-[392px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/70 p-4 shadow-[0_16px_36px_rgba(42,103,103,0.04)]">
+          <div className="grid gap-4">
+            <div className="aspect-[4/3] animate-pulse rounded-[22px] bg-[var(--color-surface-low)]" />
+            <div className="grid gap-2">
+              <span className="h-5 w-20 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+              <span className="h-8 w-4/5 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
+              <span className="h-4 w-full animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
+              <span className="h-4 w-2/3 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
+            </div>
+          </div>
+          <span className="mt-4 h-10 w-28 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -585,72 +583,24 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
   );
 }
 
-function createTemplatePreviewVisual(
-  template: ThemeTemplate,
-  platform: ThemePlatform,
-  systemTemplate?: SystemTemplateRecord,
-  uploadPreviewUrl?: (entryId: string) => string | undefined,
-): TemplatePreviewVisual {
-  const slots = getThemeSlots(platform);
-  const templateId = template.id;
-  const colors = systemTemplate?.overrides.colors ?? {};
-  const uploads = systemTemplate?.overrides.uploads ?? {};
-  const selections = systemTemplate?.overrides.candidateSelections ?? {};
+function createBaseTemplatePreviewVisual(template: ThemeTemplate): TemplatePreviewVisual {
   const seedAssets = spongebobPreviewAssets(template);
-
   return {
-    chatBackgroundColor: resolveColor(slots, "chat_background_color", colors, selections, templateId, template, template.defaults.chatBackground),
-    mainBackgroundColor: resolveColor(slots, "main_background_color", colors, selections, templateId, template, template.defaults.mainBackground),
-    tabBackgroundColor: resolveColor(slots, "tab_background", colors, selections, templateId, template, template.defaults.tabBackground),
-    myBubbleColor: resolveColor(slots, "chat_bubble_me_color", colors, selections, templateId, template, template.defaults.myBubble),
-    friendBubbleColor: resolveColor(slots, "chat_bubble_you_color", colors, selections, templateId, template, template.defaults.friendBubble),
-    chatBackgroundImage: resolveImage(slots, "chat_background", uploads, selections, templateId, template, uploadPreviewUrl) ?? seedAssets.chatBackground,
-    mainBackgroundImage: resolveImage(slots, "main_background", uploads, selections, templateId, template, uploadPreviewUrl) ?? seedAssets.mainBackground,
-    tabBackgroundImage: resolveImage(slots, "tab_background_image", uploads, selections, templateId, template, uploadPreviewUrl),
-    myBubbleImage: resolveImage(slots, "bubble_me_1", uploads, selections, templateId, template, uploadPreviewUrl) ?? seedAssets.myBubble,
-    friendBubbleImage: resolveImage(slots, "bubble_you_1", uploads, selections, templateId, template, uploadPreviewUrl) ?? seedAssets.friendBubble,
-    profileImage: resolveImage(slots, "profile_image_1", uploads, selections, templateId, template, uploadPreviewUrl) ?? seedAssets.profileImage,
+    chatBackgroundColor: template.defaults.chatBackground,
+    mainBackgroundColor: template.defaults.mainBackground,
+    tabBackgroundColor: template.defaults.tabBackground,
+    myBubbleColor: template.defaults.myBubble,
+    friendBubbleColor: template.defaults.friendBubble,
+    chatBackgroundImage: seedAssets.chatBackground,
+    mainBackgroundImage: seedAssets.mainBackground,
+    myBubbleImage: seedAssets.myBubble,
+    friendBubbleImage: seedAssets.friendBubble,
+    profileImage: seedAssets.profileImage,
   };
 }
 
-function resolveColor(
-  slots: ThemeAssetSlot[],
-  role: ThemeResourceRole,
-  colors: SlotColors,
-  selections: SlotCandidateSelections,
-  templateId: ThemeTemplateId,
-  template: ThemeTemplate,
-  fallback: string,
-) {
-  const slot = findSlotByRole(slots, role);
-  return getResolvedColor(slot, colors, selections, templateId, template) ?? fallback;
-}
-
-function resolveImage(
-  slots: ThemeAssetSlot[],
-  role: ThemeResourceRole,
-  uploads: SlotUploads,
-  selections: SlotCandidateSelections,
-  templateId: ThemeTemplateId,
-  template: ThemeTemplate,
-  uploadPreviewUrl?: (entryId: string) => string | undefined,
-) {
-  const slot = findSlotByRole(slots, role);
-  const selectedUpload = getSelectedUpload(slot, uploads, selections);
-  if (selectedUpload) return uploadPreviewUrl?.(selectedUpload.id);
-  return getResolvedAssetUrl(slot, uploads, selections, templateId, template);
-}
-
-function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {
-  return slots.find((slot) => slot.role === role);
-}
-
-function systemUploadKey(templateId: string, entryId: string) {
-  return `${templateId}:${entryId}`;
-}
-
-function groupSystemTemplateRecords(templates: SystemTemplateRecord[]) {
-  const map = new Map<string, { id: string; variants: Partial<Record<ThemePlatform, SystemTemplateRecord>>; updatedAt: number }>();
+function groupSystemTemplateRecords(templates: SystemTemplateSummary[]) {
+  const map = new Map<string, { id: string; variants: Partial<Record<ThemePlatform, SystemTemplateSummary>>; updatedAt: number }>();
 
   for (const template of templates) {
     const bundleId = template.bundleId ?? template.id;

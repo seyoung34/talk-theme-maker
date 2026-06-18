@@ -21,11 +21,11 @@ import {
 } from "@/components/project/projectModel";
 import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
-import { listAdminAssetCandidates, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { adminAssetToFile, listAdminAssetCandidates, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
-import { localSystemTemplateRepository, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
+import { systemTemplateRepository, type RemoteSlotUploads, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
 import {
@@ -33,12 +33,15 @@ import {
   getThemeTemplate,
   templateStartStorageKey,
   type ThemeAssetSlot,
+  type ThemeStartPayload,
   type ThemeTemplate,
   type ThemeTemplateId,
 } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 const editorHandoffKey = "kakaotalk-theme-maker:editor-handoff:v1";
+const templateStartPayloadReuseMs = 5000;
+let consumedTemplateStartPayload: { payload: ThemeStartPayload | null; consumedAt: number } | undefined;
 
 type Notice = {
   tone: "info" | "success" | "warning" | "error";
@@ -66,6 +69,7 @@ type ActiveSystemTemplate = {
 };
 
 type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
+type InitialLoadState = { status: "idle" | "ready" | "loading" | "error"; message?: string };
 
 type AndroidExportPayloadOptions = {
   analysis: ReturnType<typeof createThemeProjectAnalysis>;
@@ -102,11 +106,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const isAdminMode = mode === "admin";
   const router = useRouter();
   const [templateId, setTemplateId] = useState<ThemeTemplateId>("basic");
+  const [initialLoadState, setInitialLoadState] = useState<InitialLoadState>({ status: "idle" });
   const [platform, setPlatform] = useState<ThemePlatform>("android");
   const [activeSection, setActiveSection] = useState<ThemeSection>("main");
   const [activeGroup, setActiveGroup] = useState<ThemeSlotGroup>("background");
   const [selectedSlotId, setSelectedSlotId] = useState<string | undefined>();
   const [uploads, setUploads] = useState<SlotUploads>({});
+  const [remoteUploadRefs, setRemoteUploadRefs] = useState<RemoteSlotUploads>({});
   const [colors, setColors] = useState<SlotColors>({});
   const [candidateSelections, setCandidateSelections] = useState<SlotCandidateSelections>({});
   const [screenRailOpen, setScreenRailOpen] = useState(true);
@@ -146,10 +152,29 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [adminAssetsWithPreview, setAdminAssetsWithPreview] = useState<Array<AdminAssetCandidate & { previewUrl: string }>>([]);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
+  const uploadsRef = useRef<SlotUploads>({});
+  const remoteUploadRefsRef = useRef<RemoteSlotUploads>({});
 
   useEffect(() => {
-    const payload = readTemplateStartPayload(templateStartStorageKey);
-    if (!payload) return;
+    uploadsRef.current = uploads;
+  }, [uploads]);
+
+  useEffect(() => {
+    remoteUploadRefsRef.current = remoteUploadRefs;
+  }, [remoteUploadRefs]);
+
+  useEffect(() => {
+    let active = true;
+    const payload = takeTemplateStartPayload();
+    if (!payload) {
+      setInitialLoadState({ status: "ready" });
+      return () => {
+        active = false;
+      };
+    }
+
+    const requiresSystemTemplateLoad = Boolean(payload.systemTemplateId || (payload.sourceSystemTemplateId && payload.systemTemplateBundleId));
+    setInitialLoadState(requiresSystemTemplateLoad ? { status: "loading", message: "시스템 템플릿 에셋을 불러오는 중입니다." } : { status: "ready" });
 
     const loadStartedTemplate = async () => {
       setTemplateId(payload.templateId);
@@ -158,6 +183,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       setActiveGroup("background");
       setSelectedSlotId(undefined);
       setUploads({});
+      remoteUploadRefsRef.current = {};
+      setRemoteUploadRefs({});
       setColors({});
       setActiveUserTemplate(null);
       setActiveSystemTemplate(null);
@@ -165,16 +192,21 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
       if (payload.systemTemplateId) {
         try {
-          const savedTemplate = await localSystemTemplateRepository.get(payload.systemTemplateId);
+          const savedTemplate = await systemTemplateRepository.getMetadata(payload.systemTemplateId);
+          if (!active) return;
           if (!savedTemplate) {
-            setNotice({ tone: "warning", message: "시스템 템플릿을 찾을 수 없어 기본 템플릿으로 시작합니다." });
+            setInitialLoadState({ status: "error", message: "시스템 템플릿을 찾을 수 없습니다." });
             return;
           }
 
           skipDefaultSelectionResetRef.current = true;
           setTemplateId(savedTemplate.baseTemplateId);
           setPlatform(payload.platform);
-          setUploads(savedTemplate.overrides.uploads);
+          const previewUploads = await systemTemplateRepository.hydrateUploads(savedTemplate.overrides.uploadRefs, getInitialPreviewSlotIds(savedTemplate.platform, savedTemplate.overrides.uploadRefs));
+          if (!active) return;
+          remoteUploadRefsRef.current = savedTemplate.overrides.uploadRefs;
+          setRemoteUploadRefs(savedTemplate.overrides.uploadRefs);
+          setUploads(previewUploads);
           setColors(savedTemplate.overrides.colors);
           setCandidateSelections(savedTemplate.overrides.candidateSelections);
           setBubbleMarkers(savedTemplate.overrides.bubbleEdits.markers);
@@ -194,18 +226,21 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             createdAt: savedTemplate.createdAt,
           });
           setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 불러왔습니다.` });
+          setInitialLoadState({ status: "ready" });
+          void hydrateSystemTemplateUploads(savedTemplate.overrides.uploadRefs);
         } catch (error) {
           console.error(error);
-          setNotice({ tone: "error", message: "시스템 템플릿을 불러오는 중 오류가 발생했습니다." });
+          setInitialLoadState({ status: "error", message: "시스템 템플릿 에셋을 불러오는 중 오류가 발생했습니다." });
         }
         return;
       }
 
       if (payload.sourceSystemTemplateId && payload.systemTemplateBundleId) {
         try {
-          const sourceTemplate = await localSystemTemplateRepository.get(payload.sourceSystemTemplateId);
+          const sourceTemplate = await systemTemplateRepository.get(payload.sourceSystemTemplateId);
+          if (!active) return;
           if (!sourceTemplate) {
-            setNotice({ tone: "warning", message: "원본 시스템 템플릿을 찾을 수 없어 기본 템플릿으로 시작합니다." });
+            setInitialLoadState({ status: "error", message: "원본 시스템 템플릿을 찾을 수 없습니다." });
             return;
           }
 
@@ -236,9 +271,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           setSystemPriceAmount(sourceTemplate.priceAmount ? String(sourceTemplate.priceAmount) : "");
           setSystemCreditCost(sourceTemplate.creditCost ? String(sourceTemplate.creditCost) : "");
           setNotice({ tone: "success", message: `${sourceTemplate.title} 시스템 템플릿을 ${payload.platform === "android" ? "Android" : "iOS"} 기준으로 변환했습니다.` });
+          setInitialLoadState({ status: "ready" });
         } catch (error) {
           console.error(error);
-          setNotice({ tone: "error", message: "시스템 템플릿 변환 중 오류가 발생했습니다." });
+          setInitialLoadState({ status: "error", message: "시스템 템플릿 변환 중 오류가 발생했습니다." });
         }
         return;
       }
@@ -247,6 +283,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
       try {
         const savedTemplate = await getUserTemplate(payload.userTemplateId);
+        if (!active) return;
         if (!savedTemplate) {
           setNotice({ tone: "warning", message: "저장한 템플릿을 찾을 수 없어 기본 템플릿으로 시작합니다." });
           return;
@@ -270,7 +307,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     };
 
     void loadStartedTemplate();
-    localStorage.removeItem(templateStartStorageKey);
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -287,11 +326,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   }, []);
 
   useEffect(() => {
-    const next = adminAssets.map((asset) => ({ ...asset, previewUrl: URL.createObjectURL(asset.blob) }));
-    setAdminAssetsWithPreview(next);
-    return () => {
-      next.forEach((asset) => URL.revokeObjectURL(asset.previewUrl));
-    };
+    setAdminAssetsWithPreview(adminAssets.map((asset) => ({ ...asset, previewUrl: asset.previewUrl ?? "" })));
   }, [adminAssets]);
 
   const activeTemplate = getThemeTemplate(templateId);
@@ -325,6 +360,48 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const canAdjustInline = Boolean(selectedSlot?.editableInBubbleEditor && selectedFile && selectedBubbleSlot);
   const completion = getCompletion(slots, uploads, colors, candidateSelections, templateId, activeTemplate);
 
+  const hydrateSystemTemplateUploads = async (uploadRefs: RemoteSlotUploads = remoteUploadRefsRef.current, slotIds?: string[]) => {
+    const targetSlotIds = getMissingRemoteUploadSlotIds(uploadRefs, uploadsRef.current, slotIds);
+    if (!targetSlotIds.length) return uploadsRef.current;
+
+    const hydrated = keepCurrentRemoteUploads(await systemTemplateRepository.hydrateUploads(uploadRefs, targetSlotIds), remoteUploadRefsRef.current);
+    let nextUploads = uploadsRef.current;
+    setUploads((current) => {
+      nextUploads = mergeSlotUploads(current, hydrated);
+      uploadsRef.current = nextUploads;
+      return nextUploads;
+    });
+    return nextUploads;
+  };
+
+  const ensureSystemTemplateUploadsHydrated = () => hydrateSystemTemplateUploads(remoteUploadRefsRef.current);
+
+  useEffect(() => {
+    if (initialLoadState.status !== "ready" || !selectedSlot) return;
+    void hydrateSystemTemplateUploads(remoteUploadRefsRef.current, [selectedSlot.id]).catch((error) => console.error(error));
+  }, [initialLoadState.status, selectedSlot?.id]);
+
+  const startDefaultTemplate = () => {
+    skipDefaultSelectionResetRef.current = true;
+    setTemplateId("basic");
+    setPlatform("android");
+    setActiveSection("main");
+    setActiveGroup("background");
+    setSelectedSlotId(undefined);
+    setUploads({});
+    remoteUploadRefsRef.current = {};
+    setRemoteUploadRefs({});
+    setColors({});
+    setCandidateSelections(getInitialSlotCandidateSelections(getThemeSlots("android"), "basic", getThemeTemplate("basic")));
+    setBubbleMarkers({});
+    setBubbleInsets({});
+    setBubbleStretch({});
+    setActiveUserTemplate(null);
+    setActiveSystemTemplate(null);
+    setSystemTemplateBundleId(null);
+    setInitialLoadState({ status: "ready" });
+  };
+
   const selectSection = (section: ThemeSection) => {
     setActiveSection(section);
     const nextGroups = getSectionGroups(section, slots);
@@ -349,6 +426,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       ...current,
       [slot.id]: [...(current[slot.id] ?? []), { id: uploadId, file }],
     }));
+    setRemoteUploadRefs((current) => {
+      const next = { ...current };
+      delete next[slot.id];
+      remoteUploadRefsRef.current = next;
+      return next;
+    });
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
     setSelectedSlotId(slot.id);
     setActiveSection(slot.section);
@@ -359,6 +442,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setUploads((current) => {
       const next = { ...current };
       delete next[slot.id];
+      return next;
+    });
+    setRemoteUploadRefs((current) => {
+      const next = { ...current };
+      delete next[slot.id];
+      remoteUploadRefsRef.current = next;
       return next;
     });
     setCandidateSelections((current) => ({
@@ -385,12 +474,18 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
   };
 
-  const selectAdminAsset = (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => {
-    const file = new File([asset.blob], asset.fileName, { type: asset.mimeType });
+  const selectAdminAsset = async (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => {
+    const file = await adminAssetToFile(asset);
     setUploads((current) => {
       const entries = current[slot.id] ?? [];
       const nextEntries = entries.some((entry) => entry.id === asset.id) ? entries : [...entries, { id: asset.id, file }];
       return { ...current, [slot.id]: nextEntries };
+    });
+    setRemoteUploadRefs((current) => {
+      const next = { ...current };
+      delete next[slot.id];
+      remoteUploadRefsRef.current = next;
+      return next;
     });
     if (asset.bubbleAdjustment) {
       if (asset.bubbleAdjustment.markers) {
@@ -410,7 +505,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const openAdvancedBubbleEditor = async () => {
-    if (!selectedSlot?.editableInBubbleEditor || !selectedFile) {
+    let fileForEditor = selectedFile;
+    if (selectedSlot?.editableInBubbleEditor && !fileForEditor) {
+      const hydratedUploads = await hydrateSystemTemplateUploads(remoteUploadRefsRef.current, [selectedSlot.id]);
+      const hydratedAnalysis = createThemeProjectAnalysis(activeTemplate, platform, slots, hydratedUploads, colors, candidateSelections);
+      fileForEditor = getSlotFile(selectedSlot, hydratedAnalysis.files);
+    }
+
+    if (!selectedSlot?.editableInBubbleEditor || !fileForEditor) {
       router.push("/editor");
       return;
     }
@@ -421,7 +523,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       return;
     }
 
-    const dataUrl = await dataUrlForThemeFile(selectedFile);
+    const dataUrl = await dataUrlForThemeFile(fileForEditor);
     if (!dataUrl) {
       router.push("/editor");
       return;
@@ -458,13 +560,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     try {
       setIsSavingTemplate(true);
       setNotice({ tone: "info", message: "현재 편집 상태를 내 템플릿으로 저장하는 중입니다." });
+      const hydratedUploads = await ensureSystemTemplateUploadsHydrated();
       const savedTemplate = await saveUserTemplate({
         id: saveMode === "overwrite" ? activeUserTemplate?.id : undefined,
         createdAt: saveMode === "overwrite" ? activeUserTemplate?.createdAt : undefined,
         name,
         templateId,
         platform,
-        uploads,
+        uploads: hydratedUploads,
         colors,
         candidateSelections,
         bubbleEdits: {
@@ -504,7 +607,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     try {
       setIsSavingSystemTemplate(true);
       setNotice({ tone: "info", message: "시스템 템플릿을 저장하는 중입니다." });
-      const savedTemplate = await localSystemTemplateRepository.save({
+      const hydratedUploads = await ensureSystemTemplateUploadsHydrated();
+      const savedTemplate = await systemTemplateRepository.save({
         id: activeSystemTemplate?.id,
         bundleId: activeSystemTemplate?.bundleId ?? systemTemplateBundleId ?? undefined,
         createdAt: activeSystemTemplate?.createdAt,
@@ -523,7 +627,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           .filter(Boolean),
         overrides: {
           colors,
-          uploads,
+          uploads: hydratedUploads,
           candidateSelections,
           bubbleEdits: {
             markers: bubbleMarkers,
@@ -592,8 +696,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         setExportProgressStep((current) => (current >= progressSteps.length - 2 ? current : current + 1));
       }, 850);
 
+      const hydratedUploads = await ensureSystemTemplateUploadsHydrated();
+      const hydratedAnalysis = createThemeProjectAnalysis(activeTemplate, platform, slots, hydratedUploads, colors, candidateSelections);
       const formData = await createExportFormData({
-        analysis,
+        analysis: hydratedAnalysis,
         template: activeTemplate,
         templateId,
         exportName,
@@ -602,7 +708,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         themeIdentifier: exportThemeIdentifier,
         mode: exportMode,
         slots,
-        uploads,
+        uploads: hydratedUploads,
         colors,
         selections: candidateSelections,
         bubbleMarkers,
@@ -720,6 +826,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         />
       ) : null}
 
+      {initialLoadState.status === "loading" ? <InitialTemplateLoadingPanel message={initialLoadState.message ?? "템플릿을 불러오는 중입니다."} /> : null}
+      {initialLoadState.status === "error" ? <InitialTemplateErrorPanel message={initialLoadState.message ?? "템플릿을 불러오지 못했습니다."} onStartDefault={startDefaultTemplate} /> : null}
+
+      {initialLoadState.status === "ready" ? (
       <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-3 md:gap-4">
         <header className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-[#e5e7eb] bg-white/95 px-4 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
           <div className="flex min-w-0 items-center gap-4 justify-self-start">
@@ -831,7 +941,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 onClear={clearSlot}
                 onColorChange={changeColor}
                 onSelectCandidate={selectCandidate}
-                onSelectAdminAsset={selectAdminAsset}
+                    onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
                 onOpenAdvanced={openAdvancedBubbleEditor}
                 onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
                 onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
@@ -863,8 +973,69 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           />
         </section>
       </div>
+      ) : null}
     </main>
   );
+}
+
+function InitialTemplateLoadingPanel({ message }: { message: string }) {
+  return (
+    <div className="grid h-full place-items-center px-5">
+      <section className="grid w-full max-w-3xl gap-5 rounded-[28px] border border-[#e5e7eb] bg-white/95 p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#64748b]">Loading template</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-[#0f172a]">{message}</h1>
+          <p className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">저장된 이미지와 말풍선 에셋을 모두 받은 뒤 편집 화면을 엽니다.</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="aspect-[9/16] animate-pulse rounded-[28px] bg-[#f1f5f9]" />
+          <div className="grid content-start gap-3">
+            <span className="h-10 animate-pulse rounded-2xl bg-[#f1f5f9]" />
+            <span className="h-24 animate-pulse rounded-2xl bg-[#f1f5f9]" />
+            <span className="h-24 animate-pulse rounded-2xl bg-[#f1f5f9]" />
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function InitialTemplateErrorPanel({ message, onStartDefault }: { message: string; onStartDefault: () => void }) {
+  return (
+    <div className="grid h-full place-items-center px-5">
+      <section className="grid w-full max-w-xl gap-4 rounded-[28px] border border-rose-100 bg-white p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-rose-700">Template load failed</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-[#0f172a]">{message}</h1>
+          <p className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">네트워크 또는 Storage 권한을 확인한 뒤 다시 시도하거나 기본 템플릿으로 시작할 수 있습니다.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/template" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155] transition hover:bg-[#f8fafc]">
+            템플릿으로 돌아가기
+          </Link>
+          <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1e293b]" onClick={onStartDefault}>
+            기본 템플릿으로 시작
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function takeTemplateStartPayload() {
+  const payload = readTemplateStartPayload(templateStartStorageKey);
+  if (payload) {
+    consumedTemplateStartPayload = { payload, consumedAt: Date.now() };
+    localStorage.removeItem(templateStartStorageKey);
+    return payload;
+  }
+
+  if (consumedTemplateStartPayload && Date.now() - consumedTemplateStartPayload.consumedAt < templateStartPayloadReuseMs) {
+    return consumedTemplateStartPayload.payload;
+  }
+
+  consumedTemplateStartPayload = { payload: null, consumedAt: Date.now() };
+  return null;
 }
 
 function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {
@@ -1364,6 +1535,44 @@ function getExportNotice(mode: ExportMode) {
   if (mode === "project") return "Android 프로젝트 ZIP을 생성하는 중입니다.";
   if (mode === "apk-zip") return "Android APK ZIP을 생성하는 중입니다.";
   return "Android APK를 빌드하는 중입니다.";
+}
+
+function getInitialPreviewSlotIds(platform: ThemePlatform, uploadRefs: RemoteSlotUploads) {
+  const slots = getThemeSlots(platform);
+  const roleOrder: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "profile_image_1"];
+  return roleOrder.map((role) => slots.find((slot) => slot.role === role)?.id).filter((slotId): slotId is string => Boolean(slotId && uploadRefs[slotId]?.length));
+}
+
+function getMissingRemoteUploadSlotIds(uploadRefs: RemoteSlotUploads, uploads: SlotUploads, slotIds?: string[]) {
+  const targetSlotIds = slotIds?.length ? slotIds : Object.keys(uploadRefs);
+  return targetSlotIds.filter((slotId) => {
+    const refs = uploadRefs[slotId] ?? [];
+    if (!refs.length) return false;
+    const currentIds = new Set((uploads[slotId] ?? []).map((entry) => entry.id));
+    return refs.some((entry) => !currentIds.has(entry.id));
+  });
+}
+
+function keepCurrentRemoteUploads(uploads: SlotUploads, uploadRefs: RemoteSlotUploads): SlotUploads {
+  const next: SlotUploads = {};
+  for (const [slotId, entries] of Object.entries(uploads)) {
+    if (!entries?.length) continue;
+    const currentRefIds = new Set((uploadRefs[slotId] ?? []).map((entry) => entry.id));
+    const currentEntries = entries.filter((entry) => currentRefIds.has(entry.id));
+    if (currentEntries.length) next[slotId] = currentEntries;
+  }
+  return next;
+}
+
+function mergeSlotUploads(current: SlotUploads, incoming: SlotUploads): SlotUploads {
+  const next: SlotUploads = { ...current };
+  for (const [slotId, entries] of Object.entries(incoming)) {
+    if (!entries?.length) continue;
+    const currentEntries = next[slotId] ?? [];
+    const currentIds = new Set(currentEntries.map((entry) => entry.id));
+    next[slotId] = [...currentEntries, ...entries.filter((entry) => !currentIds.has(entry.id))];
+  }
+  return next;
 }
 
 function slotEditFromRole(

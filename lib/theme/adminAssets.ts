@@ -1,11 +1,7 @@
+import { createClient } from "@/lib/supabase/client";
+import { sanitizeStoragePathPart, storagePathToFile, storagePathToPreviewUrl, themeAssetsBucketName } from "@/lib/theme/remoteAssets";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
-
-const databaseName = "kakaotalk-theme-maker";
-const databaseVersion = 3;
-const userTemplatesStoreName = "user-templates";
-const systemTemplatesStoreName = "system-templates";
-const storeName = "admin-assets";
 
 export type AdminAssetCandidate = {
   id: string;
@@ -19,15 +15,19 @@ export type AdminAssetCandidate = {
   tags: string[];
   fileName: string;
   mimeType: string;
-  blob: Blob;
+  storagePath: string;
+  blob?: Blob;
+  file?: File;
+  previewUrl?: string;
   createdAt: number;
   updatedAt: number;
   enabled: boolean;
 };
 
-export type AdminAssetCandidateInput = Omit<AdminAssetCandidate, "id" | "createdAt" | "updatedAt" | "enabled"> & {
+export type AdminAssetCandidateInput = Omit<AdminAssetCandidate, "id" | "createdAt" | "updatedAt" | "enabled" | "storagePath" | "blob" | "previewUrl" | "file"> & {
   id?: string;
   enabled?: boolean;
+  blob: Blob;
 };
 
 export type AdminAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode";
@@ -47,65 +47,82 @@ export type AdminBubbleAdjustment = {
   stretch?: StretchPoint;
 };
 
-function openDatabase() {
-  return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(databaseName, databaseVersion);
-
-    request.onupgradeneeded = () => {
-      const database = request.result;
-      if (!database.objectStoreNames.contains(userTemplatesStoreName)) {
-        database.createObjectStore(userTemplatesStoreName, { keyPath: "id" });
-      }
-      if (!database.objectStoreNames.contains(storeName)) {
-        database.createObjectStore(storeName, { keyPath: "id" });
-      }
-      if (!database.objectStoreNames.contains(systemTemplatesStoreName)) {
-        database.createObjectStore(systemTemplatesStoreName, { keyPath: "id" });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function withStore<T>(mode: IDBTransactionMode, callback: (store: IDBObjectStore) => IDBRequest<T>) {
-  const database = await openDatabase();
-  return new Promise<T>((resolve, reject) => {
-    const transaction = database.transaction(storeName, mode);
-    const request = callback(transaction.objectStore(storeName));
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => database.close();
-    transaction.onerror = () => {
-      database.close();
-      reject(transaction.error);
-    };
-  });
-}
+type AdminAssetRow = {
+  id: string;
+  slot_role: ThemeResourceRole;
+  platform: ThemePlatform | "all";
+  asset_kind?: AdminAssetKind | null;
+  analysis?: AdminAssetAnalysis | null;
+  bubble_adjustment?: AdminBubbleAdjustment | null;
+  title: string;
+  note?: string | null;
+  tags: string[] | null;
+  file_name: string;
+  mime_type: string;
+  storage_path: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+};
 
 export async function listAdminAssetCandidates(): Promise<AdminAssetCandidate[]> {
-  const records = await withStore<AdminAssetCandidate[]>("readonly", (store) => store.getAll());
-  return records.map(normalizeAdminAssetCandidate).sort((a, b) => b.updatedAt - a.updatedAt);
+  const supabase = createClient();
+  const { data, error } = await supabase.from("admin_assets").select("*").order("updated_at", { ascending: false });
+  if (error) throw error;
+  return Promise.all((data ?? []).map((row) => rowToAdminAsset(row as AdminAssetRow)));
 }
 
 export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput) {
-  const now = Date.now();
-  const record: AdminAssetCandidate = {
-    ...input,
-    id: input.id ?? `admin-asset:${now}:${Math.random().toString(36).slice(2, 8)}`,
-    createdAt: now,
-    updatedAt: now,
-    enabled: input.enabled ?? true,
-  };
+  const supabase = createClient();
+  const id = input.id ?? crypto.randomUUID();
+  const storagePath = `admin-assets/${id}/${sanitizeStoragePathPart(input.fileName)}`;
 
-  await withStore("readwrite", (store) => store.put(record));
-  return record;
+  const { error: uploadError } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, input.blob, {
+    contentType: input.mimeType || "application/octet-stream",
+    upsert: true,
+  });
+  if (uploadError) throw uploadError;
+
+  const { data: userData } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from("admin_assets")
+    .upsert({
+      id,
+      slot_role: input.slotRole,
+      platform: input.platform,
+      asset_kind: input.assetKind ?? null,
+      analysis: input.analysis ?? null,
+      bubble_adjustment: input.bubbleAdjustment ?? null,
+      title: input.title,
+      note: input.note ?? null,
+      tags: input.tags,
+      file_name: input.fileName,
+      mime_type: input.mimeType || "application/octet-stream",
+      storage_path: storagePath,
+      enabled: input.enabled ?? true,
+      created_by: userData.user?.id ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  return rowToAdminAsset(data as AdminAssetRow);
 }
 
 export async function deleteAdminAssetCandidate(id: string) {
-  await withStore<undefined>("readwrite", (store) => store.delete(id));
+  const supabase = createClient();
+  const { data } = await supabase.from("admin_assets").select("storage_path").eq("id", id).maybeSingle();
+  const { error } = await supabase.from("admin_assets").delete().eq("id", id);
+  if (error) throw error;
+  if (data?.storage_path) {
+    await supabase.storage.from(themeAssetsBucketName).remove([data.storage_path]);
+  }
+}
+
+export async function adminAssetToFile(asset: AdminAssetCandidate) {
+  if (asset.file) return asset.file;
+  if (asset.blob) return new File([asset.blob], asset.fileName, { type: asset.mimeType });
+  return storagePathToFile(asset.storagePath, asset.fileName, asset.mimeType);
 }
 
 export function inferAdminAssetKind(slot: Pick<ThemeAssetSlot, "role" | "group" | "section" | "kind">): AdminAssetKind {
@@ -156,12 +173,25 @@ export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis) {
   return `${size} · ${shape}`;
 }
 
-function normalizeAdminAssetCandidate(asset: AdminAssetCandidate): AdminAssetCandidate {
+async function rowToAdminAsset(row: AdminAssetRow): Promise<AdminAssetCandidate> {
+  const previewUrl = await storagePathToPreviewUrl(row.storage_path);
   return {
-    ...asset,
-    tags: asset.tags ?? [],
-    enabled: asset.enabled ?? true,
-    assetKind: asset.assetKind ?? inferLegacyAssetKind(asset.slotRole),
+    id: row.id,
+    slotRole: row.slot_role,
+    platform: row.platform,
+    assetKind: row.asset_kind ?? inferLegacyAssetKind(row.slot_role),
+    analysis: row.analysis ?? undefined,
+    bubbleAdjustment: row.bubble_adjustment ?? undefined,
+    title: row.title,
+    note: row.note ?? undefined,
+    tags: row.tags ?? [],
+    fileName: row.file_name,
+    mimeType: row.mime_type,
+    storagePath: row.storage_path,
+    previewUrl,
+    createdAt: dateToMs(row.created_at),
+    updatedAt: dateToMs(row.updated_at),
+    enabled: row.enabled,
   };
 }
 
@@ -172,4 +202,8 @@ function inferLegacyAssetKind(role: ThemeResourceRole): AdminAssetKind {
   if (role.startsWith("bubble_")) return "bubble";
   if (role.startsWith("passcode_")) return "passcode";
   return "background";
+}
+
+function dateToMs(value?: string | null) {
+  return value ? new Date(value).getTime() : Date.now();
 }
