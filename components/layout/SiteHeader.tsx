@@ -5,8 +5,9 @@ type SiteHeaderProps = {
 };
 
 const navItems = [
-  { href: "/template", label: "Template" },
-  { href: "/admin", label: "Admin" },
+  { href: "/template", label: "템플릿" },
+  { href: "/account", label: "계정" },
+  { href: "/admin", label: "관리자" },
 ];
 
 export default function SiteHeader({ currentPath }: SiteHeaderProps) {

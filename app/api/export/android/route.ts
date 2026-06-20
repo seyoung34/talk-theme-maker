@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createPendingExportJob, exportCreditCost, getCreditBalance, getCurrentUserOrNull, isInsufficientCreditsError, markExportFailed, spendCreditForExport } from "@/lib/billing/credits";
 import { buildAndroidApk, exportAndroidApkZip, exportAndroidProjectZip, getAndroidSampleVersionName, type AndroidBuildInputFile } from "@/lib/theme/android/apk";
 
 export const runtime = "nodejs";
@@ -22,7 +23,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  let exportJobId: string | null = null;
   try {
+    const user = await getCurrentUserOrNull();
+    if (!user) return NextResponse.json({ error: "Login required.", reason: "unauthenticated" }, { status: 401 });
+
     const formData = await request.formData();
     const manifestRaw = formData.get("manifest");
     const exportNameRaw = formData.get("exportName");
@@ -35,6 +40,12 @@ export async function POST(request: Request) {
     }
 
     const mode = isExportMode(modeRaw) ? modeRaw : "apk";
+    const balance = await getCreditBalance(user.id);
+    if (balance < exportCreditCost) {
+      return NextResponse.json({ error: "Insufficient credits.", reason: "insufficient_credits", credits: balance, required: exportCreditCost }, { status: 402 });
+    }
+    exportJobId = await createPendingExportJob({ userId: user.id, platform: "android", mode });
+
     const exportName = typeof exportNameRaw === "string" && exportNameRaw.trim().length > 0 ? exportNameRaw.trim() : "kakaotalk-theme";
     const versionName = typeof versionNameRaw === "string" && versionNameRaw.trim().length > 0 ? versionNameRaw.trim() : undefined;
     const applicationId = typeof applicationIdRaw === "string" && applicationIdRaw.trim().length > 0 ? applicationIdRaw.trim() : undefined;
@@ -54,36 +65,46 @@ export async function POST(request: Request) {
 
     if (mode === "project") {
       const { zipBytes, fileName } = await exportAndroidProjectZip(files, exportName, { versionName, applicationId });
+      const credits = await spendCreditForExport({ userId: user.id, exportJobId, fileName, reason: "android_project_export" });
       return new NextResponse(zipBytes, {
         status: 200,
         headers: {
           "Content-Type": "application/zip",
           "Content-Disposition": buildContentDisposition(fileName),
+          "X-Credits-Remaining": String(credits),
         },
       });
     }
 
     if (mode === "apk-zip") {
       const { zipBytes, fileName } = await exportAndroidApkZip(files, exportName, { versionName, applicationId });
+      const credits = await spendCreditForExport({ userId: user.id, exportJobId, fileName, reason: "android_apk_zip_export" });
       return new NextResponse(zipBytes, {
         status: 200,
         headers: {
           "Content-Type": "application/zip",
           "Content-Disposition": buildContentDisposition(fileName),
+          "X-Credits-Remaining": String(credits),
         },
       });
     }
 
     const { apkBytes, fileName } = await buildAndroidApk(files, exportName, { versionName, applicationId });
+    const credits = await spendCreditForExport({ userId: user.id, exportJobId, fileName, reason: "android_apk_export" });
     return new NextResponse(apkBytes, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.android.package-archive",
         "Content-Disposition": buildContentDisposition(fileName),
+        "X-Credits-Remaining": String(credits),
       },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Android export failed.";
+    if (exportJobId) await markExportFailed(exportJobId, message);
+    if (isInsufficientCreditsError(error)) {
+      return NextResponse.json({ error: "Insufficient credits.", reason: "insufficient_credits" }, { status: 402 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

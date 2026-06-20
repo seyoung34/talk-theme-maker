@@ -77,6 +77,11 @@ type InitialLoadState = {
   total?: number;
 };
 
+type AccountState = {
+  user: { id: string; email?: string } | null;
+  credits: number;
+};
+
 type AndroidExportPayloadOptions = {
   analysis: ReturnType<typeof createThemeProjectAnalysis>;
   template: ThemeTemplate;
@@ -150,6 +155,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [exportThemeIdentifier, setExportThemeIdentifier] = useState("");
   const [themeIdentifierEdited, setThemeIdentifierEdited] = useState(false);
   const [exportProgressStep, setExportProgressStep] = useState(0);
+  const [accountState, setAccountState] = useState<AccountState | null>(null);
+  const [isAccountLoading, setIsAccountLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
   const [bubbleInsets, setBubbleInsets] = useState<Partial<Record<string, Insets>>>({});
@@ -344,6 +351,18 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   useEffect(() => {
     setAdminAssetsWithPreview(adminAssets.map((asset) => ({ ...asset, previewUrl: asset.previewUrl ?? "" })));
   }, [adminAssets]);
+
+  const refreshAccountState = async () => {
+    setIsAccountLoading(true);
+    try {
+      const response = await fetch("/api/me", { cache: "no-store" });
+      const payload = (await response.json()) as AccountState;
+      setAccountState({ user: payload.user, credits: payload.credits ?? 0 });
+      return { user: payload.user, credits: payload.credits ?? 0 };
+    } finally {
+      setIsAccountLoading(false);
+    }
+  };
 
   const activeTemplate = getThemeTemplate(templateId);
   const displayTemplateName = activeUserTemplate?.name ?? activeSystemTemplate?.title ?? activeTemplate.name;
@@ -710,6 +729,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       setThemeIdentifierEdited(false);
       setExportMode(platform === "android" ? "apk" : "ktheme");
       setExportProgressStep(0);
+      await refreshAccountState();
       setExportDialogOpen(true);
     } catch (error) {
       console.error(error);
@@ -755,7 +775,15 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       });
 
       if (!response.ok) {
-        const errorBody = (await response.json().catch(() => null)) as { error?: string } | null;
+        const errorBody = (await response.json().catch(() => null)) as { error?: string; reason?: string } | null;
+        if (response.status === 401 || errorBody?.reason === "unauthenticated") {
+          router.push(`/login?returnTo=${encodeURIComponent("/edit")}&reason=export`);
+          return;
+        }
+        if (response.status === 402 || errorBody?.reason === "insufficient_credits") {
+          await refreshAccountState();
+          throw new Error("Not enough credits. Buy credits from your account page.");
+        }
         throw new Error(errorBody?.error ?? "Android export failed.");
       }
 
@@ -767,6 +795,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       const blob = await response.blob();
       const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${exportName}-android-export`;
       triggerDownload(blob, fileName);
+      const remainingCredits = Number(response.headers.get("X-Credits-Remaining"));
+      if (Number.isFinite(remainingCredits)) setAccountState((current) => ({ user: current?.user ?? accountState?.user ?? null, credits: remainingCredits }));
       setExportDialogOpen(false);
       setNotice({ tone: "success", message: `${fileName} 파일을 생성했습니다.` });
     } catch (error) {
@@ -805,6 +835,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           exportApplicationId={exportApplicationId}
           exportThemeIdentifier={exportThemeIdentifier}
           progressStep={exportProgressStep}
+          accountState={accountState}
+          isAccountLoading={isAccountLoading}
           onClose={() => {
             if (!isExporting) {
               setExportDialogOpen(false);
@@ -830,6 +862,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             setThemeIdentifierEdited(true);
             setExportThemeIdentifier(value);
           }}
+          onLogin={() => router.push(`/login?returnTo=${encodeURIComponent("/edit")}&reason=export`)}
+          onBuyCredits={() => router.push("/account")}
           onSubmit={() => void submitExport()}
         />
       ) : null}
@@ -1388,12 +1422,16 @@ function ExportDialog({
   exportApplicationId,
   exportThemeIdentifier,
   progressStep,
+  accountState,
+  isAccountLoading,
   onClose,
   onModeChange,
   onNameChange,
   onVersionNameChange,
   onApplicationIdChange,
   onThemeIdentifierChange,
+  onLogin,
+  onBuyCredits,
   onSubmit,
 }: {
   isExporting: boolean;
@@ -1404,12 +1442,16 @@ function ExportDialog({
   exportApplicationId: string;
   exportThemeIdentifier: string;
   progressStep: number;
+  accountState: AccountState | null;
+  isAccountLoading: boolean;
   onClose: () => void;
   onModeChange: (mode: ExportMode) => void;
   onNameChange: (value: string) => void;
   onVersionNameChange: (value: string) => void;
   onApplicationIdChange: (value: string) => void;
   onThemeIdentifierChange: (value: string) => void;
+  onLogin: () => void;
+  onBuyCredits: () => void;
   onSubmit: () => void;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -1417,6 +1459,9 @@ function ExportDialog({
   const applicationIdError = platform === "android" ? getAndroidApplicationIdError(exportApplicationId) : null;
   const themeIdentifierError = platform === "ios" ? getIosThemeIdentifierError(exportThemeIdentifier) : null;
   const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0 && !applicationIdError && !themeIdentifierError;
+  const isLoggedIn = Boolean(accountState?.user);
+  const credits = accountState?.credits ?? 0;
+  const hasCredits = credits >= 1;
 
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.42)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="내보내기">
@@ -1560,6 +1605,14 @@ function ExportDialog({
         </div>
 
         <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-4">
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e5e7eb] bg-white px-3 py-2">
+            <span className="text-sm font-semibold text-[#0f172a]">Export cost</span>
+            <span className="text-sm font-black text-[#2563eb]">1 credit</span>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e5e7eb] bg-white px-3 py-2">
+            <span className="text-sm font-semibold text-[#0f172a]">Current credits</span>
+            <span className={`text-sm font-black ${hasCredits ? "text-emerald-700" : "text-rose-700"}`}>{isAccountLoading ? "..." : credits}</span>
+          </div>
           <div className="h-2 overflow-hidden rounded-full bg-[#e5e7eb]">
             <div className="h-full rounded-full bg-[#2563eb] transition-all" style={{ width: `${((progressStep + 1) / steps.length) * 100}%` }} />
           </div>
@@ -1579,8 +1632,8 @@ function ExportDialog({
           <button
             type="button"
             className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={onSubmit}
-            disabled={!canSubmit || isExporting}
+            onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit}
+            disabled={!canSubmit || isExporting || isAccountLoading}
           >
             {isExporting ? "내보내는 중.." : "내보내기"}
           </button>

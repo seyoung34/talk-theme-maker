@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createPendingExportJob, exportCreditCost, getCreditBalance, getCurrentUserOrNull, isInsufficientCreditsError, markExportFailed, spendCreditForExport } from "@/lib/billing/credits";
 import { buildAndroidApk, type AndroidBuildInputFile } from "@/lib/theme/android/apk";
 
 export const runtime = "nodejs";
@@ -10,7 +11,11 @@ type UploadManifest = Array<{
 }>;
 
 export async function POST(request: Request) {
+  let exportJobId: string | null = null;
   try {
+    const user = await getCurrentUserOrNull();
+    if (!user) return NextResponse.json({ error: "Login required.", reason: "unauthenticated" }, { status: 401 });
+
     const formData = await request.formData();
     const manifestRaw = formData.get("manifest");
     const apkBaseNameRaw = formData.get("apkBaseName");
@@ -25,6 +30,11 @@ export async function POST(request: Request) {
     const apkBaseName = typeof apkBaseNameRaw === "string" && apkBaseNameRaw.trim().length > 0 ? apkBaseNameRaw : "kakaotalk-theme";
     const versionName = typeof versionNameRaw === "string" && versionNameRaw.trim().length > 0 ? versionNameRaw.trim() : undefined;
     const applicationId = typeof applicationIdRaw === "string" && applicationIdRaw.trim().length > 0 ? applicationIdRaw.trim() : undefined;
+    const balance = await getCreditBalance(user.id);
+    if (balance < exportCreditCost) {
+      return NextResponse.json({ error: "Insufficient credits.", reason: "insufficient_credits", credits: balance, required: exportCreditCost }, { status: 402 });
+    }
+    exportJobId = await createPendingExportJob({ userId: user.id, platform: "android", mode: "apk" });
 
     const files: AndroidBuildInputFile[] = [];
     for (const item of manifest) {
@@ -39,15 +49,21 @@ export async function POST(request: Request) {
     }
 
     const { apkBytes, fileName } = await buildAndroidApk(files, apkBaseName, { versionName, applicationId });
+    const credits = await spendCreditForExport({ userId: user.id, exportJobId, fileName, reason: "android_apk_export" });
     return new NextResponse(apkBytes, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.android.package-archive",
         "Content-Disposition": buildContentDisposition(fileName),
+        "X-Credits-Remaining": String(credits),
       },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Android APK build failed.";
+    if (exportJobId) await markExportFailed(exportJobId, message);
+    if (isInsufficientCreditsError(error)) {
+      return NextResponse.json({ error: "Insufficient credits.", reason: "insufficient_credits" }, { status: 402 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
