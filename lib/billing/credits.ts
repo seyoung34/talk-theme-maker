@@ -1,11 +1,6 @@
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 
 export const exportCreditCost = 1;
-export const creditPack = {
-  credits: 10,
-  amount: 9900,
-  name: "10 Credits",
-};
 
 export type ExportPlatform = "android" | "ios";
 

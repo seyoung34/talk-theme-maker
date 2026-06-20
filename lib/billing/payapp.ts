@@ -1,4 +1,4 @@
-import { creditPack } from "@/lib/billing/credits";
+import type { CreditProduct } from "@/lib/billing/products";
 import { getSiteUrl, requirePayappServerConfig } from "@/lib/supabase/config";
 
 const payappApiUrl = "https://api.payapp.kr/oapi/apiLoad.html";
@@ -24,10 +24,12 @@ export async function createPayappCreditCheckout({
   paymentId,
   orderId,
   phone,
+  product,
 }: {
   paymentId: string;
   orderId: string;
   phone: string;
+  product: CreditProduct;
 }): Promise<PayappRequestResult> {
   const { payappUserId } = requirePayappServerConfig();
   const siteUrl = getSiteUrl();
@@ -35,13 +37,13 @@ export async function createPayappCreditCheckout({
     cmd: "payrequest",
     userid: payappUserId, //페이앱 아이디
     shopname: shopName, //상점명
-    goodname: creditPack.name,  //상품명
-    price: String(creditPack.amount), //결제요청 금액
+    goodname: product.name,  //상품명
+    price: String(product.amount), //결제요청 금액
     recvphone: normalizeKoreanPhone(phone), //수신 휴대전화번호
-    memo: `${creditPack.credits} credits`,  //결제요청 메모
+    memo: `${product.credits} credits`,  //결제요청 메모
     reqaddr: "0", //주소요청
     feedbackurl: `${siteUrl}/api/billing/payapp/feedback`,  //결제요청 성공 URL방향
-    returnurl: `${siteUrl}/account?billing=payapp-return&paymentId=${encodeURIComponent(paymentId)}`, //결제완료 이동 URL
+    returnurl: `${siteUrl}/credits?billing=payapp-return&paymentId=${encodeURIComponent(paymentId)}`, //결제완료 이동 URL
     var1: paymentId,  //임의 사용 변수 1
     var2: orderId,  //임의 사용 변수 2
     smsuse: "n",  //결제요청 문자 발송여부
@@ -95,4 +97,3 @@ export function payappFormDataToRecord(formData: FormData) {
   });
   return output;
 }
-

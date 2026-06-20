@@ -81,3 +81,28 @@ select {
   background: var(--color-tertiary-container);
   color: var(--color-on-tertiary-container);
 }
+
+@keyframes radix-popover-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes radix-dialog-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes radix-dialog-content-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.radix-popover-content[data-state="open"] { animation: radix-popover-in 150ms ease-out; }
+.radix-dialog-overlay[data-state="open"] { animation: radix-dialog-overlay-in 160ms ease-out; }
+.radix-dialog-content[data-state="open"] { animation: radix-dialog-content-in 180ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .radix-popover-content,
+  .radix-dialog-overlay,
+  .radix-dialog-content { animation: none !important; }
+}
