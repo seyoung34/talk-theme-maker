@@ -52,7 +52,7 @@ export function ProjectQuickEditPanel({
   insets?: Insets;
   stretch?: StretchPoint;
   fileInputRefs: MutableRefObject<Record<string, HTMLInputElement | null>>;
-  onUpload: (slot: ThemeAssetSlot, files: FileList | null) => void;
+  onUpload: (slot: ThemeAssetSlot, files: FileList | readonly File[] | null) => void;
   onClear: (slot: ThemeAssetSlot) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
@@ -66,6 +66,7 @@ export function ProjectQuickEditPanel({
   onToggleCandidates: () => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
+  const [pasteFeedback, setPasteFeedback] = useState(false);
   const [uploadPreviewUrls, setUploadPreviewUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -76,6 +77,33 @@ export function ProjectQuickEditPanel({
       Object.values(next).forEach((url) => URL.revokeObjectURL(url));
     };
   }, [uploads]);
+
+  useEffect(() => {
+    if (!slot || slot.kind === "color") return;
+
+    const handlePaste = (event: ClipboardEvent) => {
+      const clipboardFiles = Array.from(event.clipboardData?.files ?? []);
+      const itemFiles = Array.from(event.clipboardData?.items ?? []).flatMap((item) => {
+        const file = item.kind === "file" ? item.getAsFile() : null;
+        return file ? [file] : [];
+      });
+      const pastedFile = [...clipboardFiles, ...itemFiles].find((file) => ["image/png", "image/jpeg", "image/webp"].includes(file.type));
+      if (!pastedFile) return;
+
+      event.preventDefault();
+      onUpload(slot, [pastedFile]);
+      setPasteFeedback(true);
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [onUpload, slot]);
+
+  useEffect(() => {
+    if (!pasteFeedback) return;
+    const timer = window.setTimeout(() => setPasteFeedback(false), 2200);
+    return () => window.clearTimeout(timer);
+  }, [pasteFeedback]);
 
   if (!slot) return null;
 
@@ -144,7 +172,7 @@ export function ProjectQuickEditPanel({
             />
 
             <div
-              className={`grid gap-4 rounded-xl border-2 border-dashed p-4 transition ${dragActive ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#d7dee8] bg-[#f8fafc]"}`}
+              className={`grid gap-4 rounded-xl border-2 border-dashed p-4 transition ${dragActive || pasteFeedback ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#d7dee8] bg-[#f8fafc]"}`}
               onDragEnter={(event) => {
                 event.preventDefault();
                 setDragActive(true);
@@ -162,7 +190,8 @@ export function ProjectQuickEditPanel({
             >
               <div>
                 <p className="text-sm font-semibold text-[#0f172a]">직접 업로드</p>
-                <p className="mt-1 text-[12px] font-medium text-[#6b7280]">파일을 여기에 끌어오거나 버튼으로 직접 선택합니다.</p>
+                <p className="mt-1 text-[12px] font-medium text-[#6b7280]">파일을 끌어다 놓거나 선택하세요. 클립보드 이미지는 Ctrl+V 또는 ⌘V로 붙여넣을 수 있습니다.</p>
+                <p className="sr-only" role="status" aria-live="polite">{pasteFeedback ? "클립보드 이미지를 추가했습니다." : ""}</p>
               </div>
 
               <div className="flex flex-wrap gap-3">

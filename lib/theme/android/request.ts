@@ -89,11 +89,15 @@ function normalizeAndValidatePath(value: string) {
   }
 
   if (safeRootFiles.has(normalized)) return normalized;
-  if (!normalized.startsWith("src/main/theme/")) {
+  const isThemeResource = /^src\/main\/theme\/(?:drawable(?:-[a-z0-9-]+)?|values(?:-[a-z0-9-]+)?)\/[a-z0-9_]+(?:\.9)?\.(?:png|xml)$/.test(normalized);
+  const isLauncherResource = /^src\/main\/res\/mipmap-(?:mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi)\/ic_launcher(?:_(?:round|background|foreground))?\.png$/.test(normalized);
+  const isAllowedResourceRoot = normalized.startsWith("src/main/theme/") || normalized.startsWith("src/main/res/mipmap-");
+
+  if (!isAllowedResourceRoot) {
     throw new AndroidExportRequestError("forbidden_export_path", "Android 테마 리소스 경로만 내보낼 수 있습니다.");
   }
-  if (!/^src\/main\/theme\/(?:drawable(?:-[a-z0-9-]+)?|values(?:-[a-z0-9-]+)?)\/[a-z0-9_]+(?:\.9)?\.(?:png|xml)$/.test(normalized)) {
-    throw new AndroidExportRequestError("forbidden_export_file_type", "허용된 Android drawable·values 리소스만 내보낼 수 있습니다.");
+  if (!isThemeResource && !isLauncherResource) {
+    throw new AndroidExportRequestError("forbidden_export_file_type", "허용된 Android 테마 및 런처 리소스만 내보낼 수 있습니다.");
   }
   return normalized;
 }

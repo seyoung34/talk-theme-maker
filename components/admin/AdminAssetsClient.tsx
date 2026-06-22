@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { LoaderCircle, Pencil, Save, X } from "lucide-react";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import SiteHeader from "@/components/layout/SiteHeader";
 import {
   deleteAdminAssetCandidate,
+  adminAssetToFile,
   describeAdminAssetAnalysis,
   getAdminAssetKindLabel,
   inferAdminAssetKind,
   isAdminAssetRecommendedForSlot,
   listAdminAssetCandidates,
   saveAdminAssetCandidate,
+  updateAdminAssetCandidate,
   type AdminAssetAnalysis,
   type AdminBubbleAdjustment,
   type AdminAssetCandidate,
@@ -39,6 +43,7 @@ export default function AdminAssetsClient() {
   const [dragActive, setDragActive] = useState(false);
   const [openSlotGroups, setOpenSlotGroups] = useState<Partial<Record<AdminAssetKind, boolean>>>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [editingAsset, setEditingAsset] = useState<AdminAssetCandidate | null>(null);
 
   const slots = useMemo(() => getThemeSlots(platform).filter((slot) => slot.kind === "image" || slot.kind === "ninepatch"), [platform]);
   const slotGroups = useMemo(() => groupSlotsByAssetKind(slots), [slots]);
@@ -322,12 +327,23 @@ export default function AdminAssetsClient() {
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {visibleAssets.map((asset) => (
-                <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} onDelete={() => void remove(asset)} />
+                <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} onEdit={() => setEditingAsset(asset)} onDelete={() => void remove(asset)} />
               ))}
             </div>
           </section>
         </section>
       </div>
+
+      <AdminAssetEditDialog
+        asset={editingAsset}
+        fallbackPlatform={platform}
+        onClose={() => setEditingAsset(null)}
+        onSaved={(updatedAsset) => {
+          setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? updatedAsset : asset)));
+          setEditingAsset(null);
+          setNotice("에셋 정보를 수정했습니다.");
+        }}
+      />
     </main>
   );
 }
@@ -341,7 +357,7 @@ function groupSlotsByAssetKind(slots: ThemeAssetSlot[]) {
     .filter((group) => group.slots.length > 0);
 }
 
-function AdminAssetCard({ asset, slot, onDelete }: { asset: AdminAssetCandidate; slot?: ThemeAssetSlot; onDelete: () => void }) {
+function AdminAssetCard({ asset, slot, onEdit, onDelete }: { asset: AdminAssetCandidate; slot?: ThemeAssetSlot; onEdit: () => void; onDelete: () => void }) {
   return (
     <article className="grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)]">
       <div className="aspect-[4/3] rounded-[18px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} />
@@ -353,10 +369,172 @@ function AdminAssetCard({ asset, slot, onDelete }: { asset: AdminAssetCandidate;
         {asset.bubbleAdjustment ? <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">말풍선 조정값 저장됨</span> : null}
       </div>
       {slot && asset.slotRole !== slot.role ? <span className="w-fit rounded-full bg-[var(--color-surface-low)] px-2 py-1 text-[11px] font-bold text-[var(--color-on-surface-variant)]">유사 슬롯 추천</span> : null}
-      <button type="button" className="rounded-full border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]" onClick={onDelete}>
-        삭제
-      </button>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" onClick={onEdit}>
+          <Pencil size={14} aria-hidden="true" /> 수정
+        </button>
+        <button type="button" className="min-h-10 rounded-full border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" onClick={onDelete}>
+          삭제
+        </button>
+      </div>
     </article>
+  );
+}
+
+function AdminAssetEditDialog({
+  asset,
+  fallbackPlatform,
+  onClose,
+  onSaved,
+}: {
+  asset: AdminAssetCandidate | null;
+  fallbackPlatform: ThemePlatform;
+  onClose: () => void;
+  onSaved: (asset: AdminAssetCandidate) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [bubbleAdjustment, setBubbleAdjustment] = useState<AdminBubbleAdjustment>(createDefaultBubbleAdjustment());
+  const [bubbleFile, setBubbleFile] = useState<ThemeProjectFile>();
+  const [loadingFile, setLoadingFile] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isBubble = asset?.assetKind === "bubble" || asset?.slotRole.startsWith("bubble_");
+  const editPlatform = asset?.platform === "all" || !asset ? fallbackPlatform : asset.platform;
+  const bubbleSlot = asset ? (bubbleSlotFromRole(asset.slotRole) ?? "me") : "me";
+
+  useEffect(() => {
+    let cancelled = false;
+    setTitle(asset?.title ?? "");
+    setBubbleAdjustment(asset?.bubbleAdjustment ?? createDefaultBubbleAdjustment(asset?.analysis));
+    setBubbleFile(undefined);
+    setLoadingFile(false);
+    setError(null);
+    if (!asset || !isBubble) return;
+
+    setLoadingFile(true);
+    adminAssetToFile(asset)
+      .then((file) => {
+        if (!cancelled) setBubbleFile({ path: file.name, name: file.name, size: file.size, file });
+      })
+      .catch(() => {
+        if (!cancelled) setError("말풍선 원본을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingFile(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [asset, isBubble]);
+
+  const submitEdit = async () => {
+    if (!asset || saving) return;
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) {
+      setError("에셋 이름을 입력해 주세요.");
+      return;
+    }
+    if (normalizedTitle.length > 100) {
+      setError("에셋 이름은 100자 이내로 입력해 주세요.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const updatedAsset = await updateAdminAssetCandidate(asset.id, {
+        title: normalizedTitle,
+        bubbleAdjustment: isBubble ? bubbleAdjustment : undefined,
+      });
+      onSaved(updatedAsset);
+    } catch (updateError) {
+      console.error(updateError);
+      setError("수정 내용을 저장하지 못했습니다. 입력값과 네트워크 상태를 확인해 주세요.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog.Root open={Boolean(asset)} onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out" />
+        <Dialog.Content
+          className="fixed inset-x-3 bottom-3 top-3 z-50 mx-auto grid max-w-3xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white shadow-2xl outline-none sm:inset-x-6 sm:bottom-auto sm:top-1/2 sm:max-h-[calc(100dvh-48px)] sm:-translate-y-1/2"
+          aria-describedby="admin-asset-edit-description"
+          onEscapeKeyDown={(event) => { if (saving) event.preventDefault(); }}
+          onPointerDownOutside={(event) => { if (saving) event.preventDefault(); }}
+        >
+          <header className="flex items-start justify-between gap-4 border-b border-[var(--color-outline-variant)] px-5 py-4 sm:px-6">
+            <div className="min-w-0">
+              <Dialog.Title className="text-lg font-black text-[var(--color-on-surface)]">에셋 정보 수정</Dialog.Title>
+              <Dialog.Description id="admin-asset-edit-description" className="mt-1 truncate text-sm font-semibold text-[var(--color-on-surface-variant)]">
+                {asset?.fileName}
+              </Dialog.Description>
+            </div>
+            <Dialog.Close asChild>
+              <button type="button" disabled={saving} className="grid size-10 shrink-0 place-items-center rounded-full hover:bg-[var(--color-surface-low)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)] disabled:opacity-40" aria-label="수정 창 닫기">
+                <X size={19} aria-hidden="true" />
+              </button>
+            </Dialog.Close>
+          </header>
+
+          <div className="grid content-start gap-5 overflow-y-auto px-5 py-5 sm:px-6">
+            <label className="grid gap-2">
+              <span className="text-sm font-black text-[var(--color-on-surface)]">에셋 이름</span>
+              <input
+                autoFocus
+                value={title}
+                maxLength={100}
+                onChange={(event) => setTitle(event.currentTarget.value)}
+                disabled={saving}
+                className="h-11 rounded-xl border border-[var(--color-outline-variant)] bg-white px-3 text-sm font-semibold outline-none focus:border-[var(--color-secondary)] focus:ring-3 focus:ring-[var(--color-secondary-container)] disabled:bg-[var(--color-surface-low)] disabled:opacity-70"
+                aria-invalid={Boolean(error && !title.trim())}
+              />
+              <span className="text-right text-xs font-semibold text-[var(--color-on-surface-variant)]">{title.length}/100</span>
+            </label>
+
+            {isBubble ? (
+              <section className="grid gap-3" aria-labelledby="bubble-adjustment-heading">
+                <div>
+                  <h3 id="bubble-adjustment-heading" className="text-sm font-black text-[var(--color-on-surface)]">말풍선 조정값</h3>
+                  <p className="mt-1 text-xs font-semibold text-[var(--color-on-surface-variant)]">이미지는 변경하지 않고 늘어나는 영역과 텍스트 여백만 수정합니다.</p>
+                </div>
+                {loadingFile ? (
+                  <div className="flex min-h-28 items-center justify-center gap-2 rounded-[22px] bg-[var(--color-surface-low)] text-sm font-bold text-[var(--color-on-surface-variant)]">
+                    <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> 편집기 준비 중
+                  </div>
+                ) : (
+                  <InlineBubbleAdjuster
+                    file={bubbleFile}
+                    slot={bubbleSlot}
+                    platform={editPlatform}
+                    markers={bubbleAdjustment.markers}
+                    insets={bubbleAdjustment.insets}
+                    stretch={bubbleAdjustment.stretch}
+                    onMarkersChange={(markers) => setBubbleAdjustment((current) => ({ ...current, markers }))}
+                    onInsetsChange={(insets) => setBubbleAdjustment((current) => ({ ...current, insets }))}
+                    onStretchChange={(stretch) => setBubbleAdjustment((current) => ({ ...current, stretch }))}
+                  />
+                )}
+              </section>
+            ) : null}
+
+            {error ? <p role="alert" className="rounded-xl bg-[var(--color-error-container)] px-4 py-3 text-sm font-bold text-[var(--color-on-error-container)]">{error}</p> : null}
+          </div>
+
+          <footer className="grid grid-cols-2 gap-2 border-t border-[var(--color-outline-variant)] bg-white px-5 py-4 sm:flex sm:justify-end sm:px-6">
+            <Dialog.Close asChild>
+              <button type="button" disabled={saving} className="min-h-11 rounded-full border border-[var(--color-outline-variant)] px-5 text-sm font-black text-[var(--color-on-surface-variant)] disabled:opacity-40">취소</button>
+            </Dialog.Close>
+            <button type="button" disabled={saving || loadingFile || (isBubble && !bubbleFile) || !title.trim()} onClick={() => void submitEdit()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 text-sm font-black text-[var(--color-inverse-on-surface)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)] disabled:cursor-not-allowed disabled:opacity-45">
+              {saving ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
+              {saving ? "저장 중" : "변경 저장"}
+            </button>
+          </footer>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

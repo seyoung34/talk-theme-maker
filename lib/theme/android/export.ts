@@ -47,7 +47,7 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
         "This zip contains Android theme resource files exported from KakaoTalk Theme Maker.",
         "",
         "Merge these files into an Android KakaoTalk theme sample project.",
-        "Included paths are rooted at src/main/theme/...",
+        "Included paths are rooted at src/main/theme/... and src/main/res/mipmap-... for launcher icons.",
         "Generated colors.xml contains the current editable color tokens from the editor.",
       ].join("\n"),
     ),

@@ -471,7 +471,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setSelectedSlotId(firstSlot?.id);
   };
 
-  const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | null) => {
+  const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
     const file = fileList?.[0];
     if (!file) return;
 

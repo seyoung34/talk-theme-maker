@@ -30,6 +30,11 @@ export type AdminAssetCandidateInput = Omit<AdminAssetCandidate, "id" | "created
   blob: Blob;
 };
 
+export type AdminAssetCandidateUpdate = {
+  title: string;
+  bubbleAdjustment?: AdminBubbleAdjustment;
+};
+
 export type AdminAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode";
 
 export type AdminAssetShape = "square" | "portrait" | "wide" | "transparent" | "ninepatch" | "unknown";
@@ -102,6 +107,28 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput) {
       enabled: input.enabled ?? true,
       created_by: userData.user?.id ?? null,
     })
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  return rowToAdminAsset(data as AdminAssetRow);
+}
+
+export async function updateAdminAssetCandidate(id: string, input: AdminAssetCandidateUpdate) {
+  const title = input.title.trim();
+  if (!title || title.length > 100) throw new Error("INVALID_ASSET_TITLE");
+  if (input.bubbleAdjustment && !isValidBubbleAdjustment(input.bubbleAdjustment)) {
+    throw new Error("INVALID_BUBBLE_ADJUSTMENT");
+  }
+
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("admin_assets")
+    .update({
+      title,
+      ...(input.bubbleAdjustment ? { bubble_adjustment: input.bubbleAdjustment } : {}),
+    })
+    .eq("id", id)
     .select("*")
     .single();
   if (error) throw error;
@@ -206,4 +233,20 @@ function inferLegacyAssetKind(role: ThemeResourceRole): AdminAssetKind {
 
 function dateToMs(value?: string | null) {
   return value ? new Date(value).getTime() : Date.now();
+}
+
+function isValidBubbleAdjustment(value: AdminBubbleAdjustment) {
+  const isNonNegativeInteger = (item: unknown) => Number.isInteger(item) && Number(item) >= 0;
+  const isRange = (item: unknown) => {
+    if (!item || typeof item !== "object") return false;
+    const range = item as { start?: unknown; end?: unknown };
+    return isNonNegativeInteger(range.start) && isNonNegativeInteger(range.end) && Number(range.start) < Number(range.end);
+  };
+
+  if (value.markers) {
+    if (!isRange(value.markers.top) || !isRange(value.markers.left) || !isRange(value.markers.right) || !isRange(value.markers.bottom)) return false;
+  }
+  if (value.insets && !Object.values(value.insets).every(isNonNegativeInteger)) return false;
+  if (value.stretch && (!isNonNegativeInteger(value.stretch.x) || !isNonNegativeInteger(value.stretch.y))) return false;
+  return true;
 }
