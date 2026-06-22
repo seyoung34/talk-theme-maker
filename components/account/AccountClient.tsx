@@ -9,7 +9,7 @@ type MePayload = {
   user: { id: string; email?: string } | null;
   profile: { email?: string; display_name?: string | null; avatar_url?: string | null; provider?: string | null } | null;
   credits: number;
-  exports: Array<{ id: string; platform: string; export_mode: string; status: string; credit_cost: number; file_name?: string | null; error?: string | null; created_at: string }>;
+  exports: Array<{ id: string; platform: string; export_mode: string; status: string; stage?: string; credit_cost: number; file_name?: string | null; error?: string | null; error_code?: string | null; duration_ms?: number | null; created_at: string }>;
   error?: string;
 };
 
@@ -106,7 +106,8 @@ export default function AccountClient() {
 }
 
 function ExportRow({ item }: { item: MePayload["exports"][number] }) {
-  return <div className="grid gap-2 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={item.status} /><strong className="text-sm font-extrabold">{getPlatformLabel(item.platform)} · {getExportModeLabel(item.export_mode)}</strong></div><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]" title={item.file_name ?? item.error ?? undefined}>{item.file_name ?? item.error ?? "파일명 없음"}</p></div><div className="flex items-center justify-between gap-4 text-xs font-bold text-[var(--color-on-surface-variant)] sm:block sm:text-right"><span className="sm:block">{item.credit_cost}크레딧</span><time className="sm:mt-1 sm:block" dateTime={item.created_at}>{new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(item.created_at))}</time></div></div>;
+  const creditLabel = item.status === "failed" ? "차감 없음" : `${item.credit_cost}크레딧`;
+  return <div className="grid gap-2 py-3.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={item.status} /><strong className="text-sm font-extrabold">{getPlatformLabel(item.platform)} · {getExportModeLabel(item.export_mode)}</strong>{item.status === "pending" && item.stage ? <span className="text-[11px] font-bold text-[var(--color-on-surface-variant)]">{getExportStageLabel(item.stage)}</span> : null}</div><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]" title={item.file_name ?? item.error ?? undefined}>{item.file_name ?? item.error ?? "결과 준비 중"}</p></div><div className="flex items-center justify-between gap-4 text-xs font-bold text-[var(--color-on-surface-variant)] sm:block sm:text-right"><span className="sm:block">{creditLabel}</span>{item.duration_ms != null ? <span className="sm:mt-1 sm:block">{formatDuration(item.duration_ms)}</span> : null}<time className="sm:mt-1 sm:block" dateTime={item.created_at}>{new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(item.created_at))}</time></div></div>;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -118,3 +119,5 @@ function StatusBadge({ status }: { status: string }) {
 function getPlatformLabel(platform: string) { return platform === "android" ? "Android" : platform === "ios" ? "iOS" : platform; }
 function getExportModeLabel(mode: string) { return ({ project: "프로젝트", apk: "APK", "apk-zip": "APK ZIP", "theme-zip": "테마 ZIP", ktheme: "KTheme" } as Record<string, string>)[mode] ?? mode; }
 function getExportStatusLabel(status: string) { return ({ pending: "진행 중", succeeded: "완료", failed: "실패" } as Record<string, string>)[status] ?? status; }
+function getExportStageLabel(stage: string) { return ({ queued: "대기 중", preparing: "프로젝트 준비", building: "APK 빌드", packaging: "압축 중", finalizing: "결과 정리" } as Record<string, string>)[stage] ?? stage; }
+function formatDuration(durationMs: number) { return durationMs >= 60_000 ? `${Math.floor(durationMs / 60_000)}분 ${Math.round((durationMs % 60_000) / 1000)}초` : `${Math.max(1, Math.round(durationMs / 1000))}초`; }

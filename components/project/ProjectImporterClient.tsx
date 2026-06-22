@@ -155,6 +155,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [exportThemeIdentifier, setExportThemeIdentifier] = useState("");
   const [themeIdentifierEdited, setThemeIdentifierEdited] = useState(false);
   const [exportProgressStep, setExportProgressStep] = useState(0);
+  const [exportElapsedSeconds, setExportElapsedSeconds] = useState(0);
   const [accountState, setAccountState] = useState<AccountState | null>(null);
   const [isAccountLoading, setIsAccountLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -167,6 +168,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const skipDefaultSelectionResetRef = useRef(false);
   const uploadsRef = useRef<SlotUploads>({});
   const remoteUploadRefsRef = useRef<RemoteSlotUploads>({});
+  const exportSubmittingRef = useRef(false);
 
   useEffect(() => {
     uploadsRef.current = uploads;
@@ -738,16 +740,19 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const submitExport = async () => {
+    if (exportSubmittingRef.current) return;
+    exportSubmittingRef.current = true;
     const progressSteps = getExportProgressSteps(exportMode);
     let progressTimer: number | null = null;
 
     try {
       setIsExporting(true);
       setExportProgressStep(0);
+      setExportElapsedSeconds(0);
       setNotice({ tone: "info", message: getExportNotice(exportMode) });
       progressTimer = window.setInterval(() => {
-        setExportProgressStep((current) => (current >= progressSteps.length - 2 ? current : current + 1));
-      }, 850);
+        setExportElapsedSeconds((current) => current + 1);
+      }, 1000);
 
       const hydratedUploads = await ensureSystemTemplateUploadsHydrated();
       const hydratedAnalysis = createThemeProjectAnalysis(activeTemplate, platform, slots, hydratedUploads, colors, candidateSelections);
@@ -775,16 +780,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       });
 
       if (!response.ok) {
-        const errorBody = (await response.json().catch(() => null)) as { error?: string; reason?: string } | null;
+        const errorBody = (await response.json().catch(() => null)) as { error?: string; reason?: string; refunded?: boolean } | null;
         if (response.status === 401 || errorBody?.reason === "unauthenticated") {
           router.push(`/login?returnTo=${encodeURIComponent("/edit")}&reason=export`);
           return;
         }
         if (response.status === 402 || errorBody?.reason === "insufficient_credits") {
           await refreshAccountState();
-          throw new Error("Not enough credits. Buy credits from your account page.");
+          throw new Error("크레딧이 부족합니다. 크레딧 충전 후 다시 시도해 주세요.");
         }
-        throw new Error(errorBody?.error ?? "Android export failed.");
+        if (errorBody?.refunded) await refreshAccountState();
+        throw new Error(errorBody?.error ?? "내보내기에 실패했습니다.");
       }
 
       if (progressTimer) {
@@ -793,7 +799,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       }
       setExportProgressStep(progressSteps.length - 1);
       const blob = await response.blob();
-      const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${exportName}-android-export`;
+      const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${exportName}-${platform}-export`;
       triggerDownload(blob, fileName);
       const remainingCredits = Number(response.headers.get("X-Credits-Remaining"));
       if (Number.isFinite(remainingCredits)) setAccountState((current) => ({ user: current?.user ?? accountState?.user ?? null, credits: remainingCredits }));
@@ -804,6 +810,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       setNotice({ tone: "error", message: error instanceof Error ? error.message : "Android export 중 오류가 발생했습니다." });
     } finally {
       if (progressTimer) window.clearInterval(progressTimer);
+      exportSubmittingRef.current = false;
       setIsExporting(false);
     }
   };
@@ -835,12 +842,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           exportApplicationId={exportApplicationId}
           exportThemeIdentifier={exportThemeIdentifier}
           progressStep={exportProgressStep}
+          elapsedSeconds={exportElapsedSeconds}
           accountState={accountState}
           isAccountLoading={isAccountLoading}
           onClose={() => {
             if (!isExporting) {
               setExportDialogOpen(false);
               setExportProgressStep(0);
+              setExportElapsedSeconds(0);
             }
           }}
           onModeChange={setExportMode}
@@ -1422,6 +1431,7 @@ function ExportDialog({
   exportApplicationId,
   exportThemeIdentifier,
   progressStep,
+  elapsedSeconds,
   accountState,
   isAccountLoading,
   onClose,
@@ -1442,6 +1452,7 @@ function ExportDialog({
   exportApplicationId: string;
   exportThemeIdentifier: string;
   progressStep: number;
+  elapsedSeconds: number;
   accountState: AccountState | null;
   isAccountLoading: boolean;
   onClose: () => void;
@@ -1614,15 +1625,18 @@ function ExportDialog({
             <span className={`text-sm font-black ${hasCredits ? "text-emerald-700" : "text-rose-700"}`}>{isAccountLoading ? "..." : credits}</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-[#e5e7eb]">
-            <div className="h-full rounded-full bg-[#2563eb] transition-all" style={{ width: `${((progressStep + 1) / steps.length) * 100}%` }} />
+            <div className={`h-full rounded-full bg-[#2563eb] transition-all ${isExporting ? "w-2/3 animate-pulse" : ""}`} style={isExporting ? undefined : { width: `${(progressStep / Math.max(1, steps.length - 1)) * 100}%` }} />
           </div>
-          <div className="grid gap-1">
-            {steps.map((step, index) => (
-              <div key={step} className={`text-sm ${index === progressStep ? "font-semibold text-[#0f172a]" : index < progressStep ? "text-[#2563eb]" : "text-[#94a3b8]"}`}>
-                {step}
-              </div>
-            ))}
-          </div>
+          {isExporting ? (
+            <div className="flex items-start justify-between gap-3" role="status" aria-live="polite">
+              <div><p className="text-sm font-semibold text-[#0f172a]">{getExportNotice(exportMode)}</p><p className="mt-1 text-xs text-[#64748b]">창을 닫지 마세요. APK 빌드는 보통 1~2분 정도 걸립니다.</p></div>
+              <span className="shrink-0 font-mono text-xs font-semibold text-[#475569]">{formatElapsedTime(elapsedSeconds)}</span>
+            </div>
+          ) : (
+            <div className="grid gap-1">
+              {steps.map((step) => <div key={step} className="text-sm text-[#64748b]">{step}</div>)}
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2">
@@ -1665,6 +1679,12 @@ function getExportNotice(mode: ExportMode) {
   if (mode === "project") return "Android 프로젝트 ZIP을 생성하는 중입니다.";
   if (mode === "apk-zip") return "Android APK ZIP을 생성하는 중입니다.";
   return "Android APK를 빌드하는 중입니다.";
+}
+
+function formatElapsedTime(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function getInitialPreviewSlotIds(platform: ThemePlatform, uploadRefs: RemoteSlotUploads) {

@@ -1,10 +1,14 @@
 import { mkdtemp, cp, mkdir, writeFile, readFile, rm, readdir, stat, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createStoredZip } from "@/lib/theme/project/zip";
 
-const sampleProjectRoot = path.resolve("android-sample-theme", "apeach-26.1.0-source");
+const sampleProjectRoot = path.join(/* turbopackIgnore: true */ process.cwd(), "android-sample-theme", "apeach-26.1.0-source");
+const gradleTimeoutMs = 4 * 60 * 1000;
+const gradleLogTailBytes = 24 * 1024;
+const maxConcurrentAndroidBuilds = Math.max(1, Math.min(2, Number.parseInt(process.env.ANDROID_BUILD_CONCURRENCY ?? "1", 10) || 1));
+let activeAndroidBuilds = 0;
 
 export type AndroidBuildInputFile = {
   path: string;
@@ -16,31 +20,59 @@ export type AndroidExportProjectOptions = {
   applicationId?: string;
 };
 
-export async function buildAndroidApk(files: AndroidBuildInputFile[], apkBaseName: string, options: AndroidExportProjectOptions = {}) {
-  const prepared = await prepareAndroidProject(files, options);
+export type AndroidBuildStage = "preparing" | "building" | "packaging" | "finalizing";
+export type AndroidBuildHooks = { onStage?: (stage: AndroidBuildStage) => void | Promise<void>; signal?: AbortSignal };
 
-  try {
-    await writeAndroidLocalProperties(prepared.projectRoot);
-    await runGradle(prepared.projectRoot, ["assembleDebug"]);
-
-    const apkPath = await findLatestApk(path.join(prepared.projectRoot, "build", "outputs", "apk"));
-    if (!apkPath) {
-      throw new Error("APK output was not found after Gradle build.");
-    }
-
-    return {
-      apkBytes: await readFile(apkPath),
-      fileName: `${buildExportBaseName(apkBaseName, options.versionName)}.apk`,
-    };
-  } finally {
-    await prepared.cleanup();
+export class AndroidBuildError extends Error {
+  constructor(
+    public readonly code: string,
+    public readonly clientMessage: string,
+    public readonly logTail?: string,
+  ) {
+    super(clientMessage);
+    this.name = "AndroidBuildError";
   }
 }
 
-export async function exportAndroidProjectZip(files: AndroidBuildInputFile[], projectBaseName: string, options: AndroidExportProjectOptions = {}) {
+export async function buildAndroidApk(files: AndroidBuildInputFile[], apkBaseName: string, options: AndroidExportProjectOptions = {}, hooks: AndroidBuildHooks = {}) {
+  if (activeAndroidBuilds >= maxConcurrentAndroidBuilds) {
+    throw new AndroidBuildError("build_capacity_reached", "현재 다른 APK를 빌드하고 있습니다. 잠시 후 다시 시도해 주세요.");
+  }
+  activeAndroidBuilds += 1;
+
+  try {
+    await notifyStage(hooks, "preparing");
+    const prepared = await prepareAndroidProject(files, options);
+
+    try {
+      await notifyStage(hooks, "building");
+      await writeAndroidLocalProperties(prepared.projectRoot);
+      await runGradle(prepared.projectRoot, ["assembleDebug", "--console=plain"], hooks.signal);
+
+      await notifyStage(hooks, "finalizing");
+      const apkPath = await findLatestApk(path.join(prepared.projectRoot, "build", "outputs", "apk"));
+      if (!apkPath) {
+        throw new AndroidBuildError("apk_output_not_found", "APK 결과물을 찾지 못했습니다.");
+      }
+
+      return {
+        apkBytes: await readFile(/* turbopackIgnore: true */ apkPath),
+        fileName: `${buildExportBaseName(apkBaseName, options.versionName)}.apk`,
+      };
+    } finally {
+      await prepared.cleanup();
+    }
+  } finally {
+    activeAndroidBuilds -= 1;
+  }
+}
+
+export async function exportAndroidProjectZip(files: AndroidBuildInputFile[], projectBaseName: string, options: AndroidExportProjectOptions = {}, hooks: AndroidBuildHooks = {}) {
+  await notifyStage(hooks, "preparing");
   const prepared = await prepareAndroidProject(files, options);
 
   try {
+    await notifyStage(hooks, "packaging");
     const zipBytes = await zipProjectDirectory(prepared.projectRoot);
     return {
       zipBytes,
@@ -51,8 +83,9 @@ export async function exportAndroidProjectZip(files: AndroidBuildInputFile[], pr
   }
 }
 
-export async function exportAndroidApkZip(files: AndroidBuildInputFile[], apkBaseName: string, options: AndroidExportProjectOptions = {}) {
-  const { apkBytes, fileName } = await buildAndroidApk(files, apkBaseName, options);
+export async function exportAndroidApkZip(files: AndroidBuildInputFile[], apkBaseName: string, options: AndroidExportProjectOptions = {}, hooks: AndroidBuildHooks = {}) {
+  const { apkBytes, fileName } = await buildAndroidApk(files, apkBaseName, options, hooks);
+  await notifyStage(hooks, "packaging");
   const zipBlob = createStoredZip([{ path: fileName, bytes: apkBytes }]);
   return {
     zipBytes: new Uint8Array(await zipBlob.arrayBuffer()),
@@ -70,25 +103,40 @@ async function prepareAndroidProject(files: AndroidBuildInputFile[], options: An
   const tempRoot = await mkdtemp(path.join(tmpdir(), "kt-theme-apk-"));
   const projectRoot = path.join(tempRoot, "project");
 
-  await cp(sampleProjectRoot, projectRoot, { recursive: true });
-  await removeBundledTabBarBackgrounds(projectRoot);
-  if (options.applicationId?.trim()) {
-    await writeProjectApplicationId(projectRoot, options.applicationId.trim());
-  }
-  if (options.versionName?.trim()) {
-    await writeProjectVersion(projectRoot, options.versionName.trim());
-  }
+  try {
+    await cp(/* turbopackIgnore: true */ sampleProjectRoot, projectRoot, { recursive: true, filter: shouldCopySampleEntry });
+    await removeBundledTabBarBackgrounds(projectRoot);
+    if (options.applicationId?.trim()) {
+      await writeProjectApplicationId(projectRoot, options.applicationId.trim());
+    }
+    if (options.versionName?.trim()) {
+      await writeProjectVersion(projectRoot, options.versionName.trim());
+    }
 
-  for (const file of files) {
-    const targetPath = ensureInsideProject(projectRoot, file.path);
-    await mkdir(path.dirname(targetPath), { recursive: true });
-    await writeFile(targetPath, file.bytes);
+    for (const file of files) {
+      const targetPath = ensureInsideProject(projectRoot, file.path);
+      await mkdir(path.dirname(targetPath), { recursive: true });
+      await writeFile(targetPath, file.bytes);
+    }
+  } catch (error) {
+    await rm(tempRoot, { recursive: true, force: true });
+    throw error;
   }
 
   return {
     projectRoot,
     cleanup: () => rm(tempRoot, { recursive: true, force: true }),
   };
+}
+
+function shouldCopySampleEntry(source: string) {
+  const relativePath = path.relative(sampleProjectRoot, source).replaceAll("\\", "/");
+  if (!relativePath) return true;
+  const firstSegment = relativePath.split("/", 1)[0];
+  if (firstSegment === ".gradle" || firstSegment === "build") return false;
+  if (relativePath === "local.properties") return false;
+  if (/\.(?:apk|aab)$/i.test(relativePath)) return false;
+  return true;
 }
 
 async function removeBundledTabBarBackgrounds(projectRoot: string) {
@@ -110,7 +158,7 @@ async function writeProjectApplicationId(projectRoot: string, applicationId: str
   validateAndroidApplicationId(applicationId);
 
   const buildScriptPath = path.join(projectRoot, "build.gradle.kts");
-  const buildScript = await readFile(buildScriptPath, "utf8");
+  const buildScript = await readFile(/* turbopackIgnore: true */ buildScriptPath, "utf8");
   const nextBuildScript = buildScript.replace(/applicationId\s*=\s*"([^"]+)"/, `applicationId = "${applicationId}"`);
   if (nextBuildScript === buildScript) {
     throw new Error("Android applicationId field was not found in build.gradle.kts.");
@@ -119,11 +167,15 @@ async function writeProjectApplicationId(projectRoot: string, applicationId: str
 }
 
 async function writeProjectVersion(projectRoot: string, versionName: string) {
+  validateAndroidVersionName(versionName);
   const buildScriptPath = path.join(projectRoot, "build.gradle.kts");
-  const current = await readFile(buildScriptPath, "utf8");
+  const current = await readFile(/* turbopackIgnore: true */ buildScriptPath, "utf8");
   const next = current
     .replace(/versionName\s*=\s*"([^"]+)"/, `versionName = "${versionName.replaceAll('"', '\\"')}"`)
     .replace(/versionCode\s*=\s*\d+/, `versionCode = ${buildVersionCode(versionName)}`);
+  if (next === current) {
+    throw new AndroidBuildError("version_config_not_found", "Android 버전 설정을 적용하지 못했습니다.");
+  }
   await writeFile(buildScriptPath, next, "utf8");
 }
 
@@ -166,10 +218,14 @@ function ensureInsideProject(projectRoot: string, relativePath: string) {
   return absolute;
 }
 
-function runGradle(projectRoot: string, args: string[]) {
+function runGradle(projectRoot: string, args: string[], signal?: AbortSignal) {
   return new Promise<void>((resolve, reject) => {
-    const command = process.platform === "win32" ? "cmd.exe" : "./gradlew";
-    const commandArgs = process.platform === "win32" ? ["/d", "/s", "/c", "gradlew.bat", ...args] : args;
+    if (signal?.aborted) {
+      reject(new AndroidBuildError("build_cancelled", "Android 빌드 요청이 취소되었습니다."));
+      return;
+    }
+    const command = process.platform === "win32" ? "cmd.exe" : "sh";
+    const commandArgs = process.platform === "win32" ? ["/d", "/s", "/c", "gradlew.bat", ...args] : ["gradlew", ...args];
     const child = spawn(command, commandArgs, {
       cwd: projectRoot,
       stdio: ["ignore", "pipe", "pipe"],
@@ -177,22 +233,46 @@ function runGradle(projectRoot: string, args: string[]) {
       env: process.env,
     });
 
-    let stdout = "";
-    let stderr = "";
+    let logTail = "";
+    let didTimeOut = false;
+    let wasCancelled = false;
+    const abortHandler = () => {
+      wasCancelled = true;
+      terminateProcessTree(child);
+    };
+    signal?.addEventListener("abort", abortHandler, { once: true });
+    const timeout = setTimeout(() => {
+      didTimeOut = true;
+      terminateProcessTree(child);
+    }, gradleTimeoutMs);
 
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
+      logTail = appendLogTail(logTail, chunk.toString());
     });
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
+      logTail = appendLogTail(logTail, chunk.toString());
     });
-    child.on("error", reject);
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", abortHandler);
+      reject(new AndroidBuildError("gradle_process_error", "Android 빌드 프로세스를 시작하지 못했습니다.", error.message));
+    });
     child.on("close", (code) => {
+      clearTimeout(timeout);
+      signal?.removeEventListener("abort", abortHandler);
+      if (wasCancelled) {
+        reject(new AndroidBuildError("build_cancelled", "Android 빌드 요청이 취소되었습니다.", logTail));
+        return;
+      }
+      if (didTimeOut) {
+        reject(new AndroidBuildError("gradle_timeout", "Android 빌드 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.", logTail));
+        return;
+      }
       if (code === 0) {
         resolve();
         return;
       }
-      reject(new Error(`Gradle build failed with exit code ${code}.\n${stdout}\n${stderr}`.trim()));
+      reject(new AndroidBuildError("gradle_build_failed", "Android APK 빌드에 실패했습니다.", `exit=${code}\n${logTail}`.trim()));
     });
   });
 }
@@ -203,13 +283,14 @@ async function findLatestApk(root: string): Promise<string | null> {
     if (found.length === 0) return null;
     found.sort((left, right) => right.mtimeMs - left.mtimeMs);
     return found[0].filePath;
-  } catch {
-    return null;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return null;
+    throw error;
   }
 }
 
 async function walkForApks(root: string): Promise<Array<{ filePath: string; mtimeMs: number }>> {
-  const entries = await readdir(root, { withFileTypes: true });
+  const entries = await readdir(/* turbopackIgnore: true */ root, { withFileTypes: true });
   const results: Array<{ filePath: string; mtimeMs: number }> = [];
 
   for (const entry of entries) {
@@ -219,7 +300,7 @@ async function walkForApks(root: string): Promise<Array<{ filePath: string; mtim
       continue;
     }
     if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".apk")) continue;
-    const fileStat = await stat(fullPath);
+    const fileStat = await stat(/* turbopackIgnore: true */ fullPath);
     results.push({ filePath: fullPath, mtimeMs: fileStat.mtimeMs });
   }
 
@@ -285,19 +366,19 @@ const androidPackageSegmentReservedWords = new Set([
   "while",
 ]);
 
-function validateAndroidApplicationId(value: string) {
+export function validateAndroidApplicationId(value: string) {
   if (!/^[a-z0-9_.]+$/.test(value)) {
-    throw new Error("Invalid Android applicationId. Use lowercase letters, numbers, underscores, and dots only.");
+    throw new AndroidBuildError("invalid_application_id", "applicationId 형식이 올바르지 않습니다.");
   }
 
   const segments = value.split(".");
   if (segments.length < 2) {
-    throw new Error("Invalid Android applicationId. Use at least two package segments.");
+    throw new AndroidBuildError("invalid_application_id", "applicationId는 두 개 이상의 패키지 구간이 필요합니다.");
   }
 
   for (const segment of segments) {
     if (!segment || !/^[a-z_][a-z0-9_]*$/.test(segment) || androidPackageSegmentReservedWords.has(segment)) {
-      throw new Error(`Invalid Android applicationId segment: ${segment || "(empty)"}`);
+      throw new AndroidBuildError("invalid_application_id", `applicationId 구간이 올바르지 않습니다: ${segment || "(비어 있음)"}`);
     }
   }
 }
@@ -311,7 +392,37 @@ function buildVersionCode(versionName: string) {
   if (parts.length === 0) return 10000;
 
   const [major = 1, minor = 0, patch = 0] = parts;
-  return Math.max(1, major * 10000 + minor * 100 + patch);
+  return Math.min(2_100_000_000, Math.max(1, major * 10000 + minor * 100 + patch));
+}
+
+export function validateAndroidVersionName(value: string) {
+  if (value.length > 40 || !/^\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?$/.test(value)) {
+    throw new AndroidBuildError("invalid_version_name", "versionName은 숫자와 점을 사용한 버전 형식이어야 합니다.");
+  }
+}
+
+async function notifyStage(hooks: AndroidBuildHooks, stage: AndroidBuildStage) {
+  await hooks.onStage?.(stage);
+}
+
+function appendLogTail(current: string, chunk: string) {
+  const next = current + chunk;
+  return next.length > gradleLogTailBytes ? next.slice(-gradleLogTailBytes) : next;
+}
+
+function terminateProcessTree(child: ChildProcess) {
+  if (!child.pid) return;
+  if (process.platform === "win32") {
+    const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
+    killer.unref();
+    return;
+  }
+  child.kill("SIGTERM");
+  setTimeout(() => child.kill("SIGKILL"), 5000).unref();
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 function sanitizeFileNamePart(value: string, fallback: string) {
@@ -329,7 +440,7 @@ async function zipProjectDirectory(projectRoot: string) {
 }
 
 async function collectZipEntries(root: string, currentDir: string): Promise<Array<{ path: string; bytes: Uint8Array }>> {
-  const dirEntries = await readdir(currentDir, { withFileTypes: true });
+  const dirEntries = await readdir(/* turbopackIgnore: true */ currentDir, { withFileTypes: true });
   const results: Array<{ path: string; bytes: Uint8Array }> = [];
 
   for (const entry of dirEntries) {
@@ -348,7 +459,7 @@ async function collectZipEntries(root: string, currentDir: string): Promise<Arra
     if (!entry.isFile()) continue;
     results.push({
       path: relativePath,
-      bytes: new Uint8Array(await readFile(fullPath)),
+      bytes: new Uint8Array(await readFile(/* turbopackIgnore: true */ fullPath)),
     });
   }
 
