@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import { sanitizeStoragePathPart, storagePathToFile, storagePathToPreviewUrl, themeAssetsBucketName } from "@/lib/theme/remoteAssets";
+import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, storagePathToPreviewUrl, themeAssetsBucketName } from "@/lib/theme/remoteAssets";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -33,6 +33,19 @@ export type AdminAssetCandidateInput = Omit<AdminAssetCandidate, "id" | "created
 export type AdminAssetCandidateUpdate = {
   title: string;
   bubbleAdjustment?: AdminBubbleAdjustment;
+};
+
+export type AdminAssetPage = {
+  items: AdminAssetCandidate[];
+  nextCursor?: string;
+};
+
+export type AdminAssetListOptions = {
+  platform?: ThemePlatform;
+  assetKind?: AdminAssetKind;
+  cursor?: string;
+  limit?: number;
+  enabledOnly?: boolean;
 };
 
 export type AdminAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode";
@@ -71,10 +84,32 @@ type AdminAssetRow = {
 };
 
 export async function listAdminAssetCandidates(): Promise<AdminAssetCandidate[]> {
+  return (await listAdminAssetCandidatePage({ limit: 30 })).items;
+}
+
+export async function listAdminAssetCandidatePage(options: AdminAssetListOptions = {}): Promise<AdminAssetPage> {
   const supabase = createClient();
-  const { data, error } = await supabase.from("admin_assets").select("*").order("updated_at", { ascending: false });
+  const limit = Math.min(50, Math.max(1, options.limit ?? 24));
+  const cursor = decodeCursor(options.cursor);
+  let query = supabase
+    .from("admin_assets")
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1);
+  if (options.platform) query = query.in("platform", [options.platform, "all"]);
+  if (options.assetKind) query = query.eq("asset_kind", options.assetKind);
+  if (options.enabledOnly) query = query.eq("enabled", true);
+  if (cursor) query = query.or(`updated_at.lt.${cursor.updatedAt},and(updated_at.eq.${cursor.updatedAt},id.lt.${cursor.id})`);
+  const { data, error } = await query;
   if (error) throw error;
-  return Promise.all((data ?? []).map((row) => rowToAdminAsset(row as AdminAssetRow)));
+  const rows = (data ?? []) as AdminAssetRow[];
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+  const previewUrls = await getThemeAssetSignedUrls(pageRows.map((row) => row.storage_path));
+  const items = pageRows.map((row) => rowToAdminAsset(row, previewUrls[row.storage_path]));
+  const last = pageRows.at(-1);
+  return { items, nextCursor: hasMore && last ? encodeCursor(last.updated_at, last.id) : undefined };
 }
 
 export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput) {
@@ -111,7 +146,7 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput) {
     .single();
   if (error) throw error;
 
-  return rowToAdminAsset(data as AdminAssetRow);
+  return rowToAdminAsset(data as AdminAssetRow, await storagePathToPreviewUrl((data as AdminAssetRow).storage_path));
 }
 
 export async function updateAdminAssetCandidate(id: string, input: AdminAssetCandidateUpdate) {
@@ -133,7 +168,7 @@ export async function updateAdminAssetCandidate(id: string, input: AdminAssetCan
     .single();
   if (error) throw error;
 
-  return rowToAdminAsset(data as AdminAssetRow);
+  return rowToAdminAsset(data as AdminAssetRow, await storagePathToPreviewUrl((data as AdminAssetRow).storage_path));
 }
 
 export async function deleteAdminAssetCandidate(id: string) {
@@ -200,8 +235,7 @@ export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis) {
   return `${size} · ${shape}`;
 }
 
-async function rowToAdminAsset(row: AdminAssetRow): Promise<AdminAssetCandidate> {
-  const previewUrl = await storagePathToPreviewUrl(row.storage_path);
+function rowToAdminAsset(row: AdminAssetRow, previewUrl?: string): AdminAssetCandidate {
   return {
     id: row.id,
     slotRole: row.slot_role,
@@ -233,6 +267,19 @@ function inferLegacyAssetKind(role: ThemeResourceRole): AdminAssetKind {
 
 function dateToMs(value?: string | null) {
   return value ? new Date(value).getTime() : Date.now();
+}
+
+function encodeCursor(updatedAt: string, id: string) {
+  return `${updatedAt}|${id}`;
+}
+
+function decodeCursor(value?: string) {
+  if (!value) return null;
+  const separator = value.lastIndexOf("|");
+  if (separator < 1) return null;
+  const updatedAt = value.slice(0, separator);
+  const id = value.slice(separator + 1);
+  return /^[0-9a-f-]{36}$/i.test(id) && Number.isFinite(new Date(updatedAt).getTime()) ? { updatedAt, id } : null;
 }
 
 function isValidBubbleAdjustment(value: AdminBubbleAdjustment) {

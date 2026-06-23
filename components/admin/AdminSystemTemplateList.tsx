@@ -23,6 +23,8 @@ export default function AdminSystemTemplateList() {
   const [templates, setTemplates] = useState<SystemTemplateSummary[]>([]);
   const [uploadPreviewUrls, setUploadPreviewUrls] = useState<SignedUrlCache>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string>();
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedBundleId, setSelectedBundleId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ bundle: SystemTemplateBundle; platform?: ThemePlatform } | null>(null);
@@ -33,14 +35,31 @@ export default function AdminSystemTemplateList() {
     try {
       setIsLoading(true);
       setError(null);
-      const summaries = await systemTemplateRepository.list();
-      setTemplates(summaries);
-      setUploadPreviewUrls(await createSystemTemplatePreviewUrls(summaries, uploadPreviewUrls));
+      const page = await systemTemplateRepository.listPage({ limit: 12 });
+      setTemplates(page.items);
+      setNextCursor(page.nextCursor);
+      setUploadPreviewUrls(await createSystemTemplatePreviewUrls(page.items, uploadPreviewUrls));
     } catch (loadError) {
       console.error(loadError);
       setError("시스템 템플릿을 불러오지 못했습니다.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadMoreTemplates = async () => {
+    if (!nextCursor || isLoadingMore) return;
+    try {
+      setIsLoadingMore(true);
+      const page = await systemTemplateRepository.listPage({ cursor: nextCursor, limit: 12 });
+      setTemplates((current) => [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))]);
+      setNextCursor(page.nextCursor);
+      setUploadPreviewUrls(await createSystemTemplatePreviewUrls(page.items, uploadPreviewUrls));
+    } catch (loadError) {
+      console.error(loadError);
+      setError("템플릿을 더 불러오지 못했습니다.");
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -56,6 +75,15 @@ export default function AdminSystemTemplateList() {
 
   const bundles = useMemo(() => createBundles(templates, uploadPreviewUrls), [templates, uploadPreviewUrls]);
   const selectedBundle = bundles.find((bundle) => bundle.id === selectedBundleId) ?? null;
+
+  useEffect(() => {
+    if (!selectedBundle) return;
+    let active = true;
+    createSystemTemplatePreviewUrls(Object.values(selectedBundle.variants), uploadPreviewUrls, { includeDetails: true })
+      .then((urls) => { if (active) setUploadPreviewUrls(urls); })
+      .catch((loadError) => console.error(loadError));
+    return () => { active = false; };
+  }, [selectedBundleId]);
 
   const editTemplate = (template: SystemTemplateSummary) => {
     localStorage.setItem(
@@ -144,6 +172,12 @@ export default function AdminSystemTemplateList() {
           저장된 시스템 템플릿이 없습니다.
         </div>
       )}
+
+      {nextCursor && !isLoading ? (
+        <button type="button" className="mx-auto min-h-11 rounded-full border border-[var(--color-outline-variant)] bg-white px-5 text-sm font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-surface-low)] disabled:opacity-50" onClick={() => void loadMoreTemplates()} disabled={isLoadingMore}>
+          {isLoadingMore ? "불러오는 중" : "템플릿 더 보기"}
+        </button>
+      ) : null}
 
       {selectedBundle ? (
         <SystemTemplateManageModal
@@ -300,6 +334,9 @@ function SystemTemplateManageModal({
 }
 
 function TemplateMiniPreview({ visual }: { visual: TemplatePreviewVisual }) {
+  if (visual.cardPreviewImage) {
+    return <img src={visual.cardPreviewImage} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full rounded-[22px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] object-cover" />;
+  }
   return (
     <div className="relative aspect-[4/3] overflow-hidden rounded-[22px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
       <div className="relative grid h-full grid-cols-[0.84fr_1fr] gap-2.5 p-3">

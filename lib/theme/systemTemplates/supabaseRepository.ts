@@ -3,7 +3,8 @@ import { sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName } fro
 import { getResolvedColor } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
-import type { RemoteSlotUploads, SystemTemplateMetadataRecord, SystemTemplatePreviewMetadata, SystemTemplateRecord, SystemTemplateSaveInput, SystemTemplateSummary, ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
+import { generateSystemTemplateThumbnail } from "@/lib/theme/systemTemplates/thumbnail";
+import type { RemoteSlotUploads, SystemTemplateMetadataRecord, SystemTemplatePage, SystemTemplatePreviewMetadata, SystemTemplateRecord, SystemTemplateSaveInput, SystemTemplateSummary, ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, getThemeTemplate, type ThemeAssetSlot, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -47,6 +48,36 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       .order("updated_at", { ascending: false });
     if (error) throw error;
     return (data ?? []).map((row) => toSummary(row as unknown as VariantRow));
+  },
+
+  async listPage(options = {}): Promise<SystemTemplatePage> {
+    const supabase = createClient();
+    const limit = Math.min(30, Math.max(1, options.limit ?? 12));
+    const cursor = decodeCursor(options.cursor);
+    let query = supabase
+      .from("system_template_variants")
+      .select(
+        "id,bundle_id,platform,base_template_id,colors,candidate_selections,upload_refs,preview_metadata,created_at,updated_at,system_template_bundles!inner(id,title,description,status,visibility,pricing_type,price_amount,credit_cost,tags,created_at,updated_at)",
+      )
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(limit + 1);
+    if (options.publicOnly) {
+      query = query.eq("system_template_bundles.status", "published").eq("system_template_bundles.visibility", "public");
+    }
+    if (cursor) {
+      query = query.or(`updated_at.lt.${cursor.updatedAt},and(updated_at.eq.${cursor.updatedAt},id.lt.${cursor.id})`);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    const rows = (data ?? []) as unknown as VariantRow[];
+    const hasMore = rows.length > limit;
+    const pageRows = hasMore ? rows.slice(0, limit) : rows;
+    const last = pageRows.at(-1);
+    return {
+      items: pageRows.map(toSummary),
+      nextCursor: hasMore && last ? encodeCursor(last.updated_at, last.id) : undefined,
+    };
   },
 
   async getMetadata(id) {
@@ -105,12 +136,14 @@ export const systemTemplateRepository: SystemTemplateRepository = {
 
     const resolvedVariantId = variantId ?? crypto.randomUUID();
     const uploadRefs = await uploadSystemTemplateFiles(resolvedVariantId, input.overrides.uploads);
+    const cardPreviewPath = await createAndUploadTemplateThumbnail(resolvedVariantId, input);
     const previewMetadata = buildPreviewMetadata({
       baseTemplateId: input.baseTemplateId,
       platform: input.platform,
       colors: input.overrides.colors,
       candidateSelections: input.overrides.candidateSelections,
       uploadRefs,
+      cardPreviewPath,
     });
     const variantPayload = {
       id: resolvedVariantId,
@@ -184,6 +217,25 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
   }
 
   return refs;
+}
+
+async function createAndUploadTemplateThumbnail(variantId: string, input: SystemTemplateSaveInput) {
+  try {
+    const thumbnail = await generateSystemTemplateThumbnail(input);
+    if (!thumbnail) return undefined;
+    const storagePath = `system-templates/${variantId}/preview/card.webp`;
+    const supabase = createClient();
+    const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, thumbnail, {
+      contentType: "image/webp",
+      cacheControl: "3600",
+      upsert: true,
+    });
+    if (error) throw error;
+    return storagePath;
+  } catch (error) {
+    console.warn("System template thumbnail could not be generated.", error);
+    return undefined;
+  }
 }
 
 async function toRecord(row: VariantRow): Promise<SystemTemplateRecord> {
@@ -304,17 +356,21 @@ function buildPreviewMetadata({
   colors,
   candidateSelections,
   uploadRefs,
+  cardPreviewPath,
 }: {
   baseTemplateId: ThemeTemplateId;
   platform: ThemePlatform;
   colors: ThemeEditOverrides["colors"];
   candidateSelections: SlotCandidateSelections;
   uploadRefs: RemoteSlotUploads;
+  cardPreviewPath?: string;
 }): SystemTemplatePreviewMetadata {
   const template = getThemeTemplate(baseTemplateId);
   const slots = getThemeSlots(platform);
 
   return {
+    cardPreviewPath,
+    generatedAt: cardPreviewPath ? new Date().toISOString() : undefined,
     colors: {
       chatBackground: resolvePreviewColor(slots, "chat_background_color", colors, candidateSelections, baseTemplateId, template),
       mainBackground: resolvePreviewColor(slots, "main_background_color", colors, candidateSelections, baseTemplateId, template),
@@ -356,6 +412,8 @@ function resolvePreviewStoragePath(slots: ThemeAssetSlot[], role: ThemeResourceR
 
 function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | undefined): SystemTemplatePreviewMetadata {
   return {
+    cardPreviewPath: value?.cardPreviewPath,
+    generatedAt: value?.generatedAt,
     colors: value?.colors ?? {},
     refs: value?.refs ?? {},
   };
@@ -367,4 +425,17 @@ function dateToMs(value?: string | null) {
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function encodeCursor(updatedAt: string, id: string) {
+  return `${updatedAt}|${id}`;
+}
+
+function decodeCursor(value?: string) {
+  if (!value) return null;
+  const separator = value.lastIndexOf("|");
+  if (separator < 1) return null;
+  const updatedAt = value.slice(0, separator);
+  const id = value.slice(separator + 1);
+  return isUuid(id) && Number.isFinite(new Date(updatedAt).getTime()) ? { updatedAt, id } : null;
 }

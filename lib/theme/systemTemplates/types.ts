@@ -48,6 +48,8 @@ export type RemoteUploadEntry = {
 export type RemoteSlotUploads = Record<string, RemoteUploadEntry[] | undefined>;
 
 export type SystemTemplatePreviewMetadata = {
+  cardPreviewPath?: string;
+  generatedAt?: string;
   colors?: Partial<Record<"chatBackground" | "mainBackground" | "tabBackground" | "myBubble" | "friendBubble", string>>;
   refs?: Partial<Record<"chatBackground" | "mainBackground" | "tabBackground" | "myBubble" | "friendBubble" | "profileImage", string>>;
 };
@@ -59,6 +61,11 @@ export type SystemTemplateSummary = Pick<SystemTemplateRecord, "id" | "bundleId"
   candidateSelections: SlotCandidateSelections;
   uploadRefs: RemoteSlotUploads;
   previewMetadata: SystemTemplatePreviewMetadata;
+};
+
+export type SystemTemplatePage = {
+  items: SystemTemplateSummary[];
+  nextCursor?: string;
 };
 
 export type SystemTemplateMetadataRecord = Omit<SystemTemplateRecord, "overrides"> & {

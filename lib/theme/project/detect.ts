@@ -96,6 +96,14 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
     if (name === "theme_profile_03_image_full.png") return "profile_image_full_3";
     if (name.startsWith("theme_profile_")) return "profile_image";
     if (name === "theme_passcode_background_image.png") return "passcode_background";
+    if (name === "theme_passcode_01_image.png") return "passcode_indicator_1";
+    if (name === "theme_passcode_01_checked_image.png") return "passcode_indicator_1_checked";
+    if (name === "theme_passcode_02_image.png") return "passcode_indicator_2";
+    if (name === "theme_passcode_02_checked_image.png") return "passcode_indicator_2_checked";
+    if (name === "theme_passcode_03_image.png") return "passcode_indicator_3";
+    if (name === "theme_passcode_03_checked_image.png") return "passcode_indicator_3_checked";
+    if (name === "theme_passcode_04_image.png") return "passcode_indicator_4";
+    if (name === "theme_passcode_04_checked_image.png") return "passcode_indicator_4_checked";
     if (name.startsWith("theme_passcode_")) return "passcode";
     if (name === "theme_splash_image.png") return "splash";
     return "unknown";

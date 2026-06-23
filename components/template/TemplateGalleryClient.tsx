@@ -55,6 +55,8 @@ export default function TemplateGalleryClient() {
   const [systemTemplates, setSystemTemplates] = useState<SystemTemplateSummary[]>([]);
   const [systemUploadPreviewUrls, setSystemUploadPreviewUrls] = useState<SignedUrlCache>({});
   const [isSystemTemplatesLoading, setIsSystemTemplatesLoading] = useState(true);
+  const [isLoadingMoreTemplates, setIsLoadingMoreTemplates] = useState(false);
+  const [systemTemplateCursor, setSystemTemplateCursor] = useState<string>();
   const [notice, setNotice] = useState<string | null>(null);
   const galleryTemplates = useMemo(
     () =>
@@ -75,6 +77,15 @@ export default function TemplateGalleryClient() {
   const previewModel = selectedGalleryTemplate ? createGalleryTemplatePreviewModel(selectedGalleryTemplate, selectedGalleryTemplate.onStart) : null;
   const basicGalleryTemplateId = "base:basic";
   const hasSavedTemplates = userTemplates.length > 0;
+
+  useEffect(() => {
+    if (selectedGalleryTemplate?.kind !== "system") return;
+    let active = true;
+    createSystemTemplatePreviewUrls([selectedGalleryTemplate.previewTemplate], systemUploadPreviewUrls, { includeDetails: true })
+      .then((urls) => { if (active) setSystemUploadPreviewUrls(urls); })
+      .catch((error) => console.error(error));
+    return () => { active = false; };
+  }, [selectedGalleryTemplateId]);
 
   useEffect(() => {
     let active = true;
@@ -98,12 +109,12 @@ export default function TemplateGalleryClient() {
   useEffect(() => {
     let active = true;
     systemTemplateRepository
-      .list()
-      .then(async (templates) => {
-        const publicTemplates = templates.filter((template) => template.status === "published" && template.visibility === "public");
-        const previewUrls = await createSystemTemplatePreviewUrls(publicTemplates, systemUploadPreviewUrls);
+      .listPage({ limit: 12, publicOnly: true })
+      .then(async (page) => {
+        const previewUrls = await createSystemTemplatePreviewUrls(page.items, systemUploadPreviewUrls);
         if (active) {
-          setSystemTemplates(publicTemplates);
+          setSystemTemplates(page.items);
+          setSystemTemplateCursor(page.nextCursor);
           setSystemUploadPreviewUrls(previewUrls);
         }
       })
@@ -122,6 +133,23 @@ export default function TemplateGalleryClient() {
       active = false;
     };
   }, []);
+
+  const loadMoreSystemTemplates = async () => {
+    if (!systemTemplateCursor || isLoadingMoreTemplates) return;
+    try {
+      setIsLoadingMoreTemplates(true);
+      const page = await systemTemplateRepository.listPage({ cursor: systemTemplateCursor, limit: 12, publicOnly: true });
+      const previewUrls = await createSystemTemplatePreviewUrls(page.items, systemUploadPreviewUrls);
+      setSystemTemplates((current) => [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))]);
+      setSystemTemplateCursor(page.nextCursor);
+      setSystemUploadPreviewUrls(previewUrls);
+    } catch (error) {
+      console.error(error);
+      setNotice("템플릿을 더 불러오지 못했습니다.");
+    } finally {
+      setIsLoadingMoreTemplates(false);
+    }
+  };
 
   useEffect(() => {
     if (!notice) return;
@@ -244,6 +272,11 @@ export default function TemplateGalleryClient() {
               <GalleryTemplateCard key={template.id} template={template} onPreview={setSelectedGalleryTemplateId} />
             ))}
           </div>
+          {systemTemplateCursor ? (
+            <button type="button" className="mx-auto min-h-11 rounded-full border border-[var(--color-outline-variant)] bg-white px-5 text-sm font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-surface-low)] disabled:opacity-50" onClick={() => void loadMoreSystemTemplates()} disabled={isLoadingMoreTemplates}>
+              {isLoadingMoreTemplates ? "불러오는 중" : "템플릿 더 보기"}
+            </button>
+          ) : null}
         </section>
       </div>
 
@@ -437,6 +470,9 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
   );
 }
 function TemplateMiniPreview({ visual }: { visual: TemplatePreviewVisual }) {
+  if (visual.cardPreviewImage) {
+    return <img src={visual.cardPreviewImage} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full rounded-[22px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] object-cover" />;
+  }
   return (
     <div
       className="relative aspect-[4/3] overflow-hidden rounded-[22px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"

@@ -561,7 +561,7 @@ function TabAsset({
         if (slot) onSelectSlot?.(slot.id);
       }}
     >
-      <span className="relative grid h-10 w-10 place-items-center rounded-full bg-[#aeccfb]/55">
+      <span className="relative grid h-10 w-10 place-items-center rounded-full">
         <span className="w-8 h-8 bg-center bg-no-repeat bg-contain" style={{ backgroundImage: `url(${active ? focusedUrl || defaultUrl || "" : defaultUrl || focusedUrl || ""})` }} />
       </span>
       <span className="text-[10px] font-semibold text-[#57737a]">{label}</span>

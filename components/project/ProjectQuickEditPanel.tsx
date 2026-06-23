@@ -16,6 +16,8 @@ export function ProjectQuickEditPanel({
   colors,
   selections,
   adminAssets,
+  hasMoreAdminAssets,
+  isLoadingAdminAssets,
   templateId,
   template,
   platform,
@@ -29,6 +31,7 @@ export function ProjectQuickEditPanel({
   onColorChange,
   onSelectCandidate,
   onSelectAdminAsset,
+  onLoadMoreAdminAssets,
   onOpenAdvanced,
   onMarkersChange,
   onInsetsChange,
@@ -44,6 +47,8 @@ export function ProjectQuickEditPanel({
   colors: SlotColors;
   selections: SlotCandidateSelections;
   adminAssets: Array<AdminAssetCandidate & { previewUrl?: string }>;
+  hasMoreAdminAssets: boolean;
+  isLoadingAdminAssets: boolean;
   templateId: ThemeTemplateId;
   template: ThemeTemplate;
   platform: ThemePlatform;
@@ -57,6 +62,7 @@ export function ProjectQuickEditPanel({
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
   onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
+  onLoadMoreAdminAssets: () => void;
   onOpenAdvanced: () => void;
   onMarkersChange: (markers: Markers) => void;
   onInsetsChange: (insets: Insets) => void;
@@ -149,6 +155,9 @@ export function ProjectQuickEditPanel({
           }
           onSelectCandidate(slot, candidate.id);
         }}
+        hasMoreAdminAssets={hasMoreAdminAssets}
+        isLoadingAdminAssets={isLoadingAdminAssets}
+        onLoadMoreAdminAssets={onLoadMoreAdminAssets}
       />
 
       <section className="grid min-h-0 content-start gap-4 overflow-auto rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
@@ -246,6 +255,9 @@ function CandidatePicker({
   isOpen,
   onToggle,
   onApplyCandidate,
+  hasMoreAdminAssets,
+  isLoadingAdminAssets,
+  onLoadMoreAdminAssets,
 }: {
   slot: ThemeAssetSlot;
   candidates: SlotCandidate[];
@@ -253,6 +265,9 @@ function CandidatePicker({
   isOpen: boolean;
   onToggle: () => void;
   onApplyCandidate: (candidate: SlotCandidate) => void;
+  hasMoreAdminAssets: boolean;
+  isLoadingAdminAssets: boolean;
+  onLoadMoreAdminAssets: () => void;
 }) {
   type CandidateGroup = { key: SlotCandidate["source"]; label: string; items: SlotCandidate[] };
   const groups: CandidateGroup[] = [
@@ -343,6 +358,11 @@ function CandidatePicker({
                 </div>
               </button>
             ))}
+            {activeGroup.key === "admin" && hasMoreAdminAssets ? (
+              <button type="button" className="flex h-[104px] w-32 shrink-0 items-center justify-center rounded-xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-3 text-center text-xs font-semibold text-[#475569] disabled:opacity-50" onClick={onLoadMoreAdminAssets} disabled={isLoadingAdminAssets}>
+                {isLoadingAdminAssets ? "불러오는 중" : "더 보기"}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}

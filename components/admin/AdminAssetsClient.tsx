@@ -12,7 +12,7 @@ import {
   getAdminAssetKindLabel,
   inferAdminAssetKind,
   isAdminAssetRecommendedForSlot,
-  listAdminAssetCandidates,
+  listAdminAssetCandidatePage,
   saveAdminAssetCandidate,
   updateAdminAssetCandidate,
   type AdminAssetAnalysis,
@@ -44,6 +44,8 @@ export default function AdminAssetsClient() {
   const [openSlotGroups, setOpenSlotGroups] = useState<Partial<Record<AdminAssetKind, boolean>>>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [editingAsset, setEditingAsset] = useState<AdminAssetCandidate | null>(null);
+  const [assetCursor, setAssetCursor] = useState<string>();
+  const [isLoadingAssets, setIsLoadingAssets] = useState(false);
 
   const slots = useMemo(() => getThemeSlots(platform).filter((slot) => slot.kind === "image" || slot.kind === "ninepatch"), [platform]);
   const slotGroups = useMemo(() => groupSlotsByAssetKind(slots), [slots]);
@@ -103,8 +105,8 @@ export default function AdminAssetsClient() {
   }, [assetPlatformScope, canUseCommonScope, platform]);
 
   useEffect(() => {
-    void refreshAssets();
-  }, []);
+    void refreshAssets(undefined, false);
+  }, [platform, selectedSlot?.role]);
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
@@ -119,12 +121,18 @@ export default function AdminAssetsClient() {
     return () => window.removeEventListener("paste", handlePaste);
   }, []);
 
-  const refreshAssets = async () => {
+  const refreshAssets = async (cursor?: string, append = false) => {
+    if (!selectedSlot) return;
     try {
-      setAssets(await listAdminAssetCandidates());
+      setIsLoadingAssets(true);
+      const page = await listAdminAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), cursor, limit: 24 });
+      setAssets((current) => append ? [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))] : page.items);
+      setAssetCursor(page.nextCursor);
     } catch (error) {
       console.error(error);
       setNotice("관리 후보를 불러오지 못했습니다.");
+    } finally {
+      setIsLoadingAssets(false);
     }
   };
 
@@ -330,6 +338,11 @@ export default function AdminAssetsClient() {
                 <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} onEdit={() => setEditingAsset(asset)} onDelete={() => void remove(asset)} />
               ))}
             </div>
+            {assetCursor ? (
+              <button type="button" className="mx-auto min-h-11 rounded-full border border-[var(--color-outline-variant)] bg-white px-5 text-sm font-black text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)] disabled:opacity-50" disabled={isLoadingAssets} onClick={() => void refreshAssets(assetCursor, true)}>
+                {isLoadingAssets ? "불러오는 중" : "에셋 더 보기"}
+              </button>
+            ) : null}
           </section>
         </section>
       </div>

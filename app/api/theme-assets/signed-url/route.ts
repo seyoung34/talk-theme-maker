@@ -24,16 +24,18 @@ export async function POST(request: Request) {
     }
 
     if (path.startsWith("system-templates/") && !isAdmin) {
-      const { data: variants, error } = await adminClient
+      const variantId = path.split("/")[1];
+      if (!variantId || !/^[0-9a-f-]{36}$/i.test(variantId)) {
+        return NextResponse.json({ error: "Invalid template asset path." }, { status: 400 });
+      }
+      const { data: variant, error } = await adminClient
         .from("system_template_variants")
-        .select("id, upload_refs, system_template_bundles!inner(status, visibility)")
-        .limit(500);
+        .select("id,system_template_bundles!inner(status,visibility)")
+        .eq("id", variantId)
+        .maybeSingle();
       if (error) throw error;
-
-      const isPublicTemplateAsset = (variants ?? []).some((variant) => {
-        const bundle = Array.isArray(variant.system_template_bundles) ? variant.system_template_bundles[0] : variant.system_template_bundles;
-        return bundle?.status === "published" && bundle?.visibility === "public" && JSON.stringify(variant.upload_refs ?? {}).includes(`"storagePath":"${path}"`);
-      });
+      const bundle = Array.isArray(variant?.system_template_bundles) ? variant.system_template_bundles[0] : variant?.system_template_bundles;
+      const isPublicTemplateAsset = bundle?.status === "published" && bundle?.visibility === "public";
 
       if (!isPublicTemplateAsset) {
         return NextResponse.json({ error: "Template asset is not public." }, { status: 403 });

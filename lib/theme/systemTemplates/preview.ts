@@ -1,10 +1,11 @@
 import { getResolvedAssetUrl, getResolvedColor } from "@/lib/theme/project/state";
-import { getThemeAssetSignedUrl } from "@/lib/theme/remoteAssets";
+import { getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
 import type { RemoteSlotUploads, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 export type TemplatePreviewVisual = {
+  cardPreviewImage?: string;
   chatBackgroundColor: string;
   mainBackgroundColor: string;
   tabBackgroundColor: string;
@@ -20,11 +21,15 @@ export type TemplatePreviewVisual = {
 
 export type SignedUrlCache = Record<string, string>;
 
-export async function createSystemTemplatePreviewUrls(templates: SystemTemplateSummary[], cache: SignedUrlCache = {}) {
+export async function createSystemTemplatePreviewUrls(templates: SystemTemplateSummary[], cache: SignedUrlCache = {}, options: { includeDetails?: boolean } = {}) {
   const next = { ...cache };
   const paths = new Set<string>();
 
   for (const template of templates) {
+    if (template.previewMetadata.cardPreviewPath) {
+      if (!next[template.previewMetadata.cardPreviewPath]) paths.add(template.previewMetadata.cardPreviewPath);
+      if (!options.includeDetails) continue;
+    }
     const slots = getThemeSlots(template.platform);
     for (const role of previewRoles) {
       const slot = findSlotByRole(slots, role);
@@ -33,15 +38,11 @@ export async function createSystemTemplatePreviewUrls(templates: SystemTemplateS
     }
   }
 
-  await Promise.all(
-    Array.from(paths).map(async (path) => {
-      try {
-        next[path] = await getThemeAssetSignedUrl(path);
-      } catch (error) {
-        console.warn("System template preview URL could not be created.", path, error);
-      }
-    }),
-  );
+  try {
+    Object.assign(next, await getThemeAssetSignedUrls(Array.from(paths)));
+  } catch (error) {
+    console.warn("System template preview URLs could not be created.", error);
+  }
 
   return next;
 }
@@ -63,6 +64,7 @@ export function createSystemTemplatePreviewVisual({
   const templateId = template.id;
 
   return {
+    cardPreviewImage: summary.previewMetadata.cardPreviewPath ? signedUrls[summary.previewMetadata.cardPreviewPath] : undefined,
     chatBackgroundColor: summary.previewMetadata.colors?.chatBackground ?? resolveColor(slots, "chat_background_color", summary, templateId, template, template.defaults.chatBackground),
     mainBackgroundColor: summary.previewMetadata.colors?.mainBackground ?? resolveColor(slots, "main_background_color", summary, templateId, template, template.defaults.mainBackground),
     tabBackgroundColor: summary.previewMetadata.colors?.tabBackground ?? resolveColor(slots, "tab_background", summary, templateId, template, template.defaults.tabBackground),

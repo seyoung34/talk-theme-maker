@@ -51,6 +51,17 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
     return records.map(toSummary).sort((a, b) => b.updatedAt - a.updatedAt);
   },
 
+  async listPage(options = {}) {
+    const records = (await withStore<SystemTemplateRecord[]>("readonly", (store) => store.getAll()))
+      .filter((record) => !options.publicOnly || (record.status === "published" && record.visibility === "public"))
+      .map(toSummary)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    const start = Math.max(0, Number(options.cursor) || 0);
+    const limit = Math.min(30, Math.max(1, options.limit ?? 12));
+    const items = records.slice(start, start + limit);
+    return { items, nextCursor: start + limit < records.length ? String(start + limit) : undefined };
+  },
+
   async getMetadata(id: string) {
     const record = await withStore<SystemTemplateRecord | undefined>("readonly", (store) => store.get(id));
     return record ? toMetadataRecord(record) : null;

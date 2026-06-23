@@ -21,7 +21,7 @@ import {
 } from "@/components/project/projectModel";
 import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
-import { adminAssetToFile, listAdminAssetCandidates, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { adminAssetToFile, inferAdminAssetKind, listAdminAssetCandidatePage, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
@@ -164,6 +164,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [bubbleStretch, setBubbleStretch] = useState<Partial<Record<string, StretchPoint>>>({});
   const [adminAssets, setAdminAssets] = useState<AdminAssetCandidate[]>([]);
   const [adminAssetsWithPreview, setAdminAssetsWithPreview] = useState<Array<AdminAssetCandidate & { previewUrl: string }>>([]);
+  const [adminAssetCursor, setAdminAssetCursor] = useState<string>();
+  const [isLoadingAdminAssets, setIsLoadingAdminAssets] = useState(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
   const uploadsRef = useRef<SlotUploads>({});
@@ -338,19 +340,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   }, []);
 
   useEffect(() => {
-    let active = true;
-    listAdminAssetCandidates()
-      .then((records) => {
-        if (active) setAdminAssets(records);
-      })
-      .catch((error) => console.error(error));
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
     setAdminAssetsWithPreview(adminAssets.map((asset) => ({ ...asset, previewUrl: asset.previewUrl ?? "" })));
   }, [adminAssets]);
 
@@ -396,6 +385,40 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const selectedBubbleSlot = selectedSlot ? bubbleSlotFromRole(selectedSlot.role) : null;
   const canAdjustInline = Boolean(selectedSlot?.editableInBubbleEditor && selectedFile && selectedBubbleSlot);
   const completion = getCompletion(slots, uploads, colors, candidateSelections, templateId, activeTemplate);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedSlot || selectedSlot.kind === "color") {
+      setAdminAssets([]);
+      setAdminAssetCursor(undefined);
+      return () => { active = false; };
+    }
+    setIsLoadingAdminAssets(true);
+    listAdminAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), limit: 24, enabledOnly: true })
+      .then((page) => {
+        if (!active) return;
+        setAdminAssets(page.items);
+        setAdminAssetCursor(page.nextCursor);
+      })
+      .catch((error) => console.error(error))
+      .finally(() => { if (active) setIsLoadingAdminAssets(false); });
+    return () => { active = false; };
+  }, [platform, selectedSlot?.id]);
+
+  const loadMoreAdminAssets = async () => {
+    if (!selectedSlot || !adminAssetCursor || isLoadingAdminAssets) return;
+    try {
+      setIsLoadingAdminAssets(true);
+      const page = await listAdminAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), cursor: adminAssetCursor, limit: 24, enabledOnly: true });
+      setAdminAssets((current) => [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))]);
+      setAdminAssetCursor(page.nextCursor);
+    } catch (error) {
+      console.error(error);
+      setNotice({ tone: "error", message: "추천 에셋을 더 불러오지 못했습니다." });
+    } finally {
+      setIsLoadingAdminAssets(false);
+    }
+  };
 
   const hydrateSystemTemplateUploads = async (uploadRefs: RemoteSlotUploads = remoteUploadRefsRef.current, slotIds?: string[]) => {
     const targetSlotIds = getMissingRemoteUploadSlotIds(uploadRefs, uploadsRef.current, slotIds);
@@ -469,6 +492,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setActiveGroup(group);
     const firstSlot = slots.find((slot) => slot.section === activeSection && slot.group === group);
     setSelectedSlotId(firstSlot?.id);
+  };
+
+  const selectPreviewSlot = (slotId: string | undefined) => {
+    setSelectedSlotId(slotId);
+    const slot = slots.find((item) => item.id === slotId);
+    if (!slot) return;
+    setActiveSection(slot.section);
+    setActiveGroup(slot.group);
   };
 
   const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
@@ -1012,6 +1043,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 colors={colors}
                 selections={candidateSelections}
                 adminAssets={adminAssetsWithPreview}
+                hasMoreAdminAssets={Boolean(adminAssetCursor)}
+                isLoadingAdminAssets={isLoadingAdminAssets}
                 templateId={templateId}
                 template={activeTemplate}
                 platform={platform}
@@ -1024,7 +1057,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 onClear={clearSlot}
                 onColorChange={changeColor}
                 onSelectCandidate={selectCandidate}
-                    onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
+                onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
+                onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
                 onOpenAdvanced={openAdvancedBubbleEditor}
                 onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
                 onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
@@ -1052,7 +1086,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             }}
             selectedSlotId={selectedSlot?.id}
             className="col-span-2 lg:col-span-1 lg:row-start-auto"
-            onSelectSlot={setSelectedSlotId}
+            onSelectSlot={selectPreviewSlot}
           />
         </section>
       </div>

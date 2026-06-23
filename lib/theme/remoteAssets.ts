@@ -11,20 +11,40 @@ type SignedUrlCacheEntry = {
 };
 
 export async function getThemeAssetSignedUrl(storagePath: string) {
-  const cached = getCachedSignedUrl(storagePath);
-  if (cached) return cached;
+  const urls = await getThemeAssetSignedUrls([storagePath]);
+  const signedUrl = urls[storagePath];
+  if (!signedUrl) throw new Error("Theme asset URL could not be created.");
+  return signedUrl;
+}
 
-  const response = await fetch("/api/theme-assets/signed-url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path: storagePath }),
-  });
-  const payload = (await response.json()) as { signedUrl?: string; error?: string };
-  if (!response.ok || !payload.signedUrl) {
-    throw new Error(payload.error ?? "Theme asset URL could not be created.");
+export async function getThemeAssetSignedUrls(storagePaths: string[]) {
+  const uniquePaths = Array.from(new Set(storagePaths.filter(Boolean)));
+  const result: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const path of uniquePaths) {
+    const cached = getCachedSignedUrl(path);
+    if (cached) result[path] = cached;
+    else missing.push(path);
   }
-  setCachedSignedUrl(storagePath, payload.signedUrl);
-  return payload.signedUrl;
+  if (!missing.length) return result;
+
+  for (let index = 0; index < missing.length; index += 50) {
+    const paths = missing.slice(index, index + 50);
+    const response = await fetch("/api/theme-assets/signed-urls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths }),
+    });
+    const payload = (await response.json()) as { signedUrls?: Record<string, string>; error?: string };
+    if (!response.ok || !payload.signedUrls) {
+      throw new Error(payload.error ?? "Theme asset URL could not be created.");
+    }
+    for (const [path, signedUrl] of Object.entries(payload.signedUrls)) {
+      setCachedSignedUrl(path, signedUrl);
+      result[path] = signedUrl;
+    }
+  }
+  return result;
 }
 
 export async function storagePathToFile(storagePath: string, fileName: string, mimeType = "application/octet-stream") {
