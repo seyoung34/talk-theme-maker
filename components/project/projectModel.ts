@@ -56,6 +56,7 @@ export const groupLabels: Record<ThemeSlotGroup, string> = {
 
 export {
   bubbleSlotFromRole,
+  disabledImageCandidateId,
   getCompletion,
   getDefaultColor,
   getInitialSlotCandidateSelections,

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
-import { Apple, ArrowUpRight, Check, CircleAlert, FileCode2, PackageCheck, Smartphone } from "lucide-react";
+import { Apple, Check, CircleAlert, Smartphone } from "lucide-react";
 import { guideContent, type GuidePlatform, type GuideSection } from "@/lib/guide/content";
 
 type GuideClientProps = {
@@ -23,14 +23,17 @@ export default function GuideClient({ initialPlatform }: GuideClientProps) {
   };
 
   return (
-    <Tabs.Root value={platform} onValueChange={selectPlatform} className="mt-8">
-      <div className="flex flex-col gap-4 border-b border-[var(--color-outline-variant)] pb-5 sm:flex-row sm:items-end sm:justify-between">
-        <Tabs.List className="grid w-full grid-cols-2 rounded-[14px] bg-[var(--color-surface-container)] p-1 sm:w-[360px]" aria-label="가이드 플랫폼 선택">
+    <Tabs.Root value={platform} onValueChange={selectPlatform}>
+      <header className="grid gap-7 border-b border-[var(--color-outline-variant)] pb-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
+        <div>
+          <p className="text-xs font-black tracking-[0.16em] text-[var(--color-secondary)]">THEME GUIDE</p>
+          <h1 className="mt-2 max-w-2xl font-[var(--font-display)] text-[34px] font-semibold tracking-[-0.05em] text-[var(--color-on-surface)] sm:text-[42px]">만드는 방법부터<br className="hidden sm:block" /> 적용하는 순간까지</h1>
+        </div>
+        <Tabs.List className="grid w-full grid-cols-2 rounded-[14px] bg-[var(--color-surface-container)] p-1" aria-label="가이드 플랫폼 선택">
           <PlatformTab value="android" label="Android" icon={<Smartphone size={17} aria-hidden="true" />} />
           <PlatformTab value="ios" label="iOS" icon={<Apple size={17} aria-hidden="true" />} />
         </Tabs.List>
-        <p className="text-xs font-bold text-[var(--color-on-surface-variant)]">선택한 플랫폼의 편집·적용·파일 규격을 함께 보여줍니다.</p>
-      </div>
+      </header>
 
       <Tabs.Content value="android" className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]">
         <PlatformManual platform="android" />
@@ -46,7 +49,7 @@ function PlatformTab({ value, label, icon }: { value: GuidePlatform; label: stri
   return (
     <Tabs.Trigger
       value={value}
-      className="flex min-h-11 items-center justify-center gap-2 rounded-[10px] px-4 text-sm font-extrabold text-[var(--color-on-surface-variant)] transition data-[state=active]:bg-white data-[state=active]:text-[var(--color-on-surface)] data-[state=active]:shadow-[0_2px_10px_rgba(48,49,46,0.08)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-secondary)]"
+      className="flex min-h-12 items-center justify-center gap-2 rounded-[10px] px-4 text-sm font-extrabold text-[var(--color-on-surface-variant)] transition data-[state=active]:bg-white data-[state=active]:text-[var(--color-on-surface)] data-[state=active]:shadow-[0_2px_10px_rgba(48,49,46,0.08)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-secondary)]"
     >
       {icon}{label}
     </Tabs.Trigger>
@@ -64,13 +67,13 @@ function PlatformManual({ platform }: { platform: GuidePlatform }) {
         <div className="relative grid gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <div>
             <p className={`text-xs font-black tracking-[0.16em] ${isAndroid ? "text-[#246758]" : "text-[#315e95]"}`}>{guide.label.toUpperCase()} FIELD MANUAL</p>
-            <h2 className="mt-2 max-w-2xl font-[var(--font-display)] text-[28px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)] sm:text-[34px]">편집에서 실제 적용까지</h2>
+            <h2 className="mt-2 max-w-2xl font-[var(--font-display)] text-[28px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)] sm:text-[34px]">{guide.label} 가이드 문서</h2>
             <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{guide.intro}</p>
           </div>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs md:min-w-[260px]">
             <div><dt className="font-bold text-[var(--color-outline)]">기준 샘플</dt><dd className="mt-1 font-extrabold">{guide.sourceVersion}</dd></div>
             <div><dt className="font-bold text-[var(--color-outline)]">출력 형식</dt><dd className="mt-1 font-extrabold">{guide.output}</dd></div>
-            <div className="col-span-2 min-w-0"><dt className="font-bold text-[var(--color-outline)]">참조 경로</dt><dd className="mt-1 truncate font-mono text-[11px] font-bold" title={guide.sourcePath}>{guide.sourcePath}</dd></div>
+            {/* <div className="col-span-2 min-w-0"><dt className="font-bold text-[var(--color-outline)]">참조 경로</dt><dd className="mt-1 truncate font-mono text-[11px] font-bold" title={guide.sourcePath}>{guide.sourcePath}</dd></div> */}
           </dl>
         </div>
       </div>
@@ -150,18 +153,4 @@ function GuideSectionBlock({ section }: { section: GuideSection }) {
       </div>
     </section>
   );
-}
-
-export function GuideSummary() {
-  return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      <SummaryItem icon={<FileCode2 size={18} aria-hidden="true" />} label="편집" value="화면별 이미지와 색상" />
-      <SummaryItem icon={<PackageCheck size={18} aria-hidden="true" />} label="적용" value="내보내기부터 설치까지" />
-      <SummaryItem icon={<ArrowUpRight size={18} aria-hidden="true" />} label="상세 규격" value="파일명·배율·패키지 구조" />
-    </div>
-  );
-}
-
-function SummaryItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return <div className="flex items-start gap-3 border-l-2 border-[var(--color-outline-variant)] px-3 py-1"><span className="text-[var(--color-secondary)]">{icon}</span><div><p className="text-xs font-extrabold">{label}</p><p className="mt-0.5 text-[11px] font-semibold text-[var(--color-on-surface-variant)]">{value}</p></div></div>;
 }

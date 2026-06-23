@@ -58,6 +58,35 @@ export function validateIosPackage(entries: IosPackageEntry[]) {
   }
 }
 
+export function applyServerThemeIdentifier(entries: IosPackageEntry[], themeIdentifier: string) {
+  if (!/^com\.kakao\.talk\.theme\.u[0-9a-f]{16}\.i[0-9]{6,}$/.test(themeIdentifier)) {
+    throw new IosExportRequestError("invalid_server_theme_identifier", "iOS 테마 식별자를 발급하지 못했습니다.", 500);
+  }
+
+  const cssIndex = entries.findIndex((entry) => entry.path === "KakaoTalkTheme.css");
+  if (cssIndex < 0) throw new IosExportRequestError("missing_theme_css", "KakaoTalkTheme.css 파일이 필요합니다.");
+
+  let css: string;
+  try {
+    css = new TextDecoder("utf-8", { fatal: true }).decode(entries[cssIndex].bytes);
+  } catch {
+    throw new IosExportRequestError("invalid_theme_css_encoding", "KakaoTalkTheme.css는 UTF-8 형식이어야 합니다.");
+  }
+
+  const identifierPattern = /(-kakaotalk-theme-id:\s*)'[^'\r\n]*'(\s*;)/i;
+  if (!identifierPattern.test(css)) {
+    throw new IosExportRequestError("invalid_theme_css", "테마 CSS에 -kakaotalk-theme-id 값이 없습니다.");
+  }
+
+  const nextEntries = entries.slice();
+  nextEntries[cssIndex] = {
+    ...entries[cssIndex],
+    bytes: new TextEncoder().encode(css.replace(identifierPattern, `$1'${themeIdentifier}'$2`)),
+  };
+  validateIosPackage(nextEntries);
+  return nextEntries;
+}
+
 export function validateExportName(value: FormDataEntryValue | null) {
   const name = typeof value === "string" && value.trim() ? value.trim() : "kakaotalk-theme";
   if (name.length > 80 || /[\u0000-\u001f\u007f]/.test(name)) throw new IosExportRequestError("invalid_export_name", "테마 이름은 줄바꿈 없이 80자 이하로 입력해 주세요.");

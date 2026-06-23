@@ -7,7 +7,7 @@ export type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
 export type ExportStage = "queued" | "preparing" | "building" | "packaging" | "finalizing" | "completed" | "failed";
 
 type ReservationRow = { export_job_id: string; balance: number };
-type ExportIdentityRow = { export_number: number; application_id: string | null; export_name: string | null };
+type ExportIdentityRow = { export_number: number; application_id: string | null; theme_identifier: string | null; export_name: string | null };
 
 export async function getCurrentUserOrNull() {
   const supabase = await createClient();
@@ -66,13 +66,14 @@ export async function prepareExportJobIdentity({
     .update({ export_name: exportName.slice(0, 120) })
     .eq("id", exportJobId)
     .eq("user_id", userId)
-    .select("export_number,application_id,export_name")
+    .select("export_number,application_id,theme_identifier,export_name")
     .single();
   if (error) throw error;
   const row = data as ExportIdentityRow;
   return {
     exportNumber: Number(row.export_number),
     applicationId: row.application_id,
+    themeIdentifier: row.theme_identifier,
     exportName: row.export_name,
   };
 }

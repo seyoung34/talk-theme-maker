@@ -10,7 +10,7 @@ import {
   updateExportJobStage,
 } from "@/lib/billing/credits";
 import { createStoredZipBytes } from "@/lib/theme/project/zip";
-import { IosExportRequestError, normalizeIosPath, validateExportName, validateIosPackage, validateVersionName } from "@/lib/theme/ios/packageValidation";
+import { applyServerThemeIdentifier, IosExportRequestError, normalizeIosPath, validateExportName, validateIosPackage, validateVersionName } from "@/lib/theme/ios/packageValidation";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge, maxExportRequestBytes } from "@/lib/theme/exportRequest";
 
 export const runtime = "nodejs";
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
   let userId: string | null = null;
   let exportJobId: string | null = null;
   let exportNumber: number | null = null;
+  let themeIdentifier: string | null = null;
 
   try {
     const user = await getCurrentUserOrNull();
@@ -46,18 +47,21 @@ export async function POST(request: Request) {
     const versionNameRaw = formData.get("versionName");
     const exportName = validateExportName(exportNameRaw);
     const versionName = validateVersionName(versionNameRaw);
-    const { entries, inputBytes } = await readIosEntries(formData, manifestRaw);
+    const { entries: requestedEntries, inputBytes } = await readIosEntries(formData, manifestRaw);
 
     const reservation = await reserveCreditForExport({
       userId,
       platform: "ios",
       mode,
-      inputFileCount: entries.length,
+      inputFileCount: requestedEntries.length,
       inputBytes,
     });
     exportJobId = reservation.exportJobId;
     const identity = await prepareExportJobIdentity({ userId, exportJobId, exportName });
     exportNumber = identity.exportNumber;
+    themeIdentifier = identity.themeIdentifier;
+    if (!themeIdentifier) throw new IosExportRequestError("missing_theme_identifier", "iOS 테마 식별자를 발급하지 못했습니다.", 500);
+    const entries = applyServerThemeIdentifier(requestedEntries, themeIdentifier);
     await updateExportJobStage({ userId, exportJobId, stage: "packaging" });
 
     const bytes = createStoredZipBytes(entries);
@@ -70,13 +74,14 @@ export async function POST(request: Request) {
         "Content-Disposition": buildContentDisposition(fileName),
         "X-Export-Job-Id": exportJobId,
         "X-Export-Number": String(exportNumber),
+        "X-Theme-Identifier": themeIdentifier,
         "X-Export-Duration-Ms": String(durationMs),
       },
     });
     const credits = await completeExportJob({ userId, exportJobId, fileName, outputBytes: bytes.byteLength, durationMs });
     response.headers.set("X-Credits-Remaining", String(credits));
 
-    console.info(`[ios-export] ${JSON.stringify({ event: "completed", exportJobId, exportNumber, mode, durationMs, inputBytes, outputBytes: bytes.byteLength })}`);
+    console.info(`[ios-export] ${JSON.stringify({ event: "completed", exportJobId, exportNumber, themeIdentifier, mode, durationMs, inputBytes, outputBytes: bytes.byteLength })}`);
 
     return response;
   } catch (error) {

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, type DragEvent, type MutableRefObject } from "react";
+import { ImageOff } from "lucide-react";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
-import { buildSlotCandidates, getDefaultColor, getSelectedCandidate, getSlotUploadEntries, slotStatusLabel, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSlotUploadEntries, slotStatusLabel, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -371,6 +372,9 @@ function CandidatePicker({
 }
 
 function CandidateSwatch({ candidate }: { candidate: SlotCandidate }) {
+  if (candidate.id === disabledImageCandidateId) {
+    return <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-dashed border-[#cbd5e1] bg-[#f8fafc] text-[#64748b]"><ImageOff size={15} aria-hidden="true" /></span>;
+  }
   if (candidate.colorValue) {
     const swatch = toCssSwatch(candidate.colorValue);
     return <span className="h-8 w-8 shrink-0 rounded-md border border-[#d1d5db] bg-white" style={{ backgroundColor: swatch.backgroundColor, opacity: swatch.opacity }} />;

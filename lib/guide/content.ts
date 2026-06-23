@@ -123,7 +123,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
           { title: "템플릿과 iOS 선택", body: "Template에서 디자인을 고르고 iOS 편집기로 이동합니다." },
           { title: "화면별 요소 편집", body: "메인, 탭, 채팅방의 이미지와 색상을 순서대로 조정합니다." },
           { title: "말풍선 영역 확인", body: "말풍선의 늘어나는 기준점과 텍스트 여백을 미리보기에서 확인합니다." },
-          { title: ".ktheme 내보내기", body: "앱 이름, 버전, identifier를 확인하고 .ktheme 파일을 생성합니다." },
+          { title: ".ktheme 내보내기", body: "테마 이름과 버전을 확인하고 .ktheme 파일을 생성합니다.", note: "고유 identifier는 내보낼 때 서버에서 자동 발급됩니다." },
           { title: "iPhone에서 카카오톡으로 열기", body: "다운로드한 파일을 iPhone으로 전달한 뒤 공유 메뉴에서 카카오톡으로 엽니다." },
         ],
       },

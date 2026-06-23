@@ -103,12 +103,10 @@ type AndroidExportPayloadOptions = {
 
 type IosExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
   mode: "theme-zip" | "ktheme";
-  themeIdentifier: string;
 };
 
 type ExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
   mode: ExportMode;
-  themeIdentifier: string;
 };
 
 type ProjectImporterClientProps = {
@@ -152,8 +150,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [exportMode, setExportMode] = useState<ExportMode>("apk");
   const [exportName, setExportName] = useState("");
   const [exportVersionName, setExportVersionName] = useState("");
-  const [exportThemeIdentifier, setExportThemeIdentifier] = useState("");
-  const [themeIdentifierEdited, setThemeIdentifierEdited] = useState(false);
   const [exportProgressStep, setExportProgressStep] = useState(0);
   const [exportElapsedSeconds, setExportElapsedSeconds] = useState(0);
   const [accountState, setAccountState] = useState<AccountState | null>(null);
@@ -757,8 +753,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         setExportVersionName(payload.versionName ?? "1.0.0");
       }
       setExportName(displayTemplateName);
-      setExportThemeIdentifier(createIosThemeIdentifier(displayTemplateName));
-      setThemeIdentifierEdited(false);
       setExportMode(platform === "android" ? "apk" : "ktheme");
       setExportProgressStep(0);
       await refreshAccountState();
@@ -793,7 +787,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         templateId,
         exportName,
         versionName: exportVersionName,
-        themeIdentifier: exportThemeIdentifier,
         mode: exportMode,
         slots,
         uploads: hydratedUploads,
@@ -875,7 +868,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           exportMode={exportMode}
           exportName={exportName}
           exportVersionName={exportVersionName}
-          exportThemeIdentifier={exportThemeIdentifier}
           progressStep={exportProgressStep}
           elapsedSeconds={exportElapsedSeconds}
           accountState={accountState}
@@ -890,15 +882,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onModeChange={setExportMode}
           onNameChange={(value) => {
             setExportName(value);
-            if (platform === "ios" && !themeIdentifierEdited) {
-              setExportThemeIdentifier(createIosThemeIdentifier(value));
-            }
           }}
           onVersionNameChange={setExportVersionName}
-          onThemeIdentifierChange={(value) => {
-            setThemeIdentifierEdited(true);
-            setExportThemeIdentifier(value);
-          }}
           onLogin={() => router.push(`/login?returnTo=${encodeURIComponent("/edit")}&reason=export`)}
           onBuyCredits={() => router.push("/credits")}
           onSubmit={() => void submitExport()}
@@ -1459,7 +1444,6 @@ function ExportDialog({
   exportMode,
   exportName,
   exportVersionName,
-  exportThemeIdentifier,
   progressStep,
   elapsedSeconds,
   accountState,
@@ -1468,7 +1452,6 @@ function ExportDialog({
   onModeChange,
   onNameChange,
   onVersionNameChange,
-  onThemeIdentifierChange,
   onLogin,
   onBuyCredits,
   onSubmit,
@@ -1478,7 +1461,6 @@ function ExportDialog({
   exportMode: ExportMode;
   exportName: string;
   exportVersionName: string;
-  exportThemeIdentifier: string;
   progressStep: number;
   elapsedSeconds: number;
   accountState: AccountState | null;
@@ -1487,17 +1469,14 @@ function ExportDialog({
   onModeChange: (mode: ExportMode) => void;
   onNameChange: (value: string) => void;
   onVersionNameChange: (value: string) => void;
-  onThemeIdentifierChange: (value: string) => void;
   onLogin: () => void;
   onBuyCredits: () => void;
   onSubmit: () => void;
 }) {
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const steps = getExportProgressSteps(exportMode);
-  const themeIdentifierError = platform === "ios" ? getIosThemeIdentifierError(exportThemeIdentifier) : null;
   const exportNameError = platform === "ios" && (exportName.trim().length === 0 || exportName.trim().length > 80) ? "테마 이름은 1~80자로 입력해 주세요." : null;
   const versionNameError = platform === "ios" && !/^[0-9A-Za-z][0-9A-Za-z._-]{0,31}$/.test(exportVersionName.trim()) ? "영문, 숫자, 점, 밑줄, 하이픈으로 32자 이하로 입력해 주세요." : null;
-  const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0 && !exportNameError && !versionNameError && !themeIdentifierError;
+  const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0 && !exportNameError && !versionNameError;
   const isLoggedIn = Boolean(accountState?.user);
   const credits = accountState?.credits ?? 0;
   const hasCredits = credits >= 1;
@@ -1574,31 +1553,9 @@ function ExportDialog({
               <div><p className="text-sm font-bold">고유 앱 ID 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 applicationId를 서버에서 생성합니다.</p></div>
             </div>
           ) : (
-            <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 sm:col-span-2">
-              <button
-                type="button"
-                className="flex items-center justify-between gap-3 text-left text-sm font-semibold text-[#0f172a]"
-                onClick={() => setAdvancedOpen((current) => !current)}
-                disabled={isExporting}
-              >
-                <span>iOS 고급 옵션</span>
-                <span className="text-xs text-[#64748b]">{advancedOpen ? "접기" : "열기"}</span>
-              </button>
-              {advancedOpen ? (
-                <label className="grid gap-2">
-                  <span className="text-sm font-semibold text-[#0f172a]">identifier</span>
-                  <input
-                    type="text"
-                    value={exportThemeIdentifier}
-                    onChange={(event) => onThemeIdentifierChange(event.currentTarget.value)}
-                    disabled={isExporting}
-                    spellCheck={false}
-                    className={`h-11 rounded-xl border bg-white px-3 font-mono text-sm text-[#111827] outline-none transition focus:border-[#2563eb] ${themeIdentifierError ? "border-[#ef4444]" : "border-[#d1d5db]"
-                      }`}
-                  />
-                  {themeIdentifierError ? <span className="text-xs font-medium text-[#dc2626]">{themeIdentifierError}</span> : <span className="text-xs font-medium text-[#64748b]">KakaoTalkTheme.css의 -kakaotalk-theme-id로 내보냅니다.</span>}
-                </label>
-              ) : null}
+            <div className="flex items-start gap-3 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 text-[#1e3a8a] sm:col-span-2">
+              <ShieldCheck className="mt-0.5 shrink-0" size={17} aria-hidden="true" />
+              <div><p className="text-sm font-bold">고유 테마 identifier 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 identifier를 서버에서 생성하고 CSS에 적용합니다.</p></div>
             </div>
           )}
         </div>
@@ -1817,7 +1774,6 @@ async function createIosExportFormData({
   templateId,
   exportName,
   versionName,
-  themeIdentifier,
   mode,
   slots,
   uploads,
@@ -1844,7 +1800,6 @@ async function createIosExportFormData({
     templateId,
     exportName,
     versionName,
-    themeIdentifier,
     slots,
     uploads,
     colors,
@@ -1918,32 +1873,6 @@ async function createAndroidExportFormData({
   formData.append("mode", mode);
 
   return formData;
-}
-
-function createIosThemeIdentifier(name: string) {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ".")
-    .replace(/\.+/g, ".")
-    .replace(/^\.+|\.+$/g, "");
-  return `com.kakao.talk.theme.${slug || "custom"}`;
-}
-
-function getIosThemeIdentifierError(value: string) {
-  const identifier = value.trim();
-  if (!identifier) return "identifier를 입력하세요.";
-  if (!/^[a-z0-9.]+$/.test(identifier)) return "소문자 영문, 숫자, .만 사용할 수 있습니다.";
-
-  const segments = identifier.split(".");
-  if (segments.length < 2) return "최소 2개 이상의 segment가 필요합니다.";
-
-  for (const segment of segments) {
-    if (!segment) return "빈 segment는 사용할 수 없습니다.";
-    if (!/^[a-z][a-z0-9]*$/.test(segment)) return "각 segment는 소문자 영문으로 시작해야 합니다.";
-  }
-
-  return null;
 }
 
 function triggerDownload(blob: Blob, fileName: string) {

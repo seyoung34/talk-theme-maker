@@ -1,4 +1,4 @@
-import { normalizeIosPath, validateExportName, validateIosPackage, validateVersionName } from "../lib/theme/ios/packageValidation.ts";
+import { applyServerThemeIdentifier, normalizeIosPath, validateExportName, validateIosPackage, validateVersionName } from "../lib/theme/ios/packageValidation.ts";
 import { createStoredZipBytes } from "../lib/theme/project/zip.ts";
 
 const encoder = new TextEncoder();
@@ -10,6 +10,11 @@ const validEntries = [
 ];
 
 validateIosPackage(validEntries);
+const issuedIdentifier = "com.kakao.talk.theme.u0123456789abcdef.i000001";
+const identifiedEntries = applyServerThemeIdentifier(validEntries, issuedIdentifier);
+const identifiedCss = new TextDecoder().decode(identifiedEntries.find((entry) => entry.path === "KakaoTalkTheme.css")?.bytes);
+if (!identifiedCss.includes(`-kakaotalk-theme-id: '${issuedIdentifier}'`)) throw new Error("Server theme identifier was not applied.");
+expectCode(() => applyServerThemeIdentifier(validEntries, "com.kakao.talk.theme.user-input"), "invalid_server_theme_identifier");
 expectCode(() => validateIosPackage([{ path: "Images/icon.png", bytes: pngSignature }]), "missing_theme_css");
 expectCode(() => validateIosPackage([{ path: "KakaoTalkTheme.css", bytes: css }, { path: "Images/icon.png", bytes: new Uint8Array([1]) }]), "invalid_png_file");
 expectCode(() => validateIosPackage([{ path: "KakaoTalkTheme.css", bytes: css }]), "missing_referenced_image");
@@ -24,7 +29,7 @@ if (start !== 0x04034b50 || end.getUint32(0, true) !== 0x06054b50 || end.getUint
   throw new Error("Stored ZIP structure validation failed.");
 }
 
-console.log(JSON.stringify({ validPackage: true, rejectedInvalidCases: 6, zipEntries: validEntries.length, zipBytes: zip.length }));
+console.log(JSON.stringify({ validPackage: true, serverIdentifierApplied: true, rejectedInvalidCases: 7, zipEntries: validEntries.length, zipBytes: zip.length }));
 
 function expectCode(callback, expectedCode) {
   try {

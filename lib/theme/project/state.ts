@@ -68,7 +68,7 @@ export function getColorImageFallbackRole(role: ThemeResourceRole): ThemeResourc
 }
 
 export function canDisableImageSlot(slot: ThemeAssetSlot | undefined) {
-  return Boolean(slot && slot.kind !== "color" && getImageColorFallbackRole(slot.role));
+  return Boolean(slot && slot.kind !== "color" && (getImageColorFallbackRole(slot.role) || slot.section === "passcode"));
 }
 
 export function isImageSlotDisabled(slot: ThemeAssetSlot | undefined, selections: SlotCandidateSelections) {
@@ -180,30 +180,18 @@ export function getSlotCandidates(slot: ThemeAssetSlot | undefined, templateId: 
   }
 
   const assetUrl = slot.defaultAssetUrls?.[templateId];
+  const disabledCandidate = {
+    id: disabledImageCandidateId,
+    label: "이미지 사용 안 함",
+    note: getImageColorFallbackRole(slot.role) ? "대응 색상 슬롯 값을 사용합니다." : "해당 이미지를 내보내지 않습니다.",
+    sourceType: "template-asset" as const,
+  };
   if (!assetUrl) {
-    return canDisableImageSlot(slot)
-      ? [
-          {
-            id: disabledImageCandidateId,
-            label: "이미지 사용 안 함",
-            note: "대응 색상 슬롯 값을 사용합니다.",
-            sourceType: "template-asset",
-          },
-        ]
-      : [];
+    return canDisableImageSlot(slot) ? [disabledCandidate] : [];
   }
 
   return [
-    ...(canDisableImageSlot(slot)
-      ? [
-          {
-            id: disabledImageCandidateId,
-            label: "이미지 사용 안 함",
-            note: "대응 색상 슬롯 값을 사용합니다.",
-            sourceType: "template-asset" as const,
-          },
-        ]
-      : []),
+    ...(canDisableImageSlot(slot) ? [disabledCandidate] : []),
     {
       id: `${slot.id}:base`,
       label: "기본값",
@@ -316,7 +304,7 @@ export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colo
     const color = getResolvedColor(slot, colors, selections, templateId, template);
     return color ? color.toUpperCase() : "값 필요";
   }
-  if (isImageSlotDisabled(slot, selections)) return "색상 사용 중";
+  if (isImageSlotDisabled(slot, selections)) return getImageColorFallbackRole(slot.role) ? "색상 사용 중" : "이미지 사용 안 함";
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   if (selectedUpload) return selectedUpload.file.name;
   const selected = getSelectedCandidate(slot, selections, templateId, template);
