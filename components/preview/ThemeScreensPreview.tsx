@@ -1,6 +1,6 @@
 "use client";
 
-import { Gift, MessageCirclePlus, Search, Settings, UserPlus, ListPlus } from "lucide-react";
+import { Bell, ChevronRight, Gift, MessageCirclePlus, Search, Settings, Share2, UserPlus, ListPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getResolvedColor, type SlotCandidateSelections } from "@/components/project/projectModel";
 import { findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
@@ -40,7 +40,7 @@ export function ThemeScreensPreview({
   onSelectSlot,
 }: {
   analysis: ThemeProjectAnalysis;
-  section: Extract<ThemeSection, "main" | "tabs">;
+  section: Extract<ThemeSection, "main" | "tabs" | "more">;
   slots: ThemeAssetSlot[];
   selectedSlotId?: string;
   colors: Record<string, string | undefined>;
@@ -67,32 +67,44 @@ export function ThemeScreensPreview({
       titleColor: getColor("main_title_color", template.defaults.mainTitle),
       titlePressedColor: getColor("main_title_pressed_color", template.defaults.mainTitle),
       descriptionColor: getColor("main_description_color", template.defaults.mainBody),
-      bodyColor: getColor("main_body_color", template.defaults.mainBody),
-      bodyPressedColor: getColor("main_paragraph_pressed_color", template.defaults.mainBody),
+      descriptionPressedColor: getColor("main_description_pressed_color", template.defaults.mainBody),
+      paragraphColor: getColor("tab_paragraph_color", template.defaults.mainBody),
+      paragraphPressedColor: getColor("tab_paragraph_pressed_color", template.defaults.mainBody),
+      bodyCellColor: getColor("main_body_cell_color", withAlpha(template.defaults.mainBackground, "00")),
       bodyCellPressedColor: getColor("main_body_cell_pressed_color", withAlpha(template.defaults.mainBackground, "99")),
       bodyCellBorderColor: getColor("main_body_cell_border_color", withAlpha(template.defaults.mainTitle, "33")),
       sectionTitleColor: getColor("main_section_title_color", template.defaults.mainTitle),
       featureBrowseTabColor: getColor("main_feature_browse_tab_color", template.defaults.tabBackground),
+      featureBrowseTabFocusedColor: getColor("main_feature_browse_tab_focused_color", template.defaults.mainTitle),
+      featurePrimaryColor: getColor("feature_primary_color", template.accent),
       bodySecondaryColor: getColor("main_body_secondary_cell_color", lighten(template.defaults.mainBackground, 0.06)),
       tabBackgroundColor: getColor("tab_background", template.defaults.tabBackground),
+      lightBadgeColor: getColor("tab_light_banner_badge_background_color", template.accent),
+      badgeColor: getColor("tab_banner_badge_background_color", template.accent),
+      directShareTextColor: getColor("direct_share_text_color", template.defaults.mainTitle),
+      directShareButtonColor: getColor("direct_share_button_color", template.accent),
+      directShareBackgroundColor: getColor("direct_share_background_color", lighten(template.defaults.mainBackground, 0.04)),
+      notificationTextColor: getColor("notification_text_color", template.defaults.mainTitle),
+      notificationBackgroundColor: getColor("notification_background_color", template.defaults.friendBubble),
     };
   }, [colors, selections, slotByRole, templateId, template]);
 
   const mainBackgroundSlot = slotByRole.main_background;
   const mainBackgroundColorSlot = slotByRole.main_background_color;
+  const moreBackgroundSlot = slotByRole.main_body_secondary_cell_color;
 
   return (
     <PhoneFrame
-      backgroundUrl={urls.main_background}
-      fallbackBackground={preview.mainBackgroundColor}
-      selected={selectedSlotId === mainBackgroundSlot?.id || selectedSlotId === mainBackgroundColorSlot?.id}
-      onSelect={() => onSelectSlot?.(mainBackgroundSlot?.id ?? mainBackgroundColorSlot?.id ?? "")}
+      backgroundUrl={section === "more" ? undefined : urls.main_background}
+      fallbackBackground={section === "more" ? preview.bodySecondaryColor : preview.mainBackgroundColor}
+      selected={section === "more" ? selectedSlotId === moreBackgroundSlot?.id : selectedSlotId === mainBackgroundSlot?.id || selectedSlotId === mainBackgroundColorSlot?.id}
+      onSelect={() => onSelectSlot?.(section === "more" ? moreBackgroundSlot?.id ?? "" : mainBackgroundSlot?.id ?? mainBackgroundColorSlot?.id ?? "")}
     >
       {section === "main" ? (
         <FriendsScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} profileUrls={profileUrls} onSelectSlot={onSelectSlot} />
-      ) : (
+      ) : section === "tabs" ? (
         <ChatsScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} profileUrls={profileUrls} onSelectSlot={onSelectSlot} />
-      )}
+      ) : <MoreScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />}
     </PhoneFrame>
   );
 }
@@ -104,14 +116,25 @@ type MainPreviewPalette = {
   titleColor: string;
   titlePressedColor: string;
   descriptionColor: string;
-  bodyColor: string;
-  bodyPressedColor: string;
+  descriptionPressedColor: string;
+  paragraphColor: string;
+  paragraphPressedColor: string;
+  bodyCellColor: string;
   bodyCellPressedColor: string;
   bodyCellBorderColor: string;
   sectionTitleColor: string;
   featureBrowseTabColor: string;
+  featureBrowseTabFocusedColor: string;
+  featurePrimaryColor: string;
   bodySecondaryColor: string;
   tabBackgroundColor: string;
+  lightBadgeColor: string;
+  badgeColor: string;
+  directShareTextColor: string;
+  directShareButtonColor: string;
+  directShareBackgroundColor: string;
+  notificationTextColor: string;
+  notificationBackgroundColor: string;
 };
 
 //친구탭
@@ -239,7 +262,7 @@ function FriendsScreen({
                     {row.sub}
                   </span>
                 </div>
-                <span className="rounded-full border border-[#7aa8af]/35 bg-white/12 px-2 py-2 text-[10px] font-semibold" style={{ color: preview.bodyPressedColor }}>
+                <span className="rounded-full border border-[#7aa8af]/35 bg-white/12 px-2 py-2 text-[10px] font-semibold" style={{ color: preview.descriptionPressedColor }}>
                   {row.cta}
                 </span>
               </button>
@@ -318,7 +341,7 @@ function ChatsScreen({
       </button>
 
       <div className="grid content-start min-h-0 gap-3 pb-1 overflow-hidden">
-        <div className="px-4 pt-2 " style={{ borderColor: hexToRgba(preview.bodyCellBorderColor, 0.28) }}>
+        <div className={`px-4 pt-2 ${selectedSlotId === slotByRole.main_header_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ borderColor: hexToRgba(preview.bodyCellBorderColor, 0.28), backgroundColor: preview.headerBackgroundColor }} onClick={(event) => { event.stopPropagation(); if (slotByRole.main_header_color) onSelectSlot?.(slotByRole.main_header_color.id); }}>
           <div className="flex items-center gap-2 overflow-hidden">
             <FilterPill compact dark color={preview.headerForegroundColor}>전체</FilterPill>
             <FilterPill compact color={preview.headerForegroundColor}>
@@ -358,7 +381,7 @@ function ChatsScreen({
               role="button"
               tabIndex={0}
               className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-1 py-2 text-left ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "rounded-[18px] ring-1 ring-[#60a5fa]" : ""}`}
-              style={{}}
+              style={{ backgroundColor: preview.bodyCellColor }}
               onClick={(event) => {
                 event.stopPropagation();
                 if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
@@ -386,19 +409,19 @@ function ChatsScreen({
                 </button>
                 <button
                   type="button"
-                  className={`mt-0.5 block text-left ${selectedSlotId === slotByRole.main_description_color?.id ? "rounded-md ring-1 ring-[#60a5fa]" : ""}`}
+                  className={`mt-0.5 block text-left ${selectedSlotId === slotByRole.tab_paragraph_color?.id ? "rounded-md ring-1 ring-[#60a5fa]" : ""}`}
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (slotByRole.main_description_color) onSelectSlot?.(slotByRole.main_description_color.id);
+                    if (slotByRole.tab_paragraph_color) onSelectSlot?.(slotByRole.tab_paragraph_color.id);
                   }}
                 >
-                  <span className="line-clamp-1 text-[12px] font-medium leading-[1.3]" style={{ color: preview.descriptionColor }}>
+                  <span className="line-clamp-1 text-[12px] font-medium leading-[1.3]" style={{ color: preview.paragraphColor }}>
                     {row.sub}
                   </span>
                 </button>
               </div>
               <div className="grid justify-items-end gap-1 self-start pt-0.5">
-                <span className="text-[10px] font-medium" style={{ color: preview.bodyColor }}>
+                <span className="text-[10px] font-medium" style={{ color: preview.paragraphColor }}>
                   {row.time}
                 </span>
                 {row.badge ? <UnreadBadge value={row.badge} /> : null}
@@ -416,6 +439,34 @@ function ChatsScreen({
         urls={urls}
         onSelectSlot={onSelectSlot}
       />
+    </MainScreenFrame>
+  );
+}
+
+function MoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
+  return (
+    <MainScreenFrame>
+      <button type="button" className={`flex items-end justify-between px-5 pb-3 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ backgroundColor: preview.headerBackgroundColor, color: preview.headerForegroundColor }} onClick={(event) => { event.stopPropagation(); onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? ""); }}>
+        <strong className="text-xl font-semibold tracking-[-0.03em]">더보기</strong>
+        <div className="flex items-center gap-4"><Search className="size-5" /><Settings className="size-5" /></div>
+      </button>
+      <div className="grid min-h-0 content-start gap-3 overflow-hidden px-4 py-3" style={{ backgroundColor: preview.bodySecondaryColor }}>
+        <div className="flex gap-2 overflow-hidden rounded-xl p-2" style={{ backgroundColor: preview.headerBackgroundColor }}>
+          <span className="rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ backgroundColor: preview.featureBrowseTabFocusedColor, color: preview.headerBackgroundColor }}>전체</span>
+          <span className="rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ color: preview.featureBrowseTabColor }}>생활</span>
+          <span className="rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ color: preview.featureBrowseTabColor }}>콘텐츠</span>
+        </div>
+        <button type="button" className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl p-3 text-left ${selectedSlotId === slotByRole.direct_share_background_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`} style={{ backgroundColor: preview.directShareBackgroundColor, color: preview.directShareTextColor }} onClick={(event) => { event.stopPropagation(); if (slotByRole.direct_share_background_color) onSelectSlot?.(slotByRole.direct_share_background_color.id); }}>
+          <span className="grid size-9 place-items-center rounded-full bg-white/70"><Share2 className="size-4" /></span><span><strong className="block text-[13px]">바로 공유</strong><span className="mt-0.5 block text-[10px] opacity-75">자주 쓰는 대상을 빠르게 선택하세요</span></span><span className="rounded-full px-3 py-1 text-[10px] font-bold text-white" style={{ backgroundColor: preview.directShareButtonColor }}>공유</span>
+        </button>
+        <button type="button" className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl p-3 text-left ${selectedSlotId === slotByRole.notification_background_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`} style={{ backgroundColor: preview.notificationBackgroundColor, color: preview.notificationTextColor }} onClick={(event) => { event.stopPropagation(); if (slotByRole.notification_background_color) onSelectSlot?.(slotByRole.notification_background_color.id); }}>
+          <Bell className="size-5" /><span className="text-[12px] font-semibold">새로운 테마 소식이 있습니다.</span><ChevronRight className="size-4" />
+        </button>
+        <div className="grid grid-cols-2 gap-2">
+          {["선물하기", "멜론", "쇼핑", "예약하기"].map((label, index) => <span key={label} className="relative rounded-xl bg-white/75 p-3 text-[12px] font-bold" style={{ color: preview.featurePrimaryColor }}>{label}{index < 2 ? <span className="absolute right-2 top-2 size-2 rounded-full" style={{ backgroundColor: index ? preview.badgeColor : preview.lightBadgeColor }} /> : null}</span>)}
+        </div>
+      </div>
+      <MainBottomTabBar active="more" selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
     </MainScreenFrame>
   );
 }
@@ -522,11 +573,11 @@ function BottomTabBar({
         if (slotByRole.tab_background) onSelectSlot?.(slotByRole.tab_background.id);
       }}
     >
-      <TabAsset active={active === "friends"} label="친구" defaultUrl={urls.tab_icon_friends} focusedUrl={urls.tab_icon_friends_focused} slot={slotByRole.tab_icon_friends_focused ?? slotByRole.tab_icon_friends} selected={selectedSlotId === slotByRole.tab_icon_friends?.id || selectedSlotId === slotByRole.tab_icon_friends_focused?.id} badge="12" onSelectSlot={onSelectSlot} />
-      <TabAsset active={active === "chats"} label="채팅" defaultUrl={urls.tab_icon_chats} focusedUrl={urls.tab_icon_chats_focused} slot={slotByRole.tab_icon_chats_focused ?? slotByRole.tab_icon_chats} selected={selectedSlotId === slotByRole.tab_icon_chats?.id || selectedSlotId === slotByRole.tab_icon_chats_focused?.id} badge="8" onSelectSlot={onSelectSlot} />
-      <TabAsset active={active === "now"} label="Now" defaultUrl={urls.tab_icon_now} focusedUrl={urls.tab_icon_now_focused} slot={slotByRole.tab_icon_now_focused ?? slotByRole.tab_icon_now} selected={selectedSlotId === slotByRole.tab_icon_now?.id || selectedSlotId === slotByRole.tab_icon_now_focused?.id} onSelectSlot={onSelectSlot} />
-      <TabAsset active={active === "shopping"} label="쇼핑" defaultUrl={urls.tab_icon_shopping} focusedUrl={urls.tab_icon_shopping_focused} slot={slotByRole.tab_icon_shopping_focused ?? slotByRole.tab_icon_shopping} selected={selectedSlotId === slotByRole.tab_icon_shopping?.id || selectedSlotId === slotByRole.tab_icon_shopping_focused?.id} onSelectSlot={onSelectSlot} />
-      <TabAsset active={active === "more"} label="더보기" defaultUrl={urls.tab_icon_more} focusedUrl={urls.tab_icon_more_focused} slot={slotByRole.tab_icon_more_focused ?? slotByRole.tab_icon_more} selected={selectedSlotId === slotByRole.tab_icon_more?.id || selectedSlotId === slotByRole.tab_icon_more_focused?.id} dot onSelectSlot={onSelectSlot} />
+      <TabAsset active={active === "friends"} label="친구" defaultUrl={urls.tab_icon_friends} focusedUrl={urls.tab_icon_friends_focused} slot={slotByRole.tab_icon_friends ?? slotByRole.tab_icon_friends_focused} selected={selectedSlotId === slotByRole.tab_icon_friends?.id || selectedSlotId === slotByRole.tab_icon_friends_focused?.id} badge="12" onSelectSlot={onSelectSlot} />
+      <TabAsset active={active === "chats"} label="채팅" defaultUrl={urls.tab_icon_chats} focusedUrl={urls.tab_icon_chats_focused} slot={slotByRole.tab_icon_chats ?? slotByRole.tab_icon_chats_focused} selected={selectedSlotId === slotByRole.tab_icon_chats?.id || selectedSlotId === slotByRole.tab_icon_chats_focused?.id} badge="8" onSelectSlot={onSelectSlot} />
+      <TabAsset active={active === "now"} label="Now" defaultUrl={urls.tab_icon_now} focusedUrl={urls.tab_icon_now_focused} slot={slotByRole.tab_icon_now ?? slotByRole.tab_icon_now_focused} selected={selectedSlotId === slotByRole.tab_icon_now?.id || selectedSlotId === slotByRole.tab_icon_now_focused?.id} onSelectSlot={onSelectSlot} />
+      <TabAsset active={active === "shopping"} label="쇼핑" defaultUrl={urls.tab_icon_shopping} focusedUrl={urls.tab_icon_shopping_focused} slot={slotByRole.tab_icon_shopping ?? slotByRole.tab_icon_shopping_focused} selected={selectedSlotId === slotByRole.tab_icon_shopping?.id || selectedSlotId === slotByRole.tab_icon_shopping_focused?.id} onSelectSlot={onSelectSlot} />
+      <TabAsset active={active === "more"} label="더보기" defaultUrl={urls.tab_icon_more} focusedUrl={urls.tab_icon_more_focused} slot={slotByRole.tab_icon_more ?? slotByRole.tab_icon_more_focused} selected={selectedSlotId === slotByRole.tab_icon_more?.id || selectedSlotId === slotByRole.tab_icon_more_focused?.id} dot onSelectSlot={onSelectSlot} />
     </div>
   );
 }

@@ -14,19 +14,24 @@ import {
   getCompletion,
   getInitialSlotCandidateSelections,
   getSectionGroups,
+  getSelectedCandidate,
   getSlotFile,
+  isSlotVisibleInSection,
   sectionLabels,
   type BubbleEditState,
   type SlotCandidateSelections,
   type SlotColors,
   type SlotUploads,
 } from "@/components/project/projectModel";
-import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
+import { dataUrlForThemeFile, findBestFile } from "@/components/preview/previewResourceUtils";
+import { extractThemeImagePalette, type ImageColorPalette } from "@/lib/theme/colorPalette";
 import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
 import { adminAssetToFile, inferAdminAssetKind, listRecommendedAssetCandidatePage, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
+import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
+import { autoMainSurfaceCandidateId } from "@/lib/theme/project/state";
 import { systemTemplateRepository, type RemoteSlotUploads, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
@@ -42,8 +47,7 @@ import {
 import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 const editorHandoffKey = "kakaotalk-theme-maker:editor-handoff:v1";
-const templateStartPayloadReuseMs = 5000;
-let consumedTemplateStartPayload: { payload: ThemeStartPayload | null; consumedAt: number } | undefined;
+const editorSessionStorageKey = (mode: "user" | "admin") => `kakaotalk-theme-maker:editor-session:${mode}:v1`;
 
 type Notice = {
   tone: "info" | "success" | "warning" | "error";
@@ -162,6 +166,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [adminAssetsWithPreview, setAdminAssetsWithPreview] = useState<Array<AdminAssetCandidate & { previewUrl: string }>>([]);
   const [adminAssetCursor, setAdminAssetCursor] = useState<string>();
   const [isLoadingAdminAssets, setIsLoadingAdminAssets] = useState(false);
+  const [imageColorPalette, setImageColorPalette] = useState<ImageColorPalette | null>(null);
+  const [imageColorPaletteError, setImageColorPaletteError] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
   const uploadsRef = useRef<SlotUploads>({});
@@ -178,7 +184,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   useEffect(() => {
     let active = true;
-    const payload = takeTemplateStartPayload();
+    const payload = takeTemplateStartPayload(mode);
     if (!payload) {
       setInitialLoadState({ status: "ready" });
       return () => {
@@ -214,6 +220,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           }
 
           skipDefaultSelectionResetRef.current = true;
+          const normalizedOverrides = normalizeLegacyColorOverrides(savedTemplate.platform, savedTemplate.overrides.colors, savedTemplate.overrides.candidateSelections);
           setTemplateId(savedTemplate.baseTemplateId);
           setPlatform(payload.platform);
           const previewSlotIds = getInitialPreviewSlotIds(savedTemplate.platform, savedTemplate.overrides.uploadRefs);
@@ -230,8 +237,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           remoteUploadRefsRef.current = savedTemplate.overrides.uploadRefs;
           setRemoteUploadRefs(savedTemplate.overrides.uploadRefs);
           setUploads(previewUploads);
-          setColors(savedTemplate.overrides.colors);
-          setCandidateSelections(savedTemplate.overrides.candidateSelections);
+          setColors(normalizedOverrides.colors);
+          setCandidateSelections(normalizedOverrides.candidateSelections);
           setBubbleMarkers(savedTemplate.overrides.bubbleEdits.markers);
           setBubbleInsets(savedTemplate.overrides.bubbleEdits.insets);
           setBubbleStretch(savedTemplate.overrides.bubbleEdits.stretch);
@@ -280,8 +287,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           setTemplateId(sourceTemplate.baseTemplateId);
           setPlatform(payload.platform);
           setUploads(converted.uploads);
-          setColors(converted.colors);
-          setCandidateSelections(converted.candidateSelections);
+          const normalizedOverrides = normalizeLegacyColorOverrides(payload.platform, converted.colors, converted.candidateSelections);
+          setColors(normalizedOverrides.colors);
+          setCandidateSelections(normalizedOverrides.candidateSelections);
           setBubbleMarkers(converted.bubbleEdits.markers);
           setBubbleInsets(converted.bubbleEdits.insets);
           setBubbleStretch(converted.bubbleEdits.stretch);
@@ -313,11 +321,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         }
 
         skipDefaultSelectionResetRef.current = true;
+        const normalizedOverrides = normalizeLegacyColorOverrides(savedTemplate.platform, savedTemplate.colors, savedTemplate.candidateSelections);
         setTemplateId(savedTemplate.templateId);
         setPlatform(savedTemplate.platform);
         setUploads(savedTemplate.uploads);
-        setColors(savedTemplate.colors);
-        setCandidateSelections(savedTemplate.candidateSelections);
+        setColors(normalizedOverrides.colors);
+        setCandidateSelections(normalizedOverrides.candidateSelections);
         setBubbleMarkers(savedTemplate.bubbleEdits.markers);
         setBubbleInsets(savedTemplate.bubbleEdits.insets);
         setBubbleStretch(savedTemplate.bubbleEdits.stretch);
@@ -369,6 +378,36 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     () => createThemeProjectAnalysis(activeTemplate, platform, slots, uploads, colors, candidateSelections),
     [activeTemplate, platform, slots, uploads, colors, candidateSelections],
   );
+  const mainBackgroundFile = useMemo(() => platform === "android" ? findBestFile(analysis, "main_background") : undefined, [analysis, platform]);
+
+  useEffect(() => {
+    let active = true;
+    if (platform !== "android" || !mainBackgroundFile) {
+      setImageColorPalette(null);
+      setImageColorPaletteError(null);
+      return () => { active = false; };
+    }
+    extractThemeImagePalette(mainBackgroundFile)
+      .then((palette) => {
+        if (!active) return;
+        setImageColorPalette(palette);
+        setImageColorPaletteError(null);
+        const linkedSlots = slots.filter((slot) => slot.autoColorGroup === "main-surface" && candidateSelections[slot.id] === autoMainSurfaceCandidateId);
+        if (!linkedSlots.length) return;
+        setColors((current) => {
+          if (linkedSlots.every((slot) => current[slot.id]?.toUpperCase() === palette.representative)) return current;
+          const next = { ...current };
+          for (const slot of linkedSlots) next[slot.id] = palette.representative;
+          return next;
+        });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setImageColorPalette(null);
+        setImageColorPaletteError(error instanceof Error ? error.message : "배경 이미지 색상을 분석하지 못했습니다.");
+      });
+    return () => { active = false; };
+  }, [candidateSelections, mainBackgroundFile, platform, slots]);
 
   useEffect(() => {
     if (!groups.includes(activeGroup)) {
@@ -376,7 +415,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
   }, [activeGroup, groups]);
 
-  const visibleSlots = useMemo(() => slots.filter((slot) => slot.section === activeSection && slot.group === activeGroup), [activeGroup, activeSection, slots]);
+  const visibleSlots = useMemo(() => slots.filter((slot) => isSlotVisibleInSection(slot, activeSection) && slot.group === activeGroup), [activeGroup, activeSection, slots]);
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? visibleSlots[0] ?? slots[0];
   const selectedFile = getSlotFile(selectedSlot, analysis.files);
   const selectedBubbleSlot = selectedSlot ? bubbleSlotFromRole(selectedSlot.role) : null;
@@ -456,6 +495,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   }, [initialLoadState.status, selectedSlot?.id]);
 
   const startDefaultTemplate = () => {
+    persistEditorSession(mode, { templateId: "basic", platform: "android", editMode: mode });
     skipDefaultSelectionResetRef.current = true;
     setTemplateId("basic");
     setPlatform("android");
@@ -481,13 +521,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     const nextGroups = getSectionGroups(section, slots);
     const nextGroup = nextGroups[0];
     if (nextGroup) setActiveGroup(nextGroup);
-    const firstSlot = slots.find((slot) => slot.section === section && (!nextGroup || slot.group === nextGroup));
+    const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, section) && (!nextGroup || slot.group === nextGroup));
     setSelectedSlotId(firstSlot?.id);
   };
 
   const selectGroup = (group: ThemeSlotGroup) => {
     setActiveGroup(group);
-    const firstSlot = slots.find((slot) => slot.section === activeSection && slot.group === group);
+    const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, activeSection) && slot.group === group);
     setSelectedSlotId(firstSlot?.id);
   };
 
@@ -495,7 +535,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setSelectedSlotId(slotId);
     const slot = slots.find((item) => item.id === slotId);
     if (!slot) return;
-    setActiveSection(slot.section);
+    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
     setActiveGroup(slot.group);
   };
 
@@ -516,7 +556,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     });
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
     setSelectedSlotId(slot.id);
-    setActiveSection(slot.section);
+    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
     setActiveGroup(slot.group);
   };
 
@@ -540,7 +580,23 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const changeColor = (slot: ThemeAssetSlot, value: string) => {
     setColors((current) => ({ ...current, [slot.id]: value }));
+    if (candidateSelections[slot.id] === autoMainSurfaceCandidateId) {
+      setCandidateSelections((current) => ({ ...current, [slot.id]: getSelectedCandidate(slot, {}, templateId, activeTemplate)?.id }));
+    }
     setSelectedSlotId(slot.id);
+  };
+
+  const applyAutoSurfaceColor = (slot: ThemeAssetSlot, color = imageColorPalette?.representative) => {
+    if (!color) return;
+    setColors((current) => ({ ...current, [slot.id]: color }));
+    setCandidateSelections((current) => ({ ...current, [slot.id]: autoMainSurfaceCandidateId }));
+  };
+
+  const applyAutoSurfaceColorToAll = (color = imageColorPalette?.representative) => {
+    if (!color) return;
+    const linkedSlots = slots.filter((slot) => slot.autoColorGroup === "main-surface");
+    setColors((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, color])]));
+    setCandidateSelections((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, autoMainSurfaceCandidateId])]));
   };
 
   const selectCandidate = (slot: ThemeAssetSlot, candidateId: string) => {
@@ -582,7 +638,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
     setCandidateSelections((current) => ({ ...current, [slot.id]: asset.id }));
     setSelectedSlotId(slot.id);
-    setActiveSection(slot.section);
+    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
     setActiveGroup(slot.group);
   };
 
@@ -659,6 +715,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         },
       });
       setActiveUserTemplate({ id: savedTemplate.id, name: savedTemplate.name, createdAt: savedTemplate.createdAt });
+      persistEditorSession(mode, {
+        templateId: savedTemplate.templateId,
+        platform: savedTemplate.platform,
+        userTemplateId: savedTemplate.id,
+        editMode: mode,
+      });
       setSaveDialogOpen(false);
       setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 저장했습니다.` });
     } catch (error) {
@@ -732,6 +794,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         createdAt: savedTemplate.createdAt,
       });
       setSystemTemplateBundleId(savedTemplate.bundleId ?? savedTemplate.id);
+      persistEditorSession(mode, {
+        templateId: savedTemplate.baseTemplateId,
+        platform: savedTemplate.platform,
+        systemTemplateId: savedTemplate.id,
+        systemTemplateBundleId: savedTemplate.bundleId ?? savedTemplate.id,
+        editMode: mode,
+      });
       setSystemSaveDialogOpen(false);
       setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 저장했습니다.` });
     } catch (error) {
@@ -845,7 +914,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   return (
-    <main className="h-[100dvh] overflow-hidden px-3 py-3 text-[#111827] md:px-4 md:py-4">
+    <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
       {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
       {saveDialogOpen ? (
         <SaveTemplateDialog
@@ -926,20 +995,20 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       {initialLoadState.status === "error" ? <InitialTemplateErrorPanel message={initialLoadState.message ?? "템플릿을 불러오지 못했습니다."} onStartDefault={startDefaultTemplate} /> : null}
 
       {initialLoadState.status === "ready" ? (
-        <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-3 md:gap-4">
-          <header className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-[#e5e7eb] bg-white/95 px-4 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
-            <div className="flex min-w-0 items-center gap-4 justify-self-start">
+        <div className="grid min-h-full min-w-0 w-full grid-rows-[auto_1fr] gap-3 md:gap-4 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]">
+          <header className="grid min-h-[56px] min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 px-3 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-4 md:px-4">
+            <div className="flex min-w-0 items-center gap-2 justify-self-start md:gap-4">
               <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
                 &larr;
               </Link>
-              <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em] text-[#0f172a]">{displayTemplateName}</h1>
+              <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#0f172a] md:text-[22px]">{displayTemplateName}</h1>
             </div>
 
-            <div className="flex min-w-0 items-center gap-3 overflow-hidden justify-self-center">
+            <div className="col-span-2 row-start-3 flex min-w-0 items-center gap-2 overflow-hidden justify-self-stretch md:col-span-1 md:row-auto md:gap-3 md:justify-self-center">
               <div className="hidden shrink-0 rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#475569] md:block">
                 {platform === "android" ? "Android" : "iOS"}
               </div>
-              <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-[#e5e7eb]">
+              <div className="h-1.5 min-w-12 flex-1 overflow-hidden rounded-full bg-[#e5e7eb] md:w-24 md:flex-none">
                 <div className="h-full rounded-full bg-[#2563eb]" style={{ width: `${completion.total > 0 ? Math.round((completion.ready / completion.total) * 100) : 0}%` }} />
               </div>
               <span className="shrink-0 text-xs font-semibold text-[#64748b]">
@@ -953,7 +1022,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
               </span>
             </div>
 
-            <div className="flex min-w-0 items-center gap-2 shrink-0 justify-self-end">
+            <div className="col-span-2 row-start-2 flex max-w-full min-w-0 flex-wrap items-center justify-end gap-1.5 justify-self-stretch md:col-span-1 md:row-auto md:flex-nowrap md:gap-2 md:justify-self-end">
               {isAdminMode ? (
                 <button
                   type="button"
@@ -966,15 +1035,15 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
               ) : null}
               <button
                 type="button"
-                className={`${isAdminMode ? "hidden" : ""} rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60`}
+                className={`${isAdminMode ? "hidden" : ""} rounded-xl border border-[#d1d5db] bg-white px-2.5 py-2 text-[11px] font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60 md:px-3.5 md:text-xs`}
                 onClick={openSaveDialog}
                 disabled={isSavingTemplate}
               >
-                {isSavingTemplate ? "저장 중.." : "내 템플릿으로 저장"}
+                {isSavingTemplate ? "저장 중.." : <><span className="md:hidden">저장</span><span className="hidden md:inline">내 템플릿으로 저장</span></>}
               </button>
               <button
                 type="button"
-                className={`${isAdminMode ? "hidden" : ""} rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60`}
+                className={`${isAdminMode ? "hidden" : ""} rounded-xl bg-[#0f172a] px-3 py-2.5 text-xs font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60 md:px-4 md:text-sm`}
                 onClick={() => void openExportDialog()}
                 disabled={isExporting}
               >
@@ -983,7 +1052,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             </div>
           </header>
 
-          <section className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_300px] gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
+          <section className="grid min-h-0 min-w-0 w-full grid-cols-1 content-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
             <ProjectSectionRail
               activeSection={activeSection}
               slots={slots}
@@ -997,7 +1066,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
               onSelectSection={selectSection}
             />
 
-            <section className="grid min-h-0 min-w-0 grid-cols-[172px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
+            <section className="grid min-h-0 min-w-0 grid-cols-1 gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[196px_minmax(0,1fr)] md:gap-0 xl:grid-cols-[220px_minmax(0,1fr)]">
               <ProjectGroupRail
                 groups={groups}
                 activeGroup={activeGroup}
@@ -1011,7 +1080,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 template={activeTemplate}
                 onSelectSlot={(slot) => {
                   setSelectedSlotId(slot.id);
-                  setActiveSection(slot.section);
+                  if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
                   setActiveGroup(slot.group);
                 }}
               />
@@ -1038,6 +1107,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   onUpload={uploadSlot}
                   onClear={clearSlot}
                   onColorChange={changeColor}
+                  imageColorPalette={imageColorPalette}
+                  imageColorPaletteError={imageColorPaletteError}
+                  isAutoSurfaceColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainSurfaceCandidateId)}
+                  onApplyAutoSurfaceColor={(color) => selectedSlot && applyAutoSurfaceColor(selectedSlot, color)}
+                  onApplyAutoSurfaceColorToAll={(color) => applyAutoSurfaceColorToAll(color)}
                   onSelectCandidate={selectCandidate}
                   onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
                   onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
@@ -1067,7 +1141,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
               }}
               selectedSlotId={selectedSlot?.id}
-              className="col-span-2 lg:col-span-1 lg:row-start-auto"
+              className="min-h-[520px] lg:min-h-0"
               onSelectSlot={selectPreviewSlot}
             />
           </section>
@@ -1148,20 +1222,19 @@ function InitialTemplateErrorPanel({ message, onStartDefault }: { message: strin
   );
 }
 
-function takeTemplateStartPayload() {
-  const payload = readTemplateStartPayload(templateStartStorageKey);
-  if (payload) {
-    consumedTemplateStartPayload = { payload, consumedAt: Date.now() };
+function takeTemplateStartPayload(mode: "user" | "admin") {
+  const pendingPayload = readTemplateStartPayload(templateStartStorageKey);
+  if (pendingPayload && (!pendingPayload.editMode || pendingPayload.editMode === mode)) {
+    persistEditorSession(mode, { ...pendingPayload, editMode: mode });
     localStorage.removeItem(templateStartStorageKey);
-    return payload;
+    return pendingPayload;
   }
 
-  if (consumedTemplateStartPayload && Date.now() - consumedTemplateStartPayload.consumedAt < templateStartPayloadReuseMs) {
-    return consumedTemplateStartPayload.payload;
-  }
+  return readTemplateStartPayload(editorSessionStorageKey(mode));
+}
 
-  consumedTemplateStartPayload = { payload: null, consumedAt: Date.now() };
-  return null;
+function persistEditorSession(mode: "user" | "admin", payload: ThemeStartPayload) {
+  localStorage.setItem(editorSessionStorageKey(mode), JSON.stringify(payload));
 }
 
 function createInitialLoadProgress(message: string, current: number, total: number, detail?: string): InitialLoadState {

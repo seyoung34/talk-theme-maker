@@ -11,7 +11,8 @@
     "fileName": "theme_background_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_background_image.png",
     "required": true,
-    "note": "친구 목록과 기본 메인 화면 배경 이미지",
+    "note": "친구와 채팅 목록의 기본 배경 이미지",
+    "visibleInSections": ["tabs"],
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_background_image.png",
       "spongebob": "/template-assets/spongebob/android/theme_background_image.png"
@@ -25,9 +26,11 @@
     "group": "header",
     "screen": "friends",
     "kind": "color",
-    "label": "헤더 색상",
+    "label": "헤더·칩 영역 배경",
     "required": true,
-    "note": "상단 헤더 배경색",
+    "note": "친구 헤더와 채팅·더보기 상단 칩 영역의 공통 배경색",
+    "autoColorGroup": "main-surface",
+    "visibleInSections": ["tabs", "more"],
     "colorKey": "theme_header_cell_color",
     "defaultColor": {
       "basic": "#ffffff",
@@ -42,9 +45,10 @@
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "제목 색상",
+    "label": "이름 색상",
     "required": true,
-    "note": "친구 이름과 주요 텍스트 색상",
+    "note": "친구와 채팅 목록의 이름 색상",
+    "visibleInSections": ["tabs"],
     "colorKey": "theme_title_color",
     "defaultColor": {
       "basic": "#111111",
@@ -52,16 +56,16 @@
     }
   },
   {
-    "id": "android-main-body-color",
+    "id": "android-tab-paragraph-color",
     "platform": "android",
-    "role": "main_body_color",
-    "section": "main",
+    "role": "tab_paragraph_color",
+    "section": "tabs",
     "group": "list",
-    "screen": "friends",
+    "screen": "tabs",
     "kind": "color",
-    "label": "본문 색상",
+    "label": "마지막 메시지 색상",
     "required": true,
-    "note": "보조 텍스트와 목록 본문 색상",
+    "note": "채팅 목록의 마지막 메시지와 시간 색상",
     "colorKey": "theme_paragraph_color",
     "defaultColor": {
       "basic": "#4d5660",
@@ -76,9 +80,11 @@
     "group": "background",
     "screen": "friends",
     "kind": "color",
-    "label": "메인 배경 색상",
+    "label": "친구·채팅 배경 색상",
     "required": false,
-    "note": "메인 화면 기본 배경 색상",
+    "note": "메인 화면 기본 배경 색상, 메인 배경 이미지가 있다면 이미지가 적용됩니다.",
+    "autoColorGroup": "main-surface",
+    "visibleInSections": ["tabs"],
     "colorKey": "theme_background_color",
     "defaultColor": {
       "basic": "#F4FAFB",
@@ -93,9 +99,10 @@
     "group": "header",
     "screen": "friends",
     "kind": "color",
-    "label": "헤더 아이콘 색상",
+    "label": "헤더 제목·아이콘 색상",
     "required": false,
-    "note": "상단 헤더 텍스트와 아이콘 색상",
+    "note": "상단 헤더 제목과 아이콘의 공통 색상",
+    "visibleInSections": ["tabs", "more"],
     "colorKey": "theme_header_color",
     "defaultColor": {
       "basic": "#111111",
@@ -113,6 +120,8 @@
     "label": "제목 눌림 색상",
     "required": false,
     "note": "제목 영역의 pressed 상태 색상",
+    "optionLevel": "advanced",
+    "visibleInSections": ["tabs"],
     "colorKey": "theme_title_pressed_color",
     "defaultColor": {
       "basic": "#111111",
@@ -127,9 +136,9 @@
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "설명 색상",
+    "label": "상태 메시지 색상",
     "required": false,
-    "note": "설명 텍스트와 보조 정보 색상",
+    "note": "친구 목록의 상태 메시지와 보조 정보 색상",
     "colorKey": "theme_description_color",
     "defaultColor": {
       "basic": "#4D5660",
@@ -137,21 +146,51 @@
     }
   },
   {
-    "id": "android-main-paragraph-pressed-color",
+    "id": "android-main-description-pressed-color",
     "platform": "android",
-    "role": "main_paragraph_pressed_color",
+    "role": "main_description_pressed_color",
     "section": "main",
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "본문 눌림 색상",
+    "label": "상태 메시지 눌림 색상",
     "required": false,
-    "note": "본문 텍스트의 pressed 상태 색상",
+    "note": "친구 목록을 누르는 동안 표시되는 상태 메시지 색상",
+    "optionLevel": "advanced",
+    "colorKey": "theme_description_pressed_color"
+  },
+  {
+    "id": "android-tab-paragraph-pressed-color",
+    "platform": "android",
+    "role": "tab_paragraph_pressed_color",
+    "section": "tabs",
+    "group": "list",
+    "screen": "tabs",
+    "kind": "color",
+    "label": "마지막 메시지 눌림 색상",
+    "required": false,
+    "note": "채팅 목록을 누르는 동안 표시되는 마지막 메시지 색상",
+    "optionLevel": "advanced",
     "colorKey": "theme_paragraph_pressed_color",
     "defaultColor": {
       "basic": "#4D5660",
       "spongebob": "#37515A"
     }
+  },
+  {
+    "id": "android-main-body-cell-color",
+    "platform": "android",
+    "role": "main_body_cell_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "리스트 기본 배경",
+    "required": false,
+    "note": "친구와 채팅 목록의 기본 셀 배경색",
+    "optionLevel": "advanced",
+    "visibleInSections": ["tabs"],
+    "colorKey": "theme_body_cell_color"
   },
   {
     "id": "android-main-body-cell-pressed-color",
@@ -164,6 +203,8 @@
     "label": "리스트 눌림 배경",
     "required": false,
     "note": "리스트 셀 pressed 배경 색상",
+    "optionLevel": "advanced",
+    "visibleInSections": ["tabs"],
     "colorKey": "theme_body_cell_pressed_color",
     "defaultColor": {
       "basic": "#99F4FAFB",
@@ -181,6 +222,8 @@
     "label": "리스트 경계선 색상",
     "required": false,
     "note": "리스트 셀 구분선과 경계선 색상",
+    "optionLevel": "advanced",
+    "visibleInSections": ["tabs"],
     "colorKey": "theme_body_cell_border_color",
     "defaultColor": {
       "basic": "#33111111",
@@ -205,16 +248,45 @@
     }
   },
   {
+    "id": "android-feature-primary-color",
+    "platform": "android",
+    "role": "feature_primary_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "서비스 주요 색상",
+    "required": false,
+    "note": "멜론·선물하기 등 서비스 버튼과 강조 텍스트의 기본 색상",
+    "optionLevel": "advanced",
+    "colorKey": "theme_feature_primary_color"
+  },
+  {
+    "id": "android-feature-primary-pressed-color",
+    "platform": "android",
+    "role": "feature_primary_pressed_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "서비스 주요 눌림 색상",
+    "required": false,
+    "note": "서비스 버튼을 누르는 동안 표시되는 강조 색상",
+    "optionLevel": "advanced",
+    "colorKey": "theme_feature_primary_pressed_color"
+  },
+  {
     "id": "android-main-feature-browse-tab-color",
     "platform": "android",
     "role": "main_feature_browse_tab_color",
-    "section": "main",
-    "group": "header",
-    "screen": "friends",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
     "kind": "color",
     "label": "탐색 탭 색상",
     "required": false,
-    "note": "상단 탐색 탭과 필터 칩 색상",
+    "note": "더보기 화면의 서비스 탐색 탭 색상",
+    "optionLevel": "advanced",
     "colorKey": "theme_feature_browse_tab_color",
     "defaultColor": {
       "basic": "#FFFFFF",
@@ -222,21 +294,120 @@
     }
   },
   {
+    "id": "android-main-feature-browse-tab-focused-color",
+    "platform": "android",
+    "role": "main_feature_browse_tab_focused_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "탐색 탭 선택 색상",
+    "required": false,
+    "note": "더보기 화면에서 선택된 서비스 탐색 탭 색상",
+    "optionLevel": "advanced",
+    "colorKey": "theme_feature_browse_tab_focused_color"
+  },
+  {
     "id": "android-main-body-secondary-cell-color",
     "platform": "android",
     "role": "main_body_secondary_cell_color",
-    "section": "main",
-    "group": "list",
-    "screen": "friends",
+    "section": "more",
+    "group": "background",
+    "screen": "more",
     "kind": "color",
-    "label": "보조 셀 배경 색상",
+    "label": "더보기·보조 콘텐츠 배경",
     "required": false,
-    "note": "보조 카드와 secondary 셀 배경 색상",
+    "note": "더보기 화면과 보조 콘텐츠 영역의 기본 배경색",
+    "autoColorGroup": "main-surface",
     "colorKey": "theme_body_secondary_cell_color",
     "defaultColor": {
       "basic": "#FFFFFF",
       "spongebob": "#CCF6FB"
     }
+  },
+  {
+    "id": "android-direct-share-text-color",
+    "platform": "android",
+    "role": "direct_share_text_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "바로 공유 텍스트",
+    "required": false,
+    "note": "바로 공유 영역의 이름과 안내 텍스트 색상",
+    "optionLevel": "advanced",
+    "colorKey": "theme_direct_share_color"
+  },
+  {
+    "id": "android-direct-share-button-color",
+    "platform": "android",
+    "role": "direct_share_button_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "바로 공유 버튼",
+    "required": false,
+    "note": "바로 공유 실행 버튼의 강조 색상",
+    "optionLevel": "advanced",
+    "colorKey": "theme_direct_share_button_color"
+  },
+  {
+    "id": "android-direct-share-background-color",
+    "platform": "android",
+    "role": "direct_share_background_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "바로 공유 배경",
+    "required": false,
+    "note": "바로 공유 패널의 배경색",
+    "optionLevel": "advanced",
+    "colorKey": "theme_direct_share_background_color"
+  },
+  {
+    "id": "android-notification-text-color",
+    "platform": "android",
+    "role": "notification_text_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "알림 텍스트",
+    "required": false,
+    "note": "팝업과 토스트 알림의 텍스트 색상",
+    "optionLevel": "advanced",
+    "colorKey": "theme_notification_color"
+  },
+  {
+    "id": "android-notification-background-color",
+    "platform": "android",
+    "role": "notification_background_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "알림 배경",
+    "required": false,
+    "note": "팝업과 토스트 알림의 기본 배경색",
+    "optionLevel": "advanced",
+    "colorKey": "theme_notification_background_color"
+  },
+  {
+    "id": "android-notification-background-pressed-color",
+    "platform": "android",
+    "role": "notification_background_pressed_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "알림 눌림 배경",
+    "required": false,
+    "note": "알림을 누르는 동안 표시되는 배경색",
+    "optionLevel": "advanced",
+    "colorKey": "theme_notification_background_pressed_color"
   },
   {
     "id": "android-tab-background-image",
@@ -268,6 +439,34 @@
       "basic": "#ffffff",
       "spongebob": "#ffffff"
     }
+  },
+  {
+    "id": "android-tab-light-banner-badge-background",
+    "platform": "android",
+    "role": "tab_light_banner_badge_background_color",
+    "section": "tabs",
+    "group": "bar",
+    "screen": "tabs",
+    "kind": "color",
+    "label": "라이트 배지 배경",
+    "required": false,
+    "note": "하단 탭의 밝은 배너 배지 배경색",
+    "optionLevel": "advanced",
+    "colorKey": "theme_tab_lightbannerbadge_background_color"
+  },
+  {
+    "id": "android-tab-banner-badge-background",
+    "platform": "android",
+    "role": "tab_banner_badge_background_color",
+    "section": "tabs",
+    "group": "bar",
+    "screen": "tabs",
+    "kind": "color",
+    "label": "배너 배지 배경",
+    "required": false,
+    "note": "하단 탭의 기본 배너 배지 배경색",
+    "optionLevel": "advanced",
+    "colorKey": "theme_tab_bannerbadge_background_color"
   },
   {
     "id": "android-tab-friends",
@@ -568,9 +767,9 @@
     "group": "bubbles",
     "screen": "chatroom",
     "kind": "color",
-    "label": "내 말풍선 색상",
+    "label": "내 말풍선 텍스트 색상",
     "required": false,
-    "note": "theme_chatroom_bubble_me_color 값",
+    "note": "내가 보낸 메시지의 말풍선 안 텍스트 색상",
     "colorKey": "theme_chatroom_bubble_me_color"
   },
   {
@@ -581,9 +780,9 @@
     "group": "bubbles",
     "screen": "chatroom",
     "kind": "color",
-    "label": "상대 말풍선 색상",
+    "label": "상대 말풍선 텍스트 색상",
     "required": false,
-    "note": "theme_chatroom_bubble_you_color 값",
+    "note": "상대가 보낸 메시지의 말풍선 안 텍스트 색상",
     "colorKey": "theme_chatroom_bubble_you_color"
   },
   {
@@ -649,6 +848,34 @@
       "basic": "#111111",
       "spongebob": "#111111"
     }
+  },
+  {
+    "id": "android-chat-menu-icon-color",
+    "platform": "android",
+    "role": "chat_menu_icon_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "입력 메뉴 아이콘",
+    "required": false,
+    "note": "채팅 입력 바 왼쪽 메뉴 아이콘 색상",
+    "optionLevel": "advanced",
+    "colorKey": "theme_chatroom_input_bar_menu_icon_color"
+  },
+  {
+    "id": "android-chat-menu-button-color",
+    "platform": "android",
+    "role": "chat_menu_button_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "입력 메뉴 버튼 배경",
+    "required": false,
+    "note": "채팅 입력 바 왼쪽 메뉴 버튼의 배경색",
+    "optionLevel": "advanced",
+    "colorKey": "theme_chatroom_input_bar_menu_button_color"
   },
   {
     "id": "android-chat-send-icon-color",
@@ -726,7 +953,9 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_01_image.png",
     "required": false,
     "note": "첫 번째 암호 입력 전 표시 이미지",
-    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_01_image.png" }
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_01_image.png"
+    }
   },
   {
     "id": "android-passcode-indicator-1-checked",
@@ -741,7 +970,9 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_01_checked_image.png",
     "required": false,
     "note": "첫 번째 암호 입력 완료 표시 이미지",
-    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_01_checked_image.png" }
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_01_checked_image.png"
+    }
   },
   {
     "id": "android-passcode-indicator-2",
@@ -756,7 +987,9 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_02_image.png",
     "required": false,
     "note": "두 번째 암호 입력 전 표시 이미지",
-    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_02_image.png" }
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_02_image.png"
+    }
   },
   {
     "id": "android-passcode-indicator-2-checked",
@@ -771,7 +1004,9 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_02_checked_image.png",
     "required": false,
     "note": "두 번째 암호 입력 완료 표시 이미지",
-    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_02_checked_image.png" }
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_02_checked_image.png"
+    }
   },
   {
     "id": "android-passcode-indicator-3",
@@ -786,7 +1021,9 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_03_image.png",
     "required": false,
     "note": "세 번째 암호 입력 전 표시 이미지",
-    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_03_image.png" }
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_03_image.png"
+    }
   },
   {
     "id": "android-passcode-indicator-3-checked",
@@ -801,7 +1038,9 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_03_checked_image.png",
     "required": false,
     "note": "세 번째 암호 입력 완료 표시 이미지",
-    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_03_checked_image.png" }
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_03_checked_image.png"
+    }
   },
   {
     "id": "android-passcode-indicator-4",
@@ -816,7 +1055,9 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_04_image.png",
     "required": false,
     "note": "네 번째 암호 입력 전 표시 이미지",
-    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_04_image.png" }
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_04_image.png"
+    }
   },
   {
     "id": "android-passcode-indicator-4-checked",
@@ -831,7 +1072,9 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_04_checked_image.png",
     "required": false,
     "note": "네 번째 암호 입력 완료 표시 이미지",
-    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_04_checked_image.png" }
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_04_checked_image.png"
+    }
   },
   {
     "id": "android-passcode-color",
@@ -878,6 +1121,7 @@
     "label": "키패드 숫자 pressed",
     "required": true,
     "note": "theme_passcode_keypad_pressed_color 값",
+    "optionLevel": "advanced",
     "colorKey": "theme_passcode_keypad_pressed_color",
     "defaultColor": {
       "basic": "#CCB8B8",
@@ -912,6 +1156,7 @@
     "label": "키패드 pressed 배경",
     "required": true,
     "note": "theme_passcode_keypad_pressed_background_color 값",
+    "optionLevel": "advanced",
     "colorKey": "theme_passcode_keypad_pressed_background_color",
     "defaultColor": {
       "basic": "#99FFDEDE",

@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, type DragEvent, type MutableRefObject } from "react";
-import { ImageOff } from "lucide-react";
+import { ImageOff, Link2, RefreshCw } from "lucide-react";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSlotUploadEntries, slotStatusLabel, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import type { ImageColorPalette } from "@/lib/theme/colorPalette";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
@@ -30,6 +31,11 @@ export function ProjectQuickEditPanel({
   onUpload,
   onClear,
   onColorChange,
+  imageColorPalette,
+  imageColorPaletteError,
+  isAutoSurfaceColor,
+  onApplyAutoSurfaceColor,
+  onApplyAutoSurfaceColorToAll,
   onSelectCandidate,
   onSelectAdminAsset,
   onLoadMoreAdminAssets,
@@ -61,6 +67,11 @@ export function ProjectQuickEditPanel({
   onUpload: (slot: ThemeAssetSlot, files: FileList | readonly File[] | null) => void;
   onClear: (slot: ThemeAssetSlot) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
+  imageColorPalette: ImageColorPalette | null;
+  imageColorPaletteError: string | null;
+  isAutoSurfaceColor: boolean;
+  onApplyAutoSurfaceColor: (color?: string) => void;
+  onApplyAutoSurfaceColorToAll: (color?: string) => void;
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
   onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
   onLoadMoreAdminAssets: () => void;
@@ -168,7 +179,7 @@ export function ProjectQuickEditPanel({
         </div>
 
         {slot.kind === "color" ? (
-          <ColorEditor slot={slot} value={colors[slot.id] ?? selectedCandidate?.colorValue ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} />
+          <ColorEditor slot={slot} value={colors[slot.id] ?? selectedCandidate?.colorValue ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} isAutoSurfaceColor={isAutoSurfaceColor} onApplyAutoSurfaceColor={onApplyAutoSurfaceColor} onApplyAutoSurfaceColorToAll={onApplyAutoSurfaceColorToAll} />
         ) : (
           <>
             <input
@@ -389,15 +400,53 @@ function ColorEditor({
   slot,
   value,
   onChange,
+  imageColorPalette,
+  imageColorPaletteError,
+  isAutoSurfaceColor,
+  onApplyAutoSurfaceColor,
+  onApplyAutoSurfaceColorToAll,
 }: {
   slot: ThemeAssetSlot;
   value: string;
   onChange: (slot: ThemeAssetSlot, value: string) => void;
+  imageColorPalette: ImageColorPalette | null;
+  imageColorPaletteError: string | null;
+  isAutoSurfaceColor: boolean;
+  onApplyAutoSurfaceColor: (color?: string) => void;
+  onApplyAutoSurfaceColorToAll: (color?: string) => void;
 }) {
   const canUseColorPicker = /^#[0-9a-f]{6}$/i.test(value);
+  const contrastBackground = imageColorPalette?.representative;
+  const showContrastWarning = Boolean(contrastBackground && isTextColorSlot(slot) && contrastRatio(value, contrastBackground) < 3);
 
   return (
     <div className="grid gap-4 rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
+      {slot.autoColorGroup === "main-surface" ? (
+        <div className="grid gap-3 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] p-3">
+          <div className="flex items-start gap-2">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white text-[#2563eb]"><Link2 size={16} aria-hidden="true" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-[#1e3a8a]">배경 이미지 자동 맞춤</p>
+              <p className="mt-1 text-[11px] font-medium leading-5 text-[#475569]">{isAutoSurfaceColor ? "이미지가 바뀌면 이 색상도 자동으로 갱신됩니다." : "현재 색상은 수동 설정입니다. 언제든 자동 연결을 복원할 수 있습니다."}</p>
+            </div>
+          </div>
+          {imageColorPalette ? (
+            <div className="grid grid-cols-3 gap-2">
+              {([['대표색', imageColorPalette.representative], ['평균색', imageColorPalette.average], ['상단색', imageColorPalette.top]] as const).map(([label, color]) => (
+                <button key={label} type="button" className="grid gap-1.5 rounded-lg border border-white/80 bg-white p-2 text-left shadow-sm transition hover:border-[#93c5fd] focus-visible:outline-2 focus-visible:outline-[#2563eb]" onClick={() => onApplyAutoSurfaceColor(color)}>
+                  <span className="h-7 rounded-md border border-black/10" style={{ backgroundColor: color }} />
+                  <span className="text-[10px] font-bold text-[#334155]">{label}</span>
+                  <span className="truncate text-[9px] font-semibold text-[#64748b]">{color}</span>
+                </button>
+              ))}
+            </div>
+          ) : <p className="text-[11px] font-semibold text-[#64748b]">{imageColorPaletteError ?? "배경 이미지 색상을 분석하는 중입니다."}</p>}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-[#2563eb] px-3 text-xs font-bold text-white disabled:opacity-45" disabled={!imageColorPalette} onClick={() => onApplyAutoSurfaceColor()}><RefreshCw size={13} aria-hidden="true" />이 슬롯 다시 연결</button>
+            <button type="button" className="min-h-9 rounded-lg border border-[#bfdbfe] bg-white px-3 text-xs font-bold text-[#1d4ed8] disabled:opacity-45" disabled={!imageColorPalette} onClick={() => onApplyAutoSurfaceColorToAll()}>배경 3종 모두 맞춤</button>
+          </div>
+        </div>
+      ) : null}
       <div className="flex items-center gap-4">
         {canUseColorPicker ? (
           <input type="color" value={value} className="h-12 w-16 cursor-pointer rounded-lg border border-[#d1d5db] bg-white p-1" onChange={(event) => onChange(slot, event.currentTarget.value)} />
@@ -409,8 +458,48 @@ function ColorEditor({
           onChange={(event) => onChange(slot, event.currentTarget.value)}
         />
       </div>
+      <ColorContextPreview slot={slot} value={value} />
+      {showContrastWarning && contrastBackground ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="text-[11px] font-semibold text-amber-900">배경과의 대비가 낮아 텍스트가 흐리게 보일 수 있습니다.</p>
+          <button type="button" className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-amber-900 shadow-sm" onClick={() => onChange(slot, readableTextColor(contrastBackground))}>대비 맞춤</button>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function ColorContextPreview({ slot, value }: { slot: ThemeAssetSlot; value: string }) {
+  if (slot.role.startsWith("notification_")) return <div className="rounded-xl p-3 text-xs font-semibold shadow-sm" style={{ backgroundColor: slot.role.includes("background") ? value : "#FFFFFF", color: slot.role === "notification_text_color" ? value : "#111827" }}><BellPreviewIcon /> 새로운 알림을 확인해 주세요.</div>;
+  if (slot.role.startsWith("direct_share_")) return <div className="flex items-center justify-between rounded-xl border border-black/5 p-3 text-xs font-semibold" style={{ backgroundColor: slot.role === "direct_share_background_color" ? value : "#F8FAFC", color: slot.role === "direct_share_text_color" ? value : "#111827" }}><span>바로 공유</span><span className="rounded-full px-3 py-1 text-white" style={{ backgroundColor: slot.role === "direct_share_button_color" ? value : "#2563EB" }}>공유</span></div>;
+  if (slot.role.includes("badge")) return <div className="flex items-center gap-3 rounded-xl bg-white p-3 text-xs font-semibold"><span>새 소식</span><span className="rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ backgroundColor: value }}>3</span></div>;
+  if (slot.role.includes("pressed") || slot.role.includes("focused")) return <div className="grid grid-cols-2 gap-2 text-[11px] font-semibold"><span className="rounded-lg border border-[#e5e7eb] bg-white p-3 text-[#64748b]">기본 상태</span><span className="rounded-lg border border-[#dbeafe] p-3" style={{ backgroundColor: value, color: readableTextColor(value) }}>선택·눌림</span></div>;
+  if (slot.role === "chat_menu_icon_color" || slot.role === "chat_menu_button_color") return <div className="flex items-center gap-3 rounded-xl bg-white p-3 text-xs font-semibold"><span className="grid size-9 place-items-center rounded-full" style={{ backgroundColor: slot.role === "chat_menu_button_color" ? value : "#F1F5F9", color: slot.role === "chat_menu_icon_color" ? value : "#334155" }}>＋</span>입력 메뉴</div>;
+  return null;
+}
+
+function BellPreviewIcon() {
+  return <span aria-hidden="true">●</span>;
+}
+
+function isTextColorSlot(slot: ThemeAssetSlot) {
+  return ["main_header_foreground_color", "main_title_color", "main_description_color", "tab_paragraph_color", "chat_bubble_me_color", "chat_bubble_you_color", "chat_input_text_color", "direct_share_text_color", "notification_text_color"].includes(slot.role);
+}
+
+function readableTextColor(background: string) {
+  return contrastRatio("#111111", background) >= contrastRatio("#FFFFFF", background) ? "#111111" : "#FFFFFF";
+}
+
+function contrastRatio(foreground: string, background: string) {
+  const luminance = (color: string) => {
+    const normalized = color.replace("#", "").slice(-6);
+    if (!/^[0-9a-f]{6}$/i.test(normalized)) return 0;
+    const channels = [0, 2, 4].map((index) => Number.parseInt(normalized.slice(index, index + 2), 16) / 255).map((channel) => channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  };
+  const first = luminance(foreground);
+  const second = luminance(background);
+  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {

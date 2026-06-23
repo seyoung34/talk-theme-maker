@@ -1,9 +1,9 @@
 export type BubbleSlot = "me" | "you";
 export type PlatformMode = "android" | "ios";
 export type ThemePlatform = "android" | "ios";
-export type ThemeScreen = "chatroom" | "friends" | "tabs" | "profile" | "passcode";
-export type ThemeSection = "main" | "tabs" | "chatroom" | "passcode" | "common";
-export type ThemeSlotGroup = "background" | "header" | "list" | "bar" | "icons" | "bubbles" | "input" | "icon" | "profiles" | "launcher" | "text" | "keypad" | "pattern";
+export type ThemeScreen = "chatroom" | "friends" | "tabs" | "more" | "profile" | "passcode";
+export type ThemeSection = "main" | "tabs" | "more" | "chatroom" | "passcode" | "common";
+export type ThemeSlotGroup = "background" | "header" | "list" | "bar" | "icons" | "elements" | "bubbles" | "input" | "icon" | "profiles" | "launcher" | "text" | "keypad" | "pattern";
 export type ThemeSlotKind = "image" | "ninepatch" | "color";
 export type ThemeCandidateSourceType = "template-asset" | "template-color" | "session-upload";
 export type ThemeDiagnosticLevel = "info" | "warning" | "error";
@@ -29,16 +29,25 @@ export type ThemeResourceRole =
   | "main_description_color"
   | "main_body_color"
   | "main_paragraph_pressed_color"
+  | "tab_paragraph_color"
+  | "tab_paragraph_pressed_color"
+  | "main_description_pressed_color"
   | "main_body_cell_pressed_color"
+  | "main_body_cell_color"
   | "main_body_cell_border_color"
   | "main_body_cell_border_alpha"
   | "main_section_title_color"
   | "main_feature_browse_tab_color"
+  | "main_feature_browse_tab_focused_color"
+  | "feature_primary_color"
+  | "feature_primary_pressed_color"
   | "main_body_secondary_cell_color"
   | "main_selected_background_alpha"
   | "tab_background"
   | "tab_background_image"
   | "tab_text_color"
+  | "tab_light_banner_badge_background_color"
+  | "tab_banner_badge_background_color"
   | "tab_icon_friends"
   | "tab_icon_friends_focused"
   | "tab_icon_chats"
@@ -59,6 +68,14 @@ export type ThemeResourceRole =
   | "chat_input_text_color"
   | "chat_send_icon_color"
   | "chat_send_highlighted_icon_color"
+  | "chat_menu_icon_color"
+  | "chat_menu_button_color"
+  | "direct_share_text_color"
+  | "direct_share_button_color"
+  | "direct_share_background_color"
+  | "notification_text_color"
+  | "notification_background_color"
+  | "notification_background_pressed_color"
   | "passcode_background"
   | "passcode_background_color"
   | "passcode_color"

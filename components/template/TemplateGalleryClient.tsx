@@ -192,8 +192,14 @@ export default function TemplateGalleryClient() {
       <SiteHeader currentPath="/template" />
 
       <div className="grid gap-8 px-5 py-8 mx-auto max-w-7xl md:px-8 md:py-10">
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_360px] lg:items-end">
-          <strong className="text-2xl uppercase">template</strong>
+        <section className="grid gap-3 border-b border-[var(--color-outline-variant)] pb-7 md:pb-8">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Theme maker</p>
+          <h1 className="max-w-3xl font-[var(--font-display)] text-3xl font-semibold leading-tight tracking-[-0.025em] text-[var(--color-on-surface)] md:text-4xl">
+            원하는 템플릿을 골라 나만의 테마로 만들어 보세요
+          </h1>
+          <p className="max-w-2xl text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)] md:text-base">
+            템플릿을 선택하고 Android 또는 iOS로 시작하면 이미지와 색상을 바로 편집할 수 있습니다.
+          </p>
         </section>
 
         {/* <section className="grid gap-3 rounded-[24px] border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">

@@ -28,11 +28,12 @@ export type SlotCandidate = {
   adminAsset?: AdminAssetCandidate;
 };
 
-export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom", "passcode", "common"];
+export const sectionOrder: ThemeSection[] = ["main", "tabs", "more", "chatroom", "passcode", "common"];
 
 export const sectionLabels: Record<ThemeSection, string> = {
-  main: "메인 화면",
-  tabs: "하단 탭",
+  main: "친구",
+  tabs: "채팅/하단 탭",
+  more: "더보기",
   chatroom: "채팅방",
   passcode: "잠금화면",
   common: "공통 리소스",
@@ -44,6 +45,7 @@ export const groupLabels: Record<ThemeSlotGroup, string> = {
   list: "목록",
   bar: "탭 바",
   icons: "아이콘",
+  elements: "부가 요소",
   bubbles: "말풍선",
   input: "입력 바",
   icon: "대표 아이콘",
@@ -53,6 +55,8 @@ export const groupLabels: Record<ThemeSlotGroup, string> = {
   keypad: "키패드",
   pattern: "패턴",
 };
+
+const groupOrder: ThemeSlotGroup[] = ["background", "header", "list", "bar", "icons", "elements", "bubbles", "input", "text", "keypad", "pattern", "icon", "profiles", "launcher"];
 
 export {
   bubbleSlotFromRole,
@@ -71,7 +75,12 @@ export {
 export type { BubbleEditState, SlotCandidateSelections, SlotColors, SlotUploadEntry, SlotUploads } from "@/lib/theme/project/state";
 
 export function getSectionGroups(section: ThemeSection, slots: ThemeAssetSlot[]) {
-  return Array.from(new Set(slots.filter((slot) => slot.section === section).map((slot) => slot.group)));
+  const groups = new Set(slots.filter((slot) => isSlotVisibleInSection(slot, section)).map((slot) => slot.group));
+  return groupOrder.filter((group) => groups.has(group));
+}
+
+export function isSlotVisibleInSection(slot: ThemeAssetSlot, section: ThemeSection) {
+  return slot.section === section || Boolean(slot.visibleInSections?.includes(section));
 }
 
 export function getSlotFile(slot: ThemeAssetSlot | undefined, files: ThemeProjectFile[]) {

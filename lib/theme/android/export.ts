@@ -112,18 +112,17 @@ function buildAndroidColorsXml(
     mainTitle;
   const mainDescription =
     getResolvedColor(slotByRole.main_description_color, colors, selections, templateId, template) ??
-    getResolvedColor(slotByRole.main_body_color, colors, selections, templateId, template) ??
     template.defaults.mainBody;
-  const mainBody = getResolvedColor(slotByRole.main_body_color, colors, selections, templateId, template) ?? template.defaults.mainBody;
-  const mainParagraphPressed =
-    getResolvedColor(slotByRole.main_paragraph_pressed_color, colors, selections, templateId, template) ??
-    mainBody;
+  const mainDescriptionPressed = getResolvedColor(slotByRole.main_description_pressed_color, colors, selections, templateId, template) ?? mainDescription;
+  const tabParagraph = getResolvedColor(slotByRole.tab_paragraph_color, colors, selections, templateId, template) ?? template.defaults.mainBody;
+  const tabParagraphPressed = getResolvedColor(slotByRole.tab_paragraph_pressed_color, colors, selections, templateId, template) ?? tabParagraph;
   const mainBackground =
     getResolvedColor(slotByRole.main_background_color, colors, selections, templateId, template) ??
     template.defaults.mainBackground;
   const mainBodyCellPressed =
     getResolvedColor(slotByRole.main_body_cell_pressed_color, colors, selections, templateId, template) ??
     withAlpha(mainBackground, "99");
+  const mainBodyCell = getResolvedColor(slotByRole.main_body_cell_color, colors, selections, templateId, template) ?? withAlpha(mainBackground, "00");
   const mainBodyCellBorder =
     getResolvedColor(slotByRole.main_body_cell_border_color, colors, selections, templateId, template) ??
     withAlpha(mainTitle, "33");
@@ -134,10 +133,13 @@ function buildAndroidColorsXml(
     getResolvedColor(slotByRole.main_feature_browse_tab_color, colors, selections, templateId, template) ??
     getResolvedColor(slotByRole.tab_background, colors, selections, templateId, template) ??
     template.defaults.tabBackground;
+  const accent = template.accent;
+  const mainFeatureBrowseTabFocused = getResolvedColor(slotByRole.main_feature_browse_tab_focused_color, colors, selections, templateId, template) ?? mainTitle;
+  const featurePrimary = getResolvedColor(slotByRole.feature_primary_color, colors, selections, templateId, template) ?? accent;
+  const featurePrimaryPressed = getResolvedColor(slotByRole.feature_primary_pressed_color, colors, selections, templateId, template) ?? featurePrimary;
   const mainBodySecondary =
     getResolvedColor(slotByRole.main_body_secondary_cell_color, colors, selections, templateId, template) ??
     lighten(mainBackground, 0.06);
-  const accent = template.accent;
   const chatBackground = getResolvedColor(slotByRole.chat_background_color, colors, selections, templateId, template) ?? template.defaults.chatBackground;
   const chatBubbleMeColor =
     getResolvedColor(slotByRole.chat_bubble_me_color, colors, selections, templateId, template) ??
@@ -149,10 +151,20 @@ function buildAndroidColorsXml(
     getResolvedColor(slotByRole.chat_unread_count_color, colors, selections, templateId, template) ??
     accent;
   const tabBackground = getResolvedColor(slotByRole.tab_background, colors, selections, templateId, template) ?? template.defaults.tabBackground;
+  const lightBannerBadge = getResolvedColor(slotByRole.tab_light_banner_badge_background_color, colors, selections, templateId, template) ?? accent;
+  const bannerBadge = getResolvedColor(slotByRole.tab_banner_badge_background_color, colors, selections, templateId, template) ?? accent;
   const chatInputBackground = getResolvedColor(slotByRole.chat_input_background_color, colors, selections, templateId, template) ?? template.defaults.chatInputBackground;
   const chatSendButton = getResolvedColor(slotByRole.chat_send_button_color, colors, selections, templateId, template) ?? template.defaults.chatSendButton;
   const chatInputText = getResolvedColor(slotByRole.chat_input_text_color, colors, selections, templateId, template) ?? mainTitle;
   const chatSendIcon = getResolvedColor(slotByRole.chat_send_icon_color, colors, selections, templateId, template) ?? mainTitle;
+  const chatMenuIcon = getResolvedColor(slotByRole.chat_menu_icon_color, colors, selections, templateId, template) ?? tabParagraph;
+  const chatMenuButton = getResolvedColor(slotByRole.chat_menu_button_color, colors, selections, templateId, template) ?? withAlpha(tabParagraph, "14");
+  const directShareText = getResolvedColor(slotByRole.direct_share_text_color, colors, selections, templateId, template) ?? mainTitle;
+  const directShareButton = getResolvedColor(slotByRole.direct_share_button_color, colors, selections, templateId, template) ?? accent;
+  const directShareBackground = getResolvedColor(slotByRole.direct_share_background_color, colors, selections, templateId, template) ?? lighten(mainBackground, 0.04);
+  const notificationText = getResolvedColor(slotByRole.notification_text_color, colors, selections, templateId, template) ?? mainTitle;
+  const notificationBackground = getResolvedColor(slotByRole.notification_background_color, colors, selections, templateId, template) ?? template.defaults.friendBubble;
+  const notificationBackgroundPressed = getResolvedColor(slotByRole.notification_background_pressed_color, colors, selections, templateId, template) ?? lighten(notificationBackground, -0.04);
   const passcodeBackground = getResolvedColor(slotByRole.passcode_background_color, colors, selections, templateId, template) ?? "#FCC5C5";
   const passcodeColor = getResolvedColor(slotByRole.passcode_color, colors, selections, templateId, template) ?? "#664242";
   const passcodeKeypad = getResolvedColor(slotByRole.passcode_keypad_color, colors, selections, templateId, template) ?? "#664242";
@@ -166,31 +178,31 @@ function buildAndroidColorsXml(
     theme_section_title_color: mainSectionTitle,
     theme_title_color: mainTitle,
     theme_title_pressed_color: mainTitlePressed,
-    theme_paragraph_color: mainBody,
-    theme_paragraph_pressed_color: mainParagraphPressed,
+    theme_paragraph_color: tabParagraph,
+    theme_paragraph_pressed_color: tabParagraphPressed,
     theme_description_color: mainDescription,
-    theme_description_pressed_color: mainDescription,
-    theme_feature_primary_color: accent,
-    theme_feature_primary_pressed_color: accent,
+    theme_description_pressed_color: mainDescriptionPressed,
+    theme_feature_primary_color: featurePrimary,
+    theme_feature_primary_pressed_color: featurePrimaryPressed,
     theme_feature_browse_tab_color: mainFeatureBrowseTab,
-    theme_feature_browse_tab_focused_color: mainTitle,
+    theme_feature_browse_tab_focused_color: mainFeatureBrowseTabFocused,
     theme_background_color: mainBackground,
     theme_chatroom_background_color: chatBackground,
     theme_passcode_background_color: passcodeBackground,
     theme_header_cell_color: mainHeader,
-    theme_body_cell_color: withAlpha(mainBackground, "00"),
+    theme_body_cell_color: mainBodyCell,
     theme_body_cell_pressed_color: mainBodyCellPressed,
     theme_body_cell_border_color: mainBodyCellBorder,
     theme_body_secondary_cell_color: mainBodySecondary,
     theme_maintab_cell_color: tabBackground,
-    theme_tab_lightbannerbadge_background_color: accent,
-    theme_tab_bannerbadge_background_color: accent,
-    theme_direct_share_color: mainTitle,
-    theme_direct_share_button_color: accent,
-    theme_direct_share_background_color: lighten(mainBackground, 0.04),
-    theme_notification_color: mainTitle,
-    theme_notification_background_color: template.defaults.friendBubble,
-    theme_notification_background_pressed_color: lighten(template.defaults.friendBubble, -0.04),
+    theme_tab_lightbannerbadge_background_color: lightBannerBadge,
+    theme_tab_bannerbadge_background_color: bannerBadge,
+    theme_direct_share_color: directShareText,
+    theme_direct_share_button_color: directShareButton,
+    theme_direct_share_background_color: directShareBackground,
+    theme_notification_color: notificationText,
+    theme_notification_background_color: notificationBackground,
+    theme_notification_background_pressed_color: notificationBackgroundPressed,
     theme_passcode_color: passcodeColor,
     theme_passcode_keypad_color: passcodeKeypad,
     theme_passcode_keypad_pressed_color: passcodeKeypadPressed,
@@ -202,8 +214,8 @@ function buildAndroidColorsXml(
     theme_chatroom_unread_count_color: chatUnreadCountColor,
     theme_chatroom_input_bar_color: chatInputText,
     theme_chatroom_input_bar_background_color: chatInputBackground,
-    theme_chatroom_input_bar_menu_icon_color: mainBody,
-    theme_chatroom_input_bar_menu_button_color: withAlpha(mainBody, "14"),
+    theme_chatroom_input_bar_menu_icon_color: chatMenuIcon,
+    theme_chatroom_input_bar_menu_button_color: chatMenuButton,
     theme_chatroom_input_bar_send_icon_color: chatSendIcon,
     theme_chatroom_input_bar_send_button_color: chatSendButton,
   };

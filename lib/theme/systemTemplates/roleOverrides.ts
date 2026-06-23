@@ -44,7 +44,7 @@ export function convertSystemTemplateOverridesByRole({
   for (const [sourceSlotId, selectedId] of Object.entries(sourceOverrides.candidateSelections)) {
     if (!selectedId) continue;
     const sourceSlot = sourceById.get(sourceSlotId);
-    const targetSlot = sourceSlot ? targetByRole.get(sourceSlot.role) : undefined;
+    const targetSlot = sourceSlot ? targetByRole.get(sourceSlot.role) ?? targetByRole.get(getEquivalentRole(sourceSlot.role)) : undefined;
     if (!sourceSlot || !targetSlot) continue;
 
     if (selectedId === disabledImageCandidateId) {
@@ -98,5 +98,14 @@ function targetSlotForSourceId(
   targetByRole: Map<ThemeResourceRole, ThemeAssetSlot>,
 ) {
   const sourceSlot = sourceById.get(sourceSlotId);
-  return sourceSlot ? targetByRole.get(sourceSlot.role) : undefined;
+  if (!sourceSlot) return undefined;
+  return targetByRole.get(sourceSlot.role) ?? targetByRole.get(getEquivalentRole(sourceSlot.role));
+}
+
+function getEquivalentRole(role: ThemeResourceRole): ThemeResourceRole {
+  if (role === "tab_paragraph_color") return "main_body_color";
+  if (role === "main_body_color") return "tab_paragraph_color";
+  if (role === "tab_paragraph_pressed_color") return "main_paragraph_pressed_color";
+  if (role === "main_paragraph_pressed_color") return "tab_paragraph_pressed_color";
+  return role;
 }

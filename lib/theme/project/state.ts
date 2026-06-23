@@ -2,6 +2,7 @@ import type { ThemeAssetSlot, ThemeSlotCandidate, ThemeStartPayload, ThemeTempla
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 export const disabledImageCandidateId = "__none__";
+export const autoMainSurfaceCandidateId = "auto-color:main-surface";
 
 export type SlotUploadSource = "user" | "template" | "admin";
 
@@ -52,8 +53,6 @@ export function getImageColorFallbackRole(role: ThemeResourceRole): ThemeResourc
   if (role === "chat_background") return "chat_background_color";
   if (role === "passcode_background") return "passcode_background_color";
   if (role === "tab_background_image") return "tab_background";
-  if (role === "bubble_me_1" || role === "bubble_me_2") return "chat_bubble_me_color";
-  if (role === "bubble_you_1" || role === "bubble_you_2") return "chat_bubble_you_color";
   return undefined;
 }
 
@@ -62,8 +61,6 @@ export function getColorImageFallbackRole(role: ThemeResourceRole): ThemeResourc
   if (role === "chat_background_color") return "chat_background";
   if (role === "passcode_background_color") return "passcode_background";
   if (role === "tab_background") return "tab_background_image";
-  if (role === "chat_bubble_me_color") return "bubble_me_1";
-  if (role === "chat_bubble_you_color") return "bubble_you_1";
   return undefined;
 }
 
@@ -99,10 +96,18 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
       return template.defaults.mainTitle;
     case "main_description_color":
       return template.defaults.mainBody;
+    case "main_description_pressed_color":
+      return template.defaults.mainBody;
     case "main_body_color":
       return template.defaults.mainBody;
     case "main_paragraph_pressed_color":
       return template.defaults.mainBody;
+    case "tab_paragraph_color":
+      return template.defaults.mainBody;
+    case "tab_paragraph_pressed_color":
+      return template.defaults.mainBody;
+    case "main_body_cell_color":
+      return withAlpha(template.defaults.mainBackground, "00");
     case "main_body_cell_pressed_color":
       return "#99F4FAFB";
     case "main_body_cell_border_color":
@@ -115,12 +120,20 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
       return template.defaults.mainTitle;
     case "main_feature_browse_tab_color":
       return template.defaults.tabBackground;
+    case "main_feature_browse_tab_focused_color":
+      return template.defaults.mainTitle;
+    case "feature_primary_color":
+    case "feature_primary_pressed_color":
+      return template.accent;
     case "main_body_secondary_cell_color":
       return "#FFFFFF";
     case "tab_background":
       return template.defaults.tabBackground;
     case "tab_text_color":
       return template.defaults.mainBody;
+    case "tab_light_banner_badge_background_color":
+    case "tab_banner_badge_background_color":
+      return template.accent;
     case "chat_input_background_color":
       return template.defaults.chatInputBackground;
     case "chat_button_text_color":
@@ -141,6 +154,21 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
       return template.defaults.mainTitle;
     case "chat_send_highlighted_icon_color":
       return template.defaults.mainTitle;
+    case "chat_menu_icon_color":
+      return template.defaults.mainBody;
+    case "chat_menu_button_color":
+      return withAlpha(template.defaults.mainBody, "14");
+    case "direct_share_text_color":
+    case "notification_text_color":
+      return template.defaults.mainTitle;
+    case "direct_share_button_color":
+      return template.accent;
+    case "direct_share_background_color":
+      return lighten(template.defaults.mainBackground, 0.04);
+    case "notification_background_color":
+      return template.defaults.friendBubble;
+    case "notification_background_pressed_color":
+      return lighten(template.defaults.friendBubble, -0.04);
     case "passcode_background_color":
       return "#FCC5C5";
     case "passcode_color":
@@ -208,7 +236,7 @@ export function getInitialSlotCandidateSelections(slots: ThemeAssetSlot[], templ
   return Object.fromEntries(
     slots.map((slot) => {
       const defaultCandidate = getDefaultSelectedCandidate(slot, templateId, template);
-      return [slot.id, defaultCandidate?.id];
+      return [slot.id, slot.autoColorGroup === "main-surface" ? autoMainSurfaceCandidateId : defaultCandidate?.id];
     }),
   );
 }
@@ -300,6 +328,10 @@ export function getCompletion(
 
 export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[] = []) {
   if (slot.kind === "color") {
+    if (selections[slot.id] === autoMainSurfaceCandidateId) {
+      const color = colors[slot.id] ?? getDefaultColor(slot, templateId, template);
+      return color ? `자동 · ${color.toUpperCase()}` : "자동 맞춤 대기 중";
+    }
     if (isColorSlotDisabledByImage(slot, allSlots, uploads, selections, templateId, template)) return "색상 사용 안함";
     const color = getResolvedColor(slot, colors, selections, templateId, template);
     return color ? color.toUpperCase() : "값 필요";
@@ -311,6 +343,20 @@ export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colo
   if (selected?.label) return selected.label;
   if (slot.required) return "필수 파일 필요";
   return "선택 파일";
+}
+
+function withAlpha(color: string, alpha: string) {
+  const value = color.replace("#", "");
+  const rgb = value.length === 8 ? value.slice(2) : value.length === 3 ? value.split("").map((character) => `${character}${character}`).join("") : value;
+  return `#${alpha}${rgb.slice(-6)}`;
+}
+
+function lighten(color: string, amount: number) {
+  const value = color.replace("#", "");
+  const rgb = value.length === 8 ? value.slice(2) : value;
+  const channels = [0, 2, 4].map((index) => Number.parseInt(rgb.slice(index, index + 2), 16));
+  const adjusted = channels.map((channel) => Math.max(0, Math.min(255, Math.round(channel + (amount >= 0 ? 255 - channel : channel) * Math.abs(amount)))));
+  return `#${adjusted.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function createInitialThemeProjectState(

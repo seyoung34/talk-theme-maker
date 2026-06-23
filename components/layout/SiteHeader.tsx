@@ -74,11 +74,11 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
 
           <nav className="flex shrink-0 items-center gap-1 sm:gap-2" aria-label="주요 메뉴">
             <Link href="/template" aria-current={currentPath === "/template" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-3.5 py-2 text-xs font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/template" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-white"}`}>
-              Template
+              테마 만들기
             </Link>
 
             <Link href="/guide" aria-current={currentPath === "/guide" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-3 py-2 text-xs font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/guide" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-white"}`}>
-              Guide
+              가이드 문서
             </Link>
 
             <Popover.Root open={isOpen} onOpenChange={setIsOpen}>

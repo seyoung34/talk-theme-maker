@@ -75,6 +75,9 @@ export type ThemeAssetSlot = {
   required: boolean;
   editableInBubbleEditor?: boolean;
   note: string;
+  optionLevel?: "basic" | "advanced";
+  autoColorGroup?: "main-surface";
+  visibleInSections?: ThemeSection[];
   fileName?: string;
   path?: string;
   colorKey?: string;
@@ -87,8 +90,9 @@ export type ThemeAssetSlot = {
 export const templateStartStorageKey = "kakaotalk-theme-maker:template-start:v1";
 
 const sharedSections: ThemeSectionDefinition[] = [
-  { id: "main", label: "메인 화면", groups: ["background", "header", "list"] },
-  { id: "tabs", label: "하단 탭", groups: ["bar", "icons"] },
+  { id: "main", label: "친구", groups: ["background", "header", "list"] },
+  { id: "tabs", label: "채팅/하단 탭", groups: ["header", "list", "bar", "icons"] },
+  { id: "more", label: "더보기", groups: ["background", "header", "elements"] },
   { id: "chatroom", label: "채팅방", groups: ["background", "bubbles", "input"] },
   { id: "passcode", label: "잠금화면", groups: ["background", "text", "keypad", "pattern"] },
   { id: "common", label: "공통 리소스", groups: ["icon", "profiles", "launcher"] },

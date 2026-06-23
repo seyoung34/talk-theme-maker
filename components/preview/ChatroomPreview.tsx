@@ -94,11 +94,13 @@ export function ChatroomPreview({
   const inputBackground = getResolvedColor(slotByRole.chat_input_background_color, colors, selections, templateId, template) ?? template.defaults.chatInputBackground;
   const sendButtonColor = getResolvedColor(slotByRole.chat_send_button_color, colors, selections, templateId, template) ?? template.defaults.chatSendButton;
   const chatBackgroundColor = getResolvedColor(slotByRole.chat_background_color, colors, selections, templateId, template) ?? template.defaults.chatBackground;
-  const myBubbleColor = getResolvedColor(slotByRole.chat_bubble_me_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
-  const friendBubbleColor = getResolvedColor(slotByRole.chat_bubble_you_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
+  const myBubbleTextColor = getResolvedColor(slotByRole.chat_bubble_me_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
+  const friendBubbleTextColor = getResolvedColor(slotByRole.chat_bubble_you_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
   const unreadCountColor = getResolvedColor(slotByRole.chat_unread_count_color, colors, selections, templateId, template) ?? template.accent;
   const inputTextColor = getResolvedColor(slotByRole.chat_input_text_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
   const sendIconColor = getResolvedColor(slotByRole.chat_send_icon_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
+  const menuIconColor = getResolvedColor(slotByRole.chat_menu_icon_color, colors, selections, templateId, template) ?? template.defaults.mainBody;
+  const menuButtonColor = getResolvedColor(slotByRole.chat_menu_button_color, colors, selections, templateId, template) ?? "#14000000";
 
   useEffect(() => {
     let cancelled = false;
@@ -179,21 +181,23 @@ export function ChatroomPreview({
       selectedSlotId,
       bubbleAssets,
       bubbleEdits,
-      myBubbleColor,
-      friendBubbleColor,
+      myBubbleTextColor,
+      friendBubbleTextColor,
       unreadCountColor,
       authorColor: headerForeground,
       canvasHeight: contentCanvasHeight,
       onHotspotsChange: setHotspots,
       onCanvasHeightChange: setContentCanvasHeight,
     });
-  }, [analysis.previewDefaults, bubbleAssets, bubbleEdits, contentCanvasHeight, friendBubbleColor, headerForeground, myBubbleColor, platform, selectedSlotId, slotByRole, unreadCountColor]);
+  }, [analysis.previewDefaults, bubbleAssets, bubbleEdits, contentCanvasHeight, friendBubbleTextColor, headerForeground, myBubbleTextColor, platform, selectedSlotId, slotByRole, unreadCountColor]);
 
   const backgroundSlot = slotByRole.chat_background;
   const inputSlot = slotByRole.chat_input_background_color;
   const sendSlot = slotByRole.chat_send_button_color;
   const inputTextSlot = slotByRole.chat_input_text_color;
   const sendIconSlot = slotByRole.chat_send_icon_color;
+  const menuIconSlot = slotByRole.chat_menu_icon_color;
+  const menuButtonSlot = slotByRole.chat_menu_button_color;
 
   return (
     <div className="relative aspect-1080/2123 h-full w-full max-w-[310px] overflow-hidden rounded-xl border border-[#d7ddd8] bg-white shadow-[0_22px_48px_rgba(15,23,42,0.16)]">
@@ -262,10 +266,14 @@ export function ChatroomPreview({
         sendButtonColor={sendButtonColor}
         inputTextColor={inputTextColor}
         sendIconColor={sendIconColor}
+        menuIconColor={menuIconColor}
+        menuButtonColor={menuButtonColor}
         inputSlot={inputSlot}
         sendSlot={sendSlot}
         inputTextSlot={inputTextSlot}
         sendIconSlot={sendIconSlot}
+        menuIconSlot={menuIconSlot}
+        menuButtonSlot={menuButtonSlot}
         selectedSlotId={selectedSlotId}
         onSelectSlot={onSelectSlot}
       />
@@ -298,10 +306,14 @@ function ChatroomInputBarV2({
   sendButtonColor,
   inputTextColor,
   sendIconColor,
+  menuIconColor,
+  menuButtonColor,
   inputSlot,
   sendSlot,
   inputTextSlot,
   sendIconSlot,
+  menuIconSlot,
+  menuButtonSlot,
   selectedSlotId,
   onSelectSlot,
 }: {
@@ -309,10 +321,14 @@ function ChatroomInputBarV2({
   sendButtonColor: string;
   inputTextColor: string;
   sendIconColor: string;
+  menuIconColor: string;
+  menuButtonColor: string;
   inputSlot?: ThemeAssetSlot;
   sendSlot?: ThemeAssetSlot;
   inputTextSlot?: ThemeAssetSlot;
   sendIconSlot?: ThemeAssetSlot;
+  menuIconSlot?: ThemeAssetSlot;
+  menuButtonSlot?: ThemeAssetSlot;
   selectedSlotId?: string;
   onSelectSlot?: (slotId: string) => void;
 }) {
@@ -334,9 +350,9 @@ function ChatroomInputBarV2({
       />
 
       <div className="relative flex h-full items-center gap-[clamp(0.45rem,2.8%,0.75rem)] px-[clamp(0.65rem,4%,1rem)] py-[clamp(0.35rem,2.2%,0.65rem)] [container-type:inline-size]">
-        <span className="grid aspect-square h-[clamp(2rem,70%,2.65rem)] shrink-0 place-items-center rounded-full bg-[#edf6f8] text-[#078aa3]">
+        <button type="button" className={`grid aspect-square h-[clamp(2rem,70%,2.65rem)] shrink-0 place-items-center rounded-full ${selectedSlotId === menuIconSlot?.id || selectedSlotId === menuButtonSlot?.id ? "ring-2 ring-[#60a5fa]" : ""}`} style={{ backgroundColor: menuButtonColor, color: menuIconColor }} onClick={(event) => { event.stopPropagation(); onSelectSlot?.(menuIconSlot?.id ?? menuButtonSlot?.id ?? ""); }}>
           <Plus className="h-[58%] w-[58%]" strokeWidth={2.4} />
-        </span>
+        </button>
 
         <div className="flex h-[clamp(2rem,72%,2.8rem)] min-w-0 flex-1 items-center gap-[clamp(0.35rem,2.4%,0.6rem)] rounded-full bg-[#edf6f8] pl-[clamp(0.85rem,5%,1.35rem)] pr-[clamp(0.35rem,2%,0.5rem)]">
           <button
@@ -456,8 +472,8 @@ function drawChatPreview(
     selectedSlotId?: string;
     bubbleAssets: Record<string, BubbleAsset | undefined>;
     bubbleEdits: Partial<Record<ThemeResourceRole, BubbleEditState>>;
-    myBubbleColor: string;
-    friendBubbleColor: string;
+    myBubbleTextColor: string;
+    friendBubbleTextColor: string;
     unreadCountColor: string;
     authorColor: string;
     canvasHeight: number;
@@ -465,7 +481,7 @@ function drawChatPreview(
     onCanvasHeightChange: (height: number) => void;
   },
 ) {
-  const { defaults, platform, slots, selectedSlotId, bubbleAssets, bubbleEdits, myBubbleColor, friendBubbleColor, unreadCountColor, authorColor, canvasHeight, onHotspotsChange, onCanvasHeightChange } = options;
+  const { defaults, platform, slots, selectedSlotId, bubbleAssets, bubbleEdits, myBubbleTextColor, friendBubbleTextColor, unreadCountColor, authorColor, canvasHeight, onHotspotsChange, onCanvasHeightChange } = options;
 
   ctx.clearRect(0, 0, previewCanvasWidth, canvasHeight);
 
@@ -498,7 +514,8 @@ function drawChatPreview(
       width: size.width,
       height: size.height,
       text: message.text,
-      fill: message.mine ? (myBubbleColor ?? defaults?.myBubble ?? "#facc15") : (friendBubbleColor ?? defaults?.friendBubble ?? "#ffffff"),
+      fill: message.mine ? (defaults?.myBubble ?? "#facc15") : (defaults?.friendBubble ?? "#ffffff"),
+      textColor: message.mine ? myBubbleTextColor : friendBubbleTextColor,
       selected: selectedSlotId === slot?.id,
     });
 
@@ -539,10 +556,11 @@ function drawBubble(
     height: number;
     text: string;
     fill: string;
+    textColor: string;
     selected: boolean;
   },
 ) {
-  const { asset, edit, platform, x, y, width, height, text, fill, selected } = options;
+  const { asset, edit, platform, x, y, width, height, text, fill, textColor, selected } = options;
 
   if (asset) {
     if (platform === "ios") {
@@ -569,7 +587,7 @@ function drawBubble(
     ctx.stroke();
   }
 
-  drawText(ctx, text, contentRect.x + 14, contentRect.y + 10, Math.max(24, contentRect.width - 28), Math.max(24, contentRect.height - 20));
+  drawText(ctx, text, contentRect.x + 14, contentRect.y + 10, Math.max(24, contentRect.width - 28), Math.max(24, contentRect.height - 20), textColor);
 }
 
 function getAutoBubbleSize(ctx: CanvasRenderingContext2D, asset: BubbleAsset | null, platform: ThemePlatform, edit: BubbleEditState | undefined, text: string) {
@@ -613,8 +631,8 @@ function getPreviewContentRect(asset: BubbleAsset | null, platform: ThemePlatfor
   return mapContentRect(edit?.markers ? { ...asset, markers: edit.markers } : asset, x, y, width, height);
 }
 
-function drawText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, maxHeight: number) {
-  ctx.fillStyle = "#14343a";
+function drawText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, maxHeight: number, color: string) {
+  ctx.fillStyle = color;
   ctx.font = `${bubbleTextFontSize}px Segoe UI, Noto Sans KR, sans-serif`;
   const lineHeight = bubbleTextLineHeight;
   const lines = wrapTextLines(ctx, text, maxWidth);
