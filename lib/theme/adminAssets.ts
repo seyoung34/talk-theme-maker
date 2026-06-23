@@ -112,6 +112,19 @@ export async function listAdminAssetCandidatePage(options: AdminAssetListOptions
   return { items, nextCursor: hasMore && last ? encodeCursor(last.updated_at, last.id) : undefined };
 }
 
+export async function listRecommendedAssetCandidatePage(options: Required<Pick<AdminAssetListOptions, "platform" | "assetKind">> & AdminAssetListOptions): Promise<AdminAssetPage> {
+  const params = new URLSearchParams({
+    platform: options.platform,
+    assetKind: options.assetKind,
+    limit: String(Math.min(50, Math.max(1, options.limit ?? 24))),
+  });
+  if (options.cursor) params.set("cursor", options.cursor);
+  const response = await fetch(`/api/theme-assets/recommended?${params.toString()}`, { cache: "no-store" });
+  const payload = (await response.json()) as AdminAssetPage & { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "추천 에셋을 불러오지 못했습니다.");
+  return { items: payload.items ?? [], nextCursor: payload.nextCursor };
+}
+
 export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput) {
   const supabase = createClient();
   const id = input.id ?? crypto.randomUUID();
@@ -184,6 +197,10 @@ export async function deleteAdminAssetCandidate(id: string) {
 export async function adminAssetToFile(asset: AdminAssetCandidate) {
   if (asset.file) return asset.file;
   if (asset.blob) return new File([asset.blob], asset.fileName, { type: asset.mimeType });
+  if (asset.previewUrl) {
+    const response = await fetch(asset.previewUrl);
+    if (response.ok) return new File([await response.blob()], asset.fileName, { type: asset.mimeType });
+  }
   return storagePathToFile(asset.storagePath, asset.fileName, asset.mimeType);
 }
 

@@ -23,7 +23,7 @@ import {
 } from "@/components/project/projectModel";
 import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
-import { adminAssetToFile, inferAdminAssetKind, listAdminAssetCandidatePage, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { adminAssetToFile, inferAdminAssetKind, listRecommendedAssetCandidatePage, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
@@ -391,7 +391,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       return () => { active = false; };
     }
     setIsLoadingAdminAssets(true);
-    listAdminAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), limit: 24, enabledOnly: true })
+    listRecommendedAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), limit: 24, enabledOnly: true })
       .then((page) => {
         if (!active) return;
         setAdminAssets(page.items);
@@ -406,7 +406,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (!selectedSlot || !adminAssetCursor || isLoadingAdminAssets) return;
     try {
       setIsLoadingAdminAssets(true);
-      const page = await listAdminAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), cursor: adminAssetCursor, limit: 24, enabledOnly: true });
+      const page = await listRecommendedAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), cursor: adminAssetCursor, limit: 24, enabledOnly: true });
       setAdminAssets((current) => [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))]);
       setAdminAssetCursor(page.nextCursor);
     } catch (error) {

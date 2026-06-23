@@ -9,7 +9,9 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { paths?: unknown };
-    const paths = Array.isArray(body.paths) ? Array.from(new Set(body.paths.filter((path): path is string => typeof path === "string" && path.length > 0))) : [];
+    const paths = Array.isArray(body.paths)
+      ? Array.from(new Set(body.paths.filter((path): path is string => typeof path === "string" && path.length > 0)))
+      : [];
     if (!paths.length || paths.length > maxPaths || paths.some(isInvalidPath)) {
       return NextResponse.json({ error: `1~${maxPaths}개의 올바른 경로가 필요합니다.` }, { status: 400 });
     }
@@ -21,8 +23,18 @@ export async function POST(request: Request) {
       ? Boolean((await supabase.from("admin_profiles").select("user_id").eq("user_id", userData.user.id).eq("role", "admin").maybeSingle()).data)
       : false;
 
-    if (paths.some((path) => path.startsWith("admin-assets/")) && !isAdmin) {
-      return NextResponse.json({ error: "관리자 에셋 접근 권한이 없습니다." }, { status: 403 });
+    const adminAssetPaths = paths.filter((path) => path.startsWith("admin-assets/"));
+    if (adminAssetPaths.length && !isAdmin) {
+      const { data: enabledAssets, error } = await adminClient
+        .from("admin_assets")
+        .select("storage_path")
+        .eq("enabled", true)
+        .in("storage_path", adminAssetPaths);
+      if (error) throw error;
+      const enabledPaths = new Set((enabledAssets ?? []).map((asset) => asset.storage_path));
+      if (adminAssetPaths.some((path) => !enabledPaths.has(path))) {
+        return NextResponse.json({ error: "공개되지 않은 추천 에셋입니다." }, { status: 403 });
+      }
     }
 
     const systemPaths = paths.filter((path) => path.startsWith("system-templates/"));
