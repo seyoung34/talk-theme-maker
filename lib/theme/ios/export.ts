@@ -24,6 +24,8 @@ export type IosExportFile = {
 
 type IosImageMap = Partial<Record<ThemeResourceRole, string>>;
 const iosThemeCssFileName = "KakaoTalkTheme.css";
+const maxIosImageDimension = 8192;
+const maxIosImagePixels = 32_000_000;
 const iosScaleTargetsByRole: Partial<Record<ThemeResourceRole, number[]>> = {
   main_background: [3],
   tab_background_image: [2, 3],
@@ -51,12 +53,15 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   const iosSlots = slots.filter((slot) => slot.platform === "ios");
   const files: IosExportFile[] = [];
   const imageMap: IosImageMap = {};
+  const sourceScaleBySlotId: Record<string, number> = {};
 
   for (const slot of iosSlots) {
     if (slot.kind === "color" || !slot.path) continue;
     const blob = await resolveIosSlotBlob(slot, uploads, selections, templateId, template);
     if (!blob) continue;
-    files.push(...(await createIosImageExportFiles(slot, blob, selections, templateId)));
+    const sourceScale = getIosSourceScale(slot, uploads, selections, templateId);
+    sourceScaleBySlotId[slot.id] = sourceScale;
+    files.push(...(await createIosImageExportFiles(slot, blob, sourceScale)));
     imageMap[slot.role] = slot.fileName ?? slot.path.split("/").at(-1) ?? "";
   }
 
@@ -74,6 +79,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
         selections,
         imageMap,
         bubbleEditsBySlotId: options.bubbleEditsBySlotId,
+        sourceScaleBySlotId,
       }),
     ),
   );
@@ -90,12 +96,11 @@ async function resolveIosSlotBlob(slot: ThemeAssetSlot, uploads: SlotUploads, se
   return normalizeIosImageBlob(slot, blob, assetUrl);
 }
 
-async function createIosImageExportFiles(slot: ThemeAssetSlot, blob: Blob, selections: SlotCandidateSelections, templateId: ThemeTemplateId): Promise<IosExportFile[]> {
+async function createIosImageExportFiles(slot: ThemeAssetSlot, blob: Blob, sourceScale: number): Promise<IosExportFile[]> {
   const scaleTargets = getIosScaleTargets(slot);
   if (!slot.path || scaleTargets.length === 0) return [{ path: slot.path ?? slot.fileName ?? "Images/image.png", blob }];
 
   const basePath = stripPngExtension(stripScaleSuffix(slot.path));
-  const sourceScale = detectIosSourceScale(selections[slot.id]) ?? detectIosSourceScale(slot.defaultAssetUrls?.[templateId]) ?? 3;
   const entries: IosExportFile[] = [];
 
   for (const targetScale of scaleTargets) {
@@ -106,6 +111,14 @@ async function createIosImageExportFiles(slot: ThemeAssetSlot, blob: Blob, selec
   }
 
   return entries;
+}
+
+function getIosSourceScale(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId) {
+  const uploadName = getSelectedUpload(slot, uploads, selections)?.file.name;
+  return detectIosSourceScale(uploadName)
+    ?? detectIosSourceScale(selections[slot.id])
+    ?? detectIosSourceScale(slot.defaultAssetUrls?.[templateId])
+    ?? 3;
 }
 
 function getIosScaleTargets(slot: ThemeAssetSlot) {
@@ -124,6 +137,7 @@ function buildIosThemeCss({
   selections,
   imageMap,
   bubbleEditsBySlotId,
+  sourceScaleBySlotId,
 }: {
   template: ThemeTemplate;
   templateId: ThemeTemplateId;
@@ -135,6 +149,7 @@ function buildIosThemeCss({
   selections: SlotCandidateSelections;
   imageMap: IosImageMap;
   bubbleEditsBySlotId: Partial<Record<string, BubbleEditState>>;
+  sourceScaleBySlotId: Record<string, number>;
 }) {
   const slotByRole = Object.fromEntries(slots.map((slot) => [slot.role, slot])) as Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
   const color = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback;
@@ -252,6 +267,8 @@ function buildIosThemeCss({
       unreadColor: color("chat_unread_count_color", template.accent),
       primaryEdit: bubbleEditsBySlotId[slotByRole.bubble_me_1?.id ?? ""],
       groupEdit: bubbleEditsBySlotId[slotByRole.bubble_me_2?.id ?? ""],
+      primaryScale: sourceScaleBySlotId[slotByRole.bubble_me_1?.id ?? ""] ?? 3,
+      groupScale: sourceScaleBySlotId[slotByRole.bubble_me_2?.id ?? ""] ?? 3,
       fallbackInsets: { top: 10, left: 11, bottom: 7, right: 17 },
       fallbackStretch: { x: 17, y: 17 },
     }),
@@ -263,6 +280,8 @@ function buildIosThemeCss({
       unreadColor: color("chat_unread_count_color", template.accent),
       primaryEdit: bubbleEditsBySlotId[slotByRole.bubble_you_1?.id ?? ""],
       groupEdit: bubbleEditsBySlotId[slotByRole.bubble_you_2?.id ?? ""],
+      primaryScale: sourceScaleBySlotId[slotByRole.bubble_you_1?.id ?? ""] ?? 3,
+      groupScale: sourceScaleBySlotId[slotByRole.bubble_you_2?.id ?? ""] ?? 3,
       fallbackInsets: { top: 10, left: 17, bottom: 7, right: 11 },
       fallbackStretch: { x: 22, y: 17 },
     }),
@@ -280,12 +299,14 @@ function buildMessageCellCss(
     unreadColor: string;
     primaryEdit?: BubbleEditState;
     groupEdit?: BubbleEditState;
+    primaryScale: number;
+    groupScale: number;
     fallbackInsets: Insets;
     fallbackStretch: StretchPoint;
   },
 ) {
-  const primary = getIosCssValues(options.primaryEdit, options.fallbackInsets, options.fallbackStretch);
-  const group = getIosCssValues(options.groupEdit, options.fallbackInsets, options.fallbackStretch);
+  const primary = getIosCssValues(options.primaryEdit, options.fallbackInsets, options.fallbackStretch, options.primaryScale);
+  const group = getIosCssValues(options.groupEdit, options.fallbackInsets, options.fallbackStretch, options.groupScale);
   return [
     selector,
     "{",
@@ -304,10 +325,10 @@ function buildMessageCellCss(
     .join("\n");
 }
 
-function getIosCssValues(edit: BubbleEditState | undefined, fallbackInsets: Insets, fallbackStretch: StretchPoint) {
+function getIosCssValues(edit: BubbleEditState | undefined, fallbackInsets: Insets, fallbackStretch: StretchPoint, sourceScale: number) {
   const insets = edit?.insets ?? fallbackInsets;
   const stretch = edit?.stretch ?? fallbackStretch;
-  const scale = edit ? 3 : 1;
+  const scale = edit ? sourceScale : 1;
   return {
     stretch: `${Math.round(stretch.x / scale)}px ${Math.round(stretch.y / scale)}px`,
     insets: `${Math.round(insets.top / scale)}px ${Math.round(insets.left / scale)}px ${Math.round(insets.bottom / scale)}px ${Math.round(insets.right / scale)}px`,
@@ -322,27 +343,19 @@ async function fetchAssetBlob(assetUrl: string) {
 
 async function normalizeIosImageBlob(slot: ThemeAssetSlot, blob: Blob, sourceName: string) {
   const expectsPng = slot.path?.toLowerCase().endsWith(".png");
-  const isSvg = blob.type.includes("svg") || sourceName.toLowerCase().endsWith(".svg");
-  if (!expectsPng || !isSvg) return blob;
-  return rasterizeSvgBlob(blob);
+  if (!expectsPng) return blob;
+
+  const image = await loadBlobImage(blob, sourceName);
+  const { width, height } = getValidatedIosImageSize(image);
+  if (await hasPngSignature(blob)) return blob;
+  return drawImageToPng(image, width, height);
 }
 
-async function rasterizeSvgBlob(blob: Blob) {
-  if (typeof document === "undefined") return blob;
-
+async function loadBlobImage(blob: Blob, sourceName: string) {
+  if (typeof document === "undefined") throw new Error("iOS 이미지는 브라우저에서 변환해야 합니다.");
   const url = URL.createObjectURL(blob);
   try {
-    const image = await loadImage(url);
-    const width = image.naturalWidth || image.width || 512;
-    const height = image.naturalHeight || image.height || 512;
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) return blob;
-    context.clearRect(0, 0, width, height);
-    context.drawImage(image, 0, 0, width, height);
-    return (await canvasToPngBlob(canvas)) ?? blob;
+    return await loadImage(url, sourceName);
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -350,36 +363,56 @@ async function rasterizeSvgBlob(blob: Blob) {
 
 async function resizePngBlob(blob: Blob, scale: number) {
   if (typeof document === "undefined" || Math.abs(scale - 1) < 0.001) return blob;
-
-  const url = URL.createObjectURL(blob);
-  try {
-    const image = await loadImage(url);
-    const sourceWidth = image.naturalWidth || image.width;
-    const sourceHeight = image.naturalHeight || image.height;
-    if (!sourceWidth || !sourceHeight) return blob;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
-    const context = canvas.getContext("2d");
-    if (!context) return blob;
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = "high";
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    return (await canvasToPngBlob(canvas)) ?? blob;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  const image = await loadBlobImage(blob, "iOS PNG");
+  const source = getValidatedIosImageSize(image);
+  const width = Math.max(1, Math.round(source.width * scale));
+  const height = Math.max(1, Math.round(source.height * scale));
+  validateIosImageSize(width, height);
+  return drawImageToPng(image, width, height);
 }
 
-function loadImage(url: string) {
+function loadImage(url: string, sourceName: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Failed to rasterize SVG asset for iOS export."));
+    image.onerror = () => reject(new Error(`iOS 이미지 파일을 읽지 못했습니다: ${sourceName}`));
     image.src = url;
   });
+}
+
+function getValidatedIosImageSize(image: HTMLImageElement) {
+  const width = image.naturalWidth || image.width;
+  const height = image.naturalHeight || image.height;
+  validateIosImageSize(width, height);
+  return { width, height };
+}
+
+function validateIosImageSize(width: number, height: number) {
+  if (!width || !height || width > maxIosImageDimension || height > maxIosImageDimension || width * height > maxIosImagePixels) {
+    throw new Error(`iOS 이미지는 ${maxIosImageDimension}px 이하, ${Math.floor(maxIosImagePixels / 1_000_000)}메가픽셀 이하로 사용해 주세요.`);
+  }
+}
+
+async function drawImageToPng(image: HTMLImageElement, width: number, height: number) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("iOS 이미지 변환을 시작하지 못했습니다.");
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.clearRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+  const png = await canvasToPngBlob(canvas);
+  if (!png) throw new Error("iOS 이미지를 PNG로 변환하지 못했습니다.");
+  return png;
+}
+
+async function hasPngSignature(blob: Blob) {
+  if (blob.size < 8) return false;
+  const bytes = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+  return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+    && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
 }
 
 function canvasToPngBlob(canvas: HTMLCanvasElement) {

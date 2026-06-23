@@ -725,7 +725,8 @@
     "fileName": "theme_passcode_01_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_01_image.png",
     "required": false,
-    "note": "첫 번째 암호 입력 전 표시 이미지"
+    "note": "첫 번째 암호 입력 전 표시 이미지",
+    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_01_image.png" }
   },
   {
     "id": "android-passcode-indicator-1-checked",
@@ -739,7 +740,8 @@
     "fileName": "theme_passcode_01_checked_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_01_checked_image.png",
     "required": false,
-    "note": "첫 번째 암호 입력 완료 표시 이미지"
+    "note": "첫 번째 암호 입력 완료 표시 이미지",
+    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_01_checked_image.png" }
   },
   {
     "id": "android-passcode-indicator-2",
@@ -753,7 +755,8 @@
     "fileName": "theme_passcode_02_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_02_image.png",
     "required": false,
-    "note": "두 번째 암호 입력 전 표시 이미지"
+    "note": "두 번째 암호 입력 전 표시 이미지",
+    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_02_image.png" }
   },
   {
     "id": "android-passcode-indicator-2-checked",
@@ -767,7 +770,8 @@
     "fileName": "theme_passcode_02_checked_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_02_checked_image.png",
     "required": false,
-    "note": "두 번째 암호 입력 완료 표시 이미지"
+    "note": "두 번째 암호 입력 완료 표시 이미지",
+    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_02_checked_image.png" }
   },
   {
     "id": "android-passcode-indicator-3",
@@ -781,7 +785,8 @@
     "fileName": "theme_passcode_03_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_03_image.png",
     "required": false,
-    "note": "세 번째 암호 입력 전 표시 이미지"
+    "note": "세 번째 암호 입력 전 표시 이미지",
+    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_03_image.png" }
   },
   {
     "id": "android-passcode-indicator-3-checked",
@@ -795,7 +800,8 @@
     "fileName": "theme_passcode_03_checked_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_03_checked_image.png",
     "required": false,
-    "note": "세 번째 암호 입력 완료 표시 이미지"
+    "note": "세 번째 암호 입력 완료 표시 이미지",
+    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_03_checked_image.png" }
   },
   {
     "id": "android-passcode-indicator-4",
@@ -809,7 +815,8 @@
     "fileName": "theme_passcode_04_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_04_image.png",
     "required": false,
-    "note": "네 번째 암호 입력 전 표시 이미지"
+    "note": "네 번째 암호 입력 전 표시 이미지",
+    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_04_image.png" }
   },
   {
     "id": "android-passcode-indicator-4-checked",
@@ -823,7 +830,8 @@
     "fileName": "theme_passcode_04_checked_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_04_checked_image.png",
     "required": false,
-    "note": "네 번째 암호 입력 완료 표시 이미지"
+    "note": "네 번째 암호 입력 완료 표시 이미지",
+    "defaultAssetUrls": { "basic": "/template-assets/basic/android/passcode/theme_passcode_04_checked_image.png" }
   },
   {
     "id": "android-passcode-color",

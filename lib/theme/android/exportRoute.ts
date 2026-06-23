@@ -5,10 +5,12 @@ import {
   getCurrentUserOrNull,
   isExportAlreadyInProgressError,
   isInsufficientCreditsError,
+  prepareExportJobIdentity,
   reserveCreditForExport,
   updateExportJobStage,
   type ExportMode,
 } from "@/lib/billing/credits";
+import { isAdminUser } from "@/lib/supabase/auth";
 import {
   AndroidBuildError,
   buildAndroidApk,
@@ -30,6 +32,8 @@ export async function handleAndroidExportRequest(
   const startedAt = performance.now();
   let userId: string | null = null;
   let exportJobId: string | null = null;
+  let exportNumber: number | null = null;
+  let applicationId: string | null = null;
   let mode: AndroidExportMode = options.forcedMode ?? "apk";
 
   try {
@@ -47,15 +51,15 @@ export async function handleAndroidExportRequest(
 
     const modeRaw = formData.get("mode");
     mode = options.forcedMode ?? (isAndroidExportMode(modeRaw) ? modeRaw : "apk");
+    if (mode === "project" && !(await isAdminUser(user.id))) {
+      return NextResponse.json({ error: "프로젝트 내보내기는 관리자만 사용할 수 있습니다.", reason: "admin_required" }, { status: 403 });
+    }
     const exportNameRaw = formData.get(options.exportNameField ?? "exportName");
     const versionNameRaw = formData.get("versionName");
-    const applicationIdRaw = formData.get("applicationId");
     const exportName = typeof exportNameRaw === "string" && exportNameRaw.trim() ? exportNameRaw.trim() : "kakaotalk-theme";
     const versionName = typeof versionNameRaw === "string" && versionNameRaw.trim() ? versionNameRaw.trim() : undefined;
-    const applicationId = typeof applicationIdRaw === "string" && applicationIdRaw.trim() ? applicationIdRaw.trim() : undefined;
 
     if (versionName) validateAndroidVersionName(versionName);
-    if (applicationId) validateAndroidApplicationId(applicationId);
 
     const { files, inputBytes } = await readAndroidBuildInputFiles(formData, manifestRaw);
     const reservation = await reserveCreditForExport({
@@ -66,8 +70,13 @@ export async function handleAndroidExportRequest(
       inputBytes,
     });
     exportJobId = reservation.exportJobId;
+    const identity = await prepareExportJobIdentity({ userId, exportJobId, exportName });
+    exportNumber = identity.exportNumber;
+    applicationId = identity.applicationId;
+    if (!applicationId) throw new AndroidExportRequestError("missing_application_id", "Android 앱 식별자를 발급하지 못했습니다.");
+    validateAndroidApplicationId(applicationId);
 
-    logAndroidExport("info", "reserved", { exportJobId, mode, inputFileCount: files.length, inputBytes });
+    logAndroidExport("info", "reserved", { exportJobId, exportNumber, applicationId, mode, inputFileCount: files.length, inputBytes });
 
     const hooks: AndroidBuildHooks = {
       signal: request.signal,
@@ -100,6 +109,8 @@ export async function handleAndroidExportRequest(
         "Content-Disposition": buildContentDisposition(result.fileName),
         "X-Credits-Remaining": String(credits),
         "X-Export-Job-Id": exportJobId,
+        "X-Export-Number": String(exportNumber),
+        "X-Application-Id": applicationId,
         "X-Export-Duration-Ms": String(durationMs),
       },
     });

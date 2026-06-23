@@ -133,7 +133,7 @@ function PasscodeDevice({ mode, backgroundUrl, indicatorUrls, palette, slotByRol
   return (
     <div className={`relative aspect-[1080/2340] w-full max-w-[268px] overflow-hidden rounded-[30px] border bg-cover bg-center shadow-[0_20px_48px_rgba(15,23,42,0.2)] transition ${backgroundSelected ? "border-[#2563eb] ring-2 ring-[#93c5fd]" : "border-[#cbd5d1]"}`} style={{ backgroundColor: toCssColor(palette.background), backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined }} onClick={() => onSelectRole(backgroundUrl ? "passcode_background" : "passcode_background_color")}>
       <div className="grid h-full grid-rows-[43%_1fr]">
-        <PasscodeHeader palette={palette} enteredDigits={enteredDigits} indicatorUrls={indicatorUrls} selectedSlotId={selectedSlotId} slotByRole={slotByRole} onSelectRole={onSelectRole} />
+        <PasscodeHeader mode={mode} palette={palette} enteredDigits={enteredDigits} indicatorUrls={indicatorUrls} selectedSlotId={selectedSlotId} slotByRole={slotByRole} onSelectRole={onSelectRole} />
         {mode === "number" ? (
           <NumberPad palette={palette} selectedSlotId={selectedSlotId} slotByRole={slotByRole} enteredDigits={enteredDigits} pressedKey={pressedKey} onSelectRole={onSelectRole} onDigitsChange={onDigitsChange} onPressedKeyChange={onPressedKeyChange} />
         ) : (
@@ -144,14 +144,14 @@ function PasscodeDevice({ mode, backgroundUrl, indicatorUrls, palette, slotByRol
   );
 }
 
-function PasscodeHeader({ palette, enteredDigits, indicatorUrls, selectedSlotId, slotByRole, onSelectRole }: { palette: PasscodePalette; enteredDigits: number; indicatorUrls: RoleUrls; selectedSlotId?: string; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; onSelectRole: (role: ThemeResourceRole) => void }) {
+function PasscodeHeader({ mode, palette, enteredDigits, indicatorUrls, selectedSlotId, slotByRole, onSelectRole }: { mode: PasscodeMode; palette: PasscodePalette; enteredDigits: number; indicatorUrls: RoleUrls; selectedSlotId?: string; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; onSelectRole: (role: ThemeResourceRole) => void }) {
   return (
     <div className={`grid content-end justify-items-center gap-3 px-7 pb-5 text-center ${selectedSlotId === slotByRole.passcode_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ color: toCssColor(palette.text) }}>
       <button type="button" className="grid gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]" onClick={(event) => { event.stopPropagation(); onSelectRole("passcode_color"); }}>
         <strong className="text-[21px] font-semibold leading-none">암호</strong>
-        <span className="text-[11px] font-medium leading-none opacity-65">카카오톡 암호를 입력해주세요.</span>
+        {mode === "number" ? <span className="text-[11px] font-medium leading-none opacity-65">카카오톡 암호를 입력해주세요.</span> : <span className="text-[11px] font-medium leading-none opacity-65">잠금해제 패턴을 입력해주세요.</span>}
       </button>
-      <PasscodeIndicators enteredDigits={enteredDigits} urls={indicatorUrls} selectedSlotId={selectedSlotId} slotByRole={slotByRole} onSelectRole={onSelectRole} />
+      {mode === "number" ? <PasscodeIndicators enteredDigits={enteredDigits} urls={indicatorUrls} selectedSlotId={selectedSlotId} slotByRole={slotByRole} onSelectRole={onSelectRole} /> : null}
     </div>
   );
 }

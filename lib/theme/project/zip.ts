@@ -14,6 +14,10 @@ type CentralDirectoryRecord = {
 };
 
 export function createStoredZip(entries: ZipEntry[]) {
+  return new Blob([toBlobPart(createStoredZipBytes(entries))], { type: "application/zip" });
+}
+
+export function createStoredZipBytes(entries: ZipEntry[]) {
   const localParts: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
   const records: CentralDirectoryRecord[] = [];
@@ -86,7 +90,13 @@ export function createStoredZip(entries: ZipEntry[]) {
   endView.setUint32(16, centralStart, true);
   endView.setUint16(20, 0, true);
 
-  return new Blob([...localParts, ...centralParts, end].map(toBlobPart), { type: "application/zip" });
+  const output = new Uint8Array(offset + end.length);
+  let cursor = 0;
+  for (const part of [...localParts, ...centralParts, end]) {
+    output.set(part, cursor);
+    cursor += part.length;
+  }
+  return output;
 }
 
 export function textFile(path: string, text: string): ZipEntry {

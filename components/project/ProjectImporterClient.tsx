@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Archive, Download, Package, ShieldCheck, Wrench, X } from "lucide-react";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
 import { ProjectQuickEditPanel } from "@/components/project/ProjectQuickEditPanel";
@@ -80,6 +82,7 @@ type InitialLoadState = {
 type AccountState = {
   user: { id: string; email?: string } | null;
   credits: number;
+  isAdmin: boolean;
 };
 
 type AndroidExportPayloadOptions = {
@@ -88,7 +91,6 @@ type AndroidExportPayloadOptions = {
   templateId: ThemeTemplateId;
   exportName: string;
   versionName: string;
-  applicationId: string;
   mode: "project" | "apk" | "apk-zip";
   slots: ThemeAssetSlot[];
   uploads: SlotUploads;
@@ -150,8 +152,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [exportMode, setExportMode] = useState<ExportMode>("apk");
   const [exportName, setExportName] = useState("");
   const [exportVersionName, setExportVersionName] = useState("");
-  const [exportApplicationId, setExportApplicationId] = useState("");
-  const [applicationIdEdited, setApplicationIdEdited] = useState(false);
   const [exportThemeIdentifier, setExportThemeIdentifier] = useState("");
   const [themeIdentifierEdited, setThemeIdentifierEdited] = useState(false);
   const [exportProgressStep, setExportProgressStep] = useState(0);
@@ -348,8 +348,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     try {
       const response = await fetch("/api/me", { cache: "no-store" });
       const payload = (await response.json()) as AccountState;
-      setAccountState({ user: payload.user, credits: payload.credits ?? 0 });
-      return { user: payload.user, credits: payload.credits ?? 0 };
+      const next = { user: payload.user, credits: payload.credits ?? 0, isAdmin: payload.isAdmin ?? false };
+      setAccountState(next);
+      return next;
     } finally {
       setIsAccountLoading(false);
     }
@@ -751,14 +752,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         const response = await fetch(platform === "android" ? "/api/export/android" : "/api/export/ios");
         const payload = (await response.json()) as { versionName?: string; error?: string };
         if (!response.ok) {
-          throw new Error(payload.error ?? "Android sample config read failed.");
+          throw new Error(payload.error ?? `${platform === "android" ? "Android" : "iOS"} 내보내기 설정을 불러오지 못했습니다.`);
         }
         setExportVersionName(payload.versionName ?? "1.0.0");
       }
       setExportName(displayTemplateName);
-      setExportApplicationId(createAndroidApplicationId(displayTemplateName));
       setExportThemeIdentifier(createIosThemeIdentifier(displayTemplateName));
-      setApplicationIdEdited(false);
       setThemeIdentifierEdited(false);
       setExportMode(platform === "android" ? "apk" : "ktheme");
       setExportProgressStep(0);
@@ -786,6 +785,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       }, 1000);
 
       const hydratedUploads = await ensureSystemTemplateUploadsHydrated();
+      setExportProgressStep(platform === "ios" ? 1 : 0);
       const hydratedAnalysis = createThemeProjectAnalysis(activeTemplate, platform, slots, hydratedUploads, colors, candidateSelections);
       const formData = await createExportFormData({
         analysis: hydratedAnalysis,
@@ -793,7 +793,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         templateId,
         exportName,
         versionName: exportVersionName,
-        applicationId: exportApplicationId,
         themeIdentifier: exportThemeIdentifier,
         mode: exportMode,
         slots,
@@ -804,6 +803,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         bubbleInsets,
         bubbleStretch,
       });
+      setExportProgressStep(platform === "ios" ? 2 : 1);
 
       const response = await fetch(platform === "android" ? "/api/export/android" : "/api/export/ios", {
         method: "POST",
@@ -833,12 +833,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${exportName}-${platform}-export`;
       triggerDownload(blob, fileName);
       const remainingCredits = Number(response.headers.get("X-Credits-Remaining"));
-      if (Number.isFinite(remainingCredits)) setAccountState((current) => ({ user: current?.user ?? accountState?.user ?? null, credits: remainingCredits }));
+      if (Number.isFinite(remainingCredits)) setAccountState((current) => ({
+        user: current?.user ?? accountState?.user ?? null,
+        credits: remainingCredits,
+        isAdmin: current?.isAdmin ?? accountState?.isAdmin ?? false,
+      }));
+      const exportNumber = response.headers.get("X-Export-Number");
       setExportDialogOpen(false);
-      setNotice({ tone: "success", message: `${fileName} 파일을 생성했습니다.` });
+      setNotice({ tone: "success", message: `${exportNumber ? `내보내기 #${exportNumber} · ` : ""}${fileName} 파일을 생성했습니다.` });
     } catch (error) {
       console.error(error);
-      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Android export 중 오류가 발생했습니다." });
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : `${platform === "android" ? "Android" : "iOS"} 내보내기 중 오류가 발생했습니다.` });
     } finally {
       if (progressTimer) window.clearInterval(progressTimer);
       exportSubmittingRef.current = false;
@@ -870,7 +875,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           exportMode={exportMode}
           exportName={exportName}
           exportVersionName={exportVersionName}
-          exportApplicationId={exportApplicationId}
           exportThemeIdentifier={exportThemeIdentifier}
           progressStep={exportProgressStep}
           elapsedSeconds={exportElapsedSeconds}
@@ -886,24 +890,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onModeChange={setExportMode}
           onNameChange={(value) => {
             setExportName(value);
-            if (platform === "android" && !applicationIdEdited) {
-              setExportApplicationId(createAndroidApplicationId(value));
-            }
             if (platform === "ios" && !themeIdentifierEdited) {
               setExportThemeIdentifier(createIosThemeIdentifier(value));
             }
           }}
           onVersionNameChange={setExportVersionName}
-          onApplicationIdChange={(value) => {
-            setApplicationIdEdited(true);
-            setExportApplicationId(value);
-          }}
           onThemeIdentifierChange={(value) => {
             setThemeIdentifierEdited(true);
             setExportThemeIdentifier(value);
           }}
           onLogin={() => router.push(`/login?returnTo=${encodeURIComponent("/edit")}&reason=export`)}
-          onBuyCredits={() => router.push("/account")}
+          onBuyCredits={() => router.push("/credits")}
           onSubmit={() => void submitExport()}
         />
       ) : null}
@@ -944,152 +941,152 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       {initialLoadState.status === "error" ? <InitialTemplateErrorPanel message={initialLoadState.message ?? "템플릿을 불러오지 못했습니다."} onStartDefault={startDefaultTemplate} /> : null}
 
       {initialLoadState.status === "ready" ? (
-      <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-3 md:gap-4">
-        <header className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-[#e5e7eb] bg-white/95 px-4 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
-          <div className="flex min-w-0 items-center gap-4 justify-self-start">
-            <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
-              &larr;
-            </Link>
-            <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em] text-[#0f172a]">{displayTemplateName}</h1>
-          </div>
-
-          <div className="flex min-w-0 items-center gap-3 overflow-hidden justify-self-center">
-            <div className="hidden shrink-0 rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#475569] md:block">
-              {platform === "android" ? "Android" : "iOS"}
+        <div className="grid h-full grid-rows-[auto_minmax(0,1fr)] gap-3 md:gap-4">
+          <header className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-4 rounded-2xl border border-[#e5e7eb] bg-white/95 px-4 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
+            <div className="flex min-w-0 items-center gap-4 justify-self-start">
+              <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
+                &larr;
+              </Link>
+              <h1 className="truncate text-[22px] font-semibold tracking-[-0.02em] text-[#0f172a]">{displayTemplateName}</h1>
             </div>
-            <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-[#e5e7eb]">
-              <div className="h-full rounded-full bg-[#2563eb]" style={{ width: `${completion.total > 0 ? Math.round((completion.ready / completion.total) * 100) : 0}%` }} />
-            </div>
-            <span className="shrink-0 text-xs font-semibold text-[#64748b]">
-              {completion.ready}/{completion.total} 준비
-            </span>
-            <span className={`hidden shrink-0 text-xs font-semibold lg:inline ${analysis.diagnostics.length > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-              {analysis.diagnostics.length > 0 ? `${analysis.diagnostics.length}개 확인 필요` : "문제 없음"}
-            </span>
-            <span className="hidden min-w-0 truncate text-xs font-medium text-[#64748b] xl:block">
-              {sectionLabels[activeSection]} / {selectedSlot?.label ?? "선택된 요소 없음"}
-            </span>
-          </div>
 
-          <div className="flex min-w-0 items-center gap-2 shrink-0 justify-self-end">
-            {isAdminMode ? (
+            <div className="flex min-w-0 items-center gap-3 overflow-hidden justify-self-center">
+              <div className="hidden shrink-0 rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#475569] md:block">
+                {platform === "android" ? "Android" : "iOS"}
+              </div>
+              <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-[#e5e7eb]">
+                <div className="h-full rounded-full bg-[#2563eb]" style={{ width: `${completion.total > 0 ? Math.round((completion.ready / completion.total) * 100) : 0}%` }} />
+              </div>
+              <span className="shrink-0 text-xs font-semibold text-[#64748b]">
+                {completion.ready}/{completion.total} 준비
+              </span>
+              <span className={`hidden shrink-0 text-xs font-semibold lg:inline ${analysis.diagnostics.length > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                {analysis.diagnostics.length > 0 ? `${analysis.diagnostics.length}개 확인 필요` : "문제 없음"}
+              </span>
+              <span className="hidden min-w-0 truncate text-xs font-medium text-[#64748b] xl:block">
+                {sectionLabels[activeSection]} / {selectedSlot?.label ?? "선택된 요소 없음"}
+              </span>
+            </div>
+
+            <div className="flex min-w-0 items-center gap-2 shrink-0 justify-self-end">
+              {isAdminMode ? (
+                <button
+                  type="button"
+                  className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60"
+                  onClick={openSystemSaveDialog}
+                  disabled={isSavingSystemTemplate}
+                >
+                  {isSavingSystemTemplate ? "저장 중.." : "시스템 템플릿으로 저장"}
+                </button>
+              ) : null}
               <button
                 type="button"
-                className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60"
-                onClick={openSystemSaveDialog}
-                disabled={isSavingSystemTemplate}
+                className={`${isAdminMode ? "hidden" : ""} rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60`}
+                onClick={openSaveDialog}
+                disabled={isSavingTemplate}
               >
-                {isSavingSystemTemplate ? "저장 중.." : "시스템 템플릿으로 저장"}
+                {isSavingTemplate ? "저장 중.." : "내 템플릿으로 저장"}
               </button>
-            ) : null}
-            <button
-              type="button"
-              className={`${isAdminMode ? "hidden" : ""} rounded-xl border border-[#d1d5db] bg-white px-3.5 py-2 text-xs font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60`}
-              onClick={openSaveDialog}
-              disabled={isSavingTemplate}
-            >
-              {isSavingTemplate ? "저장 중.." : "내 템플릿으로 저장"}
-            </button>
-            <button
-              type="button"
-              className={`${isAdminMode ? "hidden" : ""} rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60`}
-              onClick={() => void openExportDialog()}
-              disabled={isExporting}
-            >
-              {isExporting ? "내보내는 중.." : "내보내기"}
-            </button>
-          </div>
-        </header>
+              <button
+                type="button"
+                className={`${isAdminMode ? "hidden" : ""} rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60`}
+                onClick={() => void openExportDialog()}
+                disabled={isExporting}
+              >
+                {isExporting ? "내보내는 중.." : "내보내기"}
+              </button>
+            </div>
+          </header>
 
-        <section className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_300px] gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
-          <ProjectSectionRail
-            activeSection={activeSection}
-            slots={slots}
-            uploads={uploads}
-            colors={colors}
-            selections={candidateSelections}
-            templateId={templateId}
-            template={activeTemplate}
-            isOpen={screenRailOpen}
-            onToggle={() => setScreenRailOpen((current) => !current)}
-            onSelectSection={selectSection}
-          />
-
-          <section className="grid min-h-0 min-w-0 grid-cols-[172px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
-            <ProjectGroupRail
-              groups={groups}
-              activeGroup={activeGroup}
-              onSelectGroup={selectGroup}
-              slots={visibleSlots}
-              selectedSlotId={selectedSlot?.id}
+          <section className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_300px] gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
+            <ProjectSectionRail
+              activeSection={activeSection}
+              slots={slots}
               uploads={uploads}
               colors={colors}
               selections={candidateSelections}
               templateId={templateId}
               template={activeTemplate}
-              onSelectSlot={(slot) => {
-                setSelectedSlotId(slot.id);
-                setActiveSection(slot.section);
-                setActiveGroup(slot.group);
-              }}
+              isOpen={screenRailOpen}
+              onToggle={() => setScreenRailOpen((current) => !current)}
+              onSelectSection={selectSection}
             />
 
-            <div className="grid min-h-0 min-w-0 px-3">
-              <ProjectQuickEditPanel
-                slot={selectedSlot}
-                slots={slots}
-                file={selectedFile}
+            <section className="grid min-h-0 min-w-0 grid-cols-[172px_minmax(0,1fr)] overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm">
+              <ProjectGroupRail
+                groups={groups}
+                activeGroup={activeGroup}
+                onSelectGroup={selectGroup}
+                slots={visibleSlots}
+                selectedSlotId={selectedSlot?.id}
                 uploads={uploads}
                 colors={colors}
                 selections={candidateSelections}
-                adminAssets={adminAssetsWithPreview}
-                hasMoreAdminAssets={Boolean(adminAssetCursor)}
-                isLoadingAdminAssets={isLoadingAdminAssets}
                 templateId={templateId}
                 template={activeTemplate}
-                platform={platform}
-                selectedBubbleSlot={selectedBubbleSlot}
-                markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
-                insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
-                stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
-                fileInputRefs={fileInputRefs}
-                onUpload={uploadSlot}
-                onClear={clearSlot}
-                onColorChange={changeColor}
-                onSelectCandidate={selectCandidate}
-                onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
-                onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
-                onOpenAdvanced={openAdvancedBubbleEditor}
-                onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
-                onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
-                onStretchChange={(stretch) => selectedSlot && setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch }))}
-                canAdjustInline={canAdjustInline}
-                candidateOpen={candidateOpen}
-                onToggleCandidates={() => setCandidateOpen((current) => !current)}
+                onSelectSlot={(slot) => {
+                  setSelectedSlotId(slot.id);
+                  setActiveSection(slot.section);
+                  setActiveGroup(slot.group);
+                }}
               />
-            </div>
-          </section>
 
-          <ProjectPreviewPanel
-            analysis={analysis}
-            activeSection={activeSection}
-            template={activeTemplate}
-            templateId={templateId}
-            slots={slots}
-            colors={colors}
-            selections={candidateSelections}
-            bubbleEdits={{
-              bubble_me_1: slotEditFromRole("bubble_me_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-              bubble_me_2: slotEditFromRole("bubble_me_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-              bubble_you_1: slotEditFromRole("bubble_you_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-              bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-            }}
-            selectedSlotId={selectedSlot?.id}
-            className="col-span-2 lg:col-span-1 lg:row-start-auto"
-            onSelectSlot={selectPreviewSlot}
-          />
-        </section>
-      </div>
+              <div className="grid min-h-0 min-w-0 px-3">
+                <ProjectQuickEditPanel
+                  slot={selectedSlot}
+                  slots={slots}
+                  file={selectedFile}
+                  uploads={uploads}
+                  colors={colors}
+                  selections={candidateSelections}
+                  adminAssets={adminAssetsWithPreview}
+                  hasMoreAdminAssets={Boolean(adminAssetCursor)}
+                  isLoadingAdminAssets={isLoadingAdminAssets}
+                  templateId={templateId}
+                  template={activeTemplate}
+                  platform={platform}
+                  selectedBubbleSlot={selectedBubbleSlot}
+                  markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
+                  insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
+                  stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
+                  fileInputRefs={fileInputRefs}
+                  onUpload={uploadSlot}
+                  onClear={clearSlot}
+                  onColorChange={changeColor}
+                  onSelectCandidate={selectCandidate}
+                  onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
+                  onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
+                  onOpenAdvanced={openAdvancedBubbleEditor}
+                  onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
+                  onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
+                  onStretchChange={(stretch) => selectedSlot && setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch }))}
+                  canAdjustInline={canAdjustInline}
+                  candidateOpen={candidateOpen}
+                  onToggleCandidates={() => setCandidateOpen((current) => !current)}
+                />
+              </div>
+            </section>
+
+            <ProjectPreviewPanel
+              analysis={analysis}
+              activeSection={activeSection}
+              template={activeTemplate}
+              templateId={templateId}
+              slots={slots}
+              colors={colors}
+              selections={candidateSelections}
+              bubbleEdits={{
+                bubble_me_1: slotEditFromRole("bubble_me_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+                bubble_me_2: slotEditFromRole("bubble_me_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+                bubble_you_1: slotEditFromRole("bubble_you_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+                bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+              }}
+              selectedSlotId={selectedSlot?.id}
+              className="col-span-2 lg:col-span-1 lg:row-start-auto"
+              onSelectSlot={selectPreviewSlot}
+            />
+          </section>
+        </div>
       ) : null}
     </main>
   );
@@ -1462,7 +1459,6 @@ function ExportDialog({
   exportMode,
   exportName,
   exportVersionName,
-  exportApplicationId,
   exportThemeIdentifier,
   progressStep,
   elapsedSeconds,
@@ -1472,7 +1468,6 @@ function ExportDialog({
   onModeChange,
   onNameChange,
   onVersionNameChange,
-  onApplicationIdChange,
   onThemeIdentifierChange,
   onLogin,
   onBuyCredits,
@@ -1483,7 +1478,6 @@ function ExportDialog({
   exportMode: ExportMode;
   exportName: string;
   exportVersionName: string;
-  exportApplicationId: string;
   exportThemeIdentifier: string;
   progressStep: number;
   elapsedSeconds: number;
@@ -1493,7 +1487,6 @@ function ExportDialog({
   onModeChange: (mode: ExportMode) => void;
   onNameChange: (value: string) => void;
   onVersionNameChange: (value: string) => void;
-  onApplicationIdChange: (value: string) => void;
   onThemeIdentifierChange: (value: string) => void;
   onLogin: () => void;
   onBuyCredits: () => void;
@@ -1501,76 +1494,87 @@ function ExportDialog({
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const steps = getExportProgressSteps(exportMode);
-  const applicationIdError = platform === "android" ? getAndroidApplicationIdError(exportApplicationId) : null;
   const themeIdentifierError = platform === "ios" ? getIosThemeIdentifierError(exportThemeIdentifier) : null;
-  const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0 && !applicationIdError && !themeIdentifierError;
+  const exportNameError = platform === "ios" && (exportName.trim().length === 0 || exportName.trim().length > 80) ? "테마 이름은 1~80자로 입력해 주세요." : null;
+  const versionNameError = platform === "ios" && !/^[0-9A-Za-z][0-9A-Za-z._-]{0,31}$/.test(exportVersionName.trim()) ? "영문, 숫자, 점, 밑줄, 하이픈으로 32자 이하로 입력해 주세요." : null;
+  const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0 && !exportNameError && !versionNameError && !themeIdentifierError;
   const isLoggedIn = Boolean(accountState?.user);
   const credits = accountState?.credits ?? 0;
   const hasCredits = credits >= 1;
+  const isAdmin = accountState?.isAdmin ?? false;
+  const ctaLabel = !isLoggedIn
+    ? "로그인 후 내보내기"
+    : !hasCredits
+      ? "크레딧 충전"
+      : exportMode === "apk"
+        ? "APK 내보내기"
+        : exportMode === "apk-zip"
+          ? "APK ZIP 내보내기"
+          : exportMode === "project"
+            ? "프로젝트 ZIP 내보내기"
+            : "내보내기";
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.42)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="내보내기">
-      <section className="grid w-full max-w-[520px] gap-5 rounded-[28px] border border-[#e5e7eb] bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
-        <div className="flex items-start justify-between gap-4">
+    <Dialog.Root open onOpenChange={(open) => { if (!open && !isExporting) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[100] bg-[rgba(15,23,42,0.48)] backdrop-blur-[2px]" />
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 z-[101] grid max-h-[calc(100dvh-24px)] w-[calc(100%-24px)] max-w-[620px] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[22px] border border-[#e2e8f0] bg-white shadow-[0_24px_72px_rgba(15,23,42,0.24)] focus:outline-none"
+          onEscapeKeyDown={(event) => { if (isExporting) event.preventDefault(); }}
+          onPointerDownOutside={(event) => { if (isExporting) event.preventDefault(); }}
+        >
+        <div className="flex items-start justify-between gap-4 border-b border-[#e2e8f0] px-5 py-4">
           <div className="grid gap-1">
-            <h2 className="text-lg font-semibold text-[#0f172a]">내보내기</h2>
-            <p className="text-sm text-[#64748b]">이름, 버전, 결과물을 설정합니다.</p>
+            <Dialog.Title className="text-lg font-bold text-[#0f172a]">{platform === "android" ? "Android 내보내기" : "iOS 내보내기"}</Dialog.Title>
+            <Dialog.Description className="text-xs font-medium text-[#64748b]">완성된 테마를 설치하거나 보관할 파일로 만듭니다.</Dialog.Description>
           </div>
-          <button type="button" className="rounded-full border border-[#e5e7eb] px-3 py-1 text-sm font-semibold text-[#475569]" onClick={onClose} disabled={isExporting}>
-            닫기
-          </button>
+          <Dialog.Close asChild>
+            <button type="button" className="grid size-9 shrink-0 place-items-center rounded-full text-[#64748b] transition hover:bg-[#f1f5f9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-40" disabled={isExporting} aria-label="내보내기 창 닫기"><X size={18} /></button>
+          </Dialog.Close>
         </div>
 
-        <div className="grid gap-3">
+        <div className="overflow-y-auto px-5 py-4 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
+        {isExporting ? (
+          <div className="grid min-h-56 place-content-center gap-5 py-4 text-center" role="status" aria-live="polite">
+            <span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><Download className="animate-pulse" size={22} aria-hidden="true" /></span>
+            <div><p className="text-base font-bold text-[#0f172a]">{getExportNotice(exportMode)}</p><p className="mt-2 text-sm font-medium text-[#64748b]">{steps[Math.min(progressStep, steps.length - 1)]} · {formatElapsedTime(elapsedSeconds)}</p></div>
+            <div className="mx-auto h-2 w-56 max-w-full overflow-hidden rounded-full bg-[#e2e8f0]"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#2563eb]" /></div>
+            <p className="text-xs font-medium text-[#64748b]">완료될 때까지 이 창을 유지해 주세요.</p>
+          </div>
+        ) : <>
+
+        <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-2">
-            <span className="text-sm font-semibold text-[#0f172a]">이름</span>
+            <span className="text-sm font-semibold text-[#0f172a]">{platform === "android" ? "앱 이름" : "테마 이름"}</span>
             <input
               type="text"
               value={exportName}
               onChange={(event) => onNameChange(event.currentTarget.value)}
               disabled={isExporting}
-              className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]"
+              aria-invalid={Boolean(exportNameError)}
+              className={`h-11 rounded-xl border bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb] ${exportNameError ? "border-[#ef4444]" : "border-[#d1d5db]"}`}
             />
+            {exportNameError ? <span className="text-xs font-medium text-[#dc2626]">{exportNameError}</span> : null}
           </label>
           <label className="grid gap-2">
-            <span className="text-sm font-semibold text-[#0f172a]">versionName</span>
+            <span className="text-sm font-semibold text-[#0f172a]">{platform === "android" ? "앱 버전" : "테마 버전"}</span>
             <input
               type="text"
               value={exportVersionName}
               onChange={(event) => onVersionNameChange(event.currentTarget.value)}
               disabled={isExporting}
-              className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]"
+              aria-invalid={Boolean(versionNameError)}
+              className={`h-11 rounded-xl border bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb] ${versionNameError ? "border-[#ef4444]" : "border-[#d1d5db]"}`}
             />
+            {versionNameError ? <span className="text-xs font-medium text-[#dc2626]">{versionNameError}</span> : null}
           </label>
           {platform === "android" ? (
-            <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3">
-              <button
-                type="button"
-                className="flex items-center justify-between gap-3 text-left text-sm font-semibold text-[#0f172a]"
-                onClick={() => setAdvancedOpen((current) => !current)}
-                disabled={isExporting}
-              >
-                <span>Android 고급 옵션</span>
-                <span className="text-xs text-[#64748b]">{advancedOpen ? "접기" : "열기"}</span>
-              </button>
-              {advancedOpen ? (
-                <label className="grid gap-2">
-                  <span className="text-sm font-semibold text-[#0f172a]">applicationId</span>
-                  <input
-                    type="text"
-                    value={exportApplicationId}
-                    onChange={(event) => onApplicationIdChange(event.currentTarget.value)}
-                    disabled={isExporting}
-                    spellCheck={false}
-                    className={`h-11 rounded-xl border bg-white px-3 font-mono text-sm text-[#111827] outline-none transition focus:border-[#2563eb] ${applicationIdError ? "border-[#ef4444]" : "border-[#d1d5db]"
-                      }`}
-                  />
-                  {applicationIdError ? <span className="text-xs font-medium text-[#dc2626]">{applicationIdError}</span> : null}
-                </label>
-              ) : null}
+            <div className="flex items-start gap-3 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 text-[#1e3a8a] sm:col-span-2">
+              <ShieldCheck className="mt-0.5 shrink-0" size={17} aria-hidden="true" />
+              <div><p className="text-sm font-bold">고유 앱 ID 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 applicationId를 서버에서 생성합니다.</p></div>
             </div>
           ) : (
-            <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3">
+            <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 sm:col-span-2">
               <button
                 type="button"
                 className="flex items-center justify-between gap-3 text-left text-sm font-semibold text-[#0f172a]"
@@ -1599,11 +1603,13 @@ function ExportDialog({
           )}
         </div>
 
-        <div className="grid gap-2">
+        <div className="mt-4 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="출력 형식">
           {platform === "ios" ? (
             <>
               <button
                 type="button"
+                role="radio"
+                aria-checked={exportMode === "ktheme"}
                 className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "ktheme" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
                 onClick={() => onModeChange("ktheme")}
                 disabled={isExporting}
@@ -1612,6 +1618,8 @@ function ExportDialog({
               </button>
               <button
                 type="button"
+                role="radio"
+                aria-checked={exportMode === "theme-zip"}
                 className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "theme-zip" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
                 onClick={() => onModeChange("theme-zip")}
                 disabled={isExporting}
@@ -1621,59 +1629,54 @@ function ExportDialog({
             </>
           ) : (
             <>
-              <button
+              {isAdmin ? <button
                 type="button"
+                role="radio"
+                aria-checked={exportMode === "project"}
                 className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "project" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
                 onClick={() => onModeChange("project")}
                 disabled={isExporting}
               >
-                <span className="block text-sm font-semibold text-[#0f172a]">빌드 전 프로젝트 내보내기</span>
-              </button>
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#0f172a]"><Wrench size={16} aria-hidden="true" />프로젝트 ZIP</span>
+                <span className="mt-1 block text-xs font-medium text-[#64748b]">관리자 디버깅용 빌드 전 소스</span>
+              </button> : null}
               <button
                 type="button"
+                role="radio"
+                aria-checked={exportMode === "apk"}
                 className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
                 onClick={() => onModeChange("apk")}
                 disabled={isExporting}
               >
-                <span className="block text-sm font-semibold text-[#0f172a]">Android APK로 내보내기</span>
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#0f172a]"><Package size={16} aria-hidden="true" />Android APK</span>
+                <span className="mt-1 block text-xs font-medium text-[#64748b]">기기에 바로 설치할 파일</span>
               </button>
               <button
                 type="button"
+                role="radio"
+                aria-checked={exportMode === "apk-zip"}
                 className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk-zip" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
                 onClick={() => onModeChange("apk-zip")}
                 disabled={isExporting}
               >
-                <span className="block text-sm font-semibold text-[#0f172a]">Android APK ZIP으로 내보내기</span>
+                <span className="flex items-center gap-2 text-sm font-semibold text-[#0f172a]"><Archive size={16} aria-hidden="true" />APK ZIP</span>
+                <span className="mt-1 block text-xs font-medium text-[#64748b]">공유하거나 보관하기 좋은 압축 파일</span>
               </button>
             </>
           )}
         </div>
 
-        <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-4">
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e5e7eb] bg-white px-3 py-2">
-            <span className="text-sm font-semibold text-[#0f172a]">Export cost</span>
-            <span className="text-sm font-black text-[#2563eb]">1 credit</span>
+        <div className="mt-4 grid gap-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span className="font-semibold text-[#475569]">비용 <strong className="ml-1 text-[#0f172a]">1크레딧</strong></span>
+            <span className="font-semibold text-[#475569]">보유 <strong className={`ml-1 ${hasCredits ? "text-emerald-700" : "text-rose-700"}`}>{isAccountLoading ? "확인 중" : `${credits}크레딧`}</strong></span>
           </div>
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e5e7eb] bg-white px-3 py-2">
-            <span className="text-sm font-semibold text-[#0f172a]">Current credits</span>
-            <span className={`text-sm font-black ${hasCredits ? "text-emerald-700" : "text-rose-700"}`}>{isAccountLoading ? "..." : credits}</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-[#e5e7eb]">
-            <div className={`h-full rounded-full bg-[#2563eb] transition-all ${isExporting ? "w-2/3 animate-pulse" : ""}`} style={isExporting ? undefined : { width: `${(progressStep / Math.max(1, steps.length - 1)) * 100}%` }} />
-          </div>
-          {isExporting ? (
-            <div className="flex items-start justify-between gap-3" role="status" aria-live="polite">
-              <div><p className="text-sm font-semibold text-[#0f172a]">{getExportNotice(exportMode)}</p><p className="mt-1 text-xs text-[#64748b]">창을 닫지 마세요. APK 빌드는 보통 1~2분 정도 걸립니다.</p></div>
-              <span className="shrink-0 font-mono text-xs font-semibold text-[#475569]">{formatElapsedTime(elapsedSeconds)}</span>
-            </div>
-          ) : (
-            <div className="grid gap-1">
-              {steps.map((step) => <div key={step} className="text-sm text-[#64748b]">{step}</div>)}
-            </div>
-          )}
         </div>
 
-        <div className="flex justify-end gap-2">
+        </>}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-[#e2e8f0] bg-white px-5 py-4">
           <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={isExporting}>
             취소
           </button>
@@ -1681,13 +1684,14 @@ function ExportDialog({
             type="button"
             className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
             onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit}
-            disabled={!canSubmit || isExporting || isAccountLoading}
+            disabled={isExporting || isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}
           >
-            {isExporting ? "내보내는 중.." : "내보내기"}
+            {isExporting ? "내보내는 중…" : ctaLabel}
           </button>
         </div>
-      </section>
-    </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -1869,7 +1873,6 @@ async function createAndroidExportFormData({
   templateId,
   exportName,
   versionName,
-  applicationId,
   mode,
   slots,
   uploads,
@@ -1912,74 +1915,9 @@ async function createAndroidExportFormData({
   formData.append("manifest", JSON.stringify(manifest));
   formData.append("exportName", exportName);
   formData.append("versionName", versionName);
-  formData.append("applicationId", applicationId);
   formData.append("mode", mode);
 
   return formData;
-}
-
-const androidPackageSegmentReservedWords = new Set([
-  "abstract",
-  "assert",
-  "boolean",
-  "break",
-  "byte",
-  "case",
-  "catch",
-  "char",
-  "class",
-  "const",
-  "continue",
-  "default",
-  "do",
-  "double",
-  "else",
-  "enum",
-  "extends",
-  "final",
-  "finally",
-  "float",
-  "for",
-  "goto",
-  "if",
-  "implements",
-  "import",
-  "instanceof",
-  "int",
-  "interface",
-  "long",
-  "native",
-  "new",
-  "package",
-  "private",
-  "protected",
-  "public",
-  "return",
-  "short",
-  "static",
-  "strictfp",
-  "super",
-  "switch",
-  "synchronized",
-  "this",
-  "throw",
-  "throws",
-  "transient",
-  "try",
-  "void",
-  "volatile",
-  "while",
-]);
-
-function createAndroidApplicationId(name: string) {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  const safeSlug = slug && /^[a-z_]/.test(slug) && !androidPackageSegmentReservedWords.has(slug) ? slug : "custom_theme";
-  return `com.kakao.talk.theme.${safeSlug}`;
 }
 
 function createIosThemeIdentifier(name: string) {
@@ -2003,23 +1941,6 @@ function getIosThemeIdentifierError(value: string) {
   for (const segment of segments) {
     if (!segment) return "빈 segment는 사용할 수 없습니다.";
     if (!/^[a-z][a-z0-9]*$/.test(segment)) return "각 segment는 소문자 영문으로 시작해야 합니다.";
-  }
-
-  return null;
-}
-
-function getAndroidApplicationIdError(value: string) {
-  const applicationId = value.trim();
-  if (!applicationId) return "applicationId를 입력하세요.";
-  if (!/^[a-z0-9_.]+$/.test(applicationId)) return "소문자 영문, 숫자, _, .만 사용할 수 있습니다.";
-
-  const segments = applicationId.split(".");
-  if (segments.length < 2) return "최소 2개 이상의 segment가 필요합니다.";
-
-  for (const segment of segments) {
-    if (!segment) return "빈 segment는 사용할 수 없습니다.";
-    if (!/^[a-z_][a-z0-9_]*$/.test(segment)) return "각 segment는 소문자 영문 또는 _로 시작해야 합니다.";
-    if (androidPackageSegmentReservedWords.has(segment)) return `예약어 '${segment}'는 사용할 수 없습니다.`;
   }
 
   return null;

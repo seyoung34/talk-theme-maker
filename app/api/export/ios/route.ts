@@ -5,10 +5,12 @@ import {
   getCurrentUserOrNull,
   isExportAlreadyInProgressError,
   isInsufficientCreditsError,
+  prepareExportJobIdentity,
   reserveCreditForExport,
   updateExportJobStage,
 } from "@/lib/billing/credits";
-import { createStoredZip } from "@/lib/theme/project/zip";
+import { createStoredZipBytes } from "@/lib/theme/project/zip";
+import { IosExportRequestError, normalizeIosPath, validateExportName, validateIosPackage, validateVersionName } from "@/lib/theme/ios/packageValidation";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge, maxExportRequestBytes } from "@/lib/theme/exportRequest";
 
 export const runtime = "nodejs";
@@ -25,6 +27,7 @@ export async function POST(request: Request) {
   const startedAt = performance.now();
   let userId: string | null = null;
   let exportJobId: string | null = null;
+  let exportNumber: number | null = null;
 
   try {
     const user = await getCurrentUserOrNull();
@@ -37,11 +40,12 @@ export async function POST(request: Request) {
     if (typeof manifestRaw !== "string") return NextResponse.json({ error: "내보내기 파일 목록이 없습니다.", reason: "missing_manifest" }, { status: 400 });
 
     const modeRaw = formData.get("mode");
-    const mode: ExportMode = isExportMode(modeRaw) ? modeRaw : "ktheme";
+    if (modeRaw !== null && !isExportMode(modeRaw)) throw new IosExportRequestError("invalid_export_mode", "지원하지 않는 iOS 출력 형식입니다.");
+    const mode: ExportMode = modeRaw ?? "ktheme";
     const exportNameRaw = formData.get("exportName");
     const versionNameRaw = formData.get("versionName");
-    const exportName = typeof exportNameRaw === "string" && exportNameRaw.trim() ? exportNameRaw.trim() : "kakaotalk-theme";
-    const versionName = typeof versionNameRaw === "string" && versionNameRaw.trim() ? versionNameRaw.trim() : "1.0.0";
+    const exportName = validateExportName(exportNameRaw);
+    const versionName = validateVersionName(versionNameRaw);
     const { entries, inputBytes } = await readIosEntries(formData, manifestRaw);
 
     const reservation = await reserveCreditForExport({
@@ -52,26 +56,29 @@ export async function POST(request: Request) {
       inputBytes,
     });
     exportJobId = reservation.exportJobId;
+    const identity = await prepareExportJobIdentity({ userId, exportJobId, exportName });
+    exportNumber = identity.exportNumber;
     await updateExportJobStage({ userId, exportJobId, stage: "packaging" });
 
-    const zipBlob = createStoredZip(entries);
-    const bytes = new Uint8Array(await zipBlob.arrayBuffer());
+    const bytes = createStoredZipBytes(entries);
     const fileName = `${buildExportBaseName(exportName, versionName)}.${mode === "ktheme" ? "ktheme" : "zip"}`;
     const durationMs = elapsedMs(startedAt);
-    const credits = await completeExportJob({ userId, exportJobId, fileName, outputBytes: bytes.byteLength, durationMs });
-
-    console.info(`[ios-export] ${JSON.stringify({ event: "completed", exportJobId, mode, durationMs, inputBytes, outputBytes: bytes.byteLength })}`);
-
-    return new NextResponse(bytes, {
+    const response = new NextResponse(bytes, {
       status: 200,
       headers: {
         "Content-Type": mode === "ktheme" ? "application/octet-stream" : "application/zip",
         "Content-Disposition": buildContentDisposition(fileName),
-        "X-Credits-Remaining": String(credits),
         "X-Export-Job-Id": exportJobId,
+        "X-Export-Number": String(exportNumber),
         "X-Export-Duration-Ms": String(durationMs),
       },
     });
+    const credits = await completeExportJob({ userId, exportJobId, fileName, outputBytes: bytes.byteLength, durationMs });
+    response.headers.set("X-Credits-Remaining", String(credits));
+
+    console.info(`[ios-export] ${JSON.stringify({ event: "completed", exportJobId, exportNumber, mode, durationMs, inputBytes, outputBytes: bytes.byteLength })}`);
+
+    return response;
   } catch (error) {
     const durationMs = elapsedMs(startedAt);
     const failure = classifyFailure(error);
@@ -130,15 +137,10 @@ async function readIosEntries(formData: FormData, manifestRaw: string) {
     entries.push({ path: normalizedPath, bytes: new Uint8Array(await file.arrayBuffer()) });
   }
 
+  validateIosPackage(entries);
   return { entries, inputBytes };
 }
 
-function normalizeIosPath(value: string) {
-  const normalized = value.replaceAll("\\", "/").replace(/^\/+/, "");
-  if (normalized === "KakaoTalkTheme.css") return normalized;
-  if (normalized.startsWith("Images/") && /\.png$/i.test(normalized) && !normalized.includes("../") && !/[\u0000-\u001f]/.test(normalized)) return normalized;
-  throw new IosExportRequestError("forbidden_export_path", "iOS 테마 리소스 경로가 올바르지 않습니다.");
-}
 
 function isManifestItem(value: unknown): value is UploadManifestItem {
   return typeof value === "object" && value !== null && "field" in value && "path" in value && typeof value.field === "string" && typeof value.path === "string";
@@ -146,13 +148,6 @@ function isManifestItem(value: unknown): value is UploadManifestItem {
 
 function isExportMode(value: FormDataEntryValue | null): value is ExportMode {
   return value === "theme-zip" || value === "ktheme";
-}
-
-class IosExportRequestError extends Error {
-  constructor(public readonly code: string, message: string, public readonly status = 400) {
-    super(message);
-    this.name = "IosExportRequestError";
-  }
 }
 
 function classifyFailure(error: unknown) {

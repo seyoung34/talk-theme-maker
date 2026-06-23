@@ -7,6 +7,7 @@ export type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
 export type ExportStage = "queued" | "preparing" | "building" | "packaging" | "finalizing" | "completed" | "failed";
 
 type ReservationRow = { export_job_id: string; balance: number };
+type ExportIdentityRow = { export_number: number; application_id: string | null; export_name: string | null };
 
 export async function getCurrentUserOrNull() {
   const supabase = await createClient();
@@ -48,6 +49,32 @@ export async function reserveCreditForExport({
   const row = (Array.isArray(data) ? data[0] : data) as ReservationRow | null;
   if (!row?.export_job_id) throw new Error("export_reservation_failed");
   return { exportJobId: row.export_job_id, balance: Number(row.balance ?? 0) };
+}
+
+export async function prepareExportJobIdentity({
+  userId,
+  exportJobId,
+  exportName,
+}: {
+  userId: string;
+  exportJobId: string;
+  exportName: string;
+}) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("export_jobs")
+    .update({ export_name: exportName.slice(0, 120) })
+    .eq("id", exportJobId)
+    .eq("user_id", userId)
+    .select("export_number,application_id,export_name")
+    .single();
+  if (error) throw error;
+  const row = data as ExportIdentityRow;
+  return {
+    exportNumber: Number(row.export_number),
+    applicationId: row.application_id,
+    exportName: row.export_name,
+  };
 }
 
 export async function updateExportJobStage({
