@@ -157,12 +157,12 @@ export default function HomePage() {
                 테마 만들기
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
+              {/* <Link
                 href="/editor"
                 className="inline-flex items-center justify-center rounded-full border border-[var(--color-outline-variant)] bg-white/86 px-6 py-4 text-base font-black text-[var(--color-on-surface)] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus:ring-4 focus:ring-[var(--color-primary-container)]"
               >
                 편집기 열기
-              </Link>
+              </Link> */}
             </div>
 
             <div className="mt-7 flex flex-wrap gap-2">
@@ -171,11 +171,10 @@ export default function HomePage() {
                   key={subject.keyword}
                   type="button"
                   onClick={() => setActiveIndex(index)}
-                  className={`rounded-full px-4 py-2 text-sm font-black transition focus:outline-none focus:ring-4 focus:ring-[var(--color-primary-container)] ${
-                    index === activeIndex
+                  className={`rounded-full px-4 py-2 text-sm font-black transition focus:outline-none focus:ring-4 focus:ring-[var(--color-primary-container)] ${index === activeIndex
                       ? "bg-[var(--color-on-background)] text-white shadow-[0_12px_28px_rgba(27,28,25,0.14)]"
                       : "border border-[var(--color-outline-variant)] bg-white/72 text-[var(--color-on-surface-variant)] hover:bg-white"
-                  }`}
+                    }`}
                 >
                   {subject.keyword}
                 </button>
@@ -348,11 +347,10 @@ function PhoneFrame({
                   className={`flex ${message.side === "right" ? "justify-end" : "justify-start"}`}
                 >
                   <p
-                    className={`max-w-[82%] rounded-[22px] px-4 py-3 text-sm font-bold leading-6 shadow-[0_12px_24px_rgba(27,28,25,0.09)] ${
-                      message.side === "right"
+                    className={`max-w-[82%] rounded-[22px] px-4 py-3 text-sm font-bold leading-6 shadow-[0_12px_24px_rgba(27,28,25,0.09)] ${message.side === "right"
                         ? "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]"
                         : "bg-[#f6f4ee] text-[#1b1c19]"
-                    }`}
+                      }`}
                   >
                     {message.text}
                   </p>
