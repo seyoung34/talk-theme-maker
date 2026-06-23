@@ -69,12 +69,16 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
       <header className="sticky top-0 z-40 border-b border-[var(--color-outline-variant)]/70 bg-[color:rgba(251,249,244,0.9)] backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 py-3.5 md:px-8">
           <Link href="/" className="min-w-0 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
-            <p className="truncate text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--color-on-surface-variant)] sm:text-[11px] sm:tracking-[0.18em]">Talk Theme Maker</p>
+            <p className="truncate text-[14px] font-extrabold uppercase tracking-[0.14em] text-[var(--color-on-surface-variant)] sm:text-[11px] sm:tracking-[0.18em]">Talk Theme</p>
           </Link>
 
-          <nav className="flex shrink-0 items-center gap-2" aria-label="주요 메뉴">
+          <nav className="flex shrink-0 items-center gap-1 sm:gap-2" aria-label="주요 메뉴">
             <Link href="/template" aria-current={currentPath === "/template" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-3.5 py-2 text-xs font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/template" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-white"}`}>
               Template
+            </Link>
+
+            <Link href="/guide" aria-current={currentPath === "/guide" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-3 py-2 text-xs font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/guide" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-white"}`}>
+              Guide
             </Link>
 
             <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
