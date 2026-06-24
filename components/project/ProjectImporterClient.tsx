@@ -132,7 +132,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [remoteUploadRefs, setRemoteUploadRefs] = useState<RemoteSlotUploads>({});
   const [colors, setColors] = useState<SlotColors>({});
   const [candidateSelections, setCandidateSelections] = useState<SlotCandidateSelections>({});
-  const [screenRailOpen, setScreenRailOpen] = useState(true);
   const [candidateOpen, setCandidateOpen] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
@@ -1099,13 +1098,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             <ProjectSectionRail
               activeSection={activeSection}
               slots={slots}
-              uploads={uploads}
-              colors={colors}
-              selections={candidateSelections}
-              templateId={templateId}
-              template={activeTemplate}
-              isOpen={screenRailOpen}
-              onToggle={() => setScreenRailOpen((current) => !current)}
               onSelectSection={selectSection}
             />
 

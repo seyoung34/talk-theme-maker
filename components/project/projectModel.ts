@@ -27,7 +27,7 @@ export type SlotCandidate = {
   adminAsset?: AdminAssetCandidate;
 };
 
-export const sectionOrder: ThemeSection[] = ["main", "tabs", "more", "chatroom", "passcode", "common"];
+export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom", "more", "passcode", "common"];
 
 export const sectionLabels: Record<ThemeSection, string> = {
   main: "친구",
