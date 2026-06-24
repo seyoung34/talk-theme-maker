@@ -5,7 +5,6 @@ import {
   getSlotCandidates,
   getSlotUploadEntries,
   disabledImageCandidateId,
-  isColorSlotDisabledByImage,
   type BubbleEditState,
   type SlotCandidateSelections,
   type SlotColors,
@@ -105,13 +104,12 @@ export function buildSlotCandidates(
   const uploadEntries = getSlotUploadEntries(slot, uploads);
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   const candidates = getSlotCandidates(slot, templateId, template);
-  const colorDisabledByImage = isColorSlotDisabledByImage(slot, allSlots, uploads, selections, templateId, template);
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
 
   const baseItems = candidates.map((candidate) => ({
     id: candidate.id,
     title: candidate.label,
-    status: colorDisabledByImage ? "색상 사용 안함" : slot.kind === "color" ? (candidate.colorValue ?? getResolvedColor(slot, colors, selections, templateId, template) ?? "값 없음").toUpperCase() : candidate.note ?? slot.note,
+    status: slot.kind === "color" ? (candidate.colorValue ?? getResolvedColor(slot, colors, selections, templateId, template) ?? "값 없음").toUpperCase() : candidate.note ?? slot.note,
     active: selected?.id === candidate.id,
     selected: selected?.id === candidate.id && !selectedUpload,
     source: candidate.isDefault || candidate.id === disabledImageCandidateId ? ("default" as const) : ("creator" as const),
@@ -181,7 +179,6 @@ function buildPaletteCandidates(
 
   for (const slot of allSlots) {
     if (slot.kind !== "color") continue;
-    if (isColorSlotDisabledByImage(slot, allSlots, uploads, selections, templateId, template)) continue;
     const color = getResolvedColor(slot, colors, selections, templateId, template);
     if (!color) continue;
 

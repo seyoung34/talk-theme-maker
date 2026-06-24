@@ -1,0 +1,53 @@
+import type { ImageColorPalette } from "@/lib/theme/colorPalette";
+import { adjustThemeColor, ensureThemeColorContrast, mixThemeColors, mutedThemeForeground, readableThemeForeground, themeColorRgbHex, withThemeColorAlpha } from "@/lib/theme/color";
+import type { ThemeAssetSlot, ThemeAutoColorRecipe } from "@/lib/theme/templates";
+
+export const autoMainPaletteCandidateId = "auto-color:main-palette-v2";
+export const legacyAutoMainSurfaceCandidateId = "auto-color:main-surface";
+
+export type MainPaletteContext = {
+  imageActive: boolean;
+  palette: ImageColorPalette | null;
+  currentBackground: string;
+  backgroundIsAuto: boolean;
+  templateAccent: string;
+};
+
+export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context: MainPaletteContext) {
+  const imagePalette = context.imageActive ? context.palette : null;
+  const currentBackground = themeColorRgbHex(context.currentBackground, "#F4FAFB");
+  const backgroundRecommendation = imagePalette?.average ?? currentBackground;
+  const background = context.backgroundIsAuto ? backgroundRecommendation : currentBackground;
+  const header = imagePalette?.top ?? background;
+  const secondary = background;
+  const tab = imagePalette?.bottom ?? background;
+  const accentSeed = imagePalette?.accent ?? context.templateAccent;
+  const accent = ensureThemeColorContrast(accentSeed, secondary, 3);
+  const foreground = readableThemeForeground(background);
+  const muted = mutedThemeForeground(background);
+  const headerForeground = readableThemeForeground(header);
+  const accentSurface = mixThemeColors(secondary, accent, 0.13);
+
+  const values: Partial<Record<ThemeAutoColorRecipe, string>> = {
+    "background-average": backgroundRecommendation,
+    "header-top": header,
+    "surface-background": secondary,
+    "tab-bottom": tab,
+    "foreground-header": headerForeground,
+    "foreground-background": foreground,
+    "foreground-muted": muted,
+    "foreground-pressed": adjustThemeColor(foreground, foreground === "#FFFFFF" ? -0.12 : 0.12),
+    "muted-pressed": adjustThemeColor(muted, muted === "#FFFFFF" ? -0.12 : 0.12),
+    "cell-transparent": withThemeColorAlpha(background, 0),
+    "cell-pressed": withThemeColorAlpha(foreground, 0.18),
+    "cell-border": withThemeColorAlpha(foreground, 0.15),
+    accent,
+    "accent-pressed": adjustThemeColor(accent, readableThemeForeground(accent) === "#FFFFFF" ? -0.12 : 0.12),
+    "accent-surface": accentSurface,
+    "accent-surface-pressed": mixThemeColors(secondary, accent, 0.22),
+  };
+
+  return Object.fromEntries(
+    slots.flatMap((slot) => slot.autoColorRecipe && values[slot.autoColorRecipe] ? [[slot.id, values[slot.autoColorRecipe]]] : []),
+  ) as Record<string, string>;
+}

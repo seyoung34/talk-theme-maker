@@ -1,8 +1,9 @@
-import type { ThemeAssetSlot, ThemeSlotCandidate, ThemeStartPayload, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
+import { normalizeThemeTemplateId, type ThemeAssetSlot, type ThemeSlotCandidate, type ThemeStartPayload, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
+import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 
 export const disabledImageCandidateId = "__none__";
-export const autoMainSurfaceCandidateId = "auto-color:main-surface";
+export { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 
 export type SlotUploadSource = "user" | "template" | "admin";
 
@@ -53,14 +54,6 @@ export function getImageColorFallbackRole(role: ThemeResourceRole): ThemeResourc
   if (role === "chat_background") return "chat_background_color";
   if (role === "passcode_background") return "passcode_background_color";
   if (role === "tab_background_image") return "tab_background";
-  return undefined;
-}
-
-export function getColorImageFallbackRole(role: ThemeResourceRole): ThemeResourceRole | undefined {
-  if (role === "main_background_color") return "main_background";
-  if (role === "chat_background_color") return "chat_background";
-  if (role === "passcode_background_color") return "passcode_background";
-  if (role === "tab_background") return "tab_background_image";
   return undefined;
 }
 
@@ -236,7 +229,7 @@ export function getInitialSlotCandidateSelections(slots: ThemeAssetSlot[], templ
   return Object.fromEntries(
     slots.map((slot) => {
       const defaultCandidate = getDefaultSelectedCandidate(slot, templateId, template);
-      return [slot.id, slot.autoColorGroup === "main-surface" ? autoMainSurfaceCandidateId : defaultCandidate?.id];
+      return [slot.id, slot.platform === "android" && slot.autoColorRecipe ? autoMainPaletteCandidateId : defaultCandidate?.id];
     }),
   );
 }
@@ -279,22 +272,6 @@ export function getResolvedAssetUrl(
   return getSelectedCandidate(slot, selections, templateId, template)?.assetUrl;
 }
 
-export function isColorSlotDisabledByImage(
-  slot: ThemeAssetSlot | undefined,
-  allSlots: ThemeAssetSlot[],
-  uploads: SlotUploads,
-  selections: SlotCandidateSelections,
-  templateId: ThemeTemplateId,
-  template: ThemeTemplate,
-) {
-  if (!slot || slot.kind !== "color") return false;
-  const imageRole = getColorImageFallbackRole(slot.role);
-  if (!imageRole) return false;
-  const imageSlot = allSlots.find((candidate) => candidate.platform === slot.platform && candidate.role === imageRole);
-  if (!imageSlot || isImageSlotDisabled(imageSlot, selections)) return false;
-  return Boolean(getSelectedUpload(imageSlot, uploads, selections) || getResolvedAssetUrl(imageSlot, uploads, selections, templateId, template));
-}
-
 export function getResolvedColor(
   slot: ThemeAssetSlot | undefined,
   colors: SlotColors,
@@ -328,11 +305,10 @@ export function getCompletion(
 
 export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[] = []) {
   if (slot.kind === "color") {
-    if (selections[slot.id] === autoMainSurfaceCandidateId) {
+    if (selections[slot.id] === autoMainPaletteCandidateId) {
       const color = colors[slot.id] ?? getDefaultColor(slot, templateId, template);
       return color ? `자동 · ${color.toUpperCase()}` : "자동 맞춤 대기 중";
     }
-    if (isColorSlotDisabledByImage(slot, allSlots, uploads, selections, templateId, template)) return "색상 사용 안함";
     const color = getResolvedColor(slot, colors, selections, templateId, template);
     return color ? color.toUpperCase() : "값 필요";
   }
@@ -383,10 +359,10 @@ export function readTemplateStartPayload(storageKey: string): ThemeStartPayload 
   try {
     const raw = localStorage.getItem(storageKey);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ThemeStartPayload>;
-    if ((parsed.templateId === "basic" || parsed.templateId === "spongebob") && (parsed.platform === "android" || parsed.platform === "ios")) {
+    const parsed = JSON.parse(raw) as Partial<ThemeStartPayload> & { templateId?: unknown };
+    if (typeof parsed.templateId === "string" && (parsed.platform === "android" || parsed.platform === "ios")) {
       return {
-        templateId: parsed.templateId,
+        templateId: normalizeThemeTemplateId(parsed.templateId),
         platform: parsed.platform,
         userTemplateId: typeof parsed.userTemplateId === "string" ? parsed.userTemplateId : undefined,
         systemTemplateId: typeof parsed.systemTemplateId === "string" ? parsed.systemTemplateId : undefined,

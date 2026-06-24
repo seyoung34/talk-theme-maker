@@ -13,6 +13,7 @@ import {
   bubbleSlotFromRole,
   getCompletion,
   getInitialSlotCandidateSelections,
+  getResolvedColor,
   getSectionGroups,
   getSelectedCandidate,
   getSlotFile,
@@ -29,9 +30,10 @@ import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
 import { adminAssetToFile, inferAdminAssetKind, listRecommendedAssetCandidatePage, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
+import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
-import { autoMainSurfaceCandidateId } from "@/lib/theme/project/state";
+import { autoMainPaletteCandidateId, buildMainPaletteRecommendations } from "@/lib/theme/autoColor";
 import { systemTemplateRepository, type RemoteSlotUploads, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
@@ -167,6 +169,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [adminAssetCursor, setAdminAssetCursor] = useState<string>();
   const [isLoadingAdminAssets, setIsLoadingAdminAssets] = useState(false);
   const [imageColorPalette, setImageColorPalette] = useState<ImageColorPalette | null>(null);
+  const [imageColorPaletteSourceKey, setImageColorPaletteSourceKey] = useState<string | null>(null);
   const [imageColorPaletteError, setImageColorPaletteError] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
@@ -379,27 +382,30 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     [activeTemplate, platform, slots, uploads, colors, candidateSelections],
   );
   const mainBackgroundFile = useMemo(() => platform === "android" ? findBestFile(analysis, "main_background") : undefined, [analysis, platform]);
+  const mainBackgroundPaletteKey = mainBackgroundFile ? getThemeFilePaletteKey(mainBackgroundFile) : null;
+  const activeImageColorPalette = mainBackgroundPaletteKey && imageColorPaletteSourceKey === mainBackgroundPaletteKey ? imageColorPalette : null;
+  const mainBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "main_background_color"), [slots]);
+  const resolvedMainBackground = mainBackgroundColorSlot
+    ? getResolvedColor(mainBackgroundColorSlot, colors, candidateSelections, templateId, activeTemplate) ?? activeTemplate.defaults.mainBackground
+    : activeTemplate.defaults.mainBackground;
 
   useEffect(() => {
     let active = true;
     if (platform !== "android" || !mainBackgroundFile) {
       setImageColorPalette(null);
+      setImageColorPaletteSourceKey(null);
       setImageColorPaletteError(null);
       return () => { active = false; };
     }
+    setImageColorPalette(null);
+    setImageColorPaletteSourceKey(null);
+    setImageColorPaletteError(null);
     extractThemeImagePalette(mainBackgroundFile)
       .then((palette) => {
         if (!active) return;
         setImageColorPalette(palette);
+        setImageColorPaletteSourceKey(mainBackgroundPaletteKey);
         setImageColorPaletteError(null);
-        const linkedSlots = slots.filter((slot) => slot.autoColorGroup === "main-surface" && candidateSelections[slot.id] === autoMainSurfaceCandidateId);
-        if (!linkedSlots.length) return;
-        setColors((current) => {
-          if (linkedSlots.every((slot) => current[slot.id]?.toUpperCase() === palette.representative)) return current;
-          const next = { ...current };
-          for (const slot of linkedSlots) next[slot.id] = palette.representative;
-          return next;
-        });
       })
       .catch((error) => {
         if (!active) return;
@@ -407,7 +413,42 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         setImageColorPaletteError(error instanceof Error ? error.message : "배경 이미지 색상을 분석하지 못했습니다.");
       });
     return () => { active = false; };
-  }, [candidateSelections, mainBackgroundFile, platform, slots]);
+  }, [mainBackgroundPaletteKey, platform]);
+
+  const mainColorRecommendations = useMemo(
+    () => buildMainPaletteRecommendations(slots, {
+      imageActive: Boolean(mainBackgroundFile),
+      palette: activeImageColorPalette,
+      currentBackground: resolvedMainBackground,
+      backgroundIsAuto: Boolean(mainBackgroundColorSlot && candidateSelections[mainBackgroundColorSlot.id] === autoMainPaletteCandidateId),
+      templateAccent: activeTemplate.accent,
+    }),
+    [activeImageColorPalette, activeTemplate.accent, candidateSelections, mainBackgroundColorSlot, mainBackgroundFile, resolvedMainBackground, slots],
+  );
+
+  useEffect(() => {
+    if (platform !== "android") return;
+    if (mainBackgroundFile && !activeImageColorPalette) return;
+    const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && candidateSelections[slot.id] === autoMainPaletteCandidateId && mainColorRecommendations[slot.id]);
+    if (!linkedSlots.length) return;
+    setColors((current) => {
+      if (linkedSlots.every((slot) => current[slot.id]?.toUpperCase() === mainColorRecommendations[slot.id]?.toUpperCase())) return current;
+      const next = { ...current };
+      for (const slot of linkedSlots) next[slot.id] = mainColorRecommendations[slot.id];
+      return next;
+    });
+  }, [activeImageColorPalette, candidateSelections, mainBackgroundFile, mainColorRecommendations, platform, slots]);
+
+  useEffect(() => {
+    if (platform !== "android" || mainBackgroundFile || !mainBackgroundColorSlot) return;
+    if (candidateSelections[mainBackgroundColorSlot.id] !== autoMainPaletteCandidateId) return;
+    setColors((current) => current[mainBackgroundColorSlot.id] ? current : { ...current, [mainBackgroundColorSlot.id]: resolvedMainBackground });
+    setCandidateSelections((current) => {
+      const next = { ...current };
+      delete next[mainBackgroundColorSlot.id];
+      return next;
+    });
+  }, [candidateSelections, mainBackgroundColorSlot, mainBackgroundFile, platform, resolvedMainBackground]);
 
   useEffect(() => {
     if (!groups.includes(activeGroup)) {
@@ -580,23 +621,25 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const changeColor = (slot: ThemeAssetSlot, value: string) => {
     setColors((current) => ({ ...current, [slot.id]: value }));
-    if (candidateSelections[slot.id] === autoMainSurfaceCandidateId) {
+    if (candidateSelections[slot.id] === autoMainPaletteCandidateId) {
       setCandidateSelections((current) => ({ ...current, [slot.id]: getSelectedCandidate(slot, {}, templateId, activeTemplate)?.id }));
     }
     setSelectedSlotId(slot.id);
   };
 
-  const applyAutoSurfaceColor = (slot: ThemeAssetSlot, color = imageColorPalette?.representative) => {
+  const applyAutoColor = (slot: ThemeAssetSlot) => {
+    if (mainBackgroundFile && !activeImageColorPalette) return;
+    const color = mainColorRecommendations[slot.id];
     if (!color) return;
     setColors((current) => ({ ...current, [slot.id]: color }));
-    setCandidateSelections((current) => ({ ...current, [slot.id]: autoMainSurfaceCandidateId }));
+    setCandidateSelections((current) => ({ ...current, [slot.id]: autoMainPaletteCandidateId }));
   };
 
-  const applyAutoSurfaceColorToAll = (color = imageColorPalette?.representative) => {
-    if (!color) return;
-    const linkedSlots = slots.filter((slot) => slot.autoColorGroup === "main-surface");
-    setColors((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, color])]));
-    setCandidateSelections((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, autoMainSurfaceCandidateId])]));
+  const applyAutoColorToAll = () => {
+    if (mainBackgroundFile && !activeImageColorPalette) return;
+    const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && mainColorRecommendations[slot.id] && (mainBackgroundFile || slot.role !== "main_background_color"));
+    setColors((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, mainColorRecommendations[slot.id]])]));
+    setCandidateSelections((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, autoMainPaletteCandidateId])]));
   };
 
   const selectCandidate = (slot: ThemeAssetSlot, candidateId: string) => {
@@ -1107,11 +1150,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   onUpload={uploadSlot}
                   onClear={clearSlot}
                   onColorChange={changeColor}
-                  imageColorPalette={imageColorPalette}
+                  imageColorPalette={activeImageColorPalette}
                   imageColorPaletteError={imageColorPaletteError}
-                  isAutoSurfaceColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainSurfaceCandidateId)}
-                  onApplyAutoSurfaceColor={(color) => selectedSlot && applyAutoSurfaceColor(selectedSlot, color)}
-                  onApplyAutoSurfaceColorToAll={(color) => applyAutoSurfaceColorToAll(color)}
+                  recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
+                  isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
+                  canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+                  canApplyAutoColorToAll={Boolean((!mainBackgroundFile || activeImageColorPalette) && Object.keys(mainColorRecommendations).length)}
+                  onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
+                  onApplyAutoColorToAll={applyAutoColorToAll}
                   onSelectCandidate={selectCandidate}
                   onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
                   onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
@@ -1955,4 +2001,9 @@ function triggerDownload(blob: Blob, fileName: string) {
   anchor.download = fileName;
   anchor.click();
   URL.revokeObjectURL(href);
+}
+
+function getThemeFilePaletteKey(file: ThemeProjectFile) {
+  if (file.file) return `${file.path}:${file.file.name}:${file.file.size}:${file.file.lastModified}`;
+  return `${file.path}:${file.sourceUrl ?? "embedded"}:${file.size}`;
 }

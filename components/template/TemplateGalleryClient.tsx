@@ -14,7 +14,7 @@ import type { ThemePlatform } from "@/lib/theme/types";
 type GalleryTemplateItem =
   | {
     id: string;
-    kind: "base" | "seed";
+    kind: "base";
     title: string;
     description?: string;
     badge: string;
@@ -300,7 +300,6 @@ export default function TemplateGalleryClient() {
 
 function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], uploadPreviewUrls: SignedUrlCache): GalleryTemplateItem[] {
   const basicTemplate = themeTemplates.find((template) => template.id === "basic") ?? themeTemplates[0];
-  const seedTemplates = themeTemplates.filter((template) => template.id !== "basic");
 
   return [
     {
@@ -312,15 +311,6 @@ function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], upload
       baseTemplate: basicTemplate,
       visual: createBaseTemplatePreviewVisual(basicTemplate),
     },
-    ...seedTemplates.map((template) => ({
-      id: `seed:${template.id}`,
-      kind: "seed" as const,
-      title: template.name,
-      description: template.description,
-      badge: "시스템",
-      baseTemplate: template,
-      visual: createBaseTemplatePreviewVisual(template),
-    })),
     ...groupSystemTemplateRecords(systemTemplates).map((bundle) => {
       const previewTemplate = bundle.variants.android ?? bundle.variants.ios!;
       const baseTemplate = themeTemplates.find((item) => item.id === previewTemplate.baseTemplateId) ?? basicTemplate;
@@ -339,7 +329,6 @@ function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], upload
           platform: previewTemplate.platform,
           summary: previewTemplate,
           signedUrls: uploadPreviewUrls,
-          seedAssets: spongebobPreviewAssets(baseTemplate),
         }),
       };
     }),
@@ -626,18 +615,12 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
 }
 
 function createBaseTemplatePreviewVisual(template: ThemeTemplate): TemplatePreviewVisual {
-  const seedAssets = spongebobPreviewAssets(template);
   return {
     chatBackgroundColor: template.defaults.chatBackground,
     mainBackgroundColor: template.defaults.mainBackground,
     tabBackgroundColor: template.defaults.tabBackground,
     myBubbleColor: template.defaults.myBubble,
     friendBubbleColor: template.defaults.friendBubble,
-    chatBackgroundImage: seedAssets.chatBackground,
-    mainBackgroundImage: seedAssets.mainBackground,
-    myBubbleImage: seedAssets.myBubble,
-    friendBubbleImage: seedAssets.friendBubble,
-    profileImage: seedAssets.profileImage,
   };
 }
 
@@ -660,17 +643,6 @@ function groupSystemTemplateRecords(templates: SystemTemplateSummary[]) {
   }
 
   return Array.from(map.values()).sort((left, right) => right.updatedAt - left.updatedAt);
-}
-
-function spongebobPreviewAssets(template: ThemeTemplate) {
-  if (template.id !== "spongebob") return {};
-  return {
-    mainBackground: "/template-assets/spongebob/android/theme_background_image.png",
-    chatBackground: "/template-assets/spongebob/android/theme_chatroom_background_image.png",
-    myBubble: "/template-assets/spongebob/android/theme_chatroom_bubble_me_01_image.9.png",
-    friendBubble: "/template-assets/spongebob/android/theme_chatroom_bubble_you_01_image.9.png",
-    profileImage: "/template-assets/spongebob/android/theme_profile_01_image.png",
-  };
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {

@@ -130,6 +130,16 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
   if (name.startsWith("maintabIcoMoreSelected") || name.startsWith("maintabIcoMoreFocused")) return "tab_icon_more_focused";
   if (name.startsWith("maintabIcoMore")) return "tab_icon_more";
   if (name.startsWith("profileImg")) return "profile_image";
+  if (name.startsWith("passcodeBgImage")) return "passcode_background";
+  if (name.startsWith("passcodeImgCode01Selected")) return "passcode_indicator_1_checked";
+  if (name.startsWith("passcodeImgCode01")) return "passcode_indicator_1";
+  if (name.startsWith("passcodeImgCode02Selected")) return "passcode_indicator_2_checked";
+  if (name.startsWith("passcodeImgCode02")) return "passcode_indicator_2";
+  if (name.startsWith("passcodeImgCode03Selected")) return "passcode_indicator_3_checked";
+  if (name.startsWith("passcodeImgCode03")) return "passcode_indicator_3";
+  if (name.startsWith("passcodeImgCode04Selected")) return "passcode_indicator_4_checked";
+  if (name.startsWith("passcodeImgCode04")) return "passcode_indicator_4";
+  if (name.startsWith("passcodeKeypadPressed")) return "passcode_keypad_pressed_image";
   if (name.startsWith("passcode")) return "passcode";
   if (path.endsWith("KakaoTalkTheme.css") || path.endsWith("Kakao Talk Theme.css")) return "unknown";
   return "unknown";

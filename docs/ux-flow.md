@@ -24,13 +24,9 @@
 - `/project`: 기존 링크 호환용 리다이렉트.
 - `/editor`: Android 9-patch와 iOS inset/stretch 말풍선 에디터.
 
-## 스폰지밥 템플릿 기본 에셋
+## 템플릿 구성
 
-스폰지밥 템플릿은 아래 원본 테마에서 대표 에셋을 가져와 기본 이미지로 표시한다.
-
-- Android 원본: `C:\Users\jupi4\Desktop\VS Code\kakaotalk-spongebob-theme`
-- iOS 원본: `C:\Users\jupi4\Desktop\VS Code\kakaotalk-spongebob-ios-theme`
-- Maker 정적 경로: `public/template-assets/spongebob`
+코드에 포함되는 기본 템플릿은 `basic` 하나다. 그 밖의 완성형 테마는 Supabase 시스템 템플릿으로 등록하고 이미지 파일은 `theme-assets` Storage에 저장한다.
 
 ## 현재 구현된 슬롯
 

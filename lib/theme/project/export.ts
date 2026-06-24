@@ -5,6 +5,14 @@ export function getSlotExportMapping(slot: ThemeAssetSlot): ThemeExportMapping |
   const configured = slot.export?.[slot.platform];
   if (configured) return configured;
 
+  if (slot.platform === "ios" && slot.kind === "color" && slot.cssSelector && slot.cssProperty) {
+    return {
+      type: "css-color",
+      target: formatCssReference(slot.cssSelector, slot.cssProperty),
+      transform: "write-css",
+    };
+  }
+
   if (slot.kind === "color" && slot.colorKey) {
     return {
       type: "css-color",
@@ -22,6 +30,11 @@ export function getSlotExportMapping(slot: ThemeAssetSlot): ThemeExportMapping |
     scaleTargets,
     transform: getDefaultTransform(slot.platform, slot.kind),
   };
+}
+
+function formatCssReference(selector: string | string[], property: string) {
+  const selectors = Array.isArray(selector) ? selector.join(" / ") : selector;
+  return `${selectors} · ${property}`;
 }
 
 function getDefaultTransform(platform: ThemePlatform, kind: ThemeAssetSlot["kind"]): ThemeExportMapping["transform"] {

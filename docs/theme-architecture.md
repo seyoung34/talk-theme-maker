@@ -263,8 +263,6 @@ lib/
     manifest/
       basic.android.json
       basic.ios.json
-      spongebob.android.json
-      spongebob.ios.json
     android/
       ninepatch.ts
       export.ts
@@ -286,9 +284,6 @@ lib/
 public/
   template-assets/
     basic/
-      android/
-      ios/
-    spongebob/
       android/
       ios/
 

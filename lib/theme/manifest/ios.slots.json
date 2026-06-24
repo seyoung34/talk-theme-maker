@@ -11,11 +11,12 @@
     "fileName": "mainBgImage.png",
     "path": "Images/mainBgImage.png",
     "required": true,
-    "note": "MainViewStyle-Primary -ios-background-image",
+    "note": "친구와 채팅 목록의 배경에 표시되는 이미지입니다. 이름과 상태 메시지가 잘 읽히는지 확인하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/mainBgImage.svg",
-      "spongebob": "/template-assets/spongebob/ios/mainBgImage@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/mainBgImage.svg"
+    },
+    "cssSelector": "MainViewStyle-Primary",
+    "cssProperty": "-ios-background-image"
   },
   {
     "id": "ios-main-background-color",
@@ -27,12 +28,33 @@
     "kind": "color",
     "label": "메인 배경색",
     "required": true,
-    "note": "MainViewStyle-Primary background-color",
-    "colorKey": "background-color",
+    "note": "배경 이미지가 없거나 투명한 영역에 표시되는 색상입니다. 이미지와 자연스럽게 이어지는 색을 선택하세요.",
     "defaultColor": {
-      "basic": "#f4fafb",
-      "spongebob": "#b7eef7"
-    }
+      "basic": "#f4fafb"
+    },
+    "cssSelector": "MainViewStyle-Primary",
+    "cssProperty": "background-color"
+  },
+  {
+    "id": "ios-main-header-foreground-color",
+    "platform": "ios",
+    "role": "main_header_foreground_color",
+    "section": "main",
+    "group": "header",
+    "screen": "friends",
+    "kind": "color",
+    "label": "헤더 제목·아이콘 색상",
+    "required": true,
+    "note": "친구·채팅·더보기 화면 상단의 제목과 아이콘 색상입니다. 배경과 충분히 구분되는 색을 선택하세요.",
+    "visibleInSections": [
+      "tabs",
+      "more"
+    ],
+    "defaultColor": {
+      "basic": "#664242"
+    },
+    "cssSelector": "HeaderStyle-Main",
+    "cssProperty": "-ios-text-color"
   },
   {
     "id": "ios-main-text-color",
@@ -42,14 +64,14 @@
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "메인 텍스트",
+    "label": "이름 색상",
     "required": true,
-    "note": "MainViewStyle-Primary -ios-text-color",
-    "colorKey": "-ios-text-color",
+    "note": "친구와 채팅 목록의 이름에 적용되는 색상입니다. 배경 위에서 또렷하게 보이는지 확인하세요.",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
-    }
+      "basic": "#111111"
+    },
+    "cssSelector": "MainViewStyle-Primary",
+    "cssProperty": "-ios-text-color"
   },
   {
     "id": "ios-main-description-color",
@@ -59,14 +81,14 @@
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "메인 보조 텍스트",
+    "label": "상태 메시지 색상",
     "required": true,
-    "note": "MainViewStyle-Primary -ios-description-text-color",
-    "colorKey": "-ios-description-text-color",
+    "note": "친구 목록의 상태 메시지와 보조 정보에 적용되는 색상입니다. 이름보다 약하게 보이면서도 읽을 수 있어야 합니다.",
     "defaultColor": {
-      "basic": "#4d5660",
-      "spongebob": "#37515a"
-    }
+      "basic": "#4d5660"
+    },
+    "cssSelector": "MainViewStyle-Primary",
+    "cssProperty": "-ios-description-text-color"
   },
   {
     "id": "ios-main-highlighted-text-color",
@@ -76,48 +98,50 @@
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "메인 pressed 텍스트",
+    "label": "이름 눌림 색상",
     "required": false,
-    "note": "MainViewStyle-Primary -ios-highlighted-text-color",
-    "colorKey": "-ios-highlighted-text-color",
+    "note": "친구나 채팅 항목을 누르는 동안 이름에 적용되는 색상입니다. 기본 이름 색상과 자연스럽게 이어지도록 설정하세요.",
+    "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
-    }
+      "basic": "#111111"
+    },
+    "cssSelector": "MainViewStyle-Primary",
+    "cssProperty": "-ios-highlighted-text-color"
   },
   {
-    "id": "ios-main-paragraph-color",
+    "id": "ios-tab-paragraph-color",
     "platform": "ios",
-    "role": "main_body_color",
-    "section": "main",
+    "role": "tab_paragraph_color",
+    "section": "tabs",
     "group": "list",
-    "screen": "friends",
+    "screen": "tabs",
     "kind": "color",
-    "label": "메인 문단 텍스트",
+    "label": "마지막 메시지 색상",
     "required": true,
-    "note": "MainViewStyle-Primary -ios-paragraph-text-color",
-    "colorKey": "-ios-paragraph-text-color",
+    "note": "채팅 목록의 마지막 메시지와 시간에 적용되는 색상입니다. 이름보다 약한 위계를 유지하세요.",
     "defaultColor": {
-      "basic": "#4d5660",
-      "spongebob": "#37515a"
-    }
+      "basic": "#4d5660"
+    },
+    "cssSelector": "MainViewStyle-Primary",
+    "cssProperty": "-ios-paragraph-text-color"
   },
   {
-    "id": "ios-main-paragraph-highlighted-color",
+    "id": "ios-tab-paragraph-highlighted-color",
     "platform": "ios",
-    "role": "main_paragraph_pressed_color",
-    "section": "main",
+    "role": "tab_paragraph_pressed_color",
+    "section": "tabs",
     "group": "list",
-    "screen": "friends",
+    "screen": "tabs",
     "kind": "color",
-    "label": "메인 문단 pressed",
+    "label": "마지막 메시지 눌림 색상",
     "required": false,
-    "note": "MainViewStyle-Primary -ios-paragraph-highlighted-text-color",
-    "colorKey": "-ios-paragraph-highlighted-text-color",
+    "note": "채팅 항목을 누르는 동안 마지막 메시지와 시간에 적용되는 색상입니다. 기본 색상과 차이가 지나치게 크지 않아야 합니다.",
+    "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#4d5660",
-      "spongebob": "#37515a"
-    }
+      "basic": "#4d5660"
+    },
+    "cssSelector": "MainViewStyle-Primary",
+    "cssProperty": "-ios-paragraph-highlighted-text-color"
   },
   {
     "id": "ios-main-selected-background-color",
@@ -127,14 +151,15 @@
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "메인 선택 배경",
+    "label": "리스트 눌림 배경",
     "required": false,
-    "note": "MainViewStyle-Primary -ios-selected-background-color",
-    "colorKey": "-ios-selected-background-color",
+    "note": "친구나 채팅 항목을 누르는 동안 셀 뒤에 표시되는 색상입니다. 배경과 구분되면서 텍스트를 가리지 않아야 합니다.",
+    "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
-    }
+      "basic": "#111111"
+    },
+    "cssSelector": "MainViewStyle-Primary",
+    "cssProperty": "-ios-selected-background-color"
   },
   {
     "id": "ios-main-selected-background-alpha",
@@ -144,14 +169,15 @@
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "메인 선택 배경 alpha",
+    "label": "리스트 눌림 배경 투명도",
     "required": false,
-    "note": "MainViewStyle-Primary -ios-selected-background-alpha",
-    "colorKey": "-ios-selected-background-alpha",
+    "note": "눌린 셀 배경의 투명도입니다. 0은 투명하고 1은 불투명하므로 약한 터치 피드백이 되도록 조절하세요.",
+    "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "0.05",
-      "spongebob": "0.05"
-    }
+      "basic": "0.05"
+    },
+    "cssSelector": "MainViewStyle-Primary",
+    "cssProperty": "-ios-selected-background-alpha"
   },
   {
     "id": "ios-main-border-color",
@@ -161,14 +187,15 @@
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "메인 보더",
+    "label": "섹션 구분선 색상",
     "required": false,
-    "note": "SectionTitleStyle-Main border-color",
-    "colorKey": "border-color",
+    "note": "친구와 채팅 목록의 섹션 구분선에 적용되는 색상입니다. 배경보다 조금만 진하게 설정하는 것이 좋습니다.",
+    "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
-    }
+      "basic": "#111111"
+    },
+    "cssSelector": "SectionTitleStyle-Main",
+    "cssProperty": "border-color"
   },
   {
     "id": "ios-main-border-alpha",
@@ -178,14 +205,15 @@
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "메인 보더 alpha",
+    "label": "섹션 구분선 투명도",
     "required": false,
-    "note": "SectionTitleStyle-Main border-alpha",
-    "colorKey": "border-alpha",
+    "note": "섹션 구분선의 투명도입니다. 0은 투명하고 1은 불투명하므로 화면이 답답해 보이지 않게 조절하세요.",
+    "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "0.18",
-      "spongebob": "0.18"
-    }
+      "basic": "0.18"
+    },
+    "cssSelector": "SectionTitleStyle-Main",
+    "cssProperty": "border-alpha"
   },
   {
     "id": "ios-tab-background-image",
@@ -199,7 +227,44 @@
     "fileName": "maintabBgImage.png",
     "path": "Images/maintabBgImage.png",
     "required": false,
-    "note": "TabbarStyle-Main -ios-background-image"
+    "note": "화면 하단의 메인 탭 영역에 표시되는 배경 이미지입니다. 모든 탭 아이콘이 잘 보이는지 확인하세요.",
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-background-image"
+  },
+  {
+    "id": "ios-more-background-color",
+    "platform": "ios",
+    "role": "main_body_secondary_cell_color",
+    "section": "more",
+    "group": "background",
+    "screen": "more",
+    "kind": "color",
+    "label": "더보기 배경색",
+    "required": true,
+    "note": "더보기 화면과 보조 콘텐츠 영역의 배경색입니다. 프로필과 서비스 항목이 자연스럽게 구분되어야 합니다.",
+    "defaultColor": {
+      "basic": "#FFDEDE"
+    },
+    "cssSelector": "MainViewStyle-Secondary",
+    "cssProperty": "background-color"
+  },
+  {
+    "id": "ios-more-feature-primary-color",
+    "platform": "ios",
+    "role": "feature_primary_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "더보기 서비스 색상",
+    "required": false,
+    "note": "더보기 화면의 서비스 이름과 주요 기능에 적용되는 색상입니다. 배경 위에서 읽기 쉬운지 확인하세요.",
+    "optionLevel": "advanced",
+    "defaultColor": {
+      "basic": "#805959"
+    },
+    "cssSelector": "FeatureStyle-Primary",
+    "cssProperty": "-ios-text-color"
   },
   {
     "id": "ios-tab-background-color",
@@ -211,12 +276,12 @@
     "kind": "color",
     "label": "탭바 배경색",
     "required": true,
-    "note": "TabbarStyle-Main background-color",
-    "colorKey": "background-color",
+    "note": "하단 탭 배경 이미지가 없거나 투명한 영역에 표시되는 색상입니다. 탭 아이콘과 충분한 대비를 유지하세요.",
     "defaultColor": {
-      "basic": "#ffffff",
-      "spongebob": "#ffffff"
-    }
+      "basic": "#ffffff"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "background-color"
   },
   {
     "id": "ios-tab-text-color",
@@ -226,14 +291,14 @@
     "group": "bar",
     "screen": "tabs",
     "kind": "color",
-    "label": "탭 텍스트",
+    "label": "상단 탭 텍스트 색상",
     "required": false,
-    "note": "HeaderStyle-Main -ios-tab-text-color",
-    "colorKey": "-ios-tab-text-color",
+    "note": "상단의 탭형 텍스트에 적용되는 기본 색상입니다. 선택된 텍스트보다 한 단계 약하게 보이도록 설정하세요.",
     "defaultColor": {
-      "basic": "#4d5660",
-      "spongebob": "#37515a"
-    }
+      "basic": "#4d5660"
+    },
+    "cssSelector": "HeaderStyle-Main",
+    "cssProperty": "-ios-tab-text-color"
   },
   {
     "id": "ios-tab-friends",
@@ -247,11 +312,12 @@
     "fileName": "maintabIcoFriends.png",
     "path": "Images/maintabIcoFriends.png",
     "required": true,
-    "note": "TabbarStyle-Main -ios-friends-normal-icon-image",
+    "note": "친구 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 선택 아이콘과 크기와 중심을 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
-      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-friends-normal-icon-image"
   },
   {
     "id": "ios-tab-friends-focused",
@@ -265,11 +331,12 @@
     "fileName": "maintabIcoFriendsSelected.png",
     "path": "Images/maintabIcoFriendsSelected.png",
     "required": false,
-    "note": "TabbarStyle-Main -ios-friends-selected-icon-image",
+    "note": "친구 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 아이콘과 같은 크기와 위치를 유지하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
-      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-friends-selected-icon-image"
   },
   {
     "id": "ios-tab-chats",
@@ -283,11 +350,12 @@
     "fileName": "maintabIcoChats.png",
     "path": "Images/maintabIcoChats.png",
     "required": false,
-    "note": "TabbarStyle-Main -ios-chats-normal-icon-image",
+    "note": "채팅 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 선택 아이콘과 크기와 중심을 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
-      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-chats-normal-icon-image"
   },
   {
     "id": "ios-tab-chats-focused",
@@ -301,11 +369,12 @@
     "fileName": "maintabIcoChatsSelected.png",
     "path": "Images/maintabIcoChatsSelected.png",
     "required": false,
-    "note": "TabbarStyle-Main -ios-chats-selected-icon-image",
+    "note": "채팅 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 아이콘과 같은 크기와 위치를 유지하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
-      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-chats-selected-icon-image"
   },
   {
     "id": "ios-tab-now",
@@ -319,11 +388,12 @@
     "fileName": "maintabIcoNow.png",
     "path": "Images/maintabIcoNow.png",
     "required": false,
-    "note": "TabbarStyle-Main -ios-openchats-normal-icon-image",
+    "note": "나우 또는 오픈채팅 계열 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 탭 구성에 따라 노출될 수 있습니다.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
-      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-now-normal-icon-image"
   },
   {
     "id": "ios-tab-now-focused",
@@ -337,11 +407,12 @@
     "fileName": "maintabIcoNowSelected.png",
     "path": "Images/maintabIcoNowSelected.png",
     "required": false,
-    "note": "TabbarStyle-Main -ios-openchats-selected-icon-image",
+    "note": "나우 또는 오픈채팅 계열 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 아이콘과 크기와 중심을 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
-      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-now-selected-icon-image"
   },
   {
     "id": "ios-tab-shopping",
@@ -355,11 +426,12 @@
     "fileName": "maintabIcoShopping.png",
     "path": "Images/maintabIcoShopping.png",
     "required": false,
-    "note": "TabbarStyle-Main -ios-shopping-normal-icon-image",
+    "note": "쇼핑 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 선택 아이콘과 크기와 중심을 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
-      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-shopping-normal-icon-image"
   },
   {
     "id": "ios-tab-shopping-focused",
@@ -373,11 +445,12 @@
     "fileName": "maintabIcoShoppingSelected.png",
     "path": "Images/maintabIcoShoppingSelected.png",
     "required": false,
-    "note": "TabbarStyle-Main -ios-shopping-selected-icon-image",
+    "note": "쇼핑 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 아이콘과 같은 크기와 위치를 유지하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
-      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-shopping-selected-icon-image"
   },
   {
     "id": "ios-tab-more",
@@ -391,11 +464,12 @@
     "fileName": "maintabIcoMore.png",
     "path": "Images/maintabIcoMore.png",
     "required": false,
-    "note": "TabbarStyle-Main -ios-more-normal-icon-image",
+    "note": "더보기 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 선택 아이콘과 크기와 중심을 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
-      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-more-normal-icon-image"
   },
   {
     "id": "ios-tab-more-focused",
@@ -409,11 +483,12 @@
     "fileName": "maintabIcoMoreSelected.png",
     "path": "Images/maintabIcoMoreSelected.png",
     "required": false,
-    "note": "TabbarStyle-Main -ios-more-selected-icon-image",
+    "note": "더보기 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 아이콘과 같은 크기와 위치를 유지하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg",
-      "spongebob": "/template-assets/spongebob/ios/maintabIcoFriends@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-more-selected-icon-image"
   },
   {
     "id": "ios-chat-background-image",
@@ -427,11 +502,12 @@
     "fileName": "chatroomBgImage.png",
     "path": "Images/chatroomBgImage.png",
     "required": true,
-    "note": "BackgroundStyle-ChatRoom -ios-background-image",
+    "note": "채팅방의 메시지 영역 뒤에 표시되는 배경 이미지입니다. 내 말풍선과 상대 말풍선이 모두 잘 보이는지 확인하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/chatroomBgImage.svg",
-      "spongebob": "/template-assets/spongebob/ios/chatroomBgImage@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/chatroomBgImage.svg"
+    },
+    "cssSelector": "BackgroundStyle-ChatRoom",
+    "cssProperty": "-ios-background-image"
   },
   {
     "id": "ios-chat-background-color",
@@ -443,12 +519,12 @@
     "kind": "color",
     "label": "채팅방 배경색",
     "required": true,
-    "note": "BackgroundStyle-ChatRoom background-color",
-    "colorKey": "background-color",
+    "note": "채팅방 배경 이미지가 없거나 투명한 영역에 표시되는 색상입니다. 말풍선과 충분히 구분되는 색을 선택하세요.",
     "defaultColor": {
-      "basic": "#b8f2f7",
-      "spongebob": "#aeeef7"
-    }
+      "basic": "#b8f2f7"
+    },
+    "cssSelector": "BackgroundStyle-ChatRoom",
+    "cssProperty": "background-color"
   },
   {
     "id": "ios-bubble-me-1",
@@ -463,11 +539,12 @@
     "path": "Images/chatroomBubbleSend01.png",
     "required": true,
     "editableInBubbleEditor": true,
-    "note": "MessageCellStyle-Send -ios-background-image",
+    "note": "내가 보낸 일반 메시지에 표시되는 말풍선 이미지입니다. 텍스트가 들어갈 안쪽 여백을 충분히 남겨 주세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/chatroomBubbleSend01.svg",
-      "spongebob": "/template-assets/spongebob/ios/chatroomBubbleSend01@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/chatroomBubbleSend01.svg"
+    },
+    "cssSelector": "MessageCellStyle-Send",
+    "cssProperty": "-ios-background-image"
   },
   {
     "id": "ios-bubble-me-2",
@@ -482,11 +559,12 @@
     "path": "Images/chatroomBubbleSend02.png",
     "required": false,
     "editableInBubbleEditor": true,
-    "note": "MessageCellStyle-Send -ios-group-background-image",
+    "note": "내 메시지가 연속으로 이어질 때 표시되는 그룹 말풍선 이미지입니다. 일반 말풍선과 같은 크기감으로 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/chatroomBubbleSend01.svg",
-      "spongebob": "/template-assets/spongebob/ios/chatroomBubbleSend01@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/chatroomBubbleSend01.svg"
+    },
+    "cssSelector": "MessageCellStyle-Send",
+    "cssProperty": "-ios-group-background-image"
   },
   {
     "id": "ios-bubble-you-1",
@@ -501,11 +579,12 @@
     "path": "Images/chatroomBubbleReceive01.png",
     "required": true,
     "editableInBubbleEditor": true,
-    "note": "MessageCellStyle-Receive -ios-background-image",
+    "note": "상대가 보낸 일반 메시지에 표시되는 말풍선 이미지입니다. 텍스트가 들어갈 안쪽 여백을 충분히 남겨 주세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.svg",
-      "spongebob": "/template-assets/spongebob/ios/chatroomBubbleReceive01@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.svg"
+    },
+    "cssSelector": "MessageCellStyle-Receive",
+    "cssProperty": "-ios-background-image"
   },
   {
     "id": "ios-bubble-you-2",
@@ -520,11 +599,12 @@
     "path": "Images/chatroomBubbleReceive02.png",
     "required": false,
     "editableInBubbleEditor": true,
-    "note": "MessageCellStyle-Receive -ios-group-background-image",
+    "note": "상대 메시지가 연속으로 이어질 때 표시되는 그룹 말풍선 이미지입니다. 일반 말풍선과 같은 크기감으로 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.svg",
-      "spongebob": "/template-assets/spongebob/ios/chatroomBubbleReceive01@3x.png"
-    }
+      "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.svg"
+    },
+    "cssSelector": "MessageCellStyle-Receive",
+    "cssProperty": "-ios-group-background-image"
   },
   {
     "id": "ios-chat-bubble-me-color",
@@ -536,12 +616,12 @@
     "kind": "color",
     "label": "내 말풍선 텍스트",
     "required": false,
-    "note": "MessageCellStyle-Send -ios-text-color",
-    "colorKey": "-ios-text-color",
+    "note": "내 말풍선 안의 메시지 글자색입니다. 말풍선 이미지의 밝기와 대비를 확인하세요.",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
-    }
+      "basic": "#111111"
+    },
+    "cssSelector": "MessageCellStyle-Send",
+    "cssProperty": "-ios-text-color"
   },
   {
     "id": "ios-chat-bubble-you-color",
@@ -553,12 +633,12 @@
     "kind": "color",
     "label": "상대 말풍선 텍스트",
     "required": false,
-    "note": "MessageCellStyle-Receive -ios-text-color",
-    "colorKey": "-ios-text-color",
+    "note": "상대 말풍선 안의 메시지 글자색입니다. 말풍선 이미지의 밝기와 대비를 확인하세요.",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
-    }
+      "basic": "#111111"
+    },
+    "cssSelector": "MessageCellStyle-Receive",
+    "cssProperty": "-ios-text-color"
   },
   {
     "id": "ios-chat-unread-count-color",
@@ -570,12 +650,15 @@
     "kind": "color",
     "label": "읽지 않음 숫자",
     "required": false,
-    "note": "MessageCellStyle unread text color",
-    "colorKey": "-ios-unread-text-color",
+    "note": "말풍선 옆의 읽지 않은 메시지 수에 적용되는 색상입니다. 채팅방 배경과 말풍선 모두에서 잘 보여야 합니다.",
     "defaultColor": {
-      "basic": "#6a5f00",
-      "spongebob": "#f6c800"
-    }
+      "basic": "#6a5f00"
+    },
+    "cssSelector": [
+      "MessageCellStyle-Send",
+      "MessageCellStyle-Receive"
+    ],
+    "cssProperty": "-ios-unread-text-color"
   },
   {
     "id": "ios-chat-input-background",
@@ -587,12 +670,12 @@
     "kind": "color",
     "label": "입력바 배경",
     "required": true,
-    "note": "InputBarStyle-Chat background-color",
-    "colorKey": "background-color",
+    "note": "채팅방 하단 입력 영역의 배경색입니다. 입력 버튼과 전송 버튼이 또렷하게 보여야 합니다.",
     "defaultColor": {
-      "basic": "#ffffff",
-      "spongebob": "#ffffff"
-    }
+      "basic": "#ffffff"
+    },
+    "cssSelector": "InputBarStyle-Chat",
+    "cssProperty": "background-color"
   },
   {
     "id": "ios-chat-button-text-color",
@@ -604,12 +687,12 @@
     "kind": "color",
     "label": "입력바 텍스트",
     "required": false,
-    "note": "InputBarStyle-Chat -ios-button-text-color",
-    "colorKey": "-ios-button-text-color",
+    "note": "채팅 입력 영역의 버튼 텍스트에 적용되는 색상입니다. 입력 영역 배경과 충분히 구분되어야 합니다.",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
-    }
+      "basic": "#111111"
+    },
+    "cssSelector": "InputBarStyle-Chat",
+    "cssProperty": "-ios-button-text-color"
   },
   {
     "id": "ios-chat-button-foreground-color",
@@ -621,12 +704,12 @@
     "kind": "color",
     "label": "메뉴 아이콘",
     "required": false,
-    "note": "InputBarStyle-Chat -ios-button-normal-foreground-color",
-    "colorKey": "-ios-button-normal-foreground-color",
+    "note": "첨부와 메뉴 버튼의 기본 아이콘 색상입니다. 입력 영역 배경 위에서 선명하게 보이는지 확인하세요.",
     "defaultColor": {
-      "basic": "#4d5660",
-      "spongebob": "#37515a"
-    }
+      "basic": "#4d5660"
+    },
+    "cssSelector": "InputBarStyle-Chat",
+    "cssProperty": "-ios-button-normal-foreground-color"
   },
   {
     "id": "ios-chat-button-highlighted-foreground-color",
@@ -636,14 +719,15 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "메뉴 아이콘 pressed",
+    "label": "메뉴 아이콘 눌림 색상",
     "required": false,
-    "note": "InputBarStyle-Chat -ios-button-highlighted-foreground-color",
-    "colorKey": "-ios-button-highlighted-foreground-color",
+    "note": "첨부와 메뉴 버튼을 누르는 동안 아이콘에 적용되는 색상입니다. 기본 상태와 자연스럽게 구분되어야 합니다.",
+    "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
-    }
+      "basic": "#111111"
+    },
+    "cssSelector": "InputBarStyle-Chat",
+    "cssProperty": "-ios-button-highlighted-foreground-color"
   },
   {
     "id": "ios-chat-button-background-color",
@@ -655,12 +739,13 @@
     "kind": "color",
     "label": "메뉴 버튼 배경",
     "required": false,
-    "note": "InputBarStyle-Chat -ios-button-normal-background-color",
-    "colorKey": "-ios-button-normal-background-color",
+    "note": "첨부와 메뉴 버튼 뒤에 표시되는 배경색과 투명도입니다. 아이콘을 가리지 않는 약한 색을 권장합니다.",
+    "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#0FFFFFFF",
-      "spongebob": "#0FFFFFFF"
-    }
+      "basic": "#0FFFFFFF"
+    },
+    "cssSelector": "InputBarStyle-Chat",
+    "cssProperty": "-ios-button-normal-background-color"
   },
   {
     "id": "ios-chat-send-button",
@@ -672,12 +757,12 @@
     "kind": "color",
     "label": "전송 버튼 배경",
     "required": true,
-    "note": "InputBarStyle-Chat -ios-send-normal-background-color",
-    "colorKey": "-ios-send-normal-background-color",
+    "note": "전송 버튼의 기본 배경색입니다. 전송 아이콘과 충분한 대비를 유지하세요.",
     "defaultColor": {
-      "basic": "#c9ff3d",
-      "spongebob": "#f6c800"
-    }
+      "basic": "#c9ff3d"
+    },
+    "cssSelector": "InputBarStyle-Chat",
+    "cssProperty": "-ios-send-normal-background-color"
   },
   {
     "id": "ios-chat-send-icon-color",
@@ -689,12 +774,12 @@
     "kind": "color",
     "label": "전송 아이콘",
     "required": false,
-    "note": "InputBarStyle-Chat -ios-send-normal-foreground-color",
-    "colorKey": "-ios-send-normal-foreground-color",
+    "note": "전송 버튼 안의 아이콘 색상입니다. 버튼 배경 위에서 또렷하게 보여야 합니다.",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
-    }
+      "basic": "#111111"
+    },
+    "cssSelector": "InputBarStyle-Chat",
+    "cssProperty": "-ios-send-normal-foreground-color"
   },
   {
     "id": "ios-chat-send-highlighted-button",
@@ -704,14 +789,15 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "전송 버튼 pressed 배경",
+    "label": "전송 버튼 눌림 배경",
     "required": false,
-    "note": "InputBarStyle-Chat -ios-send-highlighted-background-color",
-    "colorKey": "-ios-send-highlighted-background-color",
+    "note": "전송 버튼을 누르는 동안 표시되는 배경색입니다. 기본 상태와 자연스럽게 구분되어야 합니다.",
+    "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#c9ff3d",
-      "spongebob": "#f6c800"
-    }
+      "basic": "#c9ff3d"
+    },
+    "cssSelector": "InputBarStyle-Chat",
+    "cssProperty": "-ios-send-highlighted-background-color"
   },
   {
     "id": "ios-chat-send-highlighted-icon",
@@ -721,14 +807,268 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "전송 아이콘 pressed",
+    "label": "전송 아이콘 눌림 색상",
     "required": false,
-    "note": "InputBarStyle-Chat -ios-send-highlighted-foreground-color",
-    "colorKey": "-ios-send-highlighted-foreground-color",
+    "note": "전송 버튼을 누르는 동안 아이콘에 적용되는 색상입니다. 눌림 배경 위에서 잘 보이는지 확인하세요.",
+    "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
-    }
+      "basic": "#111111"
+    },
+    "cssSelector": "InputBarStyle-Chat",
+    "cssProperty": "-ios-send-highlighted-foreground-color"
+  },
+  {
+    "id": "ios-passcode-background-image",
+    "platform": "ios",
+    "role": "passcode_background",
+    "section": "passcode",
+    "group": "background",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "잠금화면 배경 이미지",
+    "fileName": "passcodeBgImage.png",
+    "path": "Images/passcodeBgImage.png",
+    "required": false,
+    "note": "암호 입력 화면의 상단과 배경에 표시되는 이미지입니다. 사용하지 않으면 배경색만 적용됩니다.",
+    "cssSelector": "BackgroundStyle-Passcode",
+    "cssProperty": "-ios-background-image"
+  },
+  {
+    "id": "ios-passcode-background-color",
+    "platform": "ios",
+    "role": "passcode_background_color",
+    "section": "passcode",
+    "group": "background",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "잠금화면 배경색",
+    "required": true,
+    "note": "암호 입력 화면에서 이미지가 없거나 투명한 영역에 표시되는 색상입니다. 제목과 암호 표시가 잘 보이는지 확인하세요.",
+    "defaultColor": {
+      "basic": "#FFDEDE"
+    },
+    "cssSelector": "BackgroundStyle-Passcode",
+    "cssProperty": "background-color"
+  },
+  {
+    "id": "ios-passcode-color",
+    "platform": "ios",
+    "role": "passcode_color",
+    "section": "passcode",
+    "group": "text",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "잠금화면 제목 색상",
+    "required": true,
+    "note": "암호 입력 화면의 제목과 안내 문구에 적용되는 색상입니다. 배경 위에서 충분히 읽을 수 있어야 합니다.",
+    "defaultColor": {
+      "basic": "#664242"
+    },
+    "cssSelector": "LabelStyle-PasscodeTitle",
+    "cssProperty": "-ios-text-color"
+  },
+  {
+    "id": "ios-passcode-indicator-1",
+    "platform": "ios",
+    "role": "passcode_indicator_1",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "암호 표시 1 기본 이미지",
+    "fileName": "passcodeImgCode01.png",
+    "path": "Images/passcodeImgCode01.png",
+    "required": false,
+    "note": "첫 번째 숫자를 입력하기 전에 표시되는 암호 이미지입니다. 네 개의 기본 이미지 크기를 동일하게 맞추세요.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_01_image.png"
+    },
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-bullet-first-image"
+  },
+  {
+    "id": "ios-passcode-indicator-1-checked",
+    "platform": "ios",
+    "role": "passcode_indicator_1_checked",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "암호 표시 1 입력 이미지",
+    "fileName": "passcodeImgCode01Selected.png",
+    "path": "Images/passcodeImgCode01Selected.png",
+    "required": false,
+    "note": "첫 번째 숫자를 입력한 뒤 표시되는 암호 이미지입니다. 입력 전 이미지와 같은 크기와 중심을 유지하세요.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_01_checked_image.png"
+    },
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-bullet-selected-first-image"
+  },
+  {
+    "id": "ios-passcode-indicator-2",
+    "platform": "ios",
+    "role": "passcode_indicator_2",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "암호 표시 2 기본 이미지",
+    "fileName": "passcodeImgCode02.png",
+    "path": "Images/passcodeImgCode02.png",
+    "required": false,
+    "note": "두 번째 숫자를 입력하기 전에 표시되는 암호 이미지입니다. 네 개의 기본 이미지 크기를 동일하게 맞추세요.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_02_image.png"
+    },
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-bullet-second-image"
+  },
+  {
+    "id": "ios-passcode-indicator-2-checked",
+    "platform": "ios",
+    "role": "passcode_indicator_2_checked",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "암호 표시 2 입력 이미지",
+    "fileName": "passcodeImgCode02Selected.png",
+    "path": "Images/passcodeImgCode02Selected.png",
+    "required": false,
+    "note": "두 번째 숫자를 입력한 뒤 표시되는 암호 이미지입니다. 입력 전 이미지와 같은 크기와 중심을 유지하세요.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_02_checked_image.png"
+    },
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-bullet-selected-second-image"
+  },
+  {
+    "id": "ios-passcode-indicator-3",
+    "platform": "ios",
+    "role": "passcode_indicator_3",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "암호 표시 3 기본 이미지",
+    "fileName": "passcodeImgCode03.png",
+    "path": "Images/passcodeImgCode03.png",
+    "required": false,
+    "note": "세 번째 숫자를 입력하기 전에 표시되는 암호 이미지입니다. 네 개의 기본 이미지 크기를 동일하게 맞추세요.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_03_image.png"
+    },
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-bullet-third-image"
+  },
+  {
+    "id": "ios-passcode-indicator-3-checked",
+    "platform": "ios",
+    "role": "passcode_indicator_3_checked",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "암호 표시 3 입력 이미지",
+    "fileName": "passcodeImgCode03Selected.png",
+    "path": "Images/passcodeImgCode03Selected.png",
+    "required": false,
+    "note": "세 번째 숫자를 입력한 뒤 표시되는 암호 이미지입니다. 입력 전 이미지와 같은 크기와 중심을 유지하세요.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_03_checked_image.png"
+    },
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-bullet-selected-third-image"
+  },
+  {
+    "id": "ios-passcode-indicator-4",
+    "platform": "ios",
+    "role": "passcode_indicator_4",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "암호 표시 4 기본 이미지",
+    "fileName": "passcodeImgCode04.png",
+    "path": "Images/passcodeImgCode04.png",
+    "required": false,
+    "note": "네 번째 숫자를 입력하기 전에 표시되는 암호 이미지입니다. 네 개의 기본 이미지 크기를 동일하게 맞추세요.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_04_image.png"
+    },
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-bullet-fourth-image"
+  },
+  {
+    "id": "ios-passcode-indicator-4-checked",
+    "platform": "ios",
+    "role": "passcode_indicator_4_checked",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "암호 표시 4 입력 이미지",
+    "fileName": "passcodeImgCode04Selected.png",
+    "path": "Images/passcodeImgCode04Selected.png",
+    "required": false,
+    "note": "네 번째 숫자를 입력한 뒤 표시되는 암호 이미지입니다. 입력 전 이미지와 같은 크기와 중심을 유지하세요.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/passcode/theme_passcode_04_checked_image.png"
+    },
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-bullet-selected-fourth-image"
+  },
+  {
+    "id": "ios-passcode-keypad-background-color",
+    "platform": "ios",
+    "role": "passcode_keypad_background_color",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "키패드 배경색",
+    "required": true,
+    "note": "숫자 키패드 영역의 배경색입니다. 숫자와 삭제 아이콘이 잘 보이는지 확인하세요.",
+    "defaultColor": {
+      "basic": "#FFF2F2"
+    },
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-keypad-background-color"
+  },
+  {
+    "id": "ios-passcode-keypad-color",
+    "platform": "ios",
+    "role": "passcode_keypad_color",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "키패드 숫자 색상",
+    "required": true,
+    "note": "키패드 숫자와 삭제 아이콘의 기본 색상입니다. 키패드 배경과 충분한 대비를 유지하세요.",
+    "defaultColor": {
+      "basic": "#664242"
+    },
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-keypad-text-normal-color"
+  },
+  {
+    "id": "ios-passcode-keypad-pressed-image",
+    "platform": "ios",
+    "role": "passcode_keypad_pressed_image",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "image",
+    "label": "키패드 눌림 이미지",
+    "fileName": "passcodeKeypadPressed.png",
+    "path": "Images/passcodeKeypadPressed.png",
+    "required": false,
+    "note": "숫자 키를 누르는 동안 표시되는 선택 효과 이미지입니다. 설정하지 않으면 카카오톡의 기본 효과를 사용합니다.",
+    "optionLevel": "advanced",
+    "cssSelector": "PasscodeStyle",
+    "cssProperty": "-ios-keypad-number-highlighted-image"
   },
   {
     "id": "ios-common-theme-icon",
@@ -742,10 +1082,9 @@
     "fileName": "commonIcoTheme.png",
     "path": "Images/commonIcoTheme.png",
     "required": true,
-    "note": "테마 목록 대표 아이콘",
+    "note": "카카오톡 테마 목록에서 사용되는 대표 아이콘입니다. 작은 크기에서도 테마를 알아볼 수 있게 단순하게 구성하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/icon.png",
-      "spongebob": "/template-assets/basic/android/icon.png"
+      "basic": "/template-assets/basic/android/icon.png"
     }
   },
   {
@@ -760,11 +1099,12 @@
     "fileName": "profileImg01.png",
     "path": "Images/profileImg01.png",
     "required": true,
-    "note": "DefaultProfileStyle -ios-profile-images",
+    "note": "프로필 이미지가 없는 사용자에게 표시되는 기본 이미지입니다. 원형으로 잘려도 중요한 부분이 남도록 구성하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_profile_01_image.png",
-      "spongebob": "/template-assets/spongebob/ios/profileImg01@3x.png"
-    }
+      "basic": "/template-assets/basic/android/theme_profile_01_image.png"
+    },
+    "cssSelector": "DefaultProfileStyle",
+    "cssProperty": "-ios-profile-images"
   },
   {
     "id": "ios-find-add-friend",
@@ -778,6 +1118,8 @@
     "fileName": "findBtnAddFriend.png",
     "path": "Images/findBtnAddFriend.png",
     "required": false,
-    "note": "ButtonStyle-AddFriend -ios-image"
+    "note": "친구 찾기와 친구 추가 화면에 표시되는 버튼 이미지입니다. 작은 크기에서도 의미가 분명해야 합니다.",
+    "cssSelector": "ButtonStyle-AddFriend",
+    "cssProperty": "-ios-image"
   }
 ]

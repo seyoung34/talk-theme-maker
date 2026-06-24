@@ -8,6 +8,7 @@ import { loadNinePatchDataUrl, mapContentRect, renderNinePatch } from "@/lib/the
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleAsset, BubbleSlot, Insets, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import { themeColorToCss } from "@/lib/theme/color";
 
 type Hotspot = {
   slotId: string;
@@ -91,16 +92,17 @@ export function ChatroomPreview({
   const [contentCanvasHeight, setContentCanvasHeight] = useState(minScrollCanvasHeight);
   const [headerForeground, setHeaderForeground] = useState("#ffffff");
 
-  const inputBackground = getResolvedColor(slotByRole.chat_input_background_color, colors, selections, templateId, template) ?? template.defaults.chatInputBackground;
-  const sendButtonColor = getResolvedColor(slotByRole.chat_send_button_color, colors, selections, templateId, template) ?? template.defaults.chatSendButton;
-  const chatBackgroundColor = getResolvedColor(slotByRole.chat_background_color, colors, selections, templateId, template) ?? template.defaults.chatBackground;
-  const myBubbleTextColor = getResolvedColor(slotByRole.chat_bubble_me_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
-  const friendBubbleTextColor = getResolvedColor(slotByRole.chat_bubble_you_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
-  const unreadCountColor = getResolvedColor(slotByRole.chat_unread_count_color, colors, selections, templateId, template) ?? template.accent;
-  const inputTextColor = getResolvedColor(slotByRole.chat_input_text_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
-  const sendIconColor = getResolvedColor(slotByRole.chat_send_icon_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
-  const menuIconColor = getResolvedColor(slotByRole.chat_menu_icon_color, colors, selections, templateId, template) ?? template.defaults.mainBody;
-  const menuButtonColor = getResolvedColor(slotByRole.chat_menu_button_color, colors, selections, templateId, template) ?? "#14000000";
+  const previewColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback);
+  const inputBackground = previewColor("chat_input_background_color", template.defaults.chatInputBackground);
+  const sendButtonColor = previewColor("chat_send_button_color", template.defaults.chatSendButton);
+  const chatBackgroundColor = previewColor("chat_background_color", template.defaults.chatBackground);
+  const myBubbleTextColor = previewColor("chat_bubble_me_color", template.defaults.mainTitle);
+  const friendBubbleTextColor = previewColor("chat_bubble_you_color", template.defaults.mainTitle);
+  const unreadCountColor = previewColor("chat_unread_count_color", template.accent);
+  const inputTextColor = previewColor("chat_input_text_color", template.defaults.mainTitle);
+  const sendIconColor = previewColor("chat_send_icon_color", template.defaults.mainTitle);
+  const menuIconColor = previewColor("chat_menu_icon_color", template.defaults.mainBody);
+  const menuButtonColor = previewColor("chat_menu_button_color", "#14000000");
 
   useEffect(() => {
     let cancelled = false;
@@ -795,6 +797,9 @@ function loadImage(src: string) {
 }
 
 function hexToRgba(hex: string, alpha: number) {
+  const functionalMatch = hex.match(/^rgba?\(\s*(\d+(?:\.\d+)?)\s*[, ]\s*(\d+(?:\.\d+)?)\s*[, ]\s*(\d+(?:\.\d+)?)/i);
+  if (functionalMatch) return `rgba(${functionalMatch[1]}, ${functionalMatch[2]}, ${functionalMatch[3]}, ${alpha})`;
+  if (hex === "transparent") return hex;
   const normalized = hex.replace("#", "");
   const full = normalized.length === 3 ? normalized.split("").map((char) => `${char}${char}`).join("") : normalized;
   const value = Number.parseInt(full, 16);

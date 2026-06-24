@@ -2,6 +2,7 @@ import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/
 import type { SystemTemplateSaveInput } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
 import type { ThemeResourceRole } from "@/lib/theme/types";
+import { themeColorToCss } from "@/lib/theme/color";
 
 const width = 640;
 const height = 480;
@@ -19,7 +20,7 @@ export async function generateSystemTemplateThumbnail(input: SystemTemplateSaveI
   const colors = input.overrides.colors;
   const selections = input.overrides.candidateSelections;
   const uploads = input.overrides.uploads;
-  const color = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slots.find((slot) => slot.role === role), colors, selections, input.baseTemplateId, template) ?? fallback;
+  const color = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slots.find((slot) => slot.role === role), colors, selections, input.baseTemplateId, template) ?? fallback);
   const imageRoles: ThemeResourceRole[] = ["main_background", "chat_background", "bubble_me_1", "bubble_you_1", "profile_image_1"];
   const images = new Map<ThemeResourceRole, HTMLImageElement>();
   const objectUrls: string[] = [];

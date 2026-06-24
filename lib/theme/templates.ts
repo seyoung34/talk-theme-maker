@@ -3,7 +3,7 @@ import iosSlotsManifest from "@/lib/theme/manifest/ios.slots.json";
 import type { ThemeCandidateSourceType, ThemeExportMapping, ThemePlatform, ThemeResourceRole, ThemeScreen, ThemeSection, ThemeSlotGroup, ThemeSlotKind } from "@/lib/theme/types";
 
 export type BaseTemplateId = "basic";
-export type ThemeTemplateId = BaseTemplateId | "spongebob";
+export type ThemeTemplateId = BaseTemplateId;
 
 export type ThemeTemplateDefaults = {
   platform: ThemePlatform;
@@ -18,6 +18,24 @@ export type ThemeTemplateDefaults = {
   chatInputBackground: string;
   chatSendButton: string;
 };
+
+export type ThemeAutoColorRecipe =
+  | "background-average"
+  | "header-top"
+  | "surface-background"
+  | "tab-bottom"
+  | "foreground-header"
+  | "foreground-background"
+  | "foreground-muted"
+  | "foreground-pressed"
+  | "muted-pressed"
+  | "cell-transparent"
+  | "cell-pressed"
+  | "cell-border"
+  | "accent"
+  | "accent-pressed"
+  | "accent-surface"
+  | "accent-surface-pressed";
 
 export type ThemeSectionDefinition = {
   id: ThemeSection;
@@ -76,11 +94,13 @@ export type ThemeAssetSlot = {
   editableInBubbleEditor?: boolean;
   note: string;
   optionLevel?: "basic" | "advanced";
-  autoColorGroup?: "main-surface";
+  autoColorRecipe?: ThemeAutoColorRecipe;
   visibleInSections?: ThemeSection[];
   fileName?: string;
   path?: string;
   colorKey?: string;
+  cssSelector?: string | string[];
+  cssProperty?: string;
   defaultColor?: Partial<Record<ThemeTemplateId, string>>;
   defaultAssetUrls?: Partial<Record<ThemeTemplateId, string>>;
   candidates?: Partial<Record<ThemeTemplateId, ThemeSlotCandidate[]>>;
@@ -121,28 +141,6 @@ export const themeTemplates: ThemeTemplate[] = [
       chatSendButton: "#c9ff3d",
     },
   },
-  {
-    id: "spongebob",
-    name: "스폰지밥 템플릿",
-    description: "기존 Android/iOS 스폰지밥 에셋으로 바로 시작하는 템플릿입니다.",
-    previewNote: "배경과 말풍선, 탭 아이콘에 기본 스폰지밥 에셋을 연결해 둡니다.",
-    accent: "#f6c800",
-    supportedPlatforms: ["android", "ios"],
-    sections: sharedSections,
-    defaults: {
-      platform: "android",
-      chatBackground: "#aeeef7",
-      myBubble: "#fff04f",
-      friendBubble: "#ffffff",
-      mainBackground: "#b7eef7",
-      mainHeader: "#ffffff",
-      mainTitle: "#111111",
-      mainBody: "#37515a",
-      tabBackground: "#ffffff",
-      chatInputBackground: "#ffffff",
-      chatSendButton: "#f6c800",
-    },
-  },
 ];
 
 export const androidThemeSlots = androidSlotsManifest as ThemeAssetSlot[];
@@ -154,4 +152,8 @@ export function getThemeSlots(platform: ThemePlatform) {
 
 export function getThemeTemplate(templateId: ThemeTemplateId) {
   return themeTemplates.find((template) => template.id === templateId) ?? themeTemplates[0];
+}
+
+export function normalizeThemeTemplateId(_value: unknown): ThemeTemplateId {
+  return "basic";
 }

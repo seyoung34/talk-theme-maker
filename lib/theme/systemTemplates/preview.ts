@@ -52,13 +52,11 @@ export function createSystemTemplatePreviewVisual({
   platform,
   summary,
   signedUrls,
-  seedAssets,
 }: {
   template: ThemeTemplate;
   platform: ThemePlatform;
   summary: SystemTemplateSummary;
   signedUrls: SignedUrlCache;
-  seedAssets?: Partial<Record<"chatBackground" | "mainBackground" | "myBubble" | "friendBubble" | "profileImage", string>>;
 }): TemplatePreviewVisual {
   const slots = getThemeSlots(platform);
   const templateId = template.id;
@@ -70,12 +68,12 @@ export function createSystemTemplatePreviewVisual({
     tabBackgroundColor: summary.previewMetadata.colors?.tabBackground ?? resolveColor(slots, "tab_background", summary, templateId, template, template.defaults.tabBackground),
     myBubbleColor: summary.previewMetadata.colors?.myBubble ?? resolveColor(slots, "chat_bubble_me_color", summary, templateId, template, template.defaults.myBubble),
     friendBubbleColor: summary.previewMetadata.colors?.friendBubble ?? resolveColor(slots, "chat_bubble_you_color", summary, templateId, template, template.defaults.friendBubble),
-    chatBackgroundImage: resolveImage(slots, "chat_background", summary, templateId, template, signedUrls) ?? seedAssets?.chatBackground,
-    mainBackgroundImage: resolveImage(slots, "main_background", summary, templateId, template, signedUrls) ?? seedAssets?.mainBackground,
+    chatBackgroundImage: resolveImage(slots, "chat_background", summary, templateId, template, signedUrls),
+    mainBackgroundImage: resolveImage(slots, "main_background", summary, templateId, template, signedUrls),
     tabBackgroundImage: resolveImage(slots, "tab_background_image", summary, templateId, template, signedUrls),
-    myBubbleImage: resolveImage(slots, "bubble_me_1", summary, templateId, template, signedUrls) ?? seedAssets?.myBubble,
-    friendBubbleImage: resolveImage(slots, "bubble_you_1", summary, templateId, template, signedUrls) ?? seedAssets?.friendBubble,
-    profileImage: resolveImage(slots, "profile_image_1", summary, templateId, template, signedUrls) ?? seedAssets?.profileImage,
+    myBubbleImage: resolveImage(slots, "bubble_me_1", summary, templateId, template, signedUrls),
+    friendBubbleImage: resolveImage(slots, "bubble_you_1", summary, templateId, template, signedUrls),
+    profileImage: resolveImage(slots, "profile_image_1", summary, templateId, template, signedUrls),
   };
 }
 

@@ -45,6 +45,16 @@ const iosScaleTargetsByRole: Partial<Record<ThemeResourceRole, number[]>> = {
   bubble_you_2: [2, 3],
   profile_image_1: [3],
   find_add_friend: [2, 3],
+  passcode_background: [3],
+  passcode_indicator_1: [3],
+  passcode_indicator_1_checked: [3],
+  passcode_indicator_2: [3],
+  passcode_indicator_2_checked: [3],
+  passcode_indicator_3: [3],
+  passcode_indicator_3_checked: [3],
+  passcode_indicator_4: [3],
+  passcode_indicator_4_checked: [3],
+  passcode_keypad_pressed_image: [3],
 };
 
 export async function buildIosThemeExportFiles(options: IosExportOptions): Promise<IosExportFile[]> {
@@ -151,10 +161,11 @@ function buildIosThemeCss({
   const color = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback;
 
   const mainText = color("main_title_color", template.defaults.mainTitle);
+  const headerText = color("main_header_foreground_color", mainText);
   const mainDescription = color("main_description_color", template.defaults.mainBody);
-  const mainParagraph = color("main_body_color", template.defaults.mainBody);
+  const mainParagraph = color("tab_paragraph_color", template.defaults.mainBody);
   const mainHighlighted = color("main_title_pressed_color", mainText);
-  const mainParagraphHighlighted = color("main_paragraph_pressed_color", mainParagraph);
+  const mainParagraphHighlighted = color("tab_paragraph_pressed_color", mainParagraph);
   const tabText = color("tab_text_color", mainParagraph);
   const chatButtonBackground = splitAlphaColor(color("chat_button_background_color", "#0FFFFFFF"));
 
@@ -192,7 +203,7 @@ function buildIosThemeCss({
     "",
     "HeaderStyle-Main",
     "{",
-    cssLine("-ios-text-color", mainText),
+    cssLine("-ios-text-color", headerText),
     cssLine("-ios-tab-text-color", tabText),
     cssLine("-ios-tab-highlighted-text-color", mainText),
     "}",
@@ -215,7 +226,7 @@ function buildIosThemeCss({
     "",
     "MainViewStyle-Secondary",
     "{",
-    cssLine("background-color", color("main_background_color", template.defaults.mainBackground)),
+    cssLine("background-color", color("main_body_secondary_cell_color", template.defaults.mainBackground)),
     "}",
     "",
     "SectionTitleStyle-Main",
@@ -224,6 +235,11 @@ function buildIosThemeCss({
     cssLine("border-alpha", color("main_body_cell_border_alpha", "0.18")),
     cssLine("-ios-text-color", color("main_section_title_color", mainText)),
     cssLine("-ios-text-alpha", "1.0"),
+    "}",
+    "",
+    "FeatureStyle-Primary",
+    "{",
+    cssLine("-ios-text-color", color("feature_primary_color", mainDescription)),
     "}",
     "",
     "ButtonStyle-AddFriend",
@@ -281,6 +297,32 @@ function buildIosThemeCss({
       fallbackInsets: { top: 10, left: 17, bottom: 7, right: 11 },
       fallbackStretch: { x: 22, y: 17 },
     }),
+    "",
+    "BackgroundStyle-Passcode",
+    "{",
+    cssLine("background-color", color("passcode_background_color", "#FFDEDE")),
+    cssImageLine("-ios-background-image", imageMap.passcode_background),
+    "}",
+    "",
+    "LabelStyle-PasscodeTitle",
+    "{",
+    cssLine("-ios-text-color", color("passcode_color", "#664242")),
+    "}",
+    "",
+    "PasscodeStyle",
+    "{",
+    cssImageLine("-ios-bullet-first-image", imageMap.passcode_indicator_1),
+    cssImageLine("-ios-bullet-second-image", imageMap.passcode_indicator_2),
+    cssImageLine("-ios-bullet-third-image", imageMap.passcode_indicator_3),
+    cssImageLine("-ios-bullet-fourth-image", imageMap.passcode_indicator_4),
+    cssImageLine("-ios-bullet-selected-first-image", imageMap.passcode_indicator_1_checked),
+    cssImageLine("-ios-bullet-selected-second-image", imageMap.passcode_indicator_2_checked),
+    cssImageLine("-ios-bullet-selected-third-image", imageMap.passcode_indicator_3_checked),
+    cssImageLine("-ios-bullet-selected-fourth-image", imageMap.passcode_indicator_4_checked),
+    cssLine("-ios-keypad-background-color", color("passcode_keypad_background_color", "#FFF2F2")),
+    cssLine("-ios-keypad-text-normal-color", color("passcode_keypad_color", "#664242")),
+    cssImageLine("-ios-keypad-number-highlighted-image", imageMap.passcode_keypad_pressed_image),
+    "}",
   ]
     .filter((line) => line !== null)
     .join("\n");

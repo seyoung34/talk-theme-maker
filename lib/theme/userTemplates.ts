@@ -1,5 +1,5 @@
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
-import type { ThemeTemplateId } from "@/lib/theme/templates";
+import { normalizeThemeTemplateId, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
 const databaseName = "kakaotalk-theme-maker";
@@ -85,12 +85,13 @@ export async function saveUserTemplate(record: Omit<UserTemplateRecord, "id" | "
 
 export async function getUserTemplate(id: string) {
   const record = await withStore<UserTemplateRecord | undefined>("readonly", (store) => store.get(id));
-  return record ?? null;
+  return record ? normalizeUserTemplateRecord(record) : null;
 }
 
 export async function listUserTemplates(): Promise<UserTemplateSummary[]> {
   const records = await withStore<UserTemplateRecord[]>("readonly", (store) => store.getAll());
   return records
+    .map(normalizeUserTemplateRecord)
     .map((record) => ({
       id: record.id,
       name: record.name,
@@ -102,6 +103,11 @@ export async function listUserTemplates(): Promise<UserTemplateSummary[]> {
       colorCount: Object.values(record.colors).filter(Boolean).length,
     }))
     .sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+function normalizeUserTemplateRecord(record: UserTemplateRecord): UserTemplateRecord {
+  const templateId = normalizeThemeTemplateId(record.templateId);
+  return templateId === record.templateId ? record : { ...record, templateId };
 }
 
 export async function deleteUserTemplate(id: string) {

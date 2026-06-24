@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "check:text": "node scripts/check-text-encoding.mjs",
+    "check:ios-slots": "node scripts/verify-ios-slot-metadata.mjs",
     "check:android-colors": "node scripts/verify-android-color-slots.mjs",
     "build": "next build",
     "start": "next start"

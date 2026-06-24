@@ -11,17 +11,19 @@
     "fileName": "theme_background_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_background_image.png",
     "required": true,
-    "note": "친구와 채팅 목록의 기본 배경 이미지",
-    "visibleInSections": ["tabs"],
+    "note": "친구·채팅 목록 위에 표시되는 배경 이미지입니다. 이미지가 있어도 투명 영역과 다른 기본 화면에는 배경 색상이 함께 사용됩니다.",
+    "visibleInSections": [
+      "tabs"
+    ],
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_background_image.png",
-      "spongebob": "/template-assets/spongebob/android/theme_background_image.png"
+      "basic": "/template-assets/basic/android/theme_background_image.png"
     }
   },
   {
     "id": "android-main-header-color",
     "platform": "android",
     "role": "main_header_color",
+    "autoColorRecipe": "header-top",
     "section": "main",
     "group": "header",
     "screen": "friends",
@@ -29,18 +31,20 @@
     "label": "헤더·칩 영역 배경",
     "required": true,
     "note": "친구 헤더와 채팅·더보기 상단 칩 영역의 공통 배경색",
-    "autoColorGroup": "main-surface",
-    "visibleInSections": ["tabs", "more"],
+    "visibleInSections": [
+      "tabs",
+      "more"
+    ],
     "colorKey": "theme_header_cell_color",
     "defaultColor": {
-      "basic": "#ffffff",
-      "spongebob": "#ffffff"
+      "basic": "#ffffff"
     }
   },
   {
     "id": "android-main-title-color",
     "platform": "android",
     "role": "main_title_color",
+    "autoColorRecipe": "foreground-background",
     "section": "main",
     "group": "list",
     "screen": "friends",
@@ -48,17 +52,19 @@
     "label": "이름 색상",
     "required": true,
     "note": "친구와 채팅 목록의 이름 색상",
-    "visibleInSections": ["tabs"],
+    "visibleInSections": [
+      "tabs"
+    ],
     "colorKey": "theme_title_color",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
+      "basic": "#111111"
     }
   },
   {
     "id": "android-tab-paragraph-color",
     "platform": "android",
     "role": "tab_paragraph_color",
+    "autoColorRecipe": "foreground-muted",
     "section": "tabs",
     "group": "list",
     "screen": "tabs",
@@ -68,33 +74,34 @@
     "note": "채팅 목록의 마지막 메시지와 시간 색상",
     "colorKey": "theme_paragraph_color",
     "defaultColor": {
-      "basic": "#4d5660",
-      "spongebob": "#37515a"
+      "basic": "#4d5660"
     }
   },
   {
     "id": "android-main-background-color",
     "platform": "android",
     "role": "main_background_color",
+    "autoColorRecipe": "background-average",
     "section": "main",
     "group": "background",
     "screen": "friends",
     "kind": "color",
     "label": "친구·채팅 배경 색상",
     "required": false,
-    "note": "메인 화면 기본 배경 색상, 메인 배경 이미지가 있다면 이미지가 적용됩니다.",
-    "autoColorGroup": "main-surface",
-    "visibleInSections": ["tabs"],
+    "note": "배경 이미지의 투명 영역과 이미지가 표시되지 않는 기본 화면에 사용되는 색상입니다. 이미지가 있으면 평균색을 자동 추천합니다.",
+    "visibleInSections": [
+      "tabs"
+    ],
     "colorKey": "theme_background_color",
     "defaultColor": {
-      "basic": "#F4FAFB",
-      "spongebob": "#B7EEF7"
+      "basic": "#F4FAFB"
     }
   },
   {
     "id": "android-main-header-foreground-color",
     "platform": "android",
     "role": "main_header_foreground_color",
+    "autoColorRecipe": "foreground-header",
     "section": "main",
     "group": "header",
     "screen": "friends",
@@ -102,17 +109,20 @@
     "label": "헤더 제목·아이콘 색상",
     "required": false,
     "note": "상단 헤더 제목과 아이콘의 공통 색상",
-    "visibleInSections": ["tabs", "more"],
+    "visibleInSections": [
+      "tabs",
+      "more"
+    ],
     "colorKey": "theme_header_color",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
+      "basic": "#111111"
     }
   },
   {
     "id": "android-main-title-pressed-color",
     "platform": "android",
     "role": "main_title_pressed_color",
+    "autoColorRecipe": "foreground-pressed",
     "section": "main",
     "group": "list",
     "screen": "friends",
@@ -121,17 +131,19 @@
     "required": false,
     "note": "제목 영역의 pressed 상태 색상",
     "optionLevel": "advanced",
-    "visibleInSections": ["tabs"],
+    "visibleInSections": [
+      "tabs"
+    ],
     "colorKey": "theme_title_pressed_color",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
+      "basic": "#111111"
     }
   },
   {
     "id": "android-main-description-color",
     "platform": "android",
     "role": "main_description_color",
+    "autoColorRecipe": "foreground-muted",
     "section": "main",
     "group": "list",
     "screen": "friends",
@@ -141,14 +153,14 @@
     "note": "친구 목록의 상태 메시지와 보조 정보 색상",
     "colorKey": "theme_description_color",
     "defaultColor": {
-      "basic": "#4D5660",
-      "spongebob": "#37515A"
+      "basic": "#4D5660"
     }
   },
   {
     "id": "android-main-description-pressed-color",
     "platform": "android",
     "role": "main_description_pressed_color",
+    "autoColorRecipe": "muted-pressed",
     "section": "main",
     "group": "list",
     "screen": "friends",
@@ -163,6 +175,7 @@
     "id": "android-tab-paragraph-pressed-color",
     "platform": "android",
     "role": "tab_paragraph_pressed_color",
+    "autoColorRecipe": "muted-pressed",
     "section": "tabs",
     "group": "list",
     "screen": "tabs",
@@ -173,29 +186,32 @@
     "optionLevel": "advanced",
     "colorKey": "theme_paragraph_pressed_color",
     "defaultColor": {
-      "basic": "#4D5660",
-      "spongebob": "#37515A"
+      "basic": "#4D5660"
     }
   },
   {
     "id": "android-main-body-cell-color",
     "platform": "android",
     "role": "main_body_cell_color",
+    "autoColorRecipe": "cell-transparent",
     "section": "main",
     "group": "list",
     "screen": "friends",
     "kind": "color",
-    "label": "리스트 기본 배경",
+    "label": "친구·채팅 리스트 셀 기본 배경",
     "required": false,
-    "note": "친구와 채팅 목록의 기본 셀 배경색",
+    "note": "친구·채팅 리스트의 각 셀에 적용되는 기본 배경색입니다. 기본값은 투명하며, 셀을 배경과 구분하고 싶을 때만 색상을 지정하세요.",
     "optionLevel": "advanced",
-    "visibleInSections": ["tabs"],
+    "visibleInSections": [
+      "tabs"
+    ],
     "colorKey": "theme_body_cell_color"
   },
   {
     "id": "android-main-body-cell-pressed-color",
     "platform": "android",
     "role": "main_body_cell_pressed_color",
+    "autoColorRecipe": "cell-pressed",
     "section": "main",
     "group": "list",
     "screen": "friends",
@@ -204,17 +220,19 @@
     "required": false,
     "note": "리스트 셀 pressed 배경 색상",
     "optionLevel": "advanced",
-    "visibleInSections": ["tabs"],
+    "visibleInSections": [
+      "tabs"
+    ],
     "colorKey": "theme_body_cell_pressed_color",
     "defaultColor": {
-      "basic": "#99F4FAFB",
-      "spongebob": "#99B7EEF7"
+      "basic": "#99F4FAFB"
     }
   },
   {
     "id": "android-main-body-cell-border-color",
     "platform": "android",
     "role": "main_body_cell_border_color",
+    "autoColorRecipe": "cell-border",
     "section": "main",
     "group": "list",
     "screen": "friends",
@@ -223,17 +241,19 @@
     "required": false,
     "note": "리스트 셀 구분선과 경계선 색상",
     "optionLevel": "advanced",
-    "visibleInSections": ["tabs"],
+    "visibleInSections": [
+      "tabs"
+    ],
     "colorKey": "theme_body_cell_border_color",
     "defaultColor": {
-      "basic": "#33111111",
-      "spongebob": "#33111111"
+      "basic": "#33111111"
     }
   },
   {
     "id": "android-main-section-title-color",
     "platform": "android",
     "role": "main_section_title_color",
+    "autoColorRecipe": "foreground-background",
     "section": "main",
     "group": "list",
     "screen": "friends",
@@ -243,14 +263,14 @@
     "note": "섹션 제목과 그룹 라벨 색상",
     "colorKey": "theme_section_title_color",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
+      "basic": "#111111"
     }
   },
   {
     "id": "android-feature-primary-color",
     "platform": "android",
     "role": "feature_primary_color",
+    "autoColorRecipe": "accent",
     "section": "more",
     "group": "elements",
     "screen": "more",
@@ -265,6 +285,7 @@
     "id": "android-feature-primary-pressed-color",
     "platform": "android",
     "role": "feature_primary_pressed_color",
+    "autoColorRecipe": "accent-pressed",
     "section": "more",
     "group": "elements",
     "screen": "more",
@@ -279,6 +300,7 @@
     "id": "android-main-feature-browse-tab-color",
     "platform": "android",
     "role": "main_feature_browse_tab_color",
+    "autoColorRecipe": "accent-surface",
     "section": "more",
     "group": "elements",
     "screen": "more",
@@ -289,14 +311,14 @@
     "optionLevel": "advanced",
     "colorKey": "theme_feature_browse_tab_color",
     "defaultColor": {
-      "basic": "#FFFFFF",
-      "spongebob": "#FFFFFF"
+      "basic": "#FFFFFF"
     }
   },
   {
     "id": "android-main-feature-browse-tab-focused-color",
     "platform": "android",
     "role": "main_feature_browse_tab_focused_color",
+    "autoColorRecipe": "accent",
     "section": "more",
     "group": "elements",
     "screen": "more",
@@ -311,6 +333,7 @@
     "id": "android-main-body-secondary-cell-color",
     "platform": "android",
     "role": "main_body_secondary_cell_color",
+    "autoColorRecipe": "surface-background",
     "section": "more",
     "group": "background",
     "screen": "more",
@@ -318,17 +341,16 @@
     "label": "더보기·보조 콘텐츠 배경",
     "required": false,
     "note": "더보기 화면과 보조 콘텐츠 영역의 기본 배경색",
-    "autoColorGroup": "main-surface",
     "colorKey": "theme_body_secondary_cell_color",
     "defaultColor": {
-      "basic": "#FFFFFF",
-      "spongebob": "#CCF6FB"
+      "basic": "#FFFFFF"
     }
   },
   {
     "id": "android-direct-share-text-color",
     "platform": "android",
     "role": "direct_share_text_color",
+    "autoColorRecipe": "foreground-background",
     "section": "more",
     "group": "elements",
     "screen": "more",
@@ -343,6 +365,7 @@
     "id": "android-direct-share-button-color",
     "platform": "android",
     "role": "direct_share_button_color",
+    "autoColorRecipe": "accent",
     "section": "more",
     "group": "elements",
     "screen": "more",
@@ -357,6 +380,7 @@
     "id": "android-direct-share-background-color",
     "platform": "android",
     "role": "direct_share_background_color",
+    "autoColorRecipe": "accent-surface",
     "section": "more",
     "group": "elements",
     "screen": "more",
@@ -371,6 +395,7 @@
     "id": "android-notification-text-color",
     "platform": "android",
     "role": "notification_text_color",
+    "autoColorRecipe": "foreground-background",
     "section": "more",
     "group": "elements",
     "screen": "more",
@@ -385,6 +410,7 @@
     "id": "android-notification-background-color",
     "platform": "android",
     "role": "notification_background_color",
+    "autoColorRecipe": "accent-surface",
     "section": "more",
     "group": "elements",
     "screen": "more",
@@ -399,6 +425,7 @@
     "id": "android-notification-background-pressed-color",
     "platform": "android",
     "role": "notification_background_pressed_color",
+    "autoColorRecipe": "accent-surface-pressed",
     "section": "more",
     "group": "elements",
     "screen": "more",
@@ -427,6 +454,7 @@
     "id": "android-tab-background",
     "platform": "android",
     "role": "tab_background",
+    "autoColorRecipe": "tab-bottom",
     "section": "tabs",
     "group": "bar",
     "screen": "tabs",
@@ -436,14 +464,14 @@
     "note": "하단 탭 영역 배경색",
     "colorKey": "theme_maintab_cell_color",
     "defaultColor": {
-      "basic": "#ffffff",
-      "spongebob": "#ffffff"
+      "basic": "#ffffff"
     }
   },
   {
     "id": "android-tab-light-banner-badge-background",
     "platform": "android",
     "role": "tab_light_banner_badge_background_color",
+    "autoColorRecipe": "accent",
     "section": "tabs",
     "group": "bar",
     "screen": "tabs",
@@ -458,6 +486,7 @@
     "id": "android-tab-banner-badge-background",
     "platform": "android",
     "role": "tab_banner_badge_background_color",
+    "autoColorRecipe": "accent-pressed",
     "section": "tabs",
     "group": "bar",
     "screen": "tabs",
@@ -482,8 +511,7 @@
     "required": true,
     "note": "친구 탭 기본 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
     }
   },
   {
@@ -500,8 +528,7 @@
     "required": false,
     "note": "친구 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
     }
   },
   {
@@ -518,8 +545,7 @@
     "required": false,
     "note": "채팅 탭 기본 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
     }
   },
   {
@@ -536,8 +562,7 @@
     "required": false,
     "note": "채팅 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
     }
   },
   {
@@ -554,8 +579,7 @@
     "required": false,
     "note": "Now 탭 기본 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
     }
   },
   {
@@ -572,8 +596,7 @@
     "required": false,
     "note": "Now 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
     }
   },
   {
@@ -590,8 +613,7 @@
     "required": false,
     "note": "쇼핑 탭 기본 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
     }
   },
   {
@@ -608,8 +630,7 @@
     "required": false,
     "note": "쇼핑 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
     }
   },
   {
@@ -626,8 +647,7 @@
     "required": false,
     "note": "더보기 탭 기본 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
     }
   },
   {
@@ -644,8 +664,7 @@
     "required": false,
     "note": "더보기 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_maintab_ico_friends_image.png"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
     }
   },
   {
@@ -662,8 +681,7 @@
     "required": true,
     "note": "1080 x 1920 기준 채팅방 배경 이미지",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_chatroom_background_image.svg",
-      "spongebob": "/template-assets/spongebob/android/theme_chatroom_background_image.png"
+      "basic": "/template-assets/basic/android/theme_chatroom_background_image.svg"
     }
   },
   {
@@ -679,8 +697,7 @@
     "note": "채팅방 기본 배경색",
     "colorKey": "theme_chatroom_background_color",
     "defaultColor": {
-      "basic": "#b8f2f7",
-      "spongebob": "#aeeef7"
+      "basic": "#b8f2f7"
     }
   },
   {
@@ -698,8 +715,7 @@
     "editableInBubbleEditor": true,
     "note": "Android 9-patch 말풍선",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png",
-      "spongebob": "/template-assets/spongebob/android/theme_chatroom_bubble_me_01_image.9.png"
+      "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png"
     }
   },
   {
@@ -717,8 +733,7 @@
     "editableInBubbleEditor": true,
     "note": "Android 9-patch 말풍선",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png",
-      "spongebob": "/template-assets/spongebob/android/theme_chatroom_bubble_me_01_image.9.png"
+      "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png"
     }
   },
   {
@@ -736,8 +751,7 @@
     "editableInBubbleEditor": true,
     "note": "Android 9-patch 말풍선",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.9.png",
-      "spongebob": "/template-assets/spongebob/android/theme_chatroom_bubble_you_01_image.9.png"
+      "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.9.png"
     }
   },
   {
@@ -755,8 +769,7 @@
     "editableInBubbleEditor": true,
     "note": "Android 9-patch 말풍선",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.9.png",
-      "spongebob": "/template-assets/spongebob/android/theme_chatroom_bubble_you_01_image.9.png"
+      "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.9.png"
     }
   },
   {
@@ -811,8 +824,7 @@
     "note": "채팅 입력 바 전체 배경색",
     "colorKey": "theme_chatroom_input_bar_background_color",
     "defaultColor": {
-      "basic": "#ffffff",
-      "spongebob": "#ffffff"
+      "basic": "#ffffff"
     }
   },
   {
@@ -828,8 +840,7 @@
     "note": "채팅 입력 영역의 전송 버튼색",
     "colorKey": "theme_chatroom_input_bar_send_button_color",
     "defaultColor": {
-      "basic": "#c9ff3d",
-      "spongebob": "#f6c800"
+      "basic": "#c9ff3d"
     }
   },
   {
@@ -845,8 +856,7 @@
     "note": "theme_chatroom_input_bar_color 값",
     "colorKey": "theme_chatroom_input_bar_color",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
+      "basic": "#111111"
     }
   },
   {
@@ -890,8 +900,7 @@
     "note": "theme_chatroom_input_bar_send_icon_color 값",
     "colorKey": "theme_chatroom_input_bar_send_icon_color",
     "defaultColor": {
-      "basic": "#111111",
-      "spongebob": "#111111"
+      "basic": "#111111"
     }
   },
   {
@@ -908,8 +917,7 @@
     "required": false,
     "note": "잠금화면 배경 이미지",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_background_image.png",
-      "spongebob": "/template-assets/spongebob/android/theme_background_image.png"
+      "basic": "/template-assets/basic/android/theme_background_image.png"
     },
     "export": {
       "android": {
@@ -936,8 +944,7 @@
     "note": "theme_passcode_background_color 값",
     "colorKey": "theme_passcode_background_color",
     "defaultColor": {
-      "basic": "#FCC5C5",
-      "spongebob": "#FCC5C5"
+      "basic": "#FCC5C5"
     }
   },
   {
@@ -1089,8 +1096,7 @@
     "note": "theme_passcode_color 값",
     "colorKey": "theme_passcode_color",
     "defaultColor": {
-      "basic": "#664242",
-      "spongebob": "#664242"
+      "basic": "#664242"
     }
   },
   {
@@ -1106,8 +1112,7 @@
     "note": "theme_passcode_keypad_color 값",
     "colorKey": "theme_passcode_keypad_color",
     "defaultColor": {
-      "basic": "#664242",
-      "spongebob": "#664242"
+      "basic": "#664242"
     }
   },
   {
@@ -1124,8 +1129,7 @@
     "optionLevel": "advanced",
     "colorKey": "theme_passcode_keypad_pressed_color",
     "defaultColor": {
-      "basic": "#CCB8B8",
-      "spongebob": "#CCB8B8"
+      "basic": "#CCB8B8"
     }
   },
   {
@@ -1141,8 +1145,7 @@
     "note": "theme_passcode_keypad_background_color 값",
     "colorKey": "theme_passcode_keypad_background_color",
     "defaultColor": {
-      "basic": "#FFF2F2",
-      "spongebob": "#FFF2F2"
+      "basic": "#FFF2F2"
     }
   },
   {
@@ -1159,8 +1162,7 @@
     "optionLevel": "advanced",
     "colorKey": "theme_passcode_keypad_pressed_background_color",
     "defaultColor": {
-      "basic": "#99FFDEDE",
-      "spongebob": "#99FFDEDE"
+      "basic": "#99FFDEDE"
     }
   },
   {
@@ -1176,8 +1178,7 @@
     "note": "theme_passcode_pattern_line_color 값",
     "colorKey": "theme_passcode_pattern_line_color",
     "defaultColor": {
-      "basic": "#FCC5C5",
-      "spongebob": "#FCC5C5"
+      "basic": "#FCC5C5"
     }
   },
   {
@@ -1211,8 +1212,7 @@
     "required": true,
     "note": "Android 앱 런처 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/launcher/ic_launcher.png",
-      "spongebob": "/template-assets/basic/android/launcher/ic_launcher.png"
+      "basic": "/template-assets/basic/android/launcher/ic_launcher.png"
     },
     "export": {
       "android": {
@@ -1243,8 +1243,7 @@
     "required": true,
     "note": "Android 라운드 런처 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/launcher/ic_launcher_round.png",
-      "spongebob": "/template-assets/basic/android/launcher/ic_launcher_round.png"
+      "basic": "/template-assets/basic/android/launcher/ic_launcher_round.png"
     },
     "export": {
       "android": {
@@ -1275,8 +1274,7 @@
     "required": true,
     "note": "Android adaptive launcher background",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/launcher/ic_launcher_background.png",
-      "spongebob": "/template-assets/basic/android/launcher/ic_launcher_background.png"
+      "basic": "/template-assets/basic/android/launcher/ic_launcher_background.png"
     },
     "export": {
       "android": {
@@ -1307,8 +1305,7 @@
     "required": true,
     "note": "Android adaptive launcher foreground",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/launcher/ic_launcher_foreground.png",
-      "spongebob": "/template-assets/basic/android/launcher/ic_launcher_foreground.png"
+      "basic": "/template-assets/basic/android/launcher/ic_launcher_foreground.png"
     },
     "export": {
       "android": {
@@ -1339,8 +1336,7 @@
     "required": true,
     "note": "기본 프로필 이미지 1",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_profile_01_image.png",
-      "spongebob": "/template-assets/spongebob/android/theme_profile_01_image.png"
+      "basic": "/template-assets/basic/android/theme_profile_01_image.png"
     }
   },
   {

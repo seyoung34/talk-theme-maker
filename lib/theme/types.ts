@@ -83,6 +83,7 @@ export type ThemeResourceRole =
   | "passcode_keypad_pressed_color"
   | "passcode_keypad_background_color"
   | "passcode_keypad_pressed_background_color"
+  | "passcode_keypad_pressed_image"
   | "passcode_pattern_line_color"
   | "passcode_indicator_1"
   | "passcode_indicator_1_checked"

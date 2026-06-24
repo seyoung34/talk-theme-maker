@@ -7,6 +7,7 @@ import { findBestFile, imageUrlForThemeFile } from "@/components/preview/preview
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeResourceRole, ThemeSection } from "@/lib/theme/types";
+import { themeColorToCss } from "@/lib/theme/color";
 
 type RoleFiles = Partial<Record<ThemeResourceRole, ThemeProjectFile>>;
 type RoleUrls = Partial<Record<ThemeResourceRole, string>>;
@@ -58,7 +59,7 @@ export function ThemeScreensPreview({
   const profileUrls = useMemo(() => getProfilePreviewUrls(urls), [urls]);
 
   const preview = useMemo(() => {
-    const getColor = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback;
+    const getColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback);
 
     return {
       mainBackgroundColor: getColor("main_background_color", template.defaults.mainBackground),
@@ -104,7 +105,7 @@ export function ThemeScreensPreview({
         <FriendsScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} profileUrls={profileUrls} onSelectSlot={onSelectSlot} />
       ) : section === "tabs" ? (
         <ChatsScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} profileUrls={profileUrls} onSelectSlot={onSelectSlot} />
-      ) : <MoreScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />}
+      ) : <MoreScreen platform={analysis.summary.platform} selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />}
     </PhoneFrame>
   );
 }
@@ -193,7 +194,7 @@ function FriendsScreen({
             }}
           >
             <span className="block text-[11px] font-semibold" style={{ color: preview.descriptionColor }}>
-              추천 카드
+              광고 영역입니다
             </span>
             <strong className="mt-2 block text-[15px] font-semibold" style={{ color: preview.titlePressedColor }}>
               새 메인 화면 요소를 바로 점검할 수 있습니다.
@@ -213,11 +214,11 @@ function FriendsScreen({
             </span>
           </button>
 
-          <div className="flex gap-3 px-1 overflow-hidden">
+          <div className="flex gap-3 px-1 overflow-hidden outline outline-red-500">
             {["샘플 A", "샘플 B", "샘플 C", "샘플 D", "더보기"].map((name, index) => (
               <div key={name} className="grid w-[62px] justify-items-center gap-2">
                 <div className="relative">
-                  <AvatarCircle src={profileUrls[index % profileUrls.length]} size="h-16 w-16" />
+                  <AvatarCircle src={profileUrls[index % profileUrls.length]} size="h-10 w-10" />
                   {index > 0 ? <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[#ff7246]" /> : null}
                 </div>
                 <button
@@ -243,35 +244,47 @@ function FriendsScreen({
               onClick={() => slotByRole.main_section_title_color && onSelectSlot?.(slotByRole.main_section_title_color.id)}
             />
             {friendRows.map((row) => (
-              <button
-                key={row.name}
-                type="button"
-                className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 border-b pb-2 text-left ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "rounded-lg ring-1 ring-[#60a5fa]" : ""}`}
-                style={{ borderColor: preview.bodyCellBorderColor }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
-                }}
-              >
-                <AvatarCircle src={profileUrls[friendRows.indexOf(row) % profileUrls.length]} size="h-12 w-12" />
-                <div>
-                  <strong className="block text-[14px] font-semibold leading-none" style={{ color: preview.titleColor }}>
-                    {row.name}
-                  </strong>
-                  <span className="mt-1 block text-[11px] font-medium leading-none" style={{ color: preview.descriptionColor }}>
-                    {row.sub}
+              <div key={row.name} className="grid gap-0.5">
+                <button
+                  type="button"
+                  className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg px-1 py-1.5 text-left ${selectedSlotId === slotByRole.main_body_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+                  style={{ backgroundColor: getVisibleCellBackground(preview.bodyCellColor) }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (slotByRole.main_body_cell_color) onSelectSlot?.(slotByRole.main_body_cell_color.id);
+                  }}
+                >
+                  <AvatarCircle src={profileUrls[friendRows.indexOf(row) % profileUrls.length]} size="h-12 w-12" />
+                  <div>
+                    <strong className="block text-[14px] font-semibold leading-none" style={{ color: preview.titleColor }}>
+                      {row.name}
+                    </strong>
+                    <span className="mt-1 block text-[11px] font-medium leading-none" style={{ color: preview.descriptionColor }}>
+                      {row.sub}
+                    </span>
+                  </div>
+                  <span className="rounded-full border border-[#7aa8af]/35 bg-white/12 px-2 py-2 text-[10px] font-semibold" style={{ color: preview.descriptionPressedColor }}>
+                    {row.cta}
                   </span>
-                </div>
-                <span className="rounded-full border border-[#7aa8af]/35 bg-white/12 px-2 py-2 text-[10px] font-semibold" style={{ color: preview.descriptionPressedColor }}>
-                  {row.cta}
-                </span>
-              </button>
+                </button>
+                <button
+                  type="button"
+                  aria-label="친구·채팅 리스트 셀 구분선 색상 편집"
+                  className={`grid h-2 items-center rounded-sm ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "ring-1 ring-[#60a5fa]" : ""}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
+                  }}
+                >
+                  <span className="block h-px w-full" style={{ backgroundColor: themeColorToCss(preview.bodyCellBorderColor) }} />
+                </button>
+              </div>
             ))}
 
             <button
               type="button"
               className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[16px] px-1 py-1 text-left ${selectedSlotId === slotByRole.main_body_cell_pressed_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
-              style={{ backgroundColor: preview.bodyCellPressedColor }}
+              style={{ backgroundColor: themeColorToCss(preview.bodyCellPressedColor) }}
               onClick={(event) => {
                 event.stopPropagation();
                 if (slotByRole.main_body_cell_pressed_color) onSelectSlot?.(slotByRole.main_body_cell_pressed_color.id);
@@ -341,7 +354,7 @@ function ChatsScreen({
       </button>
 
       <div className="grid content-start min-h-0 gap-3 pb-1 overflow-hidden">
-        <div className={`px-4 pt-2 ${selectedSlotId === slotByRole.main_header_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ borderColor: hexToRgba(preview.bodyCellBorderColor, 0.28), backgroundColor: preview.headerBackgroundColor }} onClick={(event) => { event.stopPropagation(); if (slotByRole.main_header_color) onSelectSlot?.(slotByRole.main_header_color.id); }}>
+        <div className={`px-4 pt-2 ${selectedSlotId === slotByRole.main_header_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ backgroundColor: preview.headerBackgroundColor }} onClick={(event) => { event.stopPropagation(); if (slotByRole.main_header_color) onSelectSlot?.(slotByRole.main_header_color.id); }}>
           <div className="flex items-center gap-2 overflow-hidden">
             <FilterPill compact dark color={preview.headerForegroundColor}>전체</FilterPill>
             <FilterPill compact color={preview.headerForegroundColor}>
@@ -380,17 +393,17 @@ function ChatsScreen({
               key={`${row.name}-${index}`}
               role="button"
               tabIndex={0}
-              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-1 py-2 text-left ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "rounded-[18px] ring-1 ring-[#60a5fa]" : ""}`}
-              style={{ backgroundColor: preview.bodyCellColor }}
+              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg px-1 py-2 text-left ${selectedSlotId === slotByRole.main_body_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+              style={{ backgroundColor: getVisibleCellBackground(preview.bodyCellColor) }}
               onClick={(event) => {
                 event.stopPropagation();
-                if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
+                if (slotByRole.main_body_cell_color) onSelectSlot?.(slotByRole.main_body_cell_color.id);
               }}
               onKeyDown={(event) => {
                 if (event.key !== "Enter" && event.key !== " ") return;
                 event.preventDefault();
                 event.stopPropagation();
-                if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
+                if (slotByRole.main_body_cell_color) onSelectSlot?.(slotByRole.main_body_cell_color.id);
               }}
             >
               <AvatarCircle src={profileUrls[index % profileUrls.length]} size="h-12 w-12" />
@@ -443,7 +456,11 @@ function ChatsScreen({
   );
 }
 
-function MoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
+function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { platform: "android" | "ios"; selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
+  if (platform === "ios") {
+    return <IosMoreScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />;
+  }
+
   return (
     <MainScreenFrame>
       <button type="button" className={`flex items-end justify-between px-5 pb-3 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ backgroundColor: preview.headerBackgroundColor, color: preview.headerForegroundColor }} onClick={(event) => { event.stopPropagation(); onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? ""); }}>
@@ -466,6 +483,86 @@ function MoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot }:
           {["선물하기", "멜론", "쇼핑", "예약하기"].map((label, index) => <span key={label} className="relative rounded-xl bg-white/75 p-3 text-[12px] font-bold" style={{ color: preview.featurePrimaryColor }}>{label}{index < 2 ? <span className="absolute right-2 top-2 size-2 rounded-full" style={{ backgroundColor: index ? preview.badgeColor : preview.lightBadgeColor }} /> : null}</span>)}
         </div>
       </div>
+      <MainBottomTabBar active="more" selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
+    </MainScreenFrame>
+  );
+}
+
+function IosMoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
+  const backgroundSelected = selectedSlotId === slotByRole.main_body_secondary_cell_color?.id;
+  const headerSelected = selectedSlotId === slotByRole.main_header_foreground_color?.id;
+  const featureSelected = selectedSlotId === slotByRole.feature_primary_color?.id;
+  const services = [
+    { label: "친구 추가", icon: UserPlus },
+    { label: "채팅 만들기", icon: MessageCirclePlus },
+    { label: "선물하기", icon: Gift },
+    { label: "전체 서비스", icon: ListPlus },
+  ];
+
+  return (
+    <MainScreenFrame>
+      <button
+        type="button"
+        className={`flex items-end justify-between px-5 pb-3 pt-4 text-left transition ${headerSelected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+        style={{ backgroundColor: preview.bodySecondaryColor, color: preview.headerForegroundColor }}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (slotByRole.main_header_foreground_color) onSelectSlot?.(slotByRole.main_header_foreground_color.id);
+        }}
+      >
+        <strong className="text-xl font-semibold tracking-[-0.03em]">더보기</strong>
+        <div className="flex items-center gap-4"><Search className="size-5" aria-hidden="true" /><Settings className="size-5" aria-hidden="true" /></div>
+      </button>
+
+      <div
+        role="button"
+        tabIndex={0}
+        className={`grid min-h-0 content-start gap-4 overflow-hidden px-4 py-3 text-left transition ${backgroundSelected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+        style={{ backgroundColor: preview.bodySecondaryColor }}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (slotByRole.main_body_secondary_cell_color) onSelectSlot?.(slotByRole.main_body_secondary_cell_color.id);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          if (slotByRole.main_body_secondary_cell_color) onSelectSlot?.(slotByRole.main_body_secondary_cell_color.id);
+        }}
+      >
+        <span className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-white/82 px-4 py-3 shadow-[0_10px_26px_rgba(15,23,42,0.06)]">
+          <AvatarCircle src={urls.profile_image_1} size="h-12 w-12" />
+          <span className="min-w-0">
+            <strong className="block truncate text-[15px] font-semibold" style={{ color: preview.titleColor }}>테마 메이커</strong>
+            <span className="mt-0.5 block truncate text-[11px] font-medium" style={{ color: preview.descriptionColor }}>나만의 카카오톡 테마를 만들고 있어요.</span>
+          </span>
+          <ChevronRight className="size-4 opacity-45" style={{ color: preview.headerForegroundColor }} aria-hidden="true" />
+        </span>
+
+        <button
+          type="button"
+          className={`grid grid-cols-4 gap-1 rounded-2xl bg-white/72 px-2 py-4 ${featureSelected ? "ring-2 ring-[#60a5fa]" : ""}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (slotByRole.feature_primary_color) onSelectSlot?.(slotByRole.feature_primary_color.id);
+          }}
+        >
+          {services.map(({ label, icon: Icon }) => (
+            <span key={label} className="grid justify-items-center gap-2 text-center">
+              <span className="grid size-9 place-items-center rounded-full bg-white/90 shadow-sm"><Icon className="size-4" style={{ color: preview.featurePrimaryColor }} aria-hidden="true" /></span>
+              <span className="text-[10px] font-semibold leading-tight" style={{ color: preview.featurePrimaryColor }}>{label}</span>
+            </span>
+          ))}
+        </button>
+
+        <span className="grid overflow-hidden rounded-2xl bg-white/72 px-4">
+          {["결제", "이모티콘", "테마", "설정"].map((label, index) => (
+            <span key={label} className={`flex min-h-11 items-center justify-between text-[12px] font-semibold ${index ? "border-t border-black/5" : ""}`} style={{ color: preview.titleColor }}>
+              {label}<ChevronRight className="size-3.5 opacity-35" aria-hidden="true" />
+            </span>
+          ))}
+        </span>
+      </div>
+
       <MainBottomTabBar active="more" selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
     </MainScreenFrame>
   );
@@ -741,7 +838,14 @@ function getProfilePreviewUrls(urls: RoleUrls) {
 }
 
 function hexToRgba(hex: string, alpha: number) {
-  const normalized = hex.replace("#", "");
+  const cssColor = themeColorToCss(hex);
+  if (cssColor === "transparent") return cssColor;
+  const functionalMatch = cssColor.match(/^rgba?\(\s*(\d+(?:\.\d+)?)\s*[, ]\s*(\d+(?:\.\d+)?)\s*[, ]\s*(\d+(?:\.\d+)?)/i);
+  if (functionalMatch) {
+    return `rgba(${functionalMatch[1]}, ${functionalMatch[2]}, ${functionalMatch[3]}, ${alpha})`;
+  }
+
+  const normalized = cssColor.replace("#", "");
   if (normalized.length === 8) {
     const r = Number.parseInt(normalized.slice(2, 4), 16);
     const g = Number.parseInt(normalized.slice(4, 6), 16);
@@ -761,6 +865,11 @@ function withAlpha(color: string, alphaHex: string) {
   const normalized = color.trim().replace("#", "");
   const base = normalized.length === 3 ? normalized.split("").map((char) => char + char).join("") : normalized.slice(-6);
   return `#${alphaHex}${base}`.toUpperCase();
+}
+
+function getVisibleCellBackground(color: string) {
+  const cssColor = themeColorToCss(color);
+  return cssColor === "transparent" ? undefined : cssColor;
 }
 
 function lighten(color: string, amount: number) {
