@@ -1,4 +1,4 @@
-import type { SlotCandidateSelections, SlotColors } from "@/lib/theme/project/state";
+import { disabledImageCandidateId, type SlotCandidateSelections, type SlotColors } from "@/lib/theme/project/state";
 import type { ThemePlatform } from "@/lib/theme/types";
 import { autoMainPaletteCandidateId, legacyAutoMainSurfaceCandidateId } from "@/lib/theme/autoColor";
 
@@ -16,6 +16,10 @@ export function normalizeLegacyColorOverrides(platform: ThemePlatform, colors: S
   const mapping = platform === "android" ? androidLegacySlotIds : iosLegacySlotIds;
   const candidateSelections = remapSelections(selections, mapping);
   for (const [slotId, selectedId] of Object.entries(candidateSelections)) {
+    if ((slotId === "android-main-background" || slotId === "ios-main-background-image") && selectedId === `${slotId}:base`) {
+      candidateSelections[slotId] = disabledImageCandidateId;
+      continue;
+    }
     if (selectedId === legacyAutoMainSurfaceCandidateId || (platform === "ios" && selectedId === autoMainPaletteCandidateId)) delete candidateSelections[slotId];
   }
   return {

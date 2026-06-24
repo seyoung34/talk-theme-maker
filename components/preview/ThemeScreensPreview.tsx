@@ -13,10 +13,10 @@ type RoleFiles = Partial<Record<ThemeResourceRole, ThemeProjectFile>>;
 type RoleUrls = Partial<Record<ThemeResourceRole, string>>;
 
 const friendRows = [
-  { name: "테스트 프로필", sub: "오늘", cta: "추가" },
-  { name: "샘플 그룹", sub: "어제", cta: "초대" },
-  { name: "워크스페이스", sub: "어제", cta: "보기" },
-  { name: "디자인 리뷰", sub: "최근", cta: "열기" },
+  { name: "김민수", sub: "오늘도 화이팅", cta: "선물하기" },
+  { name: "미나미", sub: "야호", cta: "선물하기" },
+  { name: "정원이", sub: "거제", cta: "선물하기" },
+  { name: "김가영", sub: "신라공주", cta: "선물하기" },
 ];
 
 const chatRows = [
@@ -165,7 +165,7 @@ function FriendsScreen({
           onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? "");
         }}
       >
-        <AvatarCircle src={urls.main_background} size="h-6 w-8" />
+        <AvatarCircle src={profileUrls[0]} size="h-6 w-8" />
         <strong className="block text-[13px] font-semibold" style={{ color: preview.headerForegroundColor }}>
           내 프로필
         </strong>
@@ -184,22 +184,13 @@ function FriendsScreen({
             <Chip textColor={preview.titleColor}>추천</Chip>
           </div>
 
-          <button
-            type="button"
-            className={`overflow-hidden rounded-[12px] px-5 py-6 text-left shadow-[0_18px_32px_rgba(15,23,42,0.08)] ${selectedSlotId === slotByRole.main_body_secondary_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
-            style={{ backgroundColor: preview.bodySecondaryColor }}
-            onClick={(event) => {
-              event.stopPropagation();
-              if (slotByRole.main_body_secondary_cell_color) onSelectSlot?.(slotByRole.main_body_secondary_cell_color.id);
-            }}
-          >
-            <span className="block text-[11px] font-semibold" style={{ color: preview.descriptionColor }}>
-              광고 영역입니다
+          <div className="grid min-h-[60px] grid-cols-[64px_minmax(0,1fr)] items-center gap-3 overflow-hidden rounded-[12px] bg-[#f1f3f5] px-3 py-2 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)]" aria-label="카카오톡 광고 예시 영역">
+            <span className="grid h-12 w-16 place-items-center rounded-lg bg-[#e2e5e9] text-[9px] font-bold tracking-[0.08em] text-[#868e96]" aria-hidden="true">AD</span>
+            <span className="min-w-0">
+              <strong className="block truncate text-[12px] font-semibold text-[#343a40]">카카오톡 채널의 새로운 소식</strong>
+              <span className="mt-1 block truncate text-[10px] font-medium text-[#868e96]">테마와 무관한 광고 예시 영역입니다.</span>
             </span>
-            <strong className="mt-2 block text-[15px] font-semibold" style={{ color: preview.titlePressedColor }}>
-              새 메인 화면 요소를 바로 점검할 수 있습니다.
-            </strong>
-          </button>
+          </div>
 
           <button
             type="button"
@@ -214,27 +205,39 @@ function FriendsScreen({
             </span>
           </button>
 
-          <div className="flex gap-3 px-1 overflow-hidden outline outline-red-500">
-            {["샘플 A", "샘플 B", "샘플 C", "샘플 D", "더보기"].map((name, index) => (
-              <div key={name} className="grid w-[62px] justify-items-center gap-2">
+          <div className="grid grid-cols-5 gap-1 px-0.5">
+            {["내 프로필", "코끼리", "강아지", "고양이", "다람쥐"].map((name, index) => (
+              <div key={name} className="grid min-w-0 justify-items-center gap-1.5">
                 <div className="relative">
                   <AvatarCircle src={profileUrls[index % profileUrls.length]} size="h-10 w-10" />
-                  {index > 0 ? <span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-[#ff7246]" /> : null}
+                  {index > 0 ? <span className="absolute -top-1 left-1 h-2 w-2 -translate-x-1/2 rounded-full bg-[#ff7246]" /> : null}
                 </div>
                 <button
                   type="button"
-                  className={`line-clamp-2 text-center text-[11px] font-medium leading-[1.15] ${selectedSlotId === slotByRole.main_description_color?.id ? "rounded-md bg-white/70 px-1 py-0.5 ring-1 ring-[#60a5fa]" : ""}`}
+                  className={`block w-full text-center ${selectedSlotId === slotByRole.main_description_color?.id ? "rounded-md bg-white/70 px-0.5 py-0.5 ring-1 ring-[#60a5fa]" : ""}`}
                   style={{ color: preview.descriptionColor }}
                   onClick={(event) => {
                     event.stopPropagation();
                     if (slotByRole.main_description_color) onSelectSlot?.(slotByRole.main_description_color.id);
                   }}
                 >
-                  {name}
+                  <span className="block w-full truncate text-[8px] font-medium leading-[1.2]">{name}</span>
                 </button>
               </div>
             ))}
           </div>
+
+          <button
+            type="button"
+            aria-label="친구·채팅 리스트 셀 구분선 색상 편집"
+            className={`grid h-1 items-center rounded-sm ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "ring-1 ring-[#60a5fa]" : ""}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
+            }}
+          >
+            <span className="block h-px w-full" style={{ backgroundColor: themeColorToCss(preview.bodyCellBorderColor) }} />
+          </button>
 
           <div className="grid gap-3 px-1">
             <SectionLabel
@@ -267,39 +270,10 @@ function FriendsScreen({
                     {row.cta}
                   </span>
                 </button>
-                <button
-                  type="button"
-                  aria-label="친구·채팅 리스트 셀 구분선 색상 편집"
-                  className={`grid h-2 items-center rounded-sm ${selectedSlotId === slotByRole.main_body_cell_border_color?.id ? "ring-1 ring-[#60a5fa]" : ""}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (slotByRole.main_body_cell_border_color) onSelectSlot?.(slotByRole.main_body_cell_border_color.id);
-                  }}
-                >
-                  <span className="block h-px w-full" style={{ backgroundColor: themeColorToCss(preview.bodyCellBorderColor) }} />
-                </button>
               </div>
             ))}
 
-            <button
-              type="button"
-              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-[16px] px-1 py-1 text-left ${selectedSlotId === slotByRole.main_body_cell_pressed_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
-              style={{ backgroundColor: themeColorToCss(preview.bodyCellPressedColor) }}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (slotByRole.main_body_cell_pressed_color) onSelectSlot?.(slotByRole.main_body_cell_pressed_color.id);
-              }}
-            >
-              <span className="grid h-12 w-12 place-items-center rounded-[20px] bg-white/70 text-xl">★</span>
-              <div>
-                <strong className="block text-[14px] font-semibold leading-tight" style={{ color: preview.titleColor }}>
-                  친구의 생일 일정을 확인해 보세요
-                </strong>
-              </div>
-              <span className="text-[14px] font-semibold" style={{ color: preview.descriptionColor }}>
-                19
-              </span>
-            </button>
+
           </div>
         </div>
       </div>
@@ -569,7 +543,7 @@ function IosMoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot
 }
 
 function MainScreenFrame({ children }: { children: ReactNode }) {
-  return <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_96px]">{children}</div>;
+  return <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_72px]">{children}</div>;
 }
 
 function MainBottomTabBar({
@@ -654,7 +628,7 @@ function BottomTabBar({
 }) {
   return (
     <div
-      className={`grid grid-cols-5 items-center px-4 ${selectedSlotId === slotByRole.tab_background?.id || selectedSlotId === slotByRole.tab_background_image?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+      className={`grid grid-cols-5 items-center px-3 ${selectedSlotId === slotByRole.tab_background?.id || selectedSlotId === slotByRole.tab_background_image?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
       style={{
         backgroundColor: hexToRgba(tabBackground, 0.96),
         backgroundImage: tabBackgroundImageUrl ? `url(${tabBackgroundImageUrl})` : undefined,
@@ -703,18 +677,18 @@ function TabAsset({
   return (
     <button
       type="button"
-      className={`relative grid justify-items-center gap-1 rounded-[22px] px-1 py-1 ${selected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+      className={`relative grid justify-items-center gap-0.5 rounded-[18px] px-0.5 py-0.5 ${selected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
       onClick={(event) => {
         event.stopPropagation();
         if (slot) onSelectSlot?.(slot.id);
       }}
     >
-      <span className="relative grid h-10 w-10 place-items-center rounded-full">
-        <span className="w-8 h-8 bg-center bg-no-repeat bg-contain" style={{ backgroundImage: `url(${active ? focusedUrl || defaultUrl || "" : defaultUrl || focusedUrl || ""})` }} />
+      <span className="relative grid h-8 w-8 place-items-center rounded-full">
+        <span className="h-7 w-7 bg-center bg-no-repeat bg-contain" style={{ backgroundImage: `url(${active ? focusedUrl || defaultUrl || "" : defaultUrl || focusedUrl || ""})` }} />
       </span>
-      <span className="text-[10px] font-semibold text-[#57737a]">{label}</span>
-      {badge ? <span className="absolute left-1/2 top-0 rounded-full bg-[#ff6b37] px-2 py-[1px] text-[10px] font-bold text-white">{badge}</span> : null}
-      {dot ? <span className="absolute right-2 top-1 h-2 w-2 rounded-full bg-[#ff6b37]" /> : null}
+      <span className="text-[9px] font-semibold text-[#57737a]">{label}</span>
+      {badge ? <span className="absolute left-1/2 top-0 rounded-full bg-[#ff6b37] px-1.5 py-px text-[9px] font-bold text-white">{badge}</span> : null}
+      {dot ? <span className="absolute right-1.5 top-1 h-1.5 w-1.5 rounded-full bg-[#ff6b37]" /> : null}
     </button>
   );
 }

@@ -464,11 +464,11 @@ function ColorEditor({
             {recommendedColor ? <div className="flex items-center gap-3 rounded-lg border border-white/80 bg-white p-2.5 shadow-sm"><ColorSwatch value={recommendedColor} className="size-9 rounded-lg" /><div className="min-w-0"><p className="text-[10px] font-bold text-[#64748b]">현재 추천 색상</p><p className="mt-0.5 font-mono text-xs font-bold text-[#0f172a]">{recommendedColor}</p></div></div> : <p className="text-[11px] font-semibold leading-5 text-[#64748b]">{imageColorPaletteError ?? (slot.role === "main_background_color" ? "배경 이미지를 사용하지 않을 때는 원하는 배경색을 직접 입력하세요." : "추천 색상을 계산할 기준 색상이 필요합니다.")}</p>}
             <div className="flex flex-wrap gap-2 justify-center gap-4">
               <div className="inline-flex overflow-hidden rounded-lg shadow-sm">
-                <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-l-lg bg-[#2563eb] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-45" disabled={!canApplyAutoColor} onClick={onApplyAutoColor}><RefreshCw size={13} aria-hidden="true" />추천 색 다시 적용</button>
+                <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-l-lg bg-[#2563eb] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-45" disabled={!canApplyAutoColor} onClick={onApplyAutoColor}><RefreshCw size={13} aria-hidden="true" />현재 슬롯 색상 적용</button>
                 <InfoTooltip label="추천 색 다시 적용 안내" content="현재 슬롯만 자동 맞춤 상태로 다시 연결합니다. 이후 배경 이미지나 기준 배경색이 바뀌면 이 슬롯의 추천 색도 함께 갱신되며, 다른 수동 설정값은 변경하지 않습니다." triggerClassName="min-h-9 rounded-r-lg border-l border-white/30 bg-[#2563eb] px-2 text-white hover:bg-[#1d4ed8] focus-visible:bg-[#1d4ed8]" />
               </div>
               <div className="inline-flex overflow-hidden rounded-lg shadow-sm">
-                <button type="button" className="min-h-9 rounded-l-lg border border-r-0 border-[#bfdbfe] bg-white px-3 text-xs font-bold text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45" disabled={!canApplyAutoColorToAll} onClick={onApplyAutoColorToAll}>메인 색상 모두 자동 맞춤</button>
+                <button type="button" className="min-h-9 rounded-l-lg border border-r-0 border-[#bfdbfe] bg-white px-3 text-xs font-bold text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45" disabled={!canApplyAutoColorToAll} onClick={onApplyAutoColorToAll}>모든 슬롯 자동 맞춤</button>
                 <InfoTooltip label="메인 색상 모두 자동 맞춤 안내" content="친구·채팅 목록·더보기·하단 탭의 자동 맞춤 대상 색상을 현재 팔레트로 다시 계산합니다. 직접 수정한 색상도 추천값으로 바뀝니다. 배경 이미지가 없으면 현재 배경색을 기준으로 계산합니다." triggerClassName="min-h-9 rounded-r-lg border border-[#bfdbfe] bg-white px-2 text-[#1d4ed8] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff]" />
               </div>
             </div>

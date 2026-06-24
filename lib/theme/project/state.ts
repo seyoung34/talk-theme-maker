@@ -204,7 +204,9 @@ export function getSlotCandidates(slot: ThemeAssetSlot | undefined, templateId: 
   const disabledCandidate = {
     id: disabledImageCandidateId,
     label: "이미지 사용 안 함",
-    note: getImageColorFallbackRole(slot.role) ? "대응 색상 슬롯 값을 사용합니다." : "해당 이미지를 내보내지 않습니다.",
+    note: slot.role === "main_background"
+      ? "배경색으로 시작합니다. 이미지를 추가하면 화면 색상을 이미지에 맞춰 자동 조정합니다."
+      : getImageColorFallbackRole(slot.role) ? "대응 색상 슬롯 값을 사용합니다." : "해당 이미지를 내보내지 않습니다.",
     sourceType: "template-asset" as const,
   };
   if (!assetUrl) {

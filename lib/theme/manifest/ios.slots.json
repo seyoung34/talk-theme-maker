@@ -11,10 +11,7 @@
     "fileName": "mainBgImage.png",
     "path": "Images/mainBgImage.png",
     "required": true,
-    "note": "친구와 채팅 목록의 배경에 표시되는 이미지입니다. 이름과 상태 메시지가 잘 읽히는지 확인하세요.",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/mainBgImage.svg"
-    },
+    "note": "친구와 채팅 목록의 배경에 표시되는 이미지입니다. 기본 템플릿은 이미지 없이 배경색으로 시작하며, 이미지를 추가한 뒤 이름과 상태 메시지가 잘 읽히는지 확인하세요.",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-background-image"
   },
