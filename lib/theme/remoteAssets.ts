@@ -35,7 +35,15 @@ export async function getThemeAssetSignedUrls(storagePaths: string[]) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paths }),
     });
-    const payload = (await response.json()) as { signedUrls?: Record<string, string>; error?: string };
+    const payload = await readJsonResponse<{ signedUrls?: Record<string, string>; error?: string }>(response);
+    if (response.status === 404) {
+      const fallbackUrls = await getThemeAssetSignedUrlsIndividually(paths);
+      for (const [path, signedUrl] of Object.entries(fallbackUrls)) {
+        setCachedSignedUrl(path, signedUrl);
+        result[path] = signedUrl;
+      }
+      continue;
+    }
     if (!response.ok || !payload.signedUrls) {
       throw new Error(payload.error ?? "Theme asset URL could not be created.");
     }
@@ -45,6 +53,33 @@ export async function getThemeAssetSignedUrls(storagePaths: string[]) {
     }
   }
   return result;
+}
+
+async function getThemeAssetSignedUrlsIndividually(storagePaths: string[]) {
+  const signedUrls: Record<string, string> = {};
+  for (const path of storagePaths) {
+    const response = await fetch("/api/theme-assets/signed-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    const payload = await readJsonResponse<{ signedUrl?: string; error?: string }>(response);
+    if (!response.ok || !payload.signedUrl) {
+      throw new Error(payload.error ?? `Theme asset URL could not be created: ${path}`);
+    }
+    signedUrls[path] = payload.signedUrl;
+  }
+  return signedUrls;
+}
+
+async function readJsonResponse<T extends { error?: string }>(response: Response): Promise<T> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    return response.json() as Promise<T>;
+  }
+  const text = await response.text().catch(() => "");
+  const excerpt = text.replace(/\s+/g, " ").slice(0, 120);
+  return { error: excerpt ? `Unexpected non-JSON response (${response.status}): ${excerpt}` : `Unexpected non-JSON response (${response.status}).` } as T;
 }
 
 export async function storagePathToFile(storagePath: string, fileName: string, mimeType = "application/octet-stream") {

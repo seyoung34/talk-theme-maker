@@ -5,12 +5,13 @@ import { ImageOff, Info, Link2, RefreshCw } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSlotUploadEntries, slotStatusLabel, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
-import { normalizeThemeColor, readableThemeForeground, setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorContrast, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
+import { normalizeThemeColor, readableThemeForeground, setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
 
 export function ProjectQuickEditPanel({
   slot,
@@ -36,6 +37,7 @@ export function ProjectQuickEditPanel({
   imageColorPalette,
   imageColorPaletteError,
   recommendedColor,
+  contrastWarning,
   isAutoColor,
   canApplyAutoColor,
   canApplyAutoColorToAll,
@@ -75,6 +77,7 @@ export function ProjectQuickEditPanel({
   imageColorPalette: ImageColorPalette | null;
   imageColorPaletteError: string | null;
   recommendedColor?: string;
+  contrastWarning?: SlotContrastWarning;
   isAutoColor: boolean;
   canApplyAutoColor: boolean;
   canApplyAutoColorToAll: boolean;
@@ -189,7 +192,7 @@ export function ProjectQuickEditPanel({
         </div>
 
         {slot.kind === "color" ? (
-          <ColorEditor slot={slot} value={colors[slot.id] ?? selectedCandidate?.colorValue ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} />
+          <ColorEditor slot={slot} value={colors[slot.id] ?? selectedCandidate?.colorValue ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} />
         ) : (
           <>
             <input
@@ -412,6 +415,7 @@ function ColorEditor({
   imageColorPalette,
   imageColorPaletteError,
   recommendedColor,
+  contrastWarning,
   isAutoColor,
   canApplyAutoColor,
   canApplyAutoColorToAll,
@@ -424,6 +428,7 @@ function ColorEditor({
   imageColorPalette: ImageColorPalette | null;
   imageColorPaletteError: string | null;
   recommendedColor?: string;
+  contrastWarning?: SlotContrastWarning;
   isAutoColor: boolean;
   canApplyAutoColor: boolean;
   canApplyAutoColorToAll: boolean;
@@ -435,8 +440,6 @@ function ColorEditor({
   const alphaId = useId();
   const normalizedDraft = normalizeThemeColor(draft);
   const effectiveColor = normalizedDraft ?? normalizeThemeColor(value) ?? "#000000";
-  const contrastBackground = imageColorPalette?.average;
-  const showContrastWarning = Boolean(contrastBackground && isTextColorSlot(slot) && themeColorContrast(effectiveColor, contrastBackground) < 3);
 
   useEffect(() => setDraft(value), [slot.id, value]);
 
@@ -498,10 +501,10 @@ function ColorEditor({
           <div className="relative"><input aria-label={`${slot.label} 투명도 퍼센트`} type="number" min="0" max="100" value={themeColorAlphaPercent(effectiveColor)} className="h-10 w-full rounded-lg border border-[#d1d5db] bg-white pl-3 pr-8 text-right text-sm font-bold" onChange={(event) => commit(setThemeColorAlpha(effectiveColor, Number(event.currentTarget.value)))} /><span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#64748b]">%</span></div>
         </div>
         <ColorContextPreview slot={slot} value={effectiveColor} />
-        {showContrastWarning && contrastBackground ? (
+        {contrastWarning ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-            <p className="text-[11px] font-semibold text-amber-900">배경과의 대비가 낮아 텍스트가 흐리게 보일 수 있습니다.</p>
-            <button type="button" className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-amber-900 shadow-sm" onClick={() => onChange(slot, readableThemeForeground(contrastBackground))}>대비 맞춤</button>
+            <p className="text-[11px] font-semibold text-amber-900">{contrastWarning.message} 현재 {contrastWarning.ratio.toFixed(1)}:1 / 권장 {contrastWarning.minimumRatio}:1 이상</p>
+            <button type="button" className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-amber-900 shadow-sm" onClick={() => onChange(slot, readableThemeForeground(contrastWarning.background, contrastWarning.minimumRatio))}>대비 맞춤</button>
           </div>
         ) : null}
       </div>

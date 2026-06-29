@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Info, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, ChevronDown, Info, SlidersHorizontal } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeSlotGroup } from "@/lib/theme/types";
 import { disabledImageCandidateId, groupLabels, slotStatusLabel, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import { normalizeThemeColor, themeColorToCss } from "@/lib/theme/color";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
+import type { SlotContrastWarning } from "@/components/project/slotContrast";
 
 export function ProjectGroupRail({
   groups,
@@ -20,6 +21,7 @@ export function ProjectGroupRail({
   selections,
   templateId,
   template,
+  contrastWarnings = {},
   onSelectSlot,
 }: {
   groups: ThemeSlotGroup[];
@@ -32,6 +34,7 @@ export function ProjectGroupRail({
   selections: SlotCandidateSelections;
   templateId: ThemeTemplateId;
   template: ThemeTemplate;
+  contrastWarnings?: Record<string, SlotContrastWarning>;
   onSelectSlot: (slot: ThemeAssetSlot) => void;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -72,6 +75,7 @@ export function ProjectGroupRail({
             slot={slot}
             selected={selectedSlotId === slot.id}
             status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)}
+            warning={contrastWarnings[slot.id]}
             onSelect={() => onSelectSlot(slot)}
           />
         ))}
@@ -88,7 +92,7 @@ export function ProjectGroupRail({
               <span className="rounded-full bg-[#e2e8f0] px-1.5 py-0.5 text-[10px] text-[#334155]">{modifiedAdvancedCount}/{advancedSlots.length}</span>
               <ChevronDown size={14} className={`transition-transform ${advancedOpen ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
-            {advancedOpen ? advancedSlots.map((slot) => <SlotRailItem key={slot.id} slot={slot} selected={selectedSlotId === slot.id} status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)} onSelect={() => onSelectSlot(slot)} />) : null}
+            {advancedOpen ? advancedSlots.map((slot) => <SlotRailItem key={slot.id} slot={slot} selected={selectedSlotId === slot.id} status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)} warning={contrastWarnings[slot.id]} onSelect={() => onSelectSlot(slot)} />) : null}
           </div>
         ) : null}
       </div>
@@ -97,13 +101,21 @@ export function ProjectGroupRail({
   );
 }
 
-function SlotRailItem({ slot, selected, status, onSelect }: { slot: ThemeAssetSlot; selected: boolean; status: string; onSelect: () => void }) {
+function SlotRailItem({ slot, selected, status, warning, onSelect }: { slot: ThemeAssetSlot; selected: boolean; status: string; warning?: SlotContrastWarning; onSelect: () => void }) {
   const helpText = getSlotHelpText(slot);
   const colorPreview = slot.kind === "color" ? getStatusColorPreview(status) : null;
   return (
     <div className="group relative">
-      <button type="button" className={`w-full rounded-xl border px-3 py-3 pr-10 text-left transition ${selected ? "border-[#93c5fd] bg-[#eff6ff] shadow-sm" : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1] hover:bg-[#fcfcfd]"}`} onClick={onSelect}>
-        <span className="block truncate text-[14px] font-semibold text-[#111827]">{slot.label}</span>
+      <button type="button" className={`w-full rounded-xl border px-3 py-3 pr-10 text-left transition ${selected ? "border-[#93c5fd] bg-[#eff6ff] shadow-sm" : warning ? "border-amber-200 bg-amber-50/70 hover:border-amber-300 hover:bg-amber-50" : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1] hover:bg-[#fcfcfd]"}`} onClick={onSelect}>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[#111827]">{slot.label}</span>
+          {warning ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+              <AlertTriangle size={11} aria-hidden="true" />
+              대비
+            </span>
+          ) : null}
+        </span>
         <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-[#6b7280]">
           {colorPreview ? (
             <span
@@ -118,7 +130,7 @@ function SlotRailItem({ slot, selected, status, onSelect }: { slot: ThemeAssetSl
       </button>
       <Tooltip.Root>
         <Tooltip.Trigger asChild><span tabIndex={0} aria-label={`${slot.label} 안내`} className="absolute right-2 top-2 grid size-8 cursor-help place-items-center text-[#64748b] transition-colors hover:text-[#2563eb] focus-visible:rounded-lg focus-visible:text-[#2563eb] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb]"><Info size={18} strokeWidth={2} aria-hidden="true" /></span></Tooltip.Trigger>
-        <Tooltip.Portal><Tooltip.Content side="right" align="start" sideOffset={10} collisionPadding={12} className="radix-tooltip-content z-[70] w-[min(248px,calc(100vw-24px))] rounded-xl border border-[#dbe3ed] bg-white p-3.5 text-left shadow-[0_16px_38px_rgba(15,23,42,0.16)] outline-none"><div className="flex items-start gap-2.5"><span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-[#eff6ff] text-[#2563eb]"><Info size={15} strokeWidth={2.2} aria-hidden="true" /></span><div className="min-w-0"><p className="text-xs font-bold text-[#0f172a]">{slot.label}</p><p className="mt-1 text-[12px] font-medium leading-[1.55] text-[#64748b]">{helpText}</p></div></div><Tooltip.Arrow className="fill-white" width={12} height={6} /></Tooltip.Content></Tooltip.Portal>
+        <Tooltip.Portal><Tooltip.Content side="right" align="start" sideOffset={10} collisionPadding={12} className="radix-tooltip-content z-[70] w-[min(248px,calc(100vw-24px))] rounded-xl border border-[#dbe3ed] bg-white p-3.5 text-left shadow-[0_16px_38px_rgba(15,23,42,0.16)] outline-none"><div className="flex items-start gap-2.5"><span className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg ${warning ? "bg-amber-100 text-amber-700" : "bg-[#eff6ff] text-[#2563eb]"}`}>{warning ? <AlertTriangle size={15} strokeWidth={2.2} aria-hidden="true" /> : <Info size={15} strokeWidth={2.2} aria-hidden="true" />}</span><div className="min-w-0"><p className="text-xs font-bold text-[#0f172a]">{slot.label}</p><p className="mt-1 text-[12px] font-medium leading-[1.55] text-[#64748b]">{helpText}</p>{warning ? <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] font-semibold leading-[1.45] text-amber-900">{warning.message} 현재 {warning.ratio.toFixed(1)}:1 / 권장 {warning.minimumRatio}:1 이상</p> : null}</div></div><Tooltip.Arrow className="fill-white" width={12} height={6} /></Tooltip.Content></Tooltip.Portal>
       </Tooltip.Root>
     </div>
   );

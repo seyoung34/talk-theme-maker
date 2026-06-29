@@ -231,7 +231,7 @@ export function getInitialSlotCandidateSelections(slots: ThemeAssetSlot[], templ
   return Object.fromEntries(
     slots.map((slot) => {
       const defaultCandidate = getDefaultSelectedCandidate(slot, templateId, template);
-      return [slot.id, slot.platform === "android" && slot.autoColorRecipe ? autoMainPaletteCandidateId : defaultCandidate?.id];
+      return [slot.id, slot.autoColorRecipe ? autoMainPaletteCandidateId : defaultCandidate?.id];
     }),
   );
 }

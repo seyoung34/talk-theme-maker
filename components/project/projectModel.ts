@@ -30,7 +30,7 @@ export type SlotCandidate = {
 export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom", "more", "passcode", "common"];
 
 export const sectionLabels: Record<ThemeSection, string> = {
-  main: "친구",
+  main: "친구/메인",
   tabs: "채팅/하단 탭",
   more: "더보기",
   chatroom: "채팅방",

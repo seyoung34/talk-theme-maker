@@ -9,6 +9,7 @@ import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
 import { ProjectQuickEditPanel } from "@/components/project/ProjectQuickEditPanel";
 import { ProjectSectionRail } from "@/components/project/ProjectSectionRail";
+import { buildSlotContrastWarnings } from "@/components/project/slotContrast";
 import {
   bubbleSlotFromRole,
   getCompletion,
@@ -380,7 +381,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     () => createThemeProjectAnalysis(activeTemplate, platform, slots, uploads, colors, candidateSelections),
     [activeTemplate, platform, slots, uploads, colors, candidateSelections],
   );
-  const mainBackgroundFile = useMemo(() => platform === "android" ? findBestFile(analysis, "main_background") : undefined, [analysis, platform]);
+  const mainBackgroundFile = useMemo(() => findBestFile(analysis, "main_background"), [analysis]);
   const mainBackgroundPaletteKey = mainBackgroundFile ? getThemeFilePaletteKey(mainBackgroundFile) : null;
   const activeImageColorPalette = mainBackgroundPaletteKey && imageColorPaletteSourceKey === mainBackgroundPaletteKey ? imageColorPalette : null;
   const mainBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "main_background_color"), [slots]);
@@ -390,7 +391,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   useEffect(() => {
     let active = true;
-    if (platform !== "android" || !mainBackgroundFile) {
+    if (!mainBackgroundFile) {
       setImageColorPalette(null);
       setImageColorPaletteSourceKey(null);
       setImageColorPaletteError(null);
@@ -412,7 +413,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         setImageColorPaletteError(error instanceof Error ? error.message : "배경 이미지 색상을 분석하지 못했습니다.");
       });
     return () => { active = false; };
-  }, [mainBackgroundPaletteKey, platform]);
+  }, [mainBackgroundPaletteKey, mainBackgroundFile]);
 
   const mainColorRecommendations = useMemo(
     () => buildMainPaletteRecommendations(slots, {
@@ -424,9 +425,20 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }),
     [activeImageColorPalette, activeTemplate.accent, candidateSelections, mainBackgroundColorSlot, mainBackgroundFile, resolvedMainBackground, slots],
   );
+  const contrastWarnings = useMemo(
+    () => buildSlotContrastWarnings({
+      platform,
+      slots,
+      colors,
+      selections: candidateSelections,
+      templateId,
+      template: activeTemplate,
+      imageColorPalette: activeImageColorPalette,
+    }),
+    [activeImageColorPalette, activeTemplate, candidateSelections, colors, platform, slots, templateId],
+  );
 
   useEffect(() => {
-    if (platform !== "android") return;
     if (mainBackgroundFile && !activeImageColorPalette) return;
     const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && candidateSelections[slot.id] === autoMainPaletteCandidateId && mainColorRecommendations[slot.id]);
     if (!linkedSlots.length) return;
@@ -436,10 +448,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       for (const slot of linkedSlots) next[slot.id] = mainColorRecommendations[slot.id];
       return next;
     });
-  }, [activeImageColorPalette, candidateSelections, mainBackgroundFile, mainColorRecommendations, platform, slots]);
+  }, [activeImageColorPalette, candidateSelections, mainBackgroundFile, mainColorRecommendations, slots]);
 
   useEffect(() => {
-    if (platform !== "android" || mainBackgroundFile || !mainBackgroundColorSlot) return;
+    if (mainBackgroundFile || !mainBackgroundColorSlot) return;
     if (candidateSelections[mainBackgroundColorSlot.id] !== autoMainPaletteCandidateId) return;
     setColors((current) => current[mainBackgroundColorSlot.id] ? current : { ...current, [mainBackgroundColorSlot.id]: resolvedMainBackground });
     setCandidateSelections((current) => {
@@ -447,7 +459,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       delete next[mainBackgroundColorSlot.id];
       return next;
     });
-  }, [candidateSelections, mainBackgroundColorSlot, mainBackgroundFile, platform, resolvedMainBackground]);
+  }, [candidateSelections, mainBackgroundColorSlot, mainBackgroundFile, resolvedMainBackground]);
 
   useEffect(() => {
     if (!groups.includes(activeGroup)) {
@@ -1113,6 +1125,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 selections={candidateSelections}
                 templateId={templateId}
                 template={activeTemplate}
+                contrastWarnings={contrastWarnings}
                 onSelectSlot={(slot) => {
                   setSelectedSlotId(slot.id);
                   if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
@@ -1145,6 +1158,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   imageColorPalette={activeImageColorPalette}
                   imageColorPaletteError={imageColorPaletteError}
                   recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
+                  contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
                   isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
                   canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
                   canApplyAutoColorToAll={Boolean((!mainBackgroundFile || activeImageColorPalette) && Object.keys(mainColorRecommendations).length)}

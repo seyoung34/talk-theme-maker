@@ -29,6 +29,7 @@
     "defaultColor": {
       "basic": "#f4fafb"
     },
+    "autoColorRecipe": "background-average",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "background-color"
   },
@@ -50,6 +51,7 @@
     "defaultColor": {
       "basic": "#664242"
     },
+    "autoColorRecipe": "foreground-header",
     "cssSelector": "HeaderStyle-Main",
     "cssProperty": "-ios-text-color"
   },
@@ -67,6 +69,7 @@
     "defaultColor": {
       "basic": "#111111"
     },
+    "autoColorRecipe": "foreground-background",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-text-color"
   },
@@ -84,6 +87,7 @@
     "defaultColor": {
       "basic": "#4d5660"
     },
+    "autoColorRecipe": "foreground-muted",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-description-text-color"
   },
@@ -102,6 +106,7 @@
     "defaultColor": {
       "basic": "#111111"
     },
+    "autoColorRecipe": "foreground-pressed",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-highlighted-text-color"
   },
@@ -119,6 +124,7 @@
     "defaultColor": {
       "basic": "#4d5660"
     },
+    "autoColorRecipe": "foreground-muted",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-paragraph-text-color"
   },
@@ -137,6 +143,7 @@
     "defaultColor": {
       "basic": "#4d5660"
     },
+    "autoColorRecipe": "muted-pressed",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-paragraph-highlighted-text-color"
   },
@@ -155,6 +162,7 @@
     "defaultColor": {
       "basic": "#111111"
     },
+    "autoColorRecipe": "cell-pressed",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-selected-background-color"
   },
@@ -191,6 +199,7 @@
     "defaultColor": {
       "basic": "#111111"
     },
+    "autoColorRecipe": "cell-border",
     "cssSelector": "SectionTitleStyle-Main",
     "cssProperty": "border-color"
   },
@@ -242,6 +251,7 @@
     "defaultColor": {
       "basic": "#FFDEDE"
     },
+    "autoColorRecipe": "surface-background",
     "cssSelector": "MainViewStyle-Secondary",
     "cssProperty": "background-color"
   },
@@ -260,6 +270,7 @@
     "defaultColor": {
       "basic": "#805959"
     },
+    "autoColorRecipe": "accent",
     "cssSelector": "FeatureStyle-Primary",
     "cssProperty": "-ios-text-color"
   },
@@ -277,6 +288,7 @@
     "defaultColor": {
       "basic": "#ffffff"
     },
+    "autoColorRecipe": "tab-bottom",
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "background-color"
   },
@@ -294,6 +306,7 @@
     "defaultColor": {
       "basic": "#4d5660"
     },
+    "autoColorRecipe": "foreground-header",
     "cssSelector": "HeaderStyle-Main",
     "cssProperty": "-ios-tab-text-color"
   },
