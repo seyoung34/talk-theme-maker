@@ -17,6 +17,12 @@ export type ImageEditMetadata = {
   state: ImageEditState;
 };
 
+export type ImageEditTarget = {
+  width: number;
+  height: number;
+  label?: string;
+};
+
 export const defaultImageEditState: ImageEditState = {
   version: 1,
   flipX: false,
@@ -31,11 +37,11 @@ export function clampImageScale(value: number) {
   return Math.min(3, Math.max(0.25, value));
 }
 
-export async function renderEditedImageFile(source: File, state: ImageEditState, outputName?: string) {
+export async function renderEditedImageFile(source: File, state: ImageEditState, outputName?: string, target?: ImageEditTarget) {
   const bitmap = await createImageBitmap(source);
   const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  canvas.width = getSafeTargetDimension(target?.width) ?? bitmap.width;
+  canvas.height = getSafeTargetDimension(target?.height) ?? bitmap.height;
 
   const context = canvas.getContext("2d");
   if (!context) {
@@ -80,6 +86,13 @@ function getFitBaseScale(mode: ImageFitMode, sourceWidth: number, sourceHeight: 
   const widthRatio = targetWidth / sourceWidth;
   const heightRatio = targetHeight / sourceHeight;
   return mode === "cover" ? Math.max(widthRatio, heightRatio) : Math.min(widthRatio, heightRatio);
+}
+
+function getSafeTargetDimension(value: number | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  const rounded = Math.round(value);
+  if (rounded < 1) return undefined;
+  return Math.min(8192, rounded);
 }
 
 function getOutputMimeType(mimeType: string) {

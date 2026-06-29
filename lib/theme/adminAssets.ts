@@ -57,6 +57,7 @@ export type AdminAssetAnalysis = {
   width?: number;
   height?: number;
   aspectRatio?: number;
+  transparentPixelRatio?: number;
   shapes: AdminAssetShape[];
 };
 
@@ -250,7 +251,8 @@ export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis) {
   if (!analysis) return "분석 정보 없음";
   const size = analysis.width && analysis.height ? `${analysis.width}x${analysis.height}` : "크기 미확인";
   const shape = analysis.shapes.filter((item) => item !== "unknown").join(", ") || "unknown";
-  return `${size} · ${shape}`;
+  const transparency = typeof analysis.transparentPixelRatio === "number" ? ` · 투명 ${Math.round(analysis.transparentPixelRatio * 100)}%` : "";
+  return `${size} · ${shape}${transparency}`;
 }
 
 function rowToAdminAsset(row: AdminAssetRow, previewUrl?: string): AdminAssetCandidate {

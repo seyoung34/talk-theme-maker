@@ -1,4 +1,5 @@
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
+import type { ImageEditState } from "@/lib/theme/imageEdit";
 import type { BaseTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -43,6 +44,13 @@ export type RemoteUploadEntry = {
   mimeType: string;
   size: number;
   storagePath: string;
+  imageEdit?: {
+    originalName: string;
+    originalSize: number;
+    originalStoragePath?: string;
+    editedAt: number;
+    state: ImageEditState;
+  };
 };
 
 export type RemoteSlotUploads = Record<string, RemoteUploadEntry[] | undefined>;

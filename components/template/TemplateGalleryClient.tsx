@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Clock3, Hash, SendHorizontal, Plus, Search, Settings, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
@@ -61,7 +61,10 @@ export default function TemplateGalleryClient() {
   const [notice, setNotice] = useState<string | null>(null);
   const [selectedUserTemplateRecord, setSelectedUserTemplateRecord] = useState<UserTemplateRecord | null>(null);
   const [userTemplatePreviewUrls, setUserTemplatePreviewUrls] = useState<Record<string, string>>({});
+  const [userTemplateCardPreviewUrls, setUserTemplateCardPreviewUrls] = useState<Record<string, Record<string, string>>>({});
+  const [userTemplateCardVisuals, setUserTemplateCardVisuals] = useState<Record<string, TemplatePreviewVisual>>({});
   const [isUserTemplatePreviewLoading, setIsUserTemplatePreviewLoading] = useState(false);
+  const userTemplateCardPreviewUrlsRef = useRef<Record<string, Record<string, string>>>({});
   const galleryTemplates = useMemo(
     () =>
       createGalleryTemplates(systemTemplates, systemUploadPreviewUrls).map((item) => ({
@@ -99,18 +102,50 @@ export default function TemplateGalleryClient() {
   }, [userTemplatePreviewUrls]);
 
   useEffect(() => {
+    return () => {
+      revokeNestedObjectUrls(userTemplateCardPreviewUrlsRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
-    listUserTemplates()
-      .then((templates) => {
-        if (active) setUserTemplates(templates);
-      })
-      .catch((error) => {
+    const loadUserTemplateSummaries = async () => {
+      try {
+        const templates = await listUserTemplates();
+        if (!active) return;
+        setUserTemplates(templates);
+        const records = (await Promise.all(templates.map((template) => getUserTemplate(template.id)))).filter((record): record is UserTemplateRecord => Boolean(record));
+        if (!active) return;
+        const nextUrls: Record<string, Record<string, string>> = {};
+        const nextVisuals: Record<string, TemplatePreviewVisual> = {};
+        for (const record of records) {
+          const baseTemplate = themeTemplates.find((template) => template.id === record.templateId) ?? themeTemplates[0];
+          const urls = createUserTemplatePreviewUrls(record);
+          nextUrls[record.id] = urls;
+          nextVisuals[record.id] = createUserTemplatePreviewVisual(record, baseTemplate, urls);
+        }
+        setUserTemplateCardPreviewUrls((current) => {
+          revokeNestedObjectUrls(current);
+          userTemplateCardPreviewUrlsRef.current = nextUrls;
+          return nextUrls;
+        });
+        setUserTemplateCardVisuals(nextVisuals);
+      } catch (error) {
         console.error(error);
         if (active) {
           setUserTemplates([]);
+          setUserTemplateCardPreviewUrls((current) => {
+            revokeNestedObjectUrls(current);
+            userTemplateCardPreviewUrlsRef.current = {};
+            return {};
+          });
+          setUserTemplateCardVisuals({});
           setNotice("내 템플릿 목록을 불러오지 못했습니다.");
         }
-      });
+      }
+    };
+
+    void loadUserTemplateSummaries();
 
     return () => {
       active = false;
@@ -133,7 +168,7 @@ export default function TemplateGalleryClient() {
         console.error(error);
         if (active) {
           setSystemTemplates([]);
-          setNotice("System templates could not be loaded.");
+          setNotice("공개 템플릿을 불러오지 못했습니다.");
         }
       })
       .finally(() => {
@@ -216,6 +251,18 @@ export default function TemplateGalleryClient() {
     try {
       await deleteUserTemplate(template.id);
       setUserTemplates((current) => current.filter((item) => item.id !== template.id));
+      setUserTemplateCardPreviewUrls((current) => {
+        const next = { ...current };
+        revokeObjectUrls(next[template.id]);
+        delete next[template.id];
+        userTemplateCardPreviewUrlsRef.current = next;
+        return next;
+      });
+      setUserTemplateCardVisuals((current) => {
+        const next = { ...current };
+        delete next[template.id];
+        return next;
+      });
       setNotice("내 템플릿을 삭제했습니다.");
     } catch (error) {
       console.error(error);
@@ -261,7 +308,9 @@ export default function TemplateGalleryClient() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="mt-2 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">내 템플릿</h2>
-
+              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
+                이 브라우저에만 저장된 작업입니다. 직접 올린 개인 이미지는 서버에 업로드되지 않습니다.
+              </p>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-surface-low)] px-3 py-2 text-xs font-bold text-[var(--color-on-surface-variant)]">
               <Clock3 className="w-4 h-4" />
@@ -275,6 +324,7 @@ export default function TemplateGalleryClient() {
                 <UserTemplateCard
                   key={template.id}
                   template={template}
+                  visual={userTemplateCardVisuals[template.id]}
                   formattedDate={formatDate(template.updatedAt)}
                   onDelete={handleDeleteUserTemplate}
                   onContinue={startUserTemplate}
@@ -287,7 +337,7 @@ export default function TemplateGalleryClient() {
               <div>
                 <strong className="block text-lg font-black text-[var(--color-on-surface)]">저장된 템플릿이 아직 없습니다.</strong>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-on-surface-variant)]">
-                  기본 템플릿으로 시작해 편집 상태를 저장하면, 다음부터는 이 영역에서 바로 이어서 작업할 수 있습니다.
+                  기본 템플릿으로 시작해 편집 상태를 저장하면, 다음부터는 이 브라우저에서 바로 이어서 작업할 수 있습니다.
                 </p>
               </div>
               <button
@@ -381,6 +431,14 @@ function createUserTemplatePreviewUrls(record: UserTemplateRecord) {
   return urls;
 }
 
+function revokeObjectUrls(urls: Record<string, string> | undefined) {
+  Object.values(urls ?? {}).forEach((url) => URL.revokeObjectURL(url));
+}
+
+function revokeNestedObjectUrls(urls: Record<string, Record<string, string>>) {
+  Object.values(urls).forEach(revokeObjectUrls);
+}
+
 function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPreviewUrls: Record<string, string>, onStart: (template: UserTemplateSummary) => void): TemplatePreviewModel {
   const baseTemplate = themeTemplates.find((template) => template.id === record.templateId) ?? themeTemplates[0];
   const visual = createUserTemplatePreviewVisual(record, baseTemplate, uploadPreviewUrls);
@@ -398,8 +456,8 @@ function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPrevie
 
   return {
     title: record.name,
-    description: "저장된 색상과 업로드 이미지를 기준으로 미리봅니다.",
-    eyebrow: "My template preview",
+    description: "이 브라우저에 저장된 색상과 업로드 이미지를 기준으로 미리봅니다. 개인 이미지는 서버에 저장되지 않습니다.",
+    eyebrow: "내 템플릿 미리보기",
     closeLabel: "닫기",
     androidLabel: record.platform === "android" ? "편집 계속하기" : "Android 사용 불가",
     iosLabel: record.platform === "ios" ? "편집 계속하기" : "iOS 사용 불가",
@@ -455,8 +513,8 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
   if (template.kind === "system") {
     return {
       title: template.title,
-      description: template.description,
-      eyebrow: "Template preview",
+      description: template.description ?? "운영자가 준비한 예시 테마입니다. 원하는 플랫폼으로 시작한 뒤 이미지와 색상을 바꿀 수 있습니다.",
+      eyebrow: "공개 템플릿 미리보기",
       closeLabel: "닫기",
       androidLabel: "Android로 시작",
       iosLabel: "iOS로 시작",
@@ -475,8 +533,8 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
 
   return {
     title: template.title,
-    description: template.baseTemplate.previewNote,
-    eyebrow: "Template preview",
+    description: template.baseTemplate.previewNote || "가장 기본이 되는 빈 테마입니다. 처음 시작하거나 직접 이미지를 올려 만들 때 적합합니다.",
+    eyebrow: "기본 템플릿 미리보기",
     closeLabel: "닫기",
     androidLabel: "Android로 시작",
     iosLabel: "iOS로 시작",
@@ -504,7 +562,9 @@ function GalleryTemplateCard({ template, onPreview }: { template: GalleryTemplat
         <TemplateMiniPreview visual={template.visual} />
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center gap-2">
-
+            <span className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase ${template.kind === "base" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]"}`}>
+              {template.badge}
+            </span>
             {template.kind === "system" ? <span className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-black uppercase text-[var(--color-on-surface-variant)]">{Object.keys(template.variants).join(" / ")}</span> : null}
           </div>
           <strong className="font-[var(--font-display)] text-[26px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.title}</strong>
@@ -549,7 +609,7 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
     canStartIos ? { platform: "ios" as const, label: preview.iosLabel, className: "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]" } : null,
   ].filter((action): action is { platform: ThemePlatform; label: string; className: string } => Boolean(action));
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${preview.title} preview`}>
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${preview.title} 미리보기`}>
       <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
         <header className="flex items-start justify-between gap-3 border-b border-[var(--color-outline-variant)] px-4 py-3 sm:px-5 sm:py-4">
           <div>
@@ -570,6 +630,9 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
                 <InfoRow key={row.label} label={row.label} value={row.value} />
               ))}
             </div>
+            <p className="rounded-[18px] border border-[var(--color-outline-variant)] bg-white px-4 py-3 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
+              미리보기는 대표 화면을 압축해 보여줍니다. 실제 편집 화면에서 슬롯별 이미지, 색상, 말풍선 조정값을 확인한 뒤 내보내세요.
+            </p>
             <div className={`grid gap-2 ${actions.length > 1 ? "sm:grid-cols-2" : ""}`}>
               {actions.map((action) => (
                 <button key={action.platform} className={`rounded-full px-4 py-3 text-sm font-black transition hover:scale-[0.98] ${action.className}`} type="button" onClick={() => preview.onStart(action.platform)}>
@@ -659,7 +722,7 @@ function TemplatePhonePreview({ template, visual }: { template: ThemeTemplate; v
         </div>
       </div>
       <div className="grid min-h-0 content-start gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4">
-        <div className="justify-self-center rounded-full bg-[#14343a]/18 px-5 py-1 text-xs font-bold text-white">Today</div>
+        <div className="justify-self-center rounded-full bg-[#14343a]/18 px-5 py-1 text-xs font-bold text-white">오늘</div>
         <PreviewMessage visual={visual} mine={false} text="테마 분위기를 확인합니다." />
         <PreviewMessage visual={visual} mine text="말풍선과 배경을 함께 볼 수 있어요." />
         <PreviewMessage visual={visual} mine={false} text="저장된 색상과 이미지가 반영됩니다." />

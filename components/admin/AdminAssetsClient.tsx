@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertTriangle, Edit3, LoaderCircle, Pencil, Save, X } from "lucide-react";
+import { AlertTriangle, Edit3, ImagePlus, LoaderCircle, Pencil, Save, Search, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import SiteHeader from "@/components/layout/SiteHeader";
@@ -48,6 +48,9 @@ export default function AdminAssetsClient() {
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
   const [isSavingAsset, setIsSavingAsset] = useState(false);
   const [imageEditOpen, setImageEditOpen] = useState(false);
+  const [assetSearch, setAssetSearch] = useState("");
+  const [assetListFilter, setAssetListFilter] = useState<"all" | "exact" | "review" | "bubble">("all");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const slots = useMemo(() => getThemeSlots(platform).filter((slot) => slot.kind === "image" || slot.kind === "ninepatch"), [platform]);
   const slotGroups = useMemo(() => groupSlotsByAssetKind(slots), [slots]);
@@ -55,8 +58,26 @@ export default function AdminAssetsClient() {
   const selectedSlot = activeKindSlots.find((slot) => slot.id === selectedSlotId) ?? activeKindSlots[0] ?? slots[0];
   const adminBubbleFile = useMemo<ThemeProjectFile | undefined>(() => (file ? { path: file.name, name: file.name, size: file.size, file } : undefined), [file]);
   const selectedBubbleSlot = selectedSlot ? (bubbleSlotFromRole(selectedSlot.role) ?? "me") : "me";
-  const canUseCommonScope = Boolean(selectedSlot && getThemeSlots(platform === "android" ? "ios" : "android").some((slot) => slot.role === selectedSlot.role && slot.kind === selectedSlot.kind));
+  const commonSaveTargets = useMemo(() => (selectedSlot ? getAdminAssetSaveTargets(selectedSlot, "all", assetKind) : []), [assetKind, selectedSlot]);
+  const canUseCommonScope = commonSaveTargets.length > 1;
   const visibleAssets = assets.filter((asset) => selectedSlot && isAdminAssetRecommendedForSlot(selectedSlot, asset));
+  const filteredAssets = useMemo(() => {
+    const query = assetSearch.trim().toLowerCase();
+    return visibleAssets.filter((asset) => {
+      const warnings = getAdminAssetGuidance(selectedSlot, asset.assetKind ?? assetKind, asset.analysis ?? null);
+      const matchesQuery =
+        !query ||
+        asset.title.toLowerCase().includes(query) ||
+        asset.fileName.toLowerCase().includes(query) ||
+        asset.slotRole.toLowerCase().includes(query);
+      const matchesFilter =
+        assetListFilter === "all" ||
+        (assetListFilter === "exact" && selectedSlot && asset.slotRole === selectedSlot.role) ||
+        (assetListFilter === "review" && warnings.length > 0) ||
+        (assetListFilter === "bubble" && Boolean(asset.bubbleAdjustment));
+      return matchesQuery && matchesFilter;
+    });
+  }, [assetKind, assetListFilter, assetSearch, selectedSlot, visibleAssets]);
   const guidanceItems = useMemo(() => getAdminAssetGuidance(selectedSlot, assetKind, analysis), [analysis, assetKind, selectedSlot]);
 
   useEffect(() => {
@@ -139,26 +160,35 @@ export default function AdminAssetsClient() {
 
   const submit = async () => {
     if (!selectedSlot || !file || isSavingAsset) return;
+    const saveTargets = getAdminAssetSaveTargets(selectedSlot, assetPlatformScope, assetKind);
+    if (saveTargets.length === 0) {
+      setNotice("적용할 플랫폼 슬롯을 찾지 못했습니다.");
+      return;
+    }
 
     try {
       setIsSavingAsset(true);
-      await saveAdminAssetCandidate({
-        slotRole: selectedSlot.role,
-        platform: assetPlatformScope,
-        assetKind,
-        analysis: analysis ?? { shapes: inferShapesFromFileName(file.name) },
-        bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined,
-        title: title.trim() || file.name,
-        note: selectedSlot.label,
-        tags: [],
-        fileName: file.name,
-        mimeType: file.type || "application/octet-stream",
-        blob: file,
-      });
+      await Promise.all(
+        saveTargets.map((target) =>
+          saveAdminAssetCandidate({
+            slotRole: target.slot.role,
+            platform: target.platform,
+            assetKind,
+            analysis: analysis ?? { shapes: inferShapesFromFileName(file.name) },
+            bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined,
+            title: title.trim() || file.name,
+            note: target.slot.label,
+            tags: [],
+            fileName: file.name,
+            mimeType: file.type || "application/octet-stream",
+            blob: file,
+          }),
+        ),
+      );
       setTitle("");
       setFile(null);
       setAnalysis(null);
-      setNotice("관리 후보를 추가했습니다.");
+      setNotice(saveTargets.length > 1 ? "Android/iOS 관리 후보를 모두 추가했습니다." : "관리 후보를 추가했습니다.");
       await refreshAssets();
     } catch (error) {
       console.error(error);
@@ -188,6 +218,18 @@ export default function AdminAssetsClient() {
   const applyRecommendedBubbleAdjustment = () => {
     setBubbleAdjustment(createDefaultBubbleAdjustment(analysis));
     setNotice("이미지 크기 기준으로 말풍선 조정값을 다시 맞췄습니다.");
+  };
+
+  const clearFile = () => {
+    if (filePreviewUrl) {
+      URL.revokeObjectURL(filePreviewUrl);
+    }
+
+    setFile(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   return (
@@ -240,7 +282,7 @@ export default function AdminAssetsClient() {
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] font-semibold leading-5 text-[var(--color-on-surface-variant)]">공통 등록이 가능한 슬롯은 저장 시 Android/iOS 공통이 기본으로 선택됩니다.</p>
+              <p className="text-[11px] font-semibold leading-5 text-[var(--color-on-surface-variant)]">둘 다 선택하면 관리 후보 추가 시 Android와 iOS 후보를 각각 생성합니다.</p>
             </div>
 
             <div className="grid max-h-[42dvh] gap-2 overflow-auto pr-1 [scrollbar-width:thin]">
@@ -264,7 +306,7 @@ export default function AdminAssetsClient() {
               <div className="grid gap-2 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3 md:col-span-2">
                 <strong className="text-sm font-black text-[#1e3a8a]">통합 에셋 등록</strong>
                 <p className="text-xs font-semibold leading-5 text-[#475569]">
-                  Android/iOS에서 같은 역할을 가진 슬롯은 공통 등록이 기본입니다. 말풍선처럼 플랫폼별 해석이 다른 값은 아래 조정 섹션에서 한 번에 확인합니다.
+                  Android/iOS에서 같은 역할을 가진 슬롯은 두 플랫폼에 함께 추가하는 흐름이 기본입니다. 말풍선처럼 플랫폼별 해석이 다른 값은 아래 조정 섹션에서 한 번에 확인합니다.
                 </p>
               </div>
               <label className="grid gap-2">
@@ -281,11 +323,17 @@ export default function AdminAssetsClient() {
                   ))}
                 </select>
               </label>
-              <label className="grid gap-2 md:col-span-2 outline outline-red-500">
-                <span className="text-sm font-black text-[var(--color-on-surface)]">이미지 파일</span>
+              <div className="grid gap-2 md:col-span-2">
+                <span className="text-sm font-black text-[var(--color-on-surface)]">
+                  이미지 파일
+                </span>
+
                 <div
                   tabIndex={0}
-                  className={`grid gap-2 rounded-2xl border-2 border-dashed px-4 py-5 transition ${dragActive ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]" : "border-[var(--color-outline-variant)] bg-[var(--color-surface-low)]"}`}
+                  className={`grid gap-2 rounded-2xl border-2 border-dashed px-4 py-5 transition ${dragActive
+                    ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]"
+                    : "border-[var(--color-outline-variant)] bg-[var(--color-surface-low)]"
+                    }`}
                   onDragEnter={(event) => {
                     event.preventDefault();
                     setDragActive(true);
@@ -305,23 +353,72 @@ export default function AdminAssetsClient() {
                     applyDroppedFile(event.dataTransfer.files);
                   }}
                 >
-                  <strong className="text-sm font-black text-[var(--color-on-surface)]">{dragActive ? "여기에 놓으면 추가됩니다." : file ? file.name : "이미지를 끌어오거나 선택하세요."}</strong>
-                  <span className="text-xs font-semibold text-[var(--color-on-surface-variant)]">PNG, JPEG, WebP · Ctrl+V 붙여넣기 지원</span>
-                  {filePreviewUrl ? <div className="mt-2 aspect-[4/3] max-h-64 rounded-2xl border border-[var(--color-outline-variant)] bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${filePreviewUrl})` }} /> : null}
+                  <strong className="text-sm font-black text-[var(--color-on-surface)]">
+                    {dragActive
+                      ? "여기에 놓으면 추가됩니다."
+                      : file
+                        ? file.name
+                        : "이미지를 끌어오거나 선택하세요."}
+                  </strong>
+
+                  <span className="text-xs font-semibold text-[var(--color-on-surface-variant)]">
+                    PNG, JPEG, WebP · Ctrl+V 붙여넣기 지원
+                  </span>
+
+                  {filePreviewUrl ? (
+                    <div
+                      className="mt-2 aspect-[4/3] max-h-64 rounded-2xl border border-[var(--color-outline-variant)] bg-white bg-contain bg-center bg-no-repeat"
+                      style={{ backgroundImage: `url(${filePreviewUrl})` }}
+                    />
+                  ) : null}
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(event) => {
+                      setFile(event.currentTarget.files?.[0] ?? null);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+
                   <div className="flex flex-wrap items-center gap-2">
-                    <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setFile(event.currentTarget.files?.[0] ?? null)} />
                     <button
                       type="button"
-                      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:-translate-y-0.5 hover:border-[#bfdbfe] hover:bg-[#eff6ff] hover:text-[#1d4ed8] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
+                      className="group inline-flex min-h-10 items-center gap-2 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-4 text-xs font-black text-[#1d4ed8] shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[#93c5fd] hover:bg-[#dbeafe] hover:shadow-md active:translate-y-0 active:scale-[0.98]"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <ImagePlus
+                        size={15}
+                        aria-hidden="true"
+                        className="transition duration-200 group-hover:scale-110 group-hover:rotate-3"
+                      />
+                      이미지 선택
+                    </button>
+
+                    <button
+                      type="button"
+                      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 text-xs font-black text-[var(--color-on-surface-variant)] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[#bfdbfe] hover:bg-[#eff6ff] hover:text-[#1d4ed8] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
                       disabled={!file}
                       onClick={() => setImageEditOpen(true)}
                     >
                       <Edit3 size={15} aria-hidden="true" />
                       이미지 편집
                     </button>
+
+                    <button
+                      type="button"
+                      disabled={!file}
+                      onClick={clearFile}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 text-xs font-black text-red-600 transition duration-200 hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-100 hover:text-red-700 active:translate-y-0 disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      <Trash2 size={15} />
+                      이미지 제거
+                    </button>
                   </div>
                 </div>
-              </label>
+              </div>
               {file ? (
                 <div className="rounded-2xl bg-[var(--color-surface-low)] px-4 py-3 text-xs font-bold text-[var(--color-on-surface-variant)] md:col-span-2">
                   자동 분석: {describeAdminAssetAnalysis(analysis ?? { shapes: inferShapesFromFileName(file.name) })}
@@ -387,21 +484,73 @@ export default function AdminAssetsClient() {
                     onClick={() => setAssetPlatformScope("all")}
                     disabled={!canUseCommonScope}
                   >
-                    Android/iOS 공통
+                    Android/iOS 둘 다
                   </button>
                 </div>
               </div>
               <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 md:col-span-2" type="button" disabled={!file || !selectedSlot || isSavingAsset} onClick={() => void submit()}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
-                {isSavingAsset ? "저장 중" : "관리 후보 추가"}
+                {isSavingAsset ? "저장 중" : assetPlatformScope === "all" ? "두 플랫폼에 후보 추가" : "관리 후보 추가"}
               </button>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleAssets.map((asset) => (
-                <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} onEdit={() => setEditingAsset(asset)} onDelete={() => void remove(asset)} />
-              ))}
-            </div>
+            <section className="grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-black text-[var(--color-on-surface)]">등록된 관리 후보</h2>
+                  <p className="mt-1 text-xs font-semibold text-[var(--color-on-surface-variant)]">
+                    {selectedSlot?.label ?? "선택 슬롯"} 기준 · {filteredAssets.length}/{visibleAssets.length}개 표시
+                  </p>
+                </div>
+                <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" />
+                  <input
+                    type="search"
+                    value={assetSearch}
+                    onChange={(event) => setAssetSearch(event.currentTarget.value)}
+                    placeholder="이름, 파일명, role 검색"
+                    className="h-11 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-sm font-semibold outline-none transition focus:border-[#93c5fd] focus:bg-white focus:ring-3 focus:ring-[#dbeafe]"
+                    aria-label="관리 후보 검색"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ["all", "전체"],
+                  ["exact", "정확한 슬롯"],
+                  ["review", "확인 필요"],
+                  ["bubble", "말풍선 조정"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`rounded-full px-3 py-2 text-xs font-black transition ${assetListFilter === value ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`}
+                    onClick={() => setAssetListFilter(value)}
+                    aria-pressed={assetListFilter === value}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {isLoadingAssets && assets.length === 0 ? (
+                <AdminAssetSkeletonGrid />
+              ) : filteredAssets.length > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {filteredAssets.map((asset) => (
+                    <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} warnings={getAdminAssetGuidance(selectedSlot, asset.assetKind ?? assetKind, asset.analysis ?? null)} onEdit={() => setEditingAsset(asset)} onDelete={() => void remove(asset)} />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid min-h-40 place-items-center rounded-[22px] border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-5 py-8 text-center">
+                  <div>
+                    <strong className="text-sm font-black text-[var(--color-on-surface)]">표시할 관리 후보가 없습니다.</strong>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
+                      검색어 또는 필터를 지우거나, 현재 슬롯에 맞는 후보를 새로 추가하세요.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
             {assetCursor ? (
               <button type="button" className="mx-auto min-h-11 rounded-full border border-[var(--color-outline-variant)] bg-white px-5 text-sm font-black text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)] disabled:opacity-50" disabled={isLoadingAssets} onClick={() => void refreshAssets(assetCursor, true)}>
                 {isLoadingAssets ? "불러오는 중" : "에셋 더 보기"}
@@ -444,12 +593,32 @@ function groupSlotsByAssetKind(slots: ThemeAssetSlot[]) {
     .filter((group) => group.slots.length > 0);
 }
 
+function getAdminAssetSaveTargets(slot: ThemeAssetSlot, scope: ThemePlatform | "all", assetKind: AdminAssetKind): Array<{ platform: ThemePlatform; slot: ThemeAssetSlot }> {
+  if (scope !== "all") return [{ platform: scope, slot }];
+
+  return (["android", "ios"] as const).flatMap((platform) => {
+    const platformSlot = findAdminAssetSaveSlot(slot, platform, assetKind);
+    return platformSlot ? [{ platform, slot: platformSlot }] : [];
+  });
+}
+
+function findAdminAssetSaveSlot(sourceSlot: ThemeAssetSlot, platform: ThemePlatform, assetKind: AdminAssetKind) {
+  const platformSlots = getThemeSlots(platform).filter((slot) => inferAdminAssetKind(slot) === assetKind);
+  return (
+    platformSlots.find((slot) => slot.role === sourceSlot.role) ??
+    platformSlots.find((slot) => sourceSlot.fileName && slot.fileName === sourceSlot.fileName) ??
+    platformSlots.find((slot) => slot.label === sourceSlot.label)
+  );
+}
+
 function getAdminAssetGuidance(slot: ThemeAssetSlot | undefined, assetKind: AdminAssetKind, analysis: AdminAssetAnalysis | null) {
   if (!slot || !analysis) return [];
   const items: string[] = [];
   const width = analysis.width ?? 0;
   const height = analysis.height ?? 0;
   const shapes = new Set(analysis.shapes);
+  const hasTransparencyAnalysis = typeof analysis.transparentPixelRatio === "number";
+  const hasTransparentPixels = hasTransparencyAnalysis ? (analysis.transparentPixelRatio ?? 0) > 0.01 : shapes.has("transparent");
 
   if (!width || !height) {
     items.push("이미지 크기를 확인하지 못했습니다. 저장 후 실제 프리뷰에서 깨짐 여부를 확인하세요.");
@@ -465,8 +634,10 @@ function getAdminAssetGuidance(slot: ThemeAssetSlot | undefined, assetKind: Admi
   if (assetKind === "bubble" && !shapes.has("ninepatch") && slot.platform === "android") {
     items.push("Android 말풍선은 9-patch 또는 stretch 조정값이 중요합니다. 저장 전 말풍선 조정값을 확인하세요.");
   }
-  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher") && !shapes.has("transparent")) {
-    items.push("투명 배경이 없는 이미지는 실제 테마에서 사각 배경이 보일 수 있습니다.");
+  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher" || assetKind === "passcode" || assetKind === "bubble") && !hasTransparentPixels) {
+    items.push(hasTransparencyAnalysis
+      ? "투명 픽셀이 거의 없습니다. 누끼가 필요한 에셋은 실제 테마에서 사각 배경이 보일 수 있습니다."
+      : "투명 배경 여부를 확인하지 못했습니다. 누끼가 필요한 에셋은 배경이 사각형으로 보일 수 있습니다.");
   }
   if (Math.min(width, height) < 48) {
     items.push("이미지 한쪽 변이 48px 미만입니다. 고해상도 기기에서 흐릿하게 보일 수 있습니다.");
@@ -555,16 +726,33 @@ function formatRange(range: { start: number; end: number }) {
   return `${range.start}-${range.end}`;
 }
 
-function AdminAssetCard({ asset, slot, onEdit, onDelete }: { asset: AdminAssetCandidate; slot?: ThemeAssetSlot; onEdit: () => void; onDelete: () => void }) {
+function AdminAssetCard({
+  asset,
+  slot,
+  warnings,
+  onEdit,
+  onDelete,
+}: {
+  asset: AdminAssetCandidate;
+  slot?: ThemeAssetSlot;
+  warnings: string[];
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
     <article className="grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)]">
       <div className="aspect-[4/3] rounded-[18px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} />
       <div className="min-w-0">
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          <span className="rounded-full bg-[var(--color-inverse-surface)] px-2 py-0.5 text-[10px] font-black uppercase text-[var(--color-inverse-on-surface)]">{asset.platform === "all" ? "both" : asset.platform}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${asset.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{asset.enabled ? "사용 중" : "비활성"}</span>
+          {warnings.length > 0 ? <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800"><AlertTriangle size={11} aria-hidden="true" />확인 {warnings.length}</span> : null}
+        </div>
         <strong className="block truncate text-sm font-black text-[var(--color-on-surface)]">{asset.title}</strong>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : slot?.label ?? asset.slotRole}</span>
-        <span className="mt-1 block truncate text-xs font-black uppercase text-[var(--color-on-surface-variant)]">{asset.platform === "all" ? "Android/iOS" : asset.platform}</span>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{describeAdminAssetAnalysis(asset.analysis)}</span>
         {asset.bubbleAdjustment ? <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">말풍선 조정값 저장됨</span> : null}
+        {warnings[0] ? <span className="mt-2 block rounded-xl bg-amber-50 px-2.5 py-2 text-[11px] font-semibold leading-4 text-amber-900">{warnings[0]}</span> : null}
       </div>
       {slot && asset.slotRole !== slot.role ? <span className="w-fit rounded-full bg-[var(--color-surface-low)] px-2 py-1 text-[11px] font-bold text-[var(--color-on-surface-variant)]">유사 슬롯 추천</span> : null}
       <div className="grid grid-cols-2 gap-2">
@@ -576,6 +764,21 @@ function AdminAssetCard({ asset, slot, onEdit, onDelete }: { asset: AdminAssetCa
         </button>
       </div>
     </article>
+  );
+}
+
+function AdminAssetSkeletonGrid() {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, index) => (
+        <div key={index} className="grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.04)]">
+          <span className="aspect-[4/3] animate-pulse rounded-[18px] bg-[var(--color-surface-low)]" />
+          <span className="h-4 w-2/3 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+          <span className="h-3 w-full animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+          <span className="h-9 w-full animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -756,25 +959,65 @@ async function analyzeImageFile(file: File): Promise<AdminAssetAnalysis> {
       element.src = url;
     });
     const aspectRatio = image.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : undefined;
+    const transparentPixelRatio = analyzeTransparentPixelRatio(image);
     return {
       width: image.naturalWidth || undefined,
       height: image.naturalHeight || undefined,
       aspectRatio,
-      shapes: inferShapes(file, aspectRatio),
+      transparentPixelRatio,
+      shapes: inferShapes(file, aspectRatio, transparentPixelRatio),
     };
   } finally {
     URL.revokeObjectURL(url);
   }
 }
 
-function inferShapes(file: File, aspectRatio?: number): AdminAssetShape[] {
+function analyzeTransparentPixelRatio(image: HTMLImageElement) {
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  if (!sourceWidth || !sourceHeight) return undefined;
+
+  const maxSize = 160;
+  const scale = Math.min(1, maxSize / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return undefined;
+
+  try {
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+    const pixels = context.getImageData(0, 0, width, height).data;
+    let transparentPixels = 0;
+    const totalPixels = width * height;
+    for (let index = 3; index < pixels.length; index += 4) {
+      if (pixels[index] < 250) transparentPixels += 1;
+    }
+    return totalPixels > 0 ? transparentPixels / totalPixels : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function inferShapes(file: File, aspectRatio?: number, transparentPixelRatio?: number): AdminAssetShape[] {
   const shapes = new Set<AdminAssetShape>(inferShapesFromFileName(file.name));
   if (aspectRatio) {
     if (aspectRatio > 0.85 && aspectRatio < 1.18) shapes.add("square");
     if (aspectRatio <= 0.85) shapes.add("portrait");
     if (aspectRatio >= 1.18) shapes.add("wide");
   }
-  if (file.type === "image/png") shapes.add("transparent");
+  if (typeof transparentPixelRatio === "number") {
+    if (transparentPixelRatio > 0.01) {
+      shapes.add("transparent");
+    } else {
+      shapes.delete("transparent");
+    }
+  } else if (file.type === "image/png") {
+    shapes.add("transparent");
+  }
   return Array.from(shapes);
 }
 

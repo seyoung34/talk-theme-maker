@@ -104,6 +104,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [colors, setColors] = useState<SlotColors>({});
   const [candidateSelections, setCandidateSelections] = useState<SlotCandidateSelections>({});
   const [candidateOpen, setCandidateOpen] = useState(true);
+  const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
@@ -451,12 +452,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (nextGroup) setActiveGroup(nextGroup);
     const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, section) && (!nextGroup || slot.group === nextGroup));
     setSelectedSlotId(firstSlot?.id);
+    setMobileEditSheetOpen(true);
   };
 
   const selectGroup = (group: ThemeSlotGroup) => {
     setActiveGroup(group);
     const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, activeSection) && slot.group === group);
     setSelectedSlotId(firstSlot?.id);
+    setMobileEditSheetOpen(true);
   };
 
   const selectPreviewSlot = (slotId: string | undefined) => {
@@ -465,6 +468,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (!slot) return;
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
     setActiveGroup(slot.group);
+    setMobileEditSheetOpen(true);
   };
 
   const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
@@ -684,7 +688,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         editMode: mode,
       });
       setSaveDialogOpen(false);
-      setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 저장했습니다.` });
+      setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 이 브라우저에 저장했습니다.` });
     } catch (error) {
       console.error(error);
       setNotice({ tone: "error", message: "내 템플릿 저장 중 오류가 발생했습니다. 브라우저 저장소 권한을 확인하세요." });
@@ -694,6 +698,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const openSystemSaveDialog = () => {
+    if (!isAdminMode) {
+      setNotice({ tone: "warning", message: "시스템 템플릿 저장은 관리자 화면에서만 사용할 수 있습니다." });
+      return;
+    }
+
     const currentSystemTitle = activeSystemTemplate?.title ?? (systemTitle.trim() || displayTemplateName);
     setSystemTitle(currentSystemTitle);
     setSystemDescription(activeSystemTemplate?.description ?? systemDescription);
@@ -707,6 +716,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const saveSystemTemplate = async () => {
+    if (!isAdminMode) {
+      setSystemSaveDialogOpen(false);
+      setNotice({ tone: "warning", message: "일반 사용자 이미지는 브라우저 저장소에만 저장됩니다. 시스템 템플릿 저장은 관리자 전용입니다." });
+      return;
+    }
+
     const title = systemTitle.trim();
     if (!title) return;
 
@@ -816,7 +831,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onSubmit={() => void submitExport()}
         />
       ) : null}
-      {systemSaveDialogOpen ? (
+      {isAdminMode && systemSaveDialogOpen ? (
         <SystemTemplateSaveDialog
           isSaving={isSavingSystemTemplate}
           title={systemTitle}
@@ -941,10 +956,43 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   setSelectedSlotId(slot.id);
                   if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
                   setActiveGroup(slot.group);
+                  setMobileEditSheetOpen(true);
                 }}
               />
 
-              <div className="grid min-h-0 min-w-0 px-3">
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-[#bfdbfe] bg-[#eff6ff] px-4 text-left text-sm font-bold text-[#1d4ed8] shadow-sm lg:hidden"
+                onClick={() => setMobileEditSheetOpen(true)}
+              >
+                <span className="min-w-0 truncate">{selectedSlot ? `${selectedSlot.label} 편집` : "선택한 요소 편집"}</span>
+                <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-black">열기</span>
+              </button>
+
+              {mobileEditSheetOpen ? (
+                <button
+                  type="button"
+                  className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-[1px] lg:hidden"
+                  aria-label="편집 패널 닫기"
+                  onClick={() => setMobileEditSheetOpen(false)}
+                />
+              ) : null}
+
+              <div className={`${mobileEditSheetOpen ? "fixed inset-x-3 bottom-3 z-50 grid max-h-[76dvh] overflow-y-auto rounded-[28px] border border-[#dbe3ed] bg-white p-3 shadow-[0_28px_80px_rgba(15,23,42,0.28)] [scrollbar-width:thin]" : "hidden"} min-h-0 min-w-0 lg:static lg:z-auto lg:grid lg:max-h-none lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:px-3 lg:shadow-none`}>
+                <div className="mb-2 flex items-center justify-between gap-3 rounded-2xl bg-[#f8fafc] px-3 py-2 lg:hidden">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#2563eb]">Quick edit</p>
+                    <strong className="block truncate text-sm font-black text-[#0f172a]">{selectedSlot?.label ?? "선택한 요소"}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    className="grid size-9 shrink-0 place-items-center rounded-full border border-[#e5e7eb] bg-white text-[#475569]"
+                    aria-label="편집 패널 닫기"
+                    onClick={() => setMobileEditSheetOpen(false)}
+                  >
+                    <X size={17} aria-hidden="true" />
+                  </button>
+                </div>
                 <ProjectQuickEditPanel
                   slot={selectedSlot}
                   slots={slots}
@@ -1164,7 +1212,7 @@ function SaveTemplateDialog({
         <div className="flex items-start justify-between gap-4">
           <div className="grid gap-1">
             <h2 className="text-lg font-semibold text-[#0f172a]">내 템플릿 저장</h2>
-            <p className="text-sm text-[#64748b]">현재 편집 상태를 저장합니다.</p>
+            <p className="text-sm leading-6 text-[#64748b]">현재 편집 상태를 이 브라우저의 IndexedDB에만 저장합니다. 직접 업로드한 개인 이미지는 서버 데이터베이스나 Storage에 저장하지 않습니다.</p>
           </div>
           <button type="button" className="rounded-full border border-[#e5e7eb] px-3 py-1 text-sm font-semibold text-[#475569]" onClick={onClose} disabled={isSaving}>
             닫기

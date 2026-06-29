@@ -206,17 +206,57 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
         upsert: true,
       });
       if (error) throw error;
+      const imageEdit = entry.imageEdit
+        ? {
+            originalName: entry.imageEdit.originalName,
+            originalSize: entry.imageEdit.originalSize,
+            originalStoragePath: await uploadOriginalImageEditFile({
+              supabase,
+              variantId,
+              slotId,
+              entryId: entry.id,
+              originalFile: entry.imageEdit.originalFile,
+            }),
+            editedAt: entry.imageEdit.editedAt,
+            state: entry.imageEdit.state,
+          }
+        : undefined;
       refs[slotId]?.push({
         id: entry.id,
         fileName: entry.file.name,
         mimeType: entry.file.type || "application/octet-stream",
         size: entry.file.size,
         storagePath,
+        ...(imageEdit ? { imageEdit } : {}),
       });
     }
   }
 
   return refs;
+}
+
+async function uploadOriginalImageEditFile({
+  supabase,
+  variantId,
+  slotId,
+  entryId,
+  originalFile,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  variantId: string;
+  slotId: string;
+  entryId: string;
+  originalFile?: File;
+}) {
+  if (!originalFile) return undefined;
+  const fileName = sanitizeStoragePathPart(originalFile.name);
+  const storagePath = `system-templates/${variantId}/${sanitizeStoragePathPart(slotId)}/${sanitizeStoragePathPart(entryId)}-original-${fileName}`;
+  const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, originalFile, {
+    contentType: originalFile.type || "application/octet-stream",
+    upsert: true,
+  });
+  if (error) throw error;
+  return storagePath;
 }
 
 async function createAndUploadTemplateThumbnail(variantId: string, input: SystemTemplateSaveInput) {
@@ -300,11 +340,27 @@ async function remoteUploadsToSlotUploads(uploadRefs: RemoteSlotUploads, slotIds
     if (allowed && !allowed.has(slotId)) continue;
     if (!entries?.length) continue;
     uploads[slotId] = await Promise.all(
-      entries.map(async (entry) => ({
-        id: entry.id,
-        file: await storagePathToFile(entry.storagePath, entry.fileName, entry.mimeType),
-        source: "template" as const,
-      })),
+      entries.map(async (entry) => {
+        const originalFile = entry.imageEdit?.originalStoragePath
+          ? await storagePathToFile(entry.imageEdit.originalStoragePath, entry.imageEdit.originalName, entry.mimeType).catch(() => undefined)
+          : undefined;
+        return {
+          id: entry.id,
+          file: await storagePathToFile(entry.storagePath, entry.fileName, entry.mimeType),
+          source: "template" as const,
+          ...(entry.imageEdit
+            ? {
+                imageEdit: {
+                  originalName: entry.imageEdit.originalName,
+                  originalSize: entry.imageEdit.originalSize,
+                  originalFile,
+                  editedAt: entry.imageEdit.editedAt,
+                  state: entry.imageEdit.state,
+                },
+              }
+            : {}),
+        };
+      }),
     );
   }
   return uploads;

@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Check, FlipHorizontal2, LoaderCircle, Move, RotateCcw, X } from "lucide-react";
-import { clampImageScale, defaultImageEditState, renderEditedImageFile, type ImageEditState } from "@/lib/theme/imageEdit";
+import { clampImageScale, defaultImageEditState, renderEditedImageFile, type ImageEditState, type ImageEditTarget } from "@/lib/theme/imageEdit";
 
 export function ImageEditDialog({
   open,
   sourceFile,
   slotLabel,
   initialState,
+  target,
   onOpenChange,
   onApply,
 }: {
@@ -17,11 +18,13 @@ export function ImageEditDialog({
   sourceFile: File | null;
   slotLabel: string;
   initialState?: ImageEditState;
+  target?: ImageEditTarget;
   onOpenChange: (open: boolean) => void;
   onApply: (file: File, state: ImageEditState) => void;
 }) {
   const [state, setState] = useState<ImageEditState>(initialState ?? defaultImageEditState);
   const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceSize, setSourceSize] = useState<{ width: number; height: number } | null>(null);
   const [isApplying, setIsApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,11 +37,24 @@ export function ImageEditDialog({
   useEffect(() => {
     if (!sourceFile || !open) {
       setSourceUrl("");
+      setSourceSize(null);
       return;
     }
     const nextUrl = URL.createObjectURL(sourceFile);
     setSourceUrl(nextUrl);
-    return () => URL.revokeObjectURL(nextUrl);
+    let active = true;
+    createImageBitmap(sourceFile)
+      .then((bitmap) => {
+        if (active) setSourceSize({ width: bitmap.width, height: bitmap.height });
+        bitmap.close();
+      })
+      .catch(() => {
+        if (active) setSourceSize(null);
+      });
+    return () => {
+      active = false;
+      URL.revokeObjectURL(nextUrl);
+    };
   }, [open, sourceFile]);
 
   const previewStyle = useMemo<CSSProperties>(
@@ -48,13 +64,23 @@ export function ImageEditDialog({
     }),
     [state],
   );
+  const frameSize = target ?? sourceSize;
+  const frameStyle = useMemo<CSSProperties | undefined>(() => {
+    if (!frameSize?.width || !frameSize.height) return undefined;
+    return { aspectRatio: `${frameSize.width} / ${frameSize.height}` };
+  }, [frameSize]);
+  const outputLabel = target
+    ? `${target.label ?? "슬롯 권장 크기"} · ${target.width}×${target.height}px`
+    : sourceSize
+      ? `원본 이미지 크기 · ${sourceSize.width}×${sourceSize.height}px`
+      : "원본 이미지 크기";
 
   const apply = async () => {
     if (!sourceFile || isApplying) return;
     try {
       setIsApplying(true);
       setError(null);
-      const editedFile = await renderEditedImageFile(sourceFile, state);
+      const editedFile = await renderEditedImageFile(sourceFile, state, undefined, target);
       onApply(editedFile, state);
       onOpenChange(false);
     } catch (applyError) {
@@ -76,6 +102,7 @@ export function ImageEditDialog({
               <Dialog.Description className="mt-1 text-sm font-medium leading-6 text-[#64748b]">
                 {slotLabel} 이미지를 원본 보존 방식으로 조정합니다. 적용하면 새 업로드 후보로 추가됩니다.
               </Dialog.Description>
+              <p className="mt-2 w-fit rounded-full bg-[#f1f5f9] px-3 py-1 text-xs font-bold text-[#475569]">출력 기준: {outputLabel}</p>
             </div>
             <Dialog.Close asChild>
               <button type="button" className="grid size-10 shrink-0 place-items-center rounded-full border border-[#e5e7eb] bg-white text-[#475569] transition hover:bg-[#f8fafc]" disabled={isApplying} aria-label="이미지 편집 닫기">
@@ -86,7 +113,7 @@ export function ImageEditDialog({
 
           <div className="grid min-h-0 gap-4 overflow-y-auto p-5 [scrollbar-width:thin] lg:grid-cols-[minmax(0,1fr)_320px]">
             <section className="grid min-h-[360px] place-items-center rounded-[24px] border border-[#e2e8f0] bg-[linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] bg-[length:18px_18px] bg-[position:0_0,0_9px,9px_-9px,-9px_0px] p-4">
-              <div className="grid aspect-[9/16] max-h-[58dvh] w-full max-w-[360px] place-items-center overflow-hidden rounded-[22px] border border-white/80 bg-white/70 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.04)]">
+              <div className="grid max-h-[58dvh] min-h-40 w-full max-w-[420px] place-items-center overflow-hidden rounded-[22px] border border-white/80 bg-white/70 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.04)]" style={frameStyle}>
                 {sourceUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={sourceUrl} alt="" className="max-h-full max-w-full select-none transition-transform duration-150 ease-out" style={previewStyle} draggable={false} />

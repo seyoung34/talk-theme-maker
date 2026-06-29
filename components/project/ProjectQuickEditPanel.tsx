@@ -9,7 +9,7 @@ import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSele
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
-import type { ImageEditState } from "@/lib/theme/imageEdit";
+import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
@@ -146,6 +146,7 @@ export function ProjectQuickEditPanel({
   const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets, uploadPreviewUrls);
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
   const selectedUploadEntry = getSelectedUpload(slot, uploads, selections);
+  const imageEditTarget = getImageEditTarget(selectedCandidate);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
   const uploadEntries = getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id));
@@ -289,6 +290,7 @@ export function ProjectQuickEditPanel({
               sourceFile={editableSourceFile}
               slotLabel={slot.label}
               initialState={selectedUploadEntry?.imageEdit?.state}
+              target={imageEditTarget}
               onOpenChange={setEditDialogOpen}
               onApply={(editedFile, editState) => {
                 if (!editableSourceFile) return;
@@ -300,6 +302,17 @@ export function ProjectQuickEditPanel({
       </section>
     </div>
   );
+}
+
+function getImageEditTarget(candidate: ReturnType<typeof getSelectedCandidate>): ImageEditTarget | undefined {
+  const width = candidate?.metadata?.width;
+  const height = candidate?.metadata?.height;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || !width || !height) return undefined;
+  return {
+    width,
+    height,
+    label: "선택 후보 기준",
+  };
 }
 
 function CandidatePicker({
