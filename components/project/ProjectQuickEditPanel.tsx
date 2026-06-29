@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useId, useState, type DragEvent, type MutableRefObject } from "react";
-import { ImageOff, Info, Link2, RefreshCw } from "lucide-react";
+import { Edit3, ImageOff, Info, Link2, RefreshCw } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
-import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSlotUploadEntries, slotStatusLabel, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
+import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, getSlotUploadEntries, slotStatusLabel, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
+import type { ImageEditState } from "@/lib/theme/imageEdit";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
@@ -32,6 +34,7 @@ export function ProjectQuickEditPanel({
   stretch,
   fileInputRefs,
   onUpload,
+  onEditedUpload,
   onClear,
   onColorChange,
   imageColorPalette,
@@ -72,6 +75,7 @@ export function ProjectQuickEditPanel({
   stretch?: StretchPoint;
   fileInputRefs: MutableRefObject<Record<string, HTMLInputElement | null>>;
   onUpload: (slot: ThemeAssetSlot, files: FileList | readonly File[] | null) => void;
+  onEditedUpload: (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File) => void;
   onClear: (slot: ThemeAssetSlot) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
   imageColorPalette: ImageColorPalette | null;
@@ -97,6 +101,7 @@ export function ProjectQuickEditPanel({
   const [dragActive, setDragActive] = useState(false);
   const [pasteFeedback, setPasteFeedback] = useState(false);
   const [uploadPreviewUrls, setUploadPreviewUrls] = useState<Record<string, string>>({});
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   useEffect(() => {
     const entries = Object.values(uploads).flatMap((items) => items ?? []);
@@ -140,6 +145,7 @@ export function ProjectQuickEditPanel({
   const status = slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots);
   const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets, uploadPreviewUrls);
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
+  const selectedUploadEntry = getSelectedUpload(slot, uploads, selections);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
   const uploadEntries = getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id));
@@ -148,7 +154,8 @@ export function ProjectQuickEditPanel({
       ? `추천 에셋 · ${selectedPickerCandidate.title}`
       : selectedPickerCandidate?.source === "template"
         ? `템플릿 에셋 · ${selectedPickerCandidate.status}`
-        : status;
+      : status;
+  const editableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;
 
   const handleDrop = (event: DragEvent<HTMLButtonElement | HTMLDivElement>) => {
     event.preventDefault();
@@ -240,6 +247,16 @@ export function ProjectQuickEditPanel({
                 >
                   직접 업로드 비우기
                 </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-lg border border-[#d1d5db] bg-white px-4 py-3 text-sm font-semibold text-[#374151] transition enabled:hover:border-[#bfdbfe] enabled:hover:bg-[#eff6ff] enabled:hover:text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={!editableSourceFile}
+                  onClick={() => setEditDialogOpen(true)}
+                  title={editableSourceFile ? "현재 이미지를 편집합니다." : "파일 객체가 있는 이미지를 선택하거나 업로드하면 편집할 수 있습니다."}
+                >
+                  <Edit3 size={16} aria-hidden="true" />
+                  이미지 편집
+                </button>
                 {slot.editableInBubbleEditor ? (
                   <button
                     type="button"
@@ -266,6 +283,18 @@ export function ProjectQuickEditPanel({
                 onStretchChange={onStretchChange}
               />
             ) : null}
+
+            <ImageEditDialog
+              open={editDialogOpen}
+              sourceFile={editableSourceFile}
+              slotLabel={slot.label}
+              initialState={selectedUploadEntry?.imageEdit?.state}
+              onOpenChange={setEditDialogOpen}
+              onApply={(editedFile, editState) => {
+                if (!editableSourceFile) return;
+                onEditedUpload(slot, editedFile, editState, editableSourceFile);
+              }}
+            />
           </>
         )}
       </section>

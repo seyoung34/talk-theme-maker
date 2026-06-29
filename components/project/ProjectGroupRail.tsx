@@ -54,13 +54,13 @@ export function ProjectGroupRail({
 
   return (
     <Tooltip.Provider delayDuration={260} skipDelayDuration={100}>
-    <aside className="grid max-h-[460px] min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-3 md:max-h-none">
-        <div className="grid min-w-0 gap-2">
+    <aside className="grid max-h-[560px] min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-3 md:max-h-none">
+        <div className="flex min-w-0 gap-2 overflow-x-auto pb-1 [scrollbar-width:thin] lg:grid lg:overflow-visible lg:pb-0">
           {groups.map((group) => (
             <button
               key={group}
               type="button"
-              className={`min-w-0 rounded-lg border px-3 py-2.5 text-left text-sm font-semibold transition ${group === activeGroup ? "border-[#bfdbfe] bg-white text-[#0f172a] shadow-sm" : "border-transparent bg-transparent text-[#6b7280] hover:border-[#e5e7eb] hover:bg-white hover:text-[#111827]"}`}
+              className={`min-w-[104px] shrink-0 rounded-lg border px-3 py-2.5 text-left text-sm font-semibold transition lg:min-w-0 ${group === activeGroup ? "border-[#bfdbfe] bg-white text-[#0f172a] shadow-sm" : "border-transparent bg-transparent text-[#6b7280] hover:border-[#e5e7eb] hover:bg-white hover:text-[#111827]"}`}
               onClick={() => onSelectGroup(group)}
             >
               {groupLabels[group]}

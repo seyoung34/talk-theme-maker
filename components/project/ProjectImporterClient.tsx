@@ -35,6 +35,7 @@ import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
+import type { ImageEditState } from "@/lib/theme/imageEdit";
 import { systemTemplateRepository, type RemoteSlotUploads, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
@@ -487,6 +488,38 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setActiveGroup(slot.group);
   };
 
+  const uploadEditedSlot = (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File) => {
+    const uploadId = `${slot.id}:edited:${Date.now()}`;
+    setUploads((current) => ({
+      ...current,
+      [slot.id]: [
+        ...(current[slot.id] ?? []),
+        {
+          id: uploadId,
+          file,
+          source: "user" as const,
+          imageEdit: {
+            originalName: sourceFile.name,
+            originalSize: sourceFile.size,
+            originalFile: sourceFile,
+            editedAt: Date.now(),
+            state: editState,
+          },
+        },
+      ],
+    }));
+    setRemoteUploadRefs((current) => {
+      const next = { ...current };
+      delete next[slot.id];
+      remoteUploadRefsRef.current = next;
+      return next;
+    });
+    setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
+    setSelectedSlotId(slot.id);
+    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
+    setActiveGroup(slot.group);
+  };
+
   const clearSlot = (slot: ThemeAssetSlot) => {
     setUploads((current) => {
       const next = { ...current };
@@ -877,14 +910,21 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             </div>
           </header>
 
-          <section className="grid min-h-0 min-w-0 w-full grid-cols-1 content-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
-            <ProjectSectionRail
-              activeSection={activeSection}
-              slots={slots}
-              onSelectSection={selectSection}
-            />
+          <div className="grid gap-2 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-3 py-3 text-xs font-bold leading-5 text-[#1d4ed8] lg:hidden">
+            <span>모바일 편집 흐름</span>
+            <span className="text-[#475569]">섹션을 고르고, 프리뷰를 확인한 뒤 아래 편집 패널에서 이미지와 색상을 바꿉니다.</span>
+          </div>
 
-            <section className="grid min-h-0 min-w-0 grid-cols-1 gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[196px_minmax(0,1fr)] md:gap-0 xl:grid-cols-[220px_minmax(0,1fr)]">
+          <section className="grid min-h-0 min-w-0 w-full grid-cols-1 content-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
+            <div className="order-1 min-w-0 lg:order-none">
+              <ProjectSectionRail
+                activeSection={activeSection}
+                slots={slots}
+                onSelectSection={selectSection}
+              />
+            </div>
+
+            <section className="order-3 grid min-h-0 min-w-0 grid-cols-1 gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[196px_minmax(0,1fr)] md:gap-0 lg:order-none xl:grid-cols-[220px_minmax(0,1fr)]">
               <ProjectGroupRail
                 groups={groups}
                 activeGroup={activeGroup}
@@ -924,6 +964,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
                   fileInputRefs={fileInputRefs}
                   onUpload={uploadSlot}
+                  onEditedUpload={uploadEditedSlot}
                   onClear={clearSlot}
                   onColorChange={changeColor}
                   imageColorPalette={activeImageColorPalette}
@@ -964,7 +1005,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
               }}
               selectedSlotId={selectedSlot?.id}
-              className="min-h-[520px] lg:min-h-0"
+              className="order-2 min-h-[420px] lg:order-none lg:min-h-0"
               onSelectSlot={selectPreviewSlot}
             />
           </section>

@@ -1,6 +1,7 @@
 import { normalizeThemeTemplateId, type ThemeAssetSlot, type ThemeSlotCandidate, type ThemeStartPayload, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
+import type { ImageEditMetadata } from "@/lib/theme/imageEdit";
 
 export const disabledImageCandidateId = "__none__";
 export { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
@@ -11,6 +12,7 @@ export type SlotUploadEntry = {
   id: string;
   file: File;
   source?: SlotUploadSource;
+  imageEdit?: ImageEditMetadata;
 };
 
 export type SlotUploads = Record<string, SlotUploadEntry[] | undefined>;

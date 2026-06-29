@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, Clock3, Hash, SendHorizontal, Plus, Search, Settings, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import UserTemplateCard from "@/components/template/UserTemplateCard";
+import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
 import { createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
-import { templateStartStorageKey, themeTemplates, type ThemeTemplate } from "@/lib/theme/templates";
-import { deleteUserTemplate, listUserTemplates, type UserTemplateSummary } from "@/lib/theme/userTemplates";
-import type { ThemePlatform } from "@/lib/theme/types";
+import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
+import { deleteUserTemplate, getUserTemplate, listUserTemplates, type UserTemplateRecord, type UserTemplateSummary } from "@/lib/theme/userTemplates";
+import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 type GalleryTemplateItem =
   | {
@@ -58,6 +59,9 @@ export default function TemplateGalleryClient() {
   const [isLoadingMoreTemplates, setIsLoadingMoreTemplates] = useState(false);
   const [systemTemplateCursor, setSystemTemplateCursor] = useState<string>();
   const [notice, setNotice] = useState<string | null>(null);
+  const [selectedUserTemplateRecord, setSelectedUserTemplateRecord] = useState<UserTemplateRecord | null>(null);
+  const [userTemplatePreviewUrls, setUserTemplatePreviewUrls] = useState<Record<string, string>>({});
+  const [isUserTemplatePreviewLoading, setIsUserTemplatePreviewLoading] = useState(false);
   const galleryTemplates = useMemo(
     () =>
       createGalleryTemplates(systemTemplates, systemUploadPreviewUrls).map((item) => ({
@@ -74,7 +78,8 @@ export default function TemplateGalleryClient() {
     [systemTemplates, systemUploadPreviewUrls],
   );
   const selectedGalleryTemplate = galleryTemplates.find((template) => template.id === selectedGalleryTemplateId) ?? null;
-  const previewModel = selectedGalleryTemplate ? createGalleryTemplatePreviewModel(selectedGalleryTemplate, selectedGalleryTemplate.onStart) : null;
+  const userPreviewModel = selectedUserTemplateRecord ? createUserTemplatePreviewModel(selectedUserTemplateRecord, userTemplatePreviewUrls, startUserTemplate) : null;
+  const previewModel = selectedGalleryTemplate ? createGalleryTemplatePreviewModel(selectedGalleryTemplate, selectedGalleryTemplate.onStart) : userPreviewModel;
   const basicGalleryTemplateId = "base:basic";
   const hasSavedTemplates = userTemplates.length > 0;
 
@@ -86,6 +91,12 @@ export default function TemplateGalleryClient() {
       .catch((error) => console.error(error));
     return () => { active = false; };
   }, [selectedGalleryTemplateId]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(userTemplatePreviewUrls).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [userTemplatePreviewUrls]);
 
   useEffect(() => {
     let active = true;
@@ -162,9 +173,34 @@ export default function TemplateGalleryClient() {
     router.push("/edit");
   };
 
-  const startUserTemplate = (template: UserTemplateSummary) => {
+  function startUserTemplate(template: UserTemplateSummary) {
     localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.templateId, platform: template.platform, userTemplateId: template.id }));
     router.push("/edit");
+  }
+
+  const openUserTemplatePreview = async (template: UserTemplateSummary) => {
+    try {
+      setIsUserTemplatePreviewLoading(true);
+      const record = await getUserTemplate(template.id);
+      if (!record) {
+        setNotice("내 템플릿을 찾지 못했습니다.");
+        return;
+      }
+      setSelectedGalleryTemplateId(null);
+      setSelectedUserTemplateRecord(record);
+      setUserTemplatePreviewUrls(createUserTemplatePreviewUrls(record));
+    } catch (error) {
+      console.error(error);
+      setNotice("내 템플릿 미리보기를 불러오지 못했습니다.");
+    } finally {
+      setIsUserTemplatePreviewLoading(false);
+    }
+  };
+
+  const closePreview = () => {
+    setSelectedGalleryTemplateId(null);
+    setSelectedUserTemplateRecord(null);
+    setUserTemplatePreviewUrls({});
   };
 
   const startSystemTemplateWithPlatform = (template: SystemTemplateSummary, platform: ThemePlatform) => {
@@ -242,6 +278,7 @@ export default function TemplateGalleryClient() {
                   formattedDate={formatDate(template.updatedAt)}
                   onDelete={handleDeleteUserTemplate}
                   onContinue={startUserTemplate}
+                  onPreview={(template) => void openUserTemplatePreview(template)}
                 />
               ))}
             </div>
@@ -273,10 +310,10 @@ export default function TemplateGalleryClient() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {isSystemTemplatesLoading ? <TemplateGallerySkeletonCards count={3} /> : null}
             {galleryTemplates.map((template) => (
               <GalleryTemplateCard key={template.id} template={template} onPreview={setSelectedGalleryTemplateId} />
             ))}
+            {isSystemTemplatesLoading ? <TemplateGallerySkeletonCards count={5} /> : null}
           </div>
           {systemTemplateCursor ? (
             <button type="button" className="mx-auto min-h-11 rounded-full border border-[var(--color-outline-variant)] bg-white px-5 text-sm font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-surface-low)] disabled:opacity-50" onClick={() => void loadMoreSystemTemplates()} disabled={isLoadingMoreTemplates}>
@@ -289,11 +326,10 @@ export default function TemplateGalleryClient() {
       {previewModel ? (
         <TemplatePreviewModal
           preview={previewModel}
-          onClose={() => {
-            setSelectedGalleryTemplateId(null);
-          }}
+          onClose={closePreview}
         />
       ) : null}
+      {isUserTemplatePreviewLoading ? <TemplatePreviewLoadingOverlay /> : null}
     </main>
   );
 }
@@ -333,6 +369,86 @@ function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], upload
       };
     }),
   ];
+}
+
+function createUserTemplatePreviewUrls(record: UserTemplateRecord) {
+  const urls: Record<string, string> = {};
+  for (const entries of Object.values(record.uploads)) {
+    for (const entry of entries ?? []) {
+      urls[entry.id] = URL.createObjectURL(entry.file);
+    }
+  }
+  return urls;
+}
+
+function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPreviewUrls: Record<string, string>, onStart: (template: UserTemplateSummary) => void): TemplatePreviewModel {
+  const baseTemplate = themeTemplates.find((template) => template.id === record.templateId) ?? themeTemplates[0];
+  const visual = createUserTemplatePreviewVisual(record, baseTemplate, uploadPreviewUrls);
+  const platformLabel = record.platform === "android" ? "Android" : "iOS";
+  const summary: UserTemplateSummary = {
+    id: record.id,
+    name: record.name,
+    templateId: record.templateId,
+    platform: record.platform,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    uploadCount: Object.values(record.uploads).reduce((count, entries) => count + (entries?.length ?? 0), 0),
+    colorCount: Object.values(record.colors).filter(Boolean).length,
+  };
+
+  return {
+    title: record.name,
+    description: "저장된 색상과 업로드 이미지를 기준으로 미리봅니다.",
+    eyebrow: "My template preview",
+    closeLabel: "닫기",
+    androidLabel: record.platform === "android" ? "편집 계속하기" : "Android 사용 불가",
+    iosLabel: record.platform === "ios" ? "편집 계속하기" : "iOS 사용 불가",
+    baseTemplate,
+    visual,
+    availablePlatforms: [record.platform],
+    rows: [
+      { label: "플랫폼", value: platformLabel },
+      { label: "이미지", value: `${summary.uploadCount}개` },
+      { label: "색상", value: `${summary.colorCount}개` },
+      { label: "최근 수정", value: formatDate(record.updatedAt) },
+    ],
+    onStart: () => onStart(summary),
+  };
+}
+
+function createUserTemplatePreviewVisual(record: UserTemplateRecord, template: ThemeTemplate, uploadPreviewUrls: Record<string, string>): TemplatePreviewVisual {
+  const slots = getThemeSlots(record.platform);
+  const templateId = template.id;
+
+  return {
+    chatBackgroundColor: resolveUserTemplateColor(slots, "chat_background_color", record, template, template.defaults.chatBackground),
+    mainBackgroundColor: resolveUserTemplateColor(slots, "main_background_color", record, template, template.defaults.mainBackground),
+    tabBackgroundColor: resolveUserTemplateColor(slots, "tab_background", record, template, template.defaults.tabBackground),
+    myBubbleColor: resolveUserTemplateColor(slots, "chat_bubble_me_color", record, template, template.defaults.myBubble),
+    friendBubbleColor: resolveUserTemplateColor(slots, "chat_bubble_you_color", record, template, template.defaults.friendBubble),
+    chatBackgroundImage: resolveUserTemplateImage(slots, "chat_background", record, templateId, template, uploadPreviewUrls),
+    mainBackgroundImage: resolveUserTemplateImage(slots, "main_background", record, templateId, template, uploadPreviewUrls),
+    tabBackgroundImage: resolveUserTemplateImage(slots, "tab_background_image", record, templateId, template, uploadPreviewUrls),
+    myBubbleImage: resolveUserTemplateImage(slots, "bubble_me_1", record, templateId, template, uploadPreviewUrls),
+    friendBubbleImage: resolveUserTemplateImage(slots, "bubble_you_1", record, templateId, template, uploadPreviewUrls),
+    profileImage: resolveUserTemplateImage(slots, "profile_image_1", record, templateId, template, uploadPreviewUrls),
+  };
+}
+
+function resolveUserTemplateColor(slots: ThemeAssetSlot[], role: ThemeResourceRole, record: UserTemplateRecord, template: ThemeTemplate, fallback: string) {
+  const slot = findSlotByRole(slots, role);
+  return getResolvedColor(slot, record.colors, record.candidateSelections, template.id, template) ?? fallback;
+}
+
+function resolveUserTemplateImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, record: UserTemplateRecord, templateId: ThemeTemplate["id"], template: ThemeTemplate, uploadPreviewUrls: Record<string, string>) {
+  const slot = findSlotByRole(slots, role);
+  const selectedUpload = getSelectedUpload(slot, record.uploads, record.candidateSelections);
+  if (selectedUpload) return uploadPreviewUrls[selectedUpload.id];
+  return getResolvedAssetUrl(slot, record.uploads, record.candidateSelections, templateId, template);
+}
+
+function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {
+  return slots.find((slot) => slot.role === role);
 }
 
 function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStart: (platform: ThemePlatform) => void): TemplatePreviewModel {
@@ -428,6 +544,10 @@ function TemplateGallerySkeletonCards({ count }: { count: number }) {
 function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewModel; onClose: () => void }) {
   const canStartAndroid = preview.availablePlatforms?.includes("android") ?? true;
   const canStartIos = preview.availablePlatforms?.includes("ios") ?? true;
+  const actions = [
+    canStartAndroid ? { platform: "android" as const, label: preview.androidLabel, className: "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" } : null,
+    canStartIos ? { platform: "ios" as const, label: preview.iosLabel, className: "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]" } : null,
+  ].filter((action): action is { platform: ThemePlatform; label: string; className: string } => Boolean(action));
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${preview.title} preview`}>
       <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
@@ -450,17 +570,26 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
                 <InfoRow key={row.label} label={row.label} value={row.value} />
               ))}
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <button className="rounded-full bg-[var(--color-inverse-surface)] px-4 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40" type="button" onClick={() => preview.onStart("android")} disabled={!canStartAndroid}>
-                {preview.androidLabel}
-              </button>
-              <button className="rounded-full bg-[var(--color-primary-container)] px-4 py-3 text-sm font-black text-[var(--color-on-primary-container)] transition hover:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40" type="button" onClick={() => preview.onStart("ios")} disabled={!canStartIos}>
-                {preview.iosLabel}
-              </button>
+            <div className={`grid gap-2 ${actions.length > 1 ? "sm:grid-cols-2" : ""}`}>
+              {actions.map((action) => (
+                <button key={action.platform} className={`rounded-full px-4 py-3 text-sm font-black transition hover:scale-[0.98] ${action.className}`} type="button" onClick={() => preview.onStart(action.platform)}>
+                  {action.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function TemplatePreviewLoadingOverlay() {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.28)] p-4" role="status" aria-live="polite">
+      <div className="rounded-[24px] border border-[var(--color-outline-variant)] bg-white px-5 py-4 text-sm font-black text-[var(--color-on-surface)] shadow-[0_22px_52px_rgba(42,103,103,0.18)]">
+        내 템플릿 미리보기를 준비하는 중
+      </div>
     </div>
   );
 }
