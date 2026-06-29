@@ -5,11 +5,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Archive, Download, Package, ShieldCheck, Wrench, X } from "lucide-react";
+import { getExportNotice, getExportProgressSteps } from "@/components/project/exportClient";
+import type { AccountState, ExportMode } from "@/components/project/exportModel";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
 import { ProjectQuickEditPanel } from "@/components/project/ProjectQuickEditPanel";
 import { ProjectSectionRail } from "@/components/project/ProjectSectionRail";
-import { buildSlotContrastWarnings } from "@/components/project/slotContrast";
+import { useProjectAutoColors } from "@/components/project/hooks/useProjectAutoColors";
+import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
+import { useProjectExport } from "@/components/project/hooks/useProjectExport";
 import {
   bubbleSlotFromRole,
   getCompletion,
@@ -25,16 +29,12 @@ import {
   type SlotColors,
   type SlotUploads,
 } from "@/components/project/projectModel";
-import { dataUrlForThemeFile, findBestFile } from "@/components/preview/previewResourceUtils";
-import { extractThemeImagePalette, type ImageColorPalette } from "@/lib/theme/colorPalette";
-import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
-import { adminAssetToFile, inferAdminAssetKind, listRecommendedAssetCandidatePage, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
-import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
+import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
+import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
-import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
-import { autoMainPaletteCandidateId, buildMainPaletteRecommendations } from "@/lib/theme/autoColor";
+import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { systemTemplateRepository, type RemoteSlotUploads, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
@@ -77,43 +77,12 @@ type ActiveSystemTemplate = {
   createdAt: number;
 };
 
-type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
 type InitialLoadState = {
   status: "idle" | "ready" | "loading" | "error";
   message?: string;
   detail?: string;
   current?: number;
   total?: number;
-};
-
-type AccountState = {
-  user: { id: string; email?: string } | null;
-  credits: number;
-  isAdmin: boolean;
-};
-
-type AndroidExportPayloadOptions = {
-  analysis: ReturnType<typeof createThemeProjectAnalysis>;
-  template: ThemeTemplate;
-  templateId: ThemeTemplateId;
-  exportName: string;
-  versionName: string;
-  mode: "project" | "apk" | "apk-zip";
-  slots: ThemeAssetSlot[];
-  uploads: SlotUploads;
-  colors: SlotColors;
-  selections: SlotCandidateSelections;
-  bubbleMarkers: Partial<Record<string, Markers>>;
-  bubbleInsets: Partial<Record<string, Insets>>;
-  bubbleStretch: Partial<Record<string, StretchPoint>>;
-};
-
-type IosExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
-  mode: "theme-zip" | "ktheme";
-};
-
-type ExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
-  mode: ExportMode;
 };
 
 type ProjectImporterClientProps = {
@@ -134,7 +103,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [colors, setColors] = useState<SlotColors>({});
   const [candidateSelections, setCandidateSelections] = useState<SlotCandidateSelections>({});
   const [candidateOpen, setCandidateOpen] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
@@ -152,30 +120,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [systemPriceAmount, setSystemPriceAmount] = useState("");
   const [systemCreditCost, setSystemCreditCost] = useState("");
   const [isSavingSystemTemplate, setIsSavingSystemTemplate] = useState(false);
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportMode, setExportMode] = useState<ExportMode>("apk");
-  const [exportName, setExportName] = useState("");
-  const [exportVersionName, setExportVersionName] = useState("");
-  const [exportProgressStep, setExportProgressStep] = useState(0);
-  const [exportElapsedSeconds, setExportElapsedSeconds] = useState(0);
-  const [accountState, setAccountState] = useState<AccountState | null>(null);
-  const [isAccountLoading, setIsAccountLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
   const [bubbleInsets, setBubbleInsets] = useState<Partial<Record<string, Insets>>>({});
   const [bubbleStretch, setBubbleStretch] = useState<Partial<Record<string, StretchPoint>>>({});
-  const [adminAssets, setAdminAssets] = useState<AdminAssetCandidate[]>([]);
-  const [adminAssetsWithPreview, setAdminAssetsWithPreview] = useState<Array<AdminAssetCandidate & { previewUrl: string }>>([]);
-  const [adminAssetCursor, setAdminAssetCursor] = useState<string>();
-  const [isLoadingAdminAssets, setIsLoadingAdminAssets] = useState(false);
-  const [imageColorPalette, setImageColorPalette] = useState<ImageColorPalette | null>(null);
-  const [imageColorPaletteSourceKey, setImageColorPaletteSourceKey] = useState<string | null>(null);
-  const [imageColorPaletteError, setImageColorPaletteError] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
   const uploadsRef = useRef<SlotUploads>({});
   const remoteUploadRefsRef = useRef<RemoteSlotUploads>({});
-  const exportSubmittingRef = useRef(false);
 
   useEffect(() => {
     uploadsRef.current = uploads;
@@ -347,23 +299,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     };
   }, []);
 
-  useEffect(() => {
-    setAdminAssetsWithPreview(adminAssets.map((asset) => ({ ...asset, previewUrl: asset.previewUrl ?? "" })));
-  }, [adminAssets]);
-
-  const refreshAccountState = async () => {
-    setIsAccountLoading(true);
-    try {
-      const response = await fetch("/api/me", { cache: "no-store" });
-      const payload = (await response.json()) as AccountState;
-      const next = { user: payload.user, credits: payload.credits ?? 0, isAdmin: payload.isAdmin ?? false };
-      setAccountState(next);
-      return next;
-    } finally {
-      setIsAccountLoading(false);
-    }
-  };
-
   const activeTemplate = getThemeTemplate(templateId);
   const displayTemplateName = activeUserTemplate?.name ?? activeSystemTemplate?.title ?? activeTemplate.name;
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
@@ -381,85 +316,23 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     () => createThemeProjectAnalysis(activeTemplate, platform, slots, uploads, colors, candidateSelections),
     [activeTemplate, platform, slots, uploads, colors, candidateSelections],
   );
-  const mainBackgroundFile = useMemo(() => findBestFile(analysis, "main_background"), [analysis]);
-  const mainBackgroundPaletteKey = mainBackgroundFile ? getThemeFilePaletteKey(mainBackgroundFile) : null;
-  const activeImageColorPalette = mainBackgroundPaletteKey && imageColorPaletteSourceKey === mainBackgroundPaletteKey ? imageColorPalette : null;
-  const mainBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "main_background_color"), [slots]);
-  const resolvedMainBackground = mainBackgroundColorSlot
-    ? getResolvedColor(mainBackgroundColorSlot, colors, candidateSelections, templateId, activeTemplate) ?? activeTemplate.defaults.mainBackground
-    : activeTemplate.defaults.mainBackground;
-
-  useEffect(() => {
-    let active = true;
-    if (!mainBackgroundFile) {
-      setImageColorPalette(null);
-      setImageColorPaletteSourceKey(null);
-      setImageColorPaletteError(null);
-      return () => { active = false; };
-    }
-    setImageColorPalette(null);
-    setImageColorPaletteSourceKey(null);
-    setImageColorPaletteError(null);
-    extractThemeImagePalette(mainBackgroundFile)
-      .then((palette) => {
-        if (!active) return;
-        setImageColorPalette(palette);
-        setImageColorPaletteSourceKey(mainBackgroundPaletteKey);
-        setImageColorPaletteError(null);
-      })
-      .catch((error) => {
-        if (!active) return;
-        setImageColorPalette(null);
-        setImageColorPaletteError(error instanceof Error ? error.message : "배경 이미지 색상을 분석하지 못했습니다.");
-      });
-    return () => { active = false; };
-  }, [mainBackgroundPaletteKey, mainBackgroundFile]);
-
-  const mainColorRecommendations = useMemo(
-    () => buildMainPaletteRecommendations(slots, {
-      imageActive: Boolean(mainBackgroundFile),
-      palette: activeImageColorPalette,
-      currentBackground: resolvedMainBackground,
-      backgroundIsAuto: Boolean(mainBackgroundColorSlot && candidateSelections[mainBackgroundColorSlot.id] === autoMainPaletteCandidateId),
-      templateAccent: activeTemplate.accent,
-    }),
-    [activeImageColorPalette, activeTemplate.accent, candidateSelections, mainBackgroundColorSlot, mainBackgroundFile, resolvedMainBackground, slots],
-  );
-  const contrastWarnings = useMemo(
-    () => buildSlotContrastWarnings({
-      platform,
-      slots,
-      colors,
-      selections: candidateSelections,
-      templateId,
-      template: activeTemplate,
-      imageColorPalette: activeImageColorPalette,
-    }),
-    [activeImageColorPalette, activeTemplate, candidateSelections, colors, platform, slots, templateId],
-  );
-
-  useEffect(() => {
-    if (mainBackgroundFile && !activeImageColorPalette) return;
-    const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && candidateSelections[slot.id] === autoMainPaletteCandidateId && mainColorRecommendations[slot.id]);
-    if (!linkedSlots.length) return;
-    setColors((current) => {
-      if (linkedSlots.every((slot) => current[slot.id]?.toUpperCase() === mainColorRecommendations[slot.id]?.toUpperCase())) return current;
-      const next = { ...current };
-      for (const slot of linkedSlots) next[slot.id] = mainColorRecommendations[slot.id];
-      return next;
-    });
-  }, [activeImageColorPalette, candidateSelections, mainBackgroundFile, mainColorRecommendations, slots]);
-
-  useEffect(() => {
-    if (mainBackgroundFile || !mainBackgroundColorSlot) return;
-    if (candidateSelections[mainBackgroundColorSlot.id] !== autoMainPaletteCandidateId) return;
-    setColors((current) => current[mainBackgroundColorSlot.id] ? current : { ...current, [mainBackgroundColorSlot.id]: resolvedMainBackground });
-    setCandidateSelections((current) => {
-      const next = { ...current };
-      delete next[mainBackgroundColorSlot.id];
-      return next;
-    });
-  }, [candidateSelections, mainBackgroundColorSlot, mainBackgroundFile, resolvedMainBackground]);
+  const {
+    activeImageColorPalette,
+    contrastWarnings,
+    imageColorPaletteError,
+    mainBackgroundFile,
+    mainColorRecommendations,
+  } = useProjectAutoColors({
+    activeTemplate,
+    analysis,
+    candidateSelections,
+    colors,
+    platform,
+    setCandidateSelections,
+    setColors,
+    slots,
+    templateId,
+  });
 
   useEffect(() => {
     if (!groups.includes(activeGroup)) {
@@ -473,40 +346,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const selectedBubbleSlot = selectedSlot ? bubbleSlotFromRole(selectedSlot.role) : null;
   const canAdjustInline = Boolean(selectedSlot?.editableInBubbleEditor && selectedFile && selectedBubbleSlot);
   const completion = getCompletion(slots, uploads, colors, candidateSelections, templateId, activeTemplate);
-
-  useEffect(() => {
-    let active = true;
-    if (!selectedSlot || selectedSlot.kind === "color") {
-      setAdminAssets([]);
-      setAdminAssetCursor(undefined);
-      return () => { active = false; };
-    }
-    setIsLoadingAdminAssets(true);
-    listRecommendedAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), limit: 24, enabledOnly: true })
-      .then((page) => {
-        if (!active) return;
-        setAdminAssets(page.items);
-        setAdminAssetCursor(page.nextCursor);
-      })
-      .catch((error) => console.error(error))
-      .finally(() => { if (active) setIsLoadingAdminAssets(false); });
-    return () => { active = false; };
-  }, [platform, selectedSlot?.id]);
-
-  const loadMoreAdminAssets = async () => {
-    if (!selectedSlot || !adminAssetCursor || isLoadingAdminAssets) return;
-    try {
-      setIsLoadingAdminAssets(true);
-      const page = await listRecommendedAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), cursor: adminAssetCursor, limit: 24, enabledOnly: true });
-      setAdminAssets((current) => [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))]);
-      setAdminAssetCursor(page.nextCursor);
-    } catch (error) {
-      console.error(error);
-      setNotice({ tone: "error", message: "추천 에셋을 더 불러오지 못했습니다." });
-    } finally {
-      setIsLoadingAdminAssets(false);
-    }
-  };
+  const {
+    adminAssetCursor,
+    adminAssetsWithPreview,
+    isLoadingAdminAssets,
+    loadMoreAdminAssets,
+  } = useProjectAssetUploads({ platform, selectedSlot, setNotice });
 
   const hydrateSystemTemplateUploads = async (uploadRefs: RemoteSlotUploads = remoteUploadRefsRef.current, slotIds?: string[]) => {
     const targetSlotIds = getMissingRemoteUploadSlotIds(uploadRefs, uploadsRef.current, slotIds);
@@ -523,6 +368,36 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const ensureSystemTemplateUploadsHydrated = () => hydrateSystemTemplateUploads(remoteUploadRefsRef.current);
+  const {
+    accountState,
+    exportDialogOpen,
+    exportElapsedSeconds,
+    exportMode,
+    exportName,
+    exportProgressStep,
+    exportVersionName,
+    isAccountLoading,
+    isExporting,
+    openExportDialog,
+    setExportDialogOpen,
+    setExportMode,
+    setExportName,
+    setExportVersionName,
+    submitExport,
+  } = useProjectExport({
+    activeTemplate,
+    bubbleInsets,
+    bubbleMarkers,
+    bubbleStretch,
+    candidateSelections,
+    colors,
+    displayTemplateName,
+    ensureSystemTemplateUploadsHydrated,
+    platform,
+    setNotice,
+    slots,
+    templateId,
+  });
 
   const hydrateUploadSlotsWithProgress = async (uploadRefs: RemoteSlotUploads, slotIds: string[], onProgress: (completed: number, total: number) => void) => {
     if (slotIds.length === 0) {
@@ -865,108 +740,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
   };
 
-  const openExportDialog = async () => {
-    try {
-      if (!exportVersionName) {
-        const response = await fetch(platform === "android" ? "/api/export/android" : "/api/export/ios");
-        const payload = (await response.json()) as { versionName?: string; error?: string };
-        if (!response.ok) {
-          throw new Error(payload.error ?? `${platform === "android" ? "Android" : "iOS"} 내보내기 설정을 불러오지 못했습니다.`);
-        }
-        setExportVersionName(payload.versionName ?? "1.0.0");
-      }
-      setExportName(displayTemplateName);
-      setExportMode(platform === "android" ? "apk" : "ktheme");
-      setExportProgressStep(0);
-      await refreshAccountState();
-      setExportDialogOpen(true);
-    } catch (error) {
-      console.error(error);
-      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Android export 설정을 불러오는 중 오류가 발생했습니다." });
-    }
-  };
-
-  const submitExport = async () => {
-    if (exportSubmittingRef.current) return;
-    exportSubmittingRef.current = true;
-    const progressSteps = getExportProgressSteps(exportMode);
-    let progressTimer: number | null = null;
-
-    try {
-      setIsExporting(true);
-      setExportProgressStep(0);
-      setExportElapsedSeconds(0);
-      setNotice({ tone: "info", message: getExportNotice(exportMode) });
-      progressTimer = window.setInterval(() => {
-        setExportElapsedSeconds((current) => current + 1);
-      }, 1000);
-
-      const hydratedUploads = await ensureSystemTemplateUploadsHydrated();
-      setExportProgressStep(platform === "ios" ? 1 : 0);
-      const hydratedAnalysis = createThemeProjectAnalysis(activeTemplate, platform, slots, hydratedUploads, colors, candidateSelections);
-      const formData = await createExportFormData({
-        analysis: hydratedAnalysis,
-        template: activeTemplate,
-        templateId,
-        exportName,
-        versionName: exportVersionName,
-        mode: exportMode,
-        slots,
-        uploads: hydratedUploads,
-        colors,
-        selections: candidateSelections,
-        bubbleMarkers,
-        bubbleInsets,
-        bubbleStretch,
-      });
-      setExportProgressStep(platform === "ios" ? 2 : 1);
-
-      const response = await fetch(platform === "android" ? "/api/export/android" : "/api/export/ios", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorBody = (await response.json().catch(() => null)) as { error?: string; reason?: string; refunded?: boolean } | null;
-        if (response.status === 401 || errorBody?.reason === "unauthenticated") {
-          router.push(`/login?returnTo=${encodeURIComponent("/edit")}&reason=export`);
-          return;
-        }
-        if (response.status === 402 || errorBody?.reason === "insufficient_credits") {
-          await refreshAccountState();
-          throw new Error("크레딧이 부족합니다. 크레딧 충전 후 다시 시도해 주세요.");
-        }
-        if (errorBody?.refunded) await refreshAccountState();
-        throw new Error(errorBody?.error ?? "내보내기에 실패했습니다.");
-      }
-
-      if (progressTimer) {
-        window.clearInterval(progressTimer);
-        progressTimer = null;
-      }
-      setExportProgressStep(progressSteps.length - 1);
-      const blob = await response.blob();
-      const fileName = getDownloadFileName(response.headers.get("content-disposition")) ?? `${exportName}-${platform}-export`;
-      triggerDownload(blob, fileName);
-      const remainingCredits = Number(response.headers.get("X-Credits-Remaining"));
-      if (Number.isFinite(remainingCredits)) setAccountState((current) => ({
-        user: current?.user ?? accountState?.user ?? null,
-        credits: remainingCredits,
-        isAdmin: current?.isAdmin ?? accountState?.isAdmin ?? false,
-      }));
-      const exportNumber = response.headers.get("X-Export-Number");
-      setExportDialogOpen(false);
-      setNotice({ tone: "success", message: `${exportNumber ? `내보내기 #${exportNumber} · ` : ""}${fileName} 파일을 생성했습니다.` });
-    } catch (error) {
-      console.error(error);
-      setNotice({ tone: "error", message: error instanceof Error ? error.message : `${platform === "android" ? "Android" : "iOS"} 내보내기 중 오류가 발생했습니다.` });
-    } finally {
-      if (progressTimer) window.clearInterval(progressTimer);
-      exportSubmittingRef.current = false;
-      setIsExporting(false);
-    }
-  };
-
   return (
     <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
       {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
@@ -998,8 +771,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onClose={() => {
             if (!isExporting) {
               setExportDialogOpen(false);
-              setExportProgressStep(0);
-              setExportElapsedSeconds(0);
             }
           }}
           onModeChange={setExportMode}
@@ -1777,30 +1548,6 @@ function ExportDialog({
   );
 }
 
-function getExportProgressSteps(mode: ExportMode) {
-  if (mode === "ktheme") {
-    return ["CSS 생성", "이미지 정리", ".ktheme 패키징", "다운로드 준비"];
-  }
-  if (mode === "theme-zip") {
-    return ["CSS 생성", "이미지 정리", "ZIP 패키징", "다운로드 준비"];
-  }
-  if (mode === "project") {
-    return ["리소스 준비", "프로젝트 생성", "메타데이터 반영", "압축 정리", "다운로드 준비"];
-  }
-  if (mode === "apk-zip") {
-    return ["리소스 준비", "프로젝트 생성", "APK 빌드", "ZIP 압축", "다운로드 준비"];
-  }
-  return ["리소스 준비", "프로젝트 생성", "APK 빌드", "결과물 정리", "다운로드 준비"];
-}
-
-function getExportNotice(mode: ExportMode) {
-  if (mode === "ktheme") return "iOS .ktheme 파일을 생성하는 중입니다.";
-  if (mode === "theme-zip") return "iOS 테마 ZIP 파일을 생성하는 중입니다.";
-  if (mode === "project") return "Android 프로젝트 ZIP을 생성하는 중입니다.";
-  if (mode === "apk-zip") return "Android APK ZIP을 생성하는 중입니다.";
-  return "Android APK를 빌드하는 중입니다.";
-}
-
 function formatElapsedTime(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -1862,154 +1609,4 @@ function slotEditFromRole(
   };
 
   return next.markers || next.insets || next.stretch ? next : undefined;
-}
-
-function getDownloadFileName(contentDisposition: string | null) {
-  if (!contentDisposition) return null;
-  const encodedMatch = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
-  if (encodedMatch?.[1]) {
-    try {
-      return decodeURIComponent(encodedMatch[1]);
-    } catch {
-      // Fall back to the ASCII filename below.
-    }
-  }
-  const match = /filename="([^"]+)"/i.exec(contentDisposition);
-  return match?.[1] ?? null;
-}
-
-async function createExportFormData(options: ExportPayloadOptions) {
-  if (isIosExportMode(options.mode)) {
-    return createIosExportFormData({ ...options, mode: options.mode });
-  }
-  return createAndroidExportFormData({ ...options, mode: isAndroidExportMode(options.mode) ? options.mode : "apk" });
-}
-
-function isAndroidExportMode(mode: ExportMode): mode is "project" | "apk" | "apk-zip" {
-  return mode === "project" || mode === "apk" || mode === "apk-zip";
-}
-
-function isIosExportMode(mode: ExportMode): mode is "theme-zip" | "ktheme" {
-  return mode === "theme-zip" || mode === "ktheme";
-}
-
-async function createIosExportFormData({
-  analysis,
-  template,
-  templateId,
-  exportName,
-  versionName,
-  mode,
-  slots,
-  uploads,
-  colors,
-  selections,
-  bubbleMarkers,
-  bubbleInsets,
-  bubbleStretch,
-}: IosExportPayloadOptions) {
-  const bubbleEditsBySlotId = Object.fromEntries(
-    slots.map((slot) => [
-      slot.id,
-      {
-        markers: bubbleMarkers[slot.id],
-        insets: bubbleInsets[slot.id],
-        stretch: bubbleStretch[slot.id],
-      },
-    ]),
-  );
-
-  const exportFiles = await buildIosThemeExportFiles({
-    analysis,
-    template,
-    templateId,
-    exportName,
-    versionName,
-    slots,
-    uploads,
-    colors,
-    selections,
-    bubbleEditsBySlotId,
-  });
-
-  const formData = new FormData();
-  const manifest = exportFiles.map((file, index) => {
-    const field = `file-${index}`;
-    formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
-    return { field, path: file.path };
-  });
-
-  formData.append("manifest", JSON.stringify(manifest));
-  formData.append("exportName", exportName);
-  formData.append("versionName", versionName);
-  formData.append("mode", mode);
-
-  return formData;
-}
-
-async function createAndroidExportFormData({
-  analysis,
-  template,
-  templateId,
-  exportName,
-  versionName,
-  mode,
-  slots,
-  uploads,
-  colors,
-  selections,
-  bubbleMarkers,
-  bubbleInsets,
-  bubbleStretch,
-}: AndroidExportPayloadOptions) {
-  const bubbleEditsBySlotId = Object.fromEntries(
-    slots.map((slot) => [
-      slot.id,
-      {
-        markers: bubbleMarkers[slot.id],
-        insets: bubbleInsets[slot.id],
-        stretch: bubbleStretch[slot.id],
-      },
-    ]),
-  );
-
-  const exportFiles = await buildAndroidThemeExportFiles({
-    analysis,
-    template,
-    templateId,
-    exportName,
-    slots,
-    uploads,
-    colors,
-    selections,
-    bubbleEditsBySlotId,
-  });
-
-  const formData = new FormData();
-  const manifest = exportFiles.map((file, index) => {
-    const field = `file-${index}`;
-    formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
-    return { field, path: file.path };
-  });
-
-  formData.append("manifest", JSON.stringify(manifest));
-  formData.append("exportName", exportName);
-  formData.append("versionName", versionName);
-  formData.append("mode", mode);
-
-  return formData;
-}
-
-function triggerDownload(blob: Blob, fileName: string) {
-  const href = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = href;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(href);
-}
-
-function getThemeFilePaletteKey(file: ThemeProjectFile) {
-  if (file.file) return `${file.path}:${file.file.name}:${file.file.size}:${file.file.lastModified}`;
-  return `${file.path}:${file.sourceUrl ?? "embedded"}:${file.size}`;
 }

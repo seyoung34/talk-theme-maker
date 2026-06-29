@@ -4,17 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, ArrowRight, Coins, Download, ShieldCheck, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
-
-type MePayload = {
-  user: { id: string; email?: string } | null;
-  profile: { email?: string; display_name?: string | null; avatar_url?: string | null; provider?: string | null } | null;
-  credits: number;
-  exports: Array<{ id: string; platform: string; export_mode: string; status: string; stage?: string; credit_cost: number; file_name?: string | null; export_number?: number | null; application_id?: string | null; theme_identifier?: string | null; export_name?: string | null; error?: string | null; error_code?: string | null; duration_ms?: number | null; created_at: string }>;
-  error?: string;
-};
+import type { AccountExportDto, AccountMeResponse } from "@/lib/billing/apiTypes";
+import { readJsonResponse } from "@/lib/shared/api/http";
 
 export default function AccountClient() {
-  const [me, setMe] = useState<MePayload | null>(null);
+  const [me, setMe] = useState<AccountMeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [accountError, setAccountError] = useState<string | null>(null);
 
@@ -22,7 +16,7 @@ export default function AccountClient() {
     setAccountError(null);
     try {
       const response = await fetch("/api/me", { cache: "no-store" });
-      const payload = (await response.json()) as MePayload;
+      const payload = await readJsonResponse<AccountMeResponse>(response);
       if (!response.ok) throw new Error(payload.error);
       setMe(payload);
     } catch {
@@ -105,7 +99,7 @@ export default function AccountClient() {
   );
 }
 
-function ExportRow({ item }: { item: MePayload["exports"][number] }) {
+function ExportRow({ item }: { item: AccountExportDto }) {
   const creditLabel = item.status === "failed" ? "차감 없음" : `${item.credit_cost}크레딧`;
   const title = item.export_name || item.file_name || "이름 없는 테마";
   const identifier = item.application_id ?? item.theme_identifier;

@@ -1,3 +1,5 @@
+import { readJsonResponse } from "@/lib/shared/api/http";
+
 export const themeAssetsBucketName = "theme-assets";
 
 const signedUrlCacheKey = "kakaotalk-theme-maker:signed-url-cache:v1";
@@ -70,16 +72,6 @@ async function getThemeAssetSignedUrlsIndividually(storagePaths: string[]) {
     signedUrls[path] = payload.signedUrl;
   }
   return signedUrls;
-}
-
-async function readJsonResponse<T extends { error?: string }>(response: Response): Promise<T> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (contentType.includes("application/json")) {
-    return response.json() as Promise<T>;
-  }
-  const text = await response.text().catch(() => "");
-  const excerpt = text.replace(/\s+/g, " ").slice(0, 120);
-  return { error: excerpt ? `Unexpected non-JSON response (${response.status}): ${excerpt}` : `Unexpected non-JSON response (${response.status}).` } as T;
 }
 
 export async function storagePathToFile(storagePath: string, fileName: string, mimeType = "application/octet-stream") {

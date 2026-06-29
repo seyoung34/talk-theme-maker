@@ -1,0 +1,48 @@
+import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
+import type { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
+import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
+import type { Insets, Markers, StretchPoint } from "@/lib/theme/types";
+
+export type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
+
+export type AccountState = {
+  user: { id: string; email?: string } | null;
+  credits: number;
+  isAdmin: boolean;
+  error?: string;
+};
+
+export type ExportVersionResponse = {
+  versionName?: string;
+  error?: string;
+};
+
+export type ExportErrorResponse = {
+  error?: string;
+  reason?: string;
+  refunded?: boolean;
+};
+
+export type AndroidExportPayloadOptions = {
+  analysis: ReturnType<typeof createThemeProjectAnalysis>;
+  template: ThemeTemplate;
+  templateId: ThemeTemplateId;
+  exportName: string;
+  versionName: string;
+  mode: "project" | "apk" | "apk-zip";
+  slots: ThemeAssetSlot[];
+  uploads: SlotUploads;
+  colors: SlotColors;
+  selections: SlotCandidateSelections;
+  bubbleMarkers: Partial<Record<string, Markers>>;
+  bubbleInsets: Partial<Record<string, Insets>>;
+  bubbleStretch: Partial<Record<string, StretchPoint>>;
+};
+
+export type IosExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
+  mode: "theme-zip" | "ktheme";
+};
+
+export type ExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
+  mode: ExportMode;
+};

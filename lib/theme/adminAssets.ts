@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { readJsonResponse } from "@/lib/shared/api/http";
 import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, storagePathToPreviewUrl, themeAssetsBucketName } from "@/lib/theme/remoteAssets";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
@@ -120,7 +121,7 @@ export async function listRecommendedAssetCandidatePage(options: Required<Pick<A
   });
   if (options.cursor) params.set("cursor", options.cursor);
   const response = await fetch(`/api/theme-assets/recommended?${params.toString()}`, { cache: "no-store" });
-  const payload = (await response.json()) as AdminAssetPage & { error?: string };
+  const payload = await readJsonResponse<AdminAssetPage & { error?: string }>(response);
   if (!response.ok) throw new Error(payload.error ?? "추천 에셋을 불러오지 못했습니다.");
   return { items: payload.items ?? [], nextCursor: payload.nextCursor };
 }

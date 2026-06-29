@@ -52,7 +52,7 @@ npm run build
 ### Preventing broken Korean text
 
 - This repo now pins text files to `UTF-8` and `LF` through `.editorconfig`, `.gitattributes`, and `.vscode/settings.json`.
-- Run `npm run check:text` before or after larger edits. It fails on UTF-8 BOM and replacement characters (`�`).
+- Run `npm run check:text` before or after larger edits. It fails on UTF-8 BOM and Unicode replacement characters (`U+FFFD`).
 - If a file is already broken, fix the original text first instead of re-saving the garbled string with a different encoding.
 
 ### In-app browser verification

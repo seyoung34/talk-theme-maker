@@ -6,17 +6,15 @@ import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
 import { CircleUserRound, LayoutDashboard, LoaderCircle, LogIn, LogOut, UserRound, X } from "lucide-react";
+import type { SessionResponse } from "@/lib/billing/apiTypes";
+import { readJsonResponse } from "@/lib/shared/api/http";
 import { createClient } from "@/lib/supabase/client";
 
 type SiteHeaderProps = { currentPath?: string };
-type SessionPayload = {
-  user: { email: string | null; displayName: string | null } | null;
-  isAdmin: boolean;
-};
 
 export default function SiteHeader({ currentPath }: SiteHeaderProps) {
   const router = useRouter();
-  const [session, setSession] = useState<SessionPayload | null>(null);
+  const [session, setSession] = useState<SessionResponse | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -27,7 +25,7 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
     fetch("/api/session", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("session request failed");
-        return (await response.json()) as SessionPayload;
+        return readJsonResponse<SessionResponse>(response);
       })
       .then((payload) => {
         if (active) setSession(payload);

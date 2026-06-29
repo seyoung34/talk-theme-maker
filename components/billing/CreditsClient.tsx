@@ -5,13 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, ArrowLeft, Check, CheckCircle2, Clock3, Coins, CreditCard, Gift, LoaderCircle, RefreshCw, ShieldCheck, Smartphone, XCircle } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
+import type { AccountMeResponse, CreditCodeRedeemResponse, PayappPrepareResponse, PayappStatusResponse, PaymentStatus } from "@/lib/billing/apiTypes";
 import { creditProducts, type CreditProductId } from "@/lib/billing/products";
+import { readJsonResponse } from "@/lib/shared/api/http";
 
-type MePayload = { user: { id: string; email?: string } | null; credits: number };
-type PaymentStatus = "pending" | "paid" | "failed" | "canceled";
 type PaymentOutcome = { status: PaymentStatus | "checking"; credits?: number; message: string } | null;
-type PayappPreparePayload = { checkoutUrl?: string; error?: string; reason?: string };
-type PayappStatusPayload = { payment?: { id: string; status: PaymentStatus; amount: number; credits: number }; error?: string };
 type ChargePhase = "idle" | "preparing" | "redirecting";
 type RedeemMessage = { tone: "success" | "error"; text: string } | null;
 
@@ -26,7 +24,7 @@ function formatPhone(value: string) {
 }
 function isValidPhone(value: string) { return /^01[016789]\d{7,8}$/.test(normalizePhone(value)); }
 
-function getPrepareError(payload: PayappPreparePayload) {
+function getPrepareError(payload: PayappPrepareResponse) {
   if (payload.reason === "invalid_product") return "충전 상품을 다시 선택해 주세요.";
   if (payload.reason === "invalid_phone") return "휴대폰번호를 정확히 입력해 주세요.";
   if (payload.reason === "payapp_config_missing") return "결제 설정을 확인 중입니다. 잠시 후 다시 시도해 주세요.";
@@ -37,7 +35,7 @@ function getPrepareError(payload: PayappPreparePayload) {
 export default function CreditsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [me, setMe] = useState<MePayload | null>(null);
+  const [me, setMe] = useState<AccountMeResponse | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<CreditProductId>("credit-4");
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -55,7 +53,7 @@ export default function CreditsClient() {
     setPageError(null);
     try {
       const response = await fetch("/api/me", { cache: "no-store" });
-      const payload = (await response.json()) as MePayload;
+      const payload = await readJsonResponse<AccountMeResponse>(response);
       if (!response.ok) throw new Error();
       setMe(payload);
     } catch {
@@ -72,7 +70,7 @@ export default function CreditsClient() {
     for (let attempt = 0; attempt < MAX_PAYMENT_CHECKS; attempt += 1) {
       try {
         const response = await fetch(`/api/billing/payapp/status?paymentId=${encodeURIComponent(paymentId)}`, { cache: "no-store" });
-        const payload = (await response.json()) as PayappStatusPayload;
+        const payload = await readJsonResponse<PayappStatusResponse>(response);
         if (response.status === 401) {
           router.push(`/login?returnTo=${encodeURIComponent(`/credits?billing=payapp-return&paymentId=${paymentId}`)}&reason=billing`);
           return;
@@ -126,7 +124,7 @@ export default function CreditsClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone: normalizePhone(phone), productId: selectedProduct.id }),
       });
-      const payload = (await response.json()) as PayappPreparePayload;
+      const payload = await readJsonResponse<PayappPrepareResponse>(response);
       if (response.status === 401) {
         router.push("/login?returnTo=%2Fcredits&reason=billing");
         return;
@@ -162,7 +160,7 @@ export default function CreditsClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: normalizedCode }),
       });
-      const payload = (await response.json()) as { creditsGranted?: number; balance?: number; error?: string };
+      const payload = await readJsonResponse<CreditCodeRedeemResponse>(response);
       if (response.status === 401) {
         router.push("/login?returnTo=%2Fcredits&reason=billing");
         return;

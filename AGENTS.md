@@ -42,16 +42,19 @@ This project contains Korean UI text and runs on Windows. Treat text encoding as
 
 - Source files should be UTF-8.
 - When reading text files in PowerShell, use `Get-Content -Encoding UTF8`.
-- When writing through PowerShell is unavoidable, use explicit UTF-8 options.
 - Prefer `apply_patch` for source edits.
+- Do not rewrite source files with PowerShell `Set-Content`, `Out-File`, shell redirection (`>`, `>>`), or `echo`, especially for `.ts`, `.tsx`, `.md`, `.json`, and `.css`.
+- When writing through PowerShell is genuinely unavoidable, get explicit approval in the task context and use explicit UTF-8 no-BOM options.
+- For large TSX files, do not rewrite the whole file. Use small `apply_patch` hunks or extract new files and import them.
 - Do not assume terminal mojibake means the file itself is corrupted.
 - If Korean output looks broken, separate terminal output encoding from actual file contents.
 - After editing files with Korean text, re-read important files with `Get-Content -Encoding UTF8`.
 - Do not preserve or re-save garbled Korean strings. Fix the original intended text instead.
-- `npm run check:text` currently catches UTF-8 BOM and replacement characters. It may not catch valid Unicode mojibake such as `?쒖`, `諛`, `遺`, or `鍮`.
+- `npm run check:text` catches UTF-8 BOM, replacement characters, and common mojibake fragments. It may still miss new valid-Unicode mojibake patterns.
 - If mojibake appears, do not repeat the same command. First decide whether the problem is terminal output encoding or actual file content.
 - When Korean UI text is touched, inspect the edited lines with `Get-Content -Encoding UTF8` and search for known mojibake fragments before finishing.
 - Prefer improving `scripts/check-text-encoding.mjs` when a new recurring mojibake pattern is found.
+- After `npm run build`, check `next-env.d.ts`. If Next changed the import to `./.next/types/routes.d.ts`, restore the local dev import `./.next/dev/types/routes.d.ts` before finishing.
 
 Useful PowerShell setup when encoding output is suspicious:
 

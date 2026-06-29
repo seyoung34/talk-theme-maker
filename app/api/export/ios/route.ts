@@ -10,6 +10,7 @@ import {
   updateExportJobStage,
 } from "@/lib/billing/credits";
 import { createStoredZipBytes } from "@/lib/theme/project/zip";
+import { buildDownloadContentDisposition, elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
 import { applyServerThemeIdentifier, IosExportRequestError, normalizeIosPath, validateExportName, validateIosPackage, validateVersionName } from "@/lib/theme/ios/packageValidation";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge, maxExportRequestBytes } from "@/lib/theme/exportRequest";
 
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
       status: 200,
       headers: {
         "Content-Type": mode === "ktheme" ? "application/octet-stream" : "application/zip",
-        "Content-Disposition": buildContentDisposition(fileName),
+        "Content-Disposition": buildDownloadContentDisposition(fileName),
         "X-Export-Job-Id": exportJobId,
         "X-Export-Number": String(exportNumber),
         "X-Theme-Identifier": themeIdentifier,
@@ -168,17 +169,4 @@ function buildExportBaseName(name: string, versionName: string) {
 
 function sanitizeFileName(value: string) {
   return value.trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-function buildContentDisposition(fileName: string) {
-  const asciiFallback = fileName.replace(/[^\x20-\x7e]+/g, "-");
-  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
-}
-
-function elapsedMs(startedAt: number) {
-  return Math.max(0, Math.round(performance.now() - startedAt));
-}
-
-function safeErrorSummary(error: unknown) {
-  return error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 1000) : String(error).slice(0, 1000);
 }

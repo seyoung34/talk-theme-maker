@@ -21,6 +21,7 @@ import {
   type AndroidBuildHooks,
 } from "@/lib/theme/android/apk";
 import { AndroidExportRequestError, readAndroidBuildInputFiles } from "@/lib/theme/android/request";
+import { buildDownloadContentDisposition, elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
 
 type AndroidExportMode = Extract<ExportMode, "project" | "apk" | "apk-zip">;
@@ -106,7 +107,7 @@ export async function handleAndroidExportRequest(
       status: 200,
       headers: {
         "Content-Type": result.contentType,
-        "Content-Disposition": buildContentDisposition(result.fileName),
+        "Content-Disposition": buildDownloadContentDisposition(result.fileName),
         "X-Credits-Remaining": String(credits),
         "X-Export-Job-Id": exportJobId,
         "X-Export-Number": String(exportNumber),
@@ -190,24 +191,6 @@ function classifyFailure(error: unknown) {
 
 function isAndroidExportMode(value: FormDataEntryValue | null): value is AndroidExportMode {
   return value === "project" || value === "apk" || value === "apk-zip";
-}
-
-function buildContentDisposition(fileName: string) {
-  const asciiFallback = fileName.replace(/[^\x20-\x7E]+/g, "-");
-  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
-}
-
-function elapsedMs(startedAt: number) {
-  return Math.max(0, Math.round(performance.now() - startedAt));
-}
-
-function safeErrorSummary(error: unknown) {
-  if (error instanceof Error) return `${error.name}: ${error.message}`.slice(0, 1000);
-  if (typeof error === "object" && error !== null) {
-    const details = Object.fromEntries(Object.entries(error).filter(([key]) => ["code", "message", "details", "hint"].includes(key)));
-    return JSON.stringify(details).slice(0, 1000);
-  }
-  return String(error).slice(0, 1000);
 }
 
 function logAndroidExport(level: "info" | "warn" | "error", event: string, details: Record<string, unknown>) {
