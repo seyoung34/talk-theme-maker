@@ -32,7 +32,7 @@ const assetKindOrder: AdminAssetKind[] = ["background", "icon", "bubble", "profi
 
 export default function AdminAssetsClient() {
   const [platform, setPlatform] = useState<ThemePlatform>("android");
-  const [assetPlatformScope, setAssetPlatformScope] = useState<ThemePlatform | "all">("android");
+  const [assetPlatformScope, setAssetPlatformScope] = useState<ThemePlatform | "all">("all");
   const [selectedSlotId, setSelectedSlotId] = useState("");
   const [assets, setAssets] = useState<AdminAssetCandidate[]>([]);
   const [title, setTitle] = useState("");
