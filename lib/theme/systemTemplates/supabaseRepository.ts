@@ -219,6 +219,7 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
             }),
             editedAt: entry.imageEdit.editedAt,
             state: entry.imageEdit.state,
+            ...(entry.imageEdit.target ? { target: entry.imageEdit.target } : {}),
           }
         : undefined;
       refs[slotId]?.push({
@@ -356,6 +357,7 @@ async function remoteUploadsToSlotUploads(uploadRefs: RemoteSlotUploads, slotIds
                   originalFile,
                   editedAt: entry.imageEdit.editedAt,
                   state: entry.imageEdit.state,
+                  ...(entry.imageEdit.target ? { target: entry.imageEdit.target } : {}),
                 },
               }
             : {}),

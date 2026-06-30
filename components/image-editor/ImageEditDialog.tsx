@@ -74,6 +74,10 @@ export function ImageEditDialog({
     : sourceSize
       ? `원본 이미지 크기 · ${sourceSize.width}×${sourceSize.height}px`
       : "원본 이미지 크기";
+  const outputSize = target ?? sourceSize;
+  const hasChanges = !isDefaultImageEditState(state);
+  const sourceSizeLabel = sourceSize ? `${sourceSize.width}×${sourceSize.height}px` : "분석 중";
+  const outputSizeLabel = outputSize ? `${outputSize.width}×${outputSize.height}px` : "원본 기준";
 
   const apply = async () => {
     if (!sourceFile || isApplying) return;
@@ -124,6 +128,16 @@ export function ImageEditDialog({
             </section>
 
             <aside className="grid content-start gap-4">
+              <div className="rounded-[20px] border border-[#bfdbfe] bg-[#eff6ff] p-4">
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-[#1d4ed8]">Edit summary</p>
+                <div className="mt-3 grid gap-2 text-xs font-bold text-[#334155]">
+                  <InfoPill label="원본" value={sourceSizeLabel} />
+                  <InfoPill label="출력" value={outputSizeLabel} />
+                  <InfoPill label="상태" value={hasChanges ? "편집값 있음" : "원본 기준"} tone={hasChanges ? "active" : "muted"} />
+                </div>
+                <p className="mt-3 text-[11px] font-semibold leading-5 text-[#475569]">적용해도 원본 파일은 유지되고, 편집 결과가 새 업로드 후보로 추가됩니다.</p>
+              </div>
+
               <div className="rounded-[20px] border border-[#e5e7eb] bg-[#f8fafc] p-4">
                 <p className="text-xs font-black uppercase tracking-[0.12em] text-[#64748b]">Transform</p>
                 <div className="mt-3 grid gap-2">
@@ -131,9 +145,9 @@ export function ImageEditDialog({
                     <FlipHorizontal2 size={17} aria-hidden="true" />
                     좌우반전
                   </button>
-                  <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#d1d5db] bg-white px-4 text-sm font-black text-[#334155] transition hover:bg-[#f8fafc]" onClick={() => setState(defaultImageEditState)}>
+                  <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#d1d5db] bg-white px-4 text-sm font-black text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-45" disabled={!hasChanges} onClick={() => setState(defaultImageEditState)}>
                     <RotateCcw size={17} aria-hidden="true" />
-                    초기화
+                    원본 상태로 되돌리기
                   </button>
                 </div>
               </div>
@@ -149,9 +163,14 @@ export function ImageEditDialog({
               </div>
 
               <div className="rounded-[20px] border border-[#e5e7eb] bg-white p-4">
-                <div className="mb-3 flex items-center gap-2 text-sm font-black text-[#0f172a]">
-                  <Move size={16} aria-hidden="true" />
-                  위치
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm font-black text-[#0f172a]">
+                    <Move size={16} aria-hidden="true" />
+                    위치
+                  </div>
+                  <button type="button" className="rounded-full border border-[#e5e7eb] px-3 py-1.5 text-[11px] font-black text-[#475569] transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-45" disabled={state.offsetX === 0 && state.offsetY === 0} onClick={() => setState((current) => ({ ...current, offsetX: 0, offsetY: 0 }))}>
+                    중앙
+                  </button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <NumberControl label="가로" value={state.offsetX} onChange={(value) => setState((current) => ({ ...current, offsetX: value }))} />
@@ -163,12 +182,13 @@ export function ImageEditDialog({
                 <p className="text-sm font-black text-[#0f172a]">맞춤 방식</p>
                 <div className="mt-3 grid gap-2">
                   {[
-                    ["contain", "전체 보이게"],
-                    ["cover", "영역 채우기"],
-                    ["original", "원본 크기"],
-                  ].map(([mode, label]) => (
+                    ["contain", "전체 보이게", "잘림 없이 슬롯 안에 맞춥니다."],
+                    ["cover", "영역 채우기", "빈 공간 없이 채우며 일부가 잘릴 수 있습니다."],
+                    ["original", "원본 크기", "원본 픽셀 크기를 기준으로 배치합니다."],
+                  ].map(([mode, label, description]) => (
                     <button key={mode} type="button" className={`rounded-xl border px-3 py-2.5 text-left text-sm font-bold transition ${state.fitMode === mode ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#e5e7eb] bg-white text-[#475569] hover:bg-[#f8fafc]"}`} onClick={() => setState((current) => ({ ...current, fitMode: mode as ImageEditState["fitMode"] }))}>
-                      {label}
+                      <span className="block">{label}</span>
+                      <span className={`mt-0.5 block text-[11px] font-semibold leading-4 ${state.fitMode === mode ? "text-[#1e40af]" : "text-[#64748b]"}`}>{description}</span>
                     </button>
                   ))}
                 </div>
@@ -196,6 +216,15 @@ export function ImageEditDialog({
   );
 }
 
+function InfoPill({ label, value, tone = "muted" }: { label: string; value: string; tone?: "active" | "muted" }) {
+  return (
+    <span className={`flex items-center justify-between gap-2 rounded-xl px-3 py-2 ${tone === "active" ? "bg-white text-[#1d4ed8]" : "bg-white/70 text-[#475569]"}`}>
+      <span className="text-[11px] font-black uppercase tracking-[0.08em] text-[#64748b]">{label}</span>
+      <span className="truncate text-right">{value}</span>
+    </span>
+  );
+}
+
 function NumberControl({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
   return (
     <label className="grid gap-1.5 text-xs font-bold text-[#64748b]">
@@ -203,4 +232,8 @@ function NumberControl({ label, value, onChange }: { label: string; value: numbe
       <input type="number" value={Math.round(value)} className="h-10 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-bold text-[#0f172a] outline-none focus:border-[#60a5fa] focus:ring-2 focus:ring-[#bfdbfe]" onChange={(event) => onChange(Number(event.currentTarget.value) || 0)} />
     </label>
   );
+}
+
+function isDefaultImageEditState(state: ImageEditState) {
+  return !state.flipX && state.scale === defaultImageEditState.scale && state.offsetX === 0 && state.offsetY === 0 && state.fitMode === defaultImageEditState.fitMode;
 }

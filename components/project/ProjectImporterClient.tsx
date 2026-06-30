@@ -22,6 +22,7 @@ import {
   getSectionGroups,
   getSelectedCandidate,
   getSlotFile,
+  groupLabels,
   isSlotVisibleInSection,
   sectionLabels,
   type BubbleEditState,
@@ -35,7 +36,7 @@ import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
 import { readTemplateStartPayload } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
-import type { ImageEditState } from "@/lib/theme/imageEdit";
+import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { systemTemplateRepository, type RemoteSlotUploads, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
@@ -130,6 +131,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const skipDefaultSelectionResetRef = useRef(false);
   const uploadsRef = useRef<SlotUploads>({});
   const remoteUploadRefsRef = useRef<RemoteSlotUploads>({});
+  const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
+  const mobileEditTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileEditCloseButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     uploadsRef.current = uploads;
@@ -138,6 +142,54 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   useEffect(() => {
     remoteUploadRefsRef.current = remoteUploadRefs;
   }, [remoteUploadRefs]);
+
+  useEffect(() => {
+    if (!mobileEditSheetOpen || typeof window === "undefined") return;
+    const mediaQuery = window.matchMedia("(min-width: 1024px)");
+    if (mediaQuery.matches) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const focusTimer = window.setTimeout(() => {
+      mobileEditCloseButtonRef.current?.focus();
+    }, 0);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobileEditSheetOpen(false);
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+      const focusableElements = getFocusableElements(mobileEditSheetRef.current);
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey && activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      window.setTimeout(() => {
+        mobileEditTriggerButtonRef.current?.focus();
+      }, 0);
+    };
+  }, [mobileEditSheetOpen]);
 
   useEffect(() => {
     let active = true;
@@ -492,7 +544,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setActiveGroup(slot.group);
   };
 
-  const uploadEditedSlot = (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File) => {
+  const uploadEditedSlot = (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => {
     const uploadId = `${slot.id}:edited:${Date.now()}`;
     setUploads((current) => ({
       ...current,
@@ -508,6 +560,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             originalFile: sourceFile,
             editedAt: Date.now(),
             state: editState,
+            ...(target ? { target } : {}),
           },
         },
       ],
@@ -961,6 +1014,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
               />
 
               <button
+                ref={mobileEditTriggerButtonRef}
                 type="button"
                 className="inline-flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-[#bfdbfe] bg-[#eff6ff] px-4 text-left text-sm font-bold text-[#1d4ed8] shadow-sm lg:hidden"
                 onClick={() => setMobileEditSheetOpen(true)}
@@ -978,63 +1032,79 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 />
               ) : null}
 
-              <div className={`${mobileEditSheetOpen ? "fixed inset-x-3 bottom-3 z-50 grid max-h-[76dvh] overflow-y-auto rounded-[28px] border border-[#dbe3ed] bg-white p-3 shadow-[0_28px_80px_rgba(15,23,42,0.28)] [scrollbar-width:thin]" : "hidden"} min-h-0 min-w-0 lg:static lg:z-auto lg:grid lg:max-h-none lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:px-3 lg:shadow-none`}>
-                <div className="mb-2 flex items-center justify-between gap-3 rounded-2xl bg-[#f8fafc] px-3 py-2 lg:hidden">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#2563eb]">Quick edit</p>
-                    <strong className="block truncate text-sm font-black text-[#0f172a]">{selectedSlot?.label ?? "선택한 요소"}</strong>
+              <div
+                ref={mobileEditSheetRef}
+                role={mobileEditSheetOpen ? "dialog" : undefined}
+                aria-modal={mobileEditSheetOpen ? "true" : undefined}
+                aria-label={selectedSlot ? `${selectedSlot.label} 편집 패널` : "요소 편집 패널"}
+                className={`${mobileEditSheetOpen ? "fixed inset-x-3 bottom-3 z-50 grid max-h-[82dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] border border-[#dbe3ed] bg-white p-3 shadow-[0_28px_80px_rgba(15,23,42,0.28)]" : "hidden"} min-h-0 min-w-0 lg:static lg:z-auto lg:grid lg:max-h-none lg:grid-rows-none lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:px-3 lg:shadow-none`}
+              >
+                <div className="mb-2 grid gap-2 rounded-2xl bg-[#f8fafc] px-3 py-2 lg:hidden">
+                  <span className="mx-auto h-1 w-10 rounded-full bg-[#cbd5e1]" aria-hidden="true" />
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#2563eb]">Quick edit</p>
+                      <strong className="block truncate text-sm font-black text-[#0f172a]">{selectedSlot?.label ?? "선택한 요소"}</strong>
+                      <span className="mt-0.5 block truncate text-[11px] font-bold text-[#64748b]">
+                        {sectionLabels[activeSection]} · {groupLabels[activeGroup] ?? activeGroup}
+                        {selectedSlot?.fileName ? ` · ${selectedSlot.fileName}` : ""}
+                      </span>
+                    </div>
+                    <button
+                      ref={mobileEditCloseButtonRef}
+                      type="button"
+                      className="grid size-9 shrink-0 place-items-center rounded-full border border-[#e5e7eb] bg-white text-[#475569] transition hover:bg-[#f8fafc] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+                      aria-label="편집 패널 닫기"
+                      onClick={() => setMobileEditSheetOpen(false)}
+                    >
+                      <X size={17} aria-hidden="true" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="grid size-9 shrink-0 place-items-center rounded-full border border-[#e5e7eb] bg-white text-[#475569]"
-                    aria-label="편집 패널 닫기"
-                    onClick={() => setMobileEditSheetOpen(false)}
-                  >
-                    <X size={17} aria-hidden="true" />
-                  </button>
                 </div>
-                <ProjectQuickEditPanel
-                  slot={selectedSlot}
-                  slots={slots}
-                  file={selectedFile}
-                  uploads={uploads}
-                  colors={colors}
-                  selections={candidateSelections}
-                  adminAssets={adminAssetsWithPreview}
-                  hasMoreAdminAssets={Boolean(adminAssetCursor)}
-                  isLoadingAdminAssets={isLoadingAdminAssets}
-                  templateId={templateId}
-                  template={activeTemplate}
-                  platform={platform}
-                  selectedBubbleSlot={selectedBubbleSlot}
-                  markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
-                  insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
-                  stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
-                  fileInputRefs={fileInputRefs}
-                  onUpload={uploadSlot}
-                  onEditedUpload={uploadEditedSlot}
-                  onClear={clearSlot}
-                  onColorChange={changeColor}
-                  imageColorPalette={activeImageColorPalette}
-                  imageColorPaletteError={imageColorPaletteError}
-                  recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
-                  contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
-                  isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
-                  canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
-                  canApplyAutoColorToAll={Boolean((!mainBackgroundFile || activeImageColorPalette) && Object.keys(mainColorRecommendations).length)}
-                  onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
-                  onApplyAutoColorToAll={applyAutoColorToAll}
-                  onSelectCandidate={selectCandidate}
-                  onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
-                  onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
-                  onOpenAdvanced={openAdvancedBubbleEditor}
-                  onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
-                  onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
-                  onStretchChange={(stretch) => selectedSlot && setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch }))}
-                  canAdjustInline={canAdjustInline}
-                  candidateOpen={candidateOpen}
-                  onToggleCandidates={() => setCandidateOpen((current) => !current)}
-                />
+                <div className="min-h-0 overflow-y-auto pr-0.5 [scrollbar-width:thin] lg:overflow-visible lg:pr-0">
+                  <ProjectQuickEditPanel
+                    slot={selectedSlot}
+                    slots={slots}
+                    file={selectedFile}
+                    uploads={uploads}
+                    colors={colors}
+                    selections={candidateSelections}
+                    adminAssets={adminAssetsWithPreview}
+                    hasMoreAdminAssets={Boolean(adminAssetCursor)}
+                    isLoadingAdminAssets={isLoadingAdminAssets}
+                    templateId={templateId}
+                    template={activeTemplate}
+                    platform={platform}
+                    selectedBubbleSlot={selectedBubbleSlot}
+                    markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
+                    insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
+                    stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
+                    fileInputRefs={fileInputRefs}
+                    onUpload={uploadSlot}
+                    onEditedUpload={uploadEditedSlot}
+                    onClear={clearSlot}
+                    onColorChange={changeColor}
+                    imageColorPalette={activeImageColorPalette}
+                    imageColorPaletteError={imageColorPaletteError}
+                    recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
+                    contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
+                    isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
+                    canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+                    canApplyAutoColorToAll={Boolean((!mainBackgroundFile || activeImageColorPalette) && Object.keys(mainColorRecommendations).length)}
+                    onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
+                    onApplyAutoColorToAll={applyAutoColorToAll}
+                    onSelectCandidate={selectCandidate}
+                    onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
+                    onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
+                    onOpenAdvanced={openAdvancedBubbleEditor}
+                    onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
+                    onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
+                    onStretchChange={(stretch) => selectedSlot && setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch }))}
+                    canAdjustInline={canAdjustInline}
+                    candidateOpen={candidateOpen}
+                    onToggleCandidates={() => setCandidateOpen((current) => !current)}
+                  />
+                </div>
               </div>
             </section>
 
@@ -1679,6 +1749,15 @@ function mergeSlotUploads(current: SlotUploads, incoming: SlotUploads): SlotUplo
     next[slotId] = [...currentEntries, ...entries.filter((entry) => !currentIds.has(entry.id))];
   }
   return next;
+}
+
+function getFocusableElements(container: HTMLElement | null) {
+  if (!container) return [];
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((element) => !element.hasAttribute("disabled") && element.getAttribute("aria-hidden") !== "true" && element.offsetParent !== null);
 }
 
 function slotEditFromRole(

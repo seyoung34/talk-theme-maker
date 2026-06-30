@@ -1,4 +1,4 @@
-import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
+import type { SlotCandidateSelections, SlotColors, SlotUploadEntry, SlotUploadSource, SlotUploads } from "@/lib/theme/project/state";
 import { normalizeThemeTemplateId, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -77,6 +77,7 @@ export async function saveUserTemplate(record: Omit<UserTemplateRecord, "id" | "
     id: record.id ?? `user-template:${now}`,
     createdAt: record.createdAt ?? now,
     updatedAt: now,
+    uploads: normalizeIndexedDbOnlyUploads(record.uploads),
   };
 
   await withStore("readwrite", (store) => store.put(next));
@@ -107,9 +108,57 @@ export async function listUserTemplates(): Promise<UserTemplateSummary[]> {
 
 function normalizeUserTemplateRecord(record: UserTemplateRecord): UserTemplateRecord {
   const templateId = normalizeThemeTemplateId(record.templateId);
-  return templateId === record.templateId ? record : { ...record, templateId };
+  return {
+    ...(templateId === record.templateId ? record : { ...record, templateId }),
+    uploads: normalizeIndexedDbOnlyUploads(record.uploads),
+  };
 }
 
 export async function deleteUserTemplate(id: string) {
   await withStore<undefined>("readwrite", (store) => store.delete(id));
+}
+
+function normalizeIndexedDbOnlyUploads(uploads: SlotUploads): SlotUploads {
+  const next: SlotUploads = {};
+
+  for (const [slotId, entries] of Object.entries(uploads)) {
+    if (!entries?.length) continue;
+    const normalizedEntries = entries
+      .map((entry) => normalizeIndexedDbOnlyUploadEntry(entry))
+      .filter((entry): entry is SlotUploadEntry => Boolean(entry));
+    if (normalizedEntries.length) next[slotId] = normalizedEntries;
+  }
+
+  return next;
+}
+
+function normalizeIndexedDbOnlyUploadEntry(entry: SlotUploadEntry): SlotUploadEntry | null {
+  if (!isFileLike(entry.file)) return null;
+
+  const normalized: SlotUploadEntry = {
+    id: entry.id,
+    file: entry.file,
+    ...(isSlotUploadSource(entry.source) ? { source: entry.source } : {}),
+  };
+
+  if (entry.imageEdit) {
+    normalized.imageEdit = {
+      originalName: entry.imageEdit.originalName,
+      originalSize: entry.imageEdit.originalSize,
+      ...(isFileLike(entry.imageEdit.originalFile) ? { originalFile: entry.imageEdit.originalFile } : {}),
+      editedAt: entry.imageEdit.editedAt,
+      state: entry.imageEdit.state,
+      ...(entry.imageEdit.target ? { target: entry.imageEdit.target } : {}),
+    };
+  }
+
+  return normalized;
+}
+
+function isSlotUploadSource(value: unknown): value is SlotUploadSource {
+  return value === "user" || value === "template" || value === "admin";
+}
+
+function isFileLike(value: unknown): value is File {
+  return typeof File !== "undefined" && value instanceof File;
 }

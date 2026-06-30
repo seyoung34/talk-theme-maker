@@ -75,7 +75,7 @@ export function ProjectQuickEditPanel({
   stretch?: StretchPoint;
   fileInputRefs: MutableRefObject<Record<string, HTMLInputElement | null>>;
   onUpload: (slot: ThemeAssetSlot, files: FileList | readonly File[] | null) => void;
-  onEditedUpload: (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File) => void;
+  onEditedUpload: (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => void;
   onClear: (slot: ThemeAssetSlot) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
   imageColorPalette: ImageColorPalette | null;
@@ -102,6 +102,9 @@ export function ProjectQuickEditPanel({
   const [pasteFeedback, setPasteFeedback] = useState(false);
   const [uploadPreviewUrls, setUploadPreviewUrls] = useState<Record<string, string>>({});
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [preparedEditSourceFile, setPreparedEditSourceFile] = useState<File | null>(null);
+  const [isPreparingEditSource, setIsPreparingEditSource] = useState(false);
+  const [editSourceError, setEditSourceError] = useState<string | null>(null);
 
   useEffect(() => {
     const entries = Object.values(uploads).flatMap((items) => items ?? []);
@@ -146,7 +149,7 @@ export function ProjectQuickEditPanel({
   const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets, uploadPreviewUrls);
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
   const selectedUploadEntry = getSelectedUpload(slot, uploads, selections);
-  const imageEditTarget = getImageEditTarget(selectedCandidate);
+  const imageEditTarget = selectedUploadEntry?.imageEdit?.target ?? getImageEditTarget(selectedCandidate);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
   const uploadEntries = getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id));
@@ -156,7 +159,35 @@ export function ProjectQuickEditPanel({
       : selectedPickerCandidate?.source === "template"
         ? `템플릿 에셋 · ${selectedPickerCandidate.status}`
       : status;
-  const editableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;
+  const directEditableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;
+  const editableSourceUrl = !directEditableSourceFile ? getEditableSourceUrl(file, selectedPickerCandidate, selectedCandidate) : undefined;
+  const editableSourceFile = preparedEditSourceFile ?? directEditableSourceFile;
+  const canOpenImageEditor = Boolean(directEditableSourceFile || editableSourceUrl);
+
+  const openImageEditor = async () => {
+    if (!slot || slot.kind === "color" || !canOpenImageEditor) return;
+
+    setEditSourceError(null);
+    if (directEditableSourceFile) {
+      setPreparedEditSourceFile(null);
+      setEditDialogOpen(true);
+      return;
+    }
+
+    if (!editableSourceUrl) return;
+
+    try {
+      setIsPreparingEditSource(true);
+      const preparedFile = await imageUrlToEditableFile(editableSourceUrl, slot.fileName ?? `${slot.id}.png`);
+      setPreparedEditSourceFile(preparedFile);
+      setEditDialogOpen(true);
+    } catch (error) {
+      console.error(error);
+      setEditSourceError("현재 이미지를 편집용으로 불러오지 못했습니다. 직접 업로드한 뒤 다시 편집해 주세요.");
+    } finally {
+      setIsPreparingEditSource(false);
+    }
+  };
 
   const handleDrop = (event: DragEvent<HTMLButtonElement | HTMLDivElement>) => {
     event.preventDefault();
@@ -233,6 +264,9 @@ export function ProjectQuickEditPanel({
               <div>
                 <p className="text-sm font-semibold text-[#0f172a]">직접 업로드</p>
                 <p className="mt-1 text-[12px] font-medium text-[#6b7280]">파일을 끌어다 놓거나 선택하세요. 클립보드 이미지는 Ctrl+V 또는 ⌘V로 붙여넣을 수 있습니다.</p>
+                <p className="mt-2 rounded-xl border border-[#dbeafe] bg-white/80 px-3 py-2 text-[11px] font-bold leading-5 text-[#475569]">
+                  개인 이미지는 일반 사용자 템플릿 저장 시 이 브라우저의 IndexedDB에만 보관됩니다. 시스템 템플릿 저장은 관리자 전용입니다.
+                </p>
                 <p className="sr-only" role="status" aria-live="polite">{pasteFeedback ? "클립보드 이미지를 추가했습니다." : ""}</p>
               </div>
 
@@ -251,12 +285,12 @@ export function ProjectQuickEditPanel({
                 <button
                   type="button"
                   className="inline-flex items-center gap-2 rounded-lg border border-[#d1d5db] bg-white px-4 py-3 text-sm font-semibold text-[#374151] transition enabled:hover:border-[#bfdbfe] enabled:hover:bg-[#eff6ff] enabled:hover:text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45"
-                  disabled={!editableSourceFile}
-                  onClick={() => setEditDialogOpen(true)}
-                  title={editableSourceFile ? "현재 이미지를 편집합니다." : "파일 객체가 있는 이미지를 선택하거나 업로드하면 편집할 수 있습니다."}
+                  disabled={!canOpenImageEditor || isPreparingEditSource}
+                  onClick={() => void openImageEditor()}
+                  title={canOpenImageEditor ? "현재 이미지를 복사해 비파괴 편집합니다." : "이미지가 있는 슬롯에서 사용할 수 있습니다."}
                 >
-                  <Edit3 size={16} aria-hidden="true" />
-                  이미지 편집
+                  {isPreparingEditSource ? <RefreshCw className="animate-spin" size={16} aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
+                  {isPreparingEditSource ? "편집 준비 중" : "이미지 편집"}
                 </button>
                 {slot.editableInBubbleEditor ? (
                   <button
@@ -269,6 +303,7 @@ export function ProjectQuickEditPanel({
                   </button>
                 ) : null}
               </div>
+              {editSourceError ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold leading-5 text-[#be123c]" role="alert">{editSourceError}</p> : null}
             </div>
 
             {canAdjustInline && selectedBubbleSlot ? (
@@ -291,10 +326,16 @@ export function ProjectQuickEditPanel({
               slotLabel={slot.label}
               initialState={selectedUploadEntry?.imageEdit?.state}
               target={imageEditTarget}
-              onOpenChange={setEditDialogOpen}
+              onOpenChange={(open) => {
+                setEditDialogOpen(open);
+                if (!open) {
+                  setPreparedEditSourceFile(null);
+                  setEditSourceError(null);
+                }
+              }}
               onApply={(editedFile, editState) => {
                 if (!editableSourceFile) return;
-                onEditedUpload(slot, editedFile, editState, editableSourceFile);
+                onEditedUpload(slot, editedFile, editState, editableSourceFile, imageEditTarget);
               }}
             />
           </>
@@ -302,6 +343,34 @@ export function ProjectQuickEditPanel({
       </section>
     </div>
   );
+}
+
+function getEditableSourceUrl(file: ThemeProjectFile | undefined, selectedPickerCandidate: SlotCandidate | undefined, selectedCandidate: ReturnType<typeof getSelectedCandidate>) {
+  return file?.sourceUrl ?? selectedPickerCandidate?.previewUrl ?? selectedCandidate?.previewUrl ?? selectedCandidate?.assetUrl;
+}
+
+async function imageUrlToEditableFile(url: string, fallbackName: string) {
+  const response = await fetch(url, { cache: "force-cache" });
+  if (!response.ok) throw new Error(`Image source could not be loaded: ${response.status}`);
+
+  const blob = await response.blob();
+  const mimeType = blob.type || inferImageMimeType(fallbackName) || "image/png";
+  return new File([blob], ensureImageFileExtension(fallbackName, mimeType), { type: mimeType });
+}
+
+function inferImageMimeType(fileName: string) {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".png") || lower.endsWith(".9.png")) return "image/png";
+  return undefined;
+}
+
+function ensureImageFileExtension(fileName: string, mimeType: string) {
+  if (/\.(png|jpe?g|webp)$/i.test(fileName)) return fileName;
+  if (mimeType === "image/jpeg") return `${fileName}.jpg`;
+  if (mimeType === "image/webp") return `${fileName}.webp`;
+  return `${fileName}.png`;
 }
 
 function getImageEditTarget(candidate: ReturnType<typeof getSelectedCandidate>): ImageEditTarget | undefined {

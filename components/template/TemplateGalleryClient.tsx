@@ -46,6 +46,7 @@ type TemplatePreviewModel = {
   visual: TemplatePreviewVisual;
   availablePlatforms?: ThemePlatform[];
   rows: Array<{ label: string; value: string }>;
+  checkpoints: string[];
   onStart: (platform: ThemePlatform) => void;
 };
 
@@ -456,11 +457,11 @@ function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPrevie
 
   return {
     title: record.name,
-    description: "이 브라우저에 저장된 색상과 업로드 이미지를 기준으로 미리봅니다. 개인 이미지는 서버에 저장되지 않습니다.",
+    description: "저장한 색상과 업로드 이미지를 실제 편집에 들어가기 전에 확인합니다. 개인 이미지는 이 브라우저에만 남습니다.",
     eyebrow: "내 템플릿 미리보기",
     closeLabel: "닫기",
-    androidLabel: record.platform === "android" ? "편집 계속하기" : "Android 사용 불가",
-    iosLabel: record.platform === "ios" ? "편집 계속하기" : "iOS 사용 불가",
+    androidLabel: record.platform === "android" ? "Android 편집 계속하기" : "Android 사용 불가",
+    iosLabel: record.platform === "ios" ? "iOS 편집 계속하기" : "iOS 사용 불가",
     baseTemplate,
     visual,
     availablePlatforms: [record.platform],
@@ -469,6 +470,11 @@ function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPrevie
       { label: "이미지", value: `${summary.uploadCount}개` },
       { label: "색상", value: `${summary.colorCount}개` },
       { label: "최근 수정", value: formatDate(record.updatedAt) },
+    ],
+    checkpoints: [
+      "저장한 이미지와 색상이 카드·채팅 미리보기에 반영됐는지 확인하세요.",
+      "개인 사진은 서버가 아니라 현재 브라우저 IndexedDB에만 저장됩니다.",
+      "이어 편집하면 이전 슬롯 선택, 색상, 말풍선 조정값을 유지합니다.",
     ],
     onStart: () => onStart(summary),
   };
@@ -513,7 +519,7 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
   if (template.kind === "system") {
     return {
       title: template.title,
-      description: template.description ?? "운영자가 준비한 예시 테마입니다. 원하는 플랫폼으로 시작한 뒤 이미지와 색상을 바꿀 수 있습니다.",
+      description: template.description ?? "운영자가 준비한 예시 테마입니다. 플랫폼을 고른 뒤 필요한 이미지와 색상만 바꿔 시작할 수 있습니다.",
       eyebrow: "공개 템플릿 미리보기",
       closeLabel: "닫기",
       androidLabel: "Android로 시작",
@@ -527,13 +533,18 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
         { label: "색상", value: `${template.previewTemplate.colorCount}` },
         { label: "이미지", value: `${template.previewTemplate.uploadCount}` },
       ],
+      checkpoints: [
+        "Android와 iOS 중 제공되는 플랫폼만 시작할 수 있습니다.",
+        "템플릿 이미지는 시작 후 내 업로드 이미지로 교체할 수 있습니다.",
+        "미리보기는 대표 화면 기준이며 세부 슬롯은 편집 화면에서 확인합니다.",
+      ],
       onStart,
     };
   }
 
   return {
     title: template.title,
-    description: template.baseTemplate.previewNote || "가장 기본이 되는 빈 테마입니다. 처음 시작하거나 직접 이미지를 올려 만들 때 적합합니다.",
+    description: template.baseTemplate.previewNote || "처음부터 직접 만드는 기본 템플릿입니다. 이미지를 올리지 않으면 기본 색상 중심으로 시작합니다.",
     eyebrow: "기본 템플릿 미리보기",
     closeLabel: "닫기",
     androidLabel: "Android로 시작",
@@ -546,6 +557,11 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
       { label: "내 말풍선", value: template.visual.myBubbleColor },
       { label: "상대 말풍선", value: template.visual.friendBubbleColor },
       { label: "플랫폼", value: template.baseTemplate.defaults.platform === "android" ? "Android" : "iOS" },
+    ],
+    checkpoints: [
+      "불필요한 샘플 이미지 없이 색상과 직접 업로드 중심으로 시작합니다.",
+      "Android/iOS 중 원하는 플랫폼을 선택해 같은 기본값에서 편집합니다.",
+      "저장 전까지 업로드 이미지는 편집 세션 안에서만 유지됩니다.",
     ],
     onStart,
   };
@@ -630,9 +646,17 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
                 <InfoRow key={row.label} label={row.label} value={row.value} />
               ))}
             </div>
-            <p className="rounded-[18px] border border-[var(--color-outline-variant)] bg-white px-4 py-3 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
-              미리보기는 대표 화면을 압축해 보여줍니다. 실제 편집 화면에서 슬롯별 이미지, 색상, 말풍선 조정값을 확인한 뒤 내보내세요.
-            </p>
+            <div className="rounded-[18px] border border-[var(--color-outline-variant)] bg-white px-4 py-3">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--color-on-surface-variant)]">확인할 것</p>
+              <ul className="mt-2 grid gap-1.5 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
+                {preview.checkpoints.map((item) => (
+                  <li key={item} className="grid grid-cols-[16px_minmax(0,1fr)] gap-2">
+                    <span className="mt-1 size-1.5 rounded-full bg-[var(--color-primary)]" aria-hidden="true" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
             <div className={`grid gap-2 ${actions.length > 1 ? "sm:grid-cols-2" : ""}`}>
               {actions.map((action) => (
                 <button key={action.platform} className={`rounded-full px-4 py-3 text-sm font-black transition hover:scale-[0.98] ${action.className}`} type="button" onClick={() => preview.onStart(action.platform)}>
@@ -723,10 +747,10 @@ function TemplatePhonePreview({ template, visual }: { template: ThemeTemplate; v
       </div>
       <div className="grid min-h-0 content-start gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4">
         <div className="justify-self-center rounded-full bg-[#14343a]/18 px-5 py-1 text-xs font-bold text-white">오늘</div>
-        <PreviewMessage visual={visual} mine={false} text="테마 분위기를 확인합니다." />
-        <PreviewMessage visual={visual} mine text="말풍선과 배경을 함께 볼 수 있어요." />
-        <PreviewMessage visual={visual} mine={false} text="저장된 색상과 이미지가 반영됩니다." />
-        <PreviewMessage visual={visual} mine text="이 템플릿으로 시작할게요." />
+        <PreviewMessage visual={visual} mine={false} text="배경과 말풍선 대비를 확인합니다." />
+        <PreviewMessage visual={visual} mine text="내 말풍선 색상도 함께 봅니다." />
+        <PreviewMessage visual={visual} mine={false} text="프로필과 채팅 화면 분위기를 점검합니다." />
+        <PreviewMessage visual={visual} mine text="문제가 없으면 편집을 시작하세요." />
       </div>
       <div className="grid grid-cols-[36px_minmax(0,1fr)_36px] items-center gap-2 bg-white/90 px-3 py-2">
         <Plus className="h-5 w-5 justify-self-center text-[var(--color-on-surface-variant)]" />

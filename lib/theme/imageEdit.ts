@@ -15,6 +15,7 @@ export type ImageEditMetadata = {
   originalFile?: File;
   editedAt: number;
   state: ImageEditState;
+  target?: ImageEditTarget;
 };
 
 export type ImageEditTarget = {

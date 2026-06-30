@@ -47,6 +47,7 @@ export default function AdminAssetsClient() {
   const [assetCursor, setAssetCursor] = useState<string>();
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
   const [isSavingAsset, setIsSavingAsset] = useState(false);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [imageEditOpen, setImageEditOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
   const [assetListFilter, setAssetListFilter] = useState<"all" | "exact" | "review" | "bubble">("all");
@@ -60,6 +61,7 @@ export default function AdminAssetsClient() {
   const selectedBubbleSlot = selectedSlot ? (bubbleSlotFromRole(selectedSlot.role) ?? "me") : "me";
   const commonSaveTargets = useMemo(() => (selectedSlot ? getAdminAssetSaveTargets(selectedSlot, "all", assetKind) : []), [assetKind, selectedSlot]);
   const canUseCommonScope = commonSaveTargets.length > 1;
+  const selectedSaveTargets = useMemo(() => (selectedSlot ? getAdminAssetSaveTargets(selectedSlot, assetPlatformScope, assetKind) : []), [assetKind, assetPlatformScope, selectedSlot]);
   const visibleAssets = assets.filter((asset) => selectedSlot && isAdminAssetRecommendedForSlot(selectedSlot, asset));
   const filteredAssets = useMemo(() => {
     const query = assetSearch.trim().toLowerCase();
@@ -160,7 +162,7 @@ export default function AdminAssetsClient() {
 
   const submit = async () => {
     if (!selectedSlot || !file || isSavingAsset) return;
-    const saveTargets = getAdminAssetSaveTargets(selectedSlot, assetPlatformScope, assetKind);
+    const saveTargets = selectedSaveTargets;
     if (saveTargets.length === 0) {
       setNotice("적용할 플랫폼 슬롯을 찾지 못했습니다.");
       return;
@@ -199,11 +201,20 @@ export default function AdminAssetsClient() {
   };
 
   const remove = async (asset: AdminAssetCandidate) => {
+    if (deletingAssetId) return;
     const confirmed = window.confirm(`"${asset.title}" 후보를 삭제할까요?`);
     if (!confirmed) return;
-    await deleteAdminAssetCandidate(asset.id);
-    setNotice("관리 후보를 삭제했습니다.");
-    await refreshAssets();
+    try {
+      setDeletingAssetId(asset.id);
+      await deleteAdminAssetCandidate(asset.id);
+      setNotice("관리 후보를 삭제했습니다.");
+      await refreshAssets();
+    } catch (error) {
+      console.error(error);
+      setNotice("관리 후보를 삭제하지 못했습니다.");
+    } finally {
+      setDeletingAssetId(null);
+    }
   };
 
   const applyDroppedFile = (files: FileList | null) => {
@@ -302,7 +313,15 @@ export default function AdminAssetsClient() {
           </aside>
 
           <section className="grid content-start gap-4">
-            <div className="grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="relative grid gap-3 overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              {isSavingAsset ? (
+                <div className="absolute inset-0 z-10 grid place-items-center bg-white/72 backdrop-blur-[1px]" role="status" aria-live="polite">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-4 py-2 text-sm font-black text-[#1d4ed8] shadow-sm">
+                    <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
+                    {selectedSaveTargets.length > 1 ? `${selectedSaveTargets.length}개 플랫폼 후보 저장 중` : "관리 후보 저장 중"}
+                  </div>
+                </div>
+              ) : null}
               <div className="grid gap-2 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3 md:col-span-2">
                 <strong className="text-sm font-black text-[#1e3a8a]">통합 에셋 등록</strong>
                 <p className="text-xs font-semibold leading-5 text-[#475569]">
@@ -487,10 +506,14 @@ export default function AdminAssetsClient() {
                     Android/iOS 둘 다
                   </button>
                 </div>
+                <p className="text-[11px] font-semibold leading-5 text-[var(--color-on-surface-variant)]">
+                  저장 시 {selectedSaveTargets.length || 0}개 후보를 생성합니다
+                  {selectedSaveTargets.length > 0 ? ` · ${selectedSaveTargets.map((target) => (target.platform === "android" ? "Android" : "iOS")).join(" / ")}` : ""}.
+                </p>
               </div>
               <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 md:col-span-2" type="button" disabled={!file || !selectedSlot || isSavingAsset} onClick={() => void submit()}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
-                {isSavingAsset ? "저장 중" : assetPlatformScope === "all" ? "두 플랫폼에 후보 추가" : "관리 후보 추가"}
+                {isSavingAsset ? "저장 중" : assetPlatformScope === "all" ? `두 플랫폼에 후보 추가 (${selectedSaveTargets.length})` : "관리 후보 추가"}
               </button>
             </div>
 
@@ -537,7 +560,7 @@ export default function AdminAssetsClient() {
               ) : filteredAssets.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {filteredAssets.map((asset) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} warnings={getAdminAssetGuidance(selectedSlot, asset.assetKind ?? assetKind, asset.analysis ?? null)} onEdit={() => setEditingAsset(asset)} onDelete={() => void remove(asset)} />
+                    <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} warnings={getAdminAssetGuidance(selectedSlot, asset.assetKind ?? assetKind, asset.analysis ?? null)} deleting={deletingAssetId === asset.id} onEdit={() => setEditingAsset(asset)} onDelete={() => void remove(asset)} />
                   ))}
                 </div>
               ) : (
@@ -730,17 +753,27 @@ function AdminAssetCard({
   asset,
   slot,
   warnings,
+  deleting,
   onEdit,
   onDelete,
 }: {
   asset: AdminAssetCandidate;
   slot?: ThemeAssetSlot;
   warnings: string[];
+  deleting: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
-    <article className="grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)]">
+    <article className={`relative grid gap-3 overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] transition duration-200 ${deleting ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(42,103,103,0.1)]"}`}>
+      {deleting ? (
+        <div className="absolute inset-0 z-10 grid place-items-center bg-white/70 backdrop-blur-[1px]" role="status" aria-live="polite">
+          <span className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-700 shadow-sm">
+            <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+            삭제 중
+          </span>
+        </div>
+      ) : null}
       <div className="aspect-[4/3] rounded-[18px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} />
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap gap-1.5">
@@ -756,11 +789,12 @@ function AdminAssetCard({
       </div>
       {slot && asset.slotRole !== slot.role ? <span className="w-fit rounded-full bg-[var(--color-surface-low)] px-2 py-1 text-[11px] font-bold text-[var(--color-on-surface-variant)]">유사 슬롯 추천</span> : null}
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" onClick={onEdit}>
+        <button type="button" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" disabled={deleting} onClick={onEdit}>
           <Pencil size={14} aria-hidden="true" /> 수정
         </button>
-        <button type="button" className="min-h-10 rounded-full border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" onClick={onDelete}>
-          삭제
+        <button type="button" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:-translate-y-0.5 hover:border-red-200 hover:bg-red-50 hover:text-red-700 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" disabled={deleting} onClick={onDelete}>
+          {deleting ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : null}
+          {deleting ? "삭제 중" : "삭제"}
         </button>
       </div>
     </article>

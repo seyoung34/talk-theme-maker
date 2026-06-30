@@ -1,5 +1,5 @@
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
-import type { ImageEditState } from "@/lib/theme/imageEdit";
+import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { BaseTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -50,6 +50,7 @@ export type RemoteUploadEntry = {
     originalStoragePath?: string;
     editedAt: number;
     state: ImageEditState;
+    target?: ImageEditTarget;
   };
 };
 
