@@ -34,7 +34,7 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
       return () => { active = false; };
     }
     setIsLoadingAdminAssets(true);
-    listRecommendedAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), limit: 24, enabledOnly: true })
+    listRecommendedAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), slotRole: selectedSlot.role, limit: 24, enabledOnly: true })
       .then((page) => {
         if (!active) return;
         setAdminAssets(page.items);
@@ -49,7 +49,7 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
     if (!selectedSlot || !adminAssetCursor || isLoadingAdminAssets) return;
     try {
       setIsLoadingAdminAssets(true);
-      const page = await listRecommendedAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), cursor: adminAssetCursor, limit: 24, enabledOnly: true });
+      const page = await listRecommendedAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), slotRole: selectedSlot.role, cursor: adminAssetCursor, limit: 24, enabledOnly: true });
       setAdminAssets((current) => [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))]);
       setAdminAssetCursor(page.nextCursor);
     } catch (error) {

@@ -111,6 +111,7 @@ export async function listRecommendedAssetCandidatePage(options: Required<Pick<A
     assetKind: options.assetKind,
     limit: String(Math.min(50, Math.max(1, options.limit ?? 24))),
   });
+  if (options.slotRole) params.set("slotRole", options.slotRole);
   if (options.cursor) params.set("cursor", options.cursor);
   const response = await fetch(`/api/theme-assets/recommended?${params.toString()}`, { cache: "no-store" });
   const payload = await readJsonResponse<AdminAssetPage & { readonly error?: string }>(response);
@@ -147,6 +148,9 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
     });
     return canonicalAdminAssetToCandidate(canonical, await storagePathToPreviewUrl(canonical.storagePath));
   } catch (error) {
+    if (!input.id) {
+      await supabase.from("admin_assets").delete().eq("id", id);
+    }
     await supabase.storage.from(themeAssetsBucketName).remove([storagePath]);
     throw error;
   }
@@ -171,7 +175,8 @@ export async function updateAdminAssetCandidate(id: string, input: AdminAssetCan
     .single();
   if (error) throw error;
 
-  if (input.targets) await replaceAdminAssetTargets(id, input.targets.map((target) => ({ ...target, asset_id: id, slot_role: target.slotRole ?? null, target_kind: target.targetKind })));
+  const targetRows = input.targets?.map((target) => ({ asset_id: id, platform: target.platform, slot_role: target.slotRole ?? null, target_kind: target.targetKind, priority: target.priority, enabled: target.enabled }));
+  if (targetRows) await replaceAdminAssetTargets(id, targetRows);
   if (bubbleSpec) {
     await replaceAdminAssetBubbleSpec(id, {
       asset_id: id,
@@ -181,7 +186,7 @@ export async function updateAdminAssetCandidate(id: string, input: AdminAssetCan
     });
   }
 
-  const canonical = mapCanonicalAdminAssetRow(data);
+  const canonical = mapCanonicalAdminAssetRow(targetRows ? { ...requireObject(data), admin_asset_targets: targetRows } : data);
   return canonicalAdminAssetToCandidate(canonical, await storagePathToPreviewUrl(canonical.storagePath));
 }
 

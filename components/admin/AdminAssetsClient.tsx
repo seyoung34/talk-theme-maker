@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertTriangle, Edit3, ImagePlus, LoaderCircle, Pencil, Save, Search, X, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, Edit3, ImagePlus, LoaderCircle, Pencil, Save, Search, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import SiteHeader from "@/components/layout/SiteHeader";
 import {
   deleteAdminAssetCandidate,
   adminAssetToFile,
+  bubbleAdjustmentToSpec,
   describeAdminAssetAnalysis,
   getAdminAssetKindLabel,
   inferAdminAssetKind,
@@ -21,6 +22,7 @@ import {
   type AdminAssetCandidate,
   type AdminAssetKind,
   type AdminAssetShape,
+  type AdminAssetTargetInput,
 } from "@/lib/theme/adminAssets";
 import { bubbleSlotFromRole } from "@/lib/theme/project/state";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
@@ -31,8 +33,7 @@ import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/t
 const assetKindOrder: AdminAssetKind[] = ["background", "icon", "bubble", "profile", "launcher", "passcode"];
 
 export default function AdminAssetsClient() {
-  const [platform, setPlatform] = useState<ThemePlatform>("android");
-  const [assetPlatformScope, setAssetPlatformScope] = useState<ThemePlatform | "all">("all");
+  const [bubblePreviewPlatform, setBubblePreviewPlatform] = useState<ThemePlatform>("android");
   const [selectedSlotId, setSelectedSlotId] = useState("");
   const [assets, setAssets] = useState<AdminAssetCandidate[]>([]);
   const [title, setTitle] = useState("");
@@ -41,6 +42,7 @@ export default function AdminAssetsClient() {
   const [bubbleAdjustment, setBubbleAdjustment] = useState<AdminBubbleAdjustment>(createDefaultBubbleAdjustment());
   const [file, setFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState("");
+  const [isAddAssetOpen, setIsAddAssetOpen] = useState(true);
   const [dragActive, setDragActive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingAsset, setEditingAsset] = useState<AdminAssetCandidate | null>(null);
@@ -53,16 +55,16 @@ export default function AdminAssetsClient() {
   const [assetListFilter, setAssetListFilter] = useState<"all" | "exact" | "review" | "bubble">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const slots = useMemo(() => getThemeSlots(platform).filter((slot) => slot.kind === "image" || slot.kind === "ninepatch"), [platform]);
+  const slots = useMemo(getUnifiedAdminAssetSlots, []);
   const slotGroups = useMemo(() => groupSlotsByAssetKind(slots), [slots]);
   const activeKindSlots = useMemo(() => slots.filter((slot) => inferAdminAssetKind(slot) === assetKind), [assetKind, slots]);
   const selectedSlot = activeKindSlots.find((slot) => slot.id === selectedSlotId) ?? activeKindSlots[0] ?? slots[0];
   const adminBubbleFile = useMemo<ThemeProjectFile | undefined>(() => (file ? { path: file.name, name: file.name, size: file.size, file } : undefined), [file]);
   const selectedBubbleSlot = selectedSlot ? (bubbleSlotFromRole(selectedSlot.role) ?? "me") : "me";
-  const commonSaveTargets = useMemo(() => (selectedSlot ? getAdminAssetSaveTargets(selectedSlot, "all", assetKind) : []), [assetKind, selectedSlot]);
-  const canUseCommonScope = commonSaveTargets.length > 1;
-  const selectedSaveTargets = useMemo(() => (selectedSlot ? getAdminAssetSaveTargets(selectedSlot, assetPlatformScope, assetKind) : []), [assetKind, assetPlatformScope, selectedSlot]);
-  const visibleAssets = assets.filter((asset) => selectedSlot && isAdminAssetRecommendedForSlot(selectedSlot, asset));
+  const selectedSaveTargets = useMemo(() => (selectedSlot ? getAdminAssetSaveTargets(selectedSlot, assetKind) : []), [assetKind, selectedSlot]);
+  const bubbleSpec = useMemo(() => (assetKind === "bubble" ? bubbleAdjustmentToSpec(bubbleAdjustment) : undefined), [assetKind, bubbleAdjustment]);
+  const canSaveAsset = Boolean(file && selectedSlot && !isSavingAsset && selectedSaveTargets.length > 0 && (assetKind !== "bubble" || bubbleSpec));
+  const visibleAssets = assets.filter((asset) => selectedSlot && isAdminAssetVisibleForAdminSlot(selectedSlot, asset));
   const filteredAssets = useMemo(() => {
     const query = assetSearch.trim().toLowerCase();
     return visibleAssets.filter((asset) => {
@@ -74,7 +76,7 @@ export default function AdminAssetsClient() {
         asset.slotRole.toLowerCase().includes(query);
       const matchesFilter =
         assetListFilter === "all" ||
-        (assetListFilter === "exact" && selectedSlot && asset.slotRole === selectedSlot.role) ||
+        (assetListFilter === "exact" && selectedSlot && isExactAdminAssetTarget(selectedSlot, asset)) ||
         (assetListFilter === "review" && warnings.length > 0) ||
         (assetListFilter === "bubble" && Boolean(asset.bubbleAdjustment));
       return matchesQuery && matchesFilter;
@@ -85,8 +87,7 @@ export default function AdminAssetsClient() {
   useEffect(() => {
     const nextSlot = activeKindSlots.find((slot) => slot.id === selectedSlotId) ?? activeKindSlots[0] ?? slots[0];
     setSelectedSlotId(nextSlot?.id ?? "");
-    setAssetPlatformScope(platform);
-  }, [activeKindSlots, platform, selectedSlotId, slots]);
+  }, [activeKindSlots, selectedSlotId, slots]);
 
   useEffect(() => {
     if (assetKind !== "bubble") return;
@@ -117,20 +118,8 @@ export default function AdminAssetsClient() {
   }, [file]);
 
   useEffect(() => {
-    if (!canUseCommonScope && assetPlatformScope === "all") {
-      setAssetPlatformScope(platform);
-    }
-  }, [assetPlatformScope, canUseCommonScope, platform]);
-
-  useEffect(() => {
-    if (canUseCommonScope && !editingAsset) {
-      setAssetPlatformScope("all");
-    }
-  }, [canUseCommonScope, editingAsset, selectedSlot?.id]);
-
-  useEffect(() => {
     void refreshAssets(undefined, false);
-  }, [assetKind, platform, selectedSlot?.role]);
+  }, [assetKind, selectedSlot?.role]);
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
@@ -138,6 +127,7 @@ export default function AdminAssetsClient() {
       if (!pastedFile) return;
       event.preventDefault();
       setFile(pastedFile);
+      setIsAddAssetOpen(true);
       setNotice("클립보드 이미지를 추가했습니다.");
     };
 
@@ -149,7 +139,7 @@ export default function AdminAssetsClient() {
     if (!selectedSlot) return;
     try {
       setIsLoadingAssets(true);
-      const page = await listAdminAssetCandidatePage({ platform, assetKind: inferAdminAssetKind(selectedSlot), cursor, limit: 24 });
+      const page = await listAdminAssetCandidatePage({ assetKind: inferAdminAssetKind(selectedSlot), cursor, limit: 24 });
       setAssets((current) => append ? [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))] : page.items);
       setAssetCursor(page.nextCursor);
     } catch (error) {
@@ -170,27 +160,28 @@ export default function AdminAssetsClient() {
 
     try {
       setIsSavingAsset(true);
-      await Promise.all(
-        saveTargets.map((target) =>
-          saveAdminAssetCandidate({
-            slotRole: target.slot.role,
-            platform: target.platform,
-            assetKind,
-            analysis: analysis ?? { shapes: inferShapesFromFileName(file.name) },
-            bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined,
-            title: title.trim() || file.name,
-            note: target.slot.label,
-            tags: [],
-            fileName: file.name,
-            mimeType: file.type || "application/octet-stream",
-            blob: file,
-          }),
-        ),
-      );
+      const representativeTarget = saveTargets[0];
+      if (!representativeTarget) throw new Error("INVALID_ASSET_TARGET");
+      await saveAdminAssetCandidate({
+        slotRole: representativeTarget.slotRole ?? selectedSlot.role,
+        platform: representativeTarget.platform,
+        assetKind,
+        analysis: analysis ?? { shapes: inferShapesFromFileName(file.name) },
+        bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined,
+        bubbleSpec: assetKind === "bubble" ? bubbleSpec : undefined,
+        title: title.trim() || file.name,
+        note: selectedSlot.label,
+        tags: [],
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        blob: file,
+        targets: saveTargets,
+      });
       setTitle("");
       setFile(null);
       setAnalysis(null);
-      setNotice(saveTargets.length > 1 ? "Android/iOS 관리 후보를 모두 추가했습니다." : "관리 후보를 추가했습니다.");
+      setIsAddAssetOpen(false);
+      setNotice("플랫폼 공통 관리 후보를 추가했습니다.");
       await refreshAssets();
     } catch (error) {
       console.error(error);
@@ -224,6 +215,7 @@ export default function AdminAssetsClient() {
       return;
     }
     setFile(nextFile);
+    setIsAddAssetOpen(true);
   };
 
   const applyRecommendedBubbleAdjustment = () => {
@@ -260,7 +252,7 @@ export default function AdminAssetsClient() {
           <aside className="grid content-start gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4">
             <div className="rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3">
               <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[#1d4ed8]">Asset workflow</span>
-              <p className="mt-1 text-sm font-black leading-5 text-[#0f172a]">에셋 종류를 먼저 고르고, 필요할 때 플랫폼 기준만 바꿉니다.</p>
+              <p className="mt-1 text-sm font-black leading-5 text-[#0f172a]">에셋 종류와 대표 슬롯만 고르면 Android/iOS 공통 대상으로 저장합니다.</p>
             </div>
 
             <div className="grid gap-2">
@@ -279,25 +271,8 @@ export default function AdminAssetsClient() {
               ))}
             </div>
 
-            <div className="grid gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] p-3">
-              <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">기준 플랫폼</span>
-              <div className="grid grid-cols-2 gap-2">
-                {(["android", "ios"] as const).map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`rounded-full px-4 py-2 text-sm font-black transition ${platform === item ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] hover:bg-white/80"}`}
-                    onClick={() => setPlatform(item)}
-                  >
-                    {item === "android" ? "Android" : "iOS"}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] font-semibold leading-5 text-[var(--color-on-surface-variant)]">둘 다 선택하면 관리 후보 추가 시 Android와 iOS 후보를 각각 생성합니다.</p>
-            </div>
-
             <div className="grid max-h-[42dvh] gap-2 overflow-auto pr-1 [scrollbar-width:thin]">
-              <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">세부 슬롯</span>
+              <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">대표 슬롯</span>
               {activeKindSlots.map((slot) => (
                 <button
                   key={slot.id}
@@ -313,21 +288,48 @@ export default function AdminAssetsClient() {
           </aside>
 
           <section className="grid content-start gap-4">
-            <div className="relative grid gap-3 overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              {isSavingAsset ? (
-                <div className="absolute inset-0 z-10 grid place-items-center bg-white/72 backdrop-blur-[1px]" role="status" aria-live="polite">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-4 py-2 text-sm font-black text-[#1d4ed8] shadow-sm">
-                    <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
-                    {selectedSaveTargets.length > 1 ? `${selectedSaveTargets.length}개 플랫폼 후보 저장 중` : "관리 후보 저장 중"}
+            <div className="overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white">
+              <button
+                id="admin-asset-add-trigger"
+                type="button"
+                className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-[var(--color-surface-low)] disabled:cursor-wait disabled:opacity-80"
+                aria-expanded={isAddAssetOpen}
+                aria-controls="admin-asset-add-panel"
+                disabled={isSavingAsset}
+                onClick={() => setIsAddAssetOpen((open) => !open)}
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-black text-[var(--color-on-surface)]">통합 에셋 등록</span>
+                  <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">
+                    {file ? file.name : `${getAdminAssetKindLabel(assetKind)} · ${selectedSlot?.label ?? "대표 슬롯"}`}
+                  </span>
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)]">
+                  {isSavingAsset ? "저장 중" : isAddAssetOpen ? "접기" : "펼치기"}
+                  <ChevronDown className={`size-4 transition-transform ${isAddAssetOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+                </span>
+              </button>
+              {isAddAssetOpen ? (
+                <div
+                  id="admin-asset-add-panel"
+                  className="relative grid gap-3 border-t border-[var(--color-outline-variant)] p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+                  role="region"
+                  aria-labelledby="admin-asset-add-trigger"
+                >
+                  {isSavingAsset ? (
+                    <div className="absolute inset-0 z-10 grid place-items-center bg-white/72 backdrop-blur-[1px]" role="status" aria-live="polite">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-4 py-2 text-sm font-black text-[#1d4ed8] shadow-sm">
+                        <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
+                        {selectedSaveTargets.length > 1 ? `${selectedSaveTargets.length}개 target 저장 중` : "관리 후보 저장 중"}
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="grid gap-2 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3 md:col-span-2">
+                    <strong className="text-sm font-black text-[#1e3a8a]">저장 방식</strong>
+                    <p className="text-xs font-semibold leading-5 text-[#475569]">
+                      업로드한 파일은 한 번만 저장하고, 대표 슬롯을 기준으로 Android/iOS에 필요한 target을 자동 생성합니다. 말풍선만 Android marker와 iOS inset/stretch 값을 함께 확인합니다.
+                    </p>
                   </div>
-                </div>
-              ) : null}
-              <div className="grid gap-2 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3 md:col-span-2">
-                <strong className="text-sm font-black text-[#1e3a8a]">통합 에셋 등록</strong>
-                <p className="text-xs font-semibold leading-5 text-[#475569]">
-                  Android/iOS에서 같은 역할을 가진 슬롯은 두 플랫폼에 함께 추가하는 흐름이 기본입니다. 말풍선처럼 플랫폼별 해석이 다른 값은 아래 조정 섹션에서 한 번에 확인합니다.
-                </p>
-              </div>
               <label className="grid gap-2">
                 <span className="text-sm font-black text-[var(--color-on-surface)]">후보 이름</span>
                 <input className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={file?.name ?? "예: 심플 말풍선"} />
@@ -398,6 +400,7 @@ export default function AdminAssetsClient() {
                     className="hidden"
                     onChange={(event) => {
                       setFile(event.currentTarget.files?.[0] ?? null);
+                      setIsAddAssetOpen(true);
                       event.currentTarget.value = "";
                     }}
                   />
@@ -473,11 +476,11 @@ export default function AdminAssetsClient() {
                       공통 기준 자동 맞춤
                     </button>
                   </div>
-                  <BubblePlatformSummary adjustment={bubbleAdjustment} activePlatform={platform} onSelectPlatform={setPlatform} />
+                  <BubblePlatformSummary adjustment={bubbleAdjustment} activePlatform={bubblePreviewPlatform} onSelectPlatform={setBubblePreviewPlatform} />
                   <InlineBubbleAdjuster
                     file={adminBubbleFile}
                     slot={selectedBubbleSlot}
-                    platform={platform}
+                    platform={bubblePreviewPlatform}
                     markers={bubbleAdjustment.markers}
                     insets={bubbleAdjustment.insets}
                     stretch={bubbleAdjustment.stretch}
@@ -487,34 +490,19 @@ export default function AdminAssetsClient() {
                   />
                 </div>
               ) : null}
-              <div className="grid gap-2 md:col-span-2">
-                <span className="text-sm font-black text-[var(--color-on-surface)]">적용 범위</span>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className={`rounded-full px-4 py-2 text-sm font-black ${assetPlatformScope !== "all" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
-                    onClick={() => setAssetPlatformScope(platform)}
-                  >
-                    현재 플랫폼
-                  </button>
-                  <button
-                    type="button"
-                    className={`rounded-full px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40 ${assetPlatformScope === "all" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
-                    onClick={() => setAssetPlatformScope("all")}
-                    disabled={!canUseCommonScope}
-                  >
-                    Android/iOS 둘 다
-                  </button>
-                </div>
-                <p className="text-[11px] font-semibold leading-5 text-[var(--color-on-surface-variant)]">
-                  저장 시 {selectedSaveTargets.length || 0}개 후보를 생성합니다
-                  {selectedSaveTargets.length > 0 ? ` · ${selectedSaveTargets.map((target) => (target.platform === "android" ? "Android" : "iOS")).join(" / ")}` : ""}.
+              <div className="grid gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3 md:col-span-2">
+                <span className="text-sm font-black text-[var(--color-on-surface)]">자동 적용 대상</span>
+                <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
+                  저장 시 파일 1개와 target {selectedSaveTargets.length || 0}개를 생성합니다
+                  {selectedSaveTargets.length > 0 ? ` · ${selectedSaveTargets.map(formatAdminAssetTargetInput).join(" / ")}` : ""}.
                 </p>
               </div>
-              <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 md:col-span-2" type="button" disabled={!file || !selectedSlot || isSavingAsset} onClick={() => void submit()}>
+              <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 md:col-span-2" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
-                {isSavingAsset ? "저장 중" : assetPlatformScope === "all" ? `두 플랫폼에 후보 추가 (${selectedSaveTargets.length})` : "관리 후보 추가"}
+                {isSavingAsset ? "저장 중" : "공통 관리 후보 추가"}
               </button>
+                </div>
+              ) : null}
             </div>
 
             <section className="grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4">
@@ -585,7 +573,6 @@ export default function AdminAssetsClient() {
 
       <AdminAssetEditDialog
         asset={editingAsset}
-        fallbackPlatform={platform}
         onClose={() => setEditingAsset(null)}
         onSaved={(updatedAsset) => {
           setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? updatedAsset : asset)));
@@ -616,13 +603,31 @@ function groupSlotsByAssetKind(slots: ThemeAssetSlot[]) {
     .filter((group) => group.slots.length > 0);
 }
 
-function getAdminAssetSaveTargets(slot: ThemeAssetSlot, scope: ThemePlatform | "all", assetKind: AdminAssetKind): Array<{ platform: ThemePlatform; slot: ThemeAssetSlot }> {
-  if (scope !== "all") return [{ platform: scope, slot }];
+function getUnifiedAdminAssetSlots(): ThemeAssetSlot[] {
+  const seenRoles = new Set<string>();
+  return (["android", "ios"] as const)
+    .flatMap((platform) => getThemeSlots(platform))
+    .filter((slot) => slot.kind === "image" || slot.kind === "ninepatch")
+    .filter((slot) => {
+      if (seenRoles.has(slot.role)) return false;
+      seenRoles.add(slot.role);
+      return true;
+    });
+}
 
-  return (["android", "ios"] as const).flatMap((platform) => {
+function getAdminAssetSaveTargets(slot: ThemeAssetSlot, assetKind: AdminAssetKind): AdminAssetTargetInput[] {
+  const platformSlots = (["android", "ios"] as const).flatMap((platform) => {
     const platformSlot = findAdminAssetSaveSlot(slot, platform, assetKind);
     return platformSlot ? [{ platform, slot: platformSlot }] : [];
   });
+  if (platformSlots.length > 1 && platformSlots.every((target) => target.slot.role === platformSlots[0]?.slot.role)) {
+    return [{ platform: "all", slotRole: platformSlots[0].slot.role, targetKind: "exact_role", priority: 0, enabled: true }];
+  }
+  return platformSlots.map((target) => ({ platform: target.platform, slotRole: target.slot.role, targetKind: "exact_role", priority: 0, enabled: true }));
+}
+
+function getSharedAdminAssetTargets(asset: AdminAssetCandidate): AdminAssetTargetInput[] {
+  return [{ platform: "all", slotRole: asset.slotRole, targetKind: "exact_role", priority: 0, enabled: asset.enabled }];
 }
 
 function findAdminAssetSaveSlot(sourceSlot: ThemeAssetSlot, platform: ThemePlatform, assetKind: AdminAssetKind) {
@@ -749,6 +754,33 @@ function formatRange(range: { start: number; end: number }) {
   return `${range.start}-${range.end}`;
 }
 
+function formatAdminAssetTargetInput(target: AdminAssetTargetInput) {
+  const platformLabel = target.platform === "all" ? "Android+iOS" : target.platform === "android" ? "Android" : "iOS";
+  return target.slotRole ? `${platformLabel} · ${target.slotRole}` : `${platformLabel} · ${target.targetKind}`;
+}
+
+function formatAdminAssetTargets(asset: AdminAssetCandidate) {
+  const targets = asset.targets ?? [];
+  if (targets.length < 1) return asset.platform === "all" ? "Android+iOS" : asset.platform === "android" ? "Android" : "iOS";
+  return targets
+    .map((target) => {
+      const platformLabel = target.platform === "all" ? "Android+iOS" : target.platform === "android" ? "Android" : "iOS";
+      return target.slotRole ? `${platformLabel} · ${target.slotRole}` : `${platformLabel} · ${target.targetKind}`;
+    })
+    .join(" / ");
+}
+
+function isExactAdminAssetTarget(slot: ThemeAssetSlot, asset: AdminAssetCandidate) {
+  return (asset.targets ?? []).some((target) => target.targetKind === "exact_role" && target.slotRole === slot.role);
+}
+
+function isAdminAssetVisibleForAdminSlot(slot: ThemeAssetSlot, asset: AdminAssetCandidate) {
+  if (!asset.enabled) return false;
+  if (isExactAdminAssetTarget(slot, asset)) return true;
+  if ((asset.targets ?? []).some((target) => target.enabled && target.targetKind === "asset_kind")) return true;
+  return isAdminAssetRecommendedForSlot(slot, { ...asset, platform: "all" });
+}
+
 function AdminAssetCard({
   asset,
   slot,
@@ -777,12 +809,13 @@ function AdminAssetCard({
       <div className="aspect-[4/3] rounded-[18px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} />
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap gap-1.5">
-          <span className="rounded-full bg-[var(--color-inverse-surface)] px-2 py-0.5 text-[10px] font-black uppercase text-[var(--color-inverse-on-surface)]">{asset.platform === "all" ? "both" : asset.platform}</span>
+          <span className="rounded-full bg-[var(--color-inverse-surface)] px-2 py-0.5 text-[10px] font-black uppercase text-[var(--color-inverse-on-surface)]">{asset.targets?.some((target) => target.platform === "all") ? "공통" : "target"}</span>
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${asset.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{asset.enabled ? "사용 중" : "비활성"}</span>
           {warnings.length > 0 ? <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800"><AlertTriangle size={11} aria-hidden="true" />확인 {warnings.length}</span> : null}
         </div>
         <strong className="block truncate text-sm font-black text-[var(--color-on-surface)]">{asset.title}</strong>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : slot?.label ?? asset.slotRole}</span>
+        <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{formatAdminAssetTargets(asset)}</span>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{describeAdminAssetAnalysis(asset.analysis)}</span>
         {asset.bubbleAdjustment ? <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">말풍선 조정값 저장됨</span> : null}
         {warnings[0] ? <span className="mt-2 block rounded-xl bg-amber-50 px-2.5 py-2 text-[11px] font-semibold leading-4 text-amber-900">{warnings[0]}</span> : null}
@@ -818,29 +851,30 @@ function AdminAssetSkeletonGrid() {
 
 function AdminAssetEditDialog({
   asset,
-  fallbackPlatform,
   onClose,
   onSaved,
 }: {
   asset: AdminAssetCandidate | null;
-  fallbackPlatform: ThemePlatform;
   onClose: () => void;
   onSaved: (asset: AdminAssetCandidate) => void;
 }) {
   const [title, setTitle] = useState("");
   const [bubbleAdjustment, setBubbleAdjustment] = useState<AdminBubbleAdjustment>(createDefaultBubbleAdjustment());
+  const [bubblePreviewPlatform, setBubblePreviewPlatform] = useState<ThemePlatform>("android");
+  const [targetMode, setTargetMode] = useState<"keep" | "shared">("keep");
   const [bubbleFile, setBubbleFile] = useState<ThemeProjectFile>();
   const [loadingFile, setLoadingFile] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isBubble = asset?.assetKind === "bubble" || asset?.slotRole.startsWith("bubble_");
-  const editPlatform = asset?.platform === "all" || !asset ? fallbackPlatform : asset.platform;
   const bubbleSlot = asset ? (bubbleSlotFromRole(asset.slotRole) ?? "me") : "me";
 
   useEffect(() => {
     let cancelled = false;
     setTitle(asset?.title ?? "");
     setBubbleAdjustment(asset?.bubbleAdjustment ?? createDefaultBubbleAdjustment(asset?.analysis));
+    setBubblePreviewPlatform("android");
+    setTargetMode("keep");
     setBubbleFile(undefined);
     setLoadingFile(false);
     setError(null);
@@ -873,13 +907,20 @@ function AdminAssetEditDialog({
       setError("에셋 이름은 100자 이내로 입력해 주세요.");
       return;
     }
+    const nextBubbleSpec = isBubble ? bubbleAdjustmentToSpec(bubbleAdjustment) : undefined;
+    if (isBubble && !nextBubbleSpec) {
+      setError("Android 마커와 iOS inset/stretch 값을 모두 입력해 주세요.");
+      return;
+    }
 
     setSaving(true);
     setError(null);
     try {
       const updatedAsset = await updateAdminAssetCandidate(asset.id, {
         title: normalizedTitle,
+        targets: targetMode === "shared" ? getSharedAdminAssetTargets(asset) : undefined,
         bubbleAdjustment: isBubble ? bubbleAdjustment : undefined,
+        bubbleSpec: nextBubbleSpec,
       });
       onSaved(updatedAsset);
     } catch (updateError) {
@@ -929,6 +970,35 @@ function AdminAssetEditDialog({
               <span className="text-right text-xs font-semibold text-[var(--color-on-surface-variant)]">{title.length}/100</span>
             </label>
 
+            {asset ? (
+              <section className="grid gap-3 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3" aria-labelledby="asset-target-heading">
+                <div>
+                  <h3 id="asset-target-heading" className="text-sm font-black text-[var(--color-on-surface)]">적용 대상</h3>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{formatAdminAssetTargets(asset)}</p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    aria-pressed={targetMode === "keep"}
+                    onClick={() => setTargetMode("keep")}
+                    className={`rounded-2xl border px-4 py-3 text-left text-xs font-bold leading-5 transition hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-45 ${targetMode === "keep" ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
+                  >
+                    기존 대상 유지
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    aria-pressed={targetMode === "shared"}
+                    onClick={() => setTargetMode("shared")}
+                    className={`rounded-2xl border px-4 py-3 text-left text-xs font-bold leading-5 transition hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-45 ${targetMode === "shared" ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
+                  >
+                    Android+iOS 공통 대상으로 정리
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
             {isBubble ? (
               <section className="grid gap-3" aria-labelledby="bubble-adjustment-heading">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -950,10 +1020,12 @@ function AdminAssetEditDialog({
                     <LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> 편집기 준비 중
                   </div>
                 ) : (
+                  <>
+                    <BubblePlatformSummary adjustment={bubbleAdjustment} activePlatform={bubblePreviewPlatform} onSelectPlatform={setBubblePreviewPlatform} />
                   <InlineBubbleAdjuster
                     file={bubbleFile}
                     slot={bubbleSlot}
-                    platform={editPlatform}
+                    platform={bubblePreviewPlatform}
                     markers={bubbleAdjustment.markers}
                     insets={bubbleAdjustment.insets}
                     stretch={bubbleAdjustment.stretch}
@@ -961,6 +1033,7 @@ function AdminAssetEditDialog({
                     onInsetsChange={(insets) => setBubbleAdjustment((current) => ({ ...current, insets }))}
                     onStretchChange={(stretch) => setBubbleAdjustment((current) => ({ ...current, stretch }))}
                   />
+                  </>
                 )}
               </section>
             ) : null}

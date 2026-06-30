@@ -71,8 +71,9 @@ export async function checkThemeAssetStorageAccess(
   if (adminAssetPaths.length && !isAdmin) {
     const { data: enabledAssets, error } = await adminClient
       .from("admin_assets")
-      .select("storage_path")
+      .select("storage_path,admin_asset_targets!inner(id)")
       .eq("enabled", true)
+      .eq("admin_asset_targets.enabled", true)
       .in("storage_path", adminAssetPaths);
     if (error) throw error;
 

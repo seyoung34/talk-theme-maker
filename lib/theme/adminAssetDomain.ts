@@ -85,6 +85,7 @@ export type AdminAssetPage = {
 export type AdminAssetListOptions = {
   readonly platform?: ThemePlatform;
   readonly assetKind?: AdminAssetKind;
+  readonly slotRole?: ThemeResourceRole;
   readonly cursor?: string;
   readonly limit?: number;
   readonly enabledOnly?: boolean;
