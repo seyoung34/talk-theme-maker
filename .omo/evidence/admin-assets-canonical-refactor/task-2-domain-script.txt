@@ -1,0 +1,1 @@
+admin asset domain assertions passed

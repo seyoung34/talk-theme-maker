@@ -1,0 +1,20 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Given canonical DB rows, When loading adminAssets.ts, Then canonical row mapper is exported
++ actual - expected
+
++ 'undefined'
+- 'function'
+
+    at file:///C:/Users/jupi4/Desktop/VS%20Code/kakaotalk-theme-maker/scripts/verify-admin-assets-domain.mjs:51:8 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'undefined',
+  expected: 'function',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.15.0

@@ -1,89 +1,75 @@
 import { createClient } from "@/lib/supabase/client";
 import { readJsonResponse } from "@/lib/shared/api/http";
-import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, storagePathToPreviewUrl, themeAssetsBucketName } from "@/lib/theme/remoteAssets";
+import {
+  getThemeAssetSignedUrls,
+  sanitizeStoragePathPart,
+  storagePathToFile,
+  storagePathToPreviewUrl,
+  themeAssetsBucketName,
+} from "@/lib/theme/remoteAssets";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import type { ThemePlatform } from "@/lib/theme/types";
+import {
+  assertValidAdminAssetCandidateInput,
+  canonicalAdminAssetToCandidate,
+  createAdminAssetPersistencePayload,
+  inferAdminAssetKind,
+  isValidBubbleAdjustment,
+  mapCanonicalAdminAssetRow,
+  type AdminAssetCandidate,
+  type AdminAssetCandidateInput,
+  type AdminAssetCandidateUpdate,
+  type AdminAssetKind,
+  type AdminAssetListOptions,
+  type AdminAssetPage,
+  type AdminBubbleSpec,
+  type AdminAssetAnalysis,
+} from "@/lib/theme/adminAssetDomain";
 
-export type AdminAssetCandidate = {
-  id: string;
-  slotRole: ThemeResourceRole;
-  platform: ThemePlatform | "all";
-  assetKind?: AdminAssetKind;
-  analysis?: AdminAssetAnalysis;
-  bubbleAdjustment?: AdminBubbleAdjustment;
-  title: string;
-  note?: string;
-  tags: string[];
-  fileName: string;
-  mimeType: string;
-  storagePath: string;
-  blob?: Blob;
-  file?: File;
-  previewUrl?: string;
-  createdAt: number;
-  updatedAt: number;
-  enabled: boolean;
-};
+export {
+  assertValidAdminAssetCandidateInput,
+  bubbleAdjustmentToSpec,
+  bubbleSpecToAdjustment,
+  canonicalAdminAssetToCandidate,
+  inferAdminAssetKind,
+  mapCanonicalAdminAssetRow,
+  type AdminAssetCandidate,
+  type AdminAssetCandidateInput,
+  type AdminAssetCandidateUpdate,
+  type AdminAssetKind,
+  type AdminAssetListOptions,
+  type AdminAssetPage,
+  type AdminAssetPlatform,
+  type AdminAssetRecommendationItem,
+  type AdminAssetShape,
+  type AdminAssetAnalysis,
+  type AdminAssetTarget,
+  type AdminAssetTargetInput,
+  type AdminAssetTargetKind,
+  type AdminBubbleAdjustment,
+  type AdminBubbleSpec,
+  type CanonicalAdminAsset,
+} from "@/lib/theme/adminAssetDomain";
 
-export type AdminAssetCandidateInput = Omit<AdminAssetCandidate, "id" | "createdAt" | "updatedAt" | "enabled" | "storagePath" | "blob" | "previewUrl" | "file"> & {
-  id?: string;
-  enabled?: boolean;
-  blob: Blob;
-};
-
-export type AdminAssetCandidateUpdate = {
-  title: string;
-  bubbleAdjustment?: AdminBubbleAdjustment;
-};
-
-export type AdminAssetPage = {
-  items: AdminAssetCandidate[];
-  nextCursor?: string;
-};
-
-export type AdminAssetListOptions = {
-  platform?: ThemePlatform;
-  assetKind?: AdminAssetKind;
-  cursor?: string;
-  limit?: number;
-  enabledOnly?: boolean;
-};
-
-export type AdminAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode";
-
-export type AdminAssetShape = "square" | "portrait" | "wide" | "transparent" | "ninepatch" | "unknown";
-
-export type AdminAssetAnalysis = {
-  width?: number;
-  height?: number;
-  aspectRatio?: number;
-  transparentPixelRatio?: number;
-  shapes: AdminAssetShape[];
-};
-
-export type AdminBubbleAdjustment = {
-  markers?: Markers;
-  insets?: Insets;
-  stretch?: StretchPoint;
-};
-
-type AdminAssetRow = {
-  id: string;
-  slot_role: ThemeResourceRole;
-  platform: ThemePlatform | "all";
-  asset_kind?: AdminAssetKind | null;
-  analysis?: AdminAssetAnalysis | null;
-  bubble_adjustment?: AdminBubbleAdjustment | null;
-  title: string;
-  note?: string | null;
-  tags: string[] | null;
-  file_name: string;
-  mime_type: string;
-  storage_path: string;
-  enabled: boolean;
-  created_at: string;
-  updated_at: string;
-};
+const adminAssetSelect = [
+  "id",
+  "slot_role",
+  "platform",
+  "asset_kind",
+  "analysis",
+  "bubble_adjustment",
+  "title",
+  "note",
+  "tags",
+  "file_name",
+  "mime_type",
+  "storage_path",
+  "enabled",
+  "created_at",
+  "updated_at",
+  "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
+  "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch)",
+].join(",");
 
 export async function listAdminAssetCandidates(): Promise<AdminAssetCandidate[]> {
   return (await listAdminAssetCandidatePage({ limit: 30 })).items;
@@ -95,23 +81,28 @@ export async function listAdminAssetCandidatePage(options: AdminAssetListOptions
   const cursor = decodeCursor(options.cursor);
   let query = supabase
     .from("admin_assets")
-    .select("*")
+    .select(adminAssetSelect)
     .order("updated_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(limit + 1);
-  if (options.platform) query = query.in("platform", [options.platform, "all"]);
+
   if (options.assetKind) query = query.eq("asset_kind", options.assetKind);
   if (options.enabledOnly) query = query.eq("enabled", true);
   if (cursor) query = query.or(`updated_at.lt.${cursor.updatedAt},and(updated_at.eq.${cursor.updatedAt},id.lt.${cursor.id})`);
+
   const { data, error } = await query;
   if (error) throw error;
-  const rows = (data ?? []) as AdminAssetRow[];
-  const hasMore = rows.length > limit;
-  const pageRows = hasMore ? rows.slice(0, limit) : rows;
-  const previewUrls = await getThemeAssetSignedUrls(pageRows.map((row) => row.storage_path));
-  const items = pageRows.map((row) => rowToAdminAsset(row, previewUrls[row.storage_path]));
-  const last = pageRows.at(-1);
-  return { items, nextCursor: hasMore && last ? encodeCursor(last.updated_at, last.id) : undefined };
+
+  const allRows = Array.isArray(data) ? data : [];
+  const platform = options.platform;
+  const platformRows = platform ? allRows.filter((row) => rowMatchesPlatform(row, platform)) : allRows;
+  const hasMore = platformRows.length > limit;
+  const pageRows = hasMore ? platformRows.slice(0, limit) : platformRows;
+  const canonicalAssets = pageRows.map(mapCanonicalAdminAssetRow);
+  const previewUrls = await getThemeAssetSignedUrls(canonicalAssets.map((asset) => asset.storagePath));
+  const items = canonicalAssets.map((asset) => canonicalAdminAssetToCandidate(asset, previewUrls[asset.storagePath]));
+  const last = canonicalAssets.at(-1);
+  return { items, nextCursor: hasMore && last ? encodeCursor(new Date(last.updatedAt).toISOString(), last.id) : undefined };
 }
 
 export async function listRecommendedAssetCandidatePage(options: Required<Pick<AdminAssetListOptions, "platform" | "assetKind">> & AdminAssetListOptions): Promise<AdminAssetPage> {
@@ -122,81 +113,88 @@ export async function listRecommendedAssetCandidatePage(options: Required<Pick<A
   });
   if (options.cursor) params.set("cursor", options.cursor);
   const response = await fetch(`/api/theme-assets/recommended?${params.toString()}`, { cache: "no-store" });
-  const payload = await readJsonResponse<AdminAssetPage & { error?: string }>(response);
+  const payload = await readJsonResponse<AdminAssetPage & { readonly error?: string }>(response);
   if (!response.ok) throw new Error(payload.error ?? "추천 에셋을 불러오지 못했습니다.");
   return { items: payload.items ?? [], nextCursor: payload.nextCursor };
 }
 
-export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput) {
+export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): Promise<AdminAssetCandidate> {
+  assertValidAdminAssetCandidateInput(input);
   const supabase = createClient();
   const id = input.id ?? crypto.randomUUID();
   const storagePath = `admin-assets/${id}/${sanitizeStoragePathPart(input.fileName)}`;
+  const mimeType = input.mimeType || "application/octet-stream";
 
   const { error: uploadError } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, input.blob, {
-    contentType: input.mimeType || "application/octet-stream",
+    contentType: mimeType,
     upsert: true,
   });
   if (uploadError) throw uploadError;
 
-  const { data: userData } = await supabase.auth.getUser();
-  const { data, error } = await supabase
-    .from("admin_assets")
-    .upsert({
-      id,
-      slot_role: input.slotRole,
-      platform: input.platform,
-      asset_kind: input.assetKind ?? null,
-      analysis: input.analysis ?? null,
-      bubble_adjustment: input.bubbleAdjustment ?? null,
-      title: input.title,
-      note: input.note ?? null,
-      tags: input.tags,
-      file_name: input.fileName,
-      mime_type: input.mimeType || "application/octet-stream",
-      storage_path: storagePath,
-      enabled: input.enabled ?? true,
-      created_by: userData.user?.id ?? null,
-    })
-    .select("*")
-    .single();
-  if (error) throw error;
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    const payload = createAdminAssetPersistencePayload(input, id, storagePath, userData.user?.id ?? null);
+    const { data, error } = await supabase.from("admin_assets").upsert(payload.asset).select(adminAssetSelect).single();
+    if (error) throw error;
 
-  return rowToAdminAsset(data as AdminAssetRow, await storagePathToPreviewUrl((data as AdminAssetRow).storage_path));
+    await replaceAdminAssetTargets(id, payload.targets);
+    await replaceAdminAssetBubbleSpec(id, payload.bubbleSpec);
+
+    const canonical = mapCanonicalAdminAssetRow({
+      ...requireObject(data),
+      admin_asset_targets: payload.targets,
+      admin_asset_bubble_specs: payload.bubbleSpec,
+    });
+    return canonicalAdminAssetToCandidate(canonical, await storagePathToPreviewUrl(canonical.storagePath));
+  } catch (error) {
+    await supabase.storage.from(themeAssetsBucketName).remove([storagePath]);
+    throw error;
+  }
 }
 
-export async function updateAdminAssetCandidate(id: string, input: AdminAssetCandidateUpdate) {
+export async function updateAdminAssetCandidate(id: string, input: AdminAssetCandidateUpdate): Promise<AdminAssetCandidate> {
   const title = input.title.trim();
   if (!title || title.length > 100) throw new Error("INVALID_ASSET_TITLE");
-  if (input.bubbleAdjustment && !isValidBubbleAdjustment(input.bubbleAdjustment)) {
-    throw new Error("INVALID_BUBBLE_ADJUSTMENT");
-  }
+  if (input.bubbleAdjustment && !isValidBubbleAdjustment(input.bubbleAdjustment)) throw new Error("INVALID_BUBBLE_ADJUSTMENT");
 
   const supabase = createClient();
+  const bubbleSpec = input.bubbleSpec;
   const { data, error } = await supabase
     .from("admin_assets")
     .update({
       title,
+      ...(typeof input.enabled === "boolean" ? { enabled: input.enabled } : {}),
       ...(input.bubbleAdjustment ? { bubble_adjustment: input.bubbleAdjustment } : {}),
     })
     .eq("id", id)
-    .select("*")
+    .select(adminAssetSelect)
     .single();
   if (error) throw error;
 
-  return rowToAdminAsset(data as AdminAssetRow, await storagePathToPreviewUrl((data as AdminAssetRow).storage_path));
+  if (input.targets) await replaceAdminAssetTargets(id, input.targets.map((target) => ({ ...target, asset_id: id, slot_role: target.slotRole ?? null, target_kind: target.targetKind })));
+  if (bubbleSpec) {
+    await replaceAdminAssetBubbleSpec(id, {
+      asset_id: id,
+      android_markers: bubbleSpec.androidMarkers,
+      ios_insets: bubbleSpec.iosInsets,
+      ios_stretch: bubbleSpec.iosStretch,
+    });
+  }
+
+  const canonical = mapCanonicalAdminAssetRow(data);
+  return canonicalAdminAssetToCandidate(canonical, await storagePathToPreviewUrl(canonical.storagePath));
 }
 
-export async function deleteAdminAssetCandidate(id: string) {
+export async function deleteAdminAssetCandidate(id: string): Promise<void> {
   const supabase = createClient();
   const { data } = await supabase.from("admin_assets").select("storage_path").eq("id", id).maybeSingle();
+  const storagePath = readStoragePath(data);
   const { error } = await supabase.from("admin_assets").delete().eq("id", id);
   if (error) throw error;
-  if (data?.storage_path) {
-    await supabase.storage.from(themeAssetsBucketName).remove([data.storage_path]);
-  }
+  if (storagePath) await supabase.storage.from(themeAssetsBucketName).remove([storagePath]);
 }
 
-export async function adminAssetToFile(asset: AdminAssetCandidate) {
+export async function adminAssetToFile(asset: AdminAssetCandidate): Promise<File> {
   if (asset.file) return asset.file;
   if (asset.blob) return new File([asset.blob], asset.fileName, { type: asset.mimeType });
   if (asset.previewUrl) {
@@ -206,17 +204,7 @@ export async function adminAssetToFile(asset: AdminAssetCandidate) {
   return storagePathToFile(asset.storagePath, asset.fileName, asset.mimeType);
 }
 
-export function inferAdminAssetKind(slot: Pick<ThemeAssetSlot, "role" | "group" | "section" | "kind">): AdminAssetKind {
-  if (slot.role.startsWith("launcher_")) return "launcher";
-  if (slot.role === "theme_icon" || slot.role.startsWith("tab_icon_")) return "icon";
-  if (slot.role === "profile_image" || slot.role.startsWith("profile_image_")) return "profile";
-  if (slot.role.startsWith("bubble_")) return "bubble";
-  if (slot.role.startsWith("passcode_")) return "passcode";
-  if (slot.group === "background" || slot.role === "tab_background_image") return "background";
-  return "icon";
-}
-
-export function getAdminAssetKindLabel(kind: AdminAssetKind) {
+export function getAdminAssetKindLabel(kind: AdminAssetKind): string {
   const labels: Record<AdminAssetKind, string> = {
     background: "배경 이미지",
     icon: "아이콘",
@@ -228,7 +216,7 @@ export function getAdminAssetKindLabel(kind: AdminAssetKind) {
   return labels[kind];
 }
 
-export function isAdminAssetRecommendedForSlot(slot: ThemeAssetSlot, asset: AdminAssetCandidate) {
+export function isAdminAssetRecommendedForSlot(slot: ThemeAssetSlot, asset: AdminAssetCandidate): boolean {
   if (!asset.enabled) return false;
   if (asset.platform !== "all" && asset.platform !== slot.platform) return false;
   if (asset.slotRole === slot.role) return true;
@@ -247,7 +235,7 @@ export function isAdminAssetRecommendedForSlot(slot: ThemeAssetSlot, asset: Admi
   return false;
 }
 
-export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis) {
+export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis): string {
   if (!analysis) return "분석 정보 없음";
   const size = analysis.width && analysis.height ? `${analysis.width}x${analysis.height}` : "크기 미확인";
   const shape = analysis.shapes.filter((item) => item !== "unknown").join(", ") || "unknown";
@@ -255,65 +243,72 @@ export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis) {
   return `${size} · ${shape}${transparency}`;
 }
 
-function rowToAdminAsset(row: AdminAssetRow, previewUrl?: string): AdminAssetCandidate {
-  return {
-    id: row.id,
-    slotRole: row.slot_role,
-    platform: row.platform,
-    assetKind: row.asset_kind ?? inferLegacyAssetKind(row.slot_role),
-    analysis: row.analysis ?? undefined,
-    bubbleAdjustment: row.bubble_adjustment ?? undefined,
-    title: row.title,
-    note: row.note ?? undefined,
-    tags: row.tags ?? [],
-    fileName: row.file_name,
-    mimeType: row.mime_type,
-    storagePath: row.storage_path,
-    previewUrl,
-    createdAt: dateToMs(row.created_at),
-    updatedAt: dateToMs(row.updated_at),
-    enabled: row.enabled,
-  };
+async function replaceAdminAssetTargets(
+  assetId: string,
+  targets: readonly {
+    readonly platform: ThemePlatform | "all";
+    readonly slot_role: string | null;
+    readonly target_kind: string;
+    readonly priority: number;
+    readonly enabled: boolean;
+  }[],
+): Promise<void> {
+  const supabase = createClient();
+  const { error: deleteError } = await supabase.from("admin_asset_targets").delete().eq("asset_id", assetId);
+  if (deleteError) throw deleteError;
+  if (targets.length < 1) return;
+  const { error: insertError } = await supabase.from("admin_asset_targets").insert(targets);
+  if (insertError) throw insertError;
 }
 
-function inferLegacyAssetKind(role: ThemeResourceRole): AdminAssetKind {
-  if (role.startsWith("launcher_")) return "launcher";
-  if (role === "theme_icon" || role.startsWith("tab_icon_")) return "icon";
-  if (role === "profile_image" || role.startsWith("profile_image_")) return "profile";
-  if (role.startsWith("bubble_")) return "bubble";
-  if (role.startsWith("passcode_")) return "passcode";
-  return "background";
+async function replaceAdminAssetBubbleSpec(assetId: string, bubbleSpec?: AdminBubbleSpecRow): Promise<void> {
+  const supabase = createClient();
+  const { error: deleteError } = await supabase.from("admin_asset_bubble_specs").delete().eq("asset_id", assetId);
+  if (deleteError) throw deleteError;
+  if (!bubbleSpec) return;
+  const { error: insertError } = await supabase.from("admin_asset_bubble_specs").insert(bubbleSpec);
+  if (insertError) throw insertError;
 }
 
-function dateToMs(value?: string | null) {
-  return value ? new Date(value).getTime() : Date.now();
+type AdminBubbleSpecRow = {
+  readonly asset_id: string;
+  readonly android_markers: AdminBubbleSpec["androidMarkers"];
+  readonly ios_insets: AdminBubbleSpec["iosInsets"];
+  readonly ios_stretch: AdminBubbleSpec["iosStretch"];
+};
+
+function rowMatchesPlatform(row: unknown, platform: ThemePlatform): boolean {
+  const record = requireObject(row);
+  const targets = record.admin_asset_targets;
+  if (Array.isArray(targets)) {
+    return targets.some((target) => {
+      const targetRecord = requireObject(target);
+      return targetRecord.platform === platform || targetRecord.platform === "all";
+    });
+  }
+  return record.platform === platform || record.platform === "all";
 }
 
-function encodeCursor(updatedAt: string, id: string) {
+function requireObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("INVALID_CANONICAL_ASSET_ROW");
+  return value as Record<string, unknown>;
+}
+
+function readStoragePath(value: unknown): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  return typeof record.storage_path === "string" ? record.storage_path : undefined;
+}
+
+function encodeCursor(updatedAt: string, id: string): string {
   return `${updatedAt}|${id}`;
 }
 
-function decodeCursor(value?: string) {
+function decodeCursor(value?: string): { readonly updatedAt: string; readonly id: string } | null {
   if (!value) return null;
   const separator = value.lastIndexOf("|");
   if (separator < 1) return null;
   const updatedAt = value.slice(0, separator);
   const id = value.slice(separator + 1);
   return /^[0-9a-f-]{36}$/i.test(id) && Number.isFinite(new Date(updatedAt).getTime()) ? { updatedAt, id } : null;
-}
-
-function isValidBubbleAdjustment(value: AdminBubbleAdjustment) {
-  const isNonNegativeInteger = (item: unknown) => Number.isInteger(item) && Number(item) >= 0;
-  const isRange = (item: unknown) => {
-    if (!item || typeof item !== "object") return false;
-    const range = item as { start?: unknown; end?: unknown };
-    return isNonNegativeInteger(range.start) && isNonNegativeInteger(range.end) && Number(range.start) < Number(range.end);
-  };
-
-  if (value.markers) {
-    if (!isRange(value.markers.top) || !isRange(value.markers.left) || !isRange(value.markers.right) || !isRange(value.markers.bottom)) return false;
-  }
-  if (value.insets && !Object.values(value.insets).every(isNonNegativeInteger)) return false;
-  if (value.stretch && (!isNonNegativeInteger(value.stretch.x) || !isNonNegativeInteger(value.stretch.y))) return false;
-  return true;
 }
