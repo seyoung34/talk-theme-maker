@@ -42,7 +42,6 @@ type TemplatePreviewModel = {
   closeLabel: string;
   androidLabel: string;
   iosLabel: string;
-  baseTemplate: ThemeTemplate;
   visual: TemplatePreviewVisual;
   availablePlatforms?: ThemePlatform[];
   rows: Array<{ label: string; value: string }>;
@@ -286,18 +285,7 @@ export default function TemplateGalleryClient() {
           </p>
         </section>
 
-        {/* <section className="grid gap-3 rounded-[24px] border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
-          <div className="flex items-center gap-3 rounded-[18px] bg-white/88 px-4 py-3 text-sm font-semibold text-[var(--color-on-surface-variant)]">
-            <Search className="w-4 h-4" />
-            <span>검색 / 태그 / 정렬 영역 예정</span>
-          </div>
-          <span className="inline-flex justify-center rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">
-            Preview first
-          </span>
-          <span className="inline-flex justify-center rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">
-            Saved first
-          </span>
-        </section> */}
+
 
         {notice ? (
           <div className="rounded-[18px] border border-[var(--color-outline-variant)] bg-white px-4 py-3 text-sm font-bold text-[var(--color-on-surface-variant)] shadow-[0_12px_28px_rgba(42,103,103,0.06)]">
@@ -462,7 +450,6 @@ function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPrevie
     closeLabel: "닫기",
     androidLabel: record.platform === "android" ? "Android 편집 계속하기" : "Android 사용 불가",
     iosLabel: record.platform === "ios" ? "iOS 편집 계속하기" : "iOS 사용 불가",
-    baseTemplate,
     visual,
     availablePlatforms: [record.platform],
     rows: [
@@ -515,16 +502,16 @@ function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {
   return slots.find((slot) => slot.role === role);
 }
 
+//템플릿 프리뷰 정보들
 function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStart: (platform: ThemePlatform) => void): TemplatePreviewModel {
   if (template.kind === "system") {
     return {
       title: template.title,
-      description: template.description ?? "운영자가 준비한 예시 테마입니다. 플랫폼을 고른 뒤 필요한 이미지와 색상만 바꿔 시작할 수 있습니다.",
+      description: template.description ?? "플랫폼을 고른 뒤 필요한 이미지와 색상만 바꿔 시작할 수 있습니다.",
       eyebrow: "공개 템플릿 미리보기",
       closeLabel: "닫기",
       androidLabel: "Android로 시작",
       iosLabel: "iOS로 시작",
-      baseTemplate: template.baseTemplate,
       visual: template.visual,
       availablePlatforms: Object.keys(template.variants) as ThemePlatform[],
       rows: [
@@ -549,7 +536,6 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
     closeLabel: "닫기",
     androidLabel: "Android로 시작",
     iosLabel: "iOS로 시작",
-    baseTemplate: template.baseTemplate,
     visual: template.visual,
     availablePlatforms: ["android", "ios"],
     rows: [
@@ -575,7 +561,7 @@ function GalleryTemplateCard({ template, onPreview }: { template: GalleryTemplat
       onClick={() => onPreview(template.id)}
     >
       <div className="grid gap-4">
-        <TemplateMiniPreview visual={template.visual} />
+        <TemplateVisualPreview visual={template.visual} size="card" />
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase ${template.kind === "base" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]"}`}>
@@ -617,6 +603,7 @@ function TemplateGallerySkeletonCards({ count }: { count: number }) {
   );
 }
 
+// 템플릿 미리보기
 function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewModel; onClose: () => void }) {
   const canStartAndroid = preview.availablePlatforms?.includes("android") ?? true;
   const canStartIos = preview.availablePlatforms?.includes("ios") ?? true;
@@ -638,8 +625,10 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
           </button>
         </header>
 
-        <div className="grid min-h-0 gap-3 p-3 sm:grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)] sm:p-4 lg:grid-cols-[340px_1fr]">
-          <TemplatePhonePreview template={preview.baseTemplate} visual={preview.visual} />
+        <div className="grid min-h-0 gap-3 p-3 sm:grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)] sm:p-4 lg:grid-cols-[340px_1fr] overflow-auto">
+          {/* TODO preview.baseTemplate 를 넣는 것이 부자연스러움  */}
+          {/* <TemplatePhonePreview template={preview.baseTemplate} visual={preview.visual} /> */}
+          <TemplateVisualPreview visual={preview.visual} size="modal" />
           <div className="grid min-h-0 content-between gap-3">
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               {preview.rows.map((row) => (
@@ -680,15 +669,42 @@ function TemplatePreviewLoadingOverlay() {
     </div>
   );
 }
-function TemplateMiniPreview({ visual }: { visual: TemplatePreviewVisual }) {
+
+//템플릿 프리뷰
+function TemplateVisualPreview({
+  visual,
+  size = "card",
+}: {
+  visual: TemplatePreviewVisual;
+  size?: "card" | "modal";
+}) {
+  const isModal = size === "modal";
+
   if (visual.cardPreviewImage) {
-    return <img src={visual.cardPreviewImage} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full rounded-[22px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] object-cover" />;
+    return (
+      <img
+        src={visual.cardPreviewImage}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className={`
+          aspect-[4/3] w-full border border-[var(--color-outline-variant)]
+          bg-[var(--color-surface-low)] object-cover
+          ${isModal ? "rounded-[28px]" : "rounded-[22px]"}
+        `}
+      />
+    );
   }
+
   return (
     <div
-      className="relative aspect-[4/3] overflow-hidden rounded-[22px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
-
+      className={`
+        relative aspect-[4/3] overflow-hidden border border-[var(--color-outline-variant)]
+        bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]
+        ${isModal ? "rounded-[28px]" : "rounded-[22px]"}
+      `}
     >
+      {/* 기존 TemplateMiniPreview 내부 JSX 그대로 */}
       {/* 친구탭 프리뷰 */}
       <div className="absolute inset-0 " />
       <div className="relative grid h-full grid-cols-[0.84fr_1fr] gap-2.5 p-3">
@@ -732,13 +748,15 @@ function TemplateMiniPreview({ visual }: { visual: TemplatePreviewVisual }) {
   );
 }
 
+
+// 템플릿 미리보기 폰 프리뷰
 function TemplatePhonePreview({ template, visual }: { template: ThemeTemplate; visual: TemplatePreviewVisual }) {
   return (
     <div
       className="mx-auto grid h-[min(48dvh,500px)] min-h-[250px] w-full max-w-[310px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[28px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[0_22px_52px_rgba(42,103,103,0.14)] sm:h-[min(68dvh,540px)] sm:max-w-[330px] sm:rounded-[32px] lg:max-w-[340px]"
       style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
     >
-      <div className="flex h-12 items-center justify-between bg-white/90 px-4 text-xs font-black text-[var(--color-on-surface)] sm:h-14 sm:px-5 sm:text-sm">
+      <div className="flex h-12 items-center justify-between bg-white/60 px-4 text-xs font-black text-[var(--color-on-surface)] sm:h-14 sm:px-5 sm:text-sm">
         <span>{template.name}</span>
         <div className="flex items-center gap-3">
           <Search className="h-4 w-4" />
@@ -747,10 +765,10 @@ function TemplatePhonePreview({ template, visual }: { template: ThemeTemplate; v
       </div>
       <div className="grid min-h-0 content-start gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4">
         <div className="justify-self-center rounded-full bg-[#14343a]/18 px-5 py-1 text-xs font-bold text-white">오늘</div>
-        <PreviewMessage visual={visual} mine={false} text="배경과 말풍선 대비를 확인합니다." />
-        <PreviewMessage visual={visual} mine text="내 말풍선 색상도 함께 봅니다." />
-        <PreviewMessage visual={visual} mine={false} text="프로필과 채팅 화면 분위기를 점검합니다." />
-        <PreviewMessage visual={visual} mine text="문제가 없으면 편집을 시작하세요." />
+        <PreviewMessage visual={visual} mine={false} text=".." />
+        <PreviewMessage visual={visual} mine text="안녕" />
+        <PreviewMessage visual={visual} mine={false} text=".." />
+        <PreviewMessage visual={visual} mine text=".." />
       </div>
       <div className="grid grid-cols-[36px_minmax(0,1fr)_36px] items-center gap-2 bg-white/90 px-3 py-2">
         <Plus className="h-5 w-5 justify-self-center text-[var(--color-on-surface-variant)]" />
@@ -818,10 +836,24 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
     <div className={`grid gap-1.5 ${mine ? "justify-items-end" : "grid-cols-[28px_minmax(0,1fr)] items-end"}`}>
       {!mine ? <MiniAvatar src={visual.profileImage} /> : null}
       <span
-        className={`max-w-[84%] rounded-[18px] bg-[length:100%_100%] bg-no-repeat px-4 py-3 text-sm font-semibold leading-5 text-[var(--color-on-surface)] ${mine ? "justify-self-end" : ""}`}
+        className={`
+          outline outline-red-500
+  min-h-[46px]
+  min-w-[100px]
+  max-w-[84%]
+  bg-no-repeat
+  rounded-[18px]
+  px-6
+  py-4
+  text-sm
+  font-semibold
+  leading-5
+  ${mine ? "justify-self-end" : ""}
+`}
         style={{
-          backgroundColor: bubbleImage ? "transparent" : mine ? visual.myBubbleColor : visual.friendBubbleColor,
           backgroundImage: bubbleImage ? `url(${bubbleImage})` : undefined,
+          backgroundSize: "auto 100%",
+          backgroundPosition: mine ? "right center" : "left center",
         }}
       >
         {text}
