@@ -7,7 +7,7 @@ import { findBestFile, imageUrlForThemeFile } from "@/components/preview/preview
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeResourceRole, ThemeSection } from "@/lib/theme/types";
-import { themeColorToCss } from "@/lib/theme/color";
+import { readableThemeForeground, themeColorToCss } from "@/lib/theme/color";
 
 type RoleFiles = Partial<Record<ThemeResourceRole, ThemeProjectFile>>;
 type RoleUrls = Partial<Record<ThemeResourceRole, string>>;
@@ -94,17 +94,11 @@ export function ThemeScreensPreview({
       bodyCellBorderColor: getColor("main_body_cell_border_color", withAlpha(template.defaults.mainTitle, "33")),
       sectionTitleColor: getColor("main_section_title_color", template.defaults.mainTitle),
       featureBrowseTabColor: getColor("main_feature_browse_tab_color", template.defaults.tabBackground),
-      featureBrowseTabFocusedColor: getColor("main_feature_browse_tab_focused_color", template.defaults.mainTitle),
       featurePrimaryColor: getColor("feature_primary_color", template.accent),
       bodySecondaryColor: getColor("main_body_secondary_cell_color", lighten(template.defaults.mainBackground, 0.06)),
       tabBackgroundColor: getColor("tab_background", template.defaults.tabBackground),
       lightBadgeColor: getColor("tab_light_banner_badge_background_color", template.accent),
       badgeColor: getColor("tab_banner_badge_background_color", template.accent),
-      directShareTextColor: getColor("direct_share_text_color", template.defaults.mainTitle),
-      directShareButtonColor: getColor("direct_share_button_color", template.accent),
-      directShareBackgroundColor: getColor("direct_share_background_color", lighten(template.defaults.mainBackground, 0.04)),
-      notificationTextColor: getColor("notification_text_color", template.defaults.mainTitle),
-      notificationBackgroundColor: getColor("notification_background_color", template.defaults.friendBubble),
     };
   }, [colors, selections, slotByRole, templateId, template, platform]);
 
@@ -143,17 +137,11 @@ type MainPreviewPalette = {
   bodyCellBorderColor: string;
   sectionTitleColor: string;
   featureBrowseTabColor: string;
-  featureBrowseTabFocusedColor: string;
   featurePrimaryColor: string;
   bodySecondaryColor: string;
   tabBackgroundColor: string;
   lightBadgeColor: string;
   badgeColor: string;
-  directShareTextColor: string;
-  directShareButtonColor: string;
-  directShareBackgroundColor: string;
-  notificationTextColor: string;
-  notificationBackgroundColor: string;
 };
 
 //친구탭
@@ -455,49 +443,54 @@ function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSel
   }
 
   const headerSelected = selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id;
+  const hasMainBackgroundImage = Boolean(urls.main_background);
+  const headerColor = hasMainBackgroundImage ? preview.headerBackgroundColor : preview.mainBackgroundColor;
+  const chipColor = preview.headerBackgroundColor;
 
   return (
     <MainScreenFrame>
-      <button
-        type="button"
-        className={`flex items-center justify-between px-5 pb-3 pt-4 text-left ${headerSelected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
-        style={{ backgroundColor: preview.headerBackgroundColor, color: preview.headerForegroundColor }}
-        onClick={(event) => { event.stopPropagation(); onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? ""); }}
-      >
-        <strong className="text-xl font-semibold tracking-[-0.03em]">더보기</strong>
-        <div className="flex items-center gap-3.5">
-          <Search className="size-5" aria-hidden="true" />
-          <Scan className="size-5" aria-hidden="true" />
-          <span className="relative">
-            <Settings className="size-5" aria-hidden="true" />
-            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[#ff6b37]" aria-hidden="true" />
-          </span>
-        </div>
-      </button>
+      <div className="min-w-0">
+        <button
+          type="button"
+          className={`flex w-full min-w-0 items-center justify-between gap-4 px-4 pb-3 pt-4 text-left ${headerSelected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+          style={{ backgroundColor: headerColor, color: preview.headerForegroundColor }}
+          onClick={(event) => { event.stopPropagation(); onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? ""); }}
+        >
+          <strong className="shrink-0 text-xl font-semibold tracking-[-0.03em]">더보기</strong>
+          <div className="flex shrink-0 items-center gap-4">
+            <Search className="size-5" aria-hidden="true" />
+            <Scan className="size-5" aria-hidden="true" />
+            <span className="relative">
+              <Settings className="size-5" aria-hidden="true" />
+              <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[#ff6b37]" aria-hidden="true" />
+            </span>
+          </div>
+        </button>
 
-      <div className="grid min-h-0 content-start gap-3 overflow-hidden px-4 py-3" style={{ backgroundColor: preview.bodySecondaryColor }}>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2 px-4 pb-3" style={{ backgroundColor: chipColor }}>
           <button
             type="button"
-            className={`rounded-full px-4 py-1.5 text-[12px] font-bold ${selectedSlotId === slotByRole.main_feature_browse_tab_focused_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
-            style={{ backgroundColor: preview.featureBrowseTabFocusedColor, color: preview.headerBackgroundColor }}
-            onClick={(event) => { event.stopPropagation(); if (slotByRole.main_feature_browse_tab_focused_color) onSelectSlot?.(slotByRole.main_feature_browse_tab_focused_color.id); }}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-[12px] font-bold ${selectedSlotId === slotByRole.main_title_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+            style={{ backgroundColor: preview.titleColor, color: preview.mainBackgroundColor }}
+            onClick={(event) => { event.stopPropagation(); if (slotByRole.main_title_color) onSelectSlot?.(slotByRole.main_title_color.id); }}
           >
             홈
           </button>
           <button
             type="button"
-            className={`flex items-center gap-1 rounded-full border px-4 py-1.5 text-[12px] font-bold ${selectedSlotId === slotByRole.main_feature_browse_tab_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
-            style={{ borderColor: hexToRgba(preview.featureBrowseTabColor, 0.24), color: preview.featureBrowseTabColor }}
-            onClick={(event) => { event.stopPropagation(); if (slotByRole.main_feature_browse_tab_color) onSelectSlot?.(slotByRole.main_feature_browse_tab_color.id); }}
+            className={`flex shrink-0 items-center gap-1 rounded-full border px-4 py-1.5 text-[12px] font-bold ${selectedSlotId === slotByRole.main_title_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+            style={{ borderColor: hexToRgba(readableThemeForeground(chipColor), 0.22), color: preview.titleColor }}
+            onClick={(event) => { event.stopPropagation(); if (slotByRole.main_title_color) onSelectSlot?.(slotByRole.main_title_color.id); }}
           >
             지갑<span className="rounded-full bg-[#ff6b37] px-1 text-[9px] font-bold text-white">N</span>
           </button>
         </div>
+      </div>
 
-        <div className="grid gap-1 rounded-2xl bg-[#fee500] px-4 py-3" aria-label="pay 잔액 예시 영역 (테마와 무관)">
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-[13px] font-bold text-[#2b2b2b]">pay 303,747원</span>
+      <div className="grid min-h-0 min-w-0 content-start gap-3 overflow-hidden px-4 py-3" style={{ backgroundColor: preview.bodySecondaryColor }}>
+        <div className="grid min-w-0 gap-1 rounded-2xl bg-[#fee500] px-4 py-3" aria-label="pay 잔액 예시 영역 (테마와 무관)">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#2b2b2b]">pay 303,747원</span>
             <span className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-[#2b2b2b]/75">
               송금<span className="opacity-30">|</span>자산<span className="opacity-30">|</span>결제
             </span>
@@ -505,50 +498,41 @@ function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSel
           <span className="text-[9px] font-medium text-[#2b2b2b]/55">테마와 무관한 예시 영역입니다.</span>
         </div>
 
-        <div className="rounded-2xl bg-white/85 px-2 pb-1.5 pt-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+        <div className="rounded-2xl px-2 pb-1.5 pt-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]" style={{ backgroundColor: hexToRgba(preview.titleColor, 0.06) }}>
           <button
             type="button"
-            className={`grid w-full grid-cols-4 gap-y-3 ${selectedSlotId === slotByRole.feature_primary_color?.id ? "rounded-xl ring-2 ring-[#60a5fa]" : ""}`}
-            onClick={(event) => { event.stopPropagation(); if (slotByRole.feature_primary_color) onSelectSlot?.(slotByRole.feature_primary_color.id); }}
+            className={`grid w-full grid-cols-4 gap-y-3 ${selectedSlotId === slotByRole.main_title_color?.id ? "rounded-xl ring-2 ring-[#60a5fa]" : ""}`}
+            onClick={(event) => { event.stopPropagation(); if (slotByRole.main_title_color) onSelectSlot?.(slotByRole.main_title_color.id); }}
           >
             {moreFeatureItems.map(({ label, icon: Icon, badge }) => (
               <span key={label} className="grid justify-items-center gap-1">
                 <span className="relative grid size-8 place-items-center">
-                  <Icon className="size-[18px]" style={{ color: preview.featurePrimaryColor }} aria-hidden="true" />
+                  <Icon className="size-[18px]" style={{ color: preview.titleColor }} aria-hidden="true" />
                   {badge ? <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: badge === "light" ? preview.lightBadgeColor : preview.badgeColor }} aria-hidden="true" /> : null}
                 </span>
-                <span className="text-center text-[8.5px] font-medium leading-tight" style={{ color: preview.descriptionColor }}>{label}</span>
+                <span className="text-center text-[8.5px] font-medium leading-tight" style={{ color: preview.titleColor }}>{label}</span>
               </span>
             ))}
           </button>
           <div className="mt-2 flex items-center justify-center gap-1 pb-1" aria-hidden="true">
-            <span className="h-1.5 w-3 rounded-full bg-black/60" />
-            <span className="h-1.5 w-1.5 rounded-full bg-black/15" />
-            <span className="h-1.5 w-1.5 rounded-full bg-black/15" />
+            <span className="h-1.5 w-3 rounded-full" style={{ backgroundColor: preview.titleColor }} />
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: preview.featureBrowseTabColor }} />
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: preview.featureBrowseTabColor }} />
           </div>
         </div>
 
-        <button
-          type="button"
-          className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl p-3 text-left ${selectedSlotId === slotByRole.direct_share_background_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
-          style={{ backgroundColor: preview.directShareBackgroundColor, color: preview.directShareTextColor }}
-          onClick={(event) => { event.stopPropagation(); if (slotByRole.direct_share_background_color) onSelectSlot?.(slotByRole.direct_share_background_color.id); }}
-        >
-          <span className="grid size-9 place-items-center rounded-full bg-white/70"><Share2 className="size-4" aria-hidden="true" /></span>
-          <span><strong className="block text-[12px]">바로 공유</strong><span className="mt-0.5 block text-[10px] opacity-75">자주 쓰는 대상을 빠르게 선택하세요</span></span>
-          <span className="rounded-full px-3 py-1 text-[10px] font-bold text-white" style={{ backgroundColor: preview.directShareButtonColor }}>공유</span>
-        </button>
-
-        <button
-          type="button"
-          className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl p-3 text-left ${selectedSlotId === slotByRole.notification_background_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
-          style={{ backgroundColor: preview.notificationBackgroundColor, color: preview.notificationTextColor }}
-          onClick={(event) => { event.stopPropagation(); if (slotByRole.notification_background_color) onSelectSlot?.(slotByRole.notification_background_color.id); }}
-        >
-          <Bell className="size-5" aria-hidden="true" />
-          <span className="text-[12px] font-semibold">새로운 테마 소식이 있습니다.</span>
-          <ChevronRight className="size-4" aria-hidden="true" />
-        </button>
+        <div className="grid min-w-0 gap-2 rounded-xl bg-[#f1f3f5] px-3 py-2.5 shadow-[0_10px_24px_rgba(15,23,42,0.06)]" aria-label="카카오톡 광고 예시 영역">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#e2e5e9] text-[#868e96]"><Share2 className="size-4" aria-hidden="true" /></span>
+            <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#343a40]">바로 공유 · 자주 쓰는 대상을 빠르게 선택하세요</span>
+          </div>
+          <div className="flex min-w-0 items-center gap-2.5 border-t border-black/5 pt-2">
+            <Bell className="size-4 shrink-0 text-[#868e96]" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[#868e96]">새로운 테마 소식이 있습니다</span>
+            <ChevronRight className="size-3.5 shrink-0 text-[#868e96]" aria-hidden="true" />
+          </div>
+          <span className="text-[9px] font-medium text-[#868e96]">테마와 무관한 광고 예시 영역입니다.</span>
+        </div>
 
         <div className="grid min-h-[56px] grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-[12px] bg-[#f1f3f5] px-3 py-2 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)]" aria-label="카카오톡 광고 예시 영역">
           <span className="grid h-10 w-14 place-items-center rounded-lg bg-[#e2e5e9] text-[8px] font-bold tracking-[0.08em] text-[#868e96]" aria-hidden="true">AD</span>
@@ -653,7 +637,7 @@ function IosMoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot
 }
 
 function MainScreenFrame({ children }: { children: ReactNode }) {
-  return <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_72px]">{children}</div>;
+  return <div className="grid h-full min-w-0 grid-rows-[auto_minmax(0,1fr)_72px]">{children}</div>;
 }
 
 function MainBottomTabBar({

@@ -59,6 +59,13 @@ export function getImageColorFallbackRole(role: ThemeResourceRole): ThemeResourc
   return undefined;
 }
 
+export function getImageAssetFallbackRole(role: ThemeResourceRole): ThemeResourceRole | undefined {
+  if (role === "profile_image_full_1") return "profile_image_1";
+  if (role === "profile_image_full_2") return "profile_image_2";
+  if (role === "profile_image_full_3") return "profile_image_3";
+  return undefined;
+}
+
 export function canDisableImageSlot(slot: ThemeAssetSlot | undefined) {
   return Boolean(slot && slot.kind !== "color" && (getImageColorFallbackRole(slot.role) || slot.section === "passcode"));
 }
@@ -224,7 +231,7 @@ export function getSlotCandidates(slot: ThemeAssetSlot | undefined, templateId: 
       sourceType: "template-asset",
       assetUrl,
       previewUrl: assetUrl,
-      isDefault: true,
+      isDefault: slot.section !== "passcode",
     },
   ];
 }

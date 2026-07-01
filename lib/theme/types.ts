@@ -106,6 +106,11 @@ export type ThemeResourceRole =
   | "profile_image_full_3"
   | "profile_image"
   | "find_add_friend"
+  | "find_add_friend_pressed"
+  | "tab_icon_call"
+  | "tab_icon_call_focused"
+  | "tab_icon_piccoma"
+  | "tab_icon_piccoma_focused"
   | "passcode"
   | "splash"
   | "unknown";

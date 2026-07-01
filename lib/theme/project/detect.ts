@@ -84,6 +84,12 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
     if (name === "theme_maintab_ico_tab4_focused_image.png" || name === "theme_maintab_ico_shopping_focused_image.png") return "tab_icon_shopping_focused";
     if (name === "theme_maintab_ico_more_image.png") return "tab_icon_more";
     if (name === "theme_maintab_ico_more_focused_image.png") return "tab_icon_more_focused";
+    if (name === "theme_maintab_ico_call_image.png") return "tab_icon_call";
+    if (name === "theme_maintab_ico_call_focused_image.png") return "tab_icon_call_focused";
+    if (name === "theme_maintab_ico_piccoma_image.png") return "tab_icon_piccoma";
+    if (name === "theme_maintab_ico_piccoma_focused_image.png") return "tab_icon_piccoma_focused";
+    if (name === "theme_find_add_friend_button_image.png") return "find_add_friend";
+    if (name === "theme_find_add_friend_button_pressed_image.png") return "find_add_friend_pressed";
     if (name === "ic_launcher.png") return "launcher_icon";
     if (name === "ic_launcher_round.png") return "launcher_round";
     if (name === "ic_launcher_background.png") return "launcher_background";

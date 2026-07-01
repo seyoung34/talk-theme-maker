@@ -204,10 +204,10 @@ function NumberPad({ palette, pressedImageUrl, selectedSlotId, slotByRole, enter
 function PatternPad({ palette, selectedSlotId, slotByRole, nodes, onSelectRole, onChange }: { palette: PasscodePalette; selectedSlotId?: string; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; nodes: number[]; onSelectRole: (role: ThemeResourceRole) => void; onChange: (nodes: number[]) => void }) {
   const [drawing, setDrawing] = useState(false);
   const points = nodes.map((node) => `${30 + (node % 3) * 60},${30 + Math.floor(node / 3) * 60}`).join(" ");
-  const selected = selectedSlotId === slotByRole.passcode_pattern_line_color?.id || selectedSlotId === slotByRole.passcode_keypad_color?.id;
+  const selected = selectedSlotId === slotByRole.passcode_pattern_line_color?.id || selectedSlotId === slotByRole.passcode_keypad_color?.id || selectedSlotId === slotByRole.passcode_keypad_background_color?.id;
   const addNode = (node: number) => onChange(nodes.includes(node) ? nodes : [...nodes, node]);
   return (
-    <div className={`grid content-center px-8 pb-10 pt-6 ${selected ? "ring-2 ring-inset ring-[#60a5fa]/65" : ""}`} onPointerUp={() => setDrawing(false)} onPointerLeave={() => setDrawing(false)}>
+    <div className={`grid content-center px-8 pb-10 pt-6 ${selected ? "ring-2 ring-inset ring-[#60a5fa]/65" : ""}`} style={{ backgroundColor: themeColorToCss(palette.keypadBackground) }} onPointerUp={() => setDrawing(false)} onPointerLeave={() => setDrawing(false)}>
       <div className="relative mx-auto grid aspect-square w-full max-w-[205px] grid-cols-3 place-items-center" onClick={(event) => { event.stopPropagation(); onSelectRole("passcode_pattern_line_color"); }}>
         <svg className="pointer-events-none absolute inset-0 size-full" viewBox="0 0 180 180" aria-hidden="true"><polyline points={points} fill="none" stroke={themeColorToCss(palette.patternLine)} strokeLinecap="round" strokeLinejoin="round" strokeWidth="5" /></svg>
         {Array.from({ length: 9 }).map((_, index) => {

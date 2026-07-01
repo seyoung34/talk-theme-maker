@@ -96,6 +96,7 @@ export type ThemeAssetSlot = {
   optionLevel?: "basic" | "advanced";
   autoColorRecipe?: ThemeAutoColorRecipe;
   visibleInSections?: ThemeSection[];
+  visibleInGroups?: ThemeSlotGroup[];
   fileName?: string;
   path?: string;
   colorKey?: string;

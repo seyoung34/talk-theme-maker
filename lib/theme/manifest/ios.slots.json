@@ -890,9 +890,6 @@
     "path": "Images/passcodeImgCode01.png",
     "required": false,
     "note": "첫 번째 숫자를 입력하기 전에 표시되는 암호 이미지입니다. 네 개의 기본 이미지 크기를 동일하게 맞추세요.",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_01_image.png"
-    },
     "cssSelector": "PasscodeStyle",
     "cssProperty": "-ios-bullet-first-image"
   },
@@ -909,9 +906,6 @@
     "path": "Images/passcodeImgCode01Selected.png",
     "required": false,
     "note": "첫 번째 숫자를 입력한 뒤 표시되는 암호 이미지입니다. 입력 전 이미지와 같은 크기와 중심을 유지하세요.",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_01_checked_image.png"
-    },
     "cssSelector": "PasscodeStyle",
     "cssProperty": "-ios-bullet-selected-first-image"
   },
@@ -928,9 +922,6 @@
     "path": "Images/passcodeImgCode02.png",
     "required": false,
     "note": "두 번째 숫자를 입력하기 전에 표시되는 암호 이미지입니다. 네 개의 기본 이미지 크기를 동일하게 맞추세요.",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_02_image.png"
-    },
     "cssSelector": "PasscodeStyle",
     "cssProperty": "-ios-bullet-second-image"
   },
@@ -947,9 +938,6 @@
     "path": "Images/passcodeImgCode02Selected.png",
     "required": false,
     "note": "두 번째 숫자를 입력한 뒤 표시되는 암호 이미지입니다. 입력 전 이미지와 같은 크기와 중심을 유지하세요.",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_02_checked_image.png"
-    },
     "cssSelector": "PasscodeStyle",
     "cssProperty": "-ios-bullet-selected-second-image"
   },
@@ -966,9 +954,6 @@
     "path": "Images/passcodeImgCode03.png",
     "required": false,
     "note": "세 번째 숫자를 입력하기 전에 표시되는 암호 이미지입니다. 네 개의 기본 이미지 크기를 동일하게 맞추세요.",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_03_image.png"
-    },
     "cssSelector": "PasscodeStyle",
     "cssProperty": "-ios-bullet-third-image"
   },
@@ -985,9 +970,6 @@
     "path": "Images/passcodeImgCode03Selected.png",
     "required": false,
     "note": "세 번째 숫자를 입력한 뒤 표시되는 암호 이미지입니다. 입력 전 이미지와 같은 크기와 중심을 유지하세요.",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_03_checked_image.png"
-    },
     "cssSelector": "PasscodeStyle",
     "cssProperty": "-ios-bullet-selected-third-image"
   },
@@ -1004,9 +986,6 @@
     "path": "Images/passcodeImgCode04.png",
     "required": false,
     "note": "네 번째 숫자를 입력하기 전에 표시되는 암호 이미지입니다. 네 개의 기본 이미지 크기를 동일하게 맞추세요.",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_04_image.png"
-    },
     "cssSelector": "PasscodeStyle",
     "cssProperty": "-ios-bullet-fourth-image"
   },
@@ -1023,9 +1002,6 @@
     "path": "Images/passcodeImgCode04Selected.png",
     "required": false,
     "note": "네 번째 숫자를 입력한 뒤 표시되는 암호 이미지입니다. 입력 전 이미지와 같은 크기와 중심을 유지하세요.",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_04_checked_image.png"
-    },
     "cssSelector": "PasscodeStyle",
     "cssProperty": "-ios-bullet-selected-fourth-image"
   },
@@ -1035,6 +1011,9 @@
     "role": "passcode_keypad_background_color",
     "section": "passcode",
     "group": "keypad",
+    "visibleInGroups": [
+      "background"
+    ],
     "screen": "passcode",
     "kind": "color",
     "label": "키패드 배경색",

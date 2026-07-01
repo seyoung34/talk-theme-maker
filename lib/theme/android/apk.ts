@@ -149,6 +149,14 @@ async function removeBundledOptionalDrawables(projectRoot: string) {
     "src/main/theme/drawable-xxhdpi/theme_chatroom_background_image.png",
     "src/main/theme/drawable-sw600dp/theme_passcode_background_image.png",
     "src/main/theme/drawable-xxhdpi/theme_passcode_background_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_passcode_01_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_passcode_01_checked_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_passcode_02_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_passcode_02_checked_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_passcode_03_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_passcode_03_checked_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_passcode_04_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_passcode_04_checked_image.png",
   ];
 
   await Promise.all(

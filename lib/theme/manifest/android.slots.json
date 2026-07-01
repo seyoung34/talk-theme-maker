@@ -520,6 +520,17 @@
     "note": "친구 탭 기본 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_friends_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_friends_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_friends_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {
@@ -537,6 +548,17 @@
     "note": "친구 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_friends_focused_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_friends_focused_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_friends_focused_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {
@@ -554,6 +576,17 @@
     "note": "채팅 탭 기본 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_chats_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_chats_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_chats_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {
@@ -571,6 +604,17 @@
     "note": "채팅 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_chats_focused_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_chats_focused_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_chats_focused_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {
@@ -588,6 +632,17 @@
     "note": "Now 탭 기본 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_now_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_now_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_now_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {
@@ -605,6 +660,17 @@
     "note": "Now 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_now_focused_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_now_focused_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_now_focused_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {
@@ -622,6 +688,17 @@
     "note": "쇼핑 탭 기본 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_shopping_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_shopping_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_shopping_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {
@@ -639,6 +716,17 @@
     "note": "쇼핑 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_shopping_focused_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_shopping_focused_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_shopping_focused_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {
@@ -656,6 +744,17 @@
     "note": "더보기 탭 기본 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_more_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_more_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_more_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {
@@ -673,6 +772,129 @@
     "note": "더보기 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_more_focused_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_more_focused_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_more_focused_image.png"
+        ],
+        "transform": "copy"
+      }
+    }
+  },
+  {
+    "id": "android-tab-call",
+    "platform": "android",
+    "role": "tab_icon_call",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "통화 탭 아이콘",
+    "fileName": "theme_maintab_ico_call_image.png",
+    "path": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_call_image.png",
+    "required": false,
+    "note": "통화 탭 기본 아이콘 (국가/버전에 따라 노출될 수 있음)",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_maintab_ico_call_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_call_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_call_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_call_image.png"
+        ],
+        "transform": "copy"
+      }
+    }
+  },
+  {
+    "id": "android-tab-call-focused",
+    "platform": "android",
+    "role": "tab_icon_call_focused",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "통화 탭 선택 아이콘",
+    "fileName": "theme_maintab_ico_call_focused_image.png",
+    "path": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_call_focused_image.png",
+    "required": false,
+    "note": "통화 탭 선택 상태 아이콘 (국가/버전에 따라 노출될 수 있음)",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_maintab_ico_call_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_call_focused_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_call_focused_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_call_focused_image.png"
+        ],
+        "transform": "copy"
+      }
+    }
+  },
+  {
+    "id": "android-tab-piccoma",
+    "platform": "android",
+    "role": "tab_icon_piccoma",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "Piccoma 탭 아이콘",
+    "fileName": "theme_maintab_ico_piccoma_image.png",
+    "path": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_piccoma_image.png",
+    "required": false,
+    "note": "Piccoma 탭 기본 아이콘 (일본/글로벌 등 일부 환경에서 노출될 수 있음)",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_maintab_ico_piccoma_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_piccoma_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_piccoma_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_piccoma_image.png"
+        ],
+        "transform": "copy"
+      }
+    }
+  },
+  {
+    "id": "android-tab-piccoma-focused",
+    "platform": "android",
+    "role": "tab_icon_piccoma_focused",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "Piccoma 탭 선택 아이콘",
+    "fileName": "theme_maintab_ico_piccoma_focused_image.png",
+    "path": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_piccoma_focused_image.png",
+    "required": false,
+    "note": "Piccoma 탭 선택 상태 아이콘 (일본/글로벌 등 일부 환경에서 노출될 수 있음)",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_maintab_ico_piccoma_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_maintab_ico_piccoma_focused_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_maintab_ico_piccoma_focused_image.png",
+          "src/main/theme/drawable-sw600dp/theme_maintab_ico_piccoma_focused_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {
@@ -935,9 +1157,6 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_background_image.png",
     "required": false,
     "note": "잠금화면 배경 이미지",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_background_image.png"
-    },
     "export": {
       "android": {
         "type": "file",
@@ -963,7 +1182,7 @@
     "note": "theme_passcode_background_color 값",
     "colorKey": "theme_passcode_background_color",
     "defaultColor": {
-      "basic": "#FCC5C5"
+      "basic": "#FFFFFF"
     }
   },
   {
@@ -978,10 +1197,7 @@
     "fileName": "theme_passcode_01_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_01_image.png",
     "required": false,
-    "note": "첫 번째 암호 입력 전 표시 이미지",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_01_image.png"
-    }
+    "note": "첫 번째 암호 입력 전 표시 이미지"
   },
   {
     "id": "android-passcode-indicator-1-checked",
@@ -995,10 +1211,7 @@
     "fileName": "theme_passcode_01_checked_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_01_checked_image.png",
     "required": false,
-    "note": "첫 번째 암호 입력 완료 표시 이미지",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_01_checked_image.png"
-    }
+    "note": "첫 번째 암호 입력 완료 표시 이미지"
   },
   {
     "id": "android-passcode-indicator-2",
@@ -1012,10 +1225,7 @@
     "fileName": "theme_passcode_02_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_02_image.png",
     "required": false,
-    "note": "두 번째 암호 입력 전 표시 이미지",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_02_image.png"
-    }
+    "note": "두 번째 암호 입력 전 표시 이미지"
   },
   {
     "id": "android-passcode-indicator-2-checked",
@@ -1029,10 +1239,7 @@
     "fileName": "theme_passcode_02_checked_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_02_checked_image.png",
     "required": false,
-    "note": "두 번째 암호 입력 완료 표시 이미지",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_02_checked_image.png"
-    }
+    "note": "두 번째 암호 입력 완료 표시 이미지"
   },
   {
     "id": "android-passcode-indicator-3",
@@ -1046,10 +1253,7 @@
     "fileName": "theme_passcode_03_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_03_image.png",
     "required": false,
-    "note": "세 번째 암호 입력 전 표시 이미지",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_03_image.png"
-    }
+    "note": "세 번째 암호 입력 전 표시 이미지"
   },
   {
     "id": "android-passcode-indicator-3-checked",
@@ -1063,10 +1267,7 @@
     "fileName": "theme_passcode_03_checked_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_03_checked_image.png",
     "required": false,
-    "note": "세 번째 암호 입력 완료 표시 이미지",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_03_checked_image.png"
-    }
+    "note": "세 번째 암호 입력 완료 표시 이미지"
   },
   {
     "id": "android-passcode-indicator-4",
@@ -1080,10 +1281,7 @@
     "fileName": "theme_passcode_04_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_04_image.png",
     "required": false,
-    "note": "네 번째 암호 입력 전 표시 이미지",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_04_image.png"
-    }
+    "note": "네 번째 암호 입력 전 표시 이미지"
   },
   {
     "id": "android-passcode-indicator-4-checked",
@@ -1097,10 +1295,7 @@
     "fileName": "theme_passcode_04_checked_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_04_checked_image.png",
     "required": false,
-    "note": "네 번째 암호 입력 완료 표시 이미지",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/passcode/theme_passcode_04_checked_image.png"
-    }
+    "note": "네 번째 암호 입력 완료 표시 이미지"
   },
   {
     "id": "android-passcode-color",
@@ -1157,6 +1352,9 @@
     "role": "passcode_keypad_background_color",
     "section": "passcode",
     "group": "keypad",
+    "visibleInGroups": [
+      "background"
+    ],
     "screen": "passcode",
     "kind": "color",
     "label": "키패드 배경",
@@ -1164,7 +1362,7 @@
     "note": "theme_passcode_keypad_background_color 값",
     "colorKey": "theme_passcode_keypad_background_color",
     "defaultColor": {
-      "basic": "#FFF2F2"
+      "basic": "#F2f2f2"
     }
   },
   {
@@ -1215,6 +1413,72 @@
     "note": "테마 목록과 앱 아이콘에 사용하는 대표 아이콘",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/icon.png"
+    }
+  },
+  {
+    "id": "android-find-add-friend",
+    "platform": "android",
+    "role": "find_add_friend",
+    "section": "common",
+    "group": "icon",
+    "screen": "profile",
+    "kind": "image",
+    "label": "친구 추가 버튼",
+    "fileName": "theme_find_add_friend_button_image.png",
+    "path": "src/main/theme/drawable-xxhdpi/theme_find_add_friend_button_image.png",
+    "required": false,
+    "note": "친구 찾기·추가 화면에 표시되는 버튼 이미지입니다.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_find_add_friend_button_image.svg"
+    }
+  },
+  {
+    "id": "android-find-add-friend-pressed",
+    "platform": "android",
+    "role": "find_add_friend_pressed",
+    "section": "common",
+    "group": "icon",
+    "screen": "profile",
+    "kind": "image",
+    "label": "친구 추가 버튼 눌림",
+    "fileName": "theme_find_add_friend_button_pressed_image.png",
+    "path": "src/main/theme/drawable-xxhdpi/theme_find_add_friend_button_pressed_image.png",
+    "required": false,
+    "note": "친구 찾기·추가 버튼을 누른 상태의 이미지입니다.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_find_add_friend_button_pressed_image.svg"
+    }
+  },
+  {
+    "id": "android-common-splash",
+    "platform": "android",
+    "role": "splash",
+    "section": "common",
+    "group": "launcher",
+    "screen": "profile",
+    "kind": "image",
+    "label": "실행 스플래시 이미지",
+    "fileName": "theme_splash_image.png",
+    "path": "src/main/theme/drawable-xxhdpi/theme_splash_image.png",
+    "required": true,
+    "note": "카카오톡 실행 시 짧게 표시되는 스플래시 화면 이미지입니다. 세로/가로 화면 모두에 동일한 이미지가 적용됩니다.",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_splash_image.png"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_splash_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_splash_image.png",
+          "src/main/theme/drawable-xhdpi/theme_splash_image.png",
+          "src/main/theme/drawable-sw600dp/theme_splash_image.png",
+          "src/main/theme/drawable-sw600dp-land/theme_splash_image.png",
+          "src/main/theme/drawable-land-xhdpi/theme_splash_image.png",
+          "src/main/theme/drawable-land-xxhdpi/theme_splash_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {

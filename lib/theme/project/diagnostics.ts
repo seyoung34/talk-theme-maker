@@ -1,4 +1,4 @@
-import { canDisableImageSlot, getResolvedAssetUrl, getResolvedColor, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { canDisableImageSlot, getImageAssetFallbackRole, getResolvedAssetUrl, getResolvedColor, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { getSlotExportMapping } from "@/lib/theme/project/export";
 import type { ThemeProjectAnalysis, ThemeProjectFile, ThemeProjectResource } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate } from "@/lib/theme/templates";
@@ -34,8 +34,18 @@ export function createThemeProjectAnalysis(
     }
 
     const imageDisabled = isImageSlotDisabled(slot, selections);
-    const upload = imageDisabled ? undefined : (uploads[slot.id] ?? []).find((entry) => entry.id === selections[slot.id])?.file;
-    const sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template);
+    let upload = imageDisabled ? undefined : (uploads[slot.id] ?? []).find((entry) => entry.id === selections[slot.id])?.file;
+    let sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template);
+
+    const fallbackRole = getImageAssetFallbackRole(slot.role);
+    if (!imageDisabled && !upload && !sourceUrl && fallbackRole) {
+      const fallbackSlot = slots.find((candidate) => candidate.role === fallbackRole && candidate.platform === slot.platform);
+      if (fallbackSlot) {
+        upload = (uploads[fallbackSlot.id] ?? []).find((entry) => entry.id === selections[fallbackSlot.id])?.file;
+        sourceUrl = getResolvedAssetUrl(fallbackSlot, uploads, selections, template.id, template);
+      }
+    }
+
     if (!imageDisabled && slot.path && slot.fileName) {
       files.push({ path: slot.path, name: slot.fileName, size: upload?.size ?? 0, file: upload, sourceUrl });
       resources.push({ id: slot.id, slotId: slot.id, platform, role: slot.role, screen: slot.screen, filePath: slot.path, exportMapping });

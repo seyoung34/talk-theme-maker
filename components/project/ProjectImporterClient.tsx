@@ -23,6 +23,7 @@ import {
   getSelectedCandidate,
   getSlotFile,
   groupLabels,
+  isSlotVisibleInGroup,
   isSlotVisibleInSection,
   sectionLabels,
   type BubbleEditState,
@@ -394,7 +395,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
   }, [activeGroup, groups]);
 
-  const visibleSlots = useMemo(() => slots.filter((slot) => isSlotVisibleInSection(slot, activeSection) && slot.group === activeGroup), [activeGroup, activeSection, slots]);
+  const visibleSlots = useMemo(() => slots.filter((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, activeGroup)), [activeGroup, activeSection, slots]);
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? visibleSlots[0] ?? slots[0];
   const selectedFile = getSlotFile(selectedSlot, analysis.files);
   const selectedBubbleSlot = selectedSlot ? bubbleSlotFromRole(selectedSlot.role) : null;
@@ -502,14 +503,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     const nextGroups = getSectionGroups(section, slots);
     const nextGroup = nextGroups[0];
     if (nextGroup) setActiveGroup(nextGroup);
-    const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, section) && (!nextGroup || slot.group === nextGroup));
+    const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, section) && (!nextGroup || isSlotVisibleInGroup(slot, nextGroup)));
     setSelectedSlotId(firstSlot?.id);
     setMobileEditSheetOpen(true);
   };
 
   const selectGroup = (group: ThemeSlotGroup) => {
     setActiveGroup(group);
-    const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, activeSection) && slot.group === group);
+    const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, group));
     setSelectedSlotId(firstSlot?.id);
     setMobileEditSheetOpen(true);
   };
@@ -519,7 +520,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     const slot = slots.find((item) => item.id === slotId);
     if (!slot) return;
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-    setActiveGroup(slot.group);
+    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
     setMobileEditSheetOpen(true);
   };
 
@@ -541,7 +542,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
     setSelectedSlotId(slot.id);
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-    setActiveGroup(slot.group);
+    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
   };
 
   const uploadEditedSlot = (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => {
@@ -574,7 +575,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
     setSelectedSlotId(slot.id);
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-    setActiveGroup(slot.group);
+    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
   };
 
   const clearSlot = (slot: ThemeAssetSlot) => {
@@ -658,7 +659,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setCandidateSelections((current) => ({ ...current, [slot.id]: asset.id }));
     setSelectedSlotId(slot.id);
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-    setActiveGroup(slot.group);
+    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
   };
 
   const openAdvancedBubbleEditor = async () => {
@@ -1008,7 +1009,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 onSelectSlot={(slot) => {
                   setSelectedSlotId(slot.id);
                   if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-                  setActiveGroup(slot.group);
+                  if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
                   setMobileEditSheetOpen(true);
                 }}
               />

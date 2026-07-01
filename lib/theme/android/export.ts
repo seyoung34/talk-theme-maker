@@ -1,5 +1,5 @@
 import { exportNinePatch, loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
-import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { getImageAssetFallbackRole, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -28,7 +28,7 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
 
   for (const slot of androidSlots) {
     if (slot.kind === "color" || !slot.path) continue;
-    const blob = await resolveAndroidSlotBlob(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id]);
+    const blob = await resolveAndroidSlotBlob(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots);
     if (!blob) continue;
     for (const path of getAndroidSlotExportPaths(slot)) {
       files.push({ path, blob });
@@ -77,6 +77,7 @@ async function resolveAndroidSlotBlob(
   templateId: ThemeTemplateId,
   template: ThemeTemplate,
   bubbleEdit?: BubbleEditState,
+  allSlots: ThemeAssetSlot[] = [],
 ) {
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   if (slot.kind === "ninepatch") {
@@ -89,8 +90,65 @@ async function resolveAndroidSlotBlob(
 
   if (selectedUpload) return selectedUpload.file;
   const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template);
-  if (!assetUrl) return null;
-  return fetchAssetBlob(assetUrl);
+  if (assetUrl) {
+    const blob = await fetchAssetBlob(assetUrl);
+    return normalizeAndroidImageBlob(slot, blob, assetUrl);
+  }
+
+  const fallbackRole = getImageAssetFallbackRole(slot.role);
+  const fallbackSlot = fallbackRole ? allSlots.find((candidate) => candidate.role === fallbackRole) : undefined;
+  if (!fallbackSlot) return null;
+  return resolveAndroidSlotBlob(fallbackSlot, uploads, selections, templateId, template, bubbleEdit, allSlots);
+}
+
+async function normalizeAndroidImageBlob(slot: ThemeAssetSlot, blob: Blob, sourceName: string) {
+  const expectsPng = (slot.path ?? slot.fileName)?.toLowerCase().endsWith(".png");
+  if (!expectsPng || (await hasPngSignature(blob))) return blob;
+
+  const image = await loadBlobImage(blob, sourceName);
+  const width = image.naturalWidth || image.width;
+  const height = image.naturalHeight || image.height;
+  if (!width || !height) throw new Error(`이미지 크기를 확인하지 못했습니다: ${sourceName}`);
+  return drawImageToPng(image, width, height);
+}
+
+async function loadBlobImage(blob: Blob, sourceName: string) {
+  if (typeof document === "undefined") throw new Error("Android 이미지는 브라우저에서 변환해야 합니다.");
+  const url = URL.createObjectURL(blob);
+  try {
+    return await loadImage(url, sourceName);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function loadImage(url: string, sourceName: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`이미지 파일을 읽지 못했습니다: ${sourceName}`));
+    image.src = url;
+  });
+}
+
+async function drawImageToPng(image: HTMLImageElement, width: number, height: number) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("이미지를 PNG로 변환하지 못했습니다.");
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.clearRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+  return canvasToBlob(canvas, "image/png");
+}
+
+async function hasPngSignature(blob: Blob) {
+  if (blob.size < 8) return false;
+  const bytes = new Uint8Array(await blob.slice(0, 8).arrayBuffer());
+  return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+    && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
 }
 
 function buildAndroidColorsXml(

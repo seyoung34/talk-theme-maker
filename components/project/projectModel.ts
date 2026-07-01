@@ -82,6 +82,10 @@ export function isSlotVisibleInSection(slot: ThemeAssetSlot, section: ThemeSecti
   return slot.section === section || Boolean(slot.visibleInSections?.includes(section));
 }
 
+export function isSlotVisibleInGroup(slot: ThemeAssetSlot, group: ThemeSlotGroup) {
+  return slot.group === group || Boolean(slot.visibleInGroups?.includes(group));
+}
+
 export function getSlotFile(slot: ThemeAssetSlot | undefined, files: ThemeProjectFile[]) {
   if (!slot?.path) return undefined;
   return files.find((file) => file.path === slot.path);
