@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     const ranked = (data ?? [])
       .map((row: unknown) => mapCanonicalAdminAssetRow(row))
-      .flatMap((asset) => matchingTargets(asset, platform, slotRole))
+      .flatMap((asset) => matchingTargets(asset, platform, slotRole, assetKind))
       .sort(compareRankedAssets);
     const cursorFiltered = cursor ? ranked.filter((item) => compareRankedAssetToCursor(item, cursor) > 0) : ranked;
     const page = cursorFiltered.slice(0, limit);
@@ -101,12 +101,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function matchingTargets(asset: ReturnType<typeof mapCanonicalAdminAssetRow>, platform: "android" | "ios", slotRole?: string): readonly RankedAsset[] {
+function matchingTargets(asset: ReturnType<typeof mapCanonicalAdminAssetRow>, platform: "android" | "ios", slotRole: string | undefined, assetKind: AdminAssetKind): readonly RankedAsset[] {
   const matches: RankedAsset[] = [];
   for (const target of asset.targets) {
     if (!target.enabled || (target.platform !== platform && target.platform !== "all")) continue;
     if (target.targetKind === "exact_role" && slotRole && target.slotRole === slotRole) {
       matches.push({ asset, target, matchRank: 0 });
+    } else if (target.targetKind === "exact_role" && slotRole && target.slotRole && isCompatibleExactRole(assetKind, target.slotRole, slotRole)) {
+      matches.push({ asset, target, matchRank: 1 });
     } else if (target.targetKind === "asset_kind" && !target.slotRole) {
       matches.push({ asset, target, matchRank: 1 });
     } else if (target.targetKind === "shape_rule" && !target.slotRole) {
@@ -114,6 +116,17 @@ function matchingTargets(asset: ReturnType<typeof mapCanonicalAdminAssetRow>, pl
     }
   }
   return matches;
+}
+
+function isCompatibleExactRole(assetKind: AdminAssetKind, targetRole: string, requestedRole: string): boolean {
+  if (assetKind === "bubble") return targetRole.startsWith("bubble_") && requestedRole.startsWith("bubble_");
+  if (assetKind === "background") return isSharedBackgroundRole(targetRole) && isSharedBackgroundRole(requestedRole);
+  if (assetKind === "icon") return targetRole.startsWith("tab_icon_") && requestedRole.startsWith("tab_icon_");
+  return false;
+}
+
+function isSharedBackgroundRole(role: string): boolean {
+  return role === "main_background" || role === "chat_background" || role === "tab_background_image";
 }
 
 async function createSignedUrlMap(admin: ReturnType<typeof createAdminClient>, paths: readonly string[]): Promise<ReadonlyMap<string, string>> {

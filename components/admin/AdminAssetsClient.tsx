@@ -616,6 +616,9 @@ function getUnifiedAdminAssetSlots(): ThemeAssetSlot[] {
 }
 
 function getAdminAssetSaveTargets(slot: ThemeAssetSlot, assetKind: AdminAssetKind): AdminAssetTargetInput[] {
+  if (assetKind === "bubble") {
+    return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }];
+  }
   const platformSlots = (["android", "ios"] as const).flatMap((platform) => {
     const platformSlot = findAdminAssetSaveSlot(slot, platform, assetKind);
     return platformSlot ? [{ platform, slot: platformSlot }] : [];
@@ -627,6 +630,9 @@ function getAdminAssetSaveTargets(slot: ThemeAssetSlot, assetKind: AdminAssetKin
 }
 
 function getSharedAdminAssetTargets(asset: AdminAssetCandidate): AdminAssetTargetInput[] {
+  if (asset.assetKind === "bubble" || asset.slotRole.startsWith("bubble_")) {
+    return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: asset.enabled }];
+  }
   return [{ platform: "all", slotRole: asset.slotRole, targetKind: "exact_role", priority: 0, enabled: asset.enabled }];
 }
 

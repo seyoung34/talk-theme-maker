@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronRight, Gift, MessageCirclePlus, Search, Settings, Share2, UserPlus, ListPlus } from "lucide-react";
+import { Bell, CalendarCheck2, CalendarClock, ChevronRight, Cloud, Gamepad2, Gift, IdCard, ListPlus, MessageCirclePlus, PackageOpen, PawPrint, Percent, Radio, Scan, Search, Settings, Share2, Smile, Store, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getResolvedColor, type SlotCandidateSelections } from "@/components/project/projectModel";
 import { findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
@@ -26,6 +26,21 @@ const chatRows = [
   { name: "블루베리군", sub: "블루베리가 크고 맛있다", time: "어제", badge: "2" },
   { name: "개발 노트", sub: "Android 프로젝트 ZIP 내보내기까지 연결되었습니다.", time: "어제" },
   { name: "딸기양", sub: "딸기는 맛있다", time: "어제" },
+];
+
+const moreFeatureItems = [
+  { label: "선물하기", icon: Gift },
+  { label: "받은선물", icon: PackageOpen },
+  { label: "톡딜", icon: Percent },
+  { label: "이모티콘", icon: Smile, badge: "light" as const },
+  { label: "라이브쇼핑", icon: Radio, badge: "dark" as const },
+  { label: "메이커스", icon: Store },
+  { label: "프렌즈", icon: PawPrint },
+  { label: "게임", icon: Gamepad2 },
+  { label: "모바일신분증", icon: IdCard },
+  { label: "톡클라우드", icon: Cloud },
+  { label: "캘린더", icon: CalendarCheck2 },
+  { label: "예약하기", icon: CalendarClock },
 ];
 
 //메인
@@ -433,33 +448,125 @@ function ChatsScreen({
   );
 }
 
+//더보기
 function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { platform: "android" | "ios"; selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
   if (platform === "ios") {
     return <IosMoreScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />;
   }
 
+  const headerSelected = selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id;
+
   return (
     <MainScreenFrame>
-      <button type="button" className={`flex items-end justify-between px-5 pb-3 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ backgroundColor: preview.headerBackgroundColor, color: preview.headerForegroundColor }} onClick={(event) => { event.stopPropagation(); onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? ""); }}>
+      <button
+        type="button"
+        className={`flex items-center justify-between px-5 pb-3 pt-4 text-left ${headerSelected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+        style={{ backgroundColor: preview.headerBackgroundColor, color: preview.headerForegroundColor }}
+        onClick={(event) => { event.stopPropagation(); onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? ""); }}
+      >
         <strong className="text-xl font-semibold tracking-[-0.03em]">더보기</strong>
-        <div className="flex items-center gap-4"><Search className="size-5" /><Settings className="size-5" /></div>
+        <div className="flex items-center gap-3.5">
+          <Search className="size-5" aria-hidden="true" />
+          <Scan className="size-5" aria-hidden="true" />
+          <span className="relative">
+            <Settings className="size-5" aria-hidden="true" />
+            <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-[#ff6b37]" aria-hidden="true" />
+          </span>
+        </div>
       </button>
+
       <div className="grid min-h-0 content-start gap-3 overflow-hidden px-4 py-3" style={{ backgroundColor: preview.bodySecondaryColor }}>
-        <div className="flex gap-2 overflow-hidden rounded-xl p-2" style={{ backgroundColor: preview.headerBackgroundColor }}>
-          <span className="rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ backgroundColor: preview.featureBrowseTabFocusedColor, color: preview.headerBackgroundColor }}>전체</span>
-          <span className="rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ color: preview.featureBrowseTabColor }}>생활</span>
-          <span className="rounded-full px-3 py-1.5 text-[11px] font-bold" style={{ color: preview.featureBrowseTabColor }}>콘텐츠</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className={`rounded-full px-4 py-1.5 text-[12px] font-bold ${selectedSlotId === slotByRole.main_feature_browse_tab_focused_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+            style={{ backgroundColor: preview.featureBrowseTabFocusedColor, color: preview.headerBackgroundColor }}
+            onClick={(event) => { event.stopPropagation(); if (slotByRole.main_feature_browse_tab_focused_color) onSelectSlot?.(slotByRole.main_feature_browse_tab_focused_color.id); }}
+          >
+            홈
+          </button>
+          <button
+            type="button"
+            className={`flex items-center gap-1 rounded-full border px-4 py-1.5 text-[12px] font-bold ${selectedSlotId === slotByRole.main_feature_browse_tab_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+            style={{ borderColor: hexToRgba(preview.featureBrowseTabColor, 0.24), color: preview.featureBrowseTabColor }}
+            onClick={(event) => { event.stopPropagation(); if (slotByRole.main_feature_browse_tab_color) onSelectSlot?.(slotByRole.main_feature_browse_tab_color.id); }}
+          >
+            지갑<span className="rounded-full bg-[#ff6b37] px-1 text-[9px] font-bold text-white">N</span>
+          </button>
         </div>
-        <button type="button" className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl p-3 text-left ${selectedSlotId === slotByRole.direct_share_background_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`} style={{ backgroundColor: preview.directShareBackgroundColor, color: preview.directShareTextColor }} onClick={(event) => { event.stopPropagation(); if (slotByRole.direct_share_background_color) onSelectSlot?.(slotByRole.direct_share_background_color.id); }}>
-          <span className="grid size-9 place-items-center rounded-full bg-white/70"><Share2 className="size-4" /></span><span><strong className="block text-[13px]">바로 공유</strong><span className="mt-0.5 block text-[10px] opacity-75">자주 쓰는 대상을 빠르게 선택하세요</span></span><span className="rounded-full px-3 py-1 text-[10px] font-bold text-white" style={{ backgroundColor: preview.directShareButtonColor }}>공유</span>
-        </button>
-        <button type="button" className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl p-3 text-left ${selectedSlotId === slotByRole.notification_background_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`} style={{ backgroundColor: preview.notificationBackgroundColor, color: preview.notificationTextColor }} onClick={(event) => { event.stopPropagation(); if (slotByRole.notification_background_color) onSelectSlot?.(slotByRole.notification_background_color.id); }}>
-          <Bell className="size-5" /><span className="text-[12px] font-semibold">새로운 테마 소식이 있습니다.</span><ChevronRight className="size-4" />
-        </button>
-        <div className="grid grid-cols-2 gap-2">
-          {["선물하기", "멜론", "쇼핑", "예약하기"].map((label, index) => <span key={label} className="relative rounded-xl bg-white/75 p-3 text-[12px] font-bold" style={{ color: preview.featurePrimaryColor }}>{label}{index < 2 ? <span className="absolute right-2 top-2 size-2 rounded-full" style={{ backgroundColor: index ? preview.badgeColor : preview.lightBadgeColor }} /> : null}</span>)}
+
+        <div className="grid gap-1 rounded-2xl bg-[#fee500] px-4 py-3" aria-label="pay 잔액 예시 영역 (테마와 무관)">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[13px] font-bold text-[#2b2b2b]">pay 303,747원</span>
+            <span className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-[#2b2b2b]/75">
+              송금<span className="opacity-30">|</span>자산<span className="opacity-30">|</span>결제
+            </span>
+          </div>
+          <span className="text-[9px] font-medium text-[#2b2b2b]/55">테마와 무관한 예시 영역입니다.</span>
         </div>
+
+        <div className="rounded-2xl bg-white/85 px-2 pb-1.5 pt-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+          <button
+            type="button"
+            className={`grid w-full grid-cols-4 gap-y-3 ${selectedSlotId === slotByRole.feature_primary_color?.id ? "rounded-xl ring-2 ring-[#60a5fa]" : ""}`}
+            onClick={(event) => { event.stopPropagation(); if (slotByRole.feature_primary_color) onSelectSlot?.(slotByRole.feature_primary_color.id); }}
+          >
+            {moreFeatureItems.map(({ label, icon: Icon, badge }) => (
+              <span key={label} className="grid justify-items-center gap-1">
+                <span className="relative grid size-8 place-items-center">
+                  <Icon className="size-[18px]" style={{ color: preview.featurePrimaryColor }} aria-hidden="true" />
+                  {badge ? <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: badge === "light" ? preview.lightBadgeColor : preview.badgeColor }} aria-hidden="true" /> : null}
+                </span>
+                <span className="text-center text-[8.5px] font-medium leading-tight" style={{ color: preview.descriptionColor }}>{label}</span>
+              </span>
+            ))}
+          </button>
+          <div className="mt-2 flex items-center justify-center gap-1 pb-1" aria-hidden="true">
+            <span className="h-1.5 w-3 rounded-full bg-black/60" />
+            <span className="h-1.5 w-1.5 rounded-full bg-black/15" />
+            <span className="h-1.5 w-1.5 rounded-full bg-black/15" />
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl p-3 text-left ${selectedSlotId === slotByRole.direct_share_background_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+          style={{ backgroundColor: preview.directShareBackgroundColor, color: preview.directShareTextColor }}
+          onClick={(event) => { event.stopPropagation(); if (slotByRole.direct_share_background_color) onSelectSlot?.(slotByRole.direct_share_background_color.id); }}
+        >
+          <span className="grid size-9 place-items-center rounded-full bg-white/70"><Share2 className="size-4" aria-hidden="true" /></span>
+          <span><strong className="block text-[12px]">바로 공유</strong><span className="mt-0.5 block text-[10px] opacity-75">자주 쓰는 대상을 빠르게 선택하세요</span></span>
+          <span className="rounded-full px-3 py-1 text-[10px] font-bold text-white" style={{ backgroundColor: preview.directShareButtonColor }}>공유</span>
+        </button>
+
+        <button
+          type="button"
+          className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl p-3 text-left ${selectedSlotId === slotByRole.notification_background_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+          style={{ backgroundColor: preview.notificationBackgroundColor, color: preview.notificationTextColor }}
+          onClick={(event) => { event.stopPropagation(); if (slotByRole.notification_background_color) onSelectSlot?.(slotByRole.notification_background_color.id); }}
+        >
+          <Bell className="size-5" aria-hidden="true" />
+          <span className="text-[12px] font-semibold">새로운 테마 소식이 있습니다.</span>
+          <ChevronRight className="size-4" aria-hidden="true" />
+        </button>
+
+        <div className="grid min-h-[56px] grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-[12px] bg-[#f1f3f5] px-3 py-2 text-left shadow-[0_10px_24px_rgba(15,23,42,0.06)]" aria-label="카카오톡 광고 예시 영역">
+          <span className="grid h-10 w-14 place-items-center rounded-lg bg-[#e2e5e9] text-[8px] font-bold tracking-[0.08em] text-[#868e96]" aria-hidden="true">AD</span>
+          <span className="min-w-0">
+            <strong className="block truncate text-[11px] font-semibold text-[#343a40]">케이스티파이 NEW 리플 케이스</strong>
+            <span className="mt-0.5 block truncate text-[9px] font-medium text-[#868e96]">테마와 무관한 광고 예시 영역입니다.</span>
+          </span>
+          <span className="shrink-0 rounded-lg border border-[#dee2e6] px-2 py-1 text-[9px] font-semibold text-[#495057]">구매하기</span>
+        </div>
+
+        <SectionLabel
+          label="게임플레이"
+          color={preview.sectionTitleColor}
+          selected={selectedSlotId === slotByRole.main_section_title_color?.id}
+          onClick={() => slotByRole.main_section_title_color && onSelectSlot?.(slotByRole.main_section_title_color.id)}
+        />
       </div>
+
       <MainBottomTabBar active="more" selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
     </MainScreenFrame>
   );

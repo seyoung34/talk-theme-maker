@@ -14,7 +14,18 @@
     "note": "친구·채팅 목록 위에 표시되는 배경 이미지입니다. 기본 템플릿은 이미지 없이 배경색으로 시작하며, 이미지를 추가하면 화면 색상을 이미지에 맞춰 자동 조정합니다.",
     "visibleInSections": [
       "tabs"
-    ]
+    ],
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_background_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_background_image.png",
+          "src/main/theme/drawable-sw600dp/theme_background_image.png"
+        ],
+        "transform": "copy"
+      }
+    }
   },
   {
     "id": "android-main-header-color",
@@ -679,6 +690,17 @@
     "note": "1080 x 1920 기준 채팅방 배경 이미지",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_chatroom_background_image.svg"
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-xxhdpi/theme_chatroom_background_image.png",
+        "scaleTargets": [
+          "src/main/theme/drawable-xxhdpi/theme_chatroom_background_image.png",
+          "src/main/theme/drawable-sw600dp/theme_chatroom_background_image.png"
+        ],
+        "transform": "copy"
+      }
     }
   },
   {

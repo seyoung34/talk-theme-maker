@@ -984,7 +984,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           </div>
 
           <section className="grid min-h-0 min-w-0 w-full grid-cols-1 content-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
-            <div className="order-1 min-w-0 lg:order-none">
+            <div className="order-1 h-full min-w-0 lg:order-none">
               <ProjectSectionRail
                 activeSection={activeSection}
                 slots={slots}
@@ -992,7 +992,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
               />
             </div>
 
-            <section className="order-3 grid min-h-0 min-w-0 grid-cols-1 gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[196px_minmax(0,1fr)] md:gap-0 lg:order-none xl:grid-cols-[220px_minmax(0,1fr)]">
+            <section className="order-3 grid min-h-0 min-w-0 grid-cols-1 gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[224px_minmax(0,1fr)] md:gap-0 lg:order-none xl:grid-cols-[248px_minmax(0,1fr)]">
               <ProjectGroupRail
                 groups={groups}
                 activeGroup={activeGroup}
@@ -1037,7 +1037,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 role={mobileEditSheetOpen ? "dialog" : undefined}
                 aria-modal={mobileEditSheetOpen ? "true" : undefined}
                 aria-label={selectedSlot ? `${selectedSlot.label} 편집 패널` : "요소 편집 패널"}
-                className={`${mobileEditSheetOpen ? "fixed inset-x-3 bottom-3 z-50 grid max-h-[82dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] border border-[#dbe3ed] bg-white p-3 shadow-[0_28px_80px_rgba(15,23,42,0.28)]" : "hidden"} min-h-0 min-w-0 lg:static lg:z-auto lg:grid lg:max-h-none lg:grid-rows-none lg:overflow-visible lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:px-3 lg:shadow-none`}
+                className={`${mobileEditSheetOpen ? "fixed inset-x-3 bottom-3 z-50 grid max-h-[82dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] border border-[#dbe3ed] bg-white p-3 shadow-[0_28px_80px_rgba(15,23,42,0.28)]" : "hidden"} min-h-0 min-w-0 lg:static lg:z-auto lg:grid lg:h-full lg:max-h-full lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:px-3 lg:shadow-none`}
               >
                 <div className="mb-2 grid gap-2 rounded-2xl bg-[#f8fafc] px-3 py-2 lg:hidden">
                   <span className="mx-auto h-1 w-10 rounded-full bg-[#cbd5e1]" aria-hidden="true" />
@@ -1061,7 +1061,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                     </button>
                   </div>
                 </div>
-                <div className="min-h-0 overflow-y-auto pr-0.5 [scrollbar-width:thin] lg:overflow-visible lg:pr-0">
+                <div className="min-h-0 overflow-y-auto pr-1 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1] lg:h-full">
                   <ProjectQuickEditPanel
                     slot={selectedSlot}
                     slots={slots}

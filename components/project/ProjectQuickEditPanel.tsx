@@ -158,7 +158,7 @@ export function ProjectQuickEditPanel({
       ? `추천 에셋 · ${selectedPickerCandidate.title}`
       : selectedPickerCandidate?.source === "template"
         ? `템플릿 에셋 · ${selectedPickerCandidate.status}`
-      : status;
+        : status;
   const directEditableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;
   const editableSourceUrl = !directEditableSourceFile ? getEditableSourceUrl(file, selectedPickerCandidate, selectedCandidate) : undefined;
   const editableSourceFile = preparedEditSourceFile ?? directEditableSourceFile;
@@ -199,7 +199,7 @@ export function ProjectQuickEditPanel({
   };
 
   return (
-    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-3">
+    <div className="grid min-h-0 content-start gap-3">
       <CandidatePicker
         slot={slot}
         candidates={candidates}
@@ -222,7 +222,7 @@ export function ProjectQuickEditPanel({
         onLoadMoreAdminAssets={onLoadMoreAdminAssets}
       />
 
-      <section className="grid min-h-0 content-start gap-4 overflow-auto rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+      <section className="grid min-h-0 content-start gap-4 rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
         <div className="grid gap-3 lg:grid-cols-2">
           {slot.kind !== "color" ? <DetailRow label="파일명" value={slot.fileName ?? "-"} /> : null}
           {slot.cssSelector && slot.cssProperty ? <DetailRow label="CSS 위치" value={formatCssReference(slot.cssSelector, slot.cssProperty)} technical /> : null}
@@ -405,18 +405,15 @@ function CandidatePicker({
   isLoadingAdminAssets: boolean;
   onLoadMoreAdminAssets: () => void;
 }) {
-  type CandidateGroup = { key: SlotCandidate["source"]; label: string; items: SlotCandidate[] };
+  type CandidateGroup = { key: SlotCandidate["source"]; label: string; items: SlotCandidate[]; persistent?: boolean };
   const groups: CandidateGroup[] = [
+    { key: "default" as const, label: "기본값", items: candidates.filter((candidate) => candidate.source === "default"), persistent: true },
+    { key: "admin" as const, label: "추천 에셋", items: candidates.filter((candidate) => candidate.source === "admin"), persistent: slot.kind !== "color" },
     { key: "palette" as const, label: "팔레트", items: candidates.filter((candidate) => candidate.source === "palette") },
-    { key: "default" as const, label: "기본값", items: candidates.filter((candidate) => candidate.source === "default") },
     { key: "template" as const, label: "템플릿 에셋", items: candidates.filter((candidate) => candidate.source === "template") },
     { key: "upload" as const, label: "내 업로드", items: candidates.filter((candidate) => candidate.source === "upload") },
     { key: "creator" as const, label: "제작자 후보", items: candidates.filter((candidate) => candidate.source === "creator") },
-  ].filter((group) => group.items.length > 0);
-  const adminItems = candidates.filter((candidate) => candidate.source === "admin");
-  if (adminItems.length > 0 && !groups.some((group) => group.key === "admin")) {
-    groups.splice(Math.max(0, groups.length - 1), 0, { key: "admin", label: "추천 에셋", items: adminItems });
-  }
+  ].filter((group) => group.persistent || group.items.length > 0);
 
   const preferredTab = slot.kind === "color" ? groups[0]?.key : (selectedCandidate?.source ?? groups[0]?.key);
   const [activeTab, setActiveTab] = useState<CandidateGroup["key"] | undefined>(preferredTab);
@@ -466,34 +463,12 @@ function CandidatePicker({
 
       {isOpen && activeGroup ? (
         <div className="grid gap-3">
-          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
-            {activeGroup.items.map((candidate) => (
-              <button
-                key={candidate.id}
-                type="button"
-                className={`flex h-[104px] w-40 shrink-0 flex-col justify-between rounded-xl border px-3 py-3 text-left transition ${candidate.selected
-                  ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]"
-                  : candidate.active
-                    ? "border-[#cbd5e1] bg-white"
-                    : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1]"
-                  }`}
-                onClick={() => {
-                  onApplyCandidate(candidate);
-                }}
-              >
-                <div className="flex items-start gap-2">
-                  <CandidateSwatch candidate={candidate} />
-                  <div className="min-w-0">
-                    <span className="block truncate text-[12px] font-semibold text-[#111827]">{candidate.title}</span>
-                    <span className="mt-1 block text-[10px] font-medium text-[#64748b]">{groupSourceLabel(candidate.source)}</span>
-                  </div>
-                </div>
-                <div className="grid gap-1">
-                  {candidate.selected ? <span className="text-[10px] font-semibold text-[#2563eb]">사용 중</span> : null}
-                  <span className="line-clamp-2 text-[11px] font-medium leading-[1.3] text-[#6b7280]">{candidate.status}</span>
-                </div>
-              </button>
-            ))}
+          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-2 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
+            {activeGroup.items.length > 0 ? activeGroup.items.map((candidate) => (
+              <CandidateCard key={candidate.id} candidate={candidate} onApply={onApplyCandidate} />
+            )) : activeGroup.key === "admin" ? (
+              <AdminAssetPlaceholderCard isLoading={isLoadingAdminAssets} />
+            ) : null}
             {activeGroup.key === "admin" && hasMoreAdminAssets ? (
               <button type="button" className="flex h-[104px] w-32 shrink-0 items-center justify-center rounded-xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-3 text-center text-xs font-semibold text-[#475569] disabled:opacity-50" onClick={onLoadMoreAdminAssets} disabled={isLoadingAdminAssets}>
                 {isLoadingAdminAssets ? "불러오는 중" : "더 보기"}
@@ -503,6 +478,50 @@ function CandidatePicker({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function CandidateCard({ candidate, onApply }: { candidate: SlotCandidate; onApply: (candidate: SlotCandidate) => void }) {
+  return (
+    <button
+      type="button"
+      className={`flex h-[104px] w-40 shrink-0 flex-col justify-between rounded-xl border px-3 py-3 text-left transition ${candidate.selected
+        ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]"
+        : candidate.active
+          ? "border-[#cbd5e1] bg-white"
+          : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1]"
+        }`}
+      onClick={() => onApply(candidate)}
+    >
+      <div className="flex items-start gap-2">
+        <CandidateSwatch candidate={candidate} />
+        <div className="min-w-0">
+          <span className="block truncate text-[12px] font-semibold text-[#111827]">{candidate.title}</span>
+          <span className="mt-1 block text-[10px] font-medium text-[#64748b]">{groupSourceLabel(candidate.source)}</span>
+        </div>
+      </div>
+      <div className="grid gap-1">
+        {candidate.selected ? <span className="text-[10px] font-semibold text-[#2563eb]">사용 중</span> : null}
+        <span className="line-clamp-2 text-[11px] font-medium leading-[1.3] text-[#6b7280]">{candidate.status}</span>
+      </div>
+    </button>
+  );
+}
+
+function AdminAssetPlaceholderCard({ isLoading }: { isLoading: boolean }) {
+  return (
+    <div className="flex h-[104px] w-40 shrink-0 flex-col justify-between rounded-xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-3 py-3 text-left">
+      <div className="flex items-start gap-2">
+        <span className={`h-8 w-8 shrink-0 rounded-md border border-[#dbe3ed] bg-white ${isLoading ? "animate-pulse" : ""}`} aria-hidden="true" />
+        <div className="min-w-0">
+          <span className="block truncate text-[12px] font-semibold text-[#111827]">추천 에셋</span>
+          <span className="mt-1 block text-[10px] font-medium text-[#64748b]">관리 후보</span>
+        </div>
+      </div>
+      <span className="line-clamp-2 text-[11px] font-medium leading-[1.3] text-[#6b7280]">
+        {isLoading ? "추천 에셋을 불러오는 중입니다." : "이 슬롯에 표시할 추천 에셋이 없습니다."}
+      </span>
+    </div>
   );
 }
 

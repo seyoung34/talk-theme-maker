@@ -68,7 +68,7 @@ export function ProjectGroupRail({
           ))}
         </div>
         <div className="h-px bg-[#e5e7eb]" />
-        <div className="grid min-w-0 content-start gap-2 overflow-x-hidden overflow-y-auto [scrollbar-width:thin]">
+        <div className="grid min-w-0 content-start gap-2 overflow-x-hidden overflow-y-auto pr-1.5 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
         {basicSlots.map((slot) => (
           <SlotRailItem
             key={slot.id}

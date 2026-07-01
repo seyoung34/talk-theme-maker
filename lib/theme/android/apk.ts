@@ -105,7 +105,7 @@ async function prepareAndroidProject(files: AndroidBuildInputFile[], options: An
 
   try {
     await cp(/* turbopackIgnore: true */ sampleProjectRoot, projectRoot, { recursive: true, filter: shouldCopySampleEntry });
-    await removeBundledTabBarBackgrounds(projectRoot);
+    await removeBundledOptionalDrawables(projectRoot);
     if (options.applicationId?.trim()) {
       await writeProjectApplicationId(projectRoot, options.applicationId.trim());
     }
@@ -139,10 +139,16 @@ function shouldCopySampleEntry(source: string) {
   return true;
 }
 
-async function removeBundledTabBarBackgrounds(projectRoot: string) {
+async function removeBundledOptionalDrawables(projectRoot: string) {
   const bundledPaths = [
     "src/main/theme/drawable-sw600dp/theme_maintab_cell_image.9.png",
     "src/main/theme/drawable-xxhdpi/theme_maintab_cell_image.9.png",
+    "src/main/theme/drawable-sw600dp/theme_background_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_background_image.png",
+    "src/main/theme/drawable-sw600dp/theme_chatroom_background_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_chatroom_background_image.png",
+    "src/main/theme/drawable-sw600dp/theme_passcode_background_image.png",
+    "src/main/theme/drawable-xxhdpi/theme_passcode_background_image.png",
   ];
 
   await Promise.all(
