@@ -2,16 +2,41 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-export type MobileSheetSnap = "half" | "expanded" | "full";
+export type MobileSheetSnap = "collapsed" | "half" | "expanded" | "full";
 
 const snapRatio: Record<MobileSheetSnap, number> = {
+  collapsed: 0.18,
   half: 0.54,
   expanded: 0.68,
   full: 0.88,
 };
 
-const snapOrder: MobileSheetSnap[] = ["half", "expanded", "full"];
+export const mobileSheetHeight: Record<MobileSheetSnap, string> = {
+  collapsed: "max(136px, 18dvh)",
+  half: "54dvh",
+  expanded: "68dvh",
+  full: "88dvh",
+};
+
+const snapOrder: MobileSheetSnap[] = ["collapsed", "half", "expanded", "full"];
 const tapThreshold = 8;
+
+function getTappedSnap(snap: MobileSheetSnap): MobileSheetSnap {
+  if (snap === "collapsed") return "half";
+  if (snap === "half") return "expanded";
+  return "collapsed";
+}
+
+function getEscapedSnap(snap: MobileSheetSnap): MobileSheetSnap {
+  if (snap === "full" || snap === "expanded") return "half";
+  return "collapsed";
+}
+
+function getHandleLabel(snap: MobileSheetSnap): string {
+  if (snap === "collapsed") return "편집 패널 펼치기";
+  if (snap === "half") return "편집 패널 더 펼치기";
+  return "편집 패널 섹션만 남기기";
+}
 
 export function MobileEditSheet({
   snap,
@@ -30,9 +55,9 @@ export function MobileEditSheet({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && snap !== "half") {
+      if (event.key === "Escape" && snap !== "collapsed") {
         event.preventDefault();
-        onSnapChange("half");
+        onSnapChange(getEscapedSnap(snap));
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -60,7 +85,7 @@ export function MobileEditSheet({
     const delta = state.startY - event.clientY;
     if (Math.abs(delta) > tapThreshold) state.moved = true;
     const viewport = window.innerHeight || 1;
-    const min = snapRatio.half * viewport;
+    const min = snapRatio.collapsed * viewport;
     const max = snapRatio.full * viewport;
     setLiveHeight(Math.min(max, Math.max(min, state.startHeight + delta)));
   };
@@ -72,7 +97,7 @@ export function MobileEditSheet({
     if (!state) return;
 
     if (!state.moved) {
-      onSnapChange(snap === "half" ? "expanded" : "half");
+      onSnapChange(getTappedSnap(snap));
       setLiveHeight(null);
       return;
     }
@@ -81,7 +106,7 @@ export function MobileEditSheet({
     setLiveHeight(null);
   };
 
-  const heightStyle = liveHeight != null ? `${Math.round(liveHeight)}px` : `${Math.round(snapRatio[snap] * 100)}dvh`;
+  const heightStyle = liveHeight != null ? `${Math.round(liveHeight)}px` : mobileSheetHeight[snap];
 
   return (
     <div
@@ -94,7 +119,7 @@ export function MobileEditSheet({
       <button
         type="button"
         className="grid touch-none place-items-center gap-1 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
-        aria-label={snap === "half" ? "편집 패널 넓히기" : "편집 패널 줄이기"}
+        aria-label={getHandleLabel(snap)}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

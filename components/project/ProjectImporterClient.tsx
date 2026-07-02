@@ -8,10 +8,11 @@ import { Archive, Download, Package, ShieldCheck, Wrench, X } from "lucide-react
 import { getExportNotice, getExportProgressSteps } from "@/components/project/exportClient";
 import type { AccountState, ExportMode } from "@/components/project/exportModel";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
+import { MobileEditActionBar } from "@/components/project/MobileEditActionBar";
 import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
 import { ProjectQuickEditPanel } from "@/components/project/ProjectQuickEditPanel";
 import { ProjectSectionRail } from "@/components/project/ProjectSectionRail";
-import { MobileEditSheet, type MobileSheetSnap } from "@/components/project/MobileEditSheet";
+import { MobileEditSheet, mobileSheetHeight, type MobileSheetSnap } from "@/components/project/MobileEditSheet";
 import { useViewportMode } from "@/components/project/hooks/useViewportMode";
 import { useProjectAutoColors } from "@/components/project/hooks/useProjectAutoColors";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
@@ -109,7 +110,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [candidateSelections, setCandidateSelections] = useState<SlotCandidateSelections>({});
   const [candidateOpen, setCandidateOpen] = useState(true);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
-  const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("half");
+  const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
@@ -518,14 +519,22 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (nextGroup) setActiveGroup(nextGroup);
     const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, section) && (!nextGroup || isSlotVisibleInGroup(slot, nextGroup)));
     setSelectedSlotId(firstSlot?.id);
-    setMobileEditSheetOpen(true);
+    if (viewportMode === "mobile") {
+      setMobileSheetSnap("collapsed");
+    } else {
+      setMobileEditSheetOpen(true);
+    }
   };
 
   const selectGroup = (group: ThemeSlotGroup) => {
     setActiveGroup(group);
     const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, group));
     setSelectedSlotId(firstSlot?.id);
-    setMobileEditSheetOpen(true);
+    if (viewportMode === "mobile") {
+      setMobileSheetSnap("half");
+    } else {
+      setMobileEditSheetOpen(true);
+    }
   };
 
   const selectPreviewSlot = (slotId: string | undefined) => {
@@ -534,8 +543,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (!slot) return;
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
     if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
-    setMobileEditSheetOpen(true);
-    setMobileSheetSnap("expanded");
+    if (viewportMode === "mobile") {
+      setMobileSheetSnap("expanded");
+    } else {
+      setMobileEditSheetOpen(true);
+    }
   };
 
   const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
@@ -994,7 +1006,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       {initialLoadState.status === "error" ? <InitialTemplateErrorPanel message={initialLoadState.message ?? "템플릿을 불러오지 못했습니다."} onStartDefault={startDefaultTemplate} /> : null}
 
       {initialLoadState.status === "ready" ? (
-        <div className="grid h-[calc(100dvh-1.5rem)] min-h-full min-w-0 w-full grid-rows-[auto_1fr] gap-3 md:h-[calc(100dvh-2rem)] md:gap-4 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]">
+        <div className={viewportMode === "mobile" ? "flex h-[calc(100dvh-1.5rem)] min-h-0 min-w-0 w-full flex-col overflow-hidden" : "grid h-[calc(100dvh-1.5rem)] min-h-full min-w-0 w-full grid-rows-[auto_1fr] gap-3 md:h-[calc(100dvh-2rem)] md:gap-4 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]"}>
+          {viewportMode === "desktop" ? (
           <header className="grid min-h-[56px] min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 px-3 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-4 md:px-4">
             <div className="flex min-w-0 items-center gap-2 justify-self-start md:gap-4">
               <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
@@ -1050,13 +1063,22 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
               </button>
             </div>
           </header>
+          ) : null}
 
           {viewportMode === "mobile" ? (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="min-h-0 flex-1 overflow-hidden p-2">
-                <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
+            <div className="flex h-full min-h-0 flex-col overflow-hidden">
+              <MobileEditActionBar
+                isAdminMode={isAdminMode}
+                isSaving={isAdminMode ? isSavingSystemTemplate : isSavingTemplate}
+                isExporting={isExporting}
+                onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
+                onExport={() => void openExportDialog()}
+              />
+              <div className="relative min-h-0 flex-1 overflow-hidden" style={{ paddingBottom: mobileSheetHeight[mobileSheetSnap] }}>
+                <div className="h-full min-h-0 p-2">
+                  <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
+                </div>
               </div>
-              <div aria-hidden className="shrink-0" style={{ height: "54dvh" }} />
               <MobileEditSheet
                 snap={mobileSheetSnap}
                 onSnapChange={setMobileSheetSnap}
@@ -1065,33 +1087,41 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 <div className="shrink-0">
                   <ProjectSectionRail variant="chips" activeSection={activeSection} slots={slots} onSelectSection={selectSection} />
                 </div>
-                <div className="min-h-0 flex-1">
-                  <ProjectGroupRail
-                    variant="sheet"
-                    groups={groups}
-                    activeGroup={activeGroup}
-                    onSelectGroup={selectGroup}
-                    slots={visibleSlots}
-                    selectedSlotId={selectedSlot?.id}
-                    uploads={uploads}
-                    colors={colors}
-                    selections={candidateSelections}
-                    templateId={templateId}
-                    template={activeTemplate}
-                    contrastWarnings={contrastWarnings}
-                    onSelectSlot={(slot) => {
-                      setSelectedSlotId(slot.id);
-                      if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-                      if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
-                      setMobileSheetSnap("expanded");
-                    }}
-                  />
-                </div>
-                {selectedSlot ? (
-                  <div className="max-h-[44dvh] shrink-0 overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-2 [scrollbar-width:thin]">
-                    {quickEditPanel}
+                {mobileSheetSnap !== "collapsed" ? (
+                  <>
+                    <div className="min-h-0 flex-1">
+                      <ProjectGroupRail
+                        variant="sheet"
+                        groups={groups}
+                        activeGroup={activeGroup}
+                        onSelectGroup={selectGroup}
+                        slots={visibleSlots}
+                        selectedSlotId={selectedSlot?.id}
+                        uploads={uploads}
+                        colors={colors}
+                        selections={candidateSelections}
+                        templateId={templateId}
+                        template={activeTemplate}
+                        contrastWarnings={contrastWarnings}
+                        onSelectSlot={(slot) => {
+                          setSelectedSlotId(slot.id);
+                          if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
+                          if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
+                          setMobileSheetSnap("expanded");
+                        }}
+                      />
+                    </div>
+                    {selectedSlot ? (
+                      <div className="max-h-[44dvh] shrink-0 overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-2 [scrollbar-width:thin]">
+                        {quickEditPanel}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="sr-only" aria-live="polite">
+                    편집 패널이 섹션 선택 상태로 접혔습니다.
                   </div>
-                ) : null}
+                )}
               </MobileEditSheet>
             </div>
           ) : viewportMode === "pending" ? (
