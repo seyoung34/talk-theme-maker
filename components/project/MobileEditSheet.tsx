@@ -2,40 +2,34 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-export type MobileSheetSnap = "collapsed" | "half" | "expanded" | "full";
+export type MobileSheetSnap = "collapsed" | "half" | "full";
 
 const snapRatio: Record<MobileSheetSnap, number> = {
   collapsed: 0.18,
-  half: 0.54,
-  expanded: 0.68,
+  half: 0.68,
   full: 0.88,
 };
 
 export const mobileSheetHeight: Record<MobileSheetSnap, string> = {
   collapsed: "max(136px, 18dvh)",
-  half: "54dvh",
-  expanded: "68dvh",
+  half: "68dvh",
   full: "88dvh",
 };
 
-const snapOrder: MobileSheetSnap[] = ["collapsed", "half", "expanded", "full"];
+const snapOrder: MobileSheetSnap[] = ["collapsed", "half", "full"];
 const tapThreshold = 8;
 
 function getTappedSnap(snap: MobileSheetSnap): MobileSheetSnap {
-  if (snap === "collapsed") return "half";
-  if (snap === "half") return "expanded";
-  return "collapsed";
+  return snap === "collapsed" ? "half" : "collapsed";
 }
 
 function getEscapedSnap(snap: MobileSheetSnap): MobileSheetSnap {
-  if (snap === "full" || snap === "expanded") return "half";
+  if (snap === "full") return "half";
   return "collapsed";
 }
 
 function getHandleLabel(snap: MobileSheetSnap): string {
-  if (snap === "collapsed") return "편집 패널 펼치기";
-  if (snap === "half") return "편집 패널 더 펼치기";
-  return "편집 패널 섹션만 남기기";
+  return snap === "collapsed" ? "편집 패널 펼치기" : "편집 패널 접기";
 }
 
 export function MobileEditSheet({

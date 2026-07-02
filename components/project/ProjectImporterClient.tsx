@@ -548,7 +548,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
     if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
     if (viewportMode === "mobile") {
-      setMobileSheetSnap("expanded");
+      setMobileSheetSnap("half");
     } else {
       setMobileEditSheetOpen(true);
     }
@@ -1140,7 +1140,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                           setSelectedSlotId(slot.id);
                           if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
                           if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
-                          setMobileSheetSnap("expanded");
+                          setMobileSheetSnap("half");
                         }}
                       />
                     </div>
