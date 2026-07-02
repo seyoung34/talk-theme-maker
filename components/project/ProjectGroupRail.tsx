@@ -23,6 +23,7 @@ export function ProjectGroupRail({
   template,
   contrastWarnings = {},
   onSelectSlot,
+  variant = "panel",
 }: {
   groups: ThemeSlotGroup[];
   activeGroup: ThemeSlotGroup;
@@ -36,6 +37,7 @@ export function ProjectGroupRail({
   template: ThemeTemplate;
   contrastWarnings?: Record<string, SlotContrastWarning>;
   onSelectSlot: (slot: ThemeAssetSlot) => void;
+  variant?: "panel" | "sheet";
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const basicSlots = useMemo(() => slots.filter((slot) => slot.optionLevel !== "advanced"), [slots]);
@@ -54,8 +56,8 @@ export function ProjectGroupRail({
 
   return (
     <Tooltip.Provider delayDuration={260} skipDelayDuration={100}>
-    <aside className="grid max-h-[560px] min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-3 md:max-h-none">
-        <div className="flex min-w-0 gap-2 overflow-x-auto pb-1 [scrollbar-width:thin] lg:grid lg:overflow-visible lg:pb-0">
+    <aside className={variant === "sheet" ? "grid min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 overflow-hidden" : "grid max-h-[560px] min-h-0 min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-3 md:max-h-none"}>
+        <div className={`flex min-w-0 gap-2 overflow-x-auto pb-1 [scrollbar-width:thin] ${variant === "sheet" ? "" : "lg:grid lg:overflow-visible lg:pb-0"}`}>
           {groups.map((group) => (
             <button
               key={group}
