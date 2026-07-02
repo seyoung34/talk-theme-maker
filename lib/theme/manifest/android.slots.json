@@ -519,7 +519,7 @@
     "required": true,
     "note": "친구 탭 기본 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.png"
     },
     "export": {
       "android": {
@@ -547,7 +547,7 @@
     "required": false,
     "note": "친구 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_focused_image.png"
     },
     "export": {
       "android": {
@@ -575,7 +575,7 @@
     "required": false,
     "note": "채팅 탭 기본 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_chats_image.png"
     },
     "export": {
       "android": {
@@ -603,7 +603,7 @@
     "required": false,
     "note": "채팅 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_chats_focused_image.png"
     },
     "export": {
       "android": {
@@ -631,7 +631,7 @@
     "required": false,
     "note": "Now 탭 기본 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_now_image.png"
     },
     "export": {
       "android": {
@@ -659,7 +659,7 @@
     "required": false,
     "note": "Now 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_now_focused_image.png"
     },
     "export": {
       "android": {
@@ -687,7 +687,7 @@
     "required": false,
     "note": "쇼핑 탭 기본 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_shopping_image.png"
     },
     "export": {
       "android": {
@@ -715,7 +715,7 @@
     "required": false,
     "note": "쇼핑 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_shopping_focused_image.png"
     },
     "export": {
       "android": {
@@ -743,7 +743,7 @@
     "required": false,
     "note": "더보기 탭 기본 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_more_image.png"
     },
     "export": {
       "android": {
@@ -771,7 +771,7 @@
     "required": false,
     "note": "더보기 탭 선택 상태 아이콘",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_friends_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_more_focused_image.png"
     },
     "export": {
       "android": {
@@ -799,7 +799,7 @@
     "required": false,
     "note": "통화 탭 기본 아이콘 (국가/버전에 따라 노출될 수 있음)",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_call_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_call_image.png"
     },
     "export": {
       "android": {
@@ -827,7 +827,7 @@
     "required": false,
     "note": "통화 탭 선택 상태 아이콘 (국가/버전에 따라 노출될 수 있음)",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_call_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_call_focused_image.png"
     },
     "export": {
       "android": {
@@ -855,7 +855,7 @@
     "required": false,
     "note": "Piccoma 탭 기본 아이콘 (일본/글로벌 등 일부 환경에서 노출될 수 있음)",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_piccoma_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_piccoma_image.png"
     },
     "export": {
       "android": {
@@ -883,7 +883,7 @@
     "required": false,
     "note": "Piccoma 탭 선택 상태 아이콘 (일본/글로벌 등 일부 환경에서 노출될 수 있음)",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_maintab_ico_piccoma_image.svg"
+      "basic": "/template-assets/basic/android/theme_maintab_ico_piccoma_focused_image.png"
     },
     "export": {
       "android": {
@@ -910,9 +910,6 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_chatroom_background_image.png",
     "required": true,
     "note": "1080 x 1920 기준 채팅방 배경 이미지",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_chatroom_background_image.svg"
-    },
     "export": {
       "android": {
         "type": "file",
@@ -1399,37 +1396,21 @@
     }
   },
   {
-    "id": "android-common-theme-icon",
-    "platform": "android",
-    "role": "theme_icon",
-    "section": "common",
-    "group": "icon",
-    "screen": "profile",
-    "kind": "image",
-    "label": "테마 대표 아이콘",
-    "fileName": "icon.png",
-    "path": "src/main/theme/drawable-xxhdpi/icon.png",
-    "required": true,
-    "note": "테마 목록과 앱 아이콘에 사용하는 대표 아이콘",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/icon.png"
-    }
-  },
-  {
     "id": "android-find-add-friend",
     "platform": "android",
     "role": "find_add_friend",
     "section": "common",
-    "group": "icon",
+    "group": "profiles",
     "screen": "profile",
     "kind": "image",
     "label": "친구 추가 버튼",
     "fileName": "theme_find_add_friend_button_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_find_add_friend_button_image.png",
     "required": false,
-    "note": "친구 찾기·추가 화면에 표시되는 버튼 이미지입니다.",
+    "note": "친구 찾기·추가 화면에 표시되는 버튼 이미지입니다. 글로벌 버전 일부 화면에서만 노출될 수 있습니다.",
+    "optionLevel": "advanced",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_find_add_friend_button_image.svg"
+      "basic": "/template-assets/basic/android/theme_find_add_friend_button_image.png"
     }
   },
   {
@@ -1437,16 +1418,17 @@
     "platform": "android",
     "role": "find_add_friend_pressed",
     "section": "common",
-    "group": "icon",
+    "group": "profiles",
     "screen": "profile",
     "kind": "image",
     "label": "친구 추가 버튼 눌림",
     "fileName": "theme_find_add_friend_button_pressed_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_find_add_friend_button_pressed_image.png",
     "required": false,
-    "note": "친구 찾기·추가 버튼을 누른 상태의 이미지입니다.",
+    "note": "친구 찾기·추가 버튼을 누른 상태의 이미지입니다. 글로벌 버전 일부 화면에서만 노출될 수 있습니다.",
+    "optionLevel": "advanced",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_find_add_friend_button_pressed_image.svg"
+      "basic": "/template-assets/basic/android/theme_find_add_friend_button_pressed_image.png"
     }
   },
   {
@@ -1662,7 +1644,8 @@
     "fileName": "theme_profile_01_image_full.png",
     "path": "src/main/theme/drawable-nodpi/theme_profile_01_image_full.png",
     "required": true,
-    "note": "전체 보기용 기본 프로필 이미지 1"
+    "note": "전체 보기용 기본 프로필 이미지 1",
+    "optionLevel": "advanced"
   },
   {
     "id": "android-common-profile-full-2",
@@ -1676,7 +1659,8 @@
     "fileName": "theme_profile_02_image_full.png",
     "path": "src/main/theme/drawable-nodpi/theme_profile_02_image_full.png",
     "required": false,
-    "note": "전체 보기용 기본 프로필 이미지 2"
+    "note": "전체 보기용 기본 프로필 이미지 2",
+    "optionLevel": "advanced"
   },
   {
     "id": "android-common-profile-full-3",
@@ -1690,6 +1674,7 @@
     "fileName": "theme_profile_03_image_full.png",
     "path": "src/main/theme/drawable-nodpi/theme_profile_03_image_full.png",
     "required": false,
-    "note": "전체 보기용 기본 프로필 이미지 3"
+    "note": "전체 보기용 기본 프로필 이미지 3",
+    "optionLevel": "advanced"
   }
 ]

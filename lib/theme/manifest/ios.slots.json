@@ -1100,14 +1100,15 @@
     "platform": "ios",
     "role": "find_add_friend",
     "section": "common",
-    "group": "icon",
+    "group": "profiles",
     "screen": "profile",
     "kind": "image",
     "label": "친구 추가 버튼",
     "fileName": "findBtnAddFriend.png",
     "path": "Images/findBtnAddFriend.png",
     "required": false,
-    "note": "친구 찾기와 친구 추가 화면에 표시되는 버튼 이미지입니다. 작은 크기에서도 의미가 분명해야 합니다.",
+    "note": "친구 찾기와 친구 추가 화면에 표시되는 버튼 이미지입니다. 작은 크기에서도 의미가 분명해야 합니다. 글로벌 버전 일부 화면에서만 노출될 수 있습니다.",
+    "optionLevel": "advanced",
     "cssSelector": "ButtonStyle-AddFriend",
     "cssProperty": "-ios-image"
   }
