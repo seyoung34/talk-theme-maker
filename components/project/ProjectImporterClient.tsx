@@ -11,6 +11,8 @@ import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
 import { ProjectQuickEditPanel } from "@/components/project/ProjectQuickEditPanel";
 import { ProjectSectionRail } from "@/components/project/ProjectSectionRail";
+import { MobileEditSheet, type MobileSheetSnap } from "@/components/project/MobileEditSheet";
+import { useViewportMode } from "@/components/project/hooks/useViewportMode";
 import { useProjectAutoColors } from "@/components/project/hooks/useProjectAutoColors";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
 import { useProjectExport } from "@/components/project/hooks/useProjectExport";
@@ -107,6 +109,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [candidateSelections, setCandidateSelections] = useState<SlotCandidateSelections>({});
   const [candidateOpen, setCandidateOpen] = useState(true);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
+  const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("half");
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
@@ -366,6 +369,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setCandidateSelections(getInitialSlotCandidateSelections(slots, templateId, activeTemplate));
   }, [activeTemplate, slots, templateId]);
 
+  const viewportMode = useViewportMode();
   const groups = useMemo(() => getSectionGroups(activeSection, slots), [activeSection, slots]);
   const analysis = useMemo(
     () => createThemeProjectAnalysis(activeTemplate, platform, slots, uploads, colors, candidateSelections),
@@ -531,6 +535,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
     if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
     setMobileEditSheetOpen(true);
+    setMobileSheetSnap("expanded");
   };
 
   const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
@@ -851,6 +856,64 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
   };
 
+  const previewProps = {
+    analysis,
+    activeSection,
+    template: activeTemplate,
+    templateId,
+    slots,
+    colors,
+    selections: candidateSelections,
+    bubbleEdits: previewBubbleEdits,
+    selectedSlotId: selectedSlot?.id,
+    onSelectSlot: selectPreviewSlot,
+  };
+
+  const quickEditPanel = (
+    <ProjectQuickEditPanel
+      slot={selectedSlot}
+      slots={slots}
+      file={selectedFile}
+      uploads={uploads}
+      colors={colors}
+      selections={candidateSelections}
+      adminAssets={adminAssetsWithPreview}
+      hasMoreAdminAssets={Boolean(adminAssetCursor)}
+      isLoadingAdminAssets={isLoadingAdminAssets}
+      templateId={templateId}
+      template={activeTemplate}
+      platform={platform}
+      selectedBubbleSlot={selectedBubbleSlot}
+      markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
+      insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
+      stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
+      fileInputRefs={fileInputRefs}
+      onUpload={uploadSlot}
+      onEditedUpload={uploadEditedSlot}
+      onClear={clearSlot}
+      onColorChange={changeColor}
+      imageColorPalette={activeImageColorPalette}
+      imageColorPaletteError={imageColorPaletteError}
+      recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
+      contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
+      isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
+      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+      canApplyAutoColorToAll={Boolean((!mainBackgroundFile || activeImageColorPalette) && Object.keys(mainColorRecommendations).length)}
+      onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
+      onApplyAutoColorToAll={applyAutoColorToAll}
+      onSelectCandidate={selectCandidate}
+      onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
+      onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
+      onOpenAdvanced={openAdvancedBubbleEditor}
+      onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
+      onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
+      onStretchChange={(stretch) => selectedSlot && setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch }))}
+      canAdjustInline={canAdjustInline}
+      candidateOpen={candidateOpen}
+      onToggleCandidates={() => setCandidateOpen((current) => !current)}
+    />
+  );
+
   return (
     <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
       {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
@@ -988,11 +1051,51 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             </div>
           </header>
 
-          <div className="grid gap-2 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-3 py-3 text-xs font-bold leading-5 text-[#1d4ed8] lg:hidden">
-            <span>모바일 편집 흐름</span>
-            <span className="text-[#475569]">섹션을 고르고, 프리뷰를 확인한 뒤 아래 편집 패널에서 이미지와 색상을 바꿉니다.</span>
-          </div>
-
+          {viewportMode === "mobile" ? (
+            <div className="relative h-full min-h-0">
+              <div className="grid h-full min-h-0 place-items-center overflow-hidden px-1 pb-[calc(54dvh+12px)] pt-1">
+                <ProjectPreviewPanel {...previewProps} className="h-full max-h-full min-h-0" />
+              </div>
+              <MobileEditSheet
+                snap={mobileSheetSnap}
+                onSnapChange={setMobileSheetSnap}
+                ariaLabel={selectedSlot ? `${selectedSlot.label} 편집 패널` : "요소 편집 패널"}
+              >
+                <div className="shrink-0">
+                  <ProjectSectionRail variant="chips" activeSection={activeSection} slots={slots} onSelectSection={selectSection} />
+                </div>
+                <div className="min-h-0 flex-1">
+                  <ProjectGroupRail
+                    variant="sheet"
+                    groups={groups}
+                    activeGroup={activeGroup}
+                    onSelectGroup={selectGroup}
+                    slots={visibleSlots}
+                    selectedSlotId={selectedSlot?.id}
+                    uploads={uploads}
+                    colors={colors}
+                    selections={candidateSelections}
+                    templateId={templateId}
+                    template={activeTemplate}
+                    contrastWarnings={contrastWarnings}
+                    onSelectSlot={(slot) => {
+                      setSelectedSlotId(slot.id);
+                      if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
+                      if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
+                      setMobileSheetSnap("expanded");
+                    }}
+                  />
+                </div>
+                {selectedSlot ? (
+                  <div className="max-h-[44dvh] shrink-0 overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-2 [scrollbar-width:thin]">
+                    {quickEditPanel}
+                  </div>
+                ) : null}
+              </MobileEditSheet>
+            </div>
+          ) : viewportMode === "pending" ? (
+            <div className="min-h-0" />
+          ) : (
           <section className="grid min-h-0 min-w-0 w-full grid-cols-1 content-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
             <div className="order-1 h-full min-w-0 lg:order-none">
               <ProjectSectionRail
@@ -1072,48 +1175,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   </div>
                 </div>
                 <div className="min-h-0 overflow-y-auto pr-1 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1] lg:h-full">
-                  <ProjectQuickEditPanel
-                    slot={selectedSlot}
-                    slots={slots}
-                    file={selectedFile}
-                    uploads={uploads}
-                    colors={colors}
-                    selections={candidateSelections}
-                    adminAssets={adminAssetsWithPreview}
-                    hasMoreAdminAssets={Boolean(adminAssetCursor)}
-                    isLoadingAdminAssets={isLoadingAdminAssets}
-                    templateId={templateId}
-                    template={activeTemplate}
-                    platform={platform}
-                    selectedBubbleSlot={selectedBubbleSlot}
-                    markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
-                    insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
-                    stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
-                    fileInputRefs={fileInputRefs}
-                    onUpload={uploadSlot}
-                    onEditedUpload={uploadEditedSlot}
-                    onClear={clearSlot}
-                    onColorChange={changeColor}
-                    imageColorPalette={activeImageColorPalette}
-                    imageColorPaletteError={imageColorPaletteError}
-                    recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
-                    contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
-                    isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
-                    canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
-                    canApplyAutoColorToAll={Boolean((!mainBackgroundFile || activeImageColorPalette) && Object.keys(mainColorRecommendations).length)}
-                    onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
-                    onApplyAutoColorToAll={applyAutoColorToAll}
-                    onSelectCandidate={selectCandidate}
-                    onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
-                    onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
-                    onOpenAdvanced={openAdvancedBubbleEditor}
-                    onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
-                    onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
-                    onStretchChange={(stretch) => selectedSlot && setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch }))}
-                    canAdjustInline={canAdjustInline}
-                    candidateOpen={candidateOpen}
-                    onToggleCandidates={() => setCandidateOpen((current) => !current)}
-                  />
+                  {quickEditPanel}
                 </div>
               </div>
             </section>
@@ -1132,6 +1194,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
               onSelectSlot={selectPreviewSlot}
             />
           </section>
+          )}
         </div>
       ) : null}
     </main>

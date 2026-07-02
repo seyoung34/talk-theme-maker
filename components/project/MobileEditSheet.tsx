@@ -102,7 +102,7 @@ export function MobileEditSheet({
         <span className="h-1.5 w-11 rounded-full bg-[#cbd5e1]" aria-hidden="true" />
       </button>
 
-      <div className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-3 px-3 pb-3">
+      <div className="flex min-h-0 flex-col gap-3 px-3 pb-3">
         {children}
       </div>
     </div>
