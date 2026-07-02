@@ -14,6 +14,9 @@ import { ProjectQuickEditPanel } from "@/components/project/ProjectQuickEditPane
 import { ProjectSectionRail } from "@/components/project/ProjectSectionRail";
 import { MobileEditSheet, mobileSheetHeight, type MobileSheetSnap } from "@/components/project/MobileEditSheet";
 import { MobileQuickEditPanel } from "@/components/project/MobileQuickEditPanel";
+import { MobileSectionNav } from "@/components/project/MobileSectionNav";
+import { MobileGroupSlotList } from "@/components/project/MobileGroupSlotList";
+import { MobileScaledPreview } from "@/components/project/MobileScaledPreview";
 import { useViewportMode } from "@/components/project/hooks/useViewportMode";
 import { useProjectAutoColors } from "@/components/project/hooks/useProjectAutoColors";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
@@ -883,7 +886,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const mobilePreviewClearance = mobileSheetSnap === "collapsed" ? mobileSheetHeight.collapsed : mobileSheetHeight.half;
-  const mobilePreviewAspect = activeSection === "chatroom" ? "1080 / 2123" : "1080 / 2340";
 
   const quickEditPanel = (
     <ProjectQuickEditPanel
@@ -1107,15 +1109,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 />
               ) : null}
               <div className="relative min-h-0 flex-1 overflow-hidden" style={{ paddingBottom: mobilePreviewClearance }}>
-                <div className="flex h-full min-h-0 items-center justify-center p-2">
-                  {activeSection === "common" ? (
-                    <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
-                  ) : (
-                    <div className="h-full max-h-full" style={{ aspectRatio: mobilePreviewAspect, maxWidth: "100%" }}>
-                      <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
-                    </div>
-                  )}
-                </div>
+                <MobileScaledPreview section={activeSection}>
+                  <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
+                </MobileScaledPreview>
               </div>
               <MobileEditSheet
                 snap={mobileSheetSnap}
@@ -1123,13 +1119,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 ariaLabel={selectedSlot ? `${selectedSlot.label} 편집 패널` : "요소 편집 패널"}
               >
                 <div className="shrink-0">
-                  <ProjectSectionRail variant="chips" activeSection={activeSection} slots={slots} onSelectSection={selectSection} />
+                  <MobileSectionNav activeSection={activeSection} slots={slots} onSelectSection={selectSection} />
                 </div>
                 {mobileSheetSnap !== "collapsed" ? (
                   <>
                     <div className="min-h-0 flex-1">
-                      <ProjectGroupRail
-                        variant="sheet"
+                      <MobileGroupSlotList
                         groups={groups}
                         activeGroup={activeGroup}
                         onSelectGroup={selectGroup}
