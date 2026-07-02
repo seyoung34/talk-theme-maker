@@ -16,11 +16,12 @@ export function ProjectSectionRail({
 }) {
   const visibleSections = sectionOrder.filter((section) => slots.some((slot) => isSlotVisibleInSection(slot, section)));
 
+  const sizingClass = variant === "chips" ? "min-h-10 shrink-0 gap-2 px-3 py-2 whitespace-nowrap" : "min-h-12 min-w-[116px] gap-2.5 px-3 py-2.5 lg:min-w-0";
   const sectionButtons = visibleSections.map((section) => (
     <button
       key={section}
       type="button"
-      className={`flex min-h-12 min-w-[116px] items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${variant === "full" ? "lg:min-w-0" : ""} ${activeSection === section ? "border-[#93c5fd] bg-[#eff6ff] text-[#1d4ed8] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]" : "border-[#e5e7eb] bg-[#fcfcfd] text-[#475569] hover:border-[#cbd5e1] hover:bg-white hover:text-[#111827]"}`}
+      className={`flex items-center rounded-xl border text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${sizingClass} ${activeSection === section ? "border-[#93c5fd] bg-[#eff6ff] text-[#1d4ed8] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]" : "border-[#e5e7eb] bg-[#fcfcfd] text-[#475569] hover:border-[#cbd5e1] hover:bg-white hover:text-[#111827]"}`}
       onClick={() => onSelectSection(section)}
       aria-current={activeSection === section ? "page" : undefined}
     >
@@ -31,7 +32,7 @@ export function ProjectSectionRail({
 
   if (variant === "chips") {
     return (
-      <nav className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]" aria-label="화면 선택">
+      <nav className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="화면 선택">
         {sectionButtons}
       </nav>
     );

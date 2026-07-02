@@ -13,6 +13,7 @@ import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
 import { ProjectQuickEditPanel } from "@/components/project/ProjectQuickEditPanel";
 import { ProjectSectionRail } from "@/components/project/ProjectSectionRail";
 import { MobileEditSheet, mobileSheetHeight, type MobileSheetSnap } from "@/components/project/MobileEditSheet";
+import { MobileQuickEditPanel } from "@/components/project/MobileQuickEditPanel";
 import { useViewportMode } from "@/components/project/hooks/useViewportMode";
 import { useProjectAutoColors } from "@/components/project/hooks/useProjectAutoColors";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
@@ -881,6 +882,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     onSelectSlot: selectPreviewSlot,
   };
 
+  const mobilePreviewClearance = mobileSheetSnap === "collapsed" ? mobileSheetHeight.collapsed : mobileSheetHeight.half;
+  const mobilePreviewAspect = activeSection === "chatroom" ? "1080 / 2123" : "1080 / 2340";
+
   const quickEditPanel = (
     <ProjectQuickEditPanel
       slot={selectedSlot}
@@ -923,6 +927,32 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       canAdjustInline={canAdjustInline}
       candidateOpen={candidateOpen}
       onToggleCandidates={() => setCandidateOpen((current) => !current)}
+    />
+  );
+
+  const mobileEditPanel = (
+    <MobileQuickEditPanel
+      slot={selectedSlot}
+      slots={slots}
+      file={selectedFile}
+      uploads={uploads}
+      colors={colors}
+      selections={candidateSelections}
+      adminAssets={adminAssetsWithPreview}
+      templateId={templateId}
+      template={activeTemplate}
+      contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
+      recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
+      isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
+      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+      fileInputRefs={fileInputRefs}
+      onUpload={uploadSlot}
+      onClear={clearSlot}
+      onColorChange={changeColor}
+      onSelectCandidate={selectCandidate}
+      onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
+      onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
+      onOpenAdvanced={openAdvancedBubbleEditor}
     />
   );
 
@@ -1067,16 +1097,24 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
           {viewportMode === "mobile" ? (
             <div className="flex h-full min-h-0 flex-col overflow-hidden">
-              <MobileEditActionBar
-                isAdminMode={isAdminMode}
-                isSaving={isAdminMode ? isSavingSystemTemplate : isSavingTemplate}
-                isExporting={isExporting}
-                onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
-                onExport={() => void openExportDialog()}
-              />
-              <div className="relative min-h-0 flex-1 overflow-hidden" style={{ paddingBottom: mobileSheetHeight[mobileSheetSnap] }}>
-                <div className="h-full min-h-0 p-2">
-                  <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
+              {mobileSheetSnap === "collapsed" ? (
+                <MobileEditActionBar
+                  isAdminMode={isAdminMode}
+                  isSaving={isAdminMode ? isSavingSystemTemplate : isSavingTemplate}
+                  isExporting={isExporting}
+                  onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
+                  onExport={() => void openExportDialog()}
+                />
+              ) : null}
+              <div className="relative min-h-0 flex-1 overflow-hidden" style={{ paddingBottom: mobilePreviewClearance }}>
+                <div className="flex h-full min-h-0 items-center justify-center p-2">
+                  {activeSection === "common" ? (
+                    <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
+                  ) : (
+                    <div className="h-full max-h-full" style={{ aspectRatio: mobilePreviewAspect, maxWidth: "100%" }}>
+                      <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
+                    </div>
+                  )}
                 </div>
               </div>
               <MobileEditSheet
@@ -1112,8 +1150,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                       />
                     </div>
                     {selectedSlot ? (
-                      <div className="max-h-[44dvh] shrink-0 overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] p-2 [scrollbar-width:thin]">
-                        {quickEditPanel}
+                      <div className="max-h-[46dvh] shrink-0 overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white p-3 [scrollbar-width:thin]">
+                        {mobileEditPanel}
                       </div>
                     ) : null}
                   </>
