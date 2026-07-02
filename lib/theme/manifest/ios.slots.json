@@ -324,7 +324,7 @@
     "required": true,
     "note": "친구 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 선택 아이콘과 크기와 중심을 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+      "basic": "/template-assets/basic/ios/maintabIcoFriends.png"
     },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-friends-normal-icon-image"
@@ -343,7 +343,7 @@
     "required": false,
     "note": "친구 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 아이콘과 같은 크기와 위치를 유지하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+      "basic": "/template-assets/basic/ios/maintabIcoFriendsSelected.png"
     },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-friends-selected-icon-image"
@@ -362,7 +362,7 @@
     "required": false,
     "note": "채팅 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 선택 아이콘과 크기와 중심을 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+      "basic": "/template-assets/basic/ios/maintabIcoChats.png"
     },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-chats-normal-icon-image"
@@ -381,7 +381,7 @@
     "required": false,
     "note": "채팅 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 아이콘과 같은 크기와 위치를 유지하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+      "basic": "/template-assets/basic/ios/maintabIcoChatsSelected.png"
     },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-chats-selected-icon-image"
@@ -400,7 +400,7 @@
     "required": false,
     "note": "나우 또는 오픈채팅 계열 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 탭 구성에 따라 노출될 수 있습니다.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+      "basic": "/template-assets/basic/ios/maintabIcoNow.png"
     },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-now-normal-icon-image"
@@ -419,7 +419,7 @@
     "required": false,
     "note": "나우 또는 오픈채팅 계열 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 아이콘과 크기와 중심을 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+      "basic": "/template-assets/basic/ios/maintabIcoNowSelected.png"
     },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-now-selected-icon-image"
@@ -438,7 +438,7 @@
     "required": false,
     "note": "쇼핑 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 선택 아이콘과 크기와 중심을 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+      "basic": "/template-assets/basic/ios/maintabIcoShopping.png"
     },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-shopping-normal-icon-image"
@@ -457,7 +457,7 @@
     "required": false,
     "note": "쇼핑 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 아이콘과 같은 크기와 위치를 유지하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+      "basic": "/template-assets/basic/ios/maintabIcoShoppingSelected.png"
     },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-shopping-selected-icon-image"
@@ -476,7 +476,7 @@
     "required": false,
     "note": "더보기 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 선택 아이콘과 크기와 중심을 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+      "basic": "/template-assets/basic/ios/maintabIcoMore.png"
     },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-more-normal-icon-image"
@@ -495,7 +495,7 @@
     "required": false,
     "note": "더보기 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 아이콘과 같은 크기와 위치를 유지하세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/maintabIcoFriends.svg"
+      "basic": "/template-assets/basic/ios/maintabIcoMoreSelected.png"
     },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-more-selected-icon-image"
@@ -513,9 +513,6 @@
     "path": "Images/chatroomBgImage.png",
     "required": true,
     "note": "채팅방의 메시지 영역 뒤에 표시되는 배경 이미지입니다. 내 말풍선과 상대 말풍선이 모두 잘 보이는지 확인하세요.",
-    "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/chatroomBgImage.svg"
-    },
     "cssSelector": "BackgroundStyle-ChatRoom",
     "cssProperty": "-ios-background-image"
   },
@@ -1109,6 +1106,9 @@
     "required": false,
     "note": "친구 찾기와 친구 추가 화면에 표시되는 버튼 이미지입니다. 작은 크기에서도 의미가 분명해야 합니다. 글로벌 버전 일부 화면에서만 노출될 수 있습니다.",
     "optionLevel": "advanced",
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/ios/findBtnAddFriend.png"
+    },
     "cssSelector": "ButtonStyle-AddFriend",
     "cssProperty": "-ios-image"
   }
