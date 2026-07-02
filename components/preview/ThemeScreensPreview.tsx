@@ -20,12 +20,12 @@ const friendRows = [
 ];
 
 const chatRows = [
-  { name: "프로젝트 공지", sub: "템플릿 미리보기를 최종 점검해 주세요.", time: "09:40" },
-  { name: "내부 QA", sub: "메인 화면 색상과 아이콘 상태를 다시 확인합니다.", time: "어제" },
-  { name: "디자인 리뷰", sub: "후보 카드와 공통 리소스 프리뷰를 정리했습니다.", time: "어제", badge: "3" },
-  { name: "블루베리군", sub: "블루베리가 크고 맛있다", time: "어제", badge: "2" },
-  { name: "개발 노트", sub: "Android 프로젝트 ZIP 내보내기까지 연결되었습니다.", time: "어제" },
-  { name: "딸기양", sub: "딸기는 맛있다", time: "어제" },
+  { name: "수아", sub: "콜! 이따 6시에 보자 ㅎㅎ", time: "09:40" },
+  { name: "가족 단톡방", sub: "엄마: 저녁 몇 시에 올 거야?", time: "어제", badge: "5" },
+  { name: "정하늘", sub: "그 사진 봤어?? 완전 웃기다 ㅋㅋㅋ", time: "어제", badge: "1" },
+  { name: "동아리 모임", sub: "이번 주 토요일에 다 같이 모이자~", time: "어제", badge: "3" },
+  { name: "이준서", sub: "오늘 저녁에 시간 괜찮아?", time: "화요일" },
+  { name: "박서연", sub: "고마워 진짜ㅠㅠ 다음에 내가 살게", time: "월요일" },
 ];
 
 const moreFeatureItems = [

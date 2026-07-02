@@ -371,6 +371,15 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     () => createThemeProjectAnalysis(activeTemplate, platform, slots, uploads, colors, candidateSelections),
     [activeTemplate, platform, slots, uploads, colors, candidateSelections],
   );
+  const previewBubbleEdits = useMemo(
+    () => ({
+      bubble_me_1: slotEditFromRole("bubble_me_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+      bubble_me_2: slotEditFromRole("bubble_me_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+      bubble_you_1: slotEditFromRole("bubble_you_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+      bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+    }),
+    [slots, bubbleMarkers, bubbleInsets, bubbleStretch],
+  );
   const {
     activeImageColorPalette,
     contrastWarnings,
@@ -1117,12 +1126,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
               slots={slots}
               colors={colors}
               selections={candidateSelections}
-              bubbleEdits={{
-                bubble_me_1: slotEditFromRole("bubble_me_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-                bubble_me_2: slotEditFromRole("bubble_me_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-                bubble_you_1: slotEditFromRole("bubble_you_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-                bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-              }}
+              bubbleEdits={previewBubbleEdits}
               selectedSlotId={selectedSlot?.id}
               className="order-2 min-h-[420px] lg:order-none lg:min-h-0"
               onSelectSlot={selectPreviewSlot}

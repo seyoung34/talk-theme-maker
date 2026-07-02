@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getResolvedColor, type BubbleEditState, type SlotCandidateSelections } from "@/components/project/projectModel";
 import { dataUrlForThemeFile, findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import { loadNinePatchDataUrl, mapContentRect, renderNinePatch } from "@/lib/theme/android/ninepatch";
-import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
+import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleAsset, BubbleSlot, Insets, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 import { themeColorToCss } from "@/lib/theme/color";
@@ -33,27 +33,27 @@ const bubbleTextFontSize = 36;
 const bubbleTextLineHeight = 48;
 
 const defaultInsets: Record<BubbleSlot, Insets> = {
-  me: { top: 24, right: 28, bottom: 24, left: 28 },
-  you: { top: 24, right: 28, bottom: 24, left: 28 },
+  me: { top: 14, right: 40, bottom: 59, left: 59 },
+  you: { top: 17, right: 58, bottom: 60, left: 38 },
 };
 
 const defaultStretch: Record<BubbleSlot, StretchPoint> = {
-  me: { x: 28, y: 24 },
-  you: { x: 28, y: 24 },
+  me: { x: 145, y: 65 },
+  you: { x: 224, y: 59 },
 };
 
 const sampleMessages = [
-  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "테스트 친구", text: "이번 미리보기 문구는 전부 샘플 데이터로 바꿨어요." },
-  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "좋아요. 실제 이름 대신 테스트용 문구만 남겨둘게요." },
-  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "테스트 친구", text: "말풍선 크기와 여백 확인에도 무난한 문장 길이예요." },
-  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "이 상태로 테마 QA와 캡처 테스트를 진행하면 됩니다." },
+  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "오늘 날씨 완전 좋다! 산책하기 딱이야 ☺️" },
+  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "그러니까! 나도 지금 잠깐 밖에 나와있어 ㅎㅎ" },
+  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "오 어디야? 나도 갈까?" },
+  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "공원 앞에 새로 생긴 카페! 커피가 진짜 맛있어" },
 
-  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "프로젝트 QA", text: "헤더와 입력바는 고정하고, 메시지 영역만 실제 채팅방처럼 움직이게 만들자." },
-  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "디자인 리뷰", text: "스크롤 상태에서도 말풍선 선택 영역이 정확히 따라오는지만 같이 보면 되겠다." },
-  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "좋아. 스크롤 레일은 투명하게 두고, 스크롤바는 아주 얇게만 보이게 처리할게." },
-  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "지금 프리뷰는 실제 사용감에 더 가깝게 조정하는 중이야. 긴 대화도 문제없이 확인 가능해야 해." },
-  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "테스트 친구", text: "세로 길이를 조금 더 확보하면 위아래로 충분히 움직이는 느낌이 날 거야." },
-  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "응. 이제 배경, 말풍선, 읽지 않음 배지까지 스크롤 안에서 같이 검수할 수 있어." },
+  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "완전 좋다... 나도 이따 합류해도 돼?" },
+  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "저녁엔 뭐 먹을지 정했어?" },
+  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "당연하지! 자리 맡아둘게" },
+  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "아직 못 정했는데, 오랜만에 떡볶이 어때? 저번에 갔던 그 집" },
+  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "완전 좋아! 그럼 6시에 거기서 보자" },
+  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "콜! 이따 봐 ㅎㅎ" },
 ];
 
 export function ChatroomPreview({
@@ -84,6 +84,11 @@ export function ChatroomPreview({
     [slots],
   );
   const selectedFiles = useMemo(() => selectPreviewFiles(analysis), [analysis]);
+  const backgroundFileSignature = useMemo(() => fileSignature(selectedFiles.chat_background), [selectedFiles]);
+  const bubbleFilesSignature = useMemo(
+    () => (["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"] as const).map((role) => fileSignature(selectedFiles[role])).join("|"),
+    [selectedFiles],
+  );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
@@ -129,7 +134,7 @@ export function ChatroomPreview({
       cancelled = true;
       for (const url of objectUrls) URL.revokeObjectURL(url);
     };
-  }, [selectedFiles.chat_background]);
+  }, [backgroundFileSignature]);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,7 +173,7 @@ export function ChatroomPreview({
     return () => {
       cancelled = true;
     };
-  }, [bubbleEdits, selectedFiles, slotByRole]);
+  }, [bubbleEdits, bubbleFilesSignature, slotByRole.bubble_me_1?.id, slotByRole.bubble_me_2?.id, slotByRole.bubble_you_1?.id, slotByRole.bubble_you_2?.id]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -775,6 +780,11 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: n
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function fileSignature(file?: ThemeProjectFile) {
+  if (!file) return "";
+  return `${file.path}:${file.size}:${file.file?.lastModified ?? file.sourceUrl ?? ""}`;
 }
 
 function selectPreviewFiles(analysis: ThemeProjectAnalysis) {
