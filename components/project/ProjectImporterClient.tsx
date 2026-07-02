@@ -994,7 +994,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       {initialLoadState.status === "error" ? <InitialTemplateErrorPanel message={initialLoadState.message ?? "템플릿을 불러오지 못했습니다."} onStartDefault={startDefaultTemplate} /> : null}
 
       {initialLoadState.status === "ready" ? (
-        <div className="grid min-h-full min-w-0 w-full grid-rows-[auto_1fr] gap-3 md:gap-4 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]">
+        <div className="grid h-[calc(100dvh-1.5rem)] min-h-full min-w-0 w-full grid-rows-[auto_1fr] gap-3 md:h-[calc(100dvh-2rem)] md:gap-4 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]">
           <header className="grid min-h-[56px] min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 px-3 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-4 md:px-4">
             <div className="flex min-w-0 items-center gap-2 justify-self-start md:gap-4">
               <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
@@ -1052,10 +1052,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           </header>
 
           {viewportMode === "mobile" ? (
-            <div className="relative h-full min-h-0">
-              <div className="grid h-full min-h-0 place-items-center overflow-hidden px-1 pb-[calc(54dvh+12px)] pt-1">
-                <ProjectPreviewPanel {...previewProps} className="h-full max-h-full min-h-0" />
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="min-h-0 flex-1 overflow-hidden p-2">
+                <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
               </div>
+              <div aria-hidden className="shrink-0" style={{ height: "54dvh" }} />
               <MobileEditSheet
                 snap={mobileSheetSnap}
                 onSnapChange={setMobileSheetSnap}
