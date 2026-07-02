@@ -1122,8 +1122,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   <MobileSectionNav activeSection={activeSection} slots={slots} onSelectSection={selectSection} />
                 </div>
                 {mobileSheetSnap !== "collapsed" ? (
-                  <>
-                    <div className="min-h-0 flex-1">
+                  <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
+                    <div className="grid gap-3 pb-2">
                       <MobileGroupSlotList
                         groups={groups}
                         activeGroup={activeGroup}
@@ -1143,13 +1143,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                           setMobileSheetSnap("half");
                         }}
                       />
+                      {selectedSlot ? (
+                        <div className="rounded-xl border border-[#e5e7eb] bg-white p-3">{mobileEditPanel}</div>
+                      ) : null}
                     </div>
-                    {selectedSlot ? (
-                      <div className="max-h-[46dvh] shrink-0 overflow-y-auto rounded-2xl border border-[#e5e7eb] bg-white p-3 [scrollbar-width:thin]">
-                        {mobileEditPanel}
-                      </div>
-                    ) : null}
-                  </>
+                  </div>
                 ) : (
                   <div className="sr-only" aria-live="polite">
                     편집 패널이 섹션 선택 상태로 접혔습니다.
