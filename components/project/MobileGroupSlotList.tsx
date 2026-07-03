@@ -20,6 +20,7 @@ export function MobileGroupSlotList({
   templateId,
   template,
   contrastWarnings = {},
+  hideSlotPicker = false,
   onSelectSlot,
 }: {
   groups: ThemeSlotGroup[];
@@ -33,9 +34,11 @@ export function MobileGroupSlotList({
   templateId: ThemeTemplateId;
   template: ThemeTemplate;
   contrastWarnings?: Record<string, SlotContrastWarning>;
+  hideSlotPicker?: boolean;
   onSelectSlot: (slot: ThemeAssetSlot) => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const basicSlots = slots.filter((slot) => slot.optionLevel !== "advanced");
   const advancedSlots = slots.filter((slot) => slot.optionLevel === "advanced");
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId);
@@ -53,6 +56,7 @@ export function MobileGroupSlotList({
             onClick={() => {
               onSelectGroup(group);
               setPickerOpen(false);
+              setAdvancedOpen(false);
             }}
           >
             {groupLabels[group]}
@@ -60,46 +64,55 @@ export function MobileGroupSlotList({
         ))}
       </div>
 
-      <div className="grid gap-1.5">
-        <button
-          type="button"
-          className="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-[#e5e7eb] bg-white px-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
-          aria-expanded={pickerOpen}
-          onClick={() => setPickerOpen((current) => !current)}
-        >
-          {selectedSlot ? (
-            <SlotPreviewChip slot={selectedSlot} status={selectedStatus ?? ""} />
-          ) : (
-            <span className="min-w-0 flex-1 text-[13px] font-semibold text-[#94a3b8]">슬롯을 선택하세요</span>
-          )}
-          {selectedWarning ? (
-            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-800">
-              <AlertTriangle size={10} aria-hidden="true" />
-              대비
-            </span>
-          ) : null}
-          <ChevronDown size={16} className={`shrink-0 text-[#94a3b8] transition-transform ${pickerOpen ? "rotate-180" : ""}`} aria-hidden="true" />
-        </button>
+      {!hideSlotPicker ? (
+        <div className="grid gap-1.5">
+          <button
+            type="button"
+            className="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-[#e5e7eb] bg-white px-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+            aria-expanded={pickerOpen}
+            onClick={() => setPickerOpen((current) => !current)}
+          >
+            {selectedSlot ? (
+              <SlotPreviewChip slot={selectedSlot} status={selectedStatus ?? ""} />
+            ) : (
+              <span className="min-w-0 flex-1 text-[13px] font-semibold text-[#94a3b8]">슬롯을 선택하세요</span>
+            )}
+            {selectedWarning ? (
+              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-800">
+                <AlertTriangle size={10} aria-hidden="true" />
+                대비
+              </span>
+            ) : null}
+            <ChevronDown size={16} className={`shrink-0 text-[#94a3b8] transition-transform ${pickerOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+          </button>
 
-        {pickerOpen ? (
-          <div className="grid gap-1 rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-1.5">
-            {basicSlots.map((slot) => (
-              <MobileSlotOption
-                key={slot.id}
-                slot={slot}
-                selected={selectedSlotId === slot.id}
-                status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)}
-                warning={contrastWarnings[slot.id]}
-                onSelect={() => {
-                  onSelectSlot(slot);
-                  setPickerOpen(false);
-                }}
-              />
-            ))}
-            {advancedSlots.length > 0 ? (
-              <>
-                <span className="mt-1 px-2 text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#94a3b8]">고급 옵션</span>
-                {advancedSlots.map((slot) => (
+          {pickerOpen ? (
+            <div className="grid gap-1 rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-1.5">
+              {basicSlots.map((slot) => (
+                <MobileSlotOption
+                  key={slot.id}
+                  slot={slot}
+                  selected={selectedSlotId === slot.id}
+                  status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)}
+                  warning={contrastWarnings[slot.id]}
+                  onSelect={() => {
+                    onSelectSlot(slot);
+                    setPickerOpen(false);
+                  }}
+                />
+              ))}
+              {advancedSlots.length > 0 ? (
+                <div className="mt-1 grid gap-1">
+                  <button
+                    type="button"
+                    className="flex min-h-9 items-center justify-between rounded-lg px-2 text-left text-[11.5px] font-bold text-[#64748b] transition hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+                    aria-expanded={advancedOpen}
+                    onClick={() => setAdvancedOpen((current) => !current)}
+                  >
+                    <span>고급 옵션</span>
+                    <ChevronDown size={14} className={`shrink-0 text-[#94a3b8] transition-transform ${advancedOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+                  </button>
+                  {advancedOpen ? advancedSlots.map((slot) => (
                   <MobileSlotOption
                     key={slot.id}
                     slot={slot}
@@ -111,12 +124,13 @@ export function MobileGroupSlotList({
                       setPickerOpen(false);
                     }}
                   />
-                ))}
-              </>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+                  )) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

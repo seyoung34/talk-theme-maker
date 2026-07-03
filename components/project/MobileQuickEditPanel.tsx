@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, type MutableRefObject } from "react";
-import { ImageOff, Sliders } from "lucide-react";
+import { useEffect, useId, useState, type MutableRefObject } from "react";
+import { ImageOff, Plus, Sliders, X } from "lucide-react";
 import {
   buildSlotCandidates,
+  disabledImageCandidateId,
   getDefaultColor,
   getSelectedCandidate,
   getSlotUploadEntries,
@@ -15,6 +16,7 @@ import {
 } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import { setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
@@ -35,7 +37,7 @@ type MobileQuickEditPanelProps = {
   canApplyAutoColor: boolean;
   fileInputRefs: MutableRefObject<Record<string, HTMLInputElement | null>>;
   onUpload: (slot: ThemeAssetSlot, files: FileList | readonly File[] | null) => void;
-  onClear: (slot: ThemeAssetSlot) => void;
+  onRemoveUpload: (slot: ThemeAssetSlot, uploadId: string) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
   onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
@@ -62,6 +64,12 @@ export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
 
   const status = slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots);
   const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets, uploadPreviewUrls);
+  const backgroundSourcePair = getBackgroundSourcePair(slot, slots);
+  const displayStatus = backgroundSourcePair
+    ? selections[backgroundSourcePair.imageSlot.id] === disabledImageCandidateId
+      ? `색상 사용 중 · ${backgroundSourcePair.colorSlot.label}`
+      : `이미지 우선 적용 중 · ${backgroundSourcePair.imageSlot.label}`
+    : status;
 
   const applyCandidate = (candidate: SlotCandidate) => {
     if (slot.kind === "color" && candidate.source === "palette" && candidate.colorValue) {
@@ -80,7 +88,7 @@ export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <strong className="block truncate text-[14px] font-bold text-[#0f172a]">{slot.label}</strong>
-          <span className="mt-0.5 block truncate text-[12px] font-medium text-[#64748b]">{status}</span>
+          <span className="mt-0.5 block truncate text-[12px] font-medium text-[#64748b]">{displayStatus}</span>
         </div>
         {props.contrastWarning ? (
           <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">대비 확인</span>
@@ -88,9 +96,87 @@ export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
       </div>
 
       {slot.kind === "color" ? (
-        <ColorControls {...props} slot={slot} candidates={candidates} />
+        backgroundSourcePair ? (
+          <BackgroundSourceControls {...props} imageSlot={backgroundSourcePair.imageSlot} colorSlot={backgroundSourcePair.colorSlot} file={backgroundSourcePair.imageSlot.id === slot.id ? file : undefined} uploadPreviewUrls={uploadPreviewUrls} />
+        ) : (
+          <ColorControls {...props} slot={slot} candidates={candidates} />
+        )
+      ) : backgroundSourcePair ? (
+        <BackgroundSourceControls {...props} imageSlot={backgroundSourcePair.imageSlot} colorSlot={backgroundSourcePair.colorSlot} file={file} uploadPreviewUrls={uploadPreviewUrls} />
       ) : (
         <ImageControls {...props} slot={slot} file={file} candidates={candidates} applyCandidate={applyCandidate} uploadPreviewUrls={uploadPreviewUrls} />
+      )}
+    </div>
+  );
+}
+
+function BackgroundSourceControls({
+  imageSlot,
+  colorSlot,
+  file,
+  uploadPreviewUrls,
+  ...props
+}: MobileQuickEditPanelProps & {
+  imageSlot: ThemeAssetSlot;
+  colorSlot: ThemeAssetSlot;
+  file?: ThemeProjectFile;
+  uploadPreviewUrls: Record<string, string>;
+}) {
+  const [modeOverride, setModeOverride] = useState<"image" | "color" | null>(null);
+  const imageDisabled = props.selections[imageSlot.id] === disabledImageCandidateId;
+  const mode = modeOverride ?? (imageDisabled ? "color" : "image");
+  const imageCandidates = buildSlotCandidates(imageSlot, props.uploads, props.colors, props.selections, props.templateId, props.template, props.slots, props.adminAssets, uploadPreviewUrls).filter((candidate) => candidate.id !== disabledImageCandidateId);
+  const colorCandidates = buildSlotCandidates(colorSlot, props.uploads, props.colors, props.selections, props.templateId, props.template, props.slots, props.adminAssets, uploadPreviewUrls);
+
+  useEffect(() => {
+    setModeOverride(null);
+  }, [imageSlot.id, colorSlot.id]);
+
+  const applyImageCandidate = (candidate: SlotCandidate) => {
+    setModeOverride(null);
+    if (candidate.source === "admin" && candidate.adminAsset) {
+      props.onSelectAdminAsset(imageSlot, candidate.adminAsset);
+      return;
+    }
+    props.onSelectCandidate(imageSlot, candidate.id);
+  };
+
+  const selectImageMode = () => {
+    setModeOverride("image");
+    const selectedCandidate = imageCandidates.find((candidate) => candidate.selected);
+    if (selectedCandidate) applyImageCandidate(selectedCandidate);
+  };
+
+  const selectColorMode = () => {
+    setModeOverride(null);
+    props.onSelectCandidate(imageSlot, disabledImageCandidateId);
+  };
+
+  return (
+    <div className="grid gap-3">
+      <div className="grid grid-cols-2 gap-1 rounded-2xl border border-[#dbe3ed] bg-[#f8fafc] p-1">
+        <button
+          type="button"
+          className={`min-h-11 rounded-xl px-3 text-[13px] font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${mode === "image" ? "bg-white text-[#1d4ed8] shadow-sm ring-1 ring-[#bfdbfe]" : "text-[#64748b] hover:bg-white/80 hover:text-[#0f172a]"}`}
+          aria-pressed={mode === "image"}
+          onClick={selectImageMode}
+        >
+          이미지로 설정
+        </button>
+        <button
+          type="button"
+          className={`min-h-11 rounded-xl px-3 text-[13px] font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${mode === "color" ? "bg-white text-[#1d4ed8] shadow-sm ring-1 ring-[#bfdbfe]" : "text-[#64748b] hover:bg-white/80 hover:text-[#0f172a]"}`}
+          aria-pressed={mode === "color"}
+          onClick={selectColorMode}
+        >
+          색상으로 설정
+        </button>
+      </div>
+
+      {mode === "image" ? (
+        <ImageControls {...props} slot={imageSlot} file={file} candidates={imageCandidates} applyCandidate={applyImageCandidate} uploadPreviewUrls={uploadPreviewUrls} />
+      ) : (
+        <ColorControls {...props} slot={colorSlot} candidates={colorCandidates} />
       )}
     </div>
   );
@@ -113,11 +199,22 @@ function ColorControls({
   const hex = themeColorRgbHex(value);
   const alpha = themeColorAlphaPercent(value);
   const swatchCandidates = candidates.filter((candidate) => candidate.colorValue);
+  const colorInputId = useId();
 
   return (
     <div className="grid gap-3">
       <div className="flex items-center gap-2">
-        <span className="size-11 shrink-0 rounded-xl border border-black/10 shadow-sm" style={{ backgroundColor: themeColorToCss(value) }} aria-hidden="true" />
+        <label htmlFor={colorInputId} className="relative size-11 shrink-0 overflow-hidden rounded-xl border border-black/10 shadow-sm ring-offset-2 transition hover:ring-2 hover:ring-[#bfdbfe] focus-within:ring-2 focus-within:ring-[#2563eb]">
+          <span className="absolute inset-0" style={{ backgroundColor: themeColorToCss(value) }} aria-hidden="true" />
+          <input
+            id={colorInputId}
+            type="color"
+            value={hex}
+            className="absolute inset-0 size-full cursor-pointer opacity-0"
+            aria-label={`${slot.label} 색상 선택`}
+            onChange={(event) => onColorChange(slot, setThemeColorRgb(value, event.currentTarget.value))}
+          />
+        </label>
         <label className="sr-only" htmlFor={`mqe-hex-${slot.id}`}>색상 코드</label>
         <input
           id={`mqe-hex-${slot.id}`}
@@ -185,7 +282,7 @@ function ImageControls({
   uploadPreviewUrls,
   fileInputRefs,
   onUpload,
-  onClear,
+  onRemoveUpload,
   onOpenAdvanced,
   file,
 }: MobileQuickEditPanelProps & {
@@ -195,31 +292,53 @@ function ImageControls({
   uploadPreviewUrls: Record<string, string>;
 }) {
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
-  const userUploads = getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id));
+  const userUploadIds = new Set(getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id)).map((entry) => entry.id));
   const hasImage = Boolean(file?.file || file?.sourceUrl);
 
   return (
     <div className="grid gap-3">
       <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          type="button"
+          className="grid w-[76px] shrink-0 place-items-center gap-1 rounded-xl border border-dashed border-[#bfdbfe] bg-[#eff6ff] p-1.5 text-center text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+          onClick={() => fileInputRefs.current[slot.id]?.click()}
+        >
+          <span className="grid aspect-square w-full place-items-center rounded-lg border border-[#bfdbfe] bg-white">
+            <Plus size={20} strokeWidth={2.4} aria-hidden="true" />
+          </span>
+          <span className="truncate text-[10px] font-bold">업로드</span>
+        </button>
         {candidates.map((candidate) => {
           const preview = candidate.previewUrl ?? (candidate.id.startsWith(slot.id) ? uploadPreviewUrls[candidate.id] : undefined);
+          const removable = candidate.source === "upload" && userUploadIds.has(candidate.id);
           return (
-            <button
-              key={candidate.id}
-              type="button"
-              aria-pressed={candidate.selected}
-              className={`grid w-[76px] shrink-0 gap-1 rounded-xl border p-1.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${candidate.selected ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-              onClick={() => applyCandidate(candidate)}
-            >
-              <span className="grid aspect-square place-items-center overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f8fafc]">
-                {preview ? (
-                  <span className="block h-full w-full bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${preview})` }} />
-                ) : (
-                  <ImageOff size={16} className="text-[#94a3b8]" aria-hidden="true" />
-                )}
-              </span>
-              <span className="truncate text-[10px] font-semibold text-[#334155]">{candidate.title}</span>
-            </button>
+            <div key={candidate.id} className="relative w-[76px] shrink-0">
+              <button
+                type="button"
+                aria-pressed={candidate.selected}
+                className={`grid w-full gap-1 rounded-xl border p-1.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${candidate.selected ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                onClick={() => applyCandidate(candidate)}
+              >
+                  <span className="grid aspect-square place-items-center overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f8fafc]">
+                    {preview ? (
+                      <span className="block h-full w-full bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${preview})` }} />
+                    ) : (
+                      <ImageOff size={16} className="text-[#94a3b8]" aria-hidden="true" />
+                    )}
+                  </span>
+                  <span className="truncate text-[10px] font-semibold text-[#334155]">{candidate.title}</span>
+              </button>
+              {removable ? (
+                <button
+                  type="button"
+                  aria-label={`${candidate.title} 삭제`}
+                  className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded-full bg-[#ef4444] text-white shadow-sm ring-2 ring-white transition hover:bg-[#dc2626] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ef4444]"
+                  onClick={() => onRemoveUpload(slot, candidate.id)}
+                >
+                  <X size={12} strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
           );
         })}
       </div>
@@ -234,33 +353,37 @@ function ImageControls({
         onChange={(event) => onUpload(slot, event.currentTarget.files)}
       />
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[#0f172a] px-3 text-[13px] font-bold text-white transition hover:bg-[#1e293b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
-          onClick={() => fileInputRefs.current[slot.id]?.click()}
-        >
-          업로드
-        </button>
-        <button
-          type="button"
-          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#d1d5db] bg-white px-3 text-[13px] font-bold text-[#374151] transition enabled:hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
-          disabled={userUploads.length === 0}
-          onClick={() => onClear(slot)}
-        >
-          비우기
-        </button>
-        {slot.editableInBubbleEditor ? (
-          <button
-            type="button"
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-3 text-[13px] font-bold text-[#1d4ed8] transition enabled:hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
-            disabled={!hasImage}
-            onClick={onOpenAdvanced}
-          >
-            정밀 조정
-          </button>
-        ) : null}
-      </div>
+      {slot.editableInBubbleEditor ? (
+        <details className="group rounded-xl border border-[#e5e7eb] bg-[#f8fafc]">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-[13px] font-bold text-[#334155] marker:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] [&::-webkit-details-marker]:hidden">
+            <span>고급 옵션</span>
+            <span className="text-[11px] font-bold text-[#94a3b8] transition group-open:rotate-180" aria-hidden="true">⌄</span>
+          </summary>
+          <div className="flex flex-wrap gap-2 border-t border-[#e5e7eb] bg-white px-3 py-3">
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-3 text-[13px] font-bold text-[#1d4ed8] transition enabled:hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+              disabled={!hasImage}
+              onClick={onOpenAdvanced}
+            >
+              정밀 조정
+            </button>
+          </div>
+        </details>
+      ) : null}
     </div>
   );
+}
+
+function getBackgroundSourcePair(slot: ThemeAssetSlot, slots: ThemeAssetSlot[]) {
+  const imageSlot =
+    slot.kind === "color"
+      ? slots.find((candidate) => candidate.kind !== "color" && getImageColorFallbackRole(candidate.role) === slot.role)
+      : getImageColorFallbackRole(slot.role)
+        ? slot
+        : undefined;
+  if (!imageSlot) return null;
+  const colorRole = getImageColorFallbackRole(imageSlot.role);
+  const colorSlot = slots.find((candidate) => candidate.kind === "color" && candidate.role === colorRole);
+  return colorSlot ? { imageSlot, colorSlot } : null;
 }

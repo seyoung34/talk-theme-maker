@@ -42,7 +42,7 @@ import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
-import { readTemplateStartPayload } from "@/lib/theme/project/state";
+import { getImageColorFallbackRole, readTemplateStartPayload } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { systemTemplateRepository, type RemoteSlotUploads, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
@@ -625,6 +625,27 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }));
   };
 
+  const removeUploadedSlotCandidate = (slot: ThemeAssetSlot, uploadId: string) => {
+    setUploads((current) => {
+      const nextEntries = (current[slot.id] ?? []).filter((entry) => entry.id !== uploadId);
+      const next = { ...current };
+      if (nextEntries.length > 0) {
+        next[slot.id] = nextEntries;
+      } else {
+        delete next[slot.id];
+      }
+      return next;
+    });
+    setCandidateSelections((current) => {
+      if (current[slot.id] !== uploadId) return current;
+      return {
+        ...current,
+        [slot.id]: getInitialSlotCandidateSelections([slot], templateId, activeTemplate)[slot.id],
+      };
+    });
+    setSelectedSlotId(slot.id);
+  };
+
   const changeColor = (slot: ThemeAssetSlot, value: string) => {
     setColors((current) => ({ ...current, [slot.id]: value }));
     if (candidateSelections[slot.id] === autoMainPaletteCandidateId) {
@@ -884,8 +905,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     onSelectSlot: selectPreviewSlot,
   };
 
-  const mobilePreviewClearance = mobileSheetLiveHeight != null ? `${Math.round(mobileSheetLiveHeight)}px` : mobileSheetSnap === "collapsed" ? mobileSheetHeight.collapsed : mobileSheetHeight.half;
+  const mobilePreviewClearance = mobileSheetLiveHeight != null ? `min(${Math.round(mobileSheetLiveHeight)}px, ${mobileSheetHeight.half})` : mobileSheetSnap === "collapsed" ? mobileSheetHeight.collapsed : mobileSheetHeight.half;
   const mobileActionBarVisible = mobileSheetSnap === "collapsed" && mobileSheetLiveHeight == null;
+  const mobileUsesSourceToggle = Boolean(selectedSlot && getBackgroundSourcePair(selectedSlot, slots));
 
   const quickEditPanel = (
     <ProjectQuickEditPanel
@@ -949,7 +971,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
       fileInputRefs={fileInputRefs}
       onUpload={uploadSlot}
-      onClear={clearSlot}
+      onRemoveUpload={removeUploadedSlotCandidate}
       onColorChange={changeColor}
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
@@ -1142,6 +1164,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                         templateId={templateId}
                         template={activeTemplate}
                         contrastWarnings={contrastWarnings}
+                        hideSlotPicker={mobileUsesSourceToggle}
                         onSelectSlot={(slot) => {
                           setSelectedSlotId(slot.id);
                           if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
@@ -1885,6 +1908,19 @@ function mergeSlotUploads(current: SlotUploads, incoming: SlotUploads): SlotUplo
     next[slotId] = [...currentEntries, ...entries.filter((entry) => !currentIds.has(entry.id))];
   }
   return next;
+}
+
+function getBackgroundSourcePair(slot: ThemeAssetSlot, slots: ThemeAssetSlot[]) {
+  const imageSlot =
+    slot.kind === "color"
+      ? slots.find((candidate) => candidate.kind !== "color" && getImageColorFallbackRole(candidate.role) === slot.role)
+      : getImageColorFallbackRole(slot.role)
+        ? slot
+        : undefined;
+  if (!imageSlot) return null;
+  const colorRole = getImageColorFallbackRole(imageSlot.role);
+  const colorSlot = slots.find((candidate) => candidate.kind === "color" && candidate.role === colorRole);
+  return colorSlot ? { imageSlot, colorSlot } : null;
 }
 
 function getFocusableElements(container: HTMLElement | null) {

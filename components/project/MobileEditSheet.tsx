@@ -5,13 +5,15 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 export type MobileSheetSnap = "collapsed" | "half" | "full";
 
 const snapRatio: Record<MobileSheetSnap, number> = {
-  collapsed: 0.18,
-  half: 0.68,
+  collapsed: 0.12,
+  half: 0.62,
   full: 0.88,
 };
 
+const collapsedHeightPx = 96;
+
 export const mobileSheetHeight: Record<MobileSheetSnap, string> = {
-  collapsed: "max(136px, 18dvh)",
+  collapsed: `${collapsedHeightPx}px`,
   half: "62dvh",
   full: "88dvh",
 };
@@ -83,7 +85,7 @@ export function MobileEditSheet({
     const delta = state.startY - event.clientY;
     if (Math.abs(delta) > tapThreshold) state.moved = true;
     const viewport = window.innerHeight || 1;
-    const min = snapRatio.collapsed * viewport;
+    const min = Math.max(collapsedHeightPx, snapRatio.collapsed * viewport);
     const max = snapRatio.full * viewport;
     const nextHeight = Math.min(max, Math.max(min, state.startHeight + delta));
     state.currentHeight = nextHeight;
