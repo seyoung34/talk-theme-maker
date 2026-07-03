@@ -21,11 +21,52 @@ export type TemplatePreviewVisual = {
   mainHeaderColor: string;
   mainHeaderForegroundColor: string;
   bodyCellColor: string;
+  // 리치 목업 텍스트 색상
+  titleColor: string;
+  descriptionColor: string;
+  sectionTitleColor: string;
+  bodyCellBorderColor: string;
+  unreadColor: string;
   // 기본 프로필 화면 미리보기용
   profileImage2?: string;
   profileImage3?: string;
   profileImageFull?: string;
+  // 하단 탭바 아이콘 (모달 상세에서만 채워짐)
+  tabIcons?: TabIconUrls;
 };
+
+export type TabIconUrls = {
+  friends?: string;
+  friendsFocused?: string;
+  chats?: string;
+  chatsFocused?: string;
+  now?: string;
+  nowFocused?: string;
+  shopping?: string;
+  shoppingFocused?: string;
+  more?: string;
+  moreFocused?: string;
+};
+
+const tabIconRoleByKey: Record<keyof TabIconUrls, ThemeResourceRole> = {
+  friends: "tab_icon_friends",
+  friendsFocused: "tab_icon_friends_focused",
+  chats: "tab_icon_chats",
+  chatsFocused: "tab_icon_chats_focused",
+  now: "tab_icon_now",
+  nowFocused: "tab_icon_now_focused",
+  shopping: "tab_icon_shopping",
+  shoppingFocused: "tab_icon_shopping_focused",
+  more: "tab_icon_more",
+  moreFocused: "tab_icon_more_focused",
+};
+
+export const tabIconPreviewRoles: ThemeResourceRole[] = Object.values(tabIconRoleByKey);
+
+export function buildTabIconUrls(resolve: (role: ThemeResourceRole) => string | undefined): TabIconUrls {
+  const entries = (Object.keys(tabIconRoleByKey) as Array<keyof TabIconUrls>).map((key) => [key, resolve(tabIconRoleByKey[key])] as const);
+  return Object.fromEntries(entries) as TabIconUrls;
+}
 
 export type SignedUrlCache = Record<string, string>;
 
@@ -39,7 +80,8 @@ export async function createSystemTemplatePreviewUrls(templates: SystemTemplateS
       if (!options.includeDetails) continue;
     }
     const slots = getThemeSlots(template.platform);
-    for (const role of previewRoles) {
+    const roles = options.includeDetails ? [...previewRoles, ...tabIconPreviewRoles] : previewRoles;
+    for (const role of roles) {
       const slot = findSlotByRole(slots, role);
       const path = getMetadataRef(template, role) ?? resolvePreviewUploadPath(slot, template.uploadRefs, template.candidateSelections);
       if (path && !next[path]) paths.add(path);
@@ -85,9 +127,15 @@ export function createSystemTemplatePreviewVisual({
     mainHeaderColor: resolveColor(slots, "main_header_color", summary, templateId, template, template.defaults.mainHeader),
     mainHeaderForegroundColor: resolveColor(slots, "main_header_foreground_color", summary, templateId, template, template.defaults.mainTitle),
     bodyCellColor: resolveColor(slots, "main_body_cell_color", summary, templateId, template, template.defaults.mainBackground),
+    titleColor: resolveColor(slots, "main_title_color", summary, templateId, template, template.defaults.mainTitle),
+    descriptionColor: resolveColor(slots, "main_description_color", summary, templateId, template, template.defaults.mainBody),
+    sectionTitleColor: resolveColor(slots, "main_section_title_color", summary, templateId, template, template.defaults.mainTitle),
+    bodyCellBorderColor: resolveColor(slots, "main_body_cell_border_color", summary, templateId, template, template.defaults.mainBody),
+    unreadColor: resolveColor(slots, "chat_unread_count_color", summary, templateId, template, template.accent),
     profileImage2: resolveImage(slots, "profile_image_2", summary, templateId, template, signedUrls),
     profileImage3: resolveImage(slots, "profile_image_3", summary, templateId, template, signedUrls),
     profileImageFull: resolveImage(slots, "profile_image_full_1", summary, templateId, template, signedUrls),
+    tabIcons: buildTabIconUrls((role) => resolveImage(slots, role, summary, templateId, template, signedUrls)),
   };
 }
 

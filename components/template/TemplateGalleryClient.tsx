@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Clock3, Eye, Hash, Info, Layers3, Palette, SendHorizontal, Plus, Search, Settings, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock3, Eye, Gift, Hash, Info, Layers3, Menu, Palette, SendHorizontal, Plus, Search, Settings, Smile, Trash2, UserPlus, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import TemplateCard from "@/components/template/TemplateCard";
 import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
-import { createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
+import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
 import { deleteUserTemplate, getUserTemplate, listUserTemplates, type UserTemplateRecord, type UserTemplateSummary } from "@/lib/theme/userTemplates";
@@ -517,9 +517,15 @@ function createUserTemplatePreviewVisual(record: UserTemplateRecord, template: T
     mainHeaderColor: resolveUserTemplateColor(slots, "main_header_color", record, template, template.defaults.mainHeader),
     mainHeaderForegroundColor: resolveUserTemplateColor(slots, "main_header_foreground_color", record, template, template.defaults.mainTitle),
     bodyCellColor: resolveUserTemplateColor(slots, "main_body_cell_color", record, template, template.defaults.mainBackground),
+    titleColor: resolveUserTemplateColor(slots, "main_title_color", record, template, template.defaults.mainTitle),
+    descriptionColor: resolveUserTemplateColor(slots, "main_description_color", record, template, template.defaults.mainBody),
+    sectionTitleColor: resolveUserTemplateColor(slots, "main_section_title_color", record, template, template.defaults.mainTitle),
+    bodyCellBorderColor: resolveUserTemplateColor(slots, "main_body_cell_border_color", record, template, template.defaults.mainBody),
+    unreadColor: resolveUserTemplateColor(slots, "chat_unread_count_color", record, template, template.accent),
     profileImage2: resolveUserTemplateImage(slots, "profile_image_2", record, templateId, template, uploadPreviewUrls),
     profileImage3: resolveUserTemplateImage(slots, "profile_image_3", record, templateId, template, uploadPreviewUrls),
     profileImageFull: resolveUserTemplateImage(slots, "profile_image_full_1", record, templateId, template, uploadPreviewUrls),
+    tabIcons: buildTabIconUrls((role) => resolveUserTemplateImage(slots, role, record, templateId, template, uploadPreviewUrls)),
   };
 }
 
@@ -910,105 +916,213 @@ function ScreenAvatar({ src, sizeClass = "size-10" }: { src?: string; sizeClass?
   );
 }
 
-// 친구메인탭
-function FriendsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
-  const friends = [
-    { name: "김민수", avatar: visual.profileImage },
-    { name: "이하늘", avatar: visual.profileImage2 ?? visual.profileImage },
-    { name: "박서연", avatar: visual.profileImage3 ?? visual.profileImage },
+// 광고 예시 배너 (테마와 무관)
+function PreviewAdBanner() {
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-[10px] bg-[#f1f3f5] px-2 py-1.5" aria-label="카카오톡 광고 예시 영역">
+      <span className="grid h-8 w-11 place-items-center rounded-md bg-[#e2e5e9] text-[8px] font-bold tracking-[0.08em] text-[#868e96]" aria-hidden="true">AD</span>
+      <span className="min-w-0">
+        <strong className="block truncate text-[9.5px] font-semibold text-[#343a40]">카카오톡 채널의 새로운 소식</strong>
+        <span className="mt-0.5 block truncate text-[8px] font-medium text-[#868e96]">테마와 무관한 광고 예시 영역입니다.</span>
+      </span>
+    </div>
+  );
+}
+
+// 하단 탭바 (테마 실제 탭 아이콘 반영)
+type PreviewTabKey = "friends" | "chats" | "now" | "shopping" | "more";
+
+function PreviewTabBar({ visual, active }: { visual: TemplatePreviewVisual; active: PreviewTabKey }) {
+  const icons = visual.tabIcons ?? {};
+  const tabs: Array<{ key: PreviewTabKey; label: string; icon?: string; badge?: string }> = [
+    { key: "friends", label: "친구", icon: active === "friends" ? icons.friendsFocused ?? icons.friends : icons.friends, badge: "12" },
+    { key: "chats", label: "채팅", icon: active === "chats" ? icons.chatsFocused ?? icons.chats : icons.chats, badge: "8" },
+    { key: "now", label: "Now", icon: active === "now" ? icons.nowFocused ?? icons.now : icons.now },
+    { key: "shopping", label: "쇼핑", icon: active === "shopping" ? icons.shoppingFocused ?? icons.shopping : icons.shopping },
+    { key: "more", label: "더보기", icon: active === "more" ? icons.moreFocused ?? icons.more : icons.more },
   ];
   return (
     <div
-      className="grid h-full grid-rows-[auto_1fr] bg-cover bg-center"
+      className="grid grid-cols-5 items-center border-t border-black/5 bg-cover bg-center px-1 pb-1.5 pt-1"
+      style={{ backgroundColor: visual.tabBackgroundColor, backgroundImage: visual.tabBackgroundImage ? `url(${visual.tabBackgroundImage})` : undefined }}
+    >
+      {tabs.map((tab) => (
+        <div key={tab.key} className="grid justify-items-center gap-0.5">
+          <span className="relative grid size-5 place-items-center">
+            {tab.icon ? (
+              <img src={tab.icon} alt="" className="h-full w-full object-contain" style={{ opacity: active === tab.key ? 1 : 0.55 }} />
+            ) : (
+              <span className="size-3.5 rounded-[5px] bg-black/15" style={{ opacity: active === tab.key ? 0.85 : 0.4 }} aria-hidden="true" />
+            )}
+            {tab.badge ? (
+              <span className="absolute -right-1 -top-1 grid h-2.5 min-w-2.5 place-items-center rounded-full px-0.5 text-[6px] font-black leading-none text-white" style={{ backgroundColor: visual.unreadColor }}>
+                {tab.badge}
+              </span>
+            ) : null}
+          </span>
+          <span className={`text-[7.5px] ${active === tab.key ? "font-black text-[var(--color-on-surface)]" : "font-semibold text-[var(--color-on-surface-variant)]"}`}>{tab.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const friendBirthdayRows = [
+  { name: "수아", sub: "오늘도 좋은 하루 ☺️" },
+  { name: "정하늘", sub: "새 프로필로 바꿨어요" },
+  { name: "이준서", sub: "여행 다녀왔습니다" },
+];
+
+// 친구메인탭
+function FriendsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
+  const avatars = [visual.profileImage, visual.profileImage2 ?? visual.profileImage, visual.profileImage3 ?? visual.profileImage];
+  return (
+    <div
+      className="grid h-full grid-rows-[auto_minmax(0,1fr)_auto] bg-cover bg-center"
       style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
     >
-      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: visual.mainHeaderColor }}>
-        <strong className="text-base font-black" style={{ color: visual.mainHeaderForegroundColor }}>친구</strong>
-        <div className="flex items-center gap-2.5" style={{ color: visual.mainHeaderForegroundColor }}>
-          <Search className="size-4" aria-hidden="true" />
-          <Settings className="size-4" aria-hidden="true" />
+      <div className="flex items-center gap-2 px-3 py-2.5" style={{ backgroundColor: visual.mainHeaderColor, color: visual.mainHeaderForegroundColor }}>
+        <ScreenAvatar src={avatars[0]} sizeClass="size-6" />
+        <strong className="flex-1 text-[12px] font-bold">내 프로필</strong>
+        <div className="flex items-center gap-2">
+          <Search className="size-3.5" aria-hidden="true" />
+          <UserPlus className="size-3.5" aria-hidden="true" />
+          <Gift className="size-3.5" aria-hidden="true" />
+          <Settings className="size-3.5" aria-hidden="true" />
         </div>
       </div>
-      <div className="grid content-start gap-4 overflow-hidden px-4 py-4">
-        {friends.map((friend) => (
-          <div key={friend.name} className="flex items-center gap-3">
-            <ScreenAvatar src={friend.avatar} />
-            <span className="text-sm font-bold text-[var(--color-on-surface)]">{friend.name}</span>
+
+      <div className="grid content-start gap-2 overflow-hidden px-3 py-2">
+        <div className="flex gap-1.5">
+          <span className="rounded-full px-2.5 py-1 text-[10px] font-bold" style={{ backgroundColor: visual.titleColor, color: visual.mainBackgroundColor }}>친구</span>
+          <span className="rounded-full border border-black/10 px-2.5 py-1 text-[10px] font-bold" style={{ color: visual.titleColor }}>추천</span>
+        </div>
+
+        <PreviewAdBanner />
+
+        <span className="px-0.5 text-[11px] font-bold" style={{ color: visual.sectionTitleColor }}>업데이트 프로필 12</span>
+        <div className="grid grid-cols-5 gap-1 px-0.5">
+          {["내 프로필", "수아", "하늘", "준서", "서연"].map((name, index) => (
+            <div key={name} className="grid min-w-0 justify-items-center gap-1">
+              <div className="relative">
+                <ScreenAvatar src={avatars[index % avatars.length]} sizeClass="size-8" />
+                {index > 0 ? <span className="absolute -top-0.5 left-1 size-1.5 rounded-full bg-[#ff7246]" aria-hidden="true" /> : null}
+              </div>
+              <span className="block w-full truncate text-center text-[7px] font-medium leading-[1.1]" style={{ color: visual.descriptionColor }}>{name}</span>
+            </div>
+          ))}
+        </div>
+
+        <span className="my-0.5 block h-px w-full" style={{ backgroundColor: visual.bodyCellBorderColor, opacity: 0.35 }} aria-hidden="true" />
+
+        <span className="px-0.5 text-[11px] font-bold" style={{ color: visual.sectionTitleColor }}>생일인 친구 4</span>
+        {friendBirthdayRows.map((row, index) => (
+          <div key={row.name} className="flex items-center gap-2.5 px-0.5 py-0.5">
+            <ScreenAvatar src={avatars[index % avatars.length]} sizeClass="size-9" />
+            <div className="min-w-0">
+              <strong className="block truncate text-[12px] font-bold leading-tight" style={{ color: visual.titleColor }}>{row.name}</strong>
+              <span className="block truncate text-[10px] font-medium leading-tight" style={{ color: visual.descriptionColor }}>{row.sub}</span>
+            </div>
           </div>
         ))}
       </div>
+
+      <PreviewTabBar visual={visual} active="friends" />
     </div>
   );
 }
 
 const chatListPreviewRows = [
-  { name: "수아", message: "콜! 이따 6시에 보자 ㅎㅎ", time: "09:40" },
-  { name: "가족 단톡방", message: "엄마: 저녁 몇 시에 올 거야?", time: "어제" },
-  { name: "정하늘", message: "그 사진 봤어?? 완전 웃기다 ㅋㅋㅋ", time: "어제" },
+  { name: "수아", message: "콜! 이따 6시에 보자 ㅎㅎ", time: "09:40", unread: 2 },
+  { name: "가족 단톡방", message: "엄마: 저녁 몇 시에 올 거야?", time: "어제", unread: 5 },
+  { name: "정하늘", message: "그 사진 봤어?? 완전 웃기다 ㅋㅋㅋ", time: "어제", unread: 0 },
+  { name: "이준서", message: "내일 회의 자료 공유할게요", time: "화요일", unread: 0 },
 ];
 
 // 채팅목록탭
 function ChatsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
-  const avatars = [visual.profileImage, visual.profileImage2, visual.profileImage3];
+  const avatars = [visual.profileImage, visual.profileImage2 ?? visual.profileImage, visual.profileImage3 ?? visual.profileImage];
   return (
     <div
-      className="grid h-full grid-rows-[auto_1fr] bg-cover bg-center"
+      className="grid h-full grid-rows-[auto_minmax(0,1fr)_auto] bg-cover bg-center"
       style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
     >
-      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: visual.mainHeaderColor }}>
-        <strong className="text-base font-black" style={{ color: visual.mainHeaderForegroundColor }}>채팅</strong>
-        <Plus className="size-4" style={{ color: visual.mainHeaderForegroundColor }} aria-hidden="true" />
+      <div className="flex items-center gap-2 px-3 py-2.5" style={{ backgroundColor: visual.mainHeaderColor, color: visual.mainHeaderForegroundColor }}>
+        <strong className="flex-1 text-[13px] font-bold">채팅</strong>
+        <Search className="size-3.5" aria-hidden="true" />
+        <Plus className="size-3.5" aria-hidden="true" />
       </div>
-      <div className="grid content-start gap-3 overflow-hidden px-4 py-4">
+
+      <div className="grid content-start gap-2 overflow-hidden px-3 py-2">
+        <PreviewAdBanner />
         {chatListPreviewRows.map((row, index) => (
-          <div key={row.name} className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-            <ScreenAvatar src={avatars[index % avatars.length]} />
+          <div key={row.name} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 py-0.5">
+            <ScreenAvatar src={avatars[index % avatars.length]} sizeClass="size-9" />
             <div className="min-w-0">
-              <strong className="block truncate text-sm font-bold text-[var(--color-on-surface)]">{row.name}</strong>
-              <span className="block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{row.message}</span>
+              <strong className="block truncate text-[12px] font-bold leading-tight" style={{ color: visual.titleColor }}>{row.name}</strong>
+              <span className="block truncate text-[10px] font-medium leading-tight" style={{ color: visual.descriptionColor }}>{row.message}</span>
             </div>
-            <span className="text-[11px] font-semibold text-[var(--color-on-surface-variant)]">{row.time}</span>
+            <div className="grid justify-items-end gap-1">
+              <span className="text-[8.5px] font-medium" style={{ color: visual.descriptionColor, opacity: 0.85 }}>{row.time}</span>
+              {row.unread > 0 ? (
+                <span className="grid h-3.5 min-w-3.5 place-items-center rounded-full px-1 text-[8px] font-black leading-none text-white" style={{ backgroundColor: visual.unreadColor }}>{row.unread}</span>
+              ) : null}
+            </div>
           </div>
         ))}
       </div>
+
+      <PreviewTabBar visual={visual} active="chats" />
     </div>
   );
 }
 
-const chatroomPreviewMessages: Array<{ mine: boolean; text: string }> = [
-  { mine: false, text: "오늘 저녁 뭐 먹지 ㅋㅋ" },
-  { mine: true, text: "떡볶이 어때 ㅎㅎ" },
-  { mine: false, text: "콜! 이따 6시에 보자" },
+const chatroomPreviewMessages: Array<{ mine: boolean; text: string; time: string }> = [
+  { mine: false, text: "오늘 저녁 뭐 먹지 ㅋㅋ", time: "5:41" },
+  { mine: true, text: "떡볶이 어때 ㅎㅎ", time: "5:42" },
+  { mine: false, text: "콜! 이따 6시에 보자", time: "5:42" },
 ];
 
 // 채팅방
 function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
   return (
     <div
-      className="grid h-full grid-rows-[1fr_auto] bg-cover bg-center"
+      className="grid h-full grid-rows-[auto_minmax(0,1fr)_auto] bg-cover bg-center"
       style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
     >
-      <div className="grid content-end gap-2 overflow-hidden px-3 py-4">
+      <div className="flex items-center gap-2 bg-black/5 px-3 py-2.5 text-[var(--color-on-surface)] backdrop-blur-sm">
+        <ArrowLeft className="size-3.5" aria-hidden="true" />
+        <strong className="flex-1 truncate text-[12px] font-bold">수아</strong>
+        <Search className="size-3.5" aria-hidden="true" />
+        <Menu className="size-3.5" aria-hidden="true" />
+      </div>
+
+      <div className="grid content-end gap-2 overflow-hidden px-3 py-3">
         {chatroomPreviewMessages.map((message, index) => (
-          <ChatroomBubble key={index} visual={visual} mine={message.mine} text={message.text} />
+          <ChatroomBubble key={index} visual={visual} mine={message.mine} text={message.text} time={message.time} />
         ))}
       </div>
-      <div className="flex items-center gap-2 bg-white/85 px-3 py-2.5">
-        <Plus className="size-4 text-[var(--color-on-surface-variant)]" aria-hidden="true" />
-        <span className="flex-1 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[var(--color-on-surface-variant)]">메시지 입력</span>
-        <SendHorizontal className="size-4 text-[var(--color-on-surface-variant)]" aria-hidden="true" />
+
+      <div className="flex items-center gap-1.5 bg-white/85 px-2.5 py-2 backdrop-blur-sm">
+        <Plus className="size-3.5 shrink-0 text-[#868e96]" aria-hidden="true" />
+        <span className="flex-1 truncate rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-[#868e96] shadow-sm">메시지 입력</span>
+        <Smile className="size-3.5 shrink-0 text-[#868e96]" aria-hidden="true" />
+        <span className="grid size-6 shrink-0 place-items-center rounded-full" style={{ backgroundColor: visual.unreadColor }}>
+          <SendHorizontal className="size-3 text-white" aria-hidden="true" />
+        </span>
       </div>
     </div>
   );
 }
 
-function ChatroomBubble({ visual, mine, text }: { visual: TemplatePreviewVisual; mine: boolean; text: string }) {
+function ChatroomBubble({ visual, mine, text, time }: { visual: TemplatePreviewVisual; mine: boolean; text: string; time: string }) {
   const image = mine ? visual.myBubbleImage : visual.friendBubbleImage;
   return (
-    <div className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
-      {!mine ? <ScreenAvatar src={visual.profileImage} sizeClass="size-7" /> : null}
+    <div className={`flex items-end gap-1.5 ${mine ? "justify-end" : "justify-start"}`}>
+      {!mine ? <ScreenAvatar src={visual.profileImage} sizeClass="size-6" /> : null}
+      {mine ? <span className="mb-0.5 text-[7px] font-medium text-[var(--color-on-surface-variant)]">{time}</span> : null}
       <span
-        className="max-w-[72%] rounded-[16px] bg-cover bg-center px-3.5 py-2.5 text-[13px] font-semibold leading-5 text-[var(--color-on-surface)]"
+        className={`max-w-[68%] bg-cover bg-center px-2.5 py-1.5 text-[11px] font-medium leading-snug text-[var(--color-on-surface)] ${mine ? "rounded-[14px] rounded-br-[4px]" : "rounded-[14px] rounded-bl-[4px]"}`}
         style={{
           backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor,
           backgroundImage: image ? `url(${image})` : undefined,
@@ -1016,6 +1130,7 @@ function ChatroomBubble({ visual, mine, text }: { visual: TemplatePreviewVisual;
       >
         {text}
       </span>
+      {!mine ? <span className="mb-0.5 text-[7px] font-medium text-[var(--color-on-surface-variant)]">{time}</span> : null}
     </div>
   );
 }
@@ -1027,17 +1142,18 @@ function ProfileScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
 
   return (
     <div
-      className="grid h-full grid-rows-[1fr_auto] bg-cover bg-center"
+      className="grid h-full grid-rows-[minmax(0,1fr)_auto] bg-cover bg-center"
       style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
     >
       <div className="grid content-center justify-items-center gap-3 px-6">
-        <ScreenAvatar src={heroImage} sizeClass="size-32" />
-        <p className="text-xs font-black uppercase tracking-[0.1em] text-[var(--color-on-surface-variant)]">기본 프로필 사진</p>
+        <ScreenAvatar src={heroImage} sizeClass="size-28" />
+        <strong className="text-[13px] font-bold" style={{ color: visual.titleColor }}>내 프로필</strong>
+        <p className="text-[9px] font-black uppercase tracking-[0.1em]" style={{ color: visual.descriptionColor }}>기본 프로필 사진</p>
       </div>
       {extras.length > 0 ? (
-        <div className="flex items-center justify-center gap-3 px-6 pb-6">
+        <div className="flex items-center justify-center gap-2.5 px-6 pb-6">
           {extras.map((src) => (
-            <ScreenAvatar key={src} src={src} sizeClass="size-11" />
+            <ScreenAvatar key={src} src={src} sizeClass="size-10" />
           ))}
         </div>
       ) : null}
@@ -1306,6 +1422,7 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
 }
 
 function createBaseTemplatePreviewVisual(template: ThemeTemplate): TemplatePreviewVisual {
+  const slots = getThemeSlots(template.defaults.platform);
   return {
     chatBackgroundColor: template.defaults.chatBackground,
     mainBackgroundColor: template.defaults.mainBackground,
@@ -1315,6 +1432,12 @@ function createBaseTemplatePreviewVisual(template: ThemeTemplate): TemplatePrevi
     mainHeaderColor: template.defaults.mainHeader,
     mainHeaderForegroundColor: template.defaults.mainTitle,
     bodyCellColor: template.defaults.mainBackground,
+    titleColor: template.defaults.mainTitle,
+    descriptionColor: template.defaults.mainBody,
+    sectionTitleColor: template.defaults.mainTitle,
+    bodyCellBorderColor: template.defaults.mainBody,
+    unreadColor: template.accent,
+    tabIcons: buildTabIconUrls((role) => getResolvedAssetUrl(findSlotByRole(slots, role), {}, {}, template.id, template)),
   };
 }
 
