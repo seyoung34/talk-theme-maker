@@ -12,7 +12,7 @@ const snapRatio: Record<MobileSheetSnap, number> = {
 
 export const mobileSheetHeight: Record<MobileSheetSnap, string> = {
   collapsed: "max(136px, 18dvh)",
-  half: "68dvh",
+  half: "62dvh",
   full: "88dvh",
 };
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 const referenceSizeBySection: Record<string, { width: number; height: number }> = {
   chatroom: { width: 310, height: Math.round((310 * 2123) / 1080) },
@@ -9,10 +9,27 @@ const referenceSizeBySection: Record<string, { width: number; height: number }> 
 };
 const defaultReferenceSize = { width: 310, height: Math.round((310 * 2340) / 1080) };
 
-export function MobileScaledPreview({ section, children }: { section: string; children: ReactNode }) {
+type MobileScaledPreviewPlacement = "center" | "raised";
+
+export function MobileScaledPreview({
+  section,
+  placement = "center",
+  children,
+}: {
+  section: string;
+  placement?: MobileScaledPreviewPlacement;
+  children: ReactNode;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
   const reference = referenceSizeBySection[section] ?? defaultReferenceSize;
+  const scaledSize = useMemo(
+    () => ({
+      width: reference.width * scale,
+      height: reference.height * scale,
+    }),
+    [reference.height, reference.width, scale],
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -32,9 +49,14 @@ export function MobileScaledPreview({ section, children }: { section: string; ch
   }, [reference.width, reference.height]);
 
   return (
-    <div ref={containerRef} className="grid h-full w-full place-items-center overflow-hidden">
-      <div style={{ width: reference.width, height: reference.height, transform: `scale(${scale})`, transformOrigin: "center center" }}>
-        {children}
+    <div ref={containerRef} className={`flex h-full w-full justify-center overflow-hidden ${placement === "raised" ? "items-start" : "items-center"}`}>
+      <div className="relative shrink-0" style={{ width: scaledSize.width, height: scaledSize.height }}>
+        <div
+          className="absolute left-1/2 top-0"
+          style={{ width: reference.width, height: reference.height, transform: `translateX(-50%) scale(${scale})`, transformOrigin: "top center" }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

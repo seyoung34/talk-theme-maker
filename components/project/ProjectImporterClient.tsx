@@ -1109,7 +1109,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 />
               ) : null}
               <div className="relative min-h-0 flex-1 overflow-hidden" style={{ paddingBottom: mobilePreviewClearance }}>
-                <MobileScaledPreview section={activeSection}>
+                <MobileScaledPreview section={activeSection} placement={mobileSheetSnap === "collapsed" ? "center" : "raised"}>
                   <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
                 </MobileScaledPreview>
               </div>

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Clock3, Hash, SendHorizontal, Plus, Search, Settings, UserRound } from "lucide-react";
+import { ArrowRight, Clock3, Eye, Hash, Info, Layers3, Palette, SendHorizontal, Plus, Search, Settings, Trash2, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
-import UserTemplateCard from "@/components/template/UserTemplateCard";
+import TemplateCard from "@/components/template/TemplateCard";
 import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
 import { createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
@@ -47,6 +47,8 @@ type TemplatePreviewModel = {
   rows: Array<{ label: string; value: string }>;
   checkpoints: string[];
   onStart: (platform: ThemePlatform) => void;
+  onDelete?: () => void;
+  deleteLabel?: string;
 };
 
 export default function TemplateGalleryClient() {
@@ -64,6 +66,7 @@ export default function TemplateGalleryClient() {
   const [userTemplateCardPreviewUrls, setUserTemplateCardPreviewUrls] = useState<Record<string, Record<string, string>>>({});
   const [userTemplateCardVisuals, setUserTemplateCardVisuals] = useState<Record<string, TemplatePreviewVisual>>({});
   const [isUserTemplatePreviewLoading, setIsUserTemplatePreviewLoading] = useState(false);
+  const [isUserTemplateInfoOpen, setIsUserTemplateInfoOpen] = useState(false);
   const userTemplateCardPreviewUrlsRef = useRef<Record<string, Record<string, string>>>({});
   const galleryTemplates = useMemo(
     () =>
@@ -81,7 +84,7 @@ export default function TemplateGalleryClient() {
     [systemTemplates, systemUploadPreviewUrls],
   );
   const selectedGalleryTemplate = galleryTemplates.find((template) => template.id === selectedGalleryTemplateId) ?? null;
-  const userPreviewModel = selectedUserTemplateRecord ? createUserTemplatePreviewModel(selectedUserTemplateRecord, userTemplatePreviewUrls, startUserTemplate) : null;
+  const userPreviewModel = selectedUserTemplateRecord ? createUserTemplatePreviewModel(selectedUserTemplateRecord, userTemplatePreviewUrls, startUserTemplate, handleDeleteUserTemplate) : null;
   const previewModel = selectedGalleryTemplate ? createGalleryTemplatePreviewModel(selectedGalleryTemplate, selectedGalleryTemplate.onStart) : userPreviewModel;
   const basicGalleryTemplateId = "base:basic";
   const hasSavedTemplates = userTemplates.length > 0;
@@ -243,8 +246,7 @@ export default function TemplateGalleryClient() {
     router.push("/edit");
   };
 
-  const handleDeleteUserTemplate = async (event: React.MouseEvent<HTMLButtonElement>, template: UserTemplateSummary) => {
-    event.stopPropagation();
+  async function handleDeleteUserTemplate(template: UserTemplateSummary) {
     const confirmed = window.confirm(`"${template.name}" 템플릿을 삭제하시겠습니까?`);
     if (!confirmed) return;
 
@@ -263,12 +265,13 @@ export default function TemplateGalleryClient() {
         delete next[template.id];
         return next;
       });
+      closePreview();
       setNotice("내 템플릿을 삭제했습니다.");
     } catch (error) {
       console.error(error);
       setNotice("템플릿을 삭제하지 못했습니다.");
     }
-  };
+  }
 
   return (
     <main className="min-h-screen bg-[var(--color-background)] text-[var(--color-on-background)]">
@@ -296,8 +299,18 @@ export default function TemplateGalleryClient() {
         <section className="grid gap-5 rounded-[32px] border border-[var(--color-outline-variant)] bg-white/92 p-5 shadow-[0_18px_48px_rgba(42,103,103,0.08)] md:p-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h2 className="mt-2 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">내 템플릿</h2>
-              <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
+              <div className="mt-2 flex items-center gap-1.5">
+                <h2 className="font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">내 템플릿</h2>
+                <button
+                  type="button"
+                  aria-label="내 템플릿 안내"
+                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] sm:hidden"
+                  onClick={() => setIsUserTemplateInfoOpen(true)}
+                >
+                  <Info className="size-3.5" aria-hidden="true" />
+                </button>
+              </div>
+              <p className="mt-2 hidden max-w-2xl text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:block">
                 이 브라우저에만 저장된 작업입니다. 직접 올린 개인 이미지는 서버에 업로드되지 않습니다.
               </p>
             </div>
@@ -308,16 +321,29 @@ export default function TemplateGalleryClient() {
           </div>
 
           {hasSavedTemplates ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-flow-col auto-cols-[calc(50%-0.25rem)] snap-x snap-mandatory gap-2 overflow-x-auto pb-1 sm:auto-cols-[300px] sm:gap-3">
               {userTemplates.map((template) => (
-                <UserTemplateCard
+                <TemplateCard
                   key={template.id}
-                  template={template}
-                  visual={userTemplateCardVisuals[template.id]}
-                  formattedDate={formatDate(template.updatedAt)}
-                  onDelete={handleDeleteUserTemplate}
-                  onContinue={startUserTemplate}
-                  onPreview={(template) => void openUserTemplatePreview(template)}
+                  title={template.name}
+                  onOpen={() => void openUserTemplatePreview(template)}
+                  openLabel={`${template.name} 미리보기 열기`}
+                  className="snap-start"
+                  mobileVisual={
+                    userTemplateCardVisuals[template.id] ? (
+                      <TemplateVisualPreview visual={userTemplateCardVisuals[template.id]} size="thumb" />
+                    ) : (
+                      <div className="aspect-[4/3] animate-pulse rounded-[12px] bg-[var(--color-surface-low)]" />
+                    )
+                  }
+                  desktopVisual={<UserTemplateDesktopVisual template={template} visual={userTemplateCardVisuals[template.id]} />}
+                  desktopContent={<UserTemplateDesktopContent template={template} />}
+                  desktopFooter={
+                    <UserTemplateDesktopFooter
+                      onPreview={() => void openUserTemplatePreview(template)}
+                      onContinue={() => startUserTemplate(template)}
+                    />
+                  }
                 />
               ))}
             </div>
@@ -348,9 +374,23 @@ export default function TemplateGalleryClient() {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-3 xl:gap-4">
             {galleryTemplates.map((template) => (
-              <GalleryTemplateCard key={template.id} template={template} onPreview={setSelectedGalleryTemplateId} />
+              <TemplateCard
+                key={template.id}
+                title={template.title}
+                onOpen={() => setSelectedGalleryTemplateId(template.id)}
+                openLabel={`${template.title} 열기`}
+                mobileVisual={<TemplateVisualPreview visual={template.visual} size="thumb" />}
+                desktopVisual={<TemplateVisualPreview visual={template.visual} size="card" />}
+                desktopContent={<GalleryTemplateDesktopContent template={template} />}
+                desktopFooter={
+                  <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
+                    템플릿 확인
+                    <ArrowRight className="w-4 h-4" />
+                  </span>
+                }
+              />
             ))}
             {isSystemTemplatesLoading ? <TemplateGallerySkeletonCards count={5} /> : null}
           </div>
@@ -369,6 +409,7 @@ export default function TemplateGalleryClient() {
         />
       ) : null}
       {isUserTemplatePreviewLoading ? <TemplatePreviewLoadingOverlay /> : null}
+      {isUserTemplateInfoOpen ? <UserTemplateInfoModal onClose={() => setIsUserTemplateInfoOpen(false)} /> : null}
     </main>
   );
 }
@@ -428,7 +469,7 @@ function revokeNestedObjectUrls(urls: Record<string, Record<string, string>>) {
   Object.values(urls).forEach(revokeObjectUrls);
 }
 
-function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPreviewUrls: Record<string, string>, onStart: (template: UserTemplateSummary) => void): TemplatePreviewModel {
+function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPreviewUrls: Record<string, string>, onStart: (template: UserTemplateSummary) => void, onDelete: (template: UserTemplateSummary) => void): TemplatePreviewModel {
   const baseTemplate = themeTemplates.find((template) => template.id === record.templateId) ?? themeTemplates[0];
   const visual = createUserTemplatePreviewVisual(record, baseTemplate, uploadPreviewUrls);
   const platformLabel = record.platform === "android" ? "Android" : "iOS";
@@ -464,6 +505,8 @@ function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPrevie
       "이어 편집하면 이전 슬롯 선택, 색상, 말풍선 조정값을 유지합니다.",
     ],
     onStart: () => onStart(summary),
+    onDelete: () => onDelete(summary),
+    deleteLabel: "삭제",
   };
 }
 
@@ -553,32 +596,193 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
   };
 }
 
-function GalleryTemplateCard({ template, onPreview }: { template: GalleryTemplateItem; onPreview: (templateId: string) => void }) {
+function GalleryTemplateDesktopContent({ template }: { template: GalleryTemplateItem }) {
   return (
-    <button
-      type="button"
-      className="group grid min-h-[392px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/92 p-4 text-left shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)]"
-      onClick={() => onPreview(template.id)}
-    >
-      <div className="grid gap-4">
-        <TemplateVisualPreview visual={template.visual} size="card" />
-        <div className="grid gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase ${template.kind === "base" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]"}`}>
-              {template.badge}
-            </span>
-            {template.kind === "system" ? <span className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-black uppercase text-[var(--color-on-surface-variant)]">{Object.keys(template.variants).join(" / ")}</span> : null}
-          </div>
-          <strong className="font-[var(--font-display)] text-[26px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.title}</strong>
-          {template.description ? <span className="line-clamp-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.description}</span> : null}
+    <div className="grid gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase ${template.kind === "base" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]"}`}>
+          {template.badge}
+        </span>
+        {template.kind === "system" ? <span className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-black uppercase text-[var(--color-on-surface-variant)]">{Object.keys(template.variants).join(" / ")}</span> : null}
+      </div>
+      <strong className="font-[var(--font-display)] text-[26px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.title}</strong>
+      {template.description ? <span className="line-clamp-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.description}</span> : null}
+    </div>
+  );
+}
+
+function UserTemplateDesktopVisual({ template, visual }: { template: UserTemplateSummary; visual?: TemplatePreviewVisual }) {
+  return (
+    <div className="relative overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] p-3">
+      {visual ? <UserMiniPreview visual={visual} /> : <UserMiniPreviewSkeleton />}
+      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-surface-variant)] shadow-sm">
+        <Eye className="size-3" aria-hidden="true" />
+        {visual ? "저장본 미리보기" : "준비 중"}
+      </span>
+      <span className="absolute right-3 top-3 rounded-full bg-[var(--color-inverse-surface)] px-2.5 py-1 text-[11px] font-black text-[var(--color-inverse-on-surface)]">
+        {template.platform === "android" ? "Android" : "iOS"}
+      </span>
+    </div>
+  );
+}
+
+function UserTemplateDesktopContent({ template }: { template: UserTemplateSummary }) {
+  return (
+    <div className="grid gap-2">
+      <div className="min-w-0">
+        <strong className="block truncate text-lg font-black text-[var(--color-on-surface)]">{template.name}</strong>
+        <p className="mt-1 text-sm leading-6 text-[var(--color-on-surface-variant)]">최근 수정 {formatDate(template.updatedAt)}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <span className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)]">
+          <Layers3 className="size-4" aria-hidden="true" />
+          이미지 {template.uploadCount}
+        </span>
+        <span className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)]">
+          <Palette className="size-4" aria-hidden="true" />
+          색상 {template.colorCount}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function UserTemplateDesktopFooter({ onPreview, onContinue }: { onPreview: () => void; onContinue: () => void }) {
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition hover:-translate-y-0.5 hover:bg-[var(--color-surface-low)] active:translate-y-0"
+        onClick={(event) => {
+          event.stopPropagation();
+          onPreview();
+        }}
+      >
+        미리보기
+        <Eye className="w-4 h-4" />
+      </button>
+      <button
+        type="button"
+        className="inline-flex items-center gap-2 rounded-full bg-[var(--color-primary-container)] px-4 py-2.5 text-sm font-black text-[var(--color-on-primary-container)] shadow-[0_10px_22px_rgba(254,229,0,0.22)] transition hover:-translate-y-0.5 hover:ring hover:ring-black/10 active:translate-y-0"
+        onClick={(event) => {
+          event.stopPropagation();
+          onContinue();
+        }}
+      >
+        편집 계속하기
+        <ArrowRight className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+function UserMiniPreview({ visual }: { visual: TemplatePreviewVisual }) {
+  return (
+    <div className="grid aspect-[4/3] grid-cols-[0.82fr_1fr] gap-2">
+      <div
+        className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white/75 bg-cover bg-center shadow-[0_10px_24px_rgba(42,103,103,0.08)]"
+        style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
+      >
+        <div className="flex h-8 items-center justify-between px-3 text-[var(--color-on-surface)]">
+          <span className="grid grid-cols-[18px_minmax(0,1fr)] items-center gap-1.5">
+            <UserMiniAvatar src={visual.profileImage} />
+            <span className="h-3 w-12 rounded-full bg-black/15" />
+          </span>
+          <span className="flex gap-1.5">
+            <Search className="size-3.5" aria-hidden="true" />
+            <Settings className="size-3.5" aria-hidden="true" />
+          </span>
+        </div>
+        <div className="grid content-start gap-2 px-3 py-2">
+          <span className="h-7 rounded-full bg-white/75 shadow-sm" />
+          <UserMiniFriendLine visual={visual} width="w-4/5" />
+          <UserMiniFriendLine visual={visual} width="w-full" />
+        </div>
+        <div className="grid h-7 grid-cols-5 items-center bg-cover bg-center px-2" style={{ backgroundColor: visual.tabBackgroundColor, backgroundImage: visual.tabBackgroundImage ? `url(${visual.tabBackgroundImage})` : undefined }}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <span key={index} className={`mx-auto rounded-full ${index === 1 ? "size-4 bg-[var(--color-primary-container)]" : "size-3 bg-black/15"}`} />
+          ))}
         </div>
       </div>
+      <div
+        className="grid content-between overflow-hidden rounded-[18px] bg-cover bg-center p-2 shadow-[0_10px_24px_rgba(42,103,103,0.08)]"
+        style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
+      >
+        <span className="h-6 w-20 rounded-full bg-white/80" />
+        <div className="grid gap-2">
+          <UserMiniBubble visual={visual} tone="friend" width="w-4/5" />
+          <UserMiniBubble visual={visual} tone="me" width="w-3/4" />
+          <UserMiniBubble visual={visual} tone="friend" width="w-5/6" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
-        템플릿 확인
-        <ArrowRight className="w-4 h-4" />
+function UserMiniPreviewSkeleton() {
+  return (
+    <div className="grid aspect-[4/3] grid-cols-[0.8fr_1fr] gap-2">
+      <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white shadow-[0_10px_24px_rgba(42,103,103,0.08)]">
+        <div className="flex h-8 items-center justify-between px-3">
+          <span className="h-3 w-12 rounded-full bg-black/12" />
+          <span className="grid size-4 place-items-center rounded-full bg-black/10" />
+        </div>
+        <div className="grid content-start gap-2 px-3 py-2">
+          <span className="h-7 animate-pulse rounded-full bg-[var(--color-primary-container)]/70" />
+          <span className="h-4 w-3/4 animate-pulse rounded-full bg-black/10" />
+          <span className="h-4 w-5/6 animate-pulse rounded-full bg-black/10" />
+        </div>
+        <div className="grid h-7 grid-cols-5 items-center bg-white/90 px-2">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <span key={index} className={`mx-auto rounded-full ${index === 1 ? "size-4 bg-[var(--color-primary-container)]" : "size-3 bg-black/15"}`} />
+          ))}
+        </div>
+      </div>
+      <div className="grid content-between overflow-hidden rounded-[18px] bg-[linear-gradient(160deg,var(--color-secondary-container),white)] p-2 shadow-[0_10px_24px_rgba(42,103,103,0.08)]">
+        <span className="h-6 w-20 rounded-full bg-white/80" />
+        <div className="grid gap-2">
+          <span className="h-8 w-4/5 animate-pulse rounded-[14px] bg-white" />
+          <span className="h-8 w-3/4 justify-self-end animate-pulse rounded-[14px] bg-[var(--color-primary-container)]" />
+          <span className="h-8 w-5/6 animate-pulse rounded-[14px] bg-white" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UserMiniFriendLine({ visual, width }: { visual: TemplatePreviewVisual; width: string }) {
+  return (
+    <span className={`grid grid-cols-[18px_minmax(0,1fr)] items-center gap-1.5 ${width}`}>
+      <UserMiniAvatar src={visual.profileImage} />
+      <span className="h-3 rounded-full bg-black/12" />
+    </span>
+  );
+}
+
+function UserMiniAvatar({ src }: { src?: string }) {
+  return (
+    <span className="grid size-[18px] place-items-center overflow-hidden rounded-full bg-[var(--color-primary-container)]/65">
+      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <UserRound className="size-3 text-[var(--color-on-primary-container)]" aria-hidden="true" />}
+    </span>
+  );
+}
+
+function UserMiniBubble({ visual, tone, width }: { visual: TemplatePreviewVisual; tone: "me" | "friend"; width: string }) {
+  const mine = tone === "me";
+  const image = mine ? visual.myBubbleImage : visual.friendBubbleImage;
+  if (image) {
+    return (
+      <span className={`${width} ${mine ? "justify-self-end" : ""}`}>
+        <img src={image} alt="" className="h-8 w-full object-contain" />
       </span>
-    </button>
+    );
+  }
+
+  return (
+    <span
+      className={`${width} h-8 rounded-[14px] ${mine ? "justify-self-end" : ""}`}
+      style={{ backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor }}
+    />
   );
 }
 
@@ -586,17 +790,24 @@ function TemplateGallerySkeletonCards({ count }: { count: number }) {
   return (
     <>
       {Array.from({ length: count }).map((_, index) => (
-        <div key={index} className="grid min-h-[392px] max-w-[420px] content-between rounded-[28px] border border-[var(--color-outline-variant)] bg-white/70 p-4 shadow-[0_16px_36px_rgba(42,103,103,0.04)]">
-          <div className="grid gap-4">
-            <div className="aspect-[4/3] animate-pulse rounded-[22px] bg-[var(--color-surface-low)]" />
-            <div className="grid gap-2">
-              <span className="h-5 w-20 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
-              <span className="h-8 w-4/5 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
-              <span className="h-4 w-full animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
-              <span className="h-4 w-2/3 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
+        <div key={index} className="grid min-h-0 content-between gap-2 overflow-hidden rounded-[16px] border border-[var(--color-outline-variant)] bg-white/70 p-2 shadow-[0_16px_36px_rgba(42,103,103,0.04)] sm:min-h-[360px] sm:gap-4 sm:rounded-[28px] sm:p-4">
+            <div className="grid gap-1.5 sm:hidden">
+              <div className="aspect-[4/3] animate-pulse rounded-[12px] bg-[var(--color-surface-low)]" />
+              <div className="flex items-center justify-between gap-2">
+                <span className="h-4 w-2/3 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+                <span className="size-6 shrink-0 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+              </div>
             </div>
-          </div>
-          <span className="mt-4 h-10 w-28 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+            <div className="hidden sm:grid sm:gap-4">
+              <div className="aspect-[4/3] animate-pulse rounded-[22px] bg-[var(--color-surface-low)]" />
+              <div className="grid gap-2">
+                <span className="h-5 w-20 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+                <span className="h-8 w-4/5 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
+                <span className="h-4 w-full animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
+                <span className="h-4 w-2/3 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
+              </div>
+            </div>
+          <span className="mt-4 hidden h-10 w-28 animate-pulse rounded-full bg-[var(--color-surface-low)] sm:block" />
         </div>
       ))}
     </>
@@ -620,9 +831,21 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
             <h2 className="mt-1 font-[var(--font-display)] text-2xl font-semibold leading-tight text-[var(--color-on-surface)] sm:text-3xl">{preview.title}</h2>
             {preview.description ? <p className="mt-1 line-clamp-2 max-w-2xl text-xs leading-5 text-[var(--color-on-surface-variant)] sm:text-sm">{preview.description}</p> : null}
           </div>
-          <button className="shrink-0 rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-white sm:px-4 sm:text-sm" type="button" onClick={onClose}>
-            {preview.closeLabel}
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {preview.onDelete ? (
+              <button
+                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-error)] transition hover:bg-[var(--color-error-container)] sm:px-4 sm:text-sm"
+                type="button"
+                onClick={preview.onDelete}
+              >
+                <Trash2 className="w-4 h-4" />
+                {preview.deleteLabel ?? "삭제"}
+              </button>
+            ) : null}
+            <button className="rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-white sm:px-4 sm:text-sm" type="button" onClick={onClose}>
+              {preview.closeLabel}
+            </button>
+          </div>
         </header>
 
         <div className="grid min-h-0 gap-3 p-3 sm:grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)] sm:p-4 lg:grid-cols-[340px_1fr] overflow-auto">
@@ -660,6 +883,26 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
   );
 }
 
+function UserTemplateInfoModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label="내 템플릿 안내" onClick={onClose}>
+      <div className="max-w-sm rounded-[24px] bg-white p-5 shadow-[0_28px_64px_rgba(42,103,103,0.2)]" onClick={(event) => event.stopPropagation()}>
+        <strong className="block text-lg font-black text-[var(--color-on-surface)]">내 템플릿 안내</strong>
+        <p className="mt-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">
+          이 브라우저에만 저장된 작업입니다. 직접 올린 개인 이미지는 서버에 업로드되지 않습니다.
+        </p>
+        <button
+          type="button"
+          className="mt-4 w-full rounded-full bg-[var(--color-inverse-surface)] px-4 py-2.5 text-sm font-black text-[var(--color-inverse-on-surface)]"
+          onClick={onClose}
+        >
+          확인
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TemplatePreviewLoadingOverlay() {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.28)] p-4" role="status" aria-live="polite">
@@ -676,9 +919,10 @@ function TemplateVisualPreview({
   size = "card",
 }: {
   visual: TemplatePreviewVisual;
-  size?: "card" | "modal";
+  size?: "card" | "modal" | "thumb";
 }) {
   const isModal = size === "modal";
+  const isThumb = size === "thumb";
 
   if (visual.cardPreviewImage) {
     return (
@@ -690,9 +934,31 @@ function TemplateVisualPreview({
         className={`
           aspect-[4/3] w-full border border-[var(--color-outline-variant)]
           bg-[var(--color-surface-low)] object-cover
-          ${isModal ? "rounded-[28px]" : "rounded-[22px]"}
+          ${isModal ? "rounded-[28px]" : isThumb ? "rounded-[12px]" : "rounded-[22px]"}
         `}
       />
+    );
+  }
+
+  if (isThumb) {
+    // 모바일 카드 썸네일용: 아이콘/텍스트 없이 배경·말풍선(이미지 우선)만 축소 표시
+    return (
+      <div className="relative aspect-[4/3] overflow-hidden rounded-[12px] border border-[var(--color-outline-variant)] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+        <div className="grid h-full grid-cols-[0.84fr_1fr] gap-1 p-1">
+          <div
+            className="rounded-[8px] bg-cover bg-center"
+            style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
+          />
+          <div
+            className="grid grid-rows-3 gap-0.5 rounded-[8px] bg-cover bg-center p-1"
+            style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
+          >
+            <MiniBubbleSwatch visual={visual} tone="friend" width="w-[70%]" />
+            <MiniBubbleSwatch visual={visual} tone="me" width="w-[78%]" />
+            <MiniBubbleSwatch visual={visual} tone="friend" width="w-[85%]" />
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -826,6 +1092,26 @@ function MiniBubble({ visual, tone, width }: { visual: TemplatePreviewVisual; to
       style={{
         backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor,
       }}
+    />
+  );
+}
+
+// 모바일 썸네일용: 말풍선 이미지가 있으면 이미지를, 없으면 색상 캡슐을 표시
+function MiniBubbleSwatch({ visual, tone, width }: { visual: TemplatePreviewVisual; tone: "me" | "friend"; width: string }) {
+  const mine = tone === "me";
+  const bubbleImage = mine ? visual.myBubbleImage : visual.friendBubbleImage;
+  if (bubbleImage) {
+    return (
+      <span className={`${width} flex h-full min-h-0 items-center ${mine ? "justify-self-end justify-end" : ""}`}>
+        <img src={bubbleImage} alt="" className="max-h-full w-full object-contain" />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={`${width} h-full rounded-full ${mine ? "justify-self-end" : ""}`}
+      style={{ backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor }}
     />
   );
 }
