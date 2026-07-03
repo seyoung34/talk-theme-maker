@@ -32,9 +32,14 @@ export function ProjectPreviewPanel({
   className?: string;
   onSelectSlot: (slotId: string | undefined) => void;
 }) {
+  const chatroomActive = activeSection === "chatroom";
+
   return (
     <aside className={`grid min-h-0 place-items-center  overflow-hidden  ${className ?? ""}`}>
-      {activeSection === "chatroom" ? (
+      <div
+        className={`col-start-1 row-start-1 grid h-full w-full place-items-center ${chatroomActive ? "" : "pointer-events-none invisible"}`}
+        aria-hidden={!chatroomActive}
+      >
         <ChatroomPreview
           analysis={analysis}
           platform={analysis.summary.platform}
@@ -47,19 +52,24 @@ export function ProjectPreviewPanel({
           bubbleEdits={bubbleEdits}
           onSelectSlot={onSelectSlot}
         />
-      ) : activeSection === "common" ? (
-        <CommonAssetsPreview
-          analysis={analysis}
-          activeGroup={getCommonActiveGroup(slots, selectedSlotId)}
-          slots={slots.filter((slot) => slot.section === "common")}
-          selectedSlotId={selectedSlotId}
-          onSelectSlot={onSelectSlot}
-        />
-      ) : activeSection === "passcode" ? (
-        <PasscodePreview analysis={analysis} slots={slots} selectedSlotId={selectedSlotId} colors={colors} selections={selections} template={template} templateId={templateId} onSelectSlot={onSelectSlot} />
-      ) : (
-        <ThemeScreensPreview analysis={analysis} section={activeSection} slots={slots} selectedSlotId={selectedSlotId} colors={colors} selections={selections} template={template} templateId={templateId} onSelectSlot={onSelectSlot} />
-      )}
+      </div>
+      {!chatroomActive ? (
+        <div className="col-start-1 row-start-1 grid h-full w-full place-items-center">
+          {activeSection === "common" ? (
+            <CommonAssetsPreview
+              analysis={analysis}
+              activeGroup={getCommonActiveGroup(slots, selectedSlotId)}
+              slots={slots.filter((slot) => slot.section === "common")}
+              selectedSlotId={selectedSlotId}
+              onSelectSlot={onSelectSlot}
+            />
+          ) : activeSection === "passcode" ? (
+            <PasscodePreview analysis={analysis} slots={slots} selectedSlotId={selectedSlotId} colors={colors} selections={selections} template={template} templateId={templateId} onSelectSlot={onSelectSlot} />
+          ) : (
+            <ThemeScreensPreview analysis={analysis} section={activeSection} slots={slots} selectedSlotId={selectedSlotId} colors={colors} selections={selections} template={template} templateId={templateId} onSelectSlot={onSelectSlot} />
+          )}
+        </div>
+      ) : null}
     </aside>
   );
 }

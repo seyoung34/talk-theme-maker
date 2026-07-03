@@ -1,9 +1,9 @@
 "use client";
 
 import { ArrowLeft, SendHorizontal, Menu, Phone, Plus, Search, Smile } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getResolvedColor, type BubbleEditState, type SlotCandidateSelections } from "@/components/project/projectModel";
-import { dataUrlForThemeFile, findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
+import { dataUrlForThemeFile, findBestFile } from "@/components/preview/previewResourceUtils";
 import { loadNinePatchDataUrl, mapContentRect, renderNinePatch } from "@/lib/theme/android/ninepatch";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -84,10 +84,18 @@ export function ChatroomPreview({
     [slots],
   );
   const selectedFiles = useMemo(() => selectPreviewFiles(analysis), [analysis]);
+  const backgroundFile = selectedFiles.chat_background;
   const backgroundFileSignature = useMemo(() => fileSignature(selectedFiles.chat_background), [selectedFiles]);
   const bubbleFilesSignature = useMemo(
     () => (["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"] as const).map((role) => fileSignature(selectedFiles[role])).join("|"),
     [selectedFiles],
+  );
+  const expectedBubbleAssetSlotIds = useMemo(
+    () =>
+      (["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"] as const)
+        .map((role) => (selectedFiles[role] ? slotByRole[role]?.id : undefined))
+        .filter((slotId): slotId is string => Boolean(slotId)),
+    [selectedFiles, slotByRole],
   );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
@@ -109,32 +117,38 @@ export function ChatroomPreview({
   const menuIconColor = previewColor("chat_menu_icon_color", template.defaults.mainBody);
   const menuButtonColor = previewColor("chat_menu_button_color", "#14000000");
 
+  useLayoutEffect(() => {
+    if (!backgroundFile) {
+      setBackgroundImage(null);
+      setBackgroundImageUrl(null);
+      return;
+    }
+
+    if (backgroundFile.file) {
+      const objectUrl = URL.createObjectURL(backgroundFile.file);
+      setBackgroundImage(null);
+      setBackgroundImageUrl(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+
+    setBackgroundImage(null);
+    setBackgroundImageUrl(backgroundFile.sourceUrl ?? null);
+  }, [backgroundFileSignature]);
+
   useEffect(() => {
     let cancelled = false;
-    const objectUrls: string[] = [];
 
     async function load() {
-      let nextBackgroundImage: HTMLImageElement | null = null;
-      let nextBackgroundImageUrl: string | null = null;
-      if (selectedFiles.chat_background) {
-        const nextBackgroundUrl = await imageUrlForThemeFile(selectedFiles.chat_background, false);
-        if (nextBackgroundUrl.startsWith("blob:")) objectUrls.push(nextBackgroundUrl);
-        nextBackgroundImageUrl = nextBackgroundUrl;
-        nextBackgroundImage = await loadImage(nextBackgroundUrl);
-      }
-
-      if (!cancelled) {
-        setBackgroundImage(nextBackgroundImage);
-        setBackgroundImageUrl(nextBackgroundImageUrl);
-      }
+      if (!backgroundImageUrl) return;
+      const nextBackgroundImage = await loadImage(backgroundImageUrl);
+      if (!cancelled) setBackgroundImage(nextBackgroundImage);
     }
 
     void load();
     return () => {
       cancelled = true;
-      for (const url of objectUrls) URL.revokeObjectURL(url);
     };
-  }, [backgroundFileSignature]);
+  }, [backgroundImageUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -180,6 +194,7 @@ export function ChatroomPreview({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    if (expectedBubbleAssetSlotIds.some((slotId) => !bubbleAssets[slotId])) return;
 
     drawChatPreview(ctx, {
       defaults: analysis.previewDefaults,
@@ -196,7 +211,7 @@ export function ChatroomPreview({
       onHotspotsChange: setHotspots,
       onCanvasHeightChange: setContentCanvasHeight,
     });
-  }, [analysis.previewDefaults, bubbleAssets, bubbleEdits, contentCanvasHeight, friendBubbleTextColor, headerForeground, myBubbleTextColor, platform, selectedSlotId, slotByRole, unreadCountColor]);
+  }, [analysis.previewDefaults, bubbleAssets, bubbleEdits, contentCanvasHeight, expectedBubbleAssetSlotIds, friendBubbleTextColor, headerForeground, myBubbleTextColor, platform, selectedSlotId, slotByRole, unreadCountColor]);
 
   const backgroundSlot = slotByRole.chat_background;
   const inputSlot = slotByRole.chat_input_background_color;

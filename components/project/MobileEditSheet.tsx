@@ -35,17 +35,20 @@ function getHandleLabel(snap: MobileSheetSnap): string {
 export function MobileEditSheet({
   snap,
   onSnapChange,
+  onLiveHeightChange,
   ariaLabel,
   children,
 }: {
   snap: MobileSheetSnap;
   onSnapChange: (snap: MobileSheetSnap) => void;
+  onLiveHeightChange?: (height: number | null) => void;
   ariaLabel?: string;
   children: ReactNode;
 }) {
   const sheetRef = useRef<HTMLDivElement | null>(null);
-  const dragState = useRef<{ startY: number; startHeight: number; moved: boolean } | null>(null);
+  const dragState = useRef<{ startY: number; startHeight: number; currentHeight: number; moved: boolean } | null>(null);
   const [liveHeight, setLiveHeight] = useState<number | null>(null);
+  const [isInteracting, setIsInteracting] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -70,7 +73,8 @@ export function MobileEditSheet({
     const rect = sheetRef.current?.getBoundingClientRect();
     if (!rect) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragState.current = { startY: event.clientY, startHeight: rect.height, moved: false };
+    setIsInteracting(true);
+    dragState.current = { startY: event.clientY, startHeight: rect.height, currentHeight: rect.height, moved: false };
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -81,23 +85,37 @@ export function MobileEditSheet({
     const viewport = window.innerHeight || 1;
     const min = snapRatio.collapsed * viewport;
     const max = snapRatio.full * viewport;
-    setLiveHeight(Math.min(max, Math.max(min, state.startHeight + delta)));
+    const nextHeight = Math.min(max, Math.max(min, state.startHeight + delta));
+    state.currentHeight = nextHeight;
+    setLiveHeight(nextHeight);
+    onLiveHeightChange?.(nextHeight);
   };
 
   const handlePointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
     const state = dragState.current;
     dragState.current = null;
+    setIsInteracting(false);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     if (!state) return;
 
     if (!state.moved) {
       onSnapChange(getTappedSnap(snap));
       setLiveHeight(null);
+      onLiveHeightChange?.(null);
       return;
     }
 
-    if (liveHeight != null) onSnapChange(nearestSnap(liveHeight));
+    onSnapChange(nearestSnap(state.currentHeight));
     setLiveHeight(null);
+    onLiveHeightChange?.(null);
+  };
+
+  const handlePointerCancel = (event: React.PointerEvent<HTMLButtonElement>) => {
+    dragState.current = null;
+    setIsInteracting(false);
+    setLiveHeight(null);
+    onLiveHeightChange?.(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
   const heightStyle = liveHeight != null ? `${Math.round(liveHeight)}px` : mobileSheetHeight[snap];
@@ -112,13 +130,14 @@ export function MobileEditSheet({
     >
       <button
         type="button"
-        className="grid touch-none place-items-center gap-1 py-2.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+        className={`grid touch-none place-items-center gap-1 py-2.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${isInteracting ? "bg-[#eff6ff]" : "bg-transparent"}`}
         aria-label={getHandleLabel(snap)}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
       >
-        <span className="h-1.5 w-11 rounded-full bg-[#cbd5e1]" aria-hidden="true" />
+        <span className={`h-1.5 rounded-full transition-all ${isInteracting ? "w-14 bg-[#2563eb] shadow-[0_0_0_4px_rgba(37,99,235,0.14)]" : "w-11 bg-[#cbd5e1]"}`} aria-hidden="true" />
       </button>
 
       <div className="flex min-h-0 flex-col gap-3 px-3 pb-3">

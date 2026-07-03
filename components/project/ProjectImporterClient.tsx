@@ -115,6 +115,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [candidateOpen, setCandidateOpen] = useState(true);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
+  const [mobileSheetLiveHeight, setMobileSheetLiveHeight] = useState<number | null>(null);
   const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
@@ -523,9 +524,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (nextGroup) setActiveGroup(nextGroup);
     const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, section) && (!nextGroup || isSlotVisibleInGroup(slot, nextGroup)));
     setSelectedSlotId(firstSlot?.id);
-    if (viewportMode === "mobile") {
-      setMobileSheetSnap("collapsed");
-    } else {
+    if (viewportMode !== "mobile") {
       setMobileEditSheetOpen(true);
     }
   };
@@ -885,7 +884,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     onSelectSlot: selectPreviewSlot,
   };
 
-  const mobilePreviewClearance = mobileSheetSnap === "collapsed" ? mobileSheetHeight.collapsed : mobileSheetHeight.half;
+  const mobilePreviewClearance = mobileSheetLiveHeight != null ? `${Math.round(mobileSheetLiveHeight)}px` : mobileSheetSnap === "collapsed" ? mobileSheetHeight.collapsed : mobileSheetHeight.half;
+  const mobileActionBarVisible = mobileSheetSnap === "collapsed" && mobileSheetLiveHeight == null;
 
   const quickEditPanel = (
     <ProjectQuickEditPanel
@@ -1099,23 +1099,29 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
           {viewportMode === "mobile" ? (
             <div className="flex h-full min-h-0 flex-col overflow-hidden">
-              {mobileSheetSnap === "collapsed" ? (
-                <MobileEditActionBar
-                  isAdminMode={isAdminMode}
-                  isSaving={isAdminMode ? isSavingSystemTemplate : isSavingTemplate}
-                  isExporting={isExporting}
-                  onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
-                  onExport={() => void openExportDialog()}
-                />
-              ) : null}
-              <div className="relative min-h-0 flex-1 overflow-hidden" style={{ paddingBottom: mobilePreviewClearance }}>
-                <MobileScaledPreview section={activeSection} placement={mobileSheetSnap === "collapsed" ? "center" : "raised"}>
+              <MobileEditActionBar
+                visible={mobileActionBarVisible}
+                isAdminMode={isAdminMode}
+                isSaving={isAdminMode ? isSavingSystemTemplate : isSavingTemplate}
+                isExporting={isExporting}
+                onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
+                onExport={() => void openExportDialog()}
+              />
+              <div
+                className="relative min-h-0 flex-1 overflow-hidden"
+                style={{
+                  paddingBottom: mobilePreviewClearance,
+                  transition: mobileSheetLiveHeight != null ? "none" : "padding-bottom 220ms cubic-bezier(0.22,1,0.36,1)",
+                }}
+              >
+                <MobileScaledPreview section={activeSection} placement={mobileSheetSnap === "collapsed" ? "center" : "raised"} isResizing={mobileSheetLiveHeight != null}>
                   <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
                 </MobileScaledPreview>
               </div>
               <MobileEditSheet
                 snap={mobileSheetSnap}
                 onSnapChange={setMobileSheetSnap}
+                onLiveHeightChange={setMobileSheetLiveHeight}
                 ariaLabel={selectedSlot ? `${selectedSlot.label} 편집 패널` : "요소 편집 패널"}
               >
                 <div className="shrink-0">

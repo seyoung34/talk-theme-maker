@@ -240,7 +240,7 @@ function ImageControls({
           className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-[#0f172a] px-3 text-[13px] font-bold text-white transition hover:bg-[#1e293b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
           onClick={() => fileInputRefs.current[slot.id]?.click()}
         >
-          이미지 선택
+          업로드
         </button>
         <button
           type="button"

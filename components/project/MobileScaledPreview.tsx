@@ -14,10 +14,12 @@ type MobileScaledPreviewPlacement = "center" | "raised";
 export function MobileScaledPreview({
   section,
   placement = "center",
+  isResizing = false,
   children,
 }: {
   section: string;
   placement?: MobileScaledPreviewPlacement;
+  isResizing?: boolean;
   children: ReactNode;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -50,10 +52,23 @@ export function MobileScaledPreview({
 
   return (
     <div ref={containerRef} className={`flex h-full w-full justify-center overflow-hidden ${placement === "raised" ? "items-start" : "items-center"}`}>
-      <div className="relative shrink-0" style={{ width: scaledSize.width, height: scaledSize.height }}>
+      <div
+        className="relative shrink-0"
+        style={{
+          width: scaledSize.width,
+          height: scaledSize.height,
+          transition: isResizing ? "none" : "width 220ms cubic-bezier(0.22,1,0.36,1), height 220ms cubic-bezier(0.22,1,0.36,1)",
+        }}
+      >
         <div
           className="absolute left-1/2 top-0"
-          style={{ width: reference.width, height: reference.height, transform: `translateX(-50%) scale(${scale})`, transformOrigin: "top center" }}
+          style={{
+            width: reference.width,
+            height: reference.height,
+            transform: `translateX(-50%) scale(${scale})`,
+            transformOrigin: "top center",
+            transition: isResizing ? "none" : "transform 220ms cubic-bezier(0.22,1,0.36,1)",
+          }}
         >
           {children}
         </div>
