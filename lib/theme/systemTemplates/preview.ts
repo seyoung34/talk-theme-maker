@@ -17,6 +17,14 @@ export type TemplatePreviewVisual = {
   myBubbleImage?: string;
   friendBubbleImage?: string;
   profileImage?: string;
+  // 채팅목록탭 헤더/리스트 미리보기용
+  mainHeaderColor: string;
+  mainHeaderForegroundColor: string;
+  bodyCellColor: string;
+  // 기본 프로필 화면 미리보기용
+  profileImage2?: string;
+  profileImage3?: string;
+  profileImageFull?: string;
 };
 
 export type SignedUrlCache = Record<string, string>;
@@ -74,6 +82,12 @@ export function createSystemTemplatePreviewVisual({
     myBubbleImage: resolveImage(slots, "bubble_me_1", summary, templateId, template, signedUrls),
     friendBubbleImage: resolveImage(slots, "bubble_you_1", summary, templateId, template, signedUrls),
     profileImage: resolveImage(slots, "profile_image_1", summary, templateId, template, signedUrls),
+    mainHeaderColor: resolveColor(slots, "main_header_color", summary, templateId, template, template.defaults.mainHeader),
+    mainHeaderForegroundColor: resolveColor(slots, "main_header_foreground_color", summary, templateId, template, template.defaults.mainTitle),
+    bodyCellColor: resolveColor(slots, "main_body_cell_color", summary, templateId, template, template.defaults.mainBackground),
+    profileImage2: resolveImage(slots, "profile_image_2", summary, templateId, template, signedUrls),
+    profileImage3: resolveImage(slots, "profile_image_3", summary, templateId, template, signedUrls),
+    profileImageFull: resolveImage(slots, "profile_image_full_1", summary, templateId, template, signedUrls),
   };
 }
 
@@ -101,7 +115,7 @@ function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {
   return slots.find((slot) => slot.role === role);
 }
 
-const previewRoles: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "profile_image_1"];
+const previewRoles: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "profile_image_1", "profile_image_2", "profile_image_3", "profile_image_full_1"];
 
 type PreviewRefKey = keyof NonNullable<SystemTemplateSummary["previewMetadata"]["refs"]>;
 

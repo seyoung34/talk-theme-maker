@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Clock3, Eye, Hash, Info, Layers3, Palette, SendHorizontal, Plus, Search, Settings, Trash2, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock3, Eye, Hash, Info, Layers3, Palette, SendHorizontal, Plus, Search, Settings, Trash2, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import TemplateCard from "@/components/template/TemplateCard";
 import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
@@ -44,8 +44,7 @@ type TemplatePreviewModel = {
   iosLabel: string;
   visual: TemplatePreviewVisual;
   availablePlatforms?: ThemePlatform[];
-  rows: Array<{ label: string; value: string }>;
-  checkpoints: string[];
+  note?: string;
   onStart: (platform: ThemePlatform) => void;
   onDelete?: () => void;
   deleteLabel?: string;
@@ -472,7 +471,6 @@ function revokeNestedObjectUrls(urls: Record<string, Record<string, string>>) {
 function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPreviewUrls: Record<string, string>, onStart: (template: UserTemplateSummary) => void, onDelete: (template: UserTemplateSummary) => void): TemplatePreviewModel {
   const baseTemplate = themeTemplates.find((template) => template.id === record.templateId) ?? themeTemplates[0];
   const visual = createUserTemplatePreviewVisual(record, baseTemplate, uploadPreviewUrls);
-  const platformLabel = record.platform === "android" ? "Android" : "iOS";
   const summary: UserTemplateSummary = {
     id: record.id,
     name: record.name,
@@ -493,17 +491,7 @@ function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPrevie
     iosLabel: record.platform === "ios" ? "iOS 편집 계속하기" : "iOS 사용 불가",
     visual,
     availablePlatforms: [record.platform],
-    rows: [
-      { label: "플랫폼", value: platformLabel },
-      { label: "이미지", value: `${summary.uploadCount}개` },
-      { label: "색상", value: `${summary.colorCount}개` },
-      { label: "최근 수정", value: formatDate(record.updatedAt) },
-    ],
-    checkpoints: [
-      "저장한 이미지와 색상이 카드·채팅 미리보기에 반영됐는지 확인하세요.",
-      "개인 사진은 서버가 아니라 현재 브라우저 IndexedDB에만 저장됩니다.",
-      "이어 편집하면 이전 슬롯 선택, 색상, 말풍선 조정값을 유지합니다.",
-    ],
+    note: "개인 사진은 서버가 아니라 이 브라우저에만 저장됩니다.",
     onStart: () => onStart(summary),
     onDelete: () => onDelete(summary),
     deleteLabel: "삭제",
@@ -526,6 +514,12 @@ function createUserTemplatePreviewVisual(record: UserTemplateRecord, template: T
     myBubbleImage: resolveUserTemplateImage(slots, "bubble_me_1", record, templateId, template, uploadPreviewUrls),
     friendBubbleImage: resolveUserTemplateImage(slots, "bubble_you_1", record, templateId, template, uploadPreviewUrls),
     profileImage: resolveUserTemplateImage(slots, "profile_image_1", record, templateId, template, uploadPreviewUrls),
+    mainHeaderColor: resolveUserTemplateColor(slots, "main_header_color", record, template, template.defaults.mainHeader),
+    mainHeaderForegroundColor: resolveUserTemplateColor(slots, "main_header_foreground_color", record, template, template.defaults.mainTitle),
+    bodyCellColor: resolveUserTemplateColor(slots, "main_body_cell_color", record, template, template.defaults.mainBackground),
+    profileImage2: resolveUserTemplateImage(slots, "profile_image_2", record, templateId, template, uploadPreviewUrls),
+    profileImage3: resolveUserTemplateImage(slots, "profile_image_3", record, templateId, template, uploadPreviewUrls),
+    profileImageFull: resolveUserTemplateImage(slots, "profile_image_full_1", record, templateId, template, uploadPreviewUrls),
   };
 }
 
@@ -557,17 +551,7 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
       iosLabel: "iOS로 시작",
       visual: template.visual,
       availablePlatforms: Object.keys(template.variants) as ThemePlatform[],
-      rows: [
-        { label: "기반", value: template.baseTemplate.name },
-        { label: "저장된 플랫폼", value: Object.keys(template.variants).map((value) => (value === "android" ? "Android" : "iOS")).join(" / ") || "없음" },
-        { label: "색상", value: `${template.previewTemplate.colorCount}` },
-        { label: "이미지", value: `${template.previewTemplate.uploadCount}` },
-      ],
-      checkpoints: [
-        "Android와 iOS 중 제공되는 플랫폼만 시작할 수 있습니다.",
-        "템플릿 이미지는 시작 후 내 업로드 이미지로 교체할 수 있습니다.",
-        "미리보기는 대표 화면 기준이며 세부 슬롯은 편집 화면에서 확인합니다.",
-      ],
+      note: "템플릿 이미지는 시작 후 내 업로드 이미지로 자유롭게 교체할 수 있습니다.",
       onStart,
     };
   }
@@ -581,17 +565,7 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
     iosLabel: "iOS로 시작",
     visual: template.visual,
     availablePlatforms: ["android", "ios"],
-    rows: [
-      { label: "채팅방 배경", value: template.visual.chatBackgroundColor },
-      { label: "내 말풍선", value: template.visual.myBubbleColor },
-      { label: "상대 말풍선", value: template.visual.friendBubbleColor },
-      { label: "플랫폼", value: template.baseTemplate.defaults.platform === "android" ? "Android" : "iOS" },
-    ],
-    checkpoints: [
-      "불필요한 샘플 이미지 없이 색상과 직접 업로드 중심으로 시작합니다.",
-      "Android/iOS 중 원하는 플랫폼을 선택해 같은 기본값에서 편집합니다.",
-      "저장 전까지 업로드 이미지는 편집 세션 안에서만 유지됩니다.",
-    ],
+    note: "불필요한 샘플 이미지 없이 색상과 직접 업로드 중심으로 시작합니다.",
     onStart,
   };
 }
@@ -815,16 +789,30 @@ function TemplateGallerySkeletonCards({ count }: { count: number }) {
 }
 
 // 템플릿 미리보기
+type PreviewScreenId = "friends" | "chats" | "chatroom" | "profile";
+
+const previewScreens: Array<{ id: PreviewScreenId; label: string }> = [
+  { id: "friends", label: "친구" },
+  { id: "chats", label: "채팅목록" },
+  { id: "chatroom", label: "채팅방" },
+  { id: "profile", label: "프로필" },
+];
+
 function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewModel; onClose: () => void }) {
+  const [activeScreenIndex, setActiveScreenIndex] = useState(0);
+  const activeScreen = previewScreens[activeScreenIndex];
+  const goToPrevScreen = () => setActiveScreenIndex((current) => (current - 1 + previewScreens.length) % previewScreens.length);
+  const goToNextScreen = () => setActiveScreenIndex((current) => (current + 1) % previewScreens.length);
   const canStartAndroid = preview.availablePlatforms?.includes("android") ?? true;
   const canStartIos = preview.availablePlatforms?.includes("ios") ?? true;
   const actions = [
     canStartAndroid ? { platform: "android" as const, label: preview.androidLabel, className: "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" } : null,
     canStartIos ? { platform: "ios" as const, label: preview.iosLabel, className: "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]" } : null,
   ].filter((action): action is { platform: ThemePlatform; label: string; className: string } => Boolean(action));
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${preview.title} 미리보기`}>
-      <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
+      <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-4xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
         <header className="flex items-start justify-between gap-3 border-b border-[var(--color-outline-variant)] px-4 py-3 sm:px-5 sm:py-4">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">{preview.eyebrow}</p>
@@ -848,37 +836,211 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
           </div>
         </header>
 
-        <div className="grid min-h-0 gap-3 p-3 sm:grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)] sm:p-4 lg:grid-cols-[340px_1fr] overflow-auto">
-          {/* TODO preview.baseTemplate 를 넣는 것이 부자연스러움  */}
-          {/* <TemplatePhonePreview template={preview.baseTemplate} visual={preview.visual} /> */}
-          <TemplateVisualPreview visual={preview.visual} size="modal" />
-          <div className="grid min-h-0 content-between gap-3">
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              {preview.rows.map((row) => (
-                <InfoRow key={row.label} label={row.label} value={row.value} />
-              ))}
+        <div className="grid min-h-0 gap-4 overflow-auto p-3 sm:grid-cols-[minmax(0,1fr)_240px] sm:p-5">
+          <div className="grid min-h-0 content-start justify-items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                type="button"
+                aria-label="이전 화면"
+                className="grid size-8 shrink-0 place-items-center rounded-full border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] sm:size-9"
+                onClick={goToPrevScreen}
+              >
+                <ArrowLeft className="size-4" aria-hidden="true" />
+              </button>
+
+              <ModalScreenFrame>
+                {activeScreen.id === "friends" ? <FriendsScreenPreview visual={preview.visual} /> : null}
+                {activeScreen.id === "chats" ? <ChatsScreenPreview visual={preview.visual} /> : null}
+                {activeScreen.id === "chatroom" ? <ChatroomScreenPreview visual={preview.visual} /> : null}
+                {activeScreen.id === "profile" ? <ProfileScreenPreview visual={preview.visual} /> : null}
+              </ModalScreenFrame>
+
+              <button
+                type="button"
+                aria-label="다음 화면"
+                className="grid size-8 shrink-0 place-items-center rounded-full border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] sm:size-9"
+                onClick={goToNextScreen}
+              >
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </button>
             </div>
-            <div className="rounded-[18px] border border-[var(--color-outline-variant)] bg-white px-4 py-3">
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--color-on-surface-variant)]">확인할 것</p>
-              <ul className="mt-2 grid gap-1.5 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
-                {preview.checkpoints.map((item) => (
-                  <li key={item} className="grid grid-cols-[16px_minmax(0,1fr)] gap-2">
-                    <span className="mt-1 size-1.5 rounded-full bg-[var(--color-primary)]" aria-hidden="true" />
-                    <span>{item}</span>
-                  </li>
+
+            <div className="flex items-center gap-2" aria-live="polite">
+              <span className="text-sm font-black text-[var(--color-on-surface)]">{activeScreen.label}</span>
+              <div className="flex items-center gap-1">
+                {previewScreens.map((screen, index) => (
+                  <span
+                    key={screen.id}
+                    className={`size-1.5 rounded-full ${index === activeScreenIndex ? "bg-[var(--color-inverse-surface)]" : "bg-[var(--color-outline-variant)]"}`}
+                    aria-hidden="true"
+                  />
                 ))}
-              </ul>
+              </div>
             </div>
-            <div className={`grid gap-2 ${actions.length > 1 ? "sm:grid-cols-2" : ""}`}>
-              {actions.map((action) => (
-                <button key={action.platform} className={`rounded-full px-4 py-3 text-sm font-black transition hover:scale-[0.98] ${action.className}`} type="button" onClick={() => preview.onStart(action.platform)}>
-                  {action.label}
-                </button>
-              ))}
-            </div>
+
+            {preview.note ? <p className="max-w-[280px] text-center text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{preview.note}</p> : null}
+          </div>
+
+          <div className="grid min-h-0 content-start gap-2">
+            {actions.map((action) => (
+              <button key={action.platform} className={`rounded-full px-4 py-3 text-sm font-black transition hover:scale-[0.98] ${action.className}`} type="button" onClick={() => preview.onStart(action.platform)}>
+                {action.label}
+              </button>
+            ))}
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function ModalScreenFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative aspect-[9/16] w-full max-w-[200px] overflow-hidden rounded-[32px] border border-[var(--color-outline-variant)] bg-white shadow-[0_18px_40px_rgba(42,103,103,0.12)] sm:max-w-[260px]">
+      {children}
+    </div>
+  );
+}
+
+function ScreenAvatar({ src, sizeClass = "size-10" }: { src?: string; sizeClass?: string }) {
+  return (
+    <span className={`grid ${sizeClass} shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--color-primary-container)]/55`}>
+      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <UserRound className="size-1/2 text-[var(--color-on-primary-container)]" aria-hidden="true" />}
+    </span>
+  );
+}
+
+// 친구메인탭
+function FriendsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
+  const friends = [
+    { name: "김민수", avatar: visual.profileImage },
+    { name: "이하늘", avatar: visual.profileImage2 ?? visual.profileImage },
+    { name: "박서연", avatar: visual.profileImage3 ?? visual.profileImage },
+  ];
+  return (
+    <div
+      className="grid h-full grid-rows-[auto_1fr] bg-cover bg-center"
+      style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
+    >
+      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: visual.mainHeaderColor }}>
+        <strong className="text-base font-black" style={{ color: visual.mainHeaderForegroundColor }}>친구</strong>
+        <div className="flex items-center gap-2.5" style={{ color: visual.mainHeaderForegroundColor }}>
+          <Search className="size-4" aria-hidden="true" />
+          <Settings className="size-4" aria-hidden="true" />
+        </div>
+      </div>
+      <div className="grid content-start gap-4 overflow-hidden px-4 py-4">
+        {friends.map((friend) => (
+          <div key={friend.name} className="flex items-center gap-3">
+            <ScreenAvatar src={friend.avatar} />
+            <span className="text-sm font-bold text-[var(--color-on-surface)]">{friend.name}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const chatListPreviewRows = [
+  { name: "수아", message: "콜! 이따 6시에 보자 ㅎㅎ", time: "09:40" },
+  { name: "가족 단톡방", message: "엄마: 저녁 몇 시에 올 거야?", time: "어제" },
+  { name: "정하늘", message: "그 사진 봤어?? 완전 웃기다 ㅋㅋㅋ", time: "어제" },
+];
+
+// 채팅목록탭
+function ChatsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
+  const avatars = [visual.profileImage, visual.profileImage2, visual.profileImage3];
+  return (
+    <div
+      className="grid h-full grid-rows-[auto_1fr] bg-cover bg-center"
+      style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
+    >
+      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: visual.mainHeaderColor }}>
+        <strong className="text-base font-black" style={{ color: visual.mainHeaderForegroundColor }}>채팅</strong>
+        <Plus className="size-4" style={{ color: visual.mainHeaderForegroundColor }} aria-hidden="true" />
+      </div>
+      <div className="grid content-start gap-3 overflow-hidden px-4 py-4">
+        {chatListPreviewRows.map((row, index) => (
+          <div key={row.name} className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+            <ScreenAvatar src={avatars[index % avatars.length]} />
+            <div className="min-w-0">
+              <strong className="block truncate text-sm font-bold text-[var(--color-on-surface)]">{row.name}</strong>
+              <span className="block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{row.message}</span>
+            </div>
+            <span className="text-[11px] font-semibold text-[var(--color-on-surface-variant)]">{row.time}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const chatroomPreviewMessages: Array<{ mine: boolean; text: string }> = [
+  { mine: false, text: "오늘 저녁 뭐 먹지 ㅋㅋ" },
+  { mine: true, text: "떡볶이 어때 ㅎㅎ" },
+  { mine: false, text: "콜! 이따 6시에 보자" },
+];
+
+// 채팅방
+function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
+  return (
+    <div
+      className="grid h-full grid-rows-[1fr_auto] bg-cover bg-center"
+      style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
+    >
+      <div className="grid content-end gap-2 overflow-hidden px-3 py-4">
+        {chatroomPreviewMessages.map((message, index) => (
+          <ChatroomBubble key={index} visual={visual} mine={message.mine} text={message.text} />
+        ))}
+      </div>
+      <div className="flex items-center gap-2 bg-white/85 px-3 py-2.5">
+        <Plus className="size-4 text-[var(--color-on-surface-variant)]" aria-hidden="true" />
+        <span className="flex-1 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[var(--color-on-surface-variant)]">메시지 입력</span>
+        <SendHorizontal className="size-4 text-[var(--color-on-surface-variant)]" aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
+
+function ChatroomBubble({ visual, mine, text }: { visual: TemplatePreviewVisual; mine: boolean; text: string }) {
+  const image = mine ? visual.myBubbleImage : visual.friendBubbleImage;
+  return (
+    <div className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+      {!mine ? <ScreenAvatar src={visual.profileImage} sizeClass="size-7" /> : null}
+      <span
+        className="max-w-[72%] rounded-[16px] bg-cover bg-center px-3.5 py-2.5 text-[13px] font-semibold leading-5 text-[var(--color-on-surface)]"
+        style={{
+          backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor,
+          backgroundImage: image ? `url(${image})` : undefined,
+        }}
+      >
+        {text}
+      </span>
+    </div>
+  );
+}
+
+// 기본 프로필 사진
+function ProfileScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
+  const heroImage = visual.profileImageFull ?? visual.profileImage;
+  const extras = Array.from(new Set([visual.profileImage, visual.profileImage2, visual.profileImage3].filter((src): src is string => Boolean(src))));
+
+  return (
+    <div
+      className="grid h-full grid-rows-[1fr_auto] bg-cover bg-center"
+      style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
+    >
+      <div className="grid content-center justify-items-center gap-3 px-6">
+        <ScreenAvatar src={heroImage} sizeClass="size-32" />
+        <p className="text-xs font-black uppercase tracking-[0.1em] text-[var(--color-on-surface-variant)]">기본 프로필 사진</p>
+      </div>
+      {extras.length > 0 ? (
+        <div className="flex items-center justify-center gap-3 px-6 pb-6">
+          {extras.map((src) => (
+            <ScreenAvatar key={src} src={src} sizeClass="size-11" />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -919,9 +1081,8 @@ function TemplateVisualPreview({
   size = "card",
 }: {
   visual: TemplatePreviewVisual;
-  size?: "card" | "modal" | "thumb";
+  size?: "card" | "thumb";
 }) {
-  const isModal = size === "modal";
   const isThumb = size === "thumb";
 
   if (visual.cardPreviewImage) {
@@ -934,7 +1095,7 @@ function TemplateVisualPreview({
         className={`
           aspect-[4/3] w-full border border-[var(--color-outline-variant)]
           bg-[var(--color-surface-low)] object-cover
-          ${isModal ? "rounded-[28px]" : isThumb ? "rounded-[12px]" : "rounded-[22px]"}
+          ${isThumb ? "rounded-[12px]" : "rounded-[22px]"}
         `}
       />
     );
@@ -964,11 +1125,7 @@ function TemplateVisualPreview({
 
   return (
     <div
-      className={`
-        relative aspect-[4/3] overflow-hidden border border-[var(--color-outline-variant)]
-        bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]
-        ${isModal ? "rounded-[28px]" : "rounded-[22px]"}
-      `}
+      className="relative aspect-[4/3] overflow-hidden rounded-[22px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
     >
       {/* 기존 TemplateMiniPreview 내부 JSX 그대로 */}
       {/* 친구탭 프리뷰 */}
@@ -1155,6 +1312,9 @@ function createBaseTemplatePreviewVisual(template: ThemeTemplate): TemplatePrevi
     tabBackgroundColor: template.defaults.tabBackground,
     myBubbleColor: template.defaults.myBubble,
     friendBubbleColor: template.defaults.friendBubble,
+    mainHeaderColor: template.defaults.mainHeader,
+    mainHeaderForegroundColor: template.defaults.mainTitle,
+    bodyCellColor: template.defaults.mainBackground,
   };
 }
 
@@ -1177,15 +1337,6 @@ function groupSystemTemplateRecords(templates: SystemTemplateSummary[]) {
   }
 
   return Array.from(map.values()).sort((left, right) => right.updatedAt - left.updatedAt);
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-[18px] bg-[var(--color-surface-low)] px-4 py-3">
-      <span className="block text-xs font-black uppercase text-[var(--color-on-surface-variant)]">{label}</span>
-      <strong className="mt-1 block text-sm text-[var(--color-on-surface)]">{value}</strong>
-    </div>
-  );
 }
 
 function formatDate(timestamp: number) {
