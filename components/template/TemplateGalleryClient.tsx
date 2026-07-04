@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Clock3, Eye, Gift, Hash, Info, Layers3, Menu, Palette, SendHorizontal, Plus, Search, Settings, Smile, Trash2, UserPlus, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
+import BubbleCanvasPreview from "@/components/preview/BubbleCanvasPreview";
 import TemplateCard from "@/components/template/TemplateCard";
 import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
 import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
@@ -509,6 +510,7 @@ function createUserTemplatePreviewVisual(record: UserTemplateRecord, template: T
   const templateId = template.id;
 
   return {
+    platform: record.platform,
     chatBackgroundColor: resolveUserTemplateColor(slots, "chat_background_color", record, template, template.defaults.chatBackground),
     mainBackgroundColor: resolveUserTemplateColor(slots, "main_background_color", record, template, template.defaults.mainBackground),
     tabBackgroundColor: resolveUserTemplateColor(slots, "tab_background", record, template, template.defaults.tabBackground),
@@ -1125,21 +1127,24 @@ function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
 
 function ChatroomBubble({ visual, mine, text, time }: { visual: TemplatePreviewVisual; mine: boolean; text: string; time: string }) {
   const image = mine ? visual.myBubbleImage : visual.friendBubbleImage;
+  const stretch = mine ? visual.myBubbleStretch : visual.friendBubbleStretch;
+  const insets = mine ? visual.myBubbleInsets : visual.friendBubbleInsets;
+  const textColor = mine ? visual.myBubbleColor : visual.friendBubbleColor;
+  const edit = stretch || insets ? { stretch, insets } : undefined;
   return (
     <div className={`flex items-end gap-1.5 ${mine ? "justify-end" : "justify-start"}`}>
       {!mine ? <ScreenAvatar src={visual.profileImage} sizeClass="size-6" /> : null}
       {mine ? <span className="mb-0.5 text-[7px] font-medium text-[var(--color-on-surface-variant)]">{time}</span> : null}
-      <span
-        className={`max-w-[68%] bg-center bg-no-repeat px-2.5 py-1.5 text-[11px] font-medium leading-snug text-[var(--color-on-surface)] ${mine ? "rounded-[14px] rounded-br-[4px]" : "rounded-[14px] rounded-bl-[4px]"}`}
-        style={{
-          backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor,
-          backgroundImage: image ? `url(${image})` : undefined,
-          // 나인패치 1px 가이드 픽셀이 보이지 않도록 배경을 살짝 키워 가장자리를 크롭한다.
-          backgroundSize: image ? "calc(100% + 5px) calc(100% + 5px)" : undefined,
-        }}
-      >
-        {text}
-      </span>
+      {image ? (
+        <BubbleCanvasPreview imageUrl={image} platform={visual.platform} slot={mine ? "me" : "you"} edit={edit} text={text} textColor={textColor} fillColor={textColor} scale={0.24} className="shrink-0" />
+      ) : (
+        <span
+          className={`max-w-[68%] px-2.5 py-1.5 text-[11px] font-medium leading-snug text-[var(--color-on-surface)] ${mine ? "rounded-[14px] rounded-br-[4px]" : "rounded-[14px] rounded-bl-[4px]"}`}
+          style={{ backgroundColor: textColor }}
+        >
+          {text}
+        </span>
+      )}
       {!mine ? <span className="mb-0.5 text-[7px] font-medium text-[var(--color-on-surface-variant)]">{time}</span> : null}
     </div>
   );
@@ -1401,32 +1406,23 @@ function MiniBubbleSwatch({ visual, tone, width }: { visual: TemplatePreviewVisu
 
 function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual; mine: boolean; text: string }) {
   const bubbleImage = mine ? visual.myBubbleImage : visual.friendBubbleImage;
+  const stretch = mine ? visual.myBubbleStretch : visual.friendBubbleStretch;
+  const insets = mine ? visual.myBubbleInsets : visual.friendBubbleInsets;
+  const textColor = mine ? visual.myBubbleColor : visual.friendBubbleColor;
+  const edit = stretch || insets ? { stretch, insets } : undefined;
   return (
     <div className={`grid gap-1.5 ${mine ? "justify-items-end" : "grid-cols-[28px_minmax(0,1fr)] items-end"}`}>
       {!mine ? <MiniAvatar src={visual.profileImage} /> : null}
-      <span
-        className={`
-  min-h-[46px]
-  min-w-[100px]
-  max-w-[84%]
-  bg-no-repeat
-  rounded-[18px]
-  px-6
-  py-4
-  text-sm
-  font-semibold
-  leading-5
-  ${mine ? "justify-self-end" : ""}
-`}
-        style={{
-          backgroundImage: bubbleImage ? `url(${bubbleImage})` : undefined,
-          // 나인패치 1px 가이드 픽셀을 감추기 위해 배경을 살짝 키워 가장자리를 크롭한다.
-          backgroundSize: bubbleImage ? "calc(100% + 5px) calc(100% + 5px)" : undefined,
-          backgroundPosition: "center",
-        }}
-      >
-        {text}
-      </span>
+      {bubbleImage ? (
+        <BubbleCanvasPreview imageUrl={bubbleImage} platform={visual.platform} slot={mine ? "me" : "you"} edit={edit} text={text} textColor={textColor} fillColor={textColor} scale={0.3} className={mine ? "justify-self-end" : ""} />
+      ) : (
+        <span
+          className={`min-h-[46px] min-w-[100px] max-w-[84%] rounded-[18px] px-6 py-4 text-sm font-semibold leading-5 ${mine ? "justify-self-end" : ""}`}
+          style={{ backgroundColor: textColor }}
+        >
+          {text}
+        </span>
+      )}
     </div>
   );
 }
@@ -1434,6 +1430,7 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
 function createBaseTemplatePreviewVisual(template: ThemeTemplate): TemplatePreviewVisual {
   const slots = getThemeSlots(template.defaults.platform);
   return {
+    platform: template.defaults.platform,
     chatBackgroundColor: template.defaults.chatBackground,
     mainBackgroundColor: template.defaults.mainBackground,
     tabBackgroundColor: template.defaults.tabBackground,

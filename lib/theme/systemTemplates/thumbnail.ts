@@ -1,7 +1,7 @@
 import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
 import type { SystemTemplateSaveInput } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
-import type { ThemeResourceRole } from "@/lib/theme/types";
+import type { StretchPoint, ThemeResourceRole } from "@/lib/theme/types";
 import { themeColorToCss } from "@/lib/theme/color";
 
 const width = 640;
@@ -21,6 +21,13 @@ export async function generateSystemTemplateThumbnail(input: SystemTemplateSaveI
   const selections = input.overrides.candidateSelections;
   const uploads = input.overrides.uploads;
   const color = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slots.find((slot) => slot.role === role), colors, selections, input.baseTemplateId, template) ?? fallback);
+  // 말풍선 슬롯의 stretch(cap-inset)를 꺼내 9-slice로 그린다. 없으면 비율 유지(contain)로 폴백.
+  const bubbleStretch = (role: ThemeResourceRole): StretchPoint | undefined => {
+    const slot = slots.find((item) => item.role === role);
+    return slot ? input.overrides.bubbleEdits.stretch[slot.id] : undefined;
+  };
+  const meStretch = bubbleStretch("bubble_me_1");
+  const youStretch = bubbleStretch("bubble_you_1");
   const imageRoles: ThemeResourceRole[] = ["main_background", "chat_background", "bubble_me_1", "bubble_you_1", "profile_image_1"];
   const images = new Map<ThemeResourceRole, HTMLImageElement>();
   const objectUrls: string[] = [];
@@ -70,9 +77,9 @@ export async function generateSystemTemplateThumbnail(input: SystemTemplateSaveI
       context.fill();
     }
 
-    drawBubble(context, 345, 105, 170, 58, false, color("chat_bubble_you_color", template.defaults.friendBubble), images.get("bubble_you_1"));
-    drawBubble(context, 420, 190, 166, 62, true, color("chat_bubble_me_color", template.defaults.myBubble), images.get("bubble_me_1"));
-    drawBubble(context, 345, 278, 205, 58, false, color("chat_bubble_you_color", template.defaults.friendBubble), images.get("bubble_you_1"));
+    drawBubble(context, 345, 105, 170, 58, false, color("chat_bubble_you_color", template.defaults.friendBubble), images.get("bubble_you_1"), youStretch);
+    drawBubble(context, 420, 190, 166, 62, true, color("chat_bubble_me_color", template.defaults.myBubble), images.get("bubble_me_1"), meStretch);
+    drawBubble(context, 345, 278, 205, 58, false, color("chat_bubble_you_color", template.defaults.friendBubble), images.get("bubble_you_1"), youStretch);
     context.fillStyle = "rgba(255,255,255,.9)";
     roundRect(context, 340, 380, 252, 48, 24);
     context.fill();
@@ -127,17 +134,72 @@ function drawLine(context: CanvasRenderingContext2D, x: number, y: number, lineW
   context.fill();
 }
 
-function drawBubble(context: CanvasRenderingContext2D, x: number, y: number, bubbleWidth: number, bubbleHeight: number, mine: boolean, color: string, image?: HTMLImageElement) {
-  context.save();
-  roundRect(context, x, y, bubbleWidth, bubbleHeight, 21);
-  context.clip();
-  context.fillStyle = color;
-  context.fillRect(x, y, bubbleWidth, bubbleHeight);
-  if (image) drawImageCover(context, image, x, y, bubbleWidth, bubbleHeight);
-  context.restore();
-  context.fillStyle = mine ? "rgba(33,48,52,.4)" : "rgba(33,48,52,.32)";
-  roundRect(context, x + 20, y + 21, bubbleWidth * 0.58, 10, 5);
-  context.fill();
+function drawBubble(context: CanvasRenderingContext2D, x: number, y: number, bubbleWidth: number, bubbleHeight: number, mine: boolean, color: string, image?: HTMLImageElement, stretch?: StretchPoint) {
+  if (image) {
+    // 말풍선 이미지는 9-slice로 그려 안쪽만 늘리고 캐릭터/테두리는 원본 비율 유지.
+    drawImageNineSlice(context, image, x, y, bubbleWidth, bubbleHeight, stretch);
+  } else {
+    context.save();
+    roundRect(context, x, y, bubbleWidth, bubbleHeight, 21);
+    context.clip();
+    context.fillStyle = color;
+    context.fillRect(x, y, bubbleWidth, bubbleHeight);
+    context.restore();
+    context.fillStyle = mine ? "rgba(33,48,52,.4)" : "rgba(33,48,52,.32)";
+    roundRect(context, x + 20, y + 21, bubbleWidth * 0.58, 10, 5);
+    context.fill();
+  }
+}
+
+// stretch(cap-inset)가 유효하면 9-slice로, 아니면 비율 유지(contain)로 그린다.
+function drawImageNineSlice(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, w: number, h: number, stretch?: StretchPoint) {
+  const sourceWidth = image.naturalWidth;
+  const sourceHeight = image.naturalHeight;
+  const stretchX = stretch?.x ?? 0;
+  const stretchY = stretch?.y ?? 0;
+  const hasValidStretch = stretchX > 1 && stretchY > 1 && stretchX < sourceWidth - 1 && stretchY < sourceHeight - 1;
+  if (!hasValidStretch) {
+    drawImageContain(context, image, x, y, w, h);
+    return;
+  }
+
+  // 원본 cap 크기(px). 소스가 고해상(@3x)이라 dest 박스에 맞게 축소한다.
+  const capLeft = stretchX;
+  const capRight = sourceWidth - stretchX - 1;
+  const capTop = stretchY;
+  const capBottom = sourceHeight - stretchY - 1;
+  const scaleX = Math.min(1, w / (capLeft + capRight));
+  const scaleY = Math.min(1, h / (capTop + capBottom));
+  const destLeft = capLeft * scaleX;
+  const destRight = capRight * scaleX;
+  const destTop = capTop * scaleY;
+  const destBottom = capBottom * scaleY;
+  const destMidWidth = Math.max(0, w - destLeft - destRight);
+  const destMidHeight = Math.max(0, h - destTop - destBottom);
+
+  const cols = [
+    { sx: 0, sw: capLeft, dx: x, dw: destLeft },
+    { sx: stretchX, sw: 1, dx: x + destLeft, dw: destMidWidth },
+    { sx: stretchX + 1, sw: capRight, dx: x + destLeft + destMidWidth, dw: destRight },
+  ];
+  const rows = [
+    { sy: 0, sh: capTop, dy: y, dh: destTop },
+    { sy: stretchY, sh: 1, dy: y + destTop, dh: destMidHeight },
+    { sy: stretchY + 1, sh: capBottom, dy: y + destTop + destMidHeight, dh: destBottom },
+  ];
+  for (const row of rows) {
+    for (const col of cols) {
+      if (col.dw <= 0 || row.dh <= 0 || col.sw <= 0 || row.sh <= 0) continue;
+      context.drawImage(image, col.sx, row.sy, col.sw, row.sh, col.dx, row.dy, col.dw, row.dh);
+    }
+  }
+}
+
+function drawImageContain(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, w: number, h: number) {
+  const scale = Math.min(w / image.naturalWidth, h / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  context.drawImage(image, x + (w - drawWidth) / 2, y + (h - drawHeight) / 2, drawWidth, drawHeight);
 }
 
 function roundRect(context: CanvasRenderingContext2D, x: number, y: number, rectWidth: number, rectHeight: number, radius: number) {

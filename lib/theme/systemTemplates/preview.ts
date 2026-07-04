@@ -2,9 +2,10 @@ import { getResolvedAssetUrl, getResolvedColor } from "@/lib/theme/project/state
 import { getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
 import type { RemoteSlotUploads, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
-import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import type { Insets, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 export type TemplatePreviewVisual = {
+  platform: ThemePlatform;
   cardPreviewImage?: string;
   chatBackgroundColor: string;
   mainBackgroundColor: string;
@@ -16,6 +17,11 @@ export type TemplatePreviewVisual = {
   tabBackgroundImage?: string;
   myBubbleImage?: string;
   friendBubbleImage?: string;
+  // 말풍선 9-slice 렌더용 stretch/inset (원본 이미지 픽셀 기준). 없으면 렌더러가 기본값 사용.
+  myBubbleStretch?: StretchPoint;
+  myBubbleInsets?: Insets;
+  friendBubbleStretch?: StretchPoint;
+  friendBubbleInsets?: Insets;
   profileImage?: string;
   // 채팅목록탭 헤더/리스트 미리보기용
   mainHeaderColor: string;
@@ -112,6 +118,7 @@ export function createSystemTemplatePreviewVisual({
   const templateId = template.id;
 
   return {
+    platform,
     cardPreviewImage: summary.previewMetadata.cardPreviewPath ? signedUrls[summary.previewMetadata.cardPreviewPath] : undefined,
     chatBackgroundColor: summary.previewMetadata.colors?.chatBackground ?? resolveColor(slots, "chat_background_color", summary, templateId, template, template.defaults.chatBackground),
     mainBackgroundColor: summary.previewMetadata.colors?.mainBackground ?? resolveColor(slots, "main_background_color", summary, templateId, template, template.defaults.mainBackground),
@@ -123,6 +130,10 @@ export function createSystemTemplatePreviewVisual({
     tabBackgroundImage: resolveImage(slots, "tab_background_image", summary, templateId, template, signedUrls),
     myBubbleImage: resolveImage(slots, "bubble_me_1", summary, templateId, template, signedUrls),
     friendBubbleImage: resolveImage(slots, "bubble_you_1", summary, templateId, template, signedUrls),
+    myBubbleStretch: summary.previewMetadata.bubbles?.myBubble?.stretch,
+    myBubbleInsets: summary.previewMetadata.bubbles?.myBubble?.insets,
+    friendBubbleStretch: summary.previewMetadata.bubbles?.friendBubble?.stretch,
+    friendBubbleInsets: summary.previewMetadata.bubbles?.friendBubble?.insets,
     profileImage: resolveImage(slots, "profile_image_1", summary, templateId, template, signedUrls),
     mainHeaderColor: resolveColor(slots, "main_header_color", summary, templateId, template, template.defaults.mainHeader),
     mainHeaderForegroundColor: resolveColor(slots, "main_header_foreground_color", summary, templateId, template, template.defaults.mainTitle),

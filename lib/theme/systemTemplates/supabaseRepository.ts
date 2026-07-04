@@ -4,7 +4,7 @@ import { getResolvedColor } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail } from "@/lib/theme/systemTemplates/thumbnail";
-import type { RemoteSlotUploads, SystemTemplateMetadataRecord, SystemTemplatePage, SystemTemplatePreviewMetadata, SystemTemplateRecord, SystemTemplateSaveInput, SystemTemplateSummary, ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
+import type { BubblePreviewShape, RemoteSlotUploads, SystemTemplateMetadataRecord, SystemTemplatePage, SystemTemplatePreviewMetadata, SystemTemplateRecord, SystemTemplateSaveInput, SystemTemplateSummary, ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, getThemeTemplate, type ThemeAssetSlot, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -142,6 +142,7 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       platform: input.platform,
       colors: input.overrides.colors,
       candidateSelections: input.overrides.candidateSelections,
+      bubbleEdits: input.overrides.bubbleEdits,
       uploadRefs,
       cardPreviewPath,
     });
@@ -413,6 +414,7 @@ function buildPreviewMetadata({
   platform,
   colors,
   candidateSelections,
+  bubbleEdits,
   uploadRefs,
   cardPreviewPath,
 }: {
@@ -420,6 +422,7 @@ function buildPreviewMetadata({
   platform: ThemePlatform;
   colors: ThemeEditOverrides["colors"];
   candidateSelections: SlotCandidateSelections;
+  bubbleEdits: ThemeEditOverrides["bubbleEdits"];
   uploadRefs: RemoteSlotUploads;
   cardPreviewPath?: string;
 }): SystemTemplatePreviewMetadata {
@@ -444,7 +447,20 @@ function buildPreviewMetadata({
       friendBubble: resolvePreviewStoragePath(slots, "bubble_you_1", uploadRefs, candidateSelections),
       profileImage: resolvePreviewStoragePath(slots, "profile_image_1", uploadRefs, candidateSelections),
     },
+    bubbles: {
+      myBubble: resolvePreviewBubbleShape(slots, "bubble_me_1", bubbleEdits),
+      friendBubble: resolvePreviewBubbleShape(slots, "bubble_you_1", bubbleEdits),
+    },
   };
+}
+
+function resolvePreviewBubbleShape(slots: ThemeAssetSlot[], role: ThemeResourceRole, bubbleEdits: ThemeEditOverrides["bubbleEdits"]): BubblePreviewShape | undefined {
+  const slot = slots.find((item) => item.role === role);
+  if (!slot) return undefined;
+  const stretch = bubbleEdits.stretch[slot.id];
+  const insets = bubbleEdits.insets[slot.id];
+  if (!stretch && !insets) return undefined;
+  return { stretch, insets };
 }
 
 function resolvePreviewColor(
@@ -474,6 +490,7 @@ function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | 
     generatedAt: value?.generatedAt,
     colors: value?.colors ?? {},
     refs: value?.refs ?? {},
+    bubbles: value?.bubbles ?? {},
   };
 }
 

@@ -56,11 +56,19 @@ export type RemoteUploadEntry = {
 
 export type RemoteSlotUploads = Record<string, RemoteUploadEntry[] | undefined>;
 
+// 말풍선 이미지를 프리뷰에서 9-slice로 그리기 위한 stretch/inset 정보.
+// stretch/insets는 원본 이미지 픽셀 기준(export의 iOS cap-inset 계산과 동일 소스).
+export type BubblePreviewShape = {
+  stretch?: StretchPoint;
+  insets?: Insets;
+};
+
 export type SystemTemplatePreviewMetadata = {
   cardPreviewPath?: string;
   generatedAt?: string;
   colors?: Partial<Record<"chatBackground" | "mainBackground" | "tabBackground" | "myBubble" | "friendBubble", string>>;
   refs?: Partial<Record<"chatBackground" | "mainBackground" | "tabBackground" | "myBubble" | "friendBubble" | "profileImage", string>>;
+  bubbles?: Partial<Record<"myBubble" | "friendBubble", BubblePreviewShape>>;
 };
 
 export type SystemTemplateSummary = Pick<SystemTemplateRecord, "id" | "bundleId" | "title" | "description" | "baseTemplateId" | "platform" | "status" | "visibility" | "pricingType" | "priceAmount" | "creditCost" | "tags" | "createdAt" | "updatedAt"> & {
