@@ -1,6 +1,6 @@
 # PROJECT AGENTS
 
-`kakaotalk-theme-maker` is a Next.js App Router + Tailwind editor for creating KakaoTalk Android/iOS themes from templates. Current product flow: `/template` starts work, `/edit` is the main project editor, and `/editor` is the precision bubble/nine-patch tool.
+`kakaotalk-theme-maker` is a Next.js App Router + Tailwind editor for creating KakaoTalk Android/iOS themes from templates. Current product flow: `/template` starts work and `/edit` is the main project editor, including inline bubble/nine-patch adjustment.
 
 ## Key Paths
 

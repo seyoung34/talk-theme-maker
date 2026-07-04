@@ -38,7 +38,6 @@ import {
   type SlotColors,
   type SlotUploads,
 } from "@/components/project/projectModel";
-import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
@@ -59,7 +58,6 @@ import {
 } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
-const editorHandoffKey = "kakaotalk-theme-maker:editor-handoff:v1";
 const editorSessionStorageKey = (mode: "user" | "admin") => `kakaotalk-theme-maker:editor-session:${mode}:v1`;
 
 type Notice = {
@@ -712,48 +710,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
   };
 
-  const openAdvancedBubbleEditor = async () => {
-    let fileForEditor = selectedFile;
-    if (selectedSlot?.editableInBubbleEditor && !fileForEditor) {
-      const hydratedUploads = await hydrateSystemTemplateUploads(remoteUploadRefsRef.current, [selectedSlot.id]);
-      const hydratedAnalysis = createThemeProjectAnalysis(activeTemplate, platform, slots, hydratedUploads, colors, candidateSelections);
-      fileForEditor = getSlotFile(selectedSlot, hydratedAnalysis.files);
-    }
-
-    if (!selectedSlot?.editableInBubbleEditor || !fileForEditor) {
-      router.push("/editor");
-      return;
-    }
-
-    const bubbleSlot = bubbleSlotFromRole(selectedSlot.role);
-    if (!bubbleSlot) {
-      router.push("/editor");
-      return;
-    }
-
-    const dataUrl = await dataUrlForThemeFile(fileForEditor);
-    if (!dataUrl) {
-      router.push("/editor");
-      return;
-    }
-
-    localStorage.setItem(
-      editorHandoffKey,
-      JSON.stringify({
-        slot: bubbleSlot,
-        platform,
-        name: selectedSlot.fileName,
-        path: selectedSlot.path,
-        dataUrl,
-        markers: bubbleMarkers[selectedSlot.id],
-        insets: bubbleInsets[selectedSlot.id],
-        stretch: bubbleStretch[selectedSlot.id],
-        createdAt: Date.now(),
-      }),
-    );
-    router.push("/editor");
-  };
-
   const openSaveDialog = () => {
     const fallbackName = `${activeTemplate.name} 복사본`;
     setSaveMode(activeUserTemplate ? "overwrite" : "saveAs");
@@ -944,7 +900,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
-      onOpenAdvanced={openAdvancedBubbleEditor}
       onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
       onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
       onStretchChange={(stretch) => selectedSlot && setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch }))}
@@ -965,6 +920,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       adminAssets={adminAssetsWithPreview}
       templateId={templateId}
       template={activeTemplate}
+      platform={platform}
+      selectedBubbleSlot={selectedBubbleSlot}
+      markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
+      insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
+      stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
       contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
@@ -976,7 +936,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
-      onOpenAdvanced={openAdvancedBubbleEditor}
+      onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
+      onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
+      onStretchChange={(stretch) => selectedSlot && setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch }))}
+      onPullSheet={() => setMobileSheetSnap("full")}
     />
   );
 

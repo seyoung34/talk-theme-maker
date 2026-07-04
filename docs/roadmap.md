@@ -14,7 +14,7 @@
 
 - `/template`에서 템플릿을 고른 뒤 플랫폼을 고정해서 시작할 수 있다.
 - `/edit`에서 메인 화면, 하단 탭, 채팅방 중심으로 슬롯 편집과 미리보기가 가능하다.
-- `/editor`에서 Android 9-patch, iOS inset/stretch를 정밀 조절할 수 있다.
+- `/edit` 안에서 Android 9-patch, iOS inset/stretch를 정밀 조절할 수 있다.
 - 후보 이미지, 세션 업로드, 기본 템플릿 에셋 구조가 이미 들어가 있다.
 
 ## 제품 우선순위

@@ -3,8 +3,8 @@
 ## Decisions
 
 - `/` is a start hub for the internal theme making workflow.
-- `/editor` hosts the preserved Android/iOS bubble editor.
-- The migration keeps the existing editor mostly intact to reduce regression risk.
+- Bubble adjustment now lives inline inside `/edit`.
+- The standalone editor route was removed after the inline editor covered the workflow.
 - Full folder-based theme preview and export are deferred.
 
 ## Completed In This Migration
@@ -14,7 +14,7 @@
 - Move 9-patch domain logic to `lib/theme/android`.
 - Move shared theme/editor types to `lib/theme`.
 - Add placeholder structure for future full-theme preview work.
-- Add `/template` flow with template selection, Android/iOS fixed asset slots, image upload, screen previews, and bubble-editor handoff.
+- Add `/template` flow with template selection, Android/iOS fixed asset slots, image upload, screen previews, and inline bubble adjustment.
 - Keep `/project` as a compatibility redirect to `/template`.
 
 ## Follow-up TODO

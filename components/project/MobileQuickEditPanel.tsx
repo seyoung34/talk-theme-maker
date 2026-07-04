@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState, type MutableRefObject } from "react";
 import { ImageOff, Plus, Sliders, X } from "lucide-react";
+import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import {
   buildSlotCandidates,
   disabledImageCandidateId,
@@ -19,6 +20,7 @@ import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
+import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import { setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
 
 type MobileQuickEditPanelProps = {
@@ -31,6 +33,11 @@ type MobileQuickEditPanelProps = {
   adminAssets: Array<AdminAssetCandidate & { previewUrl?: string }>;
   templateId: ThemeTemplateId;
   template: ThemeTemplate;
+  platform: ThemePlatform;
+  selectedBubbleSlot: BubbleSlot | null;
+  markers?: Markers;
+  insets?: Insets;
+  stretch?: StretchPoint;
   contrastWarning?: SlotContrastWarning;
   recommendedColor?: string;
   isAutoColor: boolean;
@@ -42,7 +49,10 @@ type MobileQuickEditPanelProps = {
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
   onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
   onApplyAutoColor: () => void;
-  onOpenAdvanced: () => void;
+  onMarkersChange: (markers: Markers) => void;
+  onInsetsChange: (insets: Insets) => void;
+  onStretchChange: (stretch: StretchPoint) => void;
+  onPullSheet: () => void;
 };
 
 export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
@@ -283,7 +293,15 @@ function ImageControls({
   fileInputRefs,
   onUpload,
   onRemoveUpload,
-  onOpenAdvanced,
+  platform,
+  selectedBubbleSlot,
+  markers,
+  insets,
+  stretch,
+  onMarkersChange,
+  onInsetsChange,
+  onStretchChange,
+  onPullSheet,
   file,
 }: MobileQuickEditPanelProps & {
   slot: ThemeAssetSlot;
@@ -294,6 +312,13 @@ function ImageControls({
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
   const userUploadIds = new Set(getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id)).map((entry) => entry.id));
   const hasImage = Boolean(file?.file || file?.sourceUrl);
+  const [bubbleEditorOpen, setBubbleEditorOpen] = useState(false);
+
+  useEffect(() => {
+    setBubbleEditorOpen(false);
+  }, [slot.id]);
+
+  const canAdjustBubble = Boolean(slot.editableInBubbleEditor && selectedBubbleSlot);
 
   return (
     <div className="grid gap-3">
@@ -354,21 +379,42 @@ function ImageControls({
       />
 
       {slot.editableInBubbleEditor ? (
-        <details className="group rounded-xl border border-[#e5e7eb] bg-[#f8fafc]">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-[13px] font-bold text-[#334155] marker:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] [&::-webkit-details-marker]:hidden">
-            <span>고급 옵션</span>
+        <details
+          className="group rounded-xl border border-[#dbe3ed] bg-[#f8fafc]"
+          open={bubbleEditorOpen}
+          onToggle={(event) => {
+            const next = event.currentTarget.open;
+            if (next && (!hasImage || !canAdjustBubble)) {
+              event.currentTarget.open = false;
+              setBubbleEditorOpen(false);
+              return;
+            }
+            setBubbleEditorOpen(next);
+            if (next) onPullSheet();
+          }}
+        >
+          <summary
+            className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-[13px] font-bold marker:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] [&::-webkit-details-marker]:hidden ${hasImage && canAdjustBubble ? "text-[#1d4ed8]" : "text-[#94a3b8]"}`}
+            aria-disabled={!hasImage || !canAdjustBubble}
+          >
+            <span>말풍선 편집하기</span>
             <span className="text-[11px] font-bold text-[#94a3b8] transition group-open:rotate-180" aria-hidden="true">⌄</span>
           </summary>
-          <div className="flex flex-wrap gap-2 border-t border-[#e5e7eb] bg-white px-3 py-3">
-            <button
-              type="button"
-              className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-3 text-[13px] font-bold text-[#1d4ed8] transition enabled:hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
-              disabled={!hasImage}
-              onClick={onOpenAdvanced}
-            >
-              정밀 조정
-            </button>
-          </div>
+          {bubbleEditorOpen && selectedBubbleSlot ? (
+            <div className="border-t border-[#dbe3ed] p-2">
+          <InlineBubbleAdjuster
+            file={file}
+            slot={selectedBubbleSlot}
+            platform={platform}
+            markers={markers}
+            insets={insets}
+            stretch={stretch}
+            onMarkersChange={onMarkersChange}
+            onInsetsChange={onInsetsChange}
+            onStretchChange={onStretchChange}
+          />
+            </div>
+          ) : null}
         </details>
       ) : null}
     </div>

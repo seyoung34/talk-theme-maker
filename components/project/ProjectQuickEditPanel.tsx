@@ -49,7 +49,6 @@ export function ProjectQuickEditPanel({
   onSelectCandidate,
   onSelectAdminAsset,
   onLoadMoreAdminAssets,
-  onOpenAdvanced,
   onMarkersChange,
   onInsetsChange,
   onStretchChange,
@@ -90,7 +89,6 @@ export function ProjectQuickEditPanel({
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
   onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
   onLoadMoreAdminAssets: () => void;
-  onOpenAdvanced: () => void;
   onMarkersChange: (markers: Markers) => void;
   onInsetsChange: (insets: Insets) => void;
   onStretchChange: (stretch: StretchPoint) => void;
@@ -292,16 +290,6 @@ export function ProjectQuickEditPanel({
                   {isPreparingEditSource ? <RefreshCw className="animate-spin" size={16} aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
                   {isPreparingEditSource ? "편집 준비 중" : "이미지 편집"}
                 </button>
-                {slot.editableInBubbleEditor ? (
-                  <button
-                    type="button"
-                    className="rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-sm font-semibold text-[#1d4ed8] transition enabled:hover:bg-[#dbeafe] disabled:cursor-not-allowed disabled:opacity-45"
-                    disabled={!hasImage}
-                    onClick={onOpenAdvanced}
-                  >
-                    정밀 조정
-                  </button>
-                ) : null}
               </div>
               {editSourceError ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold leading-5 text-[#be123c]" role="alert">{editSourceError}</p> : null}
             </div>
