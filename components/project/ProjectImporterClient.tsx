@@ -1133,7 +1133,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 className="relative min-h-0 flex-1 overflow-hidden"
                 style={{
                   paddingBottom: mobilePreviewClearance,
-                  transition: mobileSheetLiveHeight != null ? "none" : "padding-bottom 220ms cubic-bezier(0.22,1,0.36,1)",
+                  transition: mobileSheetLiveHeight != null ? "none" : "padding-bottom 360ms cubic-bezier(0.22,1,0.36,1)",
                 }}
               >
                 <MobileScaledPreview section={activeSection} placement={mobileSheetSnap === "collapsed" ? "center" : "raised"} isResizing={mobileSheetLiveHeight != null}>
@@ -1163,6 +1163,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                         selections={candidateSelections}
                         templateId={templateId}
                         template={activeTemplate}
+                        adminAssets={adminAssetsWithPreview}
                         contrastWarnings={contrastWarnings}
                         hideSlotPicker={mobileUsesSourceToggle}
                         onSelectSlot={(slot) => {

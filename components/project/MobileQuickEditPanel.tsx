@@ -210,7 +210,7 @@ function ColorControls({
             id={colorInputId}
             type="color"
             value={hex}
-            className="absolute inset-0 size-full cursor-pointer opacity-0"
+            className="absolute inset-0 opacity-0 cursor-pointer size-full"
             aria-label={`${slot.label} 색상 선택`}
             onChange={(event) => onColorChange(slot, setThemeColorRgb(value, event.currentTarget.value))}
           />
@@ -266,7 +266,7 @@ function ColorControls({
         >
           <Sliders size={15} strokeWidth={2.2} aria-hidden="true" />
           {isAutoColor ? "자동 색상 적용됨" : "추천 색상 자동 적용"}
-          {recommendedColor ? <span className="ml-1 size-4 rounded border border-black/10" style={{ backgroundColor: themeColorToCss(recommendedColor) }} aria-hidden="true" /> : null}
+          {recommendedColor ? <span className="ml-1 border rounded size-4 border-black/10" style={{ backgroundColor: themeColorToCss(recommendedColor) }} aria-hidden="true" /> : null}
         </button>
       ) : null}
     </div>
@@ -319,14 +319,14 @@ function ImageControls({
                 className={`grid w-full gap-1 rounded-xl border p-1.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${candidate.selected ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
                 onClick={() => applyCandidate(candidate)}
               >
-                  <span className="grid aspect-square place-items-center overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f8fafc]">
-                    {preview ? (
-                      <span className="block h-full w-full bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${preview})` }} />
-                    ) : (
-                      <ImageOff size={16} className="text-[#94a3b8]" aria-hidden="true" />
-                    )}
-                  </span>
-                  <span className="truncate text-[10px] font-semibold text-[#334155]">{candidate.title}</span>
+                <span className="grid aspect-square place-items-center overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f8fafc]">
+                  {preview ? (
+                    <span className="block w-full h-full bg-white bg-center bg-no-repeat bg-contain" style={{ backgroundImage: `url(${preview})` }} />
+                  ) : (
+                    <ImageOff size={16} className="text-[#94a3b8]" aria-hidden="true" />
+                  )}
+                </span>
+                <span className="truncate text-[10px] font-semibold text-[#334155]">{candidate.title}</span>
               </button>
               {removable ? (
                 <button

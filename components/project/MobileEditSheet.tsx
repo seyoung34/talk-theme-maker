@@ -6,7 +6,7 @@ export type MobileSheetSnap = "collapsed" | "half" | "full";
 
 const snapRatio: Record<MobileSheetSnap, number> = {
   collapsed: 0.12,
-  half: 0.62,
+  half: 0.5,
   full: 0.88,
 };
 
@@ -14,7 +14,7 @@ const collapsedHeightPx = 96;
 
 export const mobileSheetHeight: Record<MobileSheetSnap, string> = {
   collapsed: `${collapsedHeightPx}px`,
-  half: "62dvh",
+  half: "50dvh",
   full: "88dvh",
 };
 
@@ -128,7 +128,7 @@ export function MobileEditSheet({
       role="region"
       aria-label={ariaLabel ?? "편집 패널"}
       className="fixed inset-x-0 bottom-0 z-40 grid grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-t-[24px] border-t border-[#dbe3ed] bg-white shadow-[0_-16px_48px_rgba(15,23,42,0.18)]"
-      style={{ height: heightStyle, transition: liveHeight != null ? "none" : "height 220ms cubic-bezier(0.22,1,0.36,1)" }}
+      style={{ height: heightStyle, transition: liveHeight != null ? "none" : "height 200ms cubic-bezier(0.22,1,0.36,1)" }}
     >
       <button
         type="button"
@@ -142,7 +142,7 @@ export function MobileEditSheet({
         <span className={`h-1.5 rounded-full transition-all ${isInteracting ? "w-14 bg-[#2563eb] shadow-[0_0_0_4px_rgba(37,99,235,0.14)]" : "w-11 bg-[#cbd5e1]"}`} aria-hidden="true" />
       </button>
 
-      <div className="flex min-h-0 flex-col gap-3 px-3 pb-3">
+      <div className="flex flex-col min-h-0 gap-3 px-3 pb-3">
         {children}
       </div>
     </div>

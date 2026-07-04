@@ -24,6 +24,13 @@ export function MobileScaledPreview({
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
+  // 섹션 전환은 즉시 반영해야 하므로, section이 바뀐 커밋에서는 transition을 끈다.
+  const [prevSection, setPrevSection] = useState(section);
+  const [sectionSwitching, setSectionSwitching] = useState(false);
+  if (section !== prevSection) {
+    setPrevSection(section);
+    setSectionSwitching(true);
+  }
   const reference = referenceSizeBySection[section] ?? defaultReferenceSize;
   const scaledSize = useMemo(
     () => ({
@@ -50,6 +57,21 @@ export function MobileScaledPreview({
     return () => observer.disconnect();
   }, [reference.width, reference.height]);
 
+  // 섹션 전환에 따른 크기/스케일 보정이 끝난 뒤 transition을 다시 켠다(더블 rAF로 한 프레임 확보).
+  useEffect(() => {
+    if (!sectionSwitching) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setSectionSwitching(false));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [sectionSwitching]);
+
+  const noTransition = isResizing || sectionSwitching;
+
   return (
     <div ref={containerRef} className={`flex h-full w-full justify-center overflow-hidden ${placement === "raised" ? "items-start" : "items-center"}`}>
       <div
@@ -57,7 +79,7 @@ export function MobileScaledPreview({
         style={{
           width: scaledSize.width,
           height: scaledSize.height,
-          transition: isResizing ? "none" : "width 220ms cubic-bezier(0.22,1,0.36,1), height 220ms cubic-bezier(0.22,1,0.36,1)",
+          transition: noTransition ? "none" : "width 360ms cubic-bezier(0.22,1,0.36,1), height 360ms cubic-bezier(0.22,1,0.36,1)",
         }}
       >
         <div
@@ -67,7 +89,7 @@ export function MobileScaledPreview({
             height: reference.height,
             transform: `translateX(-50%) scale(${scale})`,
             transformOrigin: "top center",
-            transition: isResizing ? "none" : "transform 220ms cubic-bezier(0.22,1,0.36,1)",
+            transition: noTransition ? "none" : "transform 360ms cubic-bezier(0.22,1,0.36,1)",
           }}
         >
           {children}

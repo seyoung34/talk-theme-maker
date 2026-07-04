@@ -951,7 +951,7 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_chatroom_bubble_me_01_image.9.png",
     "required": true,
     "editableInBubbleEditor": true,
-    "note": "Android 9-patch 말풍선",
+    "note": "첫번째 내 말풍선",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png"
     }
@@ -969,7 +969,7 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_chatroom_bubble_me_02_image.9.png",
     "required": false,
     "editableInBubbleEditor": true,
-    "note": "Android 9-patch 말풍선",
+    "note": "첫번째 이후 내 말풍선",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png"
     }
@@ -987,7 +987,7 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_chatroom_bubble_you_01_image.9.png",
     "required": true,
     "editableInBubbleEditor": true,
-    "note": "Android 9-patch 말풍선",
+    "note": "첫번째 상대 내 말풍선",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.9.png"
     }
@@ -1005,7 +1005,7 @@
     "path": "src/main/theme/drawable-xxhdpi/theme_chatroom_bubble_you_02_image.9.png",
     "required": false,
     "editableInBubbleEditor": true,
-    "note": "Android 9-patch 말풍선",
+    "note": "첫번째 이후 상대 말풍선",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.9.png"
     }
@@ -1075,7 +1075,7 @@
     "kind": "color",
     "label": "전송 버튼 색상",
     "required": true,
-    "note": "채팅 입력 영역의 전송 버튼색",
+    "note": "입력 버튼 배경",
     "colorKey": "theme_chatroom_input_bar_send_button_color",
     "defaultColor": {
       "basic": "#c9ff3d"
@@ -1091,7 +1091,7 @@
     "kind": "color",
     "label": "입력 텍스트 색상",
     "required": false,
-    "note": "theme_chatroom_input_bar_color 값",
+    "note": "채팅방 입력창 글자 색상",
     "colorKey": "theme_chatroom_input_bar_color",
     "defaultColor": {
       "basic": "#111111"
@@ -1135,7 +1135,7 @@
     "kind": "color",
     "label": "전송 아이콘 색상",
     "required": false,
-    "note": "theme_chatroom_input_bar_send_icon_color 값",
+    "note": "전송 버튼 아이콘 색상",
     "colorKey": "theme_chatroom_input_bar_send_icon_color",
     "defaultColor": {
       "basic": "#111111"
