@@ -64,24 +64,24 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-[var(--color-outline-variant)]/70 bg-[color:rgba(251,249,244,0.9)] backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-[#dbe8fb]/80 bg-[color:rgba(244,249,255,0.82)] backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 py-3.5 md:px-8">
           <Link href="/" className="min-w-0 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
-            <p className="truncate text-[14px] font-extrabold uppercase tracking-[0.14em] text-[var(--color-on-surface-variant)] sm:text-[11px] sm:tracking-[0.18em]">Talk Theme</p>
+            <p className="truncate text-[14px] font-extrabold uppercase tracking-[0.14em] text-[#3d7bd6] sm:text-[11px] sm:tracking-[0.18em]">Talk Theme</p>
           </Link>
 
           <nav className="flex shrink-0 items-center gap-1 sm:gap-2" aria-label="주요 메뉴">
-            <Link href="/template" aria-current={currentPath === "/template" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-3.5 py-2 text-xs font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/template" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-white"}`}>
+            <Link href="/template" aria-current={currentPath === "/template" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-3.5 py-2 text-xs font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/template" ? "bg-[#2f6bbf] text-white shadow-[0_10px_22px_rgba(47,107,191,0.24)]" : "text-[#3d7bd6] hover:bg-white"}`}>
               테마 만들기
             </Link>
 
-            <Link href="/guide" aria-current={currentPath === "/guide" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-3 py-2 text-xs font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/guide" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-white"}`}>
+            <Link href="/guide" aria-current={currentPath === "/guide" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-3 py-2 text-xs font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/guide" ? "bg-[#2f6bbf] text-white shadow-[0_10px_22px_rgba(47,107,191,0.24)]" : "text-[#3d7bd6] hover:bg-white"}`}>
               가이드 문서
             </Link>
 
             <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
               <Popover.Trigger asChild>
-                <button type="button" className={`flex size-11 items-center justify-center rounded-full border transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] ${isOpen || isAccountArea ? "border-[var(--color-inverse-surface)] bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] hover:border-[var(--color-outline)]"}`} aria-label={session?.user ? "계정 메뉴 열기" : "로그인 메뉴 열기"} aria-expanded={isOpen}>
+                <button type="button" className={`flex size-11 items-center justify-center rounded-full border transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] ${isOpen || isAccountArea ? "border-[#2f6bbf] bg-[#2f6bbf] text-white" : "border-[#cfe0ff] bg-white text-[#3d7bd6] hover:border-[#9bc0f5]"}`} aria-label={session?.user ? "계정 메뉴 열기" : "로그인 메뉴 열기"} aria-expanded={isOpen}>
                   <CircleUserRound size={22} strokeWidth={2} aria-hidden="true" />
                 </button>
               </Popover.Trigger>

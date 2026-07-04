@@ -273,7 +273,13 @@ export default function TemplateGalleryClient() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--color-background)] text-[var(--color-on-background)]">
+    <main className="relative min-h-screen overflow-x-clip bg-[linear-gradient(180deg,#e8f1ff_0%,#f4f9ff_18%,#ffffff_44%,#f7fbff_72%,#e9f2ff_100%)] text-[var(--color-on-background)]">
+      {/* 랜딩과 동일한 결의 단일 배경 레이어 */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute left-[-9rem] top-[4%] h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle,rgba(147,197,253,0.38),transparent_68%)] blur-3xl" />
+        <div className="absolute right-[-9rem] top-[10%] h-[24rem] w-[24rem] rounded-full bg-[radial-gradient(circle,rgba(254,229,0,0.14),transparent_70%)] blur-3xl" />
+        <div className="absolute left-[-8rem] bottom-[6%] h-[24rem] w-[24rem] rounded-full bg-[radial-gradient(circle,rgba(147,197,253,0.28),transparent_70%)] blur-3xl" />
+      </div>
       <SiteHeader currentPath="/template" />
 
       <div className="grid gap-8 px-5 py-8 mx-auto max-w-7xl md:px-8 md:py-10">
@@ -751,9 +757,11 @@ function UserMiniBubble({ visual, tone, width }: { visual: TemplatePreviewVisual
   const mine = tone === "me";
   const image = mine ? visual.myBubbleImage : visual.friendBubbleImage;
   if (image) {
+    // 나인패치(.9.png) 가장자리의 1px 검은 가이드 픽셀을 잘라내기 위해
+    // overflow-hidden 컨테이너에 이미지를 2px씩 넘치게 그려 테두리를 크롭한다.
     return (
-      <span className={`${width} ${mine ? "justify-self-end" : ""}`}>
-        <img src={image} alt="" className="h-8 w-full object-contain" />
+      <span className={`relative block h-8 overflow-hidden ${width} ${mine ? "justify-self-end" : ""}`}>
+        <img src={image} alt="" className="absolute inset-[-2px] h-[calc(100%+4px)] w-[calc(100%+4px)] max-w-none object-fill" />
       </span>
     );
   }
@@ -1122,10 +1130,12 @@ function ChatroomBubble({ visual, mine, text, time }: { visual: TemplatePreviewV
       {!mine ? <ScreenAvatar src={visual.profileImage} sizeClass="size-6" /> : null}
       {mine ? <span className="mb-0.5 text-[7px] font-medium text-[var(--color-on-surface-variant)]">{time}</span> : null}
       <span
-        className={`max-w-[68%] bg-cover bg-center px-2.5 py-1.5 text-[11px] font-medium leading-snug text-[var(--color-on-surface)] ${mine ? "rounded-[14px] rounded-br-[4px]" : "rounded-[14px] rounded-bl-[4px]"}`}
+        className={`max-w-[68%] bg-center bg-no-repeat px-2.5 py-1.5 text-[11px] font-medium leading-snug text-[var(--color-on-surface)] ${mine ? "rounded-[14px] rounded-br-[4px]" : "rounded-[14px] rounded-bl-[4px]"}`}
         style={{
           backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor,
           backgroundImage: image ? `url(${image})` : undefined,
+          // 나인패치 1px 가이드 픽셀이 보이지 않도록 배경을 살짝 키워 가장자리를 크롭한다.
+          backgroundSize: image ? "calc(100% + 5px) calc(100% + 5px)" : undefined,
         }}
       >
         {text}
@@ -1353,8 +1363,8 @@ function MiniBubble({ visual, tone, width }: { visual: TemplatePreviewVisual; to
   const bubbleImage = mine ? visual.myBubbleImage : visual.friendBubbleImage;
   if (bubbleImage) {
     return (
-      <span className={`${width} flex h-full min-h-0 items-center ${mine ? "justify-self-end justify-end" : ""}`}>
-        <img src={bubbleImage} alt="" className="max-h-full w-full object-contain" />
+      <span className={`${width} relative block h-full min-h-0 overflow-hidden ${mine ? "justify-self-end" : ""}`}>
+        <img src={bubbleImage} alt="" className="absolute inset-[-2px] h-[calc(100%+4px)] w-[calc(100%+4px)] max-w-none object-fill" />
       </span>
     );
   }
@@ -1375,8 +1385,8 @@ function MiniBubbleSwatch({ visual, tone, width }: { visual: TemplatePreviewVisu
   const bubbleImage = mine ? visual.myBubbleImage : visual.friendBubbleImage;
   if (bubbleImage) {
     return (
-      <span className={`${width} flex h-full min-h-0 items-center ${mine ? "justify-self-end justify-end" : ""}`}>
-        <img src={bubbleImage} alt="" className="max-h-full w-full object-contain" />
+      <span className={`${width} relative block h-full min-h-0 overflow-hidden ${mine ? "justify-self-end" : ""}`}>
+        <img src={bubbleImage} alt="" className="absolute inset-[-2px] h-[calc(100%+4px)] w-[calc(100%+4px)] max-w-none object-fill" />
       </span>
     );
   }
@@ -1396,7 +1406,6 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
       {!mine ? <MiniAvatar src={visual.profileImage} /> : null}
       <span
         className={`
-          outline outline-red-500
   min-h-[46px]
   min-w-[100px]
   max-w-[84%]
@@ -1411,8 +1420,9 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
 `}
         style={{
           backgroundImage: bubbleImage ? `url(${bubbleImage})` : undefined,
-          backgroundSize: "auto 100%",
-          backgroundPosition: mine ? "right center" : "left center",
+          // 나인패치 1px 가이드 픽셀을 감추기 위해 배경을 살짝 키워 가장자리를 크롭한다.
+          backgroundSize: bubbleImage ? "calc(100% + 5px) calc(100% + 5px)" : undefined,
+          backgroundPosition: "center",
         }}
       >
         {text}
