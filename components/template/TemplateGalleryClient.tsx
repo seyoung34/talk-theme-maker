@@ -777,7 +777,7 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
 
           <div className="grid content-start min-h-0 grid-cols-2 gap-2 sm:grid-cols-1">
             {actions.map((action) => (
-              <button key={action.platform} className={`rounded-full px-4 py-3 text-sm font-black transition hover:scale-[0.98] ${action.className}`} type="button" onClick={() => preview.onStart(action.platform)}>
+              <button key={action.platform} className={`whitespace-nowrap rounded-full px-2.5 py-3 text-[12px] font-black transition hover:scale-[0.98] sm:px-4 sm:text-sm ${action.className}`} type="button" onClick={() => preview.onStart(action.platform)}>
                 {action.label}
               </button>
             ))}

@@ -94,7 +94,7 @@ export function PasscodePreview({ analysis, slots, selectedSlotId, colors, selec
     <section className="grid h-full w-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden rounded-[24px] border border-[#d7ddd8] bg-white/96 p-3 shadow-[0_22px_48px_rgba(15,23,42,0.12)]">
       <PasscodeToolbar mode={mode} supportsPattern={supportsPattern} onModeChange={setMode} onReset={resetSimulation} />
 
-      <div className="grid min-h-0 place-items-start overflow-auto rounded-[18px] bg-[#f5f7f6] px-3 py-4 sm:place-items-center">
+      <div className="grid min-h-0 place-items-center overflow-auto rounded-[18px]  py-4">
         <PasscodeDevice {...deviceProps} />
       </div>
 
@@ -139,7 +139,7 @@ function PasscodeDevice({ mode, backgroundUrl, indicatorUrls, keypadPressedImage
 }) {
   const backgroundSelected = selectedSlotId === slotByRole.passcode_background?.id || selectedSlotId === slotByRole.passcode_background_color?.id;
   return (
-    <div className={`relative aspect-[1080/2340] w-full max-w-[268px] overflow-hidden rounded-[30px] border bg-cover bg-center shadow-[0_20px_48px_rgba(15,23,42,0.2)] transition ${backgroundSelected ? "border-[#2563eb] ring-2 ring-[#93c5fd]" : "border-[#cbd5d1]"}`} style={{ backgroundColor: themeColorToCss(palette.background), backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined }} onClick={() => onSelectRole(backgroundUrl ? "passcode_background" : "passcode_background_color")}>
+    <div className={`relative aspect-[1080/2340] w-full max-w-[268px] overflow-hidden rounded-[30px] border bg-cover bg-center shadow-[0_12px_32px_rgba(15,23,42,0.08)] transition ${backgroundSelected ? "border-[#2563eb] ring-2 ring-inset ring-[#93c5fd]" : "border-transparent"}`} style={{ backgroundColor: themeColorToCss(palette.background), backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined }} onClick={() => onSelectRole(backgroundUrl ? "passcode_background" : "passcode_background_color")}>
       <div className="grid h-full grid-rows-[43%_1fr]">
         <PasscodeHeader mode={mode} palette={palette} enteredDigits={enteredDigits} indicatorUrls={indicatorUrls} selectedSlotId={selectedSlotId} slotByRole={slotByRole} onSelectRole={onSelectRole} />
         {mode === "number" ? (
@@ -165,13 +165,13 @@ function PasscodeHeader({ mode, palette, enteredDigits, indicatorUrls, selectedS
 }
 
 function PasscodeIndicators({ enteredDigits, urls, selectedSlotId, slotByRole, onSelectRole }: { enteredDigits: number; urls: RoleUrls; selectedSlotId?: string; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; onSelectRole: (role: ThemeResourceRole) => void }) {
-  return <div className="flex min-h-10 items-center justify-center gap-2" aria-label={`${enteredDigits}자리 입력됨`}>{Array.from({ length: 4 }).map((_, index) => {
+  return <div className="flex items-center justify-center gap-2 min-h-10" aria-label={`${enteredDigits}자리 입력됨`}>{Array.from({ length: 4 }).map((_, index) => {
     const position = index + 1;
     const checked = index < enteredDigits;
     const role = `passcode_indicator_${position}${checked ? "_checked" : ""}` as ThemeResourceRole;
     const src = urls[role];
     const selected = selectedSlotId === slotByRole[role]?.id;
-    return <button key={position} type="button" className={`grid size-10 place-items-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] ${selected ? "ring-2 ring-[#60a5fa]" : ""}`} aria-label={`${position}번째 암호 ${checked ? "입력" : "기본"} 이미지`} onClick={(event) => { event.stopPropagation(); onSelectRole(role); }}>{src ? <img src={src} alt="" className="size-10 object-contain" /> : <span className={`size-2.5 rounded-full border border-current ${checked ? "bg-current" : "bg-transparent opacity-45"}`} />}</button>;
+    return <button key={position} type="button" className={`grid size-10 place-items-center rounded-lg transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] ${selected ? "ring-2 ring-[#60a5fa]" : ""}`} aria-label={`${position}번째 암호 ${checked ? "입력" : "기본"} 이미지`} onClick={(event) => { event.stopPropagation(); onSelectRole(role); }}>{src ? <img src={src} alt="" className="object-contain size-10" /> : <span className={`size-2.5 rounded-full border border-current ${checked ? "bg-current" : "bg-transparent opacity-45"}`} />}</button>;
   })}</div>;
 }
 
@@ -209,7 +209,7 @@ function PatternPad({ palette, selectedSlotId, slotByRole, nodes, onSelectRole, 
   return (
     <div className={`grid content-center px-8 pb-10 pt-6 ${selected ? "ring-2 ring-inset ring-[#60a5fa]/65" : ""}`} style={{ backgroundColor: themeColorToCss(palette.keypadBackground) }} onPointerUp={() => setDrawing(false)} onPointerLeave={() => setDrawing(false)}>
       <div className="relative mx-auto grid aspect-square w-full max-w-[205px] grid-cols-3 place-items-center" onClick={(event) => { event.stopPropagation(); onSelectRole("passcode_pattern_line_color"); }}>
-        <svg className="pointer-events-none absolute inset-0 size-full" viewBox="0 0 180 180" aria-hidden="true"><polyline points={points} fill="none" stroke={themeColorToCss(palette.patternLine)} strokeLinecap="round" strokeLinejoin="round" strokeWidth="5" /></svg>
+        <svg className="absolute inset-0 pointer-events-none size-full" viewBox="0 0 180 180" aria-hidden="true"><polyline points={points} fill="none" stroke={themeColorToCss(palette.patternLine)} strokeLinecap="round" strokeLinejoin="round" strokeWidth="5" /></svg>
         {Array.from({ length: 9 }).map((_, index) => {
           const active = nodes.includes(index);
           return <button key={index} type="button" className="z-10 grid size-11 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]" aria-label={`패턴 점 ${index + 1}`} aria-pressed={active} onPointerDown={(event) => { event.stopPropagation(); setDrawing(true); onChange([index]); onSelectRole("passcode_keypad_color"); }} onPointerEnter={() => { if (drawing) addNode(index); }} onClick={(event) => event.stopPropagation()}><span className={`block rounded-full transition ${active ? "size-4 ring-4 ring-current/20" : "size-3"}`} style={{ backgroundColor: themeColorToCss(palette.keypad), color: themeColorToCss(palette.keypad) }} /></button>;

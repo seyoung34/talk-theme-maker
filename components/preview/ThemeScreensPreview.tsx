@@ -117,7 +117,7 @@ export function ThemeScreensPreview({
         <FriendsScreen platform={platform} selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} profileUrls={profileUrls} onSelectSlot={onSelectSlot} />
       ) : section === "tabs" ? (
         <ChatsScreen platform={platform} selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} profileUrls={profileUrls} onSelectSlot={onSelectSlot} />
-      ) : <MoreScreen platform={analysis.summary.platform} selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />}
+      ) : <MoreScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />}
     </PhoneFrame>
   );
 }
@@ -436,12 +436,8 @@ function ChatsScreen({
   );
 }
 
-//더보기
-function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { platform: "android" | "ios"; selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
-  if (platform === "ios") {
-    return <IosMoreScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />;
-  }
-
+//더보기 (Android/iOS 공통 프리뷰)
+function MoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
   const headerSelected = selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id;
   const hasMainBackgroundImage = Boolean(urls.main_background);
   const headerColor = hasMainBackgroundImage ? preview.headerBackgroundColor : preview.mainBackgroundColor;
@@ -556,86 +552,6 @@ function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSel
   );
 }
 
-function IosMoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
-  const backgroundSelected = selectedSlotId === slotByRole.main_body_secondary_cell_color?.id;
-  const headerSelected = selectedSlotId === slotByRole.main_header_foreground_color?.id;
-  const featureSelected = selectedSlotId === slotByRole.feature_primary_color?.id;
-  const services = [
-    { label: "친구 추가", icon: UserPlus },
-    { label: "채팅 만들기", icon: MessageCirclePlus },
-    { label: "선물하기", icon: Gift },
-    { label: "전체 서비스", icon: ListPlus },
-  ];
-
-  return (
-    <MainScreenFrame>
-      <button
-        type="button"
-        className={`flex items-end justify-between px-5 pb-3 pt-4 text-left transition ${headerSelected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
-        style={{ backgroundColor: preview.bodySecondaryColor, color: preview.headerForegroundColor }}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (slotByRole.main_header_foreground_color) onSelectSlot?.(slotByRole.main_header_foreground_color.id);
-        }}
-      >
-        <strong className="text-xl font-semibold tracking-[-0.03em]">더보기</strong>
-        <div className="flex items-center gap-4"><Search className="size-5" aria-hidden="true" /><Settings className="size-5" aria-hidden="true" /></div>
-      </button>
-
-      <div
-        role="button"
-        tabIndex={0}
-        className={`grid min-h-0 content-start gap-4 overflow-hidden px-4 py-3 text-left transition ${backgroundSelected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
-        style={{ backgroundColor: preview.bodySecondaryColor }}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (slotByRole.main_body_secondary_cell_color) onSelectSlot?.(slotByRole.main_body_secondary_cell_color.id);
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
-          if (slotByRole.main_body_secondary_cell_color) onSelectSlot?.(slotByRole.main_body_secondary_cell_color.id);
-        }}
-      >
-        <span className="grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-2xl bg-white/82 px-4 py-3 shadow-[0_10px_26px_rgba(15,23,42,0.06)]">
-          <AvatarCircle src={urls.profile_image_1} size="h-12 w-12" />
-          <span className="min-w-0">
-            <strong className="block truncate text-[15px] font-semibold" style={{ color: preview.titleColor }}>테마 메이커</strong>
-            <span className="mt-0.5 block truncate text-[11px] font-medium" style={{ color: preview.descriptionColor }}>나만의 카카오톡 테마를 만들고 있어요.</span>
-          </span>
-          <ChevronRight className="size-4 opacity-45" style={{ color: preview.headerForegroundColor }} aria-hidden="true" />
-        </span>
-
-        <button
-          type="button"
-          className={`grid grid-cols-4 gap-1 rounded-2xl bg-white/72 px-2 py-4 ${featureSelected ? "ring-2 ring-[#60a5fa]" : ""}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (slotByRole.feature_primary_color) onSelectSlot?.(slotByRole.feature_primary_color.id);
-          }}
-        >
-          {services.map(({ label, icon: Icon }) => (
-            <span key={label} className="grid justify-items-center gap-2 text-center">
-              <span className="grid size-9 place-items-center rounded-full bg-white/90 shadow-sm"><Icon className="size-4" style={{ color: preview.featurePrimaryColor }} aria-hidden="true" /></span>
-              <span className="text-[10px] font-semibold leading-tight" style={{ color: preview.featurePrimaryColor }}>{label}</span>
-            </span>
-          ))}
-        </button>
-
-        <span className="grid overflow-hidden rounded-2xl bg-white/72 px-4">
-          {["결제", "이모티콘", "테마", "설정"].map((label, index) => (
-            <span key={label} className={`flex min-h-11 items-center justify-between text-[12px] font-semibold ${index ? "border-t border-black/5" : ""}`} style={{ color: preview.titleColor }}>
-              {label}<ChevronRight className="size-3.5 opacity-35" aria-hidden="true" />
-            </span>
-          ))}
-        </span>
-      </div>
-
-      <MainBottomTabBar active="more" selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
-    </MainScreenFrame>
-  );
-}
-
 function MainScreenFrame({ children }: { children: ReactNode }) {
   return <div className="grid h-full min-w-0 grid-rows-[auto_minmax(0,1fr)_72px]">{children}</div>;
 }
@@ -683,7 +599,7 @@ function PhoneFrame({
 }) {
   return (
     <div
-      className={`mx-auto aspect-[1080/2340] h-full w-full max-w-[310px] overflow-hidden rounded-[32px] border shadow-[0_22px_48px_rgba(15,23,42,0.16)] ${selected ? "border-[#60a5fa]" : "border-[#d7ddd8]"}`}
+      className={`mx-auto aspect-[1080/2340] h-full w-full max-w-[310px] overflow-hidden rounded-[32px] border shadow-[0_12px_32px_rgba(15,23,42,0.08)] ${selected ? "border-[#60a5fa]" : "border-transparent"}`}
       role="button"
       tabIndex={0}
       onClick={onSelect}

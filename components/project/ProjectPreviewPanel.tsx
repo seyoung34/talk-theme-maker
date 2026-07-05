@@ -17,6 +17,7 @@ export function ProjectPreviewPanel({
   selections,
   bubbleEdits,
   selectedSlotId,
+  selectionPulseKey = 0,
   className,
   onSelectSlot,
 }: {
@@ -29,13 +30,14 @@ export function ProjectPreviewPanel({
   selections: SlotCandidateSelections;
   bubbleEdits: Partial<Record<ThemeResourceRole, BubbleEditState>>;
   selectedSlotId?: string;
+  selectionPulseKey?: number;
   className?: string;
   onSelectSlot: (slotId: string | undefined) => void;
 }) {
   const chatroomActive = activeSection === "chatroom";
 
   return (
-    <aside className={`grid min-h-0 place-items-center  overflow-hidden  ${className ?? ""}`}>
+    <aside className={`preview-selection-motion grid min-h-0 place-items-center  overflow-hidden  ${className ?? ""}`} data-selection-pulse={selectionPulseKey % 2}>
       <div
         className={`col-start-1 row-start-1 grid h-full w-full place-items-center ${chatroomActive ? "" : "pointer-events-none invisible"}`}
         aria-hidden={!chatroomActive}
@@ -54,7 +56,7 @@ export function ProjectPreviewPanel({
         />
       </div>
       {!chatroomActive ? (
-        <div className="col-start-1 row-start-1 grid h-full w-full place-items-center">
+        <div className="grid w-full h-full col-start-1 row-start-1 place-items-center">
           {activeSection === "common" ? (
             <CommonAssetsPreview
               analysis={analysis}

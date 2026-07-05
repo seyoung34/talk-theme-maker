@@ -106,6 +106,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [activeSection, setActiveSection] = useState<ThemeSection>("main");
   const [activeGroup, setActiveGroup] = useState<ThemeSlotGroup>("background");
   const [selectedSlotId, setSelectedSlotId] = useState<string | undefined>();
+  const [selectionPulseKey, setSelectionPulseKey] = useState(0);
   const [uploads, setUploads] = useState<SlotUploads>({});
   const [remoteUploadRefs, setRemoteUploadRefs] = useState<RemoteSlotUploads>({});
   const [colors, setColors] = useState<SlotColors>({});
@@ -131,6 +132,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [systemPriceAmount, setSystemPriceAmount] = useState("");
   const [systemCreditCost, setSystemCreditCost] = useState("");
   const [isSavingSystemTemplate, setIsSavingSystemTemplate] = useState(false);
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
   const [bubbleInsets, setBubbleInsets] = useState<Partial<Record<string, Insets>>>({});
@@ -198,6 +200,24 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       }, 0);
     };
   }, [mobileEditSheetOpen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
+    const handlePopState = () => {
+      window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
+      setExitConfirmOpen(true);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const requestExit = () => setExitConfirmOpen(true);
+  const cancelExit = () => setExitConfirmOpen(false);
+  const confirmExit = () => {
+    setExitConfirmOpen(false);
+    router.push("/template");
+  };
 
   useEffect(() => {
     let active = true;
@@ -522,6 +542,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (nextGroup) setActiveGroup(nextGroup);
     const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, section) && (!nextGroup || isSlotVisibleInGroup(slot, nextGroup)));
     setSelectedSlotId(firstSlot?.id);
+    if (firstSlot) setSelectionPulseKey((current) => current + 1);
     if (viewportMode !== "mobile") {
       setMobileEditSheetOpen(true);
     }
@@ -531,6 +552,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setActiveGroup(group);
     const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, group));
     setSelectedSlotId(firstSlot?.id);
+    if (firstSlot) setSelectionPulseKey((current) => current + 1);
     if (viewportMode === "mobile") {
       setMobileSheetSnap("half");
     } else {
@@ -540,6 +562,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const selectPreviewSlot = (slotId: string | undefined) => {
     setSelectedSlotId(slotId);
+    if (slotId) setSelectionPulseKey((current) => current + 1);
     const slot = slots.find((item) => item.id === slotId);
     if (!slot) return;
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
@@ -568,6 +591,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     });
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
     setSelectedSlotId(slot.id);
+    setSelectionPulseKey((current) => current + 1);
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
     if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
   };
@@ -601,6 +625,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     });
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
     setSelectedSlotId(slot.id);
+    setSelectionPulseKey((current) => current + 1);
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
     if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
   };
@@ -642,6 +667,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       };
     });
     setSelectedSlotId(slot.id);
+    setSelectionPulseKey((current) => current + 1);
   };
 
   const changeColor = (slot: ThemeAssetSlot, value: string) => {
@@ -670,6 +696,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const selectCandidate = (slot: ThemeAssetSlot, candidateId: string) => {
     setCandidateSelections((current) => ({ ...current, [slot.id]: candidateId }));
     setSelectedSlotId(slot.id);
+    setSelectionPulseKey((current) => current + 1);
 
     if (slot.kind === "color") {
       setColors((current) => {
@@ -706,6 +733,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
     setCandidateSelections((current) => ({ ...current, [slot.id]: asset.id }));
     setSelectedSlotId(slot.id);
+    setSelectionPulseKey((current) => current + 1);
     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
     if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
   };
@@ -858,6 +886,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     selections: candidateSelections,
     bubbleEdits: previewBubbleEdits,
     selectedSlotId: selectedSlot?.id,
+    selectionPulseKey,
     onSelectSlot: selectPreviewSlot,
   };
 
@@ -1011,6 +1040,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onSubmit={() => void saveSystemTemplate()}
         />
       ) : null}
+      {exitConfirmOpen ? <ExitConfirmDialog onCancel={cancelExit} onConfirm={confirmExit} /> : null}
 
       {initialLoadState.status === "loading" ? (
         <InitialTemplateLoadingPanel
@@ -1027,9 +1057,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           {viewportMode === "desktop" ? (
             <header className="grid min-h-[56px] min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 px-3 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-4 md:px-4">
               <div className="flex items-center min-w-0 gap-2 justify-self-start md:gap-4">
-                <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
+                <button
+                  type="button"
+                  onClick={requestExit}
+                  aria-label="편집 종료"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white"
+                >
                   &larr;
-                </Link>
+                </button>
                 <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#0f172a] md:text-[22px]">{displayTemplateName}</h1>
               </div>
 
@@ -1089,6 +1124,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 isAdminMode={isAdminMode}
                 isSaving={isAdminMode ? isSavingSystemTemplate : isSavingTemplate}
                 isExporting={isExporting}
+                templateName={displayTemplateName}
+                onBack={requestExit}
                 onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
                 onExport={() => void openExportDialog()}
               />
@@ -1131,6 +1168,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                         hideSlotPicker={mobileUsesSourceToggle}
                         onSelectSlot={(slot) => {
                           setSelectedSlotId(slot.id);
+                          setSelectionPulseKey((current) => current + 1);
                           if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
                           if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
                           setMobileSheetSnap("half");
@@ -1151,6 +1189,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           ) : viewportMode === "pending" ? (
             <div className="min-h-0" />
           ) : (
+            // 섹션레일,편집창,프리뷰
             <section className="grid min-h-0 min-w-0 w-full grid-cols-1 content-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
               <div className="order-1 h-full min-w-0 lg:order-none">
                 <ProjectSectionRail
@@ -1175,6 +1214,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   contrastWarnings={contrastWarnings}
                   onSelectSlot={(slot) => {
                     setSelectedSlotId(slot.id);
+                    setSelectionPulseKey((current) => current + 1);
                     if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
                     if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
                     setMobileEditSheetOpen(true);
@@ -1235,6 +1275,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 </div>
               </section>
 
+              {/* 프리뷰섹션 */}
               <ProjectPreviewPanel
                 analysis={analysis}
                 activeSection={activeSection}
@@ -1245,6 +1286,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 selections={candidateSelections}
                 bubbleEdits={previewBubbleEdits}
                 selectedSlotId={selectedSlot?.id}
+                selectionPulseKey={selectionPulseKey}
                 className="order-2 min-h-[420px] lg:order-none lg:min-h-0"
                 onSelectSlot={selectPreviewSlot}
               />
@@ -1373,6 +1415,27 @@ function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => 
       <button type="button" className="shrink-0 text-current/70 hover:text-current" onClick={onDismiss} aria-label="알림 닫기">
         닫기
       </button>
+    </div>
+  );
+}
+
+function ExitConfirmDialog({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.42)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="편집 종료 확인">
+      <section className="grid w-full max-w-[360px] gap-5 rounded-[28px] border border-[#e5e7eb] bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
+        <div className="grid gap-1">
+          <h2 className="text-lg font-semibold text-[#0f172a]">편집을 종료할까요?</h2>
+          <p className="text-sm leading-6 text-[#64748b]">저장하지 않은 변경 사항은 사라질 수 있습니다.</p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onCancel}>
+            편집 계속하기
+          </button>
+          <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white" onClick={onConfirm}>
+            편집 종료하기
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

@@ -50,8 +50,8 @@ export const groupLabels: Record<ThemeSlotGroup, string> = {
   icon: "대표 아이콘",
   profiles: "프로필",
   launcher: "런처 아이콘",
-  text: "텍스트",
-  keypad: "키패드",
+  text: "상단",
+  keypad: "하단",
   pattern: "패턴",
 };
 
