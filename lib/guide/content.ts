@@ -1,5 +1,7 @@
 export type GuidePlatform = "android" | "ios";
 
+export type GuideMode = "easy" | "detailed";
+
 export type GuideStep = {
   title: string;
   body: string;
@@ -22,6 +24,28 @@ export type GuideSection = {
   caution?: string;
 };
 
+// 쉬운(이미지 중심) 가이드용 주석. 좌표는 스크린샷 기준 상대값(0~1)이라 리사이즈에도 위치가 유지된다.
+export type EasyAnnotation = {
+  kind: "highlight" | "pin";
+  x: number;
+  y: number;
+  w?: number;
+  h?: number;
+  label?: string;
+};
+
+export type EasyStep = {
+  title: string;
+  caption: string;
+  media?: {
+    type: "image" | "video";
+    src: string;
+    poster?: string;
+  };
+  annotations?: EasyAnnotation[];
+  hardStep?: boolean;
+};
+
 export type PlatformGuide = {
   label: string;
   sourceVersion: string;
@@ -29,6 +53,7 @@ export type PlatformGuide = {
   intro: string;
   output: string;
   sections: GuideSection[];
+  easySteps?: EasyStep[];
 };
 
 export const guideContent: Record<GuidePlatform, PlatformGuide> = {
@@ -38,6 +63,48 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
     sourcePath: "android-sample-theme/apeach-26.1.0-source",
     intro: "이미지와 색상을 편집한 뒤 설치 가능한 APK로 만들고, 테마 앱에서 카카오톡에 적용합니다.",
     output: "APK · APK ZIP",
+    easySteps: [
+      {
+        title: "마음에 드는 템플릿 고르기",
+        caption: "연인·캐릭터·반려동물처럼 원하는 분위기를 골라요. 처음부터 만들지 않아도 돼요.",
+        media: { type: "image", src: "/guide/android/01-template-gallery.png" },
+        annotations: [
+          { kind: "highlight", x: 0.175, y: 0.4, w: 0.205, h: 0.52, label: "원하는 템플릿을 눌러 시작" },
+        ],
+      },
+      {
+        title: "배경을 내 사진으로 바꾸기",
+        caption: "‘추천 에셋’에서 배경을 고르거나 내 사진을 올리면 오른쪽 미리보기에 바로 보여요.",
+        media: { type: "image", src: "/guide/android/02-edit-background.png" },
+        annotations: [
+          { kind: "highlight", x: 0.355, y: 0.135, w: 0.09, h: 0.055, label: "추천 에셋에서 고르기" },
+          { kind: "pin", x: 0.9, y: 0.32, label: "미리보기에 바로 반영" },
+        ],
+      },
+      {
+        title: "말풍선까지 내 취향으로",
+        caption: "내 말풍선·상대 말풍선을 바꿔요. 미리보기로 실제 채팅 화면을 보며 조정할 수 있어요.",
+        media: { type: "image", src: "/guide/android/03-edit-bubble.png" },
+        annotations: [
+          { kind: "highlight", x: 0.355, y: 0.14, w: 0.09, h: 0.055, label: "말풍선 이미지 고르기" },
+          { kind: "pin", x: 0.9, y: 0.27, label: "채팅방 미리보기" },
+        ],
+      },
+      {
+        title: "APK 파일로 내려받기",
+        caption: "‘내보내기’를 눌러 이름과 버전을 확인하고 Android APK를 만들어요.",
+        media: { type: "image", src: "/guide/android/04-export.png" },
+        annotations: [
+          { kind: "highlight", x: 0.5, y: 0.49, w: 0.19, h: 0.1, label: "Android APK 선택" },
+          { kind: "highlight", x: 0.588, y: 0.735, w: 0.088, h: 0.06, label: "APK 내보내기" },
+        ],
+      },
+      {
+        title: "설치하고 카톡에 적용하기",
+        caption: "APK를 설치할 때 뜨는 ‘설치 허용’ 팝업과 테마 앱의 적용 과정은 곧 짧은 영상으로 안내할 예정이에요.",
+        hardStep: true,
+      },
+    ],
     sections: [
       {
         id: "android-quick-start",
@@ -186,4 +253,8 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
 
 export function isGuidePlatform(value: string | undefined): value is GuidePlatform {
   return value === "android" || value === "ios";
+}
+
+export function isGuideMode(value: string | undefined): value is GuideMode {
+  return value === "easy" || value === "detailed";
 }

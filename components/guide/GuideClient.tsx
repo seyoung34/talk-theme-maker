@@ -3,45 +3,79 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
-import { Apple, Check, CircleAlert, Smartphone } from "lucide-react";
-import { guideContent, type GuidePlatform, type GuideSection } from "@/lib/guide/content";
+import { AlertTriangle, Apple, Check, CircleAlert, FileText, Images, MapPin, Smartphone } from "lucide-react";
+import { guideContent, type EasyStep, type GuideMode, type GuidePlatform, type GuideSection } from "@/lib/guide/content";
 
 type GuideClientProps = {
   initialPlatform: GuidePlatform;
+  initialMode?: GuideMode;
 };
 
-export default function GuideClient({ initialPlatform }: GuideClientProps) {
+export default function GuideClient({ initialPlatform, initialMode = "easy" }: GuideClientProps) {
   const router = useRouter();
   const [platform, setPlatform] = useState<GuidePlatform>(initialPlatform);
+  const [mode, setMode] = useState<GuideMode>(initialMode);
 
   useEffect(() => setPlatform(initialPlatform), [initialPlatform]);
+  useEffect(() => setMode(initialMode), [initialMode]);
+
+  const pushRoute = (nextPlatform: GuidePlatform, nextMode: GuideMode) => {
+    router.push(`/guide?platform=${nextPlatform}&mode=${nextMode}`, { scroll: false });
+  };
 
   const selectPlatform = (value: string) => {
     if (value !== "android" && value !== "ios") return;
     setPlatform(value);
-    router.push(`/guide?platform=${value}`, { scroll: false });
+    pushRoute(value, mode);
+  };
+
+  const selectMode = (value: GuideMode) => {
+    setMode(value);
+    pushRoute(platform, value);
   };
 
   return (
     <Tabs.Root value={platform} onValueChange={selectPlatform}>
-      <header className="grid gap-7 border-b border-[var(--color-outline-variant)] pb-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
+      <header className="grid gap-7 border-b border-[#e3ecf7] pb-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
         <div>
-          <p className="text-xs font-black tracking-[0.16em] text-[var(--color-secondary)]">THEME GUIDE</p>
-          <h1 className="mt-2 max-w-2xl font-[var(--font-display)] text-[34px] font-semibold tracking-[-0.05em] text-[var(--color-on-surface)] sm:text-[42px]">만드는 방법부터<br className="hidden sm:block" /> 적용하는 순간까지</h1>
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-1.5 text-[11px] font-black tracking-[0.16em] text-[#3d7bd6] shadow-sm backdrop-blur">
+            THEME GUIDE
+          </span>
+          <h1 className="mt-4 max-w-2xl text-[32px] font-black leading-[1.16] tracking-[-0.02em] text-[var(--color-on-background)] sm:text-[44px]">만드는 방법부터<br className="hidden sm:block" /> 적용하는 순간까지</h1>
         </div>
-        <Tabs.List className="grid w-full grid-cols-2 rounded-[14px] bg-[var(--color-surface-container)] p-1" aria-label="가이드 플랫폼 선택">
-          <PlatformTab value="android" label="Android" icon={<Smartphone size={17} aria-hidden="true" />} />
-          <PlatformTab value="ios" label="iOS" icon={<Apple size={17} aria-hidden="true" />} />
-        </Tabs.List>
+        <div className="grid gap-2.5">
+          <div className="grid w-full grid-cols-2 rounded-full border border-[#dbe8fb] bg-[#eef5ff] p-1" role="tablist" aria-label="가이드 방식 선택">
+            <ModeTab active={mode === "easy"} onClick={() => selectMode("easy")} label="쉬운 가이드" icon={<Images size={16} aria-hidden="true" />} />
+            <ModeTab active={mode === "detailed"} onClick={() => selectMode("detailed")} label="자세한 가이드" icon={<FileText size={16} aria-hidden="true" />} />
+          </div>
+          <Tabs.List className="grid w-full grid-cols-2 rounded-full border border-[#dbe8fb] bg-[#eef5ff] p-1" aria-label="가이드 플랫폼 선택">
+            <PlatformTab value="android" label="Android" icon={<Smartphone size={17} aria-hidden="true" />} />
+            <PlatformTab value="ios" label="iOS" icon={<Apple size={17} aria-hidden="true" />} />
+          </Tabs.List>
+        </div>
       </header>
 
-      <Tabs.Content value="android" className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]">
-        <PlatformManual platform="android" />
+      <Tabs.Content value="android" className="outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bbf]">
+        {mode === "easy" ? <EasyGuide platform="android" onSeeDetailed={() => selectMode("detailed")} /> : <PlatformManual platform="android" />}
       </Tabs.Content>
-      <Tabs.Content value="ios" className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-secondary)]">
-        <PlatformManual platform="ios" />
+      <Tabs.Content value="ios" className="outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bbf]">
+        {mode === "easy" ? <EasyGuide platform="ios" onSeeDetailed={() => selectMode("detailed")} /> : <PlatformManual platform="ios" />}
       </Tabs.Content>
     </Tabs.Root>
+  );
+}
+
+function ModeTab({ active, onClick, label, icon }: { active: boolean; onClick: () => void; label: string; icon: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-black transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2f6bbf] ${active ? "bg-[#fee500] text-[#191600] shadow-[0_10px_22px_rgba(254,229,0,0.35)]" : "text-[#3d7bd6] hover:bg-white"}`}
+    >
+      {icon}{label}
+    </button>
   );
 }
 
@@ -49,10 +83,99 @@ function PlatformTab({ value, label, icon }: { value: GuidePlatform; label: stri
   return (
     <Tabs.Trigger
       value={value}
-      className="flex min-h-12 items-center justify-center gap-2 rounded-[10px] px-4 text-sm font-extrabold text-[var(--color-on-surface-variant)] transition data-[state=active]:bg-white data-[state=active]:text-[var(--color-on-surface)] data-[state=active]:shadow-[0_2px_10px_rgba(48,49,46,0.08)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--color-secondary)]"
+      className="flex min-h-12 items-center justify-center gap-2 rounded-full px-4 text-sm font-black text-[#3d7bd6] transition data-[state=active]:bg-[#2f6bbf] data-[state=active]:text-white data-[state=active]:shadow-[0_10px_22px_rgba(47,107,191,0.24)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2f6bbf]"
     >
       {icon}{label}
     </Tabs.Trigger>
+  );
+}
+
+function EasyGuide({ platform, onSeeDetailed }: { platform: GuidePlatform; onSeeDetailed: () => void }) {
+  const guide = guideContent[platform];
+  const steps = guide.easySteps;
+
+  if (!steps || steps.length === 0) {
+    return (
+      <div className="pt-10">
+        <div className="mx-auto grid max-w-lg place-items-center gap-3 rounded-[28px] border border-[#dbe8fb] bg-white/70 px-6 py-14 text-center">
+          <span className="grid size-12 place-items-center rounded-2xl bg-[#eef5ff] text-[#2f6bbf]"><Images size={22} aria-hidden="true" /></span>
+          <p className="text-lg font-black text-[var(--color-on-background)]">쉬운 가이드를 준비하고 있어요</p>
+          <p className="max-w-sm text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{guide.label} 이미지 가이드는 곧 추가돼요. 지금은 아래 버튼으로 자세한 문서를 확인할 수 있어요.</p>
+          <button type="button" onClick={onSeeDetailed} className="mt-1 inline-flex items-center gap-2 rounded-full bg-[#2f6bbf] px-5 py-2.5 text-sm font-black text-white transition hover:bg-[#2a60ac]">
+            <FileText size={16} aria-hidden="true" />자세한 가이드 보기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-7">
+      <div className="mb-8 text-center">
+        <p className="text-[22px] font-black tracking-[-0.02em] text-[var(--color-on-background)] sm:text-[26px]">사진 고르고 → 꾸미고 → 내 폰에 적용</p>
+        <p className="mt-2 text-sm font-semibold text-[var(--color-on-surface-variant)]">화면을 그대로 따라 하면 돼요.</p>
+      </div>
+
+      <ol className="grid gap-5">
+        {steps.map((step, index) => (
+          <EasyStepCard key={step.title} step={step} index={index} platformLabel={guide.label} />
+        ))}
+      </ol>
+
+      <div className="mt-8 flex flex-col items-center gap-2 rounded-[24px] border border-[#dbe8fb] bg-white/70 px-6 py-6 text-center">
+        <p className="text-sm font-black text-[var(--color-on-background)]">규격·경로까지 더 자세히 알고 싶다면?</p>
+        <button type="button" onClick={onSeeDetailed} className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white px-5 py-2.5 text-sm font-black text-[#2f6bbf] transition hover:bg-[#eef5ff]">
+          <FileText size={16} aria-hidden="true" />자세한 가이드로 전환
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EasyStepCard({ step, index, platformLabel }: { step: EasyStep; index: number; platformLabel: string }) {
+  return (
+    <li className="overflow-hidden rounded-[28px] border border-[#e3ecf7] bg-white shadow-[0_18px_42px_rgba(47,107,191,0.06)]">
+      <div className="grid gap-0 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <div className="relative order-2 bg-[#eef5ff] md:order-1">
+          {step.media ? (
+            <div className="relative aspect-[16/9] w-full">
+              <img src={step.media.type === "video" ? step.media.poster ?? step.media.src : step.media.src} alt={`${platformLabel} ${step.title} 화면`} className="h-full w-full object-cover object-top" loading="lazy" />
+              {step.annotations?.map((a, i) =>
+                a.kind === "highlight" ? (
+                  <div key={i} className="pointer-events-none absolute" style={{ left: `${a.x * 100}%`, top: `${a.y * 100}%`, width: `${(a.w ?? 0.1) * 100}%`, height: `${(a.h ?? 0.06) * 100}%` }}>
+                    <span className="absolute inset-0 rounded-[10px] border-[2.5px] border-[#fbbf24] bg-[#fee500]/10" />
+                    {a.label ? <span className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-[#191600] px-2.5 py-1 text-[11px] font-black text-[#fee500] shadow-sm">{a.label}</span> : null}
+                  </div>
+                ) : (
+                  <div key={i} className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${a.x * 100}%`, top: `${a.y * 100}%` }}>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#2f6bbf] px-2.5 py-1 text-[11px] font-black text-white shadow-[0_6px_16px_rgba(47,107,191,0.3)]"><MapPin size={12} aria-hidden="true" />{a.label}</span>
+                  </div>
+                ),
+              )}
+            </div>
+          ) : (
+            <div className="grid aspect-[16/9] w-full place-items-center bg-[#f7fbff] px-6 text-center">
+              <div className="grid gap-2">
+                <span className="mx-auto grid size-11 place-items-center rounded-2xl bg-[#eef5ff] text-[#2f6bbf]"><AlertTriangle size={20} aria-hidden="true" /></span>
+                <p className="text-xs font-black tracking-[0.14em] text-[#94a3b8]">SCREEN COMING SOON</p>
+                <p className="text-sm font-semibold text-[var(--color-on-surface-variant)]">설치·적용 과정은 곧 짧은 영상으로 안내해요.</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="order-1 flex flex-col justify-center gap-2 p-5 sm:p-7 md:order-2">
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-8 place-items-center rounded-full bg-[#2f6bbf] text-sm font-black text-white">{index + 1}</span>
+            <h3 className="text-lg font-black tracking-[-0.01em] text-[var(--color-on-background)] sm:text-xl">{step.title}</h3>
+          </div>
+          {step.hardStep ? (
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#fff8e1] px-3 py-1 text-[11px] font-black text-[#8a6a10]"><AlertTriangle size={12} aria-hidden="true" />가장 헷갈리는 곳</span>
+          ) : null}
+          <p className="text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{step.caption}</p>
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -62,18 +185,18 @@ function PlatformManual({ platform }: { platform: GuidePlatform }) {
 
   return (
     <div className="pt-7">
-      <div className={`relative overflow-hidden rounded-[20px] border px-5 py-6 sm:px-7 sm:py-7 ${isAndroid ? "border-[#b9ddd3] bg-[#edf8f4]" : "border-[#c9d8ed] bg-[#f1f6fc]"}`}>
-        <div className={`absolute -right-8 -top-12 size-40 rounded-full border-[28px] opacity-45 ${isAndroid ? "border-[#b9ddd3]" : "border-[#c9d8ed]"}`} aria-hidden="true" />
+      <div className={`relative overflow-hidden rounded-[28px] border px-5 py-6 shadow-[0_18px_42px_rgba(47,107,191,0.06)] sm:px-7 sm:py-7 ${isAndroid ? "border-[#bdeeda] bg-[#eafaf1]" : "border-[#cfe0ff] bg-[#e3efff]"}`}>
+        <div className={`absolute -right-8 -top-12 size-40 rounded-full border-[28px] opacity-45 ${isAndroid ? "border-[#bdeeda]" : "border-[#cfe0ff]"}`} aria-hidden="true" />
         <div className="relative grid gap-6 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <div>
-            <p className={`text-xs font-black tracking-[0.16em] ${isAndroid ? "text-[#246758]" : "text-[#315e95]"}`}>{guide.label.toUpperCase()} FIELD MANUAL</p>
-            <h2 className="mt-2 max-w-2xl font-[var(--font-display)] text-[28px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)] sm:text-[34px]">{guide.label} 가이드 문서</h2>
+            <p className={`text-xs font-black tracking-[0.16em] ${isAndroid ? "text-[#1f8f6b]" : "text-[#2f6bbf]"}`}>{guide.label.toUpperCase()} FIELD MANUAL</p>
+            <h2 className="mt-2 max-w-2xl text-[28px] font-black tracking-[-0.02em] text-[var(--color-on-background)] sm:text-[34px]">{guide.label} 가이드 문서</h2>
             <p className="mt-3 max-w-2xl text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{guide.intro}</p>
           </div>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs md:min-w-[260px]">
-            <div><dt className="font-bold text-[var(--color-outline)]">기준 샘플</dt><dd className="mt-1 font-extrabold">{guide.sourceVersion}</dd></div>
-            <div><dt className="font-bold text-[var(--color-outline)]">출력 형식</dt><dd className="mt-1 font-extrabold">{guide.output}</dd></div>
-            {/* <div className="col-span-2 min-w-0"><dt className="font-bold text-[var(--color-outline)]">참조 경로</dt><dd className="mt-1 truncate font-mono text-[11px] font-bold" title={guide.sourcePath}>{guide.sourcePath}</dd></div> */}
+            <div><dt className="font-bold text-[#64748b]">기준 샘플</dt><dd className="mt-1 font-extrabold text-[var(--color-on-background)]">{guide.sourceVersion}</dd></div>
+            <div><dt className="font-bold text-[#64748b]">출력 형식</dt><dd className="mt-1 font-extrabold text-[var(--color-on-background)]">{guide.output}</dd></div>
+            {/* <div className="col-span-2 min-w-0"><dt className="font-bold text-[#64748b]">참조 경로</dt><dd className="mt-1 truncate font-mono text-[11px] font-bold" title={guide.sourcePath}>{guide.sourcePath}</dd></div> */}
           </dl>
         </div>
       </div>
@@ -81,12 +204,12 @@ function PlatformManual({ platform }: { platform: GuidePlatform }) {
       <div className="mt-7 grid gap-8 lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-12">
         <aside className="min-w-0">
           <nav className="sticky top-[88px]" aria-label={`${guide.label} 가이드 목차`}>
-            <p className="mb-2 text-[11px] font-black tracking-[0.14em] text-[var(--color-outline)]">ON THIS PAGE</p>
+            <p className="mb-2 text-[11px] font-black tracking-[0.14em] text-[#94a3b8]">ON THIS PAGE</p>
             <ol className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:thin] lg:grid lg:overflow-visible lg:pb-0">
               {guide.sections.map((section, index) => (
                 <li key={section.id} className="shrink-0 lg:shrink">
-                  <a href={`#${section.id}`} className="flex min-h-10 items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-extrabold text-[var(--color-on-surface-variant)] transition hover:bg-white hover:text-[var(--color-on-surface)] focus-visible:outline-2 focus-visible:outline-[var(--color-secondary)]">
-                    <span className="font-mono text-[10px] text-[var(--color-outline)]">0{index + 1}</span>{section.title}
+                  <a href={`#${section.id}`} className="flex min-h-10 items-center gap-2 rounded-full px-2.5 py-2 text-xs font-extrabold text-[var(--color-on-surface-variant)] transition hover:bg-[#eef5ff] hover:text-[#2f6bbf] focus-visible:outline-2 focus-visible:outline-[#2f6bbf]">
+                    <span className="font-mono text-[10px] text-[#9bc0f5]">0{index + 1}</span>{section.title}
                   </a>
                 </li>
               ))}
@@ -94,7 +217,7 @@ function PlatformManual({ platform }: { platform: GuidePlatform }) {
           </nav>
         </aside>
 
-        <div className="min-w-0 divide-y divide-[var(--color-outline-variant)]">
+        <div className="min-w-0 divide-y divide-[#e3ecf7]">
           {guide.sections.map((section) => <GuideSectionBlock key={section.id} section={section} />)}
         </div>
       </div>
@@ -106,20 +229,20 @@ function GuideSectionBlock({ section }: { section: GuideSection }) {
   return (
     <section id={section.id} className="scroll-mt-24 py-9 first:pt-2 sm:py-12" aria-labelledby={`${section.id}-title`}>
       <div className="grid gap-5 md:grid-cols-[150px_minmax(0,1fr)] md:gap-8">
-        <p className="pt-1 text-[10px] font-black tracking-[0.15em] text-[var(--color-secondary)]">{section.eyebrow}</p>
+        <p className="pt-1 text-[10px] font-black tracking-[0.15em] text-[#3d7bd6]">{section.eyebrow}</p>
         <div className="min-w-0">
-          <h3 id={`${section.id}-title`} className="font-[var(--font-display)] text-2xl font-semibold tracking-[-0.035em] text-[var(--color-on-surface)] sm:text-[28px]">{section.title}</h3>
+          <h3 id={`${section.id}-title`} className="text-2xl font-black tracking-[-0.02em] text-[var(--color-on-background)] sm:text-[28px]">{section.title}</h3>
           <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{section.summary}</p>
 
           {section.steps ? (
-            <ol className="mt-7 grid gap-0 border-y border-[var(--color-outline-variant)]">
+            <ol className="mt-7 grid gap-0 border-y border-[#e3ecf7]">
               {section.steps.map((step, index) => (
-                <li key={step.title} className="grid grid-cols-[32px_minmax(0,1fr)] gap-3 border-b border-[var(--color-outline-variant)] py-4 last:border-b-0 sm:grid-cols-[40px_150px_minmax(0,1fr)] sm:gap-4">
-                  <span className="grid size-7 place-items-center rounded-full bg-[var(--color-inverse-surface)] font-mono text-[10px] font-bold text-[var(--color-inverse-on-surface)]">{String(index + 1).padStart(2, "0")}</span>
-                  <strong className="pt-1 text-sm font-extrabold text-[var(--color-on-surface)]">{step.title}</strong>
+                <li key={step.title} className="grid grid-cols-[32px_minmax(0,1fr)] gap-3 border-b border-[#e3ecf7] py-4 last:border-b-0 sm:grid-cols-[40px_150px_minmax(0,1fr)] sm:gap-4">
+                  <span className="grid size-7 place-items-center rounded-full bg-[#2f6bbf] font-mono text-[10px] font-bold text-white">{String(index + 1).padStart(2, "0")}</span>
+                  <strong className="pt-1 text-sm font-extrabold text-[var(--color-on-background)]">{step.title}</strong>
                   <div className="col-start-2 text-sm font-medium leading-6 text-[var(--color-on-surface-variant)] sm:col-start-3">
                     <p>{step.body}</p>
-                    {step.note ? <p className="mt-1.5 flex items-start gap-1.5 text-xs font-bold text-[var(--color-secondary)]"><Check className="mt-0.5 shrink-0" size={14} aria-hidden="true" />{step.note}</p> : null}
+                    {step.note ? <p className="mt-1.5 flex items-start gap-1.5 text-xs font-bold text-[#2f6bbf]"><Check className="mt-0.5 shrink-0" size={14} aria-hidden="true" />{step.note}</p> : null}
                   </div>
                 </li>
               ))}
@@ -127,15 +250,15 @@ function GuideSectionBlock({ section }: { section: GuideSection }) {
           ) : null}
 
           {section.specifications ? (
-            <div className="mt-7 overflow-hidden rounded-[14px] border border-[var(--color-outline-variant)] bg-white">
-              <div className="hidden grid-cols-[140px_220px_minmax(0,1fr)] border-b border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-2.5 text-[10px] font-black tracking-[0.12em] text-[var(--color-outline)] sm:grid">
+            <div className="mt-7 overflow-hidden rounded-[20px] border border-[#e3ecf7] bg-white">
+              <div className="hidden grid-cols-[140px_220px_minmax(0,1fr)] border-b border-[#e3ecf7] bg-[#f7fbff] px-4 py-2.5 text-[10px] font-black tracking-[0.12em] text-[#94a3b8] sm:grid">
                 <span>항목</span><span>규격</span><span>설명</span>
               </div>
-              <dl className="divide-y divide-[var(--color-outline-variant)]">
+              <dl className="divide-y divide-[#e3ecf7]">
                 {section.specifications.map((item) => (
                   <div key={item.subject} className="grid gap-1 px-4 py-4 sm:grid-cols-[140px_220px_minmax(0,1fr)] sm:gap-0">
-                    <dt className="text-xs font-extrabold text-[var(--color-on-surface)]">{item.subject}</dt>
-                    <dd className="break-all font-mono text-[11px] font-bold text-[var(--color-secondary)] sm:pr-5">{item.value}</dd>
+                    <dt className="text-xs font-extrabold text-[var(--color-on-background)]">{item.subject}</dt>
+                    <dd className="break-all font-mono text-[11px] font-bold text-[#2f6bbf] sm:pr-5">{item.value}</dd>
                     <dd className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{item.description}</dd>
                   </div>
                 ))}
@@ -144,7 +267,7 @@ function GuideSectionBlock({ section }: { section: GuideSection }) {
           ) : null}
 
           {section.caution ? (
-            <div className="mt-5 flex items-start gap-3 rounded-xl border border-[#e5c968] bg-[#fff8d8] px-4 py-3 text-[#5d4e13]">
+            <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[#f5da8e] bg-[#fff8e1] px-4 py-3 text-[#8a6a10]">
               <CircleAlert className="mt-0.5 shrink-0" size={17} aria-hidden="true" />
               <p className="text-xs font-bold leading-5">{section.caution}</p>
             </div>
