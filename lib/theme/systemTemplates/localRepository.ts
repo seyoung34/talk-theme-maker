@@ -90,6 +90,10 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
     return record;
   },
 
+  async regeneratePreviewMetadata() {
+    // 로컬(dev) 저장소는 previewMetadata를 별도 보관하지 않으므로 재계산이 필요 없다.
+  },
+
   async delete(id: string) {
     await withStore<undefined>("readwrite", (store) => store.delete(id));
   },

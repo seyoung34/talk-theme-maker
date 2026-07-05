@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import { sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName } from "@/lib/theme/remoteAssets";
+import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName } from "@/lib/theme/remoteAssets";
 import { getResolvedColor } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
@@ -183,6 +183,70 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       createdAt: input.createdAt ?? dateToMs(bundle.created_at) ?? now,
       updatedAt: dateToMs(variant.updated_at) ?? now,
     };
+  },
+
+  async regeneratePreviewMetadata(id) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("system_template_variants")
+      .select("base_template_id,platform,colors,candidate_selections,bubble_edits,upload_refs,preview_metadata")
+      .eq("id", id)
+      .single();
+    if (error) throw error;
+    const row = data as unknown as VariantRow;
+    const colors = row.colors ?? {};
+    const candidateSelections = row.candidate_selections ?? {};
+    const bubbleEdits = normalizeBubbleEdits(row.bubble_edits);
+    const uploadRefs = row.upload_refs ?? {};
+
+    // 카드 썸네일 재굽기: 원격 에셋을 role별 서명 URL로 주입해 canvas로 다시 굽는다.
+    // 실패해도(예: SSR/이미지 로드 실패) previewMetadata 갱신은 계속 진행하고 기존 webp를 유지한다.
+    let cardPreviewPath = row.preview_metadata?.cardPreviewPath;
+    try {
+      const slots = getThemeSlots(row.platform);
+      const thumbnailRoles: ThemeResourceRole[] = ["main_background", "chat_background", "bubble_me_1", "bubble_you_1", "profile_image_1"];
+      const pathByRole = new Map<ThemeResourceRole, string>();
+      for (const role of thumbnailRoles) {
+        const storagePath = resolvePreviewStoragePath(slots, role, uploadRefs, candidateSelections);
+        if (storagePath) pathByRole.set(role, storagePath);
+      }
+      const signedUrls = pathByRole.size > 0 ? await getThemeAssetSignedUrls(Array.from(pathByRole.values())) : {};
+      const imageUrlByRole: Partial<Record<ThemeResourceRole, string>> = {};
+      for (const [role, storagePath] of pathByRole) {
+        if (signedUrls[storagePath]) imageUrlByRole[role] = signedUrls[storagePath];
+      }
+      const thumbnail = await generateSystemTemplateThumbnail(
+        { baseTemplateId: row.base_template_id, platform: row.platform, overrides: { colors, uploads: {}, candidateSelections, bubbleEdits } },
+        imageUrlByRole,
+      );
+      if (thumbnail) {
+        const storagePath = `system-templates/${id}/preview/card.webp`;
+        const { error: uploadError } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, thumbnail, {
+          contentType: "image/webp",
+          cacheControl: "3600",
+          upsert: true,
+        });
+        if (uploadError) throw uploadError;
+        cardPreviewPath = storagePath;
+      }
+    } catch (thumbnailError) {
+      console.warn("Card thumbnail could not be regenerated; keeping previous.", thumbnailError);
+    }
+
+    const previewMetadata = buildPreviewMetadata({
+      baseTemplateId: row.base_template_id,
+      platform: row.platform,
+      colors,
+      candidateSelections,
+      bubbleEdits,
+      uploadRefs,
+      cardPreviewPath,
+    });
+    const { error: updateError } = await supabase
+      .from("system_template_variants")
+      .update({ preview_metadata: previewMetadata })
+      .eq("id", id);
+    if (updateError) throw updateError;
   },
 
   async delete(id) {

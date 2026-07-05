@@ -26,6 +26,7 @@ export default function AdminSystemTemplateList() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string>();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [selectedBundleId, setSelectedBundleId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ bundle: SystemTemplateBundle; platform?: ThemePlatform } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,6 +115,27 @@ export default function AdminSystemTemplateList() {
     router.push("/admin/edit");
   };
 
+  const regenerateAllPreviews = async () => {
+    if (isRegenerating) return;
+    try {
+      setIsRegenerating(true);
+      setError(null);
+      const all = await systemTemplateRepository.list();
+      let done = 0;
+      for (const template of all) {
+        await systemTemplateRepository.regeneratePreviewMetadata(template.id);
+        done += 1;
+      }
+      setNotice(`프리뷰 메타를 ${done}개 재생성했습니다.`);
+      await loadTemplates();
+    } catch (regenerateError) {
+      console.error(regenerateError);
+      setError("프리뷰 재생성에 실패했습니다.");
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
   const deleteSelected = async () => {
     if (!deleteTarget) return;
 
@@ -143,15 +165,27 @@ export default function AdminSystemTemplateList() {
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">System templates</p>
           <h2 className="mt-1 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">시스템 템플릿</h2>
         </div>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)]"
-          onClick={() => void loadTemplates()}
-          disabled={isLoading}
-        >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-          새로고침
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)] disabled:opacity-50"
+            onClick={() => void regenerateAllPreviews()}
+            disabled={isRegenerating || isLoading}
+            title="저장된 템플릿의 프리뷰 메타(색상·말풍선 stretch/insets)를 최신 로직으로 다시 계산합니다."
+          >
+            <RefreshCw className={`h-4 w-4 ${isRegenerating ? "animate-spin" : ""}`} />
+            {isRegenerating ? "재생성 중" : "프리뷰 재생성"}
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)]"
+            onClick={() => void loadTemplates()}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            새로고침
+          </button>
+        </div>
       </div>
 
       {notice ? <p className="rounded-[18px] border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{notice}</p> : null}

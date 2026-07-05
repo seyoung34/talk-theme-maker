@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Clock3, Eye, Gift, Hash, Info, Layers3, Menu, Palette, SendHorizontal, Plus, Search, Settings, Smile, Trash2, UserPlus, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock3, Eye, Gift, Hash, Info, Menu, SendHorizontal, Plus, Search, Settings, Smile, Trash2, UserPlus, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import BubbleCanvasPreview from "@/components/preview/BubbleCanvasPreview";
 import TemplateCard from "@/components/template/TemplateCard";
@@ -276,7 +276,7 @@ export default function TemplateGalleryClient() {
   return (
     <main className="relative min-h-screen overflow-x-clip bg-[linear-gradient(180deg,#e8f1ff_0%,#f4f9ff_18%,#ffffff_44%,#f7fbff_72%,#e9f2ff_100%)] text-[var(--color-on-background)]">
       {/* 랜딩과 동일한 결의 단일 배경 레이어 */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      <div aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute left-[-9rem] top-[4%] h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle,rgba(147,197,253,0.38),transparent_68%)] blur-3xl" />
         <div className="absolute right-[-9rem] top-[10%] h-[24rem] w-[24rem] rounded-full bg-[radial-gradient(circle,rgba(254,229,0,0.14),transparent_70%)] blur-3xl" />
         <div className="absolute left-[-8rem] bottom-[6%] h-[24rem] w-[24rem] rounded-full bg-[radial-gradient(circle,rgba(147,197,253,0.28),transparent_70%)] blur-3xl" />
@@ -333,7 +333,7 @@ export default function TemplateGalleryClient() {
                   key={template.id}
                   title={template.name}
                   onOpen={() => void openUserTemplatePreview(template)}
-                  openLabel={`${template.name} 미리보기 열기`}
+                  openLabel={`${template.name} 템플릿 확인`}
                   className="snap-start"
                   mobileVisual={
                     userTemplateCardVisuals[template.id] ? (
@@ -345,10 +345,10 @@ export default function TemplateGalleryClient() {
                   desktopVisual={<UserTemplateDesktopVisual template={template} visual={userTemplateCardVisuals[template.id]} />}
                   desktopContent={<UserTemplateDesktopContent template={template} />}
                   desktopFooter={
-                    <UserTemplateDesktopFooter
-                      onPreview={() => void openUserTemplatePreview(template)}
-                      onContinue={() => startUserTemplate(template)}
-                    />
+                    <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
+                      템플릿 확인
+                      <ArrowRight className="w-4 h-4" />
+                    </span>
                   }
                 />
               ))}
@@ -373,6 +373,7 @@ export default function TemplateGalleryClient() {
           )}
         </section>
 
+        {/* ===========템플릿 갤러리=========== */}
         <section className="grid gap-5">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -602,7 +603,7 @@ function GalleryTemplateDesktopContent({ template }: { template: GalleryTemplate
 function UserTemplateDesktopVisual({ template, visual }: { template: UserTemplateSummary; visual?: TemplatePreviewVisual }) {
   return (
     <div className="relative overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] p-3">
-      {visual ? <UserMiniPreview visual={visual} /> : <UserMiniPreviewSkeleton />}
+      {visual ? <TemplateVisualPreview visual={visual} size="card" /> : <UserMiniPreviewSkeleton />}
       <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-surface-variant)] shadow-sm">
         <Eye className="size-3" aria-hidden="true" />
         {visual ? "저장본 미리보기" : "준비 중"}
@@ -616,93 +617,9 @@ function UserTemplateDesktopVisual({ template, visual }: { template: UserTemplat
 
 function UserTemplateDesktopContent({ template }: { template: UserTemplateSummary }) {
   return (
-    <div className="grid gap-2">
-      <div className="min-w-0">
-        <strong className="block truncate text-lg font-black text-[var(--color-on-surface)]">{template.name}</strong>
-        <p className="mt-1 text-sm leading-6 text-[var(--color-on-surface-variant)]">최근 수정 {formatDate(template.updatedAt)}</p>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <span className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)]">
-          <Layers3 className="size-4" aria-hidden="true" />
-          이미지 {template.uploadCount}
-        </span>
-        <span className="inline-flex items-center gap-2 rounded-2xl bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)]">
-          <Palette className="size-4" aria-hidden="true" />
-          색상 {template.colorCount}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function UserTemplateDesktopFooter({ onPreview, onContinue }: { onPreview: () => void; onContinue: () => void }) {
-  return (
-    <div className="mt-4 flex flex-wrap gap-2">
-      <button
-        type="button"
-        className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition hover:-translate-y-0.5 hover:bg-[var(--color-surface-low)] active:translate-y-0"
-        onClick={(event) => {
-          event.stopPropagation();
-          onPreview();
-        }}
-      >
-        미리보기
-        <Eye className="w-4 h-4" />
-      </button>
-      <button
-        type="button"
-        className="inline-flex items-center gap-2 rounded-full bg-[var(--color-primary-container)] px-4 py-2.5 text-sm font-black text-[var(--color-on-primary-container)] shadow-[0_10px_22px_rgba(254,229,0,0.22)] transition hover:-translate-y-0.5 hover:ring hover:ring-black/10 active:translate-y-0"
-        onClick={(event) => {
-          event.stopPropagation();
-          onContinue();
-        }}
-      >
-        편집 계속하기
-        <ArrowRight className="w-4 h-4" />
-      </button>
-    </div>
-  );
-}
-
-function UserMiniPreview({ visual }: { visual: TemplatePreviewVisual }) {
-  return (
-    <div className="grid aspect-[4/3] grid-cols-[0.82fr_1fr] gap-2">
-      <div
-        className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white/75 bg-cover bg-center shadow-[0_10px_24px_rgba(42,103,103,0.08)]"
-        style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
-      >
-        <div className="flex h-8 items-center justify-between px-3 text-[var(--color-on-surface)]">
-          <span className="grid grid-cols-[18px_minmax(0,1fr)] items-center gap-1.5">
-            <UserMiniAvatar src={visual.profileImage} />
-            <span className="h-3 w-12 rounded-full bg-black/15" />
-          </span>
-          <span className="flex gap-1.5">
-            <Search className="size-3.5" aria-hidden="true" />
-            <Settings className="size-3.5" aria-hidden="true" />
-          </span>
-        </div>
-        <div className="grid content-start gap-2 px-3 py-2">
-          <span className="h-7 rounded-full bg-white/75 shadow-sm" />
-          <UserMiniFriendLine visual={visual} width="w-4/5" />
-          <UserMiniFriendLine visual={visual} width="w-full" />
-        </div>
-        <div className="grid h-7 grid-cols-5 items-center bg-cover bg-center px-2" style={{ backgroundColor: visual.tabBackgroundColor, backgroundImage: visual.tabBackgroundImage ? `url(${visual.tabBackgroundImage})` : undefined }}>
-          {Array.from({ length: 5 }).map((_, index) => (
-            <span key={index} className={`mx-auto rounded-full ${index === 1 ? "size-4 bg-[var(--color-primary-container)]" : "size-3 bg-black/15"}`} />
-          ))}
-        </div>
-      </div>
-      <div
-        className="grid content-between overflow-hidden rounded-[18px] bg-cover bg-center p-2 shadow-[0_10px_24px_rgba(42,103,103,0.08)]"
-        style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
-      >
-        <span className="h-6 w-20 rounded-full bg-white/80" />
-        <div className="grid gap-2">
-          <UserMiniBubble visual={visual} tone="friend" width="w-4/5" />
-          <UserMiniBubble visual={visual} tone="me" width="w-3/4" />
-          <UserMiniBubble visual={visual} tone="friend" width="w-5/6" />
-        </div>
-      </div>
+    <div className="min-w-0">
+      <strong className="block truncate text-lg font-black text-[var(--color-on-surface)]">{template.name}</strong>
+      <p className="mt-1 text-sm leading-6 text-[var(--color-on-surface-variant)]">최근 수정 {formatDate(template.updatedAt)}</p>
     </div>
   );
 }
@@ -711,23 +628,23 @@ function UserMiniPreviewSkeleton() {
   return (
     <div className="grid aspect-[4/3] grid-cols-[0.8fr_1fr] gap-2">
       <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white shadow-[0_10px_24px_rgba(42,103,103,0.08)]">
-        <div className="flex h-8 items-center justify-between px-3">
-          <span className="h-3 w-12 rounded-full bg-black/12" />
-          <span className="grid size-4 place-items-center rounded-full bg-black/10" />
+        <div className="flex items-center justify-between h-8 px-3">
+          <span className="w-12 h-3 rounded-full bg-black/12" />
+          <span className="grid rounded-full size-4 place-items-center bg-black/10" />
         </div>
         <div className="grid content-start gap-2 px-3 py-2">
           <span className="h-7 animate-pulse rounded-full bg-[var(--color-primary-container)]/70" />
-          <span className="h-4 w-3/4 animate-pulse rounded-full bg-black/10" />
-          <span className="h-4 w-5/6 animate-pulse rounded-full bg-black/10" />
+          <span className="w-3/4 h-4 rounded-full animate-pulse bg-black/10" />
+          <span className="w-5/6 h-4 rounded-full animate-pulse bg-black/10" />
         </div>
-        <div className="grid h-7 grid-cols-5 items-center bg-white/90 px-2">
+        <div className="grid items-center grid-cols-5 px-2 h-7 bg-white/90">
           {Array.from({ length: 5 }).map((_, index) => (
             <span key={index} className={`mx-auto rounded-full ${index === 1 ? "size-4 bg-[var(--color-primary-container)]" : "size-3 bg-black/15"}`} />
           ))}
         </div>
       </div>
       <div className="grid content-between overflow-hidden rounded-[18px] bg-[linear-gradient(160deg,var(--color-secondary-container),white)] p-2 shadow-[0_10px_24px_rgba(42,103,103,0.08)]">
-        <span className="h-6 w-20 rounded-full bg-white/80" />
+        <span className="w-20 h-6 rounded-full bg-white/80" />
         <div className="grid gap-2">
           <span className="h-8 w-4/5 animate-pulse rounded-[14px] bg-white" />
           <span className="h-8 w-3/4 justify-self-end animate-pulse rounded-[14px] bg-[var(--color-primary-container)]" />
@@ -738,65 +655,27 @@ function UserMiniPreviewSkeleton() {
   );
 }
 
-function UserMiniFriendLine({ visual, width }: { visual: TemplatePreviewVisual; width: string }) {
-  return (
-    <span className={`grid grid-cols-[18px_minmax(0,1fr)] items-center gap-1.5 ${width}`}>
-      <UserMiniAvatar src={visual.profileImage} />
-      <span className="h-3 rounded-full bg-black/12" />
-    </span>
-  );
-}
-
-function UserMiniAvatar({ src }: { src?: string }) {
-  return (
-    <span className="grid size-[18px] place-items-center overflow-hidden rounded-full bg-[var(--color-primary-container)]/65">
-      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <UserRound className="size-3 text-[var(--color-on-primary-container)]" aria-hidden="true" />}
-    </span>
-  );
-}
-
-function UserMiniBubble({ visual, tone, width }: { visual: TemplatePreviewVisual; tone: "me" | "friend"; width: string }) {
-  const mine = tone === "me";
-  const image = mine ? visual.myBubbleImage : visual.friendBubbleImage;
-  if (image) {
-    // 나인패치(.9.png) 가장자리의 1px 검은 가이드 픽셀을 잘라내기 위해
-    // overflow-hidden 컨테이너에 이미지를 2px씩 넘치게 그려 테두리를 크롭한다.
-    return (
-      <span className={`relative block h-8 overflow-hidden ${width} ${mine ? "justify-self-end" : ""}`}>
-        <img src={image} alt="" className="absolute inset-[-2px] h-[calc(100%+4px)] w-[calc(100%+4px)] max-w-none object-fill" />
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className={`${width} h-8 rounded-[14px] ${mine ? "justify-self-end" : ""}`}
-      style={{ backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor }}
-    />
-  );
-}
-
 function TemplateGallerySkeletonCards({ count }: { count: number }) {
   return (
     <>
       {Array.from({ length: count }).map((_, index) => (
         <div key={index} className="grid min-h-0 content-between gap-2 overflow-hidden rounded-[16px] border border-[var(--color-outline-variant)] bg-white/70 p-2 shadow-[0_16px_36px_rgba(42,103,103,0.04)] sm:min-h-[360px] sm:gap-4 sm:rounded-[28px] sm:p-4">
-            <div className="grid gap-1.5 sm:hidden">
-              <div className="aspect-[4/3] animate-pulse rounded-[12px] bg-[var(--color-surface-low)]" />
-              <div className="flex items-center justify-between gap-2">
-                <span className="h-4 w-2/3 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
-                <span className="size-6 shrink-0 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
-              </div>
+          <div className="grid gap-1.5 sm:hidden">
+            <div className="aspect-[4/3] animate-pulse rounded-[12px] bg-[var(--color-surface-low)]" />
+            <div className="flex items-center justify-between gap-2">
+              <span className="h-4 w-2/3 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+              <span className="size-6 shrink-0 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
             </div>
-            <div className="hidden sm:grid sm:gap-4">
-              <div className="aspect-[4/3] animate-pulse rounded-[22px] bg-[var(--color-surface-low)]" />
-              <div className="grid gap-2">
-                <span className="h-5 w-20 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
-                <span className="h-8 w-4/5 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
-                <span className="h-4 w-full animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
-                <span className="h-4 w-2/3 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
-              </div>
+          </div>
+          <div className="hidden sm:grid sm:gap-4">
+            <div className="aspect-[4/3] animate-pulse rounded-[22px] bg-[var(--color-surface-low)]" />
+            <div className="grid gap-2">
+              <span className="h-5 w-20 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
+              <span className="h-8 w-4/5 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
+              <span className="h-4 w-full animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
+              <span className="h-4 w-2/3 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
             </div>
+          </div>
           <span className="mt-4 hidden h-10 w-28 animate-pulse rounded-full bg-[var(--color-surface-low)] sm:block" />
         </div>
       ))}
@@ -828,14 +707,13 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${preview.title} 미리보기`}>
-      <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-4xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
+      <section className="grid h-[min(92dvh,780px)] w-full max-w-3xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:rounded-[32px]">
         <header className="flex items-start justify-between gap-3 border-b border-[var(--color-outline-variant)] px-4 py-3 sm:px-5 sm:py-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">{preview.eyebrow}</p>
             <h2 className="mt-1 font-[var(--font-display)] text-2xl font-semibold leading-tight text-[var(--color-on-surface)] sm:text-3xl">{preview.title}</h2>
             {preview.description ? <p className="mt-1 line-clamp-2 max-w-2xl text-xs leading-5 text-[var(--color-on-surface-variant)] sm:text-sm">{preview.description}</p> : null}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {preview.onDelete ? (
               <button
                 className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-error)] transition hover:bg-[var(--color-error-container)] sm:px-4 sm:text-sm"
@@ -853,7 +731,7 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
         </header>
 
         <div className="grid min-h-0 gap-4 overflow-auto p-3 sm:grid-cols-[minmax(0,1fr)_240px] sm:p-5">
-          <div className="grid min-h-0 content-start justify-items-center gap-3">
+          <div className="grid content-start min-h-0 gap-3 pt-1 justify-items-center">
             <div className="flex items-center gap-2 sm:gap-3">
               <button
                 type="button"
@@ -894,10 +772,10 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
               </div>
             </div>
 
-            {preview.note ? <p className="max-w-[280px] text-center text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{preview.note}</p> : null}
+            {/* {preview.note ? <p className="max-w-[280px] text-center text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{preview.note}</p> : null} */}
           </div>
 
-          <div className="grid min-h-0 content-start gap-2">
+          <div className="grid content-start min-h-0 grid-cols-2 gap-2 sm:grid-cols-1">
             {actions.map((action) => (
               <button key={action.platform} className={`rounded-full px-4 py-3 text-sm font-black transition hover:scale-[0.98] ${action.className}`} type="button" onClick={() => preview.onStart(action.platform)}>
                 {action.label}
@@ -912,7 +790,7 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
 
 function ModalScreenFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="relative aspect-[9/16] w-full max-w-[200px] overflow-hidden rounded-[32px] border border-[var(--color-outline-variant)] bg-white shadow-[0_18px_40px_rgba(42,103,103,0.12)] sm:max-w-[260px]">
+    <div className="relative aspect-9/19.5 w-[min(74vw,240px)] shrink-0 overflow-hidden rounded-[32px] border border-[var(--color-outline-variant)] bg-white shadow-[0_18px_40px_rgba(42,103,103,0.12)] sm:w-auto sm:h-[min(62dvh,540px)]">
       {children}
     </div>
   );
@@ -921,7 +799,7 @@ function ModalScreenFrame({ children }: { children: ReactNode }) {
 function ScreenAvatar({ src, sizeClass = "size-10" }: { src?: string; sizeClass?: string }) {
   return (
     <span className={`grid ${sizeClass} shrink-0 place-items-center overflow-hidden rounded-full bg-[var(--color-primary-container)]/55`}>
-      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <UserRound className="size-1/2 text-[var(--color-on-primary-container)]" aria-hidden="true" />}
+      {src ? <img src={src} alt="" className="object-cover w-full h-full" /> : <UserRound className="size-1/2 text-[var(--color-on-primary-container)]" aria-hidden="true" />}
     </span>
   );
 }
@@ -960,7 +838,7 @@ function PreviewTabBar({ visual, active }: { visual: TemplatePreviewVisual; acti
         <div key={tab.key} className="grid justify-items-center gap-0.5">
           <span className="relative grid size-5 place-items-center">
             {tab.icon ? (
-              <img src={tab.icon} alt="" className="h-full w-full object-contain" style={{ opacity: active === tab.key ? 1 : 0.55 }} />
+              <img src={tab.icon} alt="" className="object-contain w-full h-full" style={{ opacity: active === tab.key ? 1 : 0.55 }} />
             ) : (
               <span className="size-3.5 rounded-[5px] bg-black/15" style={{ opacity: active === tab.key ? 0.85 : 0.4 }} aria-hidden="true" />
             )}
@@ -1002,7 +880,7 @@ function FriendsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
         </div>
       </div>
 
-      <div className="grid content-start gap-2 overflow-hidden px-3 py-2">
+      <div className="grid content-start gap-2 px-3 py-2 overflow-hidden">
         <div className="flex gap-1.5">
           <span className="rounded-full px-2.5 py-1 text-[10px] font-bold" style={{ backgroundColor: visual.titleColor, color: visual.mainBackgroundColor }}>친구</span>
           <span className="rounded-full border border-black/10 px-2.5 py-1 text-[10px] font-bold" style={{ color: visual.titleColor }}>추천</span>
@@ -1013,7 +891,7 @@ function FriendsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
         <span className="px-0.5 text-[11px] font-bold" style={{ color: visual.sectionTitleColor }}>업데이트 프로필 12</span>
         <div className="grid grid-cols-5 gap-1 px-0.5">
           {["내 프로필", "수아", "하늘", "준서", "서연"].map((name, index) => (
-            <div key={name} className="grid min-w-0 justify-items-center gap-1">
+            <div key={name} className="grid min-w-0 gap-1 justify-items-center">
               <div className="relative">
                 <ScreenAvatar src={avatars[index % avatars.length]} sizeClass="size-8" />
                 {index > 0 ? <span className="absolute -top-0.5 left-1 size-1.5 rounded-full bg-[#ff7246]" aria-hidden="true" /> : null}
@@ -1063,7 +941,7 @@ function ChatsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
         <Plus className="size-3.5" aria-hidden="true" />
       </div>
 
-      <div className="grid content-start gap-2 overflow-hidden px-3 py-2">
+      <div className="grid content-start gap-2 px-3 py-2 overflow-hidden">
         <PreviewAdBanner />
         {chatListPreviewRows.map((row, index) => (
           <div key={row.name} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 py-0.5">
@@ -1072,7 +950,7 @@ function ChatsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
               <strong className="block truncate text-[12px] font-bold leading-tight" style={{ color: visual.titleColor }}>{row.name}</strong>
               <span className="block truncate text-[10px] font-medium leading-tight" style={{ color: visual.descriptionColor }}>{row.message}</span>
             </div>
-            <div className="grid justify-items-end gap-1">
+            <div className="grid gap-1 justify-items-end">
               <span className="text-[8.5px] font-medium" style={{ color: visual.descriptionColor, opacity: 0.85 }}>{row.time}</span>
               {row.unread > 0 ? (
                 <span className="grid h-3.5 min-w-3.5 place-items-center rounded-full px-1 text-[8px] font-black leading-none text-white" style={{ backgroundColor: visual.unreadColor }}>{row.unread}</span>
@@ -1107,7 +985,7 @@ function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
         <Menu className="size-3.5" aria-hidden="true" />
       </div>
 
-      <div className="grid content-end gap-2 overflow-hidden px-3 py-3">
+      <div className="grid content-end gap-2 px-3 py-3 overflow-hidden">
         {chatroomPreviewMessages.map((message, index) => (
           <ChatroomBubble key={index} visual={visual} mine={message.mine} text={message.text} time={message.time} />
         ))}
@@ -1117,8 +995,8 @@ function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
         <Plus className="size-3.5 shrink-0 text-[#868e96]" aria-hidden="true" />
         <span className="flex-1 truncate rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-[#868e96] shadow-sm">메시지 입력</span>
         <Smile className="size-3.5 shrink-0 text-[#868e96]" aria-hidden="true" />
-        <span className="grid size-6 shrink-0 place-items-center rounded-full" style={{ backgroundColor: visual.unreadColor }}>
-          <SendHorizontal className="size-3 text-white" aria-hidden="true" />
+        <span className="grid rounded-full size-6 shrink-0 place-items-center" style={{ backgroundColor: visual.unreadColor }}>
+          <SendHorizontal className="text-white size-3" aria-hidden="true" />
         </span>
       </div>
     </div>
@@ -1160,7 +1038,7 @@ function ProfileScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
       className="grid h-full grid-rows-[minmax(0,1fr)_auto] bg-cover bg-center"
       style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
     >
-      <div className="grid content-center justify-items-center gap-3 px-6">
+      <div className="grid content-center gap-3 px-6 justify-items-center">
         <ScreenAvatar src={heroImage} sizeClass="size-28" />
         <strong className="text-[13px] font-bold" style={{ color: visual.titleColor }}>내 프로필</strong>
         <p className="text-[9px] font-black uppercase tracking-[0.1em]" style={{ color: visual.descriptionColor }}>기본 프로필 사진</p>
@@ -1264,7 +1142,7 @@ function TemplateVisualPreview({
       <div className="relative grid h-full grid-cols-[0.84fr_1fr] gap-2.5 p-3">
         <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white/70 bg-contain bg-center bg-no-repeat shadow-[0_12px_26px_rgba(42,103,103,0.08)]"
           style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}>
-          <div className="flex h-9 items-center justify-between px-3">
+          <div className="flex items-center justify-between px-3 h-9">
             <strong className="text-sm font-black text-[var(--color-on-surface)]">친구</strong>
             <div className="flex items-center gap-1.5 text-[var(--color-on-surface)]">
               <Search className="h-3.5 w-3.5" />
@@ -1313,11 +1191,11 @@ function TemplatePhonePreview({ template, visual }: { template: ThemeTemplate; v
       <div className="flex h-12 items-center justify-between bg-white/60 px-4 text-xs font-black text-[var(--color-on-surface)] sm:h-14 sm:px-5 sm:text-sm">
         <span>{template.name}</span>
         <div className="flex items-center gap-3">
-          <Search className="h-4 w-4" />
-          <Settings className="h-4 w-4" />
+          <Search className="w-4 h-4" />
+          <Settings className="w-4 h-4" />
         </div>
       </div>
-      <div className="grid min-h-0 content-start gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4">
+      <div className="grid content-start min-h-0 gap-3 p-3 overflow-hidden sm:gap-4 sm:p-4">
         <div className="justify-self-center rounded-full bg-[#14343a]/18 px-5 py-1 text-xs font-bold text-white">오늘</div>
         <PreviewMessage visual={visual} mine={false} text=".." />
         <PreviewMessage visual={visual} mine text="안녕" />
@@ -1345,7 +1223,7 @@ function MiniFriendRow({ visual, width }: { visual: TemplatePreviewVisual; width
 function MiniAvatar({ src }: { src?: string }) {
   return (
     <span className="grid h-6 w-6 place-items-center overflow-hidden rounded-full bg-[var(--color-primary-container)]/55">
-      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <UserRound className="h-3.5 w-3.5 text-[var(--color-on-primary-container)]" />}
+      {src ? <img src={src} alt="" className="object-cover w-full h-full" /> : <UserRound className="h-3.5 w-3.5 text-[var(--color-on-primary-container)]" />}
     </span>
   );
 }

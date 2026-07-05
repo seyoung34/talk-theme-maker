@@ -7,7 +7,11 @@ import { themeColorToCss } from "@/lib/theme/color";
 const width = 640;
 const height = 480;
 
-export async function generateSystemTemplateThumbnail(input: SystemTemplateSaveInput): Promise<Blob | null> {
+// 재생성 시에는 로컬 File이 없으므로 role별 원격(서명) 이미지 URL을 주입해 굽는다.
+export async function generateSystemTemplateThumbnail(
+  input: Pick<SystemTemplateSaveInput, "baseTemplateId" | "platform" | "overrides">,
+  imageUrlByRole?: Partial<Record<ThemeResourceRole, string>>,
+): Promise<Blob | null> {
   if (typeof document === "undefined") return null;
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -36,8 +40,9 @@ export async function generateSystemTemplateThumbnail(input: SystemTemplateSaveI
     imageRoles.map(async (role) => {
       const slot = slots.find((item) => item.role === role);
       if (!slot) return;
-      const selectedUpload = getSelectedUpload(slot, uploads, selections);
-      const source = selectedUpload ? URL.createObjectURL(selectedUpload.file) : getResolvedAssetUrl(slot, uploads, selections, input.baseTemplateId, template);
+      const overrideUrl = imageUrlByRole?.[role];
+      const selectedUpload = overrideUrl ? undefined : getSelectedUpload(slot, uploads, selections);
+      const source = overrideUrl ?? (selectedUpload ? URL.createObjectURL(selectedUpload.file) : getResolvedAssetUrl(slot, uploads, selections, input.baseTemplateId, template));
       if (!source) return;
       if (selectedUpload) objectUrls.push(source);
       try {

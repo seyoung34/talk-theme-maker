@@ -1025,65 +1025,65 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       {initialLoadState.status === "ready" ? (
         <div className={viewportMode === "mobile" ? "flex h-[calc(100dvh-1.5rem)] min-h-0 min-w-0 w-full flex-col overflow-hidden" : "grid h-[calc(100dvh-1.5rem)] min-h-full min-w-0 w-full grid-rows-[auto_1fr] gap-3 md:h-[calc(100dvh-2rem)] md:gap-4 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]"}>
           {viewportMode === "desktop" ? (
-          <header className="grid min-h-[56px] min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 px-3 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-4 md:px-4">
-            <div className="flex min-w-0 items-center gap-2 justify-self-start md:gap-4">
-              <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
-                &larr;
-              </Link>
-              <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#0f172a] md:text-[22px]">{displayTemplateName}</h1>
-            </div>
-
-            <div className="col-span-2 row-start-3 flex min-w-0 items-center gap-2 overflow-hidden justify-self-stretch md:col-span-1 md:row-auto md:gap-3 md:justify-self-center">
-              <div className="hidden shrink-0 rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#475569] md:block">
-                {platform === "android" ? "Android" : "iOS"}
+            <header className="grid min-h-[56px] min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 px-3 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-4 md:px-4">
+              <div className="flex items-center min-w-0 gap-2 justify-self-start md:gap-4">
+                <Link href="/template" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-[#e5e7eb] bg-[#f8fafc] text-xl font-bold leading-none text-[#111827] transition hover:bg-white">
+                  &larr;
+                </Link>
+                <h1 className="truncate text-lg font-semibold tracking-[-0.02em] text-[#0f172a] md:text-[22px]">{displayTemplateName}</h1>
               </div>
-              <div className="h-1.5 min-w-12 flex-1 overflow-hidden rounded-full bg-[#e5e7eb] md:w-24 md:flex-none">
-                <div className="h-full rounded-full bg-[#2563eb]" style={{ width: `${completion.total > 0 ? Math.round((completion.ready / completion.total) * 100) : 0}%` }} />
-              </div>
-              <span className="shrink-0 text-xs font-semibold text-[#64748b]">
-                {completion.ready}/{completion.total} 준비
-              </span>
-              <span className={`hidden shrink-0 text-xs font-semibold lg:inline ${analysis.diagnostics.length > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-                {analysis.diagnostics.length > 0 ? `${analysis.diagnostics.length}개 확인 필요` : "문제 없음"}
-              </span>
-              <span className="hidden min-w-0 truncate text-xs font-medium text-[#64748b] xl:block">
-                {sectionLabels[activeSection]} / {selectedSlot?.label ?? "선택된 요소 없음"}
-              </span>
-            </div>
 
-            <div className="col-span-2 row-start-2 flex max-w-full min-w-0 flex-wrap items-center justify-end gap-1.5 justify-self-stretch md:col-span-1 md:row-auto md:flex-nowrap md:gap-2 md:justify-self-end">
-              {isAdminMode ? (
+              <div className="flex items-center min-w-0 col-span-2 row-start-3 gap-2 overflow-hidden justify-self-stretch md:col-span-1 md:row-auto md:gap-3 md:justify-self-center">
+                <div className="hidden shrink-0 rounded-full border border-[#e5e7eb] bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-[#475569] md:block">
+                  {platform === "android" ? "Android" : "iOS"}
+                </div>
+                <div className="h-1.5 min-w-12 flex-1 overflow-hidden rounded-full bg-[#e5e7eb] md:w-24 md:flex-none">
+                  <div className="h-full rounded-full bg-[#2563eb]" style={{ width: `${completion.total > 0 ? Math.round((completion.ready / completion.total) * 100) : 0}%` }} />
+                </div>
+                <span className="shrink-0 text-xs font-semibold text-[#64748b]">
+                  {completion.ready}/{completion.total} 준비
+                </span>
+                <span className={`hidden shrink-0 text-xs font-semibold lg:inline ${analysis.diagnostics.length > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                  {analysis.diagnostics.length > 0 ? `${analysis.diagnostics.length}개 확인 필요` : "문제 없음"}
+                </span>
+                <span className="hidden min-w-0 truncate text-xs font-medium text-[#64748b] xl:block">
+                  {sectionLabels[activeSection]} / {selectedSlot?.label ?? "선택된 요소 없음"}
+                </span>
+              </div>
+
+              <div className="col-span-2 row-start-2 flex max-w-full min-w-0 flex-wrap items-center justify-end gap-1.5 justify-self-stretch md:col-span-1 md:row-auto md:flex-nowrap md:gap-2 md:justify-self-end">
+                {isAdminMode ? (
+                  <button
+                    type="button"
+                    className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60"
+                    onClick={openSystemSaveDialog}
+                    disabled={isSavingSystemTemplate}
+                  >
+                    {isSavingSystemTemplate ? "저장 중.." : "시스템 템플릿으로 저장"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
-                  className="rounded-xl bg-[#0f172a] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60"
-                  onClick={openSystemSaveDialog}
-                  disabled={isSavingSystemTemplate}
+                  className={`${isAdminMode ? "hidden" : ""} rounded-xl border border-[#d1d5db] bg-white px-2.5 py-2 text-[11px] font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60 md:px-3.5 md:text-xs`}
+                  onClick={openSaveDialog}
+                  disabled={isSavingTemplate}
                 >
-                  {isSavingSystemTemplate ? "저장 중.." : "시스템 템플릿으로 저장"}
+                  {isSavingTemplate ? "저장 중.." : <><span className="md:hidden">저장</span><span className="hidden md:inline">내 템플릿으로 저장</span></>}
                 </button>
-              ) : null}
-              <button
-                type="button"
-                className={`${isAdminMode ? "hidden" : ""} rounded-xl border border-[#d1d5db] bg-white px-2.5 py-2 text-[11px] font-semibold text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-wait disabled:opacity-60 md:px-3.5 md:text-xs`}
-                onClick={openSaveDialog}
-                disabled={isSavingTemplate}
-              >
-                {isSavingTemplate ? "저장 중.." : <><span className="md:hidden">저장</span><span className="hidden md:inline">내 템플릿으로 저장</span></>}
-              </button>
-              <button
-                type="button"
-                className={`${isAdminMode ? "hidden" : ""} rounded-xl bg-[#0f172a] px-3 py-2.5 text-xs font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60 md:px-4 md:text-sm`}
-                onClick={() => void openExportDialog()}
-                disabled={isExporting}
-              >
-                {isExporting ? "내보내는 중.." : "내보내기"}
-              </button>
-            </div>
-          </header>
+                <button
+                  type="button"
+                  className={`${isAdminMode ? "hidden" : ""} rounded-xl bg-[#0f172a] px-3 py-2.5 text-xs font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60 md:px-4 md:text-sm`}
+                  onClick={() => void openExportDialog()}
+                  disabled={isExporting}
+                >
+                  {isExporting ? "내보내는 중.." : "내보내기"}
+                </button>
+              </div>
+            </header>
           ) : null}
 
           {viewportMode === "mobile" ? (
-            <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            <div className="flex flex-col h-full min-h-0 overflow-hidden">
               <MobileEditActionBar
                 visible={mobileActionBarVisible}
                 isAdminMode={isAdminMode}
@@ -1093,14 +1093,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 onExport={() => void openExportDialog()}
               />
               <div
-                className="relative min-h-0 flex-1 overflow-hidden"
+                className="relative flex-1 min-h-0 overflow-hidden"
                 style={{
                   paddingBottom: mobilePreviewClearance,
                   transition: mobileSheetLiveHeight != null ? "none" : "padding-bottom 360ms cubic-bezier(0.22,1,0.36,1)",
                 }}
               >
                 <MobileScaledPreview section={activeSection} placement={mobileSheetSnap === "collapsed" ? "center" : "raised"} isResizing={mobileSheetLiveHeight != null}>
-                  <ProjectPreviewPanel {...previewProps} className="h-full w-full" />
+                  <ProjectPreviewPanel {...previewProps} className="w-full h-full" />
                 </MobileScaledPreview>
               </div>
               <MobileEditSheet
@@ -1151,104 +1151,104 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           ) : viewportMode === "pending" ? (
             <div className="min-h-0" />
           ) : (
-          <section className="grid min-h-0 min-w-0 w-full grid-cols-1 content-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
-            <div className="order-1 h-full min-w-0 lg:order-none">
-              <ProjectSectionRail
-                activeSection={activeSection}
-                slots={slots}
-                onSelectSection={selectSection}
-              />
-            </div>
-
-            <section className="order-3 grid min-h-0 min-w-0 grid-cols-1 gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[224px_minmax(0,1fr)] md:gap-0 lg:order-none xl:grid-cols-[248px_minmax(0,1fr)]">
-              <ProjectGroupRail
-                groups={groups}
-                activeGroup={activeGroup}
-                onSelectGroup={selectGroup}
-                slots={visibleSlots}
-                selectedSlotId={selectedSlot?.id}
-                uploads={uploads}
-                colors={colors}
-                selections={candidateSelections}
-                templateId={templateId}
-                template={activeTemplate}
-                contrastWarnings={contrastWarnings}
-                onSelectSlot={(slot) => {
-                  setSelectedSlotId(slot.id);
-                  if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-                  if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
-                  setMobileEditSheetOpen(true);
-                }}
-              />
-
-              <button
-                ref={mobileEditTriggerButtonRef}
-                type="button"
-                className="inline-flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-[#bfdbfe] bg-[#eff6ff] px-4 text-left text-sm font-bold text-[#1d4ed8] shadow-sm lg:hidden"
-                onClick={() => setMobileEditSheetOpen(true)}
-              >
-                <span className="min-w-0 truncate">{selectedSlot ? `${selectedSlot.label} 편집` : "선택한 요소 편집"}</span>
-                <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-black">열기</span>
-              </button>
-
-              {mobileEditSheetOpen ? (
-                <button
-                  type="button"
-                  className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-[1px] lg:hidden"
-                  aria-label="편집 패널 닫기"
-                  onClick={() => setMobileEditSheetOpen(false)}
+            <section className="grid min-h-0 min-w-0 w-full grid-cols-1 content-start gap-3 lg:grid-cols-[auto_minmax(0,1fr)_280px] lg:grid-rows-1 xl:grid-cols-[auto_minmax(0,1fr)_300px] 2xl:grid-cols-[auto_minmax(0,1fr)_320px]">
+              <div className="order-1 h-full min-w-0 lg:order-none">
+                <ProjectSectionRail
+                  activeSection={activeSection}
+                  slots={slots}
+                  onSelectSection={selectSection}
                 />
-              ) : null}
+              </div>
 
-              <div
-                ref={mobileEditSheetRef}
-                role={mobileEditSheetOpen ? "dialog" : undefined}
-                aria-modal={mobileEditSheetOpen ? "true" : undefined}
-                aria-label={selectedSlot ? `${selectedSlot.label} 편집 패널` : "요소 편집 패널"}
-                className={`${mobileEditSheetOpen ? "fixed inset-x-3 bottom-3 z-50 grid max-h-[82dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] border border-[#dbe3ed] bg-white p-3 shadow-[0_28px_80px_rgba(15,23,42,0.28)]" : "hidden"} min-h-0 min-w-0 lg:static lg:z-auto lg:grid lg:h-full lg:max-h-full lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:px-3 lg:shadow-none`}
-              >
-                <div className="mb-2 grid gap-2 rounded-2xl bg-[#f8fafc] px-3 py-2 lg:hidden">
-                  <span className="mx-auto h-1 w-10 rounded-full bg-[#cbd5e1]" aria-hidden="true" />
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#2563eb]">Quick edit</p>
-                      <strong className="block truncate text-sm font-black text-[#0f172a]">{selectedSlot?.label ?? "선택한 요소"}</strong>
-                      <span className="mt-0.5 block truncate text-[11px] font-bold text-[#64748b]">
-                        {sectionLabels[activeSection]} · {groupLabels[activeGroup] ?? activeGroup}
-                        {selectedSlot?.fileName ? ` · ${selectedSlot.fileName}` : ""}
-                      </span>
+              <section className="order-3 grid min-h-0 min-w-0 grid-cols-1 gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[224px_minmax(0,1fr)] md:gap-0 lg:order-none xl:grid-cols-[248px_minmax(0,1fr)]">
+                <ProjectGroupRail
+                  groups={groups}
+                  activeGroup={activeGroup}
+                  onSelectGroup={selectGroup}
+                  slots={visibleSlots}
+                  selectedSlotId={selectedSlot?.id}
+                  uploads={uploads}
+                  colors={colors}
+                  selections={candidateSelections}
+                  templateId={templateId}
+                  template={activeTemplate}
+                  contrastWarnings={contrastWarnings}
+                  onSelectSlot={(slot) => {
+                    setSelectedSlotId(slot.id);
+                    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
+                    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
+                    setMobileEditSheetOpen(true);
+                  }}
+                />
+
+                <button
+                  ref={mobileEditTriggerButtonRef}
+                  type="button"
+                  className="inline-flex min-h-11 items-center justify-between gap-3 rounded-2xl border border-[#bfdbfe] bg-[#eff6ff] px-4 text-left text-sm font-bold text-[#1d4ed8] shadow-sm lg:hidden"
+                  onClick={() => setMobileEditSheetOpen(true)}
+                >
+                  <span className="min-w-0 truncate">{selectedSlot ? `${selectedSlot.label} 편집` : "선택한 요소 편집"}</span>
+                  <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-black">열기</span>
+                </button>
+
+                {mobileEditSheetOpen ? (
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-[1px] lg:hidden"
+                    aria-label="편집 패널 닫기"
+                    onClick={() => setMobileEditSheetOpen(false)}
+                  />
+                ) : null}
+
+                <div
+                  ref={mobileEditSheetRef}
+                  role={mobileEditSheetOpen ? "dialog" : undefined}
+                  aria-modal={mobileEditSheetOpen ? "true" : undefined}
+                  aria-label={selectedSlot ? `${selectedSlot.label} 편집 패널` : "요소 편집 패널"}
+                  className={`${mobileEditSheetOpen ? "fixed inset-x-3 bottom-3 z-50 grid max-h-[82dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] border border-[#dbe3ed] bg-white p-3 shadow-[0_28px_80px_rgba(15,23,42,0.28)]" : "hidden"} min-h-0 min-w-0 lg:static lg:z-auto lg:grid lg:h-full lg:max-h-full lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0 lg:px-3 lg:shadow-none`}
+                >
+                  <div className="mb-2 grid gap-2 rounded-2xl bg-[#f8fafc] px-3 py-2 lg:hidden">
+                    <span className="mx-auto h-1 w-10 rounded-full bg-[#cbd5e1]" aria-hidden="true" />
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-black uppercase tracking-[0.12em] text-[#2563eb]">Quick edit</p>
+                        <strong className="block truncate text-sm font-black text-[#0f172a]">{selectedSlot?.label ?? "선택한 요소"}</strong>
+                        <span className="mt-0.5 block truncate text-[11px] font-bold text-[#64748b]">
+                          {sectionLabels[activeSection]} · {groupLabels[activeGroup] ?? activeGroup}
+                          {selectedSlot?.fileName ? ` · ${selectedSlot.fileName}` : ""}
+                        </span>
+                      </div>
+                      <button
+                        ref={mobileEditCloseButtonRef}
+                        type="button"
+                        className="grid size-9 shrink-0 place-items-center rounded-full border border-[#e5e7eb] bg-white text-[#475569] transition hover:bg-[#f8fafc] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+                        aria-label="편집 패널 닫기"
+                        onClick={() => setMobileEditSheetOpen(false)}
+                      >
+                        <X size={17} aria-hidden="true" />
+                      </button>
                     </div>
-                    <button
-                      ref={mobileEditCloseButtonRef}
-                      type="button"
-                      className="grid size-9 shrink-0 place-items-center rounded-full border border-[#e5e7eb] bg-white text-[#475569] transition hover:bg-[#f8fafc] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
-                      aria-label="편집 패널 닫기"
-                      onClick={() => setMobileEditSheetOpen(false)}
-                    >
-                      <X size={17} aria-hidden="true" />
-                    </button>
+                  </div>
+                  <div className="min-h-0 overflow-y-auto pr-1 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1] lg:h-full">
+                    {quickEditPanel}
                   </div>
                 </div>
-                <div className="min-h-0 overflow-y-auto pr-1 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1] lg:h-full">
-                  {quickEditPanel}
-                </div>
-              </div>
-            </section>
+              </section>
 
-            <ProjectPreviewPanel
-              analysis={analysis}
-              activeSection={activeSection}
-              template={activeTemplate}
-              templateId={templateId}
-              slots={slots}
-              colors={colors}
-              selections={candidateSelections}
-              bubbleEdits={previewBubbleEdits}
-              selectedSlotId={selectedSlot?.id}
-              className="order-2 min-h-[420px] lg:order-none lg:min-h-0"
-              onSelectSlot={selectPreviewSlot}
-            />
-          </section>
+              <ProjectPreviewPanel
+                analysis={analysis}
+                activeSection={activeSection}
+                template={activeTemplate}
+                templateId={templateId}
+                slots={slots}
+                colors={colors}
+                selections={candidateSelections}
+                bubbleEdits={previewBubbleEdits}
+                selectedSlotId={selectedSlot?.id}
+                className="order-2 min-h-[420px] lg:order-none lg:min-h-0"
+                onSelectSlot={selectPreviewSlot}
+              />
+            </section>
           )}
         </div>
       ) : null}
@@ -1271,13 +1271,13 @@ function InitialTemplateLoadingPanel({
   const progressValue = hasProgress ? Math.max(0, Math.min(100, Math.round((current / total) * 100))) : 18;
 
   return (
-    <div className="grid h-full place-items-center px-5">
+    <div className="grid h-full px-5 place-items-center">
       <section className="grid w-full max-w-3xl gap-5 rounded-[28px] border border-[#e5e7eb] bg-white/95 p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#64748b]">Loading template</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-[#0f172a]">{message}</h1>
           <p className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">{detail ?? "미리보기에 필요한 에셋을 먼저 준비한 뒤 편집 화면을 엽니다."}</p>
-          <div className="mt-5 grid gap-2">
+          <div className="grid gap-2 mt-5">
             <div className="flex items-center justify-between gap-3 text-xs font-bold text-[#64748b]">
               <span>초기 준비</span>
               <span>{hasProgress ? `${progressValue}%` : "준비 중"}</span>
@@ -1307,7 +1307,7 @@ function InitialTemplateLoadingPanel({
 
 function InitialTemplateErrorPanel({ message, onStartDefault }: { message: string; onStartDefault: () => void }) {
   return (
-    <div className="grid h-full place-items-center px-5">
+    <div className="grid h-full px-5 place-items-center">
       <section className="grid w-full max-w-xl gap-4 rounded-[28px] border border-rose-100 bg-white p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-rose-700">Template load failed</p>
@@ -1405,9 +1405,9 @@ function SaveTemplateDialog({
         <div className="flex items-start justify-between gap-4">
           <div className="grid gap-1">
             <h2 className="text-lg font-semibold text-[#0f172a]">내 템플릿 저장</h2>
-            <p className="text-sm leading-6 text-[#64748b]">현재 편집 상태를 이 브라우저의 IndexedDB에만 저장합니다. 직접 업로드한 개인 이미지는 서버 데이터베이스나 Storage에 저장하지 않습니다.</p>
+            <p className="text-sm leading-6 text-[#64748b]">현재 편집 상태를 이 브라우저의에만 저장합니다. 직접 업로드한 개인 이미지는 서버에 저장되지 않습니다.</p>
           </div>
-          <button type="button" className="rounded-full border border-[#e5e7eb] px-3 py-1 text-sm font-semibold text-[#475569]" onClick={onClose} disabled={isSaving}>
+          <button type="button" className="shrink-0 rounded-full border border-[#e5e7eb] px-3 py-2 text-sm font-semibold text-[#475569]" onClick={onClose} disabled={isSaving}>
             닫기
           </button>
         </div>
@@ -1680,150 +1680,150 @@ function ExportDialog({
           onEscapeKeyDown={(event) => { if (isExporting) event.preventDefault(); }}
           onPointerDownOutside={(event) => { if (isExporting) event.preventDefault(); }}
         >
-        <div className="flex items-start justify-between gap-4 border-b border-[#e2e8f0] px-5 py-4">
-          <div className="grid gap-1">
-            <Dialog.Title className="text-lg font-bold text-[#0f172a]">{platform === "android" ? "Android 내보내기" : "iOS 내보내기"}</Dialog.Title>
-            <Dialog.Description className="text-xs font-medium text-[#64748b]">완성된 테마를 설치하거나 보관할 파일로 만듭니다.</Dialog.Description>
-          </div>
-          <Dialog.Close asChild>
-            <button type="button" className="grid size-9 shrink-0 place-items-center rounded-full text-[#64748b] transition hover:bg-[#f1f5f9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-40" disabled={isExporting} aria-label="내보내기 창 닫기"><X size={18} /></button>
-          </Dialog.Close>
-        </div>
-
-        <div className="overflow-y-auto px-5 py-4 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
-        {isExporting ? (
-          <div className="grid min-h-56 place-content-center gap-5 py-4 text-center" role="status" aria-live="polite">
-            <span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><Download className="animate-pulse" size={22} aria-hidden="true" /></span>
-            <div><p className="text-base font-bold text-[#0f172a]">{getExportNotice(exportMode)}</p><p className="mt-2 text-sm font-medium text-[#64748b]">{steps[Math.min(progressStep, steps.length - 1)]} · {formatElapsedTime(elapsedSeconds)}</p></div>
-            <div className="mx-auto h-2 w-56 max-w-full overflow-hidden rounded-full bg-[#e2e8f0]"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#2563eb]" /></div>
-            <p className="text-xs font-medium text-[#64748b]">완료될 때까지 이 창을 유지해 주세요.</p>
-          </div>
-        ) : <>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-2">
-            <span className="text-sm font-semibold text-[#0f172a]">{platform === "android" ? "앱 이름" : "테마 이름"}</span>
-            <input
-              type="text"
-              value={exportName}
-              onChange={(event) => onNameChange(event.currentTarget.value)}
-              disabled={isExporting}
-              aria-invalid={Boolean(exportNameError)}
-              className={`h-11 rounded-xl border bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb] ${exportNameError ? "border-[#ef4444]" : "border-[#d1d5db]"}`}
-            />
-            {exportNameError ? <span className="text-xs font-medium text-[#dc2626]">{exportNameError}</span> : null}
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm font-semibold text-[#0f172a]">{platform === "android" ? "앱 버전" : "테마 버전"}</span>
-            <input
-              type="text"
-              value={exportVersionName}
-              onChange={(event) => onVersionNameChange(event.currentTarget.value)}
-              disabled={isExporting}
-              aria-invalid={Boolean(versionNameError)}
-              className={`h-11 rounded-xl border bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb] ${versionNameError ? "border-[#ef4444]" : "border-[#d1d5db]"}`}
-            />
-            {versionNameError ? <span className="text-xs font-medium text-[#dc2626]">{versionNameError}</span> : null}
-          </label>
-          {platform === "android" ? (
-            <div className="flex items-start gap-3 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 text-[#1e3a8a] sm:col-span-2">
-              <ShieldCheck className="mt-0.5 shrink-0" size={17} aria-hidden="true" />
-              <div><p className="text-sm font-bold">고유 앱 ID 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 applicationId를 서버에서 생성합니다.</p></div>
+          <div className="flex items-start justify-between gap-4 border-b border-[#e2e8f0] px-5 py-4">
+            <div className="grid gap-1">
+              <Dialog.Title className="text-lg font-bold text-[#0f172a]">{platform === "android" ? "Android 내보내기" : "iOS 내보내기"}</Dialog.Title>
+              <Dialog.Description className="text-xs font-medium text-[#64748b]">완성된 테마를 설치하거나 보관할 파일로 만듭니다.</Dialog.Description>
             </div>
-          ) : (
-            <div className="flex items-start gap-3 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 text-[#1e3a8a] sm:col-span-2">
-              <ShieldCheck className="mt-0.5 shrink-0" size={17} aria-hidden="true" />
-              <div><p className="text-sm font-bold">고유 테마 identifier 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 identifier를 서버에서 생성하고 CSS에 적용합니다.</p></div>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="출력 형식">
-          {platform === "ios" ? (
-            <>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={exportMode === "ktheme"}
-                className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "ktheme" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-                onClick={() => onModeChange("ktheme")}
-                disabled={isExporting}
-              >
-                <span className="block text-sm font-semibold text-[#0f172a]">iOS .ktheme</span>
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={exportMode === "theme-zip"}
-                className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "theme-zip" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-                onClick={() => onModeChange("theme-zip")}
-                disabled={isExporting}
-              >
-                <span className="block text-sm font-semibold text-[#0f172a]">iOS 테마 ZIP</span>
-              </button>
-            </>
-          ) : (
-            <>
-              {isAdmin ? <button
-                type="button"
-                role="radio"
-                aria-checked={exportMode === "project"}
-                className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "project" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-                onClick={() => onModeChange("project")}
-                disabled={isExporting}
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold text-[#0f172a]"><Wrench size={16} aria-hidden="true" />프로젝트 ZIP</span>
-                <span className="mt-1 block text-xs font-medium text-[#64748b]">관리자 디버깅용 빌드 전 소스</span>
-              </button> : null}
-              <button
-                type="button"
-                role="radio"
-                aria-checked={exportMode === "apk"}
-                className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-                onClick={() => onModeChange("apk")}
-                disabled={isExporting}
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold text-[#0f172a]"><Package size={16} aria-hidden="true" />Android APK</span>
-                <span className="mt-1 block text-xs font-medium text-[#64748b]">기기에 바로 설치할 파일</span>
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={exportMode === "apk-zip"}
-                className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk-zip" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-                onClick={() => onModeChange("apk-zip")}
-                disabled={isExporting}
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold text-[#0f172a]"><Archive size={16} aria-hidden="true" />APK ZIP</span>
-                <span className="mt-1 block text-xs font-medium text-[#64748b]">공유하거나 보관하기 좋은 압축 파일</span>
-              </button>
-            </>
-          )}
-        </div>
-
-        <div className="mt-4 grid gap-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-            <span className="font-semibold text-[#475569]">비용 <strong className="ml-1 text-[#0f172a]">1크레딧</strong></span>
-            <span className="font-semibold text-[#475569]">보유 <strong className={`ml-1 ${hasCredits ? "text-emerald-700" : "text-rose-700"}`}>{isAccountLoading ? "확인 중" : `${credits}크레딧`}</strong></span>
+            <Dialog.Close asChild>
+              <button type="button" className="grid size-9 shrink-0 place-items-center rounded-full text-[#64748b] transition hover:bg-[#f1f5f9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-40" disabled={isExporting} aria-label="내보내기 창 닫기"><X size={18} /></button>
+            </Dialog.Close>
           </div>
-        </div>
 
-        </>}
-        </div>
+          <div className="overflow-y-auto px-5 py-4 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
+            {isExporting ? (
+              <div className="grid gap-5 py-4 text-center min-h-56 place-content-center" role="status" aria-live="polite">
+                <span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><Download className="animate-pulse" size={22} aria-hidden="true" /></span>
+                <div><p className="text-base font-bold text-[#0f172a]">{getExportNotice(exportMode)}</p><p className="mt-2 text-sm font-medium text-[#64748b]">{steps[Math.min(progressStep, steps.length - 1)]} · {formatElapsedTime(elapsedSeconds)}</p></div>
+                <div className="mx-auto h-2 w-56 max-w-full overflow-hidden rounded-full bg-[#e2e8f0]"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#2563eb]" /></div>
+                <p className="text-xs font-medium text-[#64748b]">완료될 때까지 이 창을 유지해 주세요.</p>
+              </div>
+            ) : <>
 
-        <div className="flex items-center justify-end gap-2 border-t border-[#e2e8f0] bg-white px-5 py-4">
-          <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={isExporting}>
-            취소
-          </button>
-          <button
-            type="button"
-            className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit}
-            disabled={isExporting || isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}
-          >
-            {isExporting ? "내보내는 중…" : ctaLabel}
-          </button>
-        </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold text-[#0f172a]">{platform === "android" ? "앱 이름" : "테마 이름"}</span>
+                  <input
+                    type="text"
+                    value={exportName}
+                    onChange={(event) => onNameChange(event.currentTarget.value)}
+                    disabled={isExporting}
+                    aria-invalid={Boolean(exportNameError)}
+                    className={`h-11 rounded-xl border bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb] ${exportNameError ? "border-[#ef4444]" : "border-[#d1d5db]"}`}
+                  />
+                  {exportNameError ? <span className="text-xs font-medium text-[#dc2626]">{exportNameError}</span> : null}
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold text-[#0f172a]">{platform === "android" ? "앱 버전" : "테마 버전"}</span>
+                  <input
+                    type="text"
+                    value={exportVersionName}
+                    onChange={(event) => onVersionNameChange(event.currentTarget.value)}
+                    disabled={isExporting}
+                    aria-invalid={Boolean(versionNameError)}
+                    className={`h-11 rounded-xl border bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb] ${versionNameError ? "border-[#ef4444]" : "border-[#d1d5db]"}`}
+                  />
+                  {versionNameError ? <span className="text-xs font-medium text-[#dc2626]">{versionNameError}</span> : null}
+                </label>
+                {platform === "android" ? (
+                  <div className="flex items-start gap-3 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 text-[#1e3a8a] sm:col-span-2">
+                    <ShieldCheck className="mt-0.5 shrink-0" size={17} aria-hidden="true" />
+                    <div><p className="text-sm font-bold">고유 앱 ID 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 applicationId를 서버에서 생성합니다.</p></div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 text-[#1e3a8a] sm:col-span-2">
+                    <ShieldCheck className="mt-0.5 shrink-0" size={17} aria-hidden="true" />
+                    <div><p className="text-sm font-bold">고유 테마 identifier 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 identifier를 서버에서 생성하고 CSS에 적용합니다.</p></div>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-2 mt-4 sm:grid-cols-2" role="radiogroup" aria-label="출력 형식">
+                {platform === "ios" ? (
+                  <>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={exportMode === "ktheme"}
+                      className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "ktheme" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                      onClick={() => onModeChange("ktheme")}
+                      disabled={isExporting}
+                    >
+                      <span className="block text-sm font-semibold text-[#0f172a]">iOS .ktheme</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={exportMode === "theme-zip"}
+                      className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "theme-zip" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                      onClick={() => onModeChange("theme-zip")}
+                      disabled={isExporting}
+                    >
+                      <span className="block text-sm font-semibold text-[#0f172a]">iOS 테마 ZIP</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {isAdmin ? <button
+                      type="button"
+                      role="radio"
+                      aria-checked={exportMode === "project"}
+                      className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "project" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                      onClick={() => onModeChange("project")}
+                      disabled={isExporting}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-semibold text-[#0f172a]"><Wrench size={16} aria-hidden="true" />프로젝트 ZIP</span>
+                      <span className="mt-1 block text-xs font-medium text-[#64748b]">관리자 디버깅용 빌드 전 소스</span>
+                    </button> : null}
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={exportMode === "apk"}
+                      className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                      onClick={() => onModeChange("apk")}
+                      disabled={isExporting}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-semibold text-[#0f172a]"><Package size={16} aria-hidden="true" />Android APK</span>
+                      <span className="mt-1 block text-xs font-medium text-[#64748b]">기기에 바로 설치할 파일</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={exportMode === "apk-zip"}
+                      className={`rounded-2xl border px-4 py-3 text-left ${exportMode === "apk-zip" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+                      onClick={() => onModeChange("apk-zip")}
+                      disabled={isExporting}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-semibold text-[#0f172a]"><Archive size={16} aria-hidden="true" />APK ZIP</span>
+                      <span className="mt-1 block text-xs font-medium text-[#64748b]">공유하거나 보관하기 좋은 압축 파일</span>
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-4 grid gap-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="font-semibold text-[#475569]">비용 <strong className="ml-1 text-[#0f172a]">1크레딧</strong></span>
+                  <span className="font-semibold text-[#475569]">보유 <strong className={`ml-1 ${hasCredits ? "text-emerald-700" : "text-rose-700"}`}>{isAccountLoading ? "확인 중" : `${credits}크레딧`}</strong></span>
+                </div>
+              </div>
+
+            </>}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-[#e2e8f0] bg-white px-5 py-4">
+            <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={isExporting}>
+              취소
+            </button>
+            <button
+              type="button"
+              className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit}
+              disabled={isExporting || isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}
+            >
+              {isExporting ? "내보내는 중…" : ctaLabel}
+            </button>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
