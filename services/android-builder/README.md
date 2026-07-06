@@ -2,7 +2,7 @@
 
 Reusable Docker builder for generating KakaoTalk Android theme APKs outside the Next.js runtime.
 
-Milestone 1 supports local Docker execution only. The container reads a local input bundle from `/in`, reuses the shared Android build core, runs Gradle inside the image, and writes an APK to `/out`.
+Milestone 1 supports local Docker execution. Milestone 2 adds GCS input/output mode. The container reads an input bundle, reuses the shared Android build core, runs Gradle inside the image, and writes an APK either to `/out` or to a GCS output prefix.
 
 ## Directory Layout
 
@@ -11,6 +11,7 @@ Milestone 1 supports local Docker execution only. The container reads a local in
 - `warm-gradle-cache.ts`: image-build-time Gradle warmup.
 - `tsconfig.json`: service-only TypeScript emit config.
 - `fixtures/basic/bundle.json`: local sample input for smoke testing.
+- `fixtures/gcs/bundle.json`: GCS-mode bundle shape for upload testing.
 
 ## Local Build Instructions
 
@@ -47,12 +48,49 @@ Expected output:
 tmp/android-builder-out/local-builder-sample_1.0.0.apk
 ```
 
+## GCS Mode
+
+GCS mode is enabled by setting both:
+
+- `GCS_INPUT_URI`: `gs://<input-bucket>/<export_job_id>` or `gs://<input-bucket>/<export_job_id>/bundle.json`
+- `GCS_OUTPUT_URI`: `gs://<output-bucket>` or `gs://<output-bucket>/<export_job_id>`
+
+The input prefix must contain:
+
+```text
+bundle.json
+files/<field>
+```
+
+The builder writes:
+
+```text
+gs://<output-bucket>/<export_job_id>/<fileName>.apk
+gs://<output-bucket>/<export_job_id>/result.json
+```
+
+Example:
+
+```powershell
+docker run --rm `
+  -e GCS_INPUT_URI="gs://my-input-bucket/local-gcs-sample" `
+  -e GCS_OUTPUT_URI="gs://my-output-bucket/local-gcs-sample" `
+  -e GOOGLE_APPLICATION_CREDENTIALS="/secrets/adc.json" `
+  -v "$env:APPDATA\gcloud\application_default_credentials.json:/secrets/adc.json:ro" `
+  kakaotalk-android-builder:m1
+```
+
+In Cloud Run Job, prefer the job service account and Application Default Credentials over mounting a key file.
+
 ## Expected Input
 
-`/in/bundle.json`:
+Local mode reads `/in/bundle.json`. GCS mode reads `bundle.json` from `GCS_INPUT_URI`.
 
 ```json
 {
+  "export_job_id": "local-gcs-sample",
+  "user_id": "user-local-gcs",
+  "theme_id": "theme-local-gcs",
   "options": {
     "mode": "apk",
     "exportName": "local-builder-sample",
@@ -85,19 +123,20 @@ The builder writes one APK to `/out` named:
 <exportName>_<versionName>.apk
 ```
 
-The APK is generated from `android-sample-theme/apeach-26.1.0-source` with local bundle overrides applied before Gradle runs.
+In GCS mode, the builder uploads the APK and a `result.json` file under `GCS_OUTPUT_URI`. The APK is generated from `android-sample-theme/apeach-26.1.0-source` with bundle overrides applied before Gradle runs.
 
 ## Known Limitations
 
-- Local `apk` mode only.
-- No GCS input or output.
+- `apk` mode only.
 - No Cloud Run Job trigger.
 - No DB ownership verification.
 - No export status polling or credit settlement.
 - Installation verification still requires a connected emulator or physical Android device outside Docker.
+- GCS bucket creation, IAM, and lifecycle policy are infrastructure steps outside this image.
 
 ## Notes
 
 - Runtime Gradle is invoked with `--offline`; missing cache entries should fail during local validation instead of downloading at runtime.
-- The entrypoint logs structured event names only and does not print bundle contents.
+- The entrypoint logs structured event names only and does not print bundle contents, GCS URIs, credential paths, signed URLs, or secrets.
 - The shared build core keeps the existing `apk.ts` public API intact while allowing this service to import project preparation and Gradle helpers directly.
+- GCS failures write `result.json` with `status: "failed"` when the output prefix is known.

@@ -121,14 +121,14 @@ gs://<input-bucket>/<export_job_id>/files/<field>       # 사용자 업로드·�
 - **완료 기준**: 고정 샘플 입력으로 컨테이너가 설치 가능한 APK를 만든다. (GCS·DB·크레딧 미개입)
 
 ### 2차 — GCS 입력/출력
-- [ ] 2.1 입력 번들 스펙 확정(위 §입력 번들) + 로컬 fixture 작성
+- [x] 2.1 입력 번들 스펙 확정(위 §입력 번들) + 로컬 fixture 작성
 - [ ] 2.2 GCS 입력/출력 버킷 생성 + IAM(빌더 SA read/write) + lifecycle
-- [ ] 2.3 엔트리(GCS 모드): `bundle.json`+`files/` 다운로드
-- [ ] 2.4 manifest `serverAsset` → 내장 `template-assets`로 해결(경로 화이트리스트·`..` 차단)
-- [ ] 2.5 번들 자체 정합성 검증(필수 필드 존재·경로 안전) — DB 대조는 3차
-- [ ] 2.6 APK를 출력 버킷 업로드(`<export_job_id>/…`)
-- [ ] 2.7 `result.json` 기록(success/fail, output_path, bytes, errorCode?)
-- [ ] 2.8 로깅 레드액션 적용(불변식 7) — 서명 URL/SA/keystore pw 미출력 확인
+- [x] 2.3 엔트리(GCS 모드): `bundle.json`+`files/` 다운로드
+- [x] 2.4 manifest `serverAsset` → 내장 `template-assets`로 해결(경로 화이트리스트·`..` 차단)
+- [x] 2.5 번들 자체 정합성 검증(필수 필드 존재·경로 안전) — DB 대조는 3차
+- [x] 2.6 APK를 출력 버킷 업로드(`<export_job_id>/…`)
+- [x] 2.7 `result.json` 기록(success/fail, output_path, bytes, errorCode?)
+- [x] 2.8 로깅 레드액션 적용(불변식 7) — 서명 URL/SA/keystore pw 미출력 확인
 - **완료 기준**: GCS 입력 번들 → 빌더 → 출력 버킷에 APK+`result.json`. 로그에 비밀 없음.
 
 ### 3차 — Vercel API에서 Job 실행

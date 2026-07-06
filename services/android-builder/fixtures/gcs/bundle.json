@@ -1,0 +1,17 @@
+{
+  "export_job_id": "local-gcs-sample",
+  "user_id": "user-local-gcs",
+  "theme_id": "theme-local-gcs",
+  "options": {
+    "mode": "apk",
+    "exportName": "gcs-builder-sample",
+    "versionName": "1.0.0",
+    "applicationId": "com.kakaotalk.theme.builder.gcs"
+  },
+  "manifest": [
+    {
+      "path": "src/main/theme/drawable-xxhdpi/theme_profile_01_image.png",
+      "serverAsset": "/template-assets/basic/android/theme_profile_01_image.png"
+    }
+  ]
+}
