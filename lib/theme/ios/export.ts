@@ -16,9 +16,24 @@ type IosExportOptions = {
   bubbleEditsBySlotId: Partial<Record<string, BubbleEditState>>;
 };
 
-export type IosExportFile = {
+export type IosExportBlobFile = {
   path: string;
   blob: Blob;
+};
+
+export type IosExportServerAssetFile = {
+  path: string;
+  serverAsset: string;
+};
+
+export type IosExportFile = IosExportBlobFile | IosExportServerAssetFile;
+
+type IosSlotSource = {
+  blob?: Blob;
+  assetUrl?: string;
+  serverAsset?: string;
+  sourceName: string;
+  sourceScale: number;
 };
 
 type IosImageMap = Partial<Record<ThemeResourceRole, string>>;
@@ -66,11 +81,10 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
 
   for (const slot of iosSlots) {
     if (slot.kind === "color" || !slot.path) continue;
-    const blob = await resolveIosSlotBlob(slot, uploads, selections, templateId, template);
-    if (!blob) continue;
-    const sourceScale = getIosSourceScale(slot, uploads, selections, templateId);
-    sourceScaleBySlotId[slot.id] = sourceScale;
-    files.push(...(await createIosImageExportFiles(slot, blob, sourceScale)));
+    const source = await resolveIosSlotSource(slot, uploads, selections, templateId, template);
+    if (!source) continue;
+    sourceScaleBySlotId[slot.id] = source.sourceScale;
+    files.push(...(await createIosImageExportFiles(slot, source)));
     imageMap[slot.role] = slot.fileName ?? slot.path.split("/").at(-1) ?? "";
   }
 
@@ -95,30 +109,76 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   return files;
 }
 
-async function resolveIosSlotBlob(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate) {
+async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate): Promise<IosSlotSource | null> {
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
-  if (selectedUpload) return normalizeIosImageBlob(slot, selectedUpload.file, selectedUpload.file.name);
+  if (selectedUpload) {
+    return {
+      blob: await normalizeIosImageBlob(slot, selectedUpload.file, selectedUpload.file.name),
+      sourceName: selectedUpload.file.name,
+      sourceScale: getIosSourceScale(slot, uploads, selections, templateId),
+    };
+  }
+
   const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template);
   if (!assetUrl) return null;
+  const sourceScale = getIosSourceScale(slot, uploads, selections, templateId);
+  if (canUseServerAssetReference(slot, assetUrl)) {
+    return {
+      assetUrl,
+      serverAsset: assetUrl,
+      sourceName: assetUrl,
+      sourceScale,
+    };
+  }
+
   const blob = await fetchAssetBlob(assetUrl);
-  return normalizeIosImageBlob(slot, blob, assetUrl);
+  return {
+    blob: await normalizeIosImageBlob(slot, blob, assetUrl),
+    sourceName: assetUrl,
+    sourceScale,
+  };
 }
 
-async function createIosImageExportFiles(slot: ThemeAssetSlot, blob: Blob, sourceScale: number): Promise<IosExportFile[]> {
+async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosExportFile[]> {
   const scaleTargets = getIosScaleTargets(slot);
-  if (!slot.path || scaleTargets.length === 0) return [{ path: slot.path ?? slot.fileName ?? "Images/image.png", blob }];
+  if (!slot.path || scaleTargets.length === 0) {
+    const path = slot.path ?? slot.fileName ?? "Images/image.png";
+    if (source.serverAsset) return [{ path, serverAsset: source.serverAsset }];
+    return [{ path, blob: await getIosSourceBlob(slot, source) }];
+  }
 
   const basePath = stripPngExtension(stripScaleSuffix(slot.path));
   const entries: IosExportFile[] = [];
 
   for (const targetScale of scaleTargets) {
+    const path = targetScale === 1 ? `${basePath}.png` : `${basePath}@${targetScale}x.png`;
+    if (targetScale === source.sourceScale && source.serverAsset) {
+      entries.push({ path, serverAsset: source.serverAsset });
+      continue;
+    }
+
+    const blob = await getIosSourceBlob(slot, source);
     entries.push({
-      path: targetScale === 1 ? `${basePath}.png` : `${basePath}@${targetScale}x.png`,
-      blob: targetScale === sourceScale ? blob : await resizePngBlob(blob, targetScale / sourceScale),
+      path,
+      blob: targetScale === source.sourceScale ? blob : await resizePngBlob(blob, targetScale / source.sourceScale),
     });
   }
 
   return entries;
+}
+
+async function getIosSourceBlob(slot: ThemeAssetSlot, source: IosSlotSource) {
+  if (source.blob) return source.blob;
+  if (!source.assetUrl) throw new Error(`iOS 이미지 원본을 찾지 못했습니다: ${source.sourceName}`);
+  const blob = await fetchAssetBlob(source.assetUrl);
+  source.blob = await normalizeIosImageBlob(slot, blob, source.sourceName);
+  return source.blob;
+}
+
+function canUseServerAssetReference(slot: ThemeAssetSlot, assetUrl: string) {
+  if (!assetUrl.startsWith("/template-assets/")) return false;
+  const exportName = (slot.path ?? slot.fileName ?? "").toLowerCase();
+  return !exportName.endsWith(".png") || assetUrl.toLowerCase().endsWith(".png");
 }
 
 function getIosSourceScale(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId) {
