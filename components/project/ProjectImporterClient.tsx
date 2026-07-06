@@ -1396,7 +1396,7 @@ function createInitialLoadProgress(message: string, current: number, total: numb
 
 function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {
   useEffect(() => {
-    const timeout = window.setTimeout(onDismiss, 3200);
+    const timeout = window.setTimeout(onDismiss, 2500);
     return () => window.clearTimeout(timeout);
   }, [notice.message, notice.tone, onDismiss]);
 

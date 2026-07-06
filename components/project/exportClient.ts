@@ -157,7 +157,13 @@ async function createAndroidExportFormData({
   });
 
   const formData = new FormData();
-  const manifest = exportFiles.map((file, index) => {
+  let fileIndex = 0;
+  const manifest = exportFiles.map((file) => {
+    if ("serverAsset" in file) {
+      return { path: file.path, serverAsset: file.serverAsset };
+    }
+    const index = fileIndex;
+    fileIndex += 1;
     const field = `file-${index}`;
     formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
     return { field, path: file.path };

@@ -16,10 +16,19 @@ type AndroidExportOptions = {
   bubbleEditsBySlotId: Partial<Record<string, BubbleEditState>>;
 };
 
-export type AndroidExportFile = {
+export type AndroidExportBlobFile = {
   path: string;
   blob: Blob;
 };
+
+export type AndroidExportServerAssetFile = {
+  path: string;
+  serverAsset: string;
+};
+
+export type AndroidExportFile = AndroidExportBlobFile | AndroidExportServerAssetFile;
+
+type AndroidExportSource = { blob: Blob } | { serverAsset: string };
 
 export async function buildAndroidThemeExportFiles(options: AndroidExportOptions): Promise<AndroidExportFile[]> {
   const { analysis, template, templateId, exportName, slots, uploads, colors, selections, bubbleEditsBySlotId } = options;
@@ -28,10 +37,10 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
 
   for (const slot of androidSlots) {
     if (slot.kind === "color" || !slot.path) continue;
-    const blob = await resolveAndroidSlotBlob(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots);
-    if (!blob) continue;
+    const source = await resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots);
+    if (!source) continue;
     for (const path of getAndroidSlotExportPaths(slot)) {
-      files.push({ path, blob });
+      files.push("serverAsset" in source ? { path, serverAsset: source.serverAsset } : { path, blob: source.blob });
     }
   }
 
@@ -63,14 +72,14 @@ function getAndroidSlotExportPaths(slot: ThemeAssetSlot) {
 export async function exportAndroidThemePackage(options: AndroidExportOptions) {
   const { template } = options;
   const files = await buildAndroidThemeExportFiles(options);
-  const entries = await Promise.all(files.map((file) => blobFile(file.path, file.blob)));
+  const entries = await Promise.all(files.map(async (file) => blobFile(file.path, "serverAsset" in file ? await fetchAssetBlob(file.serverAsset) : file.blob)));
 
   const fileName = `${slugify(template.name)}-android-theme-resources.zip`;
   const blob = createStoredZip(entries);
   return { blob, fileName };
 }
 
-async function resolveAndroidSlotBlob(
+async function resolveAndroidSlotSource(
   slot: ThemeAssetSlot,
   uploads: SlotUploads,
   selections: SlotCandidateSelections,
@@ -78,27 +87,38 @@ async function resolveAndroidSlotBlob(
   template: ThemeTemplate,
   bubbleEdit?: BubbleEditState,
   allSlots: ThemeAssetSlot[] = [],
-) {
+): Promise<AndroidExportSource | null> {
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   if (slot.kind === "ninepatch") {
     const sourceDataUrl = selectedUpload ? await readThemeProjectFileAsDataUrl(selectedUpload.file) : await assetUrlToDataUrl(getResolvedAssetUrl(slot, uploads, selections, templateId, template));
     if (!sourceDataUrl) return null;
     const asset = await loadNinePatchDataUrl(sourceDataUrl, slot.fileName ?? `${slot.id}.9.png`, slot.role.includes("_me_") ? "me" : "you");
     const nextAsset = bubbleEdit?.markers ? { ...asset, markers: bubbleEdit.markers } : asset;
-    return await canvasToBlob(exportNinePatch(nextAsset), "image/png");
+    return { blob: await canvasToBlob(exportNinePatch(nextAsset), "image/png") };
   }
 
-  if (selectedUpload) return selectedUpload.file;
+  if (selectedUpload) return { blob: selectedUpload.file };
   const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template);
   if (assetUrl) {
+    if (canUseServerAssetReference(slot, assetUrl)) return { serverAsset: assetUrl };
     const blob = await fetchAssetBlob(assetUrl);
-    return normalizeAndroidImageBlob(slot, blob, assetUrl);
+    return { blob: await normalizeAndroidImageBlob(slot, blob, assetUrl) };
   }
 
   const fallbackRole = getImageAssetFallbackRole(slot.role);
   const fallbackSlot = fallbackRole ? allSlots.find((candidate) => candidate.role === fallbackRole) : undefined;
   if (!fallbackSlot) return null;
-  return resolveAndroidSlotBlob(fallbackSlot, uploads, selections, templateId, template, bubbleEdit, allSlots);
+  return resolveAndroidSlotSource(fallbackSlot, uploads, selections, templateId, template, bubbleEdit, allSlots);
+}
+
+function canUseServerAssetReference(slot: ThemeAssetSlot, assetUrl: string) {
+  if (!isLocalTemplateAssetUrl(assetUrl)) return false;
+  const exportName = (slot.path ?? slot.fileName ?? "").toLowerCase();
+  return !exportName.endsWith(".png") || assetUrl.toLowerCase().endsWith(".png");
+}
+
+function isLocalTemplateAssetUrl(assetUrl: string) {
+  return assetUrl.startsWith("/template-assets/");
 }
 
 async function normalizeAndroidImageBlob(slot: ThemeAssetSlot, blob: Blob, sourceName: string) {
