@@ -6,6 +6,7 @@ ENV PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platf
 ENV INPUT_DIR=/in
 ENV OUTPUT_DIR=/out
 ENV TEMPLATE_ASSETS_ROOT=/workspace/public/template-assets
+ENV NODE_OPTIONS=--no-deprecation
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl unzip bash nodejs npm \
