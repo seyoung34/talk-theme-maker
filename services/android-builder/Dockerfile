@@ -8,7 +8,7 @@ ENV OUTPUT_DIR=/out
 ENV TEMPLATE_ASSETS_ROOT=/workspace/public/template-assets
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl unzip nodejs npm \
+  && apt-get install -y --no-install-recommends ca-certificates curl unzip bash nodejs npm \
   && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools" \

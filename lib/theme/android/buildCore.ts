@@ -115,8 +115,8 @@ export function runGradle(projectRoot: string, args: string[], signal?: AbortSig
       reject(new AndroidBuildError("build_cancelled", "Android 빌드 요청이 취소되었습니다."));
       return;
     }
-    const command = process.platform === "win32" ? "cmd.exe" : "sh";
-    const commandArgs = process.platform === "win32" ? ["/d", "/s", "/c", "gradlew.bat", ...args] : ["gradlew", ...args];
+    const command = process.platform === "win32" ? "cmd.exe" : "bash";
+    const commandArgs = process.platform === "win32" ? ["/d", "/s", "/c", "gradlew.bat", ...args] : ["./gradlew", ...args];
     const child = spawn(command, commandArgs, {
       cwd: projectRoot,
       stdio: ["ignore", "pipe", "pipe"],
