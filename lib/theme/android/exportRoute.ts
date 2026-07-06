@@ -181,7 +181,7 @@ async function buildResult(
 function classifyFailure(error: unknown) {
   if (error instanceof AndroidExportRequestError) return { code: error.code, message: error.message, status: error.status };
   if (error instanceof AndroidBuildError) {
-    const status = error.code.startsWith("invalid_") ? 400 : error.code === "build_capacity_reached" ? 503 : error.code === "gradle_timeout" ? 504 : error.code === "build_cancelled" ? 408 : 500;
+    const status = error.code.startsWith("invalid_") ? 400 : error.code === "build_capacity_reached" || error.code === "android_sdk_missing" ? 503 : error.code === "gradle_timeout" ? 504 : error.code === "build_cancelled" ? 408 : 500;
     return { code: error.code, message: error.clientMessage, status };
   }
   if (isInsufficientCreditsError(error)) return { code: "insufficient_credits", message: "크레딧이 부족합니다.", status: 402 };

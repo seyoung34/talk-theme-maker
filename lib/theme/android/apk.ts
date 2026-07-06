@@ -196,7 +196,10 @@ async function writeProjectVersion(projectRoot: string, versionName: string) {
 async function writeAndroidLocalProperties(projectRoot: string) {
   const sdkDir = await resolveAndroidSdkDir();
   if (!sdkDir) {
-    throw new Error("Android SDK was not found. Set ANDROID_HOME or install the SDK under %LOCALAPPDATA%\\Android\\Sdk.");
+    throw new AndroidBuildError(
+      "android_sdk_missing",
+      "Android APK 빌드 환경에 Android SDK가 없습니다. 서버에 Android SDK를 설치하고 ANDROID_HOME 또는 ANDROID_SDK_ROOT를 설정해 주세요.",
+    );
   }
 
   const escaped = sdkDir.replaceAll("\\", "\\\\");
