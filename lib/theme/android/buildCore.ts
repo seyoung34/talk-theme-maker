@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const sampleProjectRoot = path.join(/* turbopackIgnore: true */ process.cwd(), "android-sample-theme", "apeach-26.1.0-source");
-const gradleTimeoutMs = 4 * 60 * 1000;
+const defaultGradleTimeoutMs = 4 * 60 * 1000;
 const gradleLogTailBytes = 24 * 1024;
 
 export type AndroidBuildInputFile = {
@@ -135,7 +135,7 @@ export function runGradle(projectRoot: string, args: string[], signal?: AbortSig
     const timeout = setTimeout(() => {
       didTimeOut = true;
       terminateProcessTree(child);
-    }, gradleTimeoutMs);
+    }, getGradleTimeoutMs());
 
     child.stdout.on("data", (chunk) => {
       logTail = appendLogTail(logTail, chunk.toString());
@@ -339,6 +339,11 @@ async function notifyStage(hooks: AndroidBuildHooks, stage: AndroidBuildStage) {
 function appendLogTail(current: string, chunk: string) {
   const next = current + chunk;
   return next.length > gradleLogTailBytes ? next.slice(-gradleLogTailBytes) : next;
+}
+
+function getGradleTimeoutMs() {
+  const configured = Number.parseInt(process.env.ANDROID_GRADLE_TIMEOUT_MS ?? "", 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : defaultGradleTimeoutMs;
 }
 
 function terminateProcessTree(child: ChildProcess) {

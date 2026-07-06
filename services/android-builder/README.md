@@ -30,6 +30,7 @@ The image build installs:
 - project npm dependencies used to compile the builder entrypoint
 
 The Docker build also runs `gradlew assembleDebug` once to warm Gradle, Android Gradle Plugin, Kotlin, and dependency caches.
+The warmup step uses a longer Gradle timeout than runtime because the first image build may need to download the Gradle distribution and dependencies.
 
 ## Docker Run
 

@@ -31,6 +31,6 @@ COPY public/template-assets ./public/template-assets
 RUN npm ci
 RUN chmod +x ./android-sample-theme/apeach-26.1.0-source/gradlew
 RUN npx tsc -p services/android-builder/tsconfig.json
-RUN node dist/services/android-builder/warm-gradle-cache.js
+RUN ANDROID_GRADLE_TIMEOUT_MS=900000 node dist/services/android-builder/warm-gradle-cache.js
 
 ENTRYPOINT ["node", "dist/services/android-builder/entrypoint.js"]
