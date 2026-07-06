@@ -14,13 +14,15 @@ const androidSampleTraceExcludes = [
   "./android-sample-theme/apeach-26.1.0-source/**/*.apk",
   "./android-sample-theme/apeach-26.1.0-source/**/*.aab",
 ];
+const templateAssetTraceFiles = ["./public/template-assets/**/*"];
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   outputFileTracingIncludes: {
-    "/api/export/android": androidSampleTraceFiles,
-    "/api/export/android-apk": androidSampleTraceFiles,
-    "/api/export/android-project": androidSampleTraceFiles,
+    "/api/export/android": [...androidSampleTraceFiles, ...templateAssetTraceFiles],
+    "/api/export/android-apk": [...androidSampleTraceFiles, ...templateAssetTraceFiles],
+    "/api/export/android-project": [...androidSampleTraceFiles, ...templateAssetTraceFiles],
+    "/api/export/ios": templateAssetTraceFiles,
   },
   outputFileTracingExcludes: {
     "/api/export/android": androidSampleTraceExcludes,
