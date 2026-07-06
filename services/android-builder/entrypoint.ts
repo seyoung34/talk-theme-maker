@@ -1,5 +1,6 @@
-import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { Storage } from "@google-cloud/storage";
 import {
   buildExportBaseName,
   findLatestApk,
@@ -14,6 +15,9 @@ import {
 
 type BundleManifestItem = { path: string; field: string } | { path: string; serverAsset: string };
 type LocalBundle = {
+  export_job_id?: string;
+  user_id?: string;
+  theme_id?: string;
   options?: {
     mode?: string;
     exportName?: string;
@@ -23,22 +27,50 @@ type LocalBundle = {
   manifest?: BundleManifestItem[];
 };
 
+type BundleOptions = AndroidExportProjectOptions & { exportName: string };
+type BuildSource =
+  | { mode: "local"; inputDir: string; outputDir: string }
+  | { mode: "gcs"; input: GcsObjectRef; inputPrefix: string; output: GcsPrefixRef; exportJobId: string };
+type GcsObjectRef = { bucket: string; object: string };
+type GcsPrefixRef = { bucket: string; prefix: string };
+type BuildResult = { outputFileName: string; apkBytes: Uint8Array };
+type ResultJson =
+  | { status: "success"; export_job_id: string; output_path: string; fileName: string; bytes: number }
+  | { status: "failed"; export_job_id?: string; errorCode: string };
+
 const inputDir = process.env.INPUT_DIR ?? "/in";
 const outputDir = process.env.OUTPUT_DIR ?? "/out";
+const gcsInputUri = process.env.GCS_INPUT_URI ?? process.env.INPUT_GCS_URI;
+const gcsOutputUri = process.env.GCS_OUTPUT_URI ?? process.env.OUTPUT_GCS_URI;
 const templateAssetsRoot = process.env.TEMPLATE_ASSETS_ROOT ?? "/workspace/public/template-assets";
+const storage = new Storage();
 
 try {
   await main();
 } catch (error) {
-  log("error", "failed", { error: error instanceof Error ? error.message : String(error) });
+  log("error", "failed", { errorCode: getErrorCode(error) });
   process.exitCode = 1;
 }
 
 async function main() {
-  log("info", "started", { inputDir, outputDir });
-  const bundle = await readBundle(path.join(inputDir, "bundle.json"));
+  const source = await resolveBuildSource();
+  log("info", "started", { mode: source.mode, export_job_id: "exportJobId" in source ? source.exportJobId : undefined });
+
+  const bundle = await readBundle(source);
   const options = readOptions(bundle);
-  const files = await readInputFiles(bundle, inputDir, templateAssetsRoot);
+
+  try {
+    const files = await readInputFiles(bundle, source, templateAssetsRoot);
+    const result = await buildApk(files, options);
+    await writeOutput(source, result);
+    log("info", "completed", { mode: source.mode, outputFileName: result.outputFileName });
+  } catch (error) {
+    await writeFailureResult(source, error);
+    throw error;
+  }
+}
+
+async function buildApk(files: AndroidBuildInputFile[], options: BundleOptions): Promise<BuildResult> {
   const prepared = await prepareAndroidProject(files, options);
 
   try {
@@ -49,20 +81,19 @@ async function main() {
     const apkPath = await findLatestApk(path.join(prepared.projectRoot, "build", "outputs", "apk"));
     if (!apkPath) throw new Error("APK output was not found.");
 
-    await mkdir(outputDir, { recursive: true });
     const outputFileName = `${buildExportBaseName(options.exportName, options.versionName)}.apk`;
-    const outputPath = path.join(outputDir, outputFileName);
-    await copyFile(apkPath, outputPath);
-    log("info", "completed", { outputFileName });
+    const apk = await readFile(apkPath);
+    return { outputFileName, apkBytes: new Uint8Array(apk) };
   } finally {
     await prepared.cleanup();
   }
 }
 
-async function readBundle(bundlePath: string): Promise<LocalBundle> {
-  const raw = await readFile(bundlePath, "utf8");
+async function readBundle(source: BuildSource): Promise<LocalBundle> {
+  const raw = source.mode === "gcs" ? await downloadText(source.input) : await readFile(path.join(source.inputDir, "bundle.json"), "utf8");
   const parsed: unknown = JSON.parse(raw);
   if (!isLocalBundle(parsed)) throw new Error("Invalid bundle.json.");
+  if (source.mode === "gcs") validateGcsBundle(parsed, source.exportJobId);
   return parsed;
 }
 
@@ -82,7 +113,7 @@ function readOptions(bundle: LocalBundle): AndroidExportProjectOptions & { expor
   };
 }
 
-async function readInputFiles(bundle: LocalBundle, root: string, assetsRoot: string): Promise<AndroidBuildInputFile[]> {
+async function readInputFiles(bundle: LocalBundle, source: BuildSource, assetsRoot: string): Promise<AndroidBuildInputFile[]> {
   const manifest = bundle.manifest ?? [];
   const files: AndroidBuildInputFile[] = [];
   const paths = new Set<string>();
@@ -97,7 +128,9 @@ async function readInputFiles(bundle: LocalBundle, root: string, assetsRoot: str
       continue;
     }
 
-    files.push({ path: normalizedPath, bytes: new Uint8Array(await readFile(resolveInputFilePath(root, item.field))) });
+    const bytes =
+      source.mode === "gcs" ? await downloadBytes(resolveGcsInputFile(source, item.field)) : new Uint8Array(await readFile(resolveInputFilePath(source.inputDir, item.field)));
+    files.push({ path: normalizedPath, bytes });
   }
 
   return files;
@@ -106,6 +139,9 @@ async function readInputFiles(bundle: LocalBundle, root: string, assetsRoot: str
 function isLocalBundle(value: unknown): value is LocalBundle {
   if (typeof value !== "object" || value === null) return false;
   const bundle = value as Record<string, unknown>;
+  if (bundle.export_job_id !== undefined && typeof bundle.export_job_id !== "string") return false;
+  if (bundle.user_id !== undefined && typeof bundle.user_id !== "string") return false;
+  if (bundle.theme_id !== undefined && typeof bundle.theme_id !== "string") return false;
   if (bundle.options !== undefined && (typeof bundle.options !== "object" || bundle.options === null)) return false;
   if (bundle.manifest !== undefined && !Array.isArray(bundle.manifest)) return false;
   return (bundle.manifest ?? []).every(isManifestItem);
@@ -122,10 +158,23 @@ function isManifestItem(value: unknown): value is BundleManifestItem {
 }
 
 function resolveInputFilePath(root: string, field: string) {
-  const normalized = field.replaceAll("\\", "/").replace(/^\/+/, "");
-  const relativePath = normalized.startsWith("files/") ? normalized.slice("files/".length) : normalized;
+  const relativePath = normalizeInputFileField(field);
   if (!relativePath || isUnsafeRelativePath(relativePath)) throw new Error(`Invalid input file field: ${field}`);
   return resolveInside(path.join(root, "files"), relativePath);
+}
+
+function resolveGcsInputFile(source: Extract<BuildSource, { mode: "gcs" }>, field: string): GcsObjectRef {
+  const relativePath = normalizeInputFileField(field);
+  if (!relativePath || isUnsafeRelativePath(relativePath)) throw new Error(`Invalid input file field: ${field}`);
+  return {
+    bucket: source.input.bucket,
+    object: joinGcsPath(source.inputPrefix, "files", relativePath),
+  };
+}
+
+function normalizeInputFileField(field: string) {
+  const normalized = field.replaceAll("\\", "/").replace(/^\/+/, "");
+  return normalized.startsWith("files/") ? normalized.slice("files/".length) : normalized;
 }
 
 function resolveTemplateAssetPath(root: string, serverAsset: string) {
@@ -162,6 +211,141 @@ function nonEmptyString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+async function resolveBuildSource(): Promise<BuildSource> {
+  if (!gcsInputUri && !gcsOutputUri) return { mode: "local", inputDir, outputDir };
+  if (!gcsInputUri || !gcsOutputUri) throw new Error("Both GCS_INPUT_URI and GCS_OUTPUT_URI are required for GCS mode.");
+
+  const input = parseGcsObjectUri(gcsInputUri);
+  const inputPrefix = input.object.endsWith("/bundle.json") ? input.object.slice(0, -"bundle.json".length).replace(/\/$/, "") : input.object.replace(/\/$/, "");
+  const bundleObject = input.object.endsWith("/bundle.json") ? input.object : joinGcsPath(inputPrefix, "bundle.json");
+  const inputBundle = { bucket: input.bucket, object: bundleObject };
+
+  const bundle = await readJsonFromGcs(inputBundle);
+  if (!isLocalBundle(bundle)) throw new Error("Invalid bundle.json.");
+  const exportJobId = nonEmptyString(bundle.export_job_id);
+  if (!exportJobId) throw new Error("GCS bundle requires export_job_id.");
+  if (inputPrefix !== exportJobId && !inputPrefix.endsWith(`/${exportJobId}`)) {
+    throw new Error("GCS input prefix must end with export_job_id.");
+  }
+
+  return {
+    mode: "gcs",
+    input: inputBundle,
+    inputPrefix,
+    output: resolveOutputPrefix(gcsOutputUri, exportJobId),
+    exportJobId,
+  };
+}
+
+async function writeOutput(source: BuildSource, result: BuildResult) {
+  if (source.mode === "local") {
+    await mkdir(source.outputDir, { recursive: true });
+    await writeFile(path.join(source.outputDir, result.outputFileName), result.apkBytes);
+    return;
+  }
+
+  const outputObject = joinGcsPath(source.output.prefix, result.outputFileName);
+  await storage.bucket(source.output.bucket).file(outputObject).save(Buffer.from(result.apkBytes), {
+    resumable: false,
+    contentType: "application/vnd.android.package-archive",
+  });
+
+  const resultJson: ResultJson = {
+    status: "success",
+    export_job_id: source.exportJobId,
+    output_path: `gs://${source.output.bucket}/${outputObject}`,
+    fileName: result.outputFileName,
+    bytes: result.apkBytes.byteLength,
+  };
+  await uploadJson(source.output, "result.json", resultJson);
+}
+
+async function writeFailureResult(source: BuildSource, error: unknown) {
+  if (source.mode !== "gcs") return;
+  const resultJson: ResultJson = {
+    status: "failed",
+    export_job_id: source.exportJobId,
+    errorCode: getErrorCode(error),
+  };
+  await uploadJson(source.output, "result.json", resultJson).catch(() => undefined);
+}
+
+function validateGcsBundle(bundle: LocalBundle, exportJobId: string) {
+  if (bundle.export_job_id !== exportJobId) throw new Error("GCS bundle export_job_id does not match input path.");
+  if (!nonEmptyString(bundle.user_id)) throw new Error("GCS bundle requires user_id.");
+  if (!nonEmptyString(bundle.theme_id)) throw new Error("GCS bundle requires theme_id.");
+  if (!Array.isArray(bundle.manifest)) throw new Error("GCS bundle requires manifest.");
+}
+
+async function readJsonFromGcs(ref: GcsObjectRef): Promise<unknown> {
+  const raw = await downloadText(ref);
+  return JSON.parse(raw);
+}
+
+async function downloadText(ref: GcsObjectRef) {
+  const [bytes] = await storage.bucket(ref.bucket).file(ref.object).download();
+  return bytes.toString("utf8");
+}
+
+async function downloadBytes(ref: GcsObjectRef) {
+  const [bytes] = await storage.bucket(ref.bucket).file(ref.object).download();
+  return new Uint8Array(bytes);
+}
+
+async function uploadJson(prefix: GcsPrefixRef, fileName: string, value: ResultJson) {
+  await storage.bucket(prefix.bucket).file(joinGcsPath(prefix.prefix, fileName)).save(JSON.stringify(value, null, 2), {
+    contentType: "application/json",
+    resumable: false,
+  });
+}
+
+function parseGcsObjectUri(uri: string): GcsObjectRef {
+  if (!uri.startsWith("gs://")) throw new Error("GCS URI must start with gs://.");
+  const withoutScheme = uri.slice("gs://".length);
+  const slash = withoutScheme.indexOf("/");
+  if (slash <= 0 || slash === withoutScheme.length - 1) throw new Error("GCS URI must include a bucket and object path.");
+  const bucket = withoutScheme.slice(0, slash);
+  const object = normalizeGcsObjectPath(withoutScheme.slice(slash + 1));
+  return { bucket, object };
+}
+
+function resolveOutputPrefix(uri: string, exportJobId: string): GcsPrefixRef {
+  if (!uri.startsWith("gs://")) throw new Error("GCS URI must start with gs://.");
+  const withoutScheme = uri.slice("gs://".length).replace(/\/+$/, "");
+  const slash = withoutScheme.indexOf("/");
+  if (slash === -1) {
+    if (!withoutScheme) throw new Error("GCS URI must include a bucket.");
+    return { bucket: withoutScheme, prefix: exportJobId };
+  }
+  const bucket = withoutScheme.slice(0, slash);
+  const rawPrefix = withoutScheme.slice(slash + 1);
+  const prefix = rawPrefix ? normalizeGcsObjectPath(rawPrefix) : exportJobId;
+  if (!bucket) throw new Error("GCS URI must include a bucket.");
+  return { bucket, prefix };
+}
+
+function normalizeGcsObjectPath(value: string) {
+  const normalized = value.replaceAll("\\", "/").replace(/^\/+|\/+$/g, "");
+  if (!normalized || isUnsafeRelativePath(normalized)) throw new Error(`Invalid GCS object path: ${value}`);
+  return normalized;
+}
+
+function joinGcsPath(...parts: string[]) {
+  return parts
+    .map((part) => part.replaceAll("\\", "/").replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean)
+    .join("/");
+}
+
+function getErrorCode(error: unknown) {
+  if (error && typeof error === "object" && "code" in error && typeof (error as { code?: unknown }).code === "string") {
+    return (error as { code: string }).code;
+  }
+  if (error instanceof SyntaxError) return "invalid_json";
+  if (error instanceof Error) return error.name || "error";
+  return "error";
+}
+
 function log(level: "info" | "error", event: string, details: Record<string, unknown>) {
-  console[level](JSON.stringify({ event, ...details }));
+  console[level](JSON.stringify({ event, ...Object.fromEntries(Object.entries(details).filter(([, value]) => value !== undefined)) }));
 }
