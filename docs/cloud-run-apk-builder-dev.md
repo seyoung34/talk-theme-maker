@@ -116,8 +116,8 @@ gs://<input-bucket>/<export_job_id>/files/<field>       # 사용자 업로드·�
       (`prepareAndroidProject`/`runGradle`/`buildAndroidApk` 재사용, `resolveAndroidSdkDir`는 `ANDROID_SDK_ROOT`
       지원하므로 수정 불필요)
 - [x] 1.7 엔트리(로컬 모드): 로컬 디렉터리의 `bundle.json`+`files/` → build core → 로컬 APK 출력
-- [ ] 1.8 `docker run -v <입력>:/in -v <출력>:/out` 로 APK 산출
-- [ ] 1.9 산출 APK 에뮬/실기기 설치 확인
+- [x] 1.8 `docker run -v <입력>:/in -v <출력>:/out` 로 APK 산출
+- [x] 1.9 산출 APK 에뮬/실기기 설치 확인
 - **완료 기준**: 고정 샘플 입력으로 컨테이너가 설치 가능한 APK를 만든다. (GCS·DB·크레딧 미개입)
 
 ### 2차 — GCS 입력/출력
