@@ -1,0 +1,15 @@
+.git
+.next
+.omo
+.vscode
+dist
+node_modules
+tsconfig.tsbuildinfo
+.codex-dev-err.log
+.codex-dev-out.log
+.env.local
+
+android-sample-theme/**/.gradle
+android-sample-theme/**/build
+android-sample-theme/**/*.apk
+android-sample-theme/**/*.aab

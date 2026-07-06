@@ -1,0 +1,14 @@
+{
+  "options": {
+    "mode": "apk",
+    "exportName": "local-builder-sample",
+    "versionName": "1.0.0",
+    "applicationId": "com.kakaotalk.theme.builder.local"
+  },
+  "manifest": [
+    {
+      "path": "src/main/theme/drawable-xxhdpi/theme_profile_01_image.png",
+      "serverAsset": "/template-assets/basic/android/theme_profile_01_image.png"
+    }
+  ]
+}
