@@ -3,9 +3,8 @@
 웹 호스트를 Vercel → **Cloudflare Pages(OpenNext)** 로 이전하는 상세 계획.
 상위 트랙: [../in-progress/android-build-cloud-run-plan.md](../in-progress/android-build-cloud-run-plan.md) Phase 3.
 
-> 상태: **착수함 — `cloudflare-pages-migration` 브랜치.** 5가지 핵심 결정 완료. CF-0 중 **Next 15 다운그레이드
-> 완료 + OpenNext 빌드/프리뷰 스파이크 성공**(캐치-22 재현 안 됨, 실기기 아닌 로컬 workerd 검증). 남은 건
-> **GCP 자체 OIDC 인증 스파이크**뿐(실제 GCP WIF 리소스 변경이 필요해 진행 전 확인 필요).
+> 상태: **CF-0 전체 완료** — `cloudflare-pages-migration` 브랜치. 5가지 핵심 결정 + 3개 스파이크(Next 15
+> 다운그레이드, OpenNext 빌드/프리뷰, GCP 자체 OIDC) 전부 성공. 다음은 CF-1(Node 전용 빌드 코어 분리)부터.
 > **이전의 진짜 동기는 Vercel Hobby의 상업적 이용 금지 조항이다** — 413 payload 문제는 비동기 Cloud Run Job
 > 경로로 이미 해소됐지만([../done/android-export-413-plan.md](../done/android-export-413-plan.md)), 그것과
 > 무관하게 상업 서비스를 Hobby 플랜에서 계속 운영하면 약관 위반이라 반드시 유료 플랜이 필요하다. 즉 실제
@@ -223,14 +222,24 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
   `.gitignore`의 `.open-next/`/`.wrangler/`)은 이번 CF-0 커밋에 그대로 남겨둠 — 이후 CF-4에서 이 설정을
   다시 다듬는다.
 
-**GCP 인증 스파이크 — 아직 미착수(실제 GCP WIF 인프라 변경 필요, 사용자 확인 후 진행 예정)**
-- [ ] GCP WIF에 `cloudflare-provider`(자체 OIDC issuer+JWKS) 추가 전, 로컬/스테이징에서 자체 서명 JWT →
-      STS 교환 성공을 먼저 스파이크로 검증(운영 GCP 리소스 건드리기 전 격리 확인)
+**GCP 인증 스파이크 — 완료, 성공 (프로덕션 `vercel-pool`은 건드리지 않고 격리해서 검증)**
+- [x] 임시 풀·프로바이더로 격리해 검증: `cloudflare-spike-pool`(신규, `vercel-pool`과 완전 분리) +
+      `cloudflare-spike-provider`를 로컬에서 생성한 RSA 키 JWKS로 `--jwk-json-path`(GCP가 공개 URL을 fetch할
+      필요 없이 JWKS를 직접 등록하는 옵션) 지정해 생성
+- [x] Node `crypto`로 RSA 키 쌍 생성 → JWKS(공개키) + RS256로 자체 서명한 JWT(iss/sub/aud/iat/exp, 5분 만료)
+      준비
+- [x] `https://sts.googleapis.com/v1/token`에 STS 토큰 교환(`urn:ietf:params:oauth:grant-type:token-exchange`)
+      요청 — **성공**: federated access token(`token_type: Bearer`, `expires_in: 241`) 발급 확인
+- [x] 정리: 프로바이더·풀 삭제(`DELETED` 상태 확인, ~30일 후 GCP가 완전 정리), 로컬 개인키·JWT 파일 삭제.
+      `vercel-pool`은 검증 내내 조회만 하고 변경 없음(`ACTIVE` 그대로)
+- **완료 기준 충족**: **GCP WIF가 자체 서명 OIDC를 실제로 신뢰하고 federated 토큰을 발급한다** — (B) 설계의
+  핵심 전제가 실측으로 확인됨. CF-3에서 이 절차를 영구 리소스(`cloudflare-provider`, 기존 풀 구조 아래)로
+  다시 만들면 됨.
 
 **Workers Free CPU 10ms 한도**: 사전 실측 생략 — §비용 분석 참조(우선 Free로 시작, 체감 저하 시 Paid 전환).
 
-- **완료 기준**: ~~Next 15 다운그레이드 회귀 통과~~(완료), ~~OpenNext 스파이크(Next 15 기준) 통과~~(완료), 자체
-  서명 JWT→STS 교환 스파이크 성공 — 이거 하나만 남음.
+- **완료 기준 전부 충족**: ~~Next 15 다운그레이드 회귀 통과~~ · ~~OpenNext 스파이크 통과~~ · ~~자체 서명
+  JWT→STS 교환 스파이크 성공~~ — **CF-0 완료.**
 
 ### CF-1 — 웹 번들에서 Node 전용 빌드 코어 분리 (B1~B4)
 - [ ] `exportRoute.ts`를 동기/비동기로 분리 — 엣지 라우트가 `apk.ts`(→buildCore)를 **정적 import하지 않도록**.
@@ -255,6 +264,9 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
 - **완료 기준**: Cloudflare Workers에서 자체 서명 JWT→STS 교환→impersonation→GCS/Job 트리거가 SA 키 없이 성공.
 
 ### CF-4 — OpenNext 도입 + 설정 정리
+> CF-0 스파이크에서 `@opennextjs/cloudflare`/`wrangler` 설치 + 최소 `wrangler.jsonc`/`open-next.config.ts`는
+> 이미 만들어져 있음(스파이크 검증용). 여기서는 그걸 실제 배포용으로 다듬는다(R2 incremental cache, 실제
+> Cloudflare 계정/프로젝트 연결, 배포 파이프라인).
 - [ ] `@opennextjs/cloudflare` 도입, 빌드/배포 파이프라인(Pages) 구성
 - [ ] `next.config.ts`에서 Vercel 전용 항목 정리: `outputFileTracingIncludes/Excludes`, `proxyClientMaxBodySize`
 - [ ] 라우트 `runtime="nodejs"`/`maxDuration` 선언 재검토(엣지에선 무의미) — 잔류 Node 라우트에만 유지
@@ -269,15 +281,17 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
 - [ ] DNS/도메인 전환(정상 확인 후)
 - **완료 기준**: 위 E2E 전 항목 통과, 실기기 검증 완료. 이 문서를 `plans/done/`으로 이동.
 
-## 미결정 (스파이크 결과로만 확정 가능 — 정책 결정 5가지는 완료)
+## 미결정
 
-- **Next 15 다운그레이드 회귀** — `middleware.ts` 전환·설정 rename 이후 로그인/세션 등 기존 동작이 실제로
-  안 깨지는지는 CF-0 다운그레이드 단계에서 실측 전까지 미확정(다만 Next 16 전용 API 미사용 확인으로 위험은 낮음).
-- **자체 서명 JWT → GCP STS 교환 스파이크** — CF-0에서 격리 검증 전까지는 (B) 설계가 이론상 타당하다는
-  수준. 실제로 GCP WIF가 커스텀 issuer를 기대대로 신뢰하는지는 실측 전까지 미확정.
+CF-0의 3개 스파이크(Next 15 다운그레이드 회귀, OpenNext 빌드/프리뷰, 자체 서명 JWT→GCP STS 교환)는 모두
+실측 완료. 남은 미결정은:
+
 - **Next 15 → 재상향 시점** — 2026-10-21(Maintenance LTS 종료) 전에 그때 시점의 최신 지원 버전으로 다시
-  올려야 함. `docs/notes/scratch.md`에 기한 메모 추가 예정.
+  올려야 함. `docs/notes/scratch.md`에 기한 메모 있음.
 - **Workers Free CPU 10ms 한도** — 사전 실측 안 함(결정 완료). 운영 중 체감 저하 시 Paid 전환.
+- **OpenNext Windows 호환 경고** — 이번 스파이크는 Windows에서 문제없이 통과했지만, 공식적으로 "완전 호환
+  아님"이라 경고함. 실제 배포 파이프라인(CI 등)이 Windows가 아니라면 무관하지만, 로컬 개발 환경 기준으로는
+  재확인 필요.
 - Cloud Run Job `max-retries`, 버킷 lifecycle 최종값 등 상위 트랙([cloud-run-apk-builder-dev.md](../in-progress/cloud-run-apk-builder-dev.md))의 기존 미결정 항목은 이 이전과 무관하게 별도로 남아 있음.
 
 ## 검증 (요약)
