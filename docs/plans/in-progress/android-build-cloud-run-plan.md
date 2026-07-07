@@ -155,14 +155,14 @@ Cloudflare Pages Function → { status, downloadUrl? }
 - [x] E2E 검증(큐잉→폴링→다운로드, 크레딧 예약·완료·환불 경로) — 실기기 설치까지 확인
 - **완료** — 상세 근거: [cloud-run-apk-builder-dev.md](cloud-run-apk-builder-dev.md) 3.2~3.6, 4.1~4.8.
 
-### Phase 3 — Cloudflare Pages 이전
-> **착수함 — CF-0 기술 스파이크 진행 중(`cloudflare-pages-migration` 브랜치).** 상세 계획은 별도 문서로 분리:
-> [cloudflare-pages-migration-plan.md](cloudflare-pages-migration-plan.md).
+### Phase 3 — Cloudflare Workers(OpenNext) 이전
+> **CF-0 완료, CF-1부터 진행 중(`cloudflare-pages-migration` 브랜치 — 브랜치명은 만들 당시 이름 그대로 유지,
+> 실제 배포 대상은 Pages가 아니라 Workers임).** 상세 계획은 별도 문서로 분리:
+> [cloudflare-workers-opennext-migration-plan.md](cloudflare-workers-opennext-migration-plan.md).
 > 이전의 진짜 동기는 413(이미 해소됨)이 아니라 **Vercel Hobby 상업 이용 금지** — 상업 서비스는 Pro($20/월~)
 > 아니면 다른 호스트가 필요하다. 비용 분석 결과 Cloudflare가 유리(연 15~27만원 절감 추정)해 **자체 OIDC(JWKS)
 > 발급 + Next 15/middleware.ts 다운그레이드(시한부, 2026-10-21 전 재상향)로 완전 이전**하기로 확정했다(5개
-> 정책 결정 모두 완료). 지금은 CF-0(Next 15 다운그레이드·OpenNext·GCP 인증 스파이크) 진행 중. 아래는 원래
-> 개괄 항목(상세·최신 진행 상태는 분리 문서 참조).
+> 정책 결정 모두 완료, CF-0 스파이크 3개 전부 성공). 아래는 원래 개괄 항목(상세·최신 진행 상태는 분리 문서 참조).
 - [ ] OpenNext(`@opennextjs/cloudflare`) 도입 + 빌드/배포 파이프라인
 - [ ] Node 전용 API 사용처 감사(전 라우트) — 특히 export 경로에서 `apk.ts` import 완전 분리 확인
 - [ ] 413 `node:fs`(public 읽기) 제거 확인(기본 에셋은 Job 소유)

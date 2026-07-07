@@ -1,6 +1,9 @@
-# Cloudflare Pages 이전 계획 (Android 빌드 오프로딩 Phase 3)
+# Cloudflare Workers/OpenNext 이전 계획 (Android 빌드 오프로딩 Phase 3)
 
-웹 호스트를 Vercel → **Cloudflare Pages(OpenNext)** 로 이전하는 상세 계획.
+웹 호스트를 Vercel → **Cloudflare Workers(OpenNext)** 로 이전하는 상세 계획. CF-0 스파이크로 실측 확인된 대로,
+`@opennextjs/cloudflare`는 앱을 **Cloudflare Workers**(`wrangler.jsonc`의 `main` 필드가 가리키는
+`.open-next/worker.js`)로 배포한다 — "Pages Functions"이 아니라 Worker 자체이므로 문서명·용어를 실제 배포
+형태에 맞춰 정리한다.
 상위 트랙: [../in-progress/android-build-cloud-run-plan.md](../in-progress/android-build-cloud-run-plan.md) Phase 3.
 
 > 상태: **CF-0 전체 완료** — `cloudflare-pages-migration` 브랜치. 5가지 핵심 결정 + 3개 스파이크(Next 15
@@ -169,7 +172,7 @@ iOS는 gradle이 없어 zip 조립(`createStoredZipBytes`)은 엣지에서 그�
 ## 목표 아키텍처
 
 ```
-정적/RSC/페이지  →  Cloudflare Pages (OpenNext, workerd)
+정적/RSC/페이지  →  Cloudflare Workers (OpenNext, workerd)
 API 라우트
   ├─ 엣지 안전(auth·billing·assets·android status/enqueue·ios)  →  Cloudflare Workers
   └─ 동기 gradle(apk-zip/project 관리자)  →  Cloudflare 이전 시점에 일시 비활성화
@@ -246,12 +249,28 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
       비동기 전용 엣지 핸들러 + (남긴다면) 동기 핸들러를 별 모듈로.
 - [ ] `apk.ts`/`buildCore.ts`/`request.ts`의 Node 의존부가 엣지 라우트 그래프에 포함되지 않음을 번들 분석으로 확인
 - [ ] `/api/export/android`가 비동기 경로만으로 동작(플래그 강제 on 전제) 확인
-- **완료 기준**: 엣지 대상 라우트 번들에 `child_process`/`node:fs`/`node:os` 참조가 없다(정적 분석/빌드 로그로 증명).
+- **규칙 — 엣지 대상 파일의 Node import 금지 (재발 방지)**: 엣지에서 서빙되는 라우트/모듈
+  (`app/api/export/android/route.ts`+`exportRoute.ts`의 비동기 분기, `app/api/export/ios/route.ts`,
+  `app/api/billing/**`, `app/api/theme-assets/**`, `app/api/admin/**`, `app/api/me`, `app/api/session`,
+  `middleware.ts`+`lib/supabase/middleware.ts`)는 `node:child_process`·`node:fs`·`node:os`·`node:tls`·
+  `node:net` 등 Node 전용 모듈을 **직접 import든 다른 모듈을 거친 transitive import든 금지**한다. B3에서
+  손으로 한 번 분리해도, 나중에 다른 사람이 무심코 `apk.ts`나 `buildCore.ts`를 엣지 라우트에서 다시
+  import하면 조용히 재발할 수 있다 — 이 문서에만 적어두지 말고 `scripts/verify-*.mjs` 관례를 따라
+  `scripts/verify-edge-safe-imports.mjs` 같은 체크 스크립트를 만들어 `package.json`의 `check:*` 계열에
+  추가하는 걸 CF-1의 산출물로 포함한다(엣지 대상 파일 목록에서 시작해 import 그래프를 훑어 금지 모듈이
+  나오면 실패시키는 정도로 충분).
+- **완료 기준**: 엣지 대상 라우트 번들에 `child_process`/`node:fs`/`node:os` 참조가 없다(정적 분석/빌드 로그로
+  증명). 위 재발 방지 체크 스크립트가 존재하고 통과한다.
 
 ### CF-2 — iOS 기본 에셋 읽기 대체 (B5)
 - [ ] `app/api/export/ios/route.ts`의 `readFile`(디스크) → 확정 대안(HTTP fetch 권장)으로 교체
 - [ ] 경로 화이트리스트/`..` 차단 로직 유지(엣지 버전으로 포팅)
-- **완료 기준**: iOS 내보내기가 `node:fs` 없이 기본 에셋을 해결하고, 결과물(.ktheme/zip)이 이전과 바이트 동일.
+- **완료 기준**: iOS 내보내기가 `node:fs` 없이 기본 에셋을 해결하고, 아래 두 가지를 모두 만족한다 —
+  1. **파일 해시가 이전과 동일**(전환 전/후 같은 입력으로 만든 `.ktheme`/zip의 SHA-256 비교. "바이트 동일"과
+     같은 뜻이지만 해시 비교가 실제 검증 방법이라 이렇게 명시): 디스크 읽기 → HTTP fetch로 바꾼 게 바이트를
+     조용히 바꾸지 않았다는 기계적 증명.
+  2. **실제 카카오톡 앱에서 테마 import가 성공**: 해시가 같아도 애초에 원본 로직 자체가 잘못돼 있었을 가능성은
+     해시 비교로 못 잡는다 — 최종적으로 기능이 되는지가 진짜 기준이라 실기기 import 확인을 별도로 추가한다.
 
 ### CF-3 — GCP 인증 엣지화 (자체 OIDC/JWKS 구현)
 - [ ] 서명 키 쌍 생성, 개인키를 Cloudflare Workers Secret으로 등록
@@ -261,13 +280,46 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
       (`crypto.subtle.sign`, RS256/ES256, 5분 이내 단명)
 - [ ] `@vercel/oidc` 의존성 제거
 - [ ] 관리자 전용 zip 내보내기 임시 비활성화 적용(§동기 경로 처리 확정 반영)
-- **완료 기준**: Cloudflare Workers에서 자체 서명 JWT→STS 교환→impersonation→GCS/Job 트리거가 SA 키 없이 성공.
+
+**OIDC 클레임 (고정)**
+- `iss`: 자체 발급자 문자열(Worker의 실제 도메인, 예 `https://kakaotalk-theme-maker.<subdomain>.workers.dev`
+  또는 커스텀 도메인). CF-0 스파이크에서 쓴 `https://kakaotalk-theme-maker-spike.workers.dev`는 테스트용이라
+  실제 배포 도메인으로 교체.
+- `sub`: 고정 문자열(예 `cloudflare-worker-prod`) — 이 Worker 배포 하나를 가리키는 값, 요청마다 바뀌지 않음.
+- `aud`: WIF 프로바이더 전체 리소스 이름(`//iam.googleapis.com/projects/<번호>/locations/global/workloadIdentityPools/vercel-pool/providers/cloudflare-provider` 형태, CF-0 스파이크와 동일 패턴).
+- `iat`/`exp`: 요청 시점 기준 발급, **5분 이내 단명**(스파이크와 동일).
+
+**attribute-condition (신규 — 스파이크에서는 생략했으나 실 구현엔 필수)**
+- [ ] 프로바이더 생성 시 `--attribute-condition="assertion.sub == 'cloudflare-worker-prod'"` 지정 — JWKS
+      신뢰만으로는 "이 서명 키로 만든 어떤 sub든" 통과되므로, sub을 고정값으로 검증하는 조건을 걸어 서명 키가
+      유출됐을 때도 다른 subject를 사칭한 토큰 교환을 막는 방어선을 하나 더 둔다(CF-0 스파이크는 검증용이라
+      이 조건 없이 만들었음 — 실제 구현에서는 빠뜨리지 않는다).
+
+**키 로테이션 절차**
+- [ ] GCP WIF의 `--jwk-json-path`는 `keys` 배열에 여러 키를 동시에 등록할 수 있다는 점을 이용:
+      1) 새 키 쌍 생성 → 2) 새 `kid`를 기존 JWKS 배열에 **추가**(기존 키 유지, 둘 다 신뢰됨) → 3) Worker의
+      서명 로직을 새 `kid`로 전환 → 4) 안전 기간(예 7일) 지켜본 뒤 기존 키를 JWKS 배열에서 제거.
+      한 번에 스왑하지 않고 이렇게 하는 이유: 전환 도중 서명/검증 키가 잠깐이라도 어긋나면 빌드 큐잉이 전부
+      실패하기 때문(무중단 로테이션).
+- [ ] 로테이션 주기는 확정하지 않음(연 1회 또는 유출 의심 시 즉시) — CF-3 구현 시점에 정한다.
+
+**롤백 경로 (이 인증 메커니즘이 배포 후 깨질 경우)**
+- [ ] **사용자 영향 최소화**: 인증이 깨져도 `enqueueAndroidBuild`가 실패하면 기존 `failExportJob`(멱등, 즉시
+      환불) 경로를 그대로 타므로 크레딧 손실은 없다 — 사용자는 "빌드 시작 실패" 에러만 보고 재시도 가능.
+- [ ] **Worker 버전 롤백**: Cloudflare Workers는 이전 배포로 즉시 롤백 가능 — 이 인증 코드가 원인으로
+      의심되면 direct 원인 조사 전에 우선 이전 버전으로 되돌려 서비스 영향을 끊는다.
+- [ ] **DNS/호스트 롤백**: CF-5의 DNS 전환 항목과 연결 — Cloudflare 컷오버 후에도 일정 기간 Vercel 배포를
+      바로 폐기하지 않고 유지해, 이 인증 메커니즘 자체가 구조적으로 막히면 DNS를 Vercel로 되돌리는 최후
+      수단을 쓸 수 있게 한다.
+- **완료 기준**: Cloudflare Workers에서 자체 서명 JWT→STS 교환→impersonation→GCS/Job 트리거가 SA 키 없이
+  성공. `attribute-condition`이 걸려 있고, 다른 `sub` 값으로 서명한 토큰은 교환이 거부됨을 확인. 키 로테이션
+  절차가 문서화돼 있고 최소 한 번 리허설됨(새 키 추가→전환→기존 키 제거를 무중단으로).
 
 ### CF-4 — OpenNext 도입 + 설정 정리
 > CF-0 스파이크에서 `@opennextjs/cloudflare`/`wrangler` 설치 + 최소 `wrangler.jsonc`/`open-next.config.ts`는
 > 이미 만들어져 있음(스파이크 검증용). 여기서는 그걸 실제 배포용으로 다듬는다(R2 incremental cache, 실제
 > Cloudflare 계정/프로젝트 연결, 배포 파이프라인).
-- [ ] `@opennextjs/cloudflare` 도입, 빌드/배포 파이프라인(Pages) 구성
+- [ ] `@opennextjs/cloudflare` 도입, 빌드/배포 파이프라인(Cloudflare Workers) 구성
 - [ ] `next.config.ts`에서 Vercel 전용 항목 정리: `outputFileTracingIncludes/Excludes`, `proxyClientMaxBodySize`
 - [ ] 라우트 `runtime="nodejs"`/`maxDuration` 선언 재검토(엣지에선 무의미) — 잔류 Node 라우트에만 유지
 - [ ] 시크릿/환경변수 이전: WIF 설정값·GCP 버킷/Job·Supabase 시크릿·PayApp 키를 Cloudflare 시크릿/변수로
@@ -278,8 +330,23 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
 - [ ] Supabase auth/session·이미지·서명 URL·CORS(출력 버킷)·결제(PayApp) 엣지 동작 회귀
 - [ ] Cloudflare Preview E2E: 로그인 → Android 비동기 내보내기(큐잉→폴링→서명URL) → iOS 내보내기 → 크레딧
       예약/완료/환불 → 실기기 APK 설치
-- [ ] DNS/도메인 전환(정상 확인 후)
-- **완료 기준**: 위 E2E 전 항목 통과, 실기기 검증 완료. 이 문서를 `plans/done/`으로 이동.
+- [ ] **Workers CPU 시간 관찰** — §비용 분석에서 사전 실측을 미루기로 한 항목의 실제 확인 지점. 위 E2E를
+      한 번 돌린 뒤 Cloudflare 대시보드에서 라우트별(특히 `theme-assets` 서명 URL 배치, `android/status` 폴링,
+      `middleware.ts`) CPU 시간을 관찰해 Free 10ms 한도에 얼마나 가까운지 기록. 막는 기준은 아니고(§비용
+      분석 결정 유지), Paid 전환 판단 근거 자료로 남긴다.
+- [ ] **PayApp 콜백(`/api/billing/payapp/feedback`) 별도 검증** — 코드 자체는 이미 엣지 안전(Node 의존 없음,
+      `request.formData()` + Web Crypto만 사용, `lib/billing/payapp.ts:1-2` 확인함)하지만, 이 라우트는
+      **사용자 브라우저가 아니라 PayApp 서버가 직접 호출하는 웹훅**이라 위 "로그인→내보내기→크레딧" E2E로는
+      전혀 exercise되지 않는다. 실결제 1건 또는 실제 페이로드 형태를 모사한 POST로 별도 확인 필요:
+      1) PayApp 판매자 대시보드에 등록된 콜백 URL이 새 Cloudflare 도메인을 가리키도록 갱신됐는지,
+      2) `payload.userid`/`linkkey`/`linkval` 매칭 → `payments` 테이블 조회 → `complete_credit_purchase` RPC
+      호출까지 전 구간이 Workers에서 실패 없이 도는지.
+- [ ] **DNS 전환 + 롤백 준비**: DNS/도메인 전환(정상 확인 후) 실행. 전환 즉시 Vercel 배포를 폐기하지 않고
+      **최소 며칠의 관찰 기간** 동안 유지 — 이 기간에 문제가 발견되면 DNS 레코드를 Vercel로 되돌리는 게
+      유일하게 필요한 되돌리기 동작이 되도록 미리 확인해둔다(되돌리기 기준: 에러율 급증, 결제/크레딧 불일치,
+      실기기 빌드 실패 등 §검증 항목의 회귀). 관찰 기간이 끝나고서만 Vercel 배포를 실제로 내린다.
+- **완료 기준**: 위 E2E 전 항목 통과, Workers CPU 시간 관찰 기록 남김, PayApp 콜백 별도 검증 통과, 실기기
+  검증 완료, DNS 전환 후 관찰 기간까지 무사히 지남. 이 문서를 `plans/done/`으로 이동.
 
 ## 미결정
 
@@ -299,4 +366,6 @@ CF-0의 3개 스파이크(Next 15 다운그레이드 회귀, OpenNext 빌드/프
 1. 로컬/스파이크: OpenNext 최소 앱 Cloudflare Preview 부팅, 엣지 라우트 번들에 Node 의존 부재.
 2. Preview E2E: 로그인·Android 비동기 내보내기·iOS 내보내기·크레딧 3경로(예약/완료/환불)·서명 URL TTL·CORS.
 3. 실기기: Android APK 설치 확인.
-4. 회귀: 결제(PayApp) 왕복, 관리자 크레딧 코드, 테마 에셋 서명 URL.
+4. 회귀: 결제(PayApp) 왕복(사용자 플로우) + **PayApp 콜백 웹훅 별도 검증**(브라우저 E2E로는 안 잡힘), 관리자
+   크레딧 코드, 테마 에셋 서명 URL.
+5. 운영 관찰: Workers CPU 시간(Free 한도 근접 여부), DNS 전환 후 롤백 가능 기간 확보.
