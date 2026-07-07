@@ -31,8 +31,8 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     // Theme exports contain multiple image files and commonly exceed the
-    // proxy's 10MB default. Keep a finite ceiling to bound per-request memory.
-    proxyClientMaxBodySize: "50mb",
+    // middleware's 10MB default. Keep a finite ceiling to bound per-request memory.
+    middlewareClientMaxBodySize: "50mb",
   },
 };
 

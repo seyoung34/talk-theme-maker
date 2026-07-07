@@ -184,13 +184,27 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
 - [x] iOS 기본 에셋 읽기 방식 확정: **(i) HTTP fetch**
 - [x] Next 버전 전략 확정: **Next 15 + `middleware.ts`로 다운그레이드**(시한부, 2026-10-21 전 재상향 필요)
 
-**Next 15 다운그레이드 (선행 — 아래 OpenNext 스파이크보다 먼저 한다)**
-- [ ] `package.json`의 `next` 버전을 15 최신 마이너로 다운그레이드, `react`/`react-dom` 등 피어 의존성 호환 확인
-- [ ] `proxy.ts` → `middleware.ts` 이름 변경, `export async function proxy` → `export async function middleware`
-- [ ] `next.config.ts`: `experimental.proxyClientMaxBodySize` → `experimental.middlewareClientMaxBodySize`
-- [ ] `npx tsc --noEmit` + `npm run build` + 로그인(Kakao/이메일) 로컬 회귀 확인 — 다운그레이드 자체가 깨진 게
-      없는지 먼저 확인(Cloudflare 얹기 전에)
-- **완료 기준**: Next 15에서 기존 기능이 전과 동일하게 동작(로그인·세션 갱신 포함).
+**Next 15 다운그레이드 (선행 — 아래 OpenNext 스파이크보다 먼저 한다) — 완료**
+- [x] `package.json`의 `next`를 `^15.5.20`(2026-07 기준 최신 안정 마이너)으로 다운그레이드.
+      `react`/`react-dom` ^19.0.0은 15.5.20 피어 의존성 범위(`^18.2.0 || ^19.0.0`) 안이라 변경 불필요
+- [x] `proxy.ts` → `middleware.ts`, `export async function proxy` → `export async function middleware`.
+      내부 헬퍼도 함께 정리: `lib/supabase/proxy.ts` → `lib/supabase/middleware.ts`(유일한 호출부인 루트
+      `middleware.ts`의 import만 변경, 다른 참조 없음 확인)
+- [x] `next.config.ts`: `experimental.proxyClientMaxBodySize` → `experimental.middlewareClientMaxBodySize`
+- [x] `npx tsc --noEmit` + `npm run build` + dev 서버로 `/`, `/login`, `/api/me`, `/api/session`, `/template`
+      실제 요청 — 전부 200, 빌드 로그에 `ƒ Middleware 90.4 kB`로 정상 컴파일 확인, 에러 없음
+- **예상 못 했던 추가 발견 2건** (계획에 없었지만 다운그레이드 중 실제로 걸림):
+  - `npm run build`가 **`tsconfig.json`의 `jsx`를 `"react-jsx"` → `"preserve"`로 자동 수정**함(Next 15가
+    App Router에 요구하는 값 — Next 자체 SWC 변환과 충돌 방지 목적, 정상 동작이라 그대로 둠).
+  - `npx tsc --noEmit`이 `app/layout.tsx`의 `import "./globals.css"`에서 **`TS2882`(side-effect import에 대한
+    타입 선언 없음)** 로 실패 — TypeScript 6.0.3의 신규 진단이 Next 16의 내장 TS 플러그인에서는 흡수됐지만
+    Next 15 플러그인엔 그 대응이 없는 것으로 보임. 저장소 어디에도 plain `*.css` ambient 선언이 없었던 게
+    원인 → 신규 [css.d.ts](../../../css.d.ts)에 `declare module "*.css";` 한 줄 추가로 해결(표준적인 해법,
+    Next 16 전용 동작에 의존하던 부분 아님).
+  - `next-env.d.ts`: Next 15의 dev 서버는 **`.next/dev/types/`를 만들지 않고 `.next/types/`만 사용**(Next 16과
+    다른 지점 — AGENTS.md의 "빌드 후 `.next/dev/types/routes.d.ts`로 복원" 관례는 Next 16 전용이었음, Next
+    15에서는 `.next/types/routes.d.ts` 참조가 맞는 상태이고 `next dev` 실행 후 자동으로 그 값으로 유지됨).
+- **완료 기준 충족**: Next 15에서 기존 기능이 전과 동일하게 동작(로그인·세션 갱신 포함) — 로컬 검증 완료.
 
 **OpenNext × Next 15 호환성 스파이크 (다운그레이드 이후, 위험도 낮음 — 성숙 경로)**
 - [ ] 격리된 워크트리에서 `@opennextjs/cloudflare`+`wrangler` 설치, `nodejs_compat` 플래그·
@@ -205,8 +219,8 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
 
 **Workers Free CPU 10ms 한도**: 사전 실측 생략 — §비용 분석 참조(우선 Free로 시작, 체감 저하 시 Paid 전환).
 
-- **완료 기준**: Next 15 다운그레이드 회귀 통과, OpenNext 스파이크(Next 15 기준) 통과, 자체 서명 JWT→STS 교환
-  스파이크 성공.
+- **완료 기준**: ~~Next 15 다운그레이드 회귀 통과~~(완료), OpenNext 스파이크(Next 15 기준) 통과, 자체 서명
+  JWT→STS 교환 스파이크 성공 — 이 두 개만 남음.
 
 ### CF-1 — 웹 번들에서 Node 전용 빌드 코어 분리 (B1~B4)
 - [ ] `exportRoute.ts`를 동기/비동기로 분리 — 엣지 라우트가 `apk.ts`(→buildCore)를 **정적 import하지 않도록**.
