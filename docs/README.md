@@ -29,14 +29,14 @@
 |---|---|
 | [plans/planned/easy-guide-plan.md](plans/planned/easy-guide-plan.md) | 이미지 중심 "쉬운 가이드" 기획 확정. 스크린샷/GIF 에셋 준비 후 구현 착수 예정 |
 | [plans/planned/export-loading-ui-plan.md](plans/planned/export-loading-ui-plan.md) | edit 창 내보내기 사전 준비 구간의 로딩/진행 상태 노출 기획 확정. `isPreparingExport` 분리와 다이얼로그 선오픈 방향 |
-| [plans/planned/cloudflare-pages-migration-plan.md](plans/planned/cloudflare-pages-migration-plan.md) | Cloudflare Pages 이전(Android 빌드 Phase 3). 동기는 Vercel Hobby 상업 이용 금지. 자체 OIDC(JWKS)·Next 15+middleware.ts 다운그레이드(시한부, 2026-10-21 전 재상향)로 확정. 남은 건 다운그레이드 회귀·OpenNext 스파이크 |
 
 ## plans/in-progress — 구현 진행중
 
 | 문서 | 상태 |
 |---|---|
-| [plans/in-progress/android-build-cloud-run-plan.md](plans/in-progress/android-build-cloud-run-plan.md) | 비동기 Cloud Run Job 빌드 오프로딩은 완료. Cloudflare Pages 이전(Phase 3)은 미착수 — 현재도 Vercel 유지 |
+| [plans/in-progress/android-build-cloud-run-plan.md](plans/in-progress/android-build-cloud-run-plan.md) | 비동기 Cloud Run Job 빌드 오프로딩은 완료. Cloudflare Pages 이전(Phase 3) 착수함 — 아래 문서 참조 |
 | [plans/in-progress/cloud-run-apk-builder-dev.md](plans/in-progress/cloud-run-apk-builder-dev.md) | Cloud Run Job 빌드 오프로딩 마일스톤 1~4차 완료(실기기 검증 포함). 남은 것: `apk-zip`/`project` 비동기화(3.7) + 후속 튜닝 |
+| [plans/in-progress/cloudflare-pages-migration-plan.md](plans/in-progress/cloudflare-pages-migration-plan.md) | Cloudflare Pages 이전. 5개 정책 결정 완료(자체 OIDC/JWKS, Next 15+middleware.ts 다운그레이드[시한부 2026-10-21], 관리자 zip 일시 비활성화, iOS HTTP fetch). `cloudflare-pages-migration` 브랜치에서 CF-0 스파이크 진행 중 |
 
 ## plans/done — 구현·검증 완료
 

@@ -3,7 +3,7 @@
 웹 호스트를 Vercel → **Cloudflare Pages(OpenNext)** 로 이전하는 상세 계획.
 상위 트랙: [../in-progress/android-build-cloud-run-plan.md](../in-progress/android-build-cloud-run-plan.md) Phase 3.
 
-> 상태: **기획 확정 — 4가지 핵심 결정 완료, 구현 착수 전.**
+> 상태: **착수함 — `cloudflare-pages-migration` 브랜치, CF-0 기술 스파이크 진행 중.** 5가지 핵심 결정 완료.
 > **이전의 진짜 동기는 Vercel Hobby의 상업적 이용 금지 조항이다** — 413 payload 문제는 비동기 Cloud Run Job
 > 경로로 이미 해소됐지만([../done/android-export-413-plan.md](../done/android-export-413-plan.md)), 그것과
 > 무관하게 상업 서비스를 Hobby 플랜에서 계속 운영하면 약관 위반이라 반드시 유료 플랜이 필요하다. 즉 실제
