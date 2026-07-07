@@ -9,6 +9,7 @@
     "check:ios-slots": "node scripts/verify-ios-slot-metadata.mjs",
     "check:android-colors": "node scripts/verify-android-color-slots.mjs",
     "check:android-assets": "node scripts/verify-android-bundled-assets.mjs",
+    "check:edge-imports": "node scripts/verify-edge-safe-imports.mjs",
     "build": "next build",
     "start": "next start",
     "cf:build": "opennextjs-cloudflare build",

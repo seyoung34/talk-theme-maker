@@ -245,10 +245,10 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
   JWT→STS 교환 스파이크 성공~~ — **CF-0 완료.**
 
 ### CF-1 — 웹 번들에서 Node 전용 빌드 코어 분리 (B1~B4)
-- [ ] `exportRoute.ts`를 동기/비동기로 분리 — 엣지 라우트가 `apk.ts`(→buildCore)를 **정적 import하지 않도록**.
+- [x] `exportRoute.ts`를 동기/비동기로 분리 — 엣지 라우트가 `apk.ts`(→buildCore)를 **정적 import하지 않도록**.
       비동기 전용 엣지 핸들러 + (남긴다면) 동기 핸들러를 별 모듈로.
-- [ ] `apk.ts`/`buildCore.ts`/`request.ts`의 Node 의존부가 엣지 라우트 그래프에 포함되지 않음을 번들 분석으로 확인
-- [ ] `/api/export/android`가 비동기 경로만으로 동작(플래그 강제 on 전제) 확인
+- [x] `apk.ts`/`buildCore.ts`/`request.ts`의 Node 의존부가 엣지 라우트 그래프에 포함되지 않음을 번들 분석으로 확인
+- [x] `/api/export/android`가 비동기 경로만으로 동작(플래그 강제 on 전제) 확인
 - **규칙 — 엣지 대상 파일의 Node import 금지 (재발 방지)**: 엣지에서 서빙되는 라우트/모듈
   (`app/api/export/android/route.ts`+`exportRoute.ts`의 비동기 분기, `app/api/export/ios/route.ts`,
   `app/api/billing/**`, `app/api/theme-assets/**`, `app/api/admin/**`, `app/api/me`, `app/api/session`,
@@ -261,6 +261,11 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
   나오면 실패시키는 정도로 충분).
 - **완료 기준**: 엣지 대상 라우트 번들에 `child_process`/`node:fs`/`node:os` 참조가 없다(정적 분석/빌드 로그로
   증명). 위 재발 방지 체크 스크립트가 존재하고 통과한다.
+- **CF-1 구현 메모**: `/api/export/android`는 `exportRouteAsync.ts`만 import하고, 동기 빌드 경로는 기존
+  `exportRoute.ts`에 남겼다. `requestShared.ts`/`validation.ts`는 Node import 없이 비동기 경로가 공유하는
+  manifest·검증 로직을 제공한다. `scripts/verify-edge-safe-imports.mjs` 추가 및 `check:edge-imports` 등록 완료.
+  CF-2 대상인 `app/api/export/ios/route.ts`는 아직 `node:fs`를 사용하므로 스크립트에서 명시적 deferred entry로
+  표시했다.
 
 ### CF-2 — iOS 기본 에셋 읽기 대체 (B5)
 - [ ] `app/api/export/ios/route.ts`의 `readFile`(디스크) → 확정 대안(HTTP fetch 권장)으로 교체

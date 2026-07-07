@@ -1,5 +1,5 @@
 import { getVercelOidcToken } from "@vercel/oidc";
-import type { AndroidBundleUploadFile, AndroidExportManifestItem } from "@/lib/theme/android/request";
+import type { AndroidBundleUploadFile, AndroidExportManifestItem } from "@/lib/theme/android/requestShared";
 
 // Vercel/Cloudflare → GCP를 Workload Identity Federation(OIDC)으로 인증하고, 입력 번들을 GCS에 올린 뒤
 // Cloud Run Job 실행을 트리거한다. SA JSON 키를 쓰지 않으며 fetch만 사용(엣지 안전)한다.
