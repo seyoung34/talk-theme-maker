@@ -24,8 +24,12 @@ const builtins = new Set(module.builtinModules.map((name) => name.replace(/^node
 
 const entries = [
   "app/api/export/android/route.ts",
+  "app/api/export/android-apk/route.ts",
+  "app/api/export/android-project/route.ts",
   "app/api/export/android/status/route.ts",
   "app/api/export/ios/route.ts",
+  "app/.well-known/jwks.json/route.ts",
+  "app/.well-known/openid-configuration/route.ts",
   "app/api/billing",
   "app/api/theme-assets",
   "app/api/admin",

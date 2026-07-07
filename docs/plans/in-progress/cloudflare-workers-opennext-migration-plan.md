@@ -6,8 +6,8 @@
 형태에 맞춰 정리한다.
 상위 트랙: [../in-progress/android-build-cloud-run-plan.md](../in-progress/android-build-cloud-run-plan.md) Phase 3.
 
-> 상태: **CF-0 전체 완료** — `cloudflare-pages-migration` 브랜치. 5가지 핵심 결정 + 3개 스파이크(Next 15
-> 다운그레이드, OpenNext 빌드/프리뷰, GCP 자체 OIDC) 전부 성공. 다음은 CF-1(Node 전용 빌드 코어 분리)부터.
+> 상태: **CF-0~CF-2 완료, CF-3 코드 반영 중** — `cloudflare-pages-migration` 브랜치. 남은 CF-3 핵심은
+> Cloudflare OIDC 환경변수/시크릿 등록, GCP WIF `cloudflare-provider` 생성, STS/impersonation 실측 검증.
 > **이전의 진짜 동기는 Vercel Hobby의 상업적 이용 금지 조항이다** — 413 payload 문제는 비동기 Cloud Run Job
 > 경로로 이미 해소됐지만([../done/android-export-413-plan.md](../done/android-export-413-plan.md)), 그것과
 > 무관하게 상업 서비스를 Hobby 플랜에서 계속 운영하면 약관 위반이라 반드시 유료 플랜이 필요하다. 즉 실제
@@ -283,13 +283,48 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
   다시 확인한다.
 
 ### CF-3 — GCP 인증 엣지화 (자체 OIDC/JWKS 구현)
-- [ ] 서명 키 쌍 생성, 개인키를 Cloudflare Workers Secret으로 등록
-- [ ] `/.well-known/jwks.json` Worker 라우트로 공개키 노출
+- [x] 서명 키 쌍 생성 스크립트 추가(`scripts/generate-cloudflare-oidc-keypair.mjs`) — 실제 운영 키 생성과
+      Cloudflare Secret 등록은 배포 계정에서 별도 실행 필요
+- [x] `/.well-known/jwks.json` Worker 라우트로 공개키 노출(+ `/.well-known/openid-configuration` discovery 응답)
 - [ ] GCP WIF에 `cloudflare-provider`(issuer=자체 발급자, JWKS URL) 추가 + 대상 SA에 신뢰 바인딩
-- [ ] `buildJobClient.ts`의 `getVercelOidcToken()` 의존 제거 → 자체 서명 JWT 발급 함수로 교체
+- [x] `buildJobClient.ts`의 `getVercelOidcToken()` 의존 제거 → 자체 서명 JWT 발급 함수로 교체
       (`crypto.subtle.sign`, RS256/ES256, 5분 이내 단명)
-- [ ] `@vercel/oidc` 의존성 제거
-- [ ] 관리자 전용 zip 내보내기 임시 비활성화 적용(§동기 경로 처리 확정 반영)
+- [x] `@vercel/oidc` 의존성 제거
+- [x] 관리자 전용 zip 내보내기 임시 비활성화 적용(§동기 경로 처리 확정 반영)
+
+**CF-3 코드 구현 메모**
+- 새 환경변수/시크릿:
+  - `CLOUDFLARE_OIDC_PRIVATE_JWK`: RS256 private JWK JSON. **Secret으로 등록, 저장소에 커밋 금지.**
+  - `CLOUDFLARE_OIDC_PUBLIC_JWKS`: 공개 JWKS JSON. `/.well-known/jwks.json`이 private 필드를 제거해 노출.
+  - `CLOUDFLARE_OIDC_ISSUER`: 실제 Worker origin. 예: `https://kakaotalk-theme-maker.<subdomain>.workers.dev`
+    또는 커스텀 도메인. GCP provider `--issuer-uri`와 JWT `iss`가 정확히 같아야 한다.
+  - `CLOUDFLARE_OIDC_SUBJECT`: 기본값 `cloudflare-worker-prod`. GCP `attribute-condition`과 맞춘다.
+- 키 생성:
+  ```powershell
+  node scripts/generate-cloudflare-oidc-keypair.mjs cf-oidc-202607
+  ```
+  출력된 private JWK는 Cloudflare Secret에 넣고, public JWKS는 Cloudflare env/secret 및 GCP `--jwk-json-path`
+  파일로 사용한다. private JWK는 로컬 파일이나 저장소에 남기지 않는다.
+- GCP provider 생성 예시(값은 실제 프로젝트/도메인으로 치환):
+  ```powershell
+  gcloud iam workload-identity-pools providers create-oidc cloudflare-provider `
+    --project="$env:GCP_PROJECT_ID" `
+    --location="global" `
+    --workload-identity-pool="vercel-pool" `
+    --issuer-uri="$env:CLOUDFLARE_OIDC_ISSUER" `
+    --attribute-mapping="google.subject=assertion.sub" `
+    --attribute-condition="assertion.sub == 'cloudflare-worker-prod'" `
+    --jwk-json-path="cloudflare-jwks.json"
+  ```
+- 대상 서비스 계정 impersonation 바인딩 예시:
+  ```powershell
+  gcloud iam service-accounts add-iam-policy-binding "$env:GCP_BUILDER_SA_EMAIL" `
+    --project="$env:GCP_PROJECT_ID" `
+    --role="roles/iam.workloadIdentityUser" `
+    --member="principal://iam.googleapis.com/projects/$env:GCP_PROJECT_NUMBER/locations/global/workloadIdentityPools/vercel-pool/subject/cloudflare-worker-prod"
+  ```
+- 코드 기본값은 `GCP_WIF_PROVIDER_ID=cloudflare-provider`, `GCP_WIF_POOL_ID=vercel-pool`이다. 다른 풀/프로바이더를
+  쓰면 env로 명시한다.
 
 **OIDC 클레임 (고정)**
 - `iss`: 자체 발급자 문자열(Worker의 실제 도메인, 예 `https://kakaotalk-theme-maker.<subdomain>.workers.dev`
@@ -306,12 +341,12 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
       이 조건 없이 만들었음 — 실제 구현에서는 빠뜨리지 않는다).
 
 **키 로테이션 절차**
-- [ ] GCP WIF의 `--jwk-json-path`는 `keys` 배열에 여러 키를 동시에 등록할 수 있다는 점을 이용:
+- [x] GCP WIF의 `--jwk-json-path`는 `keys` 배열에 여러 키를 동시에 등록할 수 있다는 점을 이용:
       1) 새 키 쌍 생성 → 2) 새 `kid`를 기존 JWKS 배열에 **추가**(기존 키 유지, 둘 다 신뢰됨) → 3) Worker의
       서명 로직을 새 `kid`로 전환 → 4) 안전 기간(예 7일) 지켜본 뒤 기존 키를 JWKS 배열에서 제거.
       한 번에 스왑하지 않고 이렇게 하는 이유: 전환 도중 서명/검증 키가 잠깐이라도 어긋나면 빌드 큐잉이 전부
       실패하기 때문(무중단 로테이션).
-- [ ] 로테이션 주기는 확정하지 않음(연 1회 또는 유출 의심 시 즉시) — CF-3 구현 시점에 정한다.
+- [x] 로테이션 주기: 정기 로테이션은 연 1회, 키 유출 의심 시 즉시. 실제 로테이션은 위 무중단 절차로 리허설한다.
 
 **롤백 경로 (이 인증 메커니즘이 배포 후 깨질 경우)**
 - [ ] **사용자 영향 최소화**: 인증이 깨져도 `enqueueAndroidBuild`가 실패하면 기존 `failExportJob`(멱등, 즉시

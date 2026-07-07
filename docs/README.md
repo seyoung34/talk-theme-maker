@@ -36,7 +36,7 @@
 |---|---|
 | [plans/in-progress/android-build-cloud-run-plan.md](plans/in-progress/android-build-cloud-run-plan.md) | 비동기 Cloud Run Job 빌드 오프로딩은 완료. Cloudflare Pages 이전(Phase 3) 착수함 — 아래 문서 참조 |
 | [plans/in-progress/cloud-run-apk-builder-dev.md](plans/in-progress/cloud-run-apk-builder-dev.md) | Cloud Run Job 빌드 오프로딩 마일스톤 1~4차 완료(실기기 검증 포함). 남은 것: `apk-zip`/`project` 비동기화(3.7) + 후속 튜닝 |
-| [plans/in-progress/cloudflare-workers-opennext-migration-plan.md](plans/in-progress/cloudflare-workers-opennext-migration-plan.md) | Cloudflare Workers(OpenNext) 이전. 5개 정책 결정 + CF-0 스파이크 3개(Next 15 다운그레이드, OpenNext 빌드/프리뷰, GCP 자체 OIDC) 전부 성공. `cloudflare-pages-migration` 브랜치에서 CF-1부터 진행 중 |
+| [plans/in-progress/cloudflare-workers-opennext-migration-plan.md](plans/in-progress/cloudflare-workers-opennext-migration-plan.md) | Cloudflare Workers(OpenNext) 이전. CF-0~CF-2 완료, CF-3 자체 OIDC/JWKS 코드 반영 중. 남은 것: Cloudflare Secret/env 등록, GCP WIF provider 생성, STS/impersonation 실측 검증 |
 
 ## plans/done — 구현·검증 완료
 
