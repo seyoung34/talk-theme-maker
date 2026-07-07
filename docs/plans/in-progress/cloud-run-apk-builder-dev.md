@@ -5,7 +5,9 @@ Android APK Gradle 빌드를 **Google Cloud Run Job**으로 오프로딩하는 �
 
 > 범위: 이 문서는 **APK 빌드 오프로딩만** 다룬다. Cloudflare Pages 이전은 별도 트랙.
 > 상위 아키텍처·결정 근거: [android-build-cloud-run-plan.md](android-build-cloud-run-plan.md) · 413/payload:
-> [android-export-413-plan.md](android-export-413-plan.md)
+> [../done/android-export-413-plan.md](../done/android-export-413-plan.md)
+> 상태: **마일스톤 1~4차 완료**(실기기 설치 검증까지 완료). 남은 것은 3.7(`apk-zip`/`project` 비동기화)과
+> 후속 튜닝 항목뿐(§미결정 참조).
 
 ## 용어
 

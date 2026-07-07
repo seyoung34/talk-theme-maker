@@ -3,7 +3,9 @@
 실기기(배포 환경)에서 Android APK 내보내기가 **413 `FUNCTION_PAYLOAD_TOO_LARGE`** 로 실패하는 문제의
 수정 계획. 옵션 1(서버에서 기본 에셋 해결)로 진행한다.
 
-> 상태: Android/iOS 옵션 1 구현 완료. 로컬/배포 검증 후 원격 에셋 참조화 진행.
+> 상태: **완료.** Android/iOS 옵션 1 구현 및 배포 실기기 검증까지 완료 — 비동기 Cloud Run Job 경로
+> ([../in-progress/cloud-run-apk-builder-dev.md](../in-progress/cloud-run-apk-builder-dev.md))에서도 동일한
+> `serverAsset` 참조 방식을 재사용해 413이 해소됨을 확인. 원격(시스템 템플릿) 에셋 참조화(옵션 2)는 별도 후속 과제로 남음.
 
 ## 원인 (확정)
 

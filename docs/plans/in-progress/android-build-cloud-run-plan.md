@@ -6,8 +6,10 @@ Vercel 서버리스에는 Android SDK/JDK/Gradle이 없어 `lib/theme/android/ap
 - 빌드는 **Cloud Run Job**(비동기 배치)으로 이전, 결과는 **GCS**에 저장하고 클라이언트가 **폴링**.
 - 웹 호스트는 **Cloudflare Pages**로 이전(비용 유리 + 본문 한도 여유).
 
-> 상태: 아키텍처 확정(비동기 + Cloudflare). 상세 구현 착수 전.
-> 참고: payload/413은 별도 해결됨 → [android-export-413-plan.md](android-export-413-plan.md)
+> 상태: **비동기 Cloud Run Job 빌드 오프로딩은 완료**(마일스톤 1~4차, 실기기 검증 포함 —
+> [cloud-run-apk-builder-dev.md](cloud-run-apk-builder-dev.md) 참조). **Cloudflare Pages 이전(Phase 3)은 미착수** —
+> 현재도 Vercel에서 서비스 중이며 OIDC 토큰 조회는 `@vercel/oidc`로 해결(Vercel 유지 전제로 조정됨).
+> 참고: payload/413은 별도 해결 완료 → [../done/android-export-413-plan.md](../done/android-export-413-plan.md)
 
 ## 결정 로그
 
