@@ -264,18 +264,21 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
 - **CF-1 구현 메모**: `/api/export/android`는 `exportRouteAsync.ts`만 import하고, 동기 빌드 경로는 기존
   `exportRoute.ts`에 남겼다. `requestShared.ts`/`validation.ts`는 Node import 없이 비동기 경로가 공유하는
   manifest·검증 로직을 제공한다. `scripts/verify-edge-safe-imports.mjs` 추가 및 `check:edge-imports` 등록 완료.
-  CF-2 대상인 `app/api/export/ios/route.ts`는 아직 `node:fs`를 사용하므로 스크립트에서 명시적 deferred entry로
-  표시했다.
+  CF-2에서 `app/api/export/ios/route.ts`까지 `check:edge-imports` 대상에 포함했다.
 
 ### CF-2 — iOS 기본 에셋 읽기 대체 (B5)
-- [ ] `app/api/export/ios/route.ts`의 `readFile`(디스크) → 확정 대안(HTTP fetch 권장)으로 교체
-- [ ] 경로 화이트리스트/`..` 차단 로직 유지(엣지 버전으로 포팅)
+- [x] `app/api/export/ios/route.ts`의 `readFile`(디스크) → 확정 대안(HTTP fetch 권장)으로 교체
+- [x] 경로 화이트리스트/`..` 차단 로직 유지(엣지 버전으로 포팅)
 - **완료 기준**: iOS 내보내기가 `node:fs` 없이 기본 에셋을 해결하고, 아래 두 가지를 모두 만족한다 —
-  1. **파일 해시가 이전과 동일**(전환 전/후 같은 입력으로 만든 `.ktheme`/zip의 SHA-256 비교. "바이트 동일"과
+  1. [x] **파일 해시가 이전과 동일**(전환 전/후 같은 입력으로 만든 `.ktheme`/zip의 SHA-256 비교. "바이트 동일"과
      같은 뜻이지만 해시 비교가 실제 검증 방법이라 이렇게 명시): 디스크 읽기 → HTTP fetch로 바꾼 게 바이트를
      조용히 바꾸지 않았다는 기계적 증명.
-  2. **실제 카카오톡 앱에서 테마 import가 성공**: 해시가 같아도 애초에 원본 로직 자체가 잘못돼 있었을 가능성은
+  2. [ ] **실제 카카오톡 앱에서 테마 import가 성공**: 해시가 같아도 애초에 원본 로직 자체가 잘못돼 있었을 가능성은
      해시 비교로 못 잡는다 — 최종적으로 기능이 되는지가 진짜 기준이라 실기기 import 확인을 별도로 추가한다.
+- **CF-2 구현 메모**: `/api/export/ios`는 `/template-assets/...` 서버 에셋을 같은 origin HTTP `fetch()`로 읽고,
+  `node:fs`/`node:path`/`runtime="nodejs"` 선언을 제거했다. 로컬 정적 서버로 `public/template-assets` 전체
+  38개 파일의 디스크 SHA-256과 HTTP 응답 SHA-256이 동일함을 확인했다. `check:edge-imports`, `tsc`,
+  `cf:build` 통과. 실기기 카카오톡 import 확인은 별도 수동 검증 필요.
 
 ### CF-3 — GCP 인증 엣지화 (자체 OIDC/JWKS 구현)
 - [ ] 서명 키 쌍 생성, 개인키를 Cloudflare Workers Secret으로 등록

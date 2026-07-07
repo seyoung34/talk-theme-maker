@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import {
   completeExportJob,
@@ -15,9 +13,6 @@ import { createStoredZipBytes } from "@/lib/theme/project/zip";
 import { buildDownloadContentDisposition, elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
 import { applyServerThemeIdentifier, IosExportRequestError, normalizeIosPath, validateExportName, validateIosPackage, validateVersionName } from "@/lib/theme/ios/packageValidation";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge, maxExportRequestBytes } from "@/lib/theme/exportRequest";
-
-export const runtime = "nodejs";
-export const maxDuration = 60;
 
 type UploadManifestItem = { field: string; path: string };
 type ServerAssetManifestItem = { path: string; serverAsset: string };
@@ -52,7 +47,7 @@ export async function POST(request: Request) {
     const versionNameRaw = formData.get("versionName");
     const exportName = validateExportName(exportNameRaw);
     const versionName = validateVersionName(versionNameRaw);
-    const { entries: requestedEntries, inputBytes } = await readIosEntries(formData, manifestRaw);
+    const { entries: requestedEntries, inputBytes } = await readIosEntries(formData, manifestRaw, request.url);
 
     const reservation = await reserveCreditForExport({
       userId,
@@ -116,7 +111,7 @@ async function readFormData(request: Request) {
   }
 }
 
-async function readIosEntries(formData: FormData, manifestRaw: string) {
+async function readIosEntries(formData: FormData, manifestRaw: string, requestUrl: string) {
   let parsed: unknown;
   try {
     parsed = JSON.parse(manifestRaw);
@@ -140,7 +135,7 @@ async function readIosEntries(formData: FormData, manifestRaw: string) {
     }
 
     if ("serverAsset" in item) {
-      const bytes = await readPublicTemplateAsset(item.serverAsset);
+      const bytes = await fetchPublicTemplateAsset(item.serverAsset, requestUrl);
       inputBytes = addInputBytes(inputBytes, bytes.byteLength);
       paths.add(normalizedPath);
       entries.push({ path: normalizedPath, bytes });
@@ -180,16 +175,18 @@ function addInputBytes(current: number, size: number) {
   return next;
 }
 
-async function readPublicTemplateAsset(serverAsset: string) {
-  const absolutePath = resolvePublicTemplateAssetPath(serverAsset);
+async function fetchPublicTemplateAsset(serverAsset: string, requestUrl: string) {
+  const assetUrl = resolvePublicTemplateAssetUrl(serverAsset, requestUrl);
   try {
-    return new Uint8Array(await readFile(absolutePath));
+    const response = await fetch(assetUrl, { cache: "force-cache" });
+    if (!response.ok) throw new Error(`asset_fetch_failed:${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
   } catch {
     throw new IosExportRequestError("missing_server_asset", "기본 테마 에셋을 찾지 못했습니다.");
   }
 }
 
-function resolvePublicTemplateAssetPath(serverAsset: string) {
+function resolvePublicTemplateAssetUrl(serverAsset: string, requestUrl: string) {
   if (!serverAsset.startsWith("/template-assets/") || serverAsset.includes("\\")) {
     throw new IosExportRequestError("invalid_server_asset", "기본 테마 에셋 참조가 올바르지 않습니다.");
   }
@@ -199,13 +196,7 @@ function resolvePublicTemplateAssetPath(serverAsset: string) {
     throw new IosExportRequestError("invalid_server_asset", "기본 테마 에셋 참조가 올바르지 않습니다.");
   }
 
-  const publicRoot = path.resolve(process.cwd(), "public");
-  const absolutePath = path.resolve(publicRoot, relativePath);
-  const templateAssetsRoot = path.resolve(publicRoot, "template-assets");
-  if (absolutePath !== templateAssetsRoot && !absolutePath.startsWith(`${templateAssetsRoot}${path.sep}`)) {
-    throw new IosExportRequestError("forbidden_server_asset", "허용된 기본 테마 에셋만 참조할 수 있습니다.");
-  }
-  return absolutePath;
+  return new URL(`/${relativePath}`, requestUrl);
 }
 
 function isExportMode(value: FormDataEntryValue | null): value is ExportMode {

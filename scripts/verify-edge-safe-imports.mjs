@@ -25,6 +25,7 @@ const builtins = new Set(module.builtinModules.map((name) => name.replace(/^node
 const entries = [
   "app/api/export/android/route.ts",
   "app/api/export/android/status/route.ts",
+  "app/api/export/ios/route.ts",
   "app/api/billing",
   "app/api/theme-assets",
   "app/api/admin",
@@ -37,19 +38,8 @@ const entries = [
 const visited = new Set();
 const violations = [];
 
-const deferredEntries = new Map([
-  ["app/api/export/ios/route.ts", "CF-2 replaces public template asset disk reads"],
-]);
-
 for (const entry of entries.flatMap(expandEntry)) {
   walk(entry, []);
-}
-
-for (const [entry, reason] of deferredEntries) {
-  const entryPath = path.join(root, entry);
-  if (fs.existsSync(entryPath)) {
-    console.warn(`Skipping deferred edge import check for ${entry}: ${reason}.`);
-  }
 }
 
 if (violations.length) {
