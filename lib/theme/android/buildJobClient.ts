@@ -1,3 +1,4 @@
+import { getVercelOidcToken } from "@vercel/oidc";
 import type { AndroidBundleUploadFile, AndroidExportManifestItem } from "@/lib/theme/android/request";
 
 // Vercel/Cloudflare → GCP를 Workload Identity Federation(OIDC)으로 인증하고, 입력 번들을 GCS에 올린 뒤
@@ -87,9 +88,15 @@ export async function enqueueAndroidBuild(bundle: AndroidBuildBundle) {
 }
 
 // OIDC(호스트 발급) → STS 토큰 교환 → 대상 SA impersonation 순으로 단명 액세스 토큰을 얻는다.
+// 실제 배포(Fluid Compute)에서는 OIDC 토큰이 요청 헤더(x-vercel-oidc-token)로 전달되고 process.env에는
+// 안정적으로 노출되지 않는다. getVercelOidcToken()이 헤더 우선, env 폴백 순으로 읽어준다.
 export async function getBuilderAccessToken(config: BuilderConfig) {
-  const oidcToken = process.env.VERCEL_OIDC_TOKEN;
-  if (!oidcToken) throw new AndroidBuildEnqueueError("missing_oidc_token", "OIDC 토큰을 사용할 수 없습니다.");
+  let oidcToken: string;
+  try {
+    oidcToken = await getVercelOidcToken();
+  } catch {
+    throw new AndroidBuildEnqueueError("missing_oidc_token", "OIDC 토큰을 사용할 수 없습니다.");
+  }
 
   const federatedToken = await exchangeStsToken(config.wifAudience, oidcToken);
   return impersonateServiceAccount(config.builderServiceAccount, federatedToken);

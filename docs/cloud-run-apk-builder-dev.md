@@ -158,7 +158,11 @@ gs://<input-bucket>/<export_job_id>/files/<field>       # 사용자 업로드·�
 
 **웹→GCP 필요 env(비밀 아님, WIF)**: `GCP_PROJECT_ID`, `GCP_PROJECT_NUMBER`, `GCP_BUILDER_SA_EMAIL`,
 `GCP_BUILD_INPUT_BUCKET`, `GCP_BUILD_OUTPUT_BUCKET`, `GCP_BUILD_JOB_REGION`(=`asia-northeast3`),
-`GCP_BUILD_JOB_NAME`, `ANDROID_EXPORT_ASYNC=1`. (`VERCEL_OIDC_TOKEN`은 런타임 자동 주입)
+`GCP_BUILD_JOB_NAME`, `ANDROID_EXPORT_ASYNC=1`.
+**OIDC 토큰 획득**: 실제 배포(Fluid Compute)에서는 `VERCEL_OIDC_TOKEN`이 `process.env`로 안정적으로 노출되지
+않고 요청 헤더(`x-vercel-oidc-token`)로 전달된다. `@vercel/oidc`의 `getVercelOidcToken()`(헤더 우선, env
+폴백)으로 읽어야 하며, 프로젝트 Settings → Environment Variables → **OIDC Federation을 대상 환경(Production/
+Preview)별로 저장·활성화**해야 한다(로컬 `vercel env pull`이 되는 것과 배포 런타임 주입은 별개).
 선택: `ANDROID_EXPORT_WATCHDOG_MS`(기본 1500000=25분, 4.5 워치독 임계값).
 
 **빌더(Cloud Run Job) 필요 env**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`(3.5/3.6용, 미설정 시 DB 단계 skip).
