@@ -6,9 +6,11 @@ Vercel 서버리스에는 Android SDK/JDK/Gradle이 없어 `lib/theme/android/ap
 - 빌드는 **Cloud Run Job**(비동기 배치)으로 이전, 결과는 **GCS**에 저장하고 클라이언트가 **폴링**.
 - 웹 호스트는 **Cloudflare Pages**로 이전(비용 유리 + 본문 한도 여유).
 
-> 상태: **비동기 Cloud Run Job 빌드 오프로딩은 완료**(마일스톤 1~4차, 실기기 검증 포함 —
-> [cloud-run-apk-builder-dev.md](cloud-run-apk-builder-dev.md) 참조). **Cloudflare Pages 이전(Phase 3)은 미착수** —
-> 현재도 Vercel에서 서비스 중이며 OIDC 토큰 조회는 `@vercel/oidc`로 해결(Vercel 유지 전제로 조정됨).
+> 상태: **Phase 0~2(인프라 준비·Cloud Run Job 빌더·웹 큐잉/폴링) 완료**, 실기기 검증 포함 —
+> [cloud-run-apk-builder-dev.md](cloud-run-apk-builder-dev.md) 참조. 단 Phase 1의 `apk-zip`/`project`(zip) 모드
+> Job 위임은 아직 미완료(현재 비동기는 `apk` 모드만). **Phase 3(Cloudflare Pages 이전)은 미착수** — 현재도
+> Vercel에서 서비스 중이며 OIDC 토큰 조회는 `@vercel/oidc`로 해결(Vercel 유지 전제로 조정됨). Phase 4(후속 튜닝·
+> iOS 비동기화)도 미착수.
 > 참고: payload/413은 별도 해결 완료 → [../done/android-export-413-plan.md](../done/android-export-413-plan.md)
 
 ## 결정 로그
@@ -127,29 +129,40 @@ Cloudflare Pages Function → { status, downloadUrl? }
 ## 작업 목록 (Task List)
 
 ### Phase 0 — 인프라 준비
-- [ ] GCP 프로젝트 + Artifact Registry(이미지 저장소) 생성
-- [ ] GCS 버킷 2개(입력/출력) 생성 + lifecycle(N시간 후 삭제) 규칙
-- [ ] Cloud Run Job 리소스 + 대상 서비스 계정(GCS 읽기/쓰기, Job 실행 권한) 생성 — **키는 발급하지 않음**
-- [ ] Workload Identity Federation 풀/프로바이더 구성(호스트 OIDC 발급자 신뢰) + 대상 SA에 impersonation 허용
+- [x] GCP 프로젝트 + Artifact Registry(이미지 저장소) 생성
+- [x] GCS 버킷 2개(입력/출력) 생성 + lifecycle(N시간 후 삭제) 규칙
+- [x] Cloud Run Job 리소스 + 대상 서비스 계정(GCS 읽기/쓰기, Job 실행 권한) 생성 — **키는 발급하지 않음**
+- [x] Workload Identity Federation 풀/프로바이더 구성(호스트 OIDC 발급자 신뢰) + 대상 SA에 impersonation 허용
+- **완료** — 상세 근거: [cloud-run-apk-builder-dev.md](cloud-run-apk-builder-dev.md) 2.2, 3.1.
 
 ### Phase 1 — Cloud Run Job 빌더 (빌드 오프로딩 먼저)
-- [ ] `services/android-builder/` 스캐폴드(Dockerfile + Job 엔트리)
-- [ ] Dockerfile: `eclipse-temurin:17-jdk` + SDK(`platform-tools`, `platforms;android-35`, `build-tools;35.0.0`) + 라이선스 accept + `ANDROID_SDK_ROOT`
-- [ ] 샘플 프로젝트 + `public/template-assets` 이미지 내장, 빌드 시 `gradlew assembleDebug` 1회로 캐시 워밍
-- [ ] `apk.ts` 빌드 코어를 웹 번들에서 분리(Job에서 import, 엣지 번들엔 미포함)
-- [ ] Job 엔트리: GCS 입력 로드 → manifest `serverAsset`를 내장 에셋으로 해결 → `prepareAndroidProject` → `runGradle` → APK를 출력 버킷 업로드 → 상태 기록
-- [ ] `project`(zip) 'gradle 없이 zip만' 모드 Job 처리
-- [ ] 로컬 Docker로 빌더 단독 검증(가짜 입력 → APK)
+- [x] `services/android-builder/` 스캐폴드(Dockerfile + Job 엔트리)
+- [x] Dockerfile: `eclipse-temurin:17-jdk` + SDK(`platform-tools`, `platforms;android-35`, `build-tools;35.0.0`) + 라이선스 accept + `ANDROID_SDK_ROOT`
+- [x] 샘플 프로젝트 + `public/template-assets` 이미지 내장, 빌드 시 `gradlew assembleDebug` 1회로 캐시 워밍
+- [x] `apk.ts` 빌드 코어를 웹 번들에서 분리(Job에서 import, 엣지 번들엔 미포함)
+- [x] Job 엔트리: GCS 입력 로드 → manifest `serverAsset`를 내장 에셋으로 해결 → `prepareAndroidProject` → `runGradle` → APK를 출력 버킷 업로드 → 상태 기록
+- [ ] `project`(zip) 'gradle 없이 zip만' 모드 Job 처리 — **미완료**, 현재 비동기 경로는 `apk` 모드만 지원(하위
+      [cloud-run-apk-builder-dev.md](cloud-run-apk-builder-dev.md) 3.7과 동일 항목)
+- [x] 로컬 Docker로 빌더 단독 검증(가짜 입력 → APK)
 
 ### Phase 2 — 웹 큐잉·폴링 전환 (아직 현재 호스트에서)
-- [ ] `lib/theme/android/buildJobClient.ts`(엣지 안전): 호스트 OIDC 토큰 → GCP 토큰 교환(단명 액세스 토큰) →
+- [x] `lib/theme/android/buildJobClient.ts`(엣지 안전): 호스트 OIDC 토큰 → GCP 토큰 교환(단명 액세스 토큰) →
       입력 GCS 업로드 + Job 트리거 + `jobId` 반환
-- [ ] `route.ts`/`exportRoute.ts`: 동기 `buildAndroidApk` 호출 제거 → 큐잉+트리거
-- [ ] `app/api/export/android/status`: 폴링 엔드포인트 + done/failed 최초 전이에서 `completeExportJob`/`failExportJob` + GCS 서명 URL 반환
-- [ ] `useProjectExport`: 단일 POST→blob → 큐잉+폴링+서명URL 다운로드로 변경
-- [ ] E2E 검증(큐잉→폴링→다운로드, 크레딧 예약·완료·환불 경로)
+- [x] `route.ts`/`exportRoute.ts`: 큐잉+트리거 경로 추가 — 계획 원문과 달리 동기 호출을 제거하지 않고
+      **`ANDROID_EXPORT_ASYNC` 피처 플래그**로 비동기 경로를 병행 추가함(기본은 동기 유지). 현재 `apk` 모드만.
+- [x] `app/api/export/android/status`: 폴링 엔드포인트 + done/failed 최초 전이에서 `completeExportJob`/`failExportJob` + GCS 서명 URL 반환
+- [x] `useProjectExport`: 단일 POST→blob → 큐잉+폴링+서명URL 다운로드로 변경
+- [x] E2E 검증(큐잉→폴링→다운로드, 크레딧 예약·완료·환불 경로) — 실기기 설치까지 확인
+- **완료** — 상세 근거: [cloud-run-apk-builder-dev.md](cloud-run-apk-builder-dev.md) 3.2~3.6, 4.1~4.8.
 
 ### Phase 3 — Cloudflare Pages 이전
+> **미착수(정책 결정은 완료, 구현 전).** 상세 계획은 별도 문서로 분리:
+> [../planned/cloudflare-pages-migration-plan.md](../planned/cloudflare-pages-migration-plan.md).
+> 이전의 진짜 동기는 413(이미 해소됨)이 아니라 **Vercel Hobby 상업 이용 금지** — 상업 서비스는 Pro($20/월~)
+> 아니면 다른 호스트가 필요하다. 비용 분석 결과 Cloudflare가 유리(연 15~27만원 절감 추정)해 **자체 OIDC(JWKS)
+> 발급으로 완전 이전**하기로 확정했다(GCP WIF 인증 방식·관리자 zip 모드 처리·iOS 에셋 읽기 방식 모두 결정
+> 완료). 남은 건 OpenNext/Next 16 호환성과 Workers CPU 한도 실측뿐. 아래는 원래 개괄 항목(상세·최신 판단은
+> 분리 문서 참조).
 - [ ] OpenNext(`@opennextjs/cloudflare`) 도입 + 빌드/배포 파이프라인
 - [ ] Node 전용 API 사용처 감사(전 라우트) — 특히 export 경로에서 `apk.ts` import 완전 분리 확인
 - [ ] 413 `node:fs`(public 읽기) 제거 확인(기본 에셋은 Job 소유)

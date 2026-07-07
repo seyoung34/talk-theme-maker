@@ -28,6 +28,8 @@
 | 문서 | 상태 |
 |---|---|
 | [plans/planned/easy-guide-plan.md](plans/planned/easy-guide-plan.md) | 이미지 중심 "쉬운 가이드" 기획 확정. 스크린샷/GIF 에셋 준비 후 구현 착수 예정 |
+| [plans/planned/export-loading-ui-plan.md](plans/planned/export-loading-ui-plan.md) | edit 창 내보내기 사전 준비 구간의 로딩/진행 상태 노출 기획 확정. `isPreparingExport` 분리와 다이얼로그 선오픈 방향 |
+| [plans/planned/cloudflare-pages-migration-plan.md](plans/planned/cloudflare-pages-migration-plan.md) | Cloudflare Pages 이전(Android 빌드 Phase 3). 동기는 Vercel Hobby 상업 이용 금지. 자체 OIDC(JWKS)·Next 15+middleware.ts 다운그레이드(시한부, 2026-10-21 전 재상향)로 확정. 남은 건 다운그레이드 회귀·OpenNext 스파이크 |
 
 ## plans/in-progress — 구현 진행중
 
