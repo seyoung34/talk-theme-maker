@@ -3,7 +3,9 @@
 웹 호스트를 Vercel → **Cloudflare Pages(OpenNext)** 로 이전하는 상세 계획.
 상위 트랙: [../in-progress/android-build-cloud-run-plan.md](../in-progress/android-build-cloud-run-plan.md) Phase 3.
 
-> 상태: **착수함 — `cloudflare-pages-migration` 브랜치, CF-0 기술 스파이크 진행 중.** 5가지 핵심 결정 완료.
+> 상태: **착수함 — `cloudflare-pages-migration` 브랜치.** 5가지 핵심 결정 완료. CF-0 중 **Next 15 다운그레이드
+> 완료 + OpenNext 빌드/프리뷰 스파이크 성공**(캐치-22 재현 안 됨, 실기기 아닌 로컬 workerd 검증). 남은 건
+> **GCP 자체 OIDC 인증 스파이크**뿐(실제 GCP WIF 리소스 변경이 필요해 진행 전 확인 필요).
 > **이전의 진짜 동기는 Vercel Hobby의 상업적 이용 금지 조항이다** — 413 payload 문제는 비동기 Cloud Run Job
 > 경로로 이미 해소됐지만([../done/android-export-413-plan.md](../done/android-export-413-plan.md)), 그것과
 > 무관하게 상업 서비스를 Hobby 플랜에서 계속 운영하면 약관 위반이라 반드시 유료 플랜이 필요하다. 즉 실제
@@ -206,21 +208,29 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
     15에서는 `.next/types/routes.d.ts` 참조가 맞는 상태이고 `next dev` 실행 후 자동으로 그 값으로 유지됨).
 - **완료 기준 충족**: Next 15에서 기존 기능이 전과 동일하게 동작(로그인·세션 갱신 포함) — 로컬 검증 완료.
 
-**OpenNext × Next 15 호환성 스파이크 (다운그레이드 이후, 위험도 낮음 — 성숙 경로)**
-- [ ] 격리된 워크트리에서 `@opennextjs/cloudflare`+`wrangler` 설치, `nodejs_compat` 플래그·
-      `compatibility_date >= 2024-09-23` 설정 후 `next build` → `opennextjs-cloudflare build`
-- [ ] `wrangler dev`로 로컬 기동 + 로그인 플로우(세션 갱신이 `middleware.ts`를 타는 요청) 실제 실행해 정상
-      응답 확인
-- **완료 기준**: OpenNext 빌드 성공 + Cloudflare Preview에서 로그인 요청이 500 없이 응답.
+**OpenNext × Next 15 호환성 스파이크 — 완료, 성공**
+- [x] `@opennextjs/cloudflare@1.20.1`+`wrangler@4.107.1` 설치, `wrangler.jsonc`(`nodejs_compat`,
+      `compatibility_date: 2026-07-07`) + `open-next.config.ts` 추가, `npx opennextjs-cloudflare build` 실행
+      — **빌드 성공**, 빌드 로그에 `ƒ Middleware 90.4 kB`로 정상 컴파일 확인. 걱정했던 `proxy.ts` 캐치-22 자체가
+      발생하지 않음(Next 15 다운그레이드로 원천 회피됐다는 게 실측으로 확인됨).
+- [x] `wrangler dev`(workerd 런타임, 실제 Cloudflare Workers 로컬 에뮬레이션)로 기동 후 `/`, `/login`,
+      `/api/me`, `/api/session`, `/template` 실제 요청 — **전부 200, 에러 로그 없음**. `/login` 응답 본문에
+      "카카오" 텍스트 확인(에러 페이지가 200으로 위장한 게 아니라 실제 렌더링 확인).
+- **완료 기준 충족**: OpenNext 빌드 성공 + Cloudflare Workers 로컬 프리뷰에서 로그인 요청이 500 없이 응답.
+- **주의**: `opennextjs-cloudflare`가 "Windows에 완전히 호환되지 않음, WSL 권장"이라는 경고를 냄 — 지금은
+  문제없이 동작했지만 향후 실제 배포 파이프라인(CI 등)에서 재확인 필요.
+- 스파이크용 파일(`wrangler.jsonc`, `open-next.config.ts`, `package.json`의 `cf:build`/`cf:preview` 스크립트,
+  `.gitignore`의 `.open-next/`/`.wrangler/`)은 이번 CF-0 커밋에 그대로 남겨둠 — 이후 CF-4에서 이 설정을
+  다시 다듬는다.
 
-**GCP 인증 스파이크**
+**GCP 인증 스파이크 — 아직 미착수(실제 GCP WIF 인프라 변경 필요, 사용자 확인 후 진행 예정)**
 - [ ] GCP WIF에 `cloudflare-provider`(자체 OIDC issuer+JWKS) 추가 전, 로컬/스테이징에서 자체 서명 JWT →
       STS 교환 성공을 먼저 스파이크로 검증(운영 GCP 리소스 건드리기 전 격리 확인)
 
 **Workers Free CPU 10ms 한도**: 사전 실측 생략 — §비용 분석 참조(우선 Free로 시작, 체감 저하 시 Paid 전환).
 
-- **완료 기준**: ~~Next 15 다운그레이드 회귀 통과~~(완료), OpenNext 스파이크(Next 15 기준) 통과, 자체 서명
-  JWT→STS 교환 스파이크 성공 — 이 두 개만 남음.
+- **완료 기준**: ~~Next 15 다운그레이드 회귀 통과~~(완료), ~~OpenNext 스파이크(Next 15 기준) 통과~~(완료), 자체
+  서명 JWT→STS 교환 스파이크 성공 — 이거 하나만 남음.
 
 ### CF-1 — 웹 번들에서 Node 전용 빌드 코어 분리 (B1~B4)
 - [ ] `exportRoute.ts`를 동기/비동기로 분리 — 엣지 라우트가 `apk.ts`(→buildCore)를 **정적 import하지 않도록**.
