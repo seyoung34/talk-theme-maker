@@ -9,7 +9,9 @@ const safeRootFiles = new Set(["README-export.txt", "theme-export-report.json"])
 
 type UploadManifestItem = { field: string; path: string };
 type ServerAssetManifestItem = { path: string; serverAsset: string };
-type AndroidExportManifestItem = UploadManifestItem | ServerAssetManifestItem;
+export type AndroidExportManifestItem = UploadManifestItem | ServerAssetManifestItem;
+
+export type AndroidBundleUploadFile = { field: string; bytes: Uint8Array };
 
 export class AndroidExportRequestError extends Error {
   constructor(
@@ -62,6 +64,48 @@ export async function readAndroidBuildInputFiles(formData: FormData, manifestRaw
   }
 
   return { files, inputBytes };
+}
+
+// 비동기(Cloud Run Job) 경로용: serverAsset은 참조 그대로 두고(빌더가 내장 template-assets로 해결),
+// 사용자 업로드(file-N) 바이트만 수집한다. 동기 경로의 readAndroidBuildInputFiles와 달리 로컬 public을 읽지 않는다.
+export async function readAndroidBundleUpload(formData: FormData, manifestRaw: string) {
+  const manifest = parseManifest(manifestRaw);
+  const fields = new Set<string>();
+  const paths = new Set<string>();
+  const files: AndroidBundleUploadFile[] = [];
+  let inputBytes = 0;
+
+  for (const item of manifest) {
+    const normalizedPath = normalizeAndValidatePath(item.path);
+    if (paths.has(normalizedPath)) {
+      throw new AndroidExportRequestError("duplicate_export_path", "중복된 Android 리소스 경로가 있습니다.");
+    }
+    paths.add(normalizedPath);
+
+    if ("serverAsset" in item) {
+      // 바이트를 읽지는 않지만 참조 형식·허용 경로를 검증해 빌더로 안전한 참조만 전달한다.
+      resolvePublicTemplateAssetPath(item.serverAsset);
+      continue;
+    }
+
+    if (!/^file-\d+$/.test(item.field) || fields.has(item.field)) {
+      throw new AndroidExportRequestError("invalid_manifest_field", "내보내기 파일 목록이 올바르지 않습니다.");
+    }
+
+    const file = formData.get(item.field);
+    if (!(file instanceof File)) {
+      throw new AndroidExportRequestError("missing_export_file", `내보내기 파일을 찾을 수 없습니다: ${normalizedPath}`);
+    }
+    if (file.size > maxAndroidExportFileBytes) {
+      throw new AndroidExportRequestError("export_file_too_large", "개별 이미지 파일은 20MB 이하여야 합니다.", 413);
+    }
+
+    inputBytes = addInputBytes(inputBytes, file.size);
+    fields.add(item.field);
+    files.push({ field: item.field, bytes: new Uint8Array(await file.arrayBuffer()) });
+  }
+
+  return { manifest, files, inputBytes };
 }
 
 function parseManifest(value: string): AndroidExportManifestItem[] {

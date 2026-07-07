@@ -50,3 +50,6 @@ local.properties
 tmp/
 temp/
 *.tmp
+
+.vercel
+.env*

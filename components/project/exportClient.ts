@@ -41,6 +41,40 @@ export function getExportNotice(mode: ExportMode) {
   return "Android APK를 빌드하는 중입니다.";
 }
 
+export type AsyncAndroidExportOutcome =
+  | { status: "completed"; downloadUrl: string; fileName: string }
+  | { status: "failed"; error: string };
+
+// 4.7: 비동기 Android 내보내기 큐잉 후 완료/실패까지 status 엔드포인트를 폴링한다.
+export async function pollAndroidExportStatus(exportJobId: string, onStage?: (stage: string) => void): Promise<AsyncAndroidExportOutcome> {
+  const pollIntervalMs = 3000;
+  const maxPolls = 240; // 3초 * 240 = 12분 클라이언트 측 상한(서버 워치독이 최종 방어)
+
+  for (let attempt = 0; attempt < maxPolls; attempt += 1) {
+    const response = await fetch(`/api/export/android/status?jobId=${encodeURIComponent(exportJobId)}`, { cache: "no-store" });
+    const payload = (await response.json().catch(() => null)) as
+      | { status: "pending"; stage: string }
+      | { status: "completed"; downloadUrl: string; fileName: string }
+      | { status: "failed"; error: string }
+      | { error?: string }
+      | null;
+
+    if (response.ok && payload && "status" in payload) {
+      if (payload.status === "pending") {
+        onStage?.(payload.stage);
+      } else if (payload.status === "completed") {
+        return { status: "completed", downloadUrl: payload.downloadUrl, fileName: payload.fileName };
+      } else {
+        return { status: "failed", error: payload.error };
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  return { status: "failed", error: "내보내기 상태 확인 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요." };
+}
+
 export function getDownloadFileName(contentDisposition: string | null) {
   if (!contentDisposition) return null;
   const encodedMatch = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);

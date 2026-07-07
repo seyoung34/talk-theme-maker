@@ -4,7 +4,7 @@ import { useCallback, useRef, useState, type Dispatch, type SetStateAction } fro
 import { useRouter } from "next/navigation";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { readJsonResponse } from "@/lib/shared/api/http";
-import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, triggerDownload } from "@/components/project/exportClient";
+import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAndroidExportStatus, triggerDownload } from "@/components/project/exportClient";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
 import type { AccountState, ExportErrorResponse, ExportMode, ExportVersionResponse } from "@/components/project/exportModel";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -143,6 +143,34 @@ export function useProjectExport({
         }
         if (errorBody?.refunded) await refreshAccountState();
         throw new Error(errorBody?.error ?? "내보내기에 실패했습니다.");
+      }
+
+      // 202: 비동기(Cloud Run Job) 큐잉 경로. 완료/실패까지 status를 폴링한 뒤 서명 URL로 다운로드한다.
+      if (response.status === 202) {
+        const queued = await readJsonResponse<{ exportJobId: string; exportNumber?: number; error?: string }>(response);
+        const stepLabels = getExportProgressSteps(exportMode);
+        const outcome = await pollAndroidExportStatus(queued.exportJobId, () => {
+          setExportProgressStep((current) => Math.min(current + 1, stepLabels.length - 2));
+        });
+
+        if (progressTimer) {
+          window.clearInterval(progressTimer);
+          progressTimer = null;
+        }
+        if (outcome.status === "failed") {
+          await refreshAccountState();
+          throw new Error(outcome.error);
+        }
+
+        setExportProgressStep(stepLabels.length - 1);
+        const downloadResponse = await fetch(outcome.downloadUrl);
+        if (!downloadResponse.ok) throw new Error("빌드 결과 파일을 내려받지 못했습니다.");
+        const asyncBlob = await downloadResponse.blob();
+        triggerDownload(asyncBlob, outcome.fileName);
+        await refreshAccountState();
+        setExportDialogOpen(false);
+        setNotice({ tone: "success", message: `${queued.exportNumber ? `내보내기 #${queued.exportNumber} · ` : ""}${outcome.fileName} 파일을 생성했습니다.` });
+        return;
       }
 
       if (progressTimer) {

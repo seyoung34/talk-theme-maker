@@ -55,9 +55,12 @@ reserve → status=pending, stage=queued
 ```
 
 - 기존 `updateExportJobStage`는 이미 `WHERE status='pending'` 게이트 → **재사용**.
-- **감사 필요**: RPC `complete_export_job`/`fail_export_job`가 종료 전이를 조건부(pending→terminal)로 하고,
-  이미 terminal이면 **금액 변화 없이 현재 잔액 반환**하는지 확인. 아니면 SQL에 `WHERE status='pending'` +
-  분기 추가(마이그레이션). → 불변식 1·2.
+- **감사 완료(불변식 1·2 충족)**: RPC `complete_export_job`/`fail_export_job`는 `SELECT … FOR UPDATE` 행 잠금 +
+  분기로 **이미 멱등**하다 — `status='succeeded'`(complete)/`'failed'`(fail)면 금액 변화 없이 현재 잔액 반환,
+  그 외 비-`pending`이면 `export_job_not_pending` 예외. 마이그레이션 불필요. Phase 4 status 엔드포인트는
+  `export_job_not_pending`을 **"이미 정산됨"** 으로 처리한다.
+- **`theme_id` 갭**: `export_jobs`에는 `theme_id` 컬럼이 없다(reserve RPC 미저장). 불변식 6의 `theme_id` 대조는
+  DB로 불가 → 처리 방침은 아래 §미결정 참조.
 
 ## 입력 번들 스펙
 
@@ -122,7 +125,9 @@ gs://<input-bucket>/<export_job_id>/files/<field>       # 사용자 업로드·�
 
 ### 2차 — GCS 입력/출력
 - [x] 2.1 입력 번들 스펙 확정(위 §입력 번들) + 로컬 fixture 작성
-- [ ] 2.2 GCS 입력/출력 버킷 생성 + IAM(빌더 SA read/write) + lifecycle
+- [x] 2.2 GCS 입력/출력 버킷 생성 + IAM(빌더 SA read/write) + lifecycle
+      (`kt-theme-build-input`/`-output` + `-dev` 변형, ASIA-NORTHEAST3. `vercel-builder@…` SA가 프로젝트 레벨
+      `storage.objectAdmin`으로 read/write 확인됨. prod 버킷 lifecycle 추가: input 1일, output 7일 — dev와 동일)
 - [x] 2.3 엔트리(GCS 모드): `bundle.json`+`files/` 다운로드
 - [x] 2.4 manifest `serverAsset` → 내장 `template-assets`로 해결(경로 화이트리스트·`..` 차단)
 - [x] 2.5 번들 자체 정합성 검증(필수 필드 존재·경로 안전) — DB 대조는 3차
@@ -132,29 +137,62 @@ gs://<input-bucket>/<export_job_id>/files/<field>       # 사용자 업로드·�
 - **완료 기준**: GCS 입력 번들 → 빌더 → 출력 버킷에 APK+`result.json`. 로그에 비밀 없음.
 
 ### 3차 — Vercel API에서 Job 실행
-- [ ] 3.1 **Workload Identity Federation(OIDC)** 구성 — 호스트(Vercel/Cloudflare) OIDC 토큰을 신뢰하는
-      워크로드 아이덴티티 풀/프로바이더 + 대상 SA(최소권한: GCS·`jobs.run`) impersonation. **SA JSON 키 미발급.**
-      런타임은 호스트 OIDC 토큰 → GCP 토큰 교환으로 단명 액세스 토큰 획득
-- [ ] 3.2 `lib/theme/android/buildJobClient.ts`: 번들 GCS 업로드(user_id/theme_id/export_job_id 포함)
-- [ ] 3.3 buildJobClient: Cloud Run Job 실행 트리거(`jobs.run` + override로 bundle 경로 전달)
-- [ ] 3.4 `route.ts`/`exportRoute.ts`: 동기 `buildAndroidApk` 제거 → reserve → 번들 업로드 → Job 트리거 →
-      `{ exportJobId }` 반환. **API 소유권 검증**(유저↔theme_id, 예약↔user_id)
-- [ ] 3.5 빌더: **DB 대조 소유권 검증**(bundle.export_job_id/user_id ↔ `export_jobs` row) — 불일치 시 즉시 실패
-- [ ] 3.6 빌더: 스테이지 갱신 `updateExportJobStage`(preparing/building/…) — idempotent(`WHERE status='pending'`)
-- [ ] 3.7 `project`(zip) 모드도 같은 경로로 Job 위임('gradle 없이 zip만')
+- [x] 3.1 **Workload Identity Federation(OIDC)** — 풀(`vercel-pool`)/프로바이더(`vercel-provider`, issuer
+      `oidc.vercel.com`) + `vercel-builder@…` SA `workloadIdentityUser` 바인딩 구성 완료. 코드는 env로 소비.
+- [x] **인프라**: 빌더 이미지 `asia-northeast3-docker.pkg.dev/…/theme-builder/android-builder:v1` 푸시 +
+      Cloud Run Job `android-builder`(asia-northeast3, SA `vercel-builder@…`, 4Gi/2CPU/task-timeout 900/retries 0)
+      생성. **E2E 스모크 통과**: GCS 입력 번들 → Job → 출력 버킷에 APK(3.28MB)+`result.json{status:success}`.
+      (Supabase env 미설정 → 3.5/3.6 skip 상태로 검증)
+- [x] 3.2 `lib/theme/android/buildJobClient.ts`: OIDC→STS 교환→SA impersonation(단명 토큰)로 번들 GCS 업로드
+      (`<export_job_id>/bundle.json` + `files/`) — fetch만 사용(엣지 안전), SA 키 미사용
+- [x] 3.3 buildJobClient: Cloud Run Job 실행 트리거(`jobs.run` v2 + `GCS_INPUT_URI`/`GCS_OUTPUT_URI` override)
+- [x] 3.4 `exportRoute.ts`: **`ANDROID_EXPORT_ASYNC` 플래그**로 비동기 경로 추가(기본 동기 유지). reserve →
+      `readAndroidBundleUpload`(serverAsset 참조 통과, 업로드 바이트만 수집) → 번들 업로드 → Job 트리거 →
+      `202 { exportJobId }`. 큐잉 실패 시 `failExportJob` 즉시 환불. theme_id는 추적용 통과(결정 A). 현재 `apk` 모드만.
+- [x] 3.5 빌더(`entrypoint.ts`): **DB 대조 소유권 검증** — gcs+Supabase 설정 시 `export_jobs.user_id`가 번들
+      `user_id`와 일치하는지 확인(`export_job_not_found`/`ownership_mismatch` 시 즉시 실패)
+- [x] 3.6 빌더: 스테이지 갱신(preparing/building/finalizing) — `WHERE status='pending'` 게이트, best-effort(실패해도
+      빌드 진행). service-role 사용
+- [ ] 3.7 `apk-zip`/`project`(zip) 모드도 같은 비동기 경로로 Job 위임 (현재 비동기는 `apk`만)
 - **완료 기준**: API 호출이 실제 Job 실행을 트리거하고, 소유권 불일치 요청은 거부된다.
 
+**웹→GCP 필요 env(비밀 아님, WIF)**: `GCP_PROJECT_ID`, `GCP_PROJECT_NUMBER`, `GCP_BUILDER_SA_EMAIL`,
+`GCP_BUILD_INPUT_BUCKET`, `GCP_BUILD_OUTPUT_BUCKET`, `GCP_BUILD_JOB_REGION`(=`asia-northeast3`),
+`GCP_BUILD_JOB_NAME`, `ANDROID_EXPORT_ASYNC=1`. (`VERCEL_OIDC_TOKEN`은 런타임 자동 주입)
+선택: `ANDROID_EXPORT_WATCHDOG_MS`(기본 1500000=25분, 4.5 워치독 임계값).
+
+**빌더(Cloud Run Job) 필요 env**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`(3.5/3.6용, 미설정 시 DB 단계 skip).
+GCS 접근은 Job의 서비스 계정 IAM으로(키 없음).
+
 ### 4차 — 폴링 / status / 크레딧 정산
-- [ ] 4.1 `app/api/export/android/status?jobId=` 엔드포인트: `export_jobs` + GCS `result.json` 조회
-- [ ] 4.2 **정산 전 상태 확인**(불변식 3): status가 `pending`일 때만 정산 시도
-- [ ] 4.3 완료 전이: `result.json=success` → `completeExportJob`(멱등, 중복 안전)
-- [ ] 4.4 실패 전이: `result.json=failed` → `failExportJob` 환불(멱등)
-- [ ] 4.5 **워치독**(불변식 4): 결과 없이 임계시간 초과한 stale `pending` → `failExportJob` 환불
-      (status 엔드포인트 내 판정 or 스케줄 스윕)
-- [ ] 4.6 다운로드: 완료 시 **단명 서명 URL** 발급(불변식 5), DB엔 경로만
-- [ ] 4.7 `useProjectExport`: 단일 POST→blob → **큐잉+폴링+서명URL 다운로드**로 변경
-- [ ] 4.8 경합 테스트: 동시 다중 폴링에서 `complete`/`fail`이 **정확히 1회만** 정산(불변식 1·2)
-- **완료 기준**: E2E 큐잉→폴링→다운로드. 성공 1회 차감, 실패/타임아웃 1회 환불, 동시 폴링 안전.
+- [x] 4.1 `app/api/export/android/status?jobId=` 엔드포인트(`androidExportStatus.ts` + route) — `export_jobs` 조회
+      (소유권 `user_id` 필터 포함) + GCS `result.json` 조회
+- [x] 4.2 **정산 전 상태 확인**(불변식 3): `row.status`가 `pending`일 때만 result.json 조회·정산 시도. 이미
+      `succeeded`/`failed`면 정산 재호출 없이 서명 URL/에러만 반환
+- [x] 4.3 완료 전이: `result.json.status="success"` → `completeExportJob` 호출(`export_job_not_pending`이면
+      이미 정산된 것으로 간주하고 계속 진행 — 멱등)
+- [x] 4.4 실패 전이: `result.json.status="failed"` → `failExportJob` 환불(동일 멱등 처리)
+- [x] 4.5 **워치독**(불변식 4): `result.json` 없이 `created_at` 기준 임계시간(`ANDROID_EXPORT_WATCHDOG_MS`,
+      기본 25분 — Job task-timeout 900초보다 여유 있게) 초과한 stale `pending` → status 엔드포인트가 직접
+      `failExportJob` 환불
+- [x] 4.6 다운로드: **GCS V4 서명 URL**(TTL 300초)을 signBlob(IAM Credentials API, SA 키 없이 impersonation
+      토큰으로 서명)으로 온디맨드 생성. DB에는 `file_name`만 저장(영구 URL 미저장)
+      **로컬 테스트 중 발견·수정한 이슈**:
+      (a) `signBlob` 호출은 대상 SA가 **자기 자신에게 `roles/iam.serviceAccountTokenCreator`** 를 부여해야
+      동작(별도 self-binding 필요, `workloadIdentityUser`만으로는 불가) — `vercel-builder` SA에 적용 완료.
+      (b) 서명 URL 생성 시 `exportJobId/fileName` 전체를 한 번에 `encodeURIComponent`하면 `/`까지 `%2F`로
+      이스케이프되어 실제 오브젝트 경로와 어긋남 — 경로 세그먼트별로만 인코딩하도록 수정.
+      (c) 브라우저가 `storage.googleapis.com`으로 크로스 오리진 `fetch()`를 하므로 **출력 버킷에 CORS 설정
+      필요**(GET, `localhost:3000`+배포 도메인 허용) — `kt-theme-build-output`/`-dev` 양쪽에 적용 완료.
+- [x] 4.7 `useProjectExport`/`exportClient.ts`: 응답이 `202`(큐잉)이면 `pollAndroidExportStatus`로 3초 간격
+      폴링(클라이언트 상한 12분, 서버 워치독이 최종 방어) → 완료 시 서명 URL로 다운로드. 실패 시 에러 표시 +
+      계정 상태 새로고침(환불 반영)
+- [x] 4.8 경합 안전성: 별도 락 코드 없이 **RPC 자체의 `SELECT … FOR UPDATE` + 상태 분기에 위임**(코드 감사로
+      이미 멱등 확인됨 — 동시 폴링이 `complete_export_job`/`fail_export_job`을 동시 호출해도 첫 호출만 실제
+      전이하고 이후 호출은 잔액만 반환)
+- **완료 기준 충족 + 실기기 검증 완료**: 로컬(`npm run dev` + `vercel env pull`로 받은 `VERCEL_OIDC_TOKEN`)에서
+  큐잉→폴링→서명URL 다운로드 E2E 성공, **APK를 안드로이드 실기기에 설치까지 확인**. 애초 이 작업의 발단이었던
+  "실기기에서 413으로 내보내기 실패" 문제가 해소됨. 실제 동시성 부하 테스트는 별도 후속 검증 권장.
 
 ---
 
@@ -179,7 +217,12 @@ gs://<input-bucket>/<export_job_id>/files/<field>       # 사용자 업로드·�
 
 ## 미결정 (구현 중 확정)
 
-- Cloud Run Job task timeout / `max-retries`(재시도 시 멱등 전제) / 병렬 실행 상한.
-- 워치독 방식: status 엔드포인트 판정 vs 스케줄 스윕(cron) — stale 임계시간 값.
-- 서명 URL TTL, 버킷 lifecycle 보관 시간, 폴링 주기.
-- `complete_export_job`/`fail_export_job` RPC의 현재 멱등성 여부(감사 결과에 따라 마이그레이션 필요할 수 있음).
+- ~~RPC 멱등성 감사~~ → **해소: 이미 멱등**(위 §상태 머신). 마이그레이션 불필요.
+- **`theme_id` 소유권 처리(불변식 6)** → **확정: API 계층 검증 + 빌더는 `export_job_id↔user_id`만 대조**
+  (마이그레이션 없음). `theme_id`는 번들에 유지해 추적/로깅용으로만 사용.
+- **라우트 컷오버(3.4)** → **확정: `ANDROID_EXPORT_ASYNC` 피처 플래그로 비동기 경로 추가**(기본은 기존 동기 유지).
+- ~~워치독 방식~~ → **해소: status 엔드포인트 내 판정**(스케줄 스윕 없음, `created_at` 기준).
+- ~~서명 URL TTL·폴링 주기~~ → **해소: TTL 300초, 폴링 3초 간격(클라이언트 상한 12분)**.
+- **남은 것**: Cloud Run Job `max-retries`(현재 0 — 재시도 시 멱등 전제 재검토 필요), 버킷 lifecycle 보관 시간
+  최종값(현재 dev와 동일 input 1일/output 7일 — 프로덕션 트래픽 기준 재조정 여지), 동시성 부하 테스트(4.8은
+  코드 감사로 확인, 실전 동시 요청 테스트는 미실시), `apk-zip`/`project` 비동기화(3.7, 별도).

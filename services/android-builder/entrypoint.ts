@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Storage } from "@google-cloud/storage";
+import { createClient } from "@supabase/supabase-js";
 import {
   buildExportBaseName,
   findLatestApk,
@@ -45,6 +46,35 @@ const gcsOutputUri = process.env.GCS_OUTPUT_URI ?? process.env.OUTPUT_GCS_URI;
 const templateAssetsRoot = process.env.TEMPLATE_ASSETS_ROOT ?? "/workspace/public/template-assets";
 const storage = new Storage();
 
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+type ExportStage = "preparing" | "building" | "finalizing";
+type DbClient = ReturnType<typeof createClient>;
+
+function getDbClientOrNull(): DbClient | null {
+  if (!supabaseUrl || !supabaseServiceRoleKey) return null;
+  return createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+// 3.5 소유권 검증: 번들의 export_job_id/user_id가 DB export_jobs row와 일치해야 한다.
+async function verifyOwnership(db: DbClient, exportJobId: string, userId: string) {
+  const { data, error } = await db.from("export_jobs").select("user_id").eq("id", exportJobId).maybeSingle();
+  if (error) throw new Error("ownership_check_failed");
+  if (!data) throw new Error("export_job_not_found");
+  if ((data as { user_id?: string }).user_id !== userId) throw new Error("ownership_mismatch");
+}
+
+// 3.6 스테이지 갱신: status='pending'일 때만(멱등). 실패해도 빌드를 막지 않는다(best-effort).
+async function setStage(db: DbClient | null, exportJobId: string | undefined, stage: ExportStage) {
+  if (!db || !exportJobId) return;
+  try {
+    // 빌더에는 생성된 DB 스키마 타입이 없어 update 페이로드가 never로 추론된다. 런타임엔 영향 없음.
+    await db.from("export_jobs").update({ stage } as never).eq("id", exportJobId).eq("status", "pending");
+  } catch {
+    log("info", "stage_update_skipped", { stage });
+  }
+}
+
 try {
   await main();
 } catch (error) {
@@ -54,14 +84,22 @@ try {
 
 async function main() {
   const source = await resolveBuildSource();
-  log("info", "started", { mode: source.mode, export_job_id: "exportJobId" in source ? source.exportJobId : undefined });
+  const exportJobId = "exportJobId" in source ? source.exportJobId : undefined;
+  log("info", "started", { mode: source.mode, export_job_id: exportJobId });
 
   const bundle = await readBundle(source);
+  const db = getDbClientOrNull();
+  if (source.mode === "gcs" && db && bundle.user_id) {
+    await verifyOwnership(db, source.exportJobId, bundle.user_id);
+  }
   const options = readOptions(bundle);
 
   try {
+    await setStage(db, exportJobId, "preparing");
     const files = await readInputFiles(bundle, source, templateAssetsRoot);
+    await setStage(db, exportJobId, "building");
     const result = await buildApk(files, options);
+    await setStage(db, exportJobId, "finalizing");
     await writeOutput(source, result);
     log("info", "completed", { mode: source.mode, outputFileName: result.outputFileName });
   } catch (error) {

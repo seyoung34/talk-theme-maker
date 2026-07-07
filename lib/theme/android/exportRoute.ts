@@ -20,7 +20,8 @@ import {
   validateAndroidVersionName,
   type AndroidBuildHooks,
 } from "@/lib/theme/android/apk";
-import { AndroidExportRequestError, readAndroidBuildInputFiles } from "@/lib/theme/android/request";
+import { AndroidExportRequestError, readAndroidBuildInputFiles, readAndroidBundleUpload } from "@/lib/theme/android/request";
+import { AndroidBuildEnqueueError, enqueueAndroidBuild, isAsyncAndroidExportEnabled } from "@/lib/theme/android/buildJobClient";
 import { buildDownloadContentDisposition, elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
 
@@ -61,6 +62,11 @@ export async function handleAndroidExportRequest(
     const versionName = typeof versionNameRaw === "string" && versionNameRaw.trim() ? versionNameRaw.trim() : undefined;
 
     if (versionName) validateAndroidVersionName(versionName);
+
+    // 비동기(Cloud Run Job) 경로: 플래그가 켜지면 동기 빌드 대신 큐잉+Job 트리거 후 즉시 반환한다.
+    if (isAsyncAndroidExportEnabled() && mode === "apk") {
+      return await enqueueAsyncAndroidExport({ formData, manifestRaw, user, mode, exportName, versionName });
+    }
 
     const { files, inputBytes } = await readAndroidBuildInputFiles(formData, manifestRaw);
     const reservation = await reserveCreditForExport({
@@ -149,6 +155,53 @@ export async function handleAndroidExportRequest(
       { status: failure.status },
     );
   }
+}
+
+async function enqueueAsyncAndroidExport(args: {
+  formData: FormData;
+  manifestRaw: string;
+  user: { id: string };
+  mode: AndroidExportMode;
+  exportName: string;
+  versionName?: string;
+}) {
+  const { formData, manifestRaw, user, mode, exportName, versionName } = args;
+  const themeIdRaw = formData.get("themeId");
+  const themeId = typeof themeIdRaw === "string" && themeIdRaw.trim() ? themeIdRaw.trim().slice(0, 120) : "unknown";
+
+  const { manifest, files, inputBytes } = await readAndroidBundleUpload(formData, manifestRaw);
+  const reservation = await reserveCreditForExport({ userId: user.id, platform: "android", mode, inputFileCount: files.length, inputBytes });
+  const identity = await prepareExportJobIdentity({ userId: user.id, exportJobId: reservation.exportJobId, exportName });
+  if (!identity.applicationId) throw new AndroidExportRequestError("missing_application_id", "Android 앱 식별자를 발급하지 못했습니다.");
+  validateAndroidApplicationId(identity.applicationId);
+
+  try {
+    await enqueueAndroidBuild({
+      exportJobId: reservation.exportJobId,
+      userId: user.id,
+      themeId,
+      options: { mode, exportName, versionName, applicationId: identity.applicationId },
+      manifest,
+      files,
+    });
+  } catch (error) {
+    // 큐잉 실패 시 즉시 환불(불변식 4). failExportJob은 멱등이라 안전하다.
+    await failExportJob({
+      userId: user.id,
+      exportJobId: reservation.exportJobId,
+      errorCode: error instanceof AndroidBuildEnqueueError ? error.code : "enqueue_failed",
+      errorMessage: "빌드 작업을 시작하지 못했습니다.",
+      durationMs: 0,
+    }).catch(() => undefined);
+    logAndroidExport("error", "enqueue_failed", { exportJobId: reservation.exportJobId, mode, errorCode: error instanceof AndroidBuildEnqueueError ? error.code : "enqueue_failed" });
+    return NextResponse.json({ error: "빌드 작업을 시작하지 못했습니다.", reason: "enqueue_failed", refunded: true }, { status: 502 });
+  }
+
+  logAndroidExport("info", "enqueued", { exportJobId: reservation.exportJobId, exportNumber: identity.exportNumber, mode, inputFileCount: files.length, inputBytes });
+  return NextResponse.json(
+    { exportJobId: reservation.exportJobId, exportNumber: identity.exportNumber, applicationId: identity.applicationId, status: "queued" },
+    { status: 202 },
+  );
 }
 
 async function readFormData(request: Request) {
