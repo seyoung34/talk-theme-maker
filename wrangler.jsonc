@@ -3,7 +3,10 @@
   "main": ".open-next/worker.js",
   "name": "talk-theme-maker",
   "compatibility_date": "2026-07-07",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "compatibility_flags": [
+    "nodejs_compat",
+    "global_fetch_strictly_public"
+  ],
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -13,5 +16,11 @@
       "binding": "WORKER_SELF_REFERENCE",
       "service": "talk-theme-maker"
     }
-  ]
+  ],
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  }
 }
