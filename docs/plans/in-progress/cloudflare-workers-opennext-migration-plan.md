@@ -6,12 +6,12 @@
 형태에 맞춰 정리한다.
 상위 트랙: [../in-progress/android-build-cloud-run-plan.md](../in-progress/android-build-cloud-run-plan.md) Phase 3.
 
-> 상태: **CF-0~CF-3 완료, 실제 프로덕션 배포로 검증 완료** — `cloudflare-pages-migration` 브랜치, Cloudflare
+> 상태: **CF-0~CF-4 완료, 실제 프로덕션 배포로 검증 완료** — `cloudflare-pages-migration` 브랜치, Cloudflare
 > Worker `talk-theme-maker`(`https://talk-theme-maker.jupi4784.workers.dev`)에 실배포됨. GCP WIF
 > `cloudflare-provider`를 `vercel-pool`에 영구 생성하고, 프로덕션 서명 키로 JWT 서명→STS 교환→`vercel-builder`
-> SA impersonation까지 실제로 성공 확인. Supabase/PayApp/GCP 빌드 시크릿도 이 김에 Cloudflare Worker로
-> 이전해 로그인·`/api/me`·`/api/session`까지 살아있는 배포에서 확인함(CF-4의 시크릿 이전 항목을 앞당겨 처리 —
-> 아래 CF-4 체크리스트에 반영). 다음은 CF-4 나머지(Vercel 전용 설정 정리)와 CF-5.
+> SA impersonation까지 실제로 성공 확인. Supabase/PayApp/GCP 빌드 시크릿 이전, `next.config.ts`의 죽은 Vercel
+> 전용 트레이싱 설정 제거, 불필요한 `runtime="nodejs"` 정리까지 끝내고 재배포·회귀 확인 완료. 다음은 CF-5
+> (전 경로 회귀 감사·Workers CPU 관찰·PayApp 콜백 별도 검증·DNS 전환)뿐.
 > **이전의 진짜 동기는 Vercel Hobby의 상업적 이용 금지 조항이다** — 413 payload 문제는 비동기 Cloud Run Job
 > 경로로 이미 해소됐지만([../done/android-export-413-plan.md](../done/android-export-413-plan.md)), 그것과
 > 무관하게 상업 서비스를 Hobby 플랜에서 계속 운영하면 약관 위반이라 반드시 유료 플랜이 필요하다. 즉 실제
@@ -402,14 +402,26 @@ CF-3 검증을 실제 배포로 하는 과정에서 CF-4의 상당 부분이 자
 > 이미 만들어져 있었고, 위 과정에서 실제 배포·시크릿 이전까지 끝났다. 남은 건 Vercel 전용 설정 정리뿐.
 - [x] `@opennextjs/cloudflare` 도입, 빌드/배포 파이프라인(Cloudflare Workers) 구성 — Cloudflare Workers
       Builds(Git 연동)로 `cloudflare-pages-migration` 브랜치 push마다 자동배포되도록 완료
-- [ ] `next.config.ts`에서 Vercel 전용 항목 정리: `outputFileTracingIncludes/Excludes`
-- [ ] 라우트 `runtime="nodejs"`/`maxDuration` 선언 재검토(엣지에선 무의미) — 잔류 Node 라우트에만 유지
+- [x] `next.config.ts`에서 Vercel 전용 항목 정리: `outputFileTracingIncludes`/`Excludes`(android-sample-theme·
+      template-assets 트레이싱) **삭제 완료**. CF-1에서 `exportRoute.ts`(동기 빌드 코어 경로)가 완전히
+      unimport 상태가 된 걸 확인 — 웹 번들이 더 이상 `android-sample-theme`/`template-assets`를 디스크로
+      안 읽으므로 트레이싱 힌트 자체가 죽은 설정이었음.
+- [x] 라우트 `runtime="nodejs"`/`maxDuration` 선언 재검토 — 실제로 남아있던 건
+      `app/api/export/android/status/route.ts`의 `runtime="nodejs"` 하나뿐이었고(이 라우트는 fetch+Web
+      Crypto만 쓰는 순수 엣지 세이프 코드), 이건 기본값을 그대로 다시 적은 것뿐이라 제거. (참고: OpenNext는
+      Next의 `runtime="edge"` 선언 자체를 지원하지 않으므로 — 항상 Node.js 런타임(`nodejs_compat`) 위에서
+      돈다 — 이 정리는 "엣지로 바꾼다"는 뜻이 아니라 불필요한 명시적 선언을 지우는 것.) `maxDuration`은
+      CF-1/CF-2 때 이미 다 제거돼 있었음(grep 결과 0건).
 - [x] 시크릿/환경변수 이전: `SUPABASE_SECRET_KEY`, `PAYAPP_USER_ID/LINK_KEY/LINK_VALUE`, `GCP_PROJECT_ID`,
       `GCP_PROJECT_NUMBER`, `GCP_BUILDER_SA_EMAIL`, `GCP_BUILD_INPUT_BUCKET/OUTPUT_BUCKET/JOB_REGION/JOB_NAME`,
       `ANDROID_EXPORT_ASYNC`를 Cloudflare Worker 시크릿으로 이전 완료. `NEXT_PUBLIC_*`(빌드 타임 인라인)는
       실제 배포 URL로 오버라이드해 재빌드 완료.
-- **완료 기준**: `npx tsc --noEmit` 통과 + OpenNext 빌드 성공(완료) + 실제 배포 부팅 및 시크릿 반영 확인(완료).
-  남은 건 `next.config.ts`/`runtime="nodejs"` Vercel 전용 설정 정리뿐.
+- **완료 기준 충족**: `npx tsc --noEmit` 통과, OpenNext 빌드 성공, 실제 배포에 재배포해 `/`, `/login`,
+  `/api/me`, `/api/session`, `/.well-known/jwks.json` 200 + `/api/export/android-apk`(비활성화 라우트) 410
+  확인 — 정리 후 회귀 없음. **CF-4 완료.**
+- **남은 선택 항목(블로킹 아님)**: `open-next.config.ts`에 R2 incremental cache 미설정 상태(배포 로그에
+  `WARN Failed to set up cache for your project`) — ISR 캐싱이 아쉬운 정도지 기능 장애는 아니라 CF-5 이후
+  필요하면 별도로 붙인다.
 
 ### CF-5 — 전 경로 회귀 감사 + 검증
 - [ ] Node 전용 API 사용처 최종 감사(전 라우트) — 특히 export 그래프에서 buildCore 완전 분리 재확인
