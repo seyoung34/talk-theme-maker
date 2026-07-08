@@ -6,14 +6,20 @@
 형태에 맞춰 정리한다.
 상위 트랙: [../in-progress/android-build-cloud-run-plan.md](../in-progress/android-build-cloud-run-plan.md) Phase 3.
 
-> 상태: **CF-0~CF-4 완료, 실제 프로덕션 배포로 검증 완료** — `cloudflare-pages-migration` 브랜치, Cloudflare
-> Worker `talk-theme-maker`(`https://talk-theme-maker.jupi4784.workers.dev`)에 실배포됨. GCP WIF
+> 상태: **CF-0~CF-4 완료, 실제 프로덕션 배포로 검증 완료.** `cloudflare-pages-migration` 브랜치는
+> **`main`에 병합 완료**(2026-07-08, 사용자가 직접 병합 + 보안 강화 커밋 추가: PayApp 웹훅 timing-safe 비교,
+> 오픈 리다이렉트 방지). 이제부터는 `main`이 작업 기준 브랜치. Cloudflare Worker `talk-theme-maker`
+> (`https://talk-theme-maker.jupi4784.workers.dev`, 커스텀 도메인 `talktheme.shop`)에 실배포됨. GCP WIF
 > `cloudflare-provider`를 `vercel-pool`에 영구 생성하고, 프로덕션 서명 키로 JWT 서명→STS 교환→`vercel-builder`
 > SA impersonation까지 실제로 성공 확인. Supabase/PayApp/GCP 빌드 시크릿 이전, `next.config.ts`의 죽은 Vercel
 > 전용 트레이싱 설정 제거, 불필요한 `runtime="nodejs"` 정리까지 끝내고 재배포·회귀 확인 완료. **CF-5의 DNS
 > 전환도 이미 완료**(`talktheme.shop`이 Cloudflare로 이관되어 실제로 Worker에 라우팅됨, 관측성 설정도 켜서
 > `wrangler tail`로 로그 확인까지 됨). 남은 건 Workers CPU 관찰·PayApp 콜백 별도 검증·Vercel 롤백 관찰
 > 기간뿐.
+>
+> **확인 필요**: Cloudflare Workers Build(Git 연동)의 빌드 대상 브랜치가 아직 `cloudflare-pages-migration`
+> 으로 설정돼 있다면, 병합 후에는 그 브랜치에 새 커밋이 안 쌓이므로 **`main`으로 바꿔야** 이후 `main`에 대한
+> push가 자동배포된다(대시보드 → 프로젝트 → Settings → Build → Branch control).
 > **이전의 진짜 동기는 Vercel Hobby의 상업적 이용 금지 조항이다** — 413 payload 문제는 비동기 Cloud Run Job
 > 경로로 이미 해소됐지만([../done/android-export-413-plan.md](../done/android-export-413-plan.md)), 그것과
 > 무관하게 상업 서비스를 Hobby 플랜에서 계속 운영하면 약관 위반이라 반드시 유료 플랜이 필요하다. 즉 실제
@@ -403,7 +409,8 @@ CF-3 검증을 실제 배포로 하는 과정에서 CF-4의 상당 부분이 자
 > CF-0 스파이크에서 `@opennextjs/cloudflare`/`wrangler` 설치 + 최소 `wrangler.jsonc`/`open-next.config.ts`는
 > 이미 만들어져 있었고, 위 과정에서 실제 배포·시크릿 이전까지 끝났다. 남은 건 Vercel 전용 설정 정리뿐.
 - [x] `@opennextjs/cloudflare` 도입, 빌드/배포 파이프라인(Cloudflare Workers) 구성 — Cloudflare Workers
-      Builds(Git 연동)로 `cloudflare-pages-migration` 브랜치 push마다 자동배포되도록 완료
+      Builds(Git 연동) 자동배포 완료. **`main` 병합 후: 빌드 대상 브랜치를 `cloudflare-pages-migration`에서
+      `main`으로 바꿔야 함**(위 §확인 필요 참조) — 안 바꾸면 이후 `main` push가 자동배포 안 됨.
 - [x] `next.config.ts`에서 Vercel 전용 항목 정리: `outputFileTracingIncludes`/`Excludes`(android-sample-theme·
       template-assets 트레이싱) **삭제 완료**. CF-1에서 `exportRoute.ts`(동기 빌드 코어 경로)가 완전히
       unimport 상태가 된 걸 확인 — 웹 번들이 더 이상 `android-sample-theme`/`template-assets`를 디스크로

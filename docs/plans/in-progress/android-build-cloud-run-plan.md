@@ -156,8 +156,8 @@ Cloudflare Pages Function → { status, downloadUrl? }
 - **완료** — 상세 근거: [cloud-run-apk-builder-dev.md](cloud-run-apk-builder-dev.md) 3.2~3.6, 4.1~4.8.
 
 ### Phase 3 — Cloudflare Workers(OpenNext) 이전
-> **CF-0 완료, CF-1부터 진행 중(`cloudflare-pages-migration` 브랜치 — 브랜치명은 만들 당시 이름 그대로 유지,
-> 실제 배포 대상은 Pages가 아니라 Workers임).** 상세 계획은 별도 문서로 분리:
+> **CF-0~CF-4 완료 + 실제 프로덕션 배포·DNS 전환까지 끝남.** 작업 브랜치(`cloudflare-pages-migration`)는
+> 2026-07-08에 `main`으로 병합 완료 — 이제부터는 `main`이 기준. 상세 계획은 별도 문서로 분리:
 > [cloudflare-workers-opennext-migration-plan.md](cloudflare-workers-opennext-migration-plan.md).
 > 이전의 진짜 동기는 413(이미 해소됨)이 아니라 **Vercel Hobby 상업 이용 금지** — 상업 서비스는 Pro($20/월~)
 > 아니면 다른 호스트가 필요하다. 비용 분석 결과 Cloudflare가 유리(연 15~27만원 절감 추정)해 **자체 OIDC(JWKS)
