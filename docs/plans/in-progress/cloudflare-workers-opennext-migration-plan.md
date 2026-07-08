@@ -10,8 +10,10 @@
 > Worker `talk-theme-maker`(`https://talk-theme-maker.jupi4784.workers.dev`)에 실배포됨. GCP WIF
 > `cloudflare-provider`를 `vercel-pool`에 영구 생성하고, 프로덕션 서명 키로 JWT 서명→STS 교환→`vercel-builder`
 > SA impersonation까지 실제로 성공 확인. Supabase/PayApp/GCP 빌드 시크릿 이전, `next.config.ts`의 죽은 Vercel
-> 전용 트레이싱 설정 제거, 불필요한 `runtime="nodejs"` 정리까지 끝내고 재배포·회귀 확인 완료. 다음은 CF-5
-> (전 경로 회귀 감사·Workers CPU 관찰·PayApp 콜백 별도 검증·DNS 전환)뿐.
+> 전용 트레이싱 설정 제거, 불필요한 `runtime="nodejs"` 정리까지 끝내고 재배포·회귀 확인 완료. **CF-5의 DNS
+> 전환도 이미 완료**(`talktheme.shop`이 Cloudflare로 이관되어 실제로 Worker에 라우팅됨, 관측성 설정도 켜서
+> `wrangler tail`로 로그 확인까지 됨). 남은 건 Workers CPU 관찰·PayApp 콜백 별도 검증·Vercel 롤백 관찰
+> 기간뿐.
 > **이전의 진짜 동기는 Vercel Hobby의 상업적 이용 금지 조항이다** — 413 payload 문제는 비동기 Cloud Run Job
 > 경로로 이미 해소됐지만([../done/android-export-413-plan.md](../done/android-export-413-plan.md)), 그것과
 > 무관하게 상업 서비스를 Hobby 플랜에서 계속 운영하면 약관 위반이라 반드시 유료 플랜이 필요하다. 즉 실제
@@ -442,12 +444,26 @@ CF-3 검증을 실제 배포로 하는 과정에서 CF-4의 상당 부분이 자
       1) PayApp 판매자 대시보드에 등록된 콜백 URL이 새 Cloudflare 도메인을 가리키도록 갱신됐는지,
       2) `payload.userid`/`linkkey`/`linkval` 매칭 → `payments` 테이블 조회 → `complete_credit_purchase` RPC
       호출까지 전 구간이 Workers에서 실패 없이 도는지.
-- [ ] **DNS 전환 + 롤백 준비**: DNS/도메인 전환(정상 확인 후) 실행. 전환 즉시 Vercel 배포를 폐기하지 않고
-      **최소 며칠의 관찰 기간** 동안 유지 — 이 기간에 문제가 발견되면 DNS 레코드를 Vercel로 되돌리는 게
-      유일하게 필요한 되돌리기 동작이 되도록 미리 확인해둔다(되돌리기 기준: 에러율 급증, 결제/크레딧 불일치,
-      실기기 빌드 실패 등 §검증 항목의 회귀). 관찰 기간이 끝나고서만 Vercel 배포를 실제로 내린다.
+- [x] **DNS 전환** — `talktheme.shop`을 Cloudflare 사이트로 추가, 네임서버를 Cloudflare로 교체(활성화 확인
+      완료), Worker에 커스텀 도메인 연결 완료. 도중 겪은 문제: 온보딩이 기존 Vercel A/CNAME 레코드를 그대로
+      가져와 있어서 "Hostname already has externally managed DNS records" 에러 발생 → 그 레코드(apex A,
+      `www` CNAME)를 삭제한 뒤 Custom Domain 추가로 해결. `https://talktheme.shop/`이 실제로 200 응답하고
+      Worker 로그에도 잡히는 것까지 확인(아래 §관측성 참조). `NEXT_PUBLIC_SITE_URL`도 실제 도메인으로
+      재빌드·재배포 완료.
+- [ ] **DNS 롤백 준비(여전히 필요)**: 전환은 됐지만 Vercel 배포를 아직 폐기하지 않고 **최소 며칠의 관찰
+      기간**을 두는 것 — 문제가 생기면 Cloudflare DNS 레코드를 다시 Vercel 값(A `216.198.79.1`, `www` CNAME
+      `dce5e5216a74f0d8.vercel-dns-017.com`)으로 되돌리는 게 유일한 롤백 동작이 되도록 이 값을 기억해둔다
+      (되돌리기 기준: 에러율 급증, 결제/크레딧 불일치, 실기기 빌드 실패 등 §검증 항목의 회귀). 관찰 기간이
+      끝나고서만 Vercel 배포를 실제로 내린다.
+
+**관측성(observability) 설정** — `wrangler.jsonc`에 `observability.enabled: true` +
+`observability.logs.{enabled, invocation_logs}: true` 추가. `wrangler tail`로 실시간 확인: workers.dev
+주소와 `talktheme.shop` 양쪽 요청이 전부 정상적으로 로그에 잡힘(`GET .../  - Ok`, `POST
+.../api/export/android-apk - Ok` 등). 이걸로 §Workers CPU 시간 관찰과 §PayApp 콜백 검증 때 실제로 로그를
+들여다볼 준비가 됐다.
+
 - **완료 기준**: 위 E2E 전 항목 통과, Workers CPU 시간 관찰 기록 남김, PayApp 콜백 별도 검증 통과, 실기기
-  검증 완료, DNS 전환 후 관찰 기간까지 무사히 지남. 이 문서를 `plans/done/`으로 이동.
+  검증 완료, ~~DNS 전환~~(완료) 후 관찰 기간까지 무사히 지남. 이 문서를 `plans/done/`으로 이동.
 
 ## 미결정
 
