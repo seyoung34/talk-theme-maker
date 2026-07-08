@@ -6,8 +6,12 @@
 형태에 맞춰 정리한다.
 상위 트랙: [../in-progress/android-build-cloud-run-plan.md](../in-progress/android-build-cloud-run-plan.md) Phase 3.
 
-> 상태: **CF-0~CF-2 완료, CF-3 코드 반영 중** — `cloudflare-pages-migration` 브랜치. 남은 CF-3 핵심은
-> Cloudflare OIDC 환경변수/시크릿 등록, GCP WIF `cloudflare-provider` 생성, STS/impersonation 실측 검증.
+> 상태: **CF-0~CF-3 완료, 실제 프로덕션 배포로 검증 완료** — `cloudflare-pages-migration` 브랜치, Cloudflare
+> Worker `talk-theme-maker`(`https://talk-theme-maker.jupi4784.workers.dev`)에 실배포됨. GCP WIF
+> `cloudflare-provider`를 `vercel-pool`에 영구 생성하고, 프로덕션 서명 키로 JWT 서명→STS 교환→`vercel-builder`
+> SA impersonation까지 실제로 성공 확인. Supabase/PayApp/GCP 빌드 시크릿도 이 김에 Cloudflare Worker로
+> 이전해 로그인·`/api/me`·`/api/session`까지 살아있는 배포에서 확인함(CF-4의 시크릿 이전 항목을 앞당겨 처리 —
+> 아래 CF-4 체크리스트에 반영). 다음은 CF-4 나머지(Vercel 전용 설정 정리)와 CF-5.
 > **이전의 진짜 동기는 Vercel Hobby의 상업적 이용 금지 조항이다** — 413 payload 문제는 비동기 Cloud Run Job
 > 경로로 이미 해소됐지만([../done/android-export-413-plan.md](../done/android-export-413-plan.md)), 그것과
 > 무관하게 상업 서비스를 Hobby 플랜에서 계속 운영하면 약관 위반이라 반드시 유료 플랜이 필요하다. 즉 실제
@@ -283,14 +287,22 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
   다시 확인한다.
 
 ### CF-3 — GCP 인증 엣지화 (자체 OIDC/JWKS 구현)
-- [x] 서명 키 쌍 생성 스크립트 추가(`scripts/generate-cloudflare-oidc-keypair.mjs`) — 실제 운영 키 생성과
-      Cloudflare Secret 등록은 배포 계정에서 별도 실행 필요
+- [x] 서명 키 쌍 생성 스크립트 추가(`scripts/generate-cloudflare-oidc-keypair.mjs`) — **실제 운영 키를 생성해
+      Cloudflare Secret으로 등록 완료**(`CLOUDFLARE_OIDC_PRIVATE_JWK`), 로컬 사본은 즉시 삭제
 - [x] `/.well-known/jwks.json` Worker 라우트로 공개키 노출(+ `/.well-known/openid-configuration` discovery 응답)
-- [ ] GCP WIF에 `cloudflare-provider`(issuer=자체 발급자, JWKS URL) 추가 + 대상 SA에 신뢰 바인딩
+      — 실배포에서 둘 다 정상 응답 확인
+- [x] GCP WIF에 `cloudflare-provider`(issuer=`https://talk-theme-maker.jupi4784.workers.dev`, JWKS는
+      `--jwk-json-path`로 직접 등록) **`vercel-pool`에 영구 생성 완료**. 대상 SA(`vercel-builder`) 신뢰는
+      기존 `principalSet://.../workloadIdentityPools/vercel-pool/*`(풀 전체) 바인딩이 이미 커버해 추가
+      바인딩 불필요했음(확인 완료).
 - [x] `buildJobClient.ts`의 `getVercelOidcToken()` 의존 제거 → 자체 서명 JWT 발급 함수로 교체
       (`crypto.subtle.sign`, RS256/ES256, 5분 이내 단명)
 - [x] `@vercel/oidc` 의존성 제거
 - [x] 관리자 전용 zip 내보내기 임시 비활성화 적용(§동기 경로 처리 확정 반영)
+
+**실제 검증 결과 (2026-07-08, 프로덕션)**: 프로덕션 서명 키로 JWT 서명 → `sts.googleapis.com` 토큰 교환 →
+`vercel-builder` SA impersonation까지 전 구간 성공(`iamcredentials.googleapis.com:generateAccessToken`으로
+액세스 토큰 발급 확인). (B) 설계가 스파이크 수준이 아니라 실제 운영 경로로 검증됨.
 
 **CF-3 코드 구현 메모**
 - 새 환경변수/시크릿:
@@ -326,19 +338,16 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
 - 코드 기본값은 `GCP_WIF_PROVIDER_ID=cloudflare-provider`, `GCP_WIF_POOL_ID=vercel-pool`이다. 다른 풀/프로바이더를
   쓰면 env로 명시한다.
 
-**OIDC 클레임 (고정)**
-- `iss`: 자체 발급자 문자열(Worker의 실제 도메인, 예 `https://kakaotalk-theme-maker.<subdomain>.workers.dev`
-  또는 커스텀 도메인). CF-0 스파이크에서 쓴 `https://kakaotalk-theme-maker-spike.workers.dev`는 테스트용이라
-  실제 배포 도메인으로 교체.
-- `sub`: 고정 문자열(예 `cloudflare-worker-prod`) — 이 Worker 배포 하나를 가리키는 값, 요청마다 바뀌지 않음.
-- `aud`: WIF 프로바이더 전체 리소스 이름(`//iam.googleapis.com/projects/<번호>/locations/global/workloadIdentityPools/vercel-pool/providers/cloudflare-provider` 형태, CF-0 스파이크와 동일 패턴).
+**OIDC 클레임 (고정, 실제 배포 값)**
+- `iss`: `https://talk-theme-maker.jupi4784.workers.dev`(CF-0 스파이크에서 쓴
+  `https://kakaotalk-theme-maker-spike.workers.dev`는 테스트용이었고 실제 배포 도메인으로 교체 완료).
+  Worker 이름이 최종적으로 GitHub 저장소 이름과 맞춰 `talk-theme-maker`로 확정됨(§Worker 이름 확정 참조).
+- `sub`: `cloudflare-worker-prod`(고정) — 이 Worker 배포 하나를 가리키는 값, 요청마다 바뀌지 않음.
+- `aud`: `//iam.googleapis.com/projects/779222832316/locations/global/workloadIdentityPools/vercel-pool/providers/cloudflare-provider`.
 - `iat`/`exp`: 요청 시점 기준 발급, **5분 이내 단명**(스파이크와 동일).
 
-**attribute-condition (신규 — 스파이크에서는 생략했으나 실 구현엔 필수)**
-- [ ] 프로바이더 생성 시 `--attribute-condition="assertion.sub == 'cloudflare-worker-prod'"` 지정 — JWKS
-      신뢰만으로는 "이 서명 키로 만든 어떤 sub든" 통과되므로, sub을 고정값으로 검증하는 조건을 걸어 서명 키가
-      유출됐을 때도 다른 subject를 사칭한 토큰 교환을 막는 방어선을 하나 더 둔다(CF-0 스파이크는 검증용이라
-      이 조건 없이 만들었음 — 실제 구현에서는 빠뜨리지 않는다).
+**attribute-condition** — [x] 프로바이더 생성 시 `--attribute-condition="assertion.sub == 'cloudflare-worker-prod'"`
+지정 완료(CF-0 스파이크는 검증용이라 이 조건 없이 만들었지만, 실제 `cloudflare-provider` 생성 시에는 반영함).
 
 **키 로테이션 절차**
 - [x] GCP WIF의 `--jwk-json-path`는 `keys` 배열에 여러 키를 동시에 등록할 수 있다는 점을 이용:
@@ -356,19 +365,51 @@ Cloud Run Job 빌더  →  변경 없음(이미 완료)
 - [ ] **DNS/호스트 롤백**: CF-5의 DNS 전환 항목과 연결 — Cloudflare 컷오버 후에도 일정 기간 Vercel 배포를
       바로 폐기하지 않고 유지해, 이 인증 메커니즘 자체가 구조적으로 막히면 DNS를 Vercel로 되돌리는 최후
       수단을 쓸 수 있게 한다.
-- **완료 기준**: Cloudflare Workers에서 자체 서명 JWT→STS 교환→impersonation→GCS/Job 트리거가 SA 키 없이
-  성공. `attribute-condition`이 걸려 있고, 다른 `sub` 값으로 서명한 토큰은 교환이 거부됨을 확인. 키 로테이션
-  절차가 문서화돼 있고 최소 한 번 리허설됨(새 키 추가→전환→기존 키 제거를 무중단으로).
+- **완료 기준 충족**: 자체 서명 JWT→STS 교환→impersonation이 프로덕션 배포에서 실제로 성공(2026-07-08 확인).
+  `attribute-condition` 반영 완료. 남은 것: 키 로테이션 리허설(설계는 완료, 실제 1회 실행은 아직 안 해봄),
+  다른 `sub` 값 토큰이 실제로 거부되는지의 음성 테스트(원한다면 후속으로 확인 가능).
+
+### Worker 이름 확정 + 배포 파이프라인 연결 (CF-4 착수 중 실제로 겪은 과정)
+
+CF-3 검증을 실제 배포로 하는 과정에서 CF-4의 상당 부분이 자연스럽게 앞당겨졌다. 겪은 순서대로 기록:
+
+1. **이메일 인증**: 첫 `wrangler deploy`가 `You need to verify your email address` (코드 10034)로 실패 —
+   Cloudflare 계정 이메일 인증 필요(사용자가 직접 처리).
+2. **workers.dev 서브도메인 등록**: 계정에 서브도메인이 없어 배포 실패 — 대시보드 온보딩에서 등록(사용자가
+   직접 처리, 계정 단위 1회성 선택이라 대신할 수 없었음).
+3. **Cloudflare Git 연동(Workers Builds) 발견**: 사용자가 온보딩 중 GitHub 저장소를 연결하면서 Cloudflare의
+   자체 Git 기반 자동배포가 생성됨(프로젝트명 `talk-theme-maker` — GitHub 저장소 `seyoung34/talk-theme-maker`
+   에서 자동으로 따온 이름). 이게 CF-4의 "배포 파이프라인 구성"을 사실상 대신함.
+4. **브랜치 불일치**: 이 자동배포가 기본으로 `main`을 빌드해 Next 16 `proxy.ts` 캐치-22가 그대로 재현됨(우리가
+   Next 15로 피했던 바로 그 문제) — Cloudflare 프로젝트 설정에서 빌드 브랜치를 `cloudflare-pages-migration`
+   으로 변경해 해결.
+5. **빌드 명령 불일치**: 대시보드가 자동 감지한 `Build command: npm run build`(순수 `next build`)로는
+   `.open-next/worker.js`가 안 만들어짐 — `npm run cf:build`(`opennextjs-cloudflare build`)로 변경.
+6. **Worker 이름 불일치**: `wrangler.jsonc`의 `name`이 스파이크 때 임시로 붙인 `kakaotalk-theme-maker`로
+   남아있어서, 실제 앱이 사용자가 보는 `talk-theme-maker` 프로젝트가 아니라 별도의 안 보이는 Worker로
+   배포되고 있었음(그래서 `talk-theme-maker.jupi4784.workers.dev`는 초기 "Hello world" 그대로였음) —
+   `wrangler.jsonc`의 `name`/`services[0].service`를 `talk-theme-maker`로 통일해 해결.
+7. **시크릿 이전**: Supabase/PayApp/GCP 빌드 설정 12개를 `wrangler secret put`으로 이전(§CF-4 체크리스트).
+   `NEXT_PUBLIC_SITE_URL`은 빌드 타임에 번들에 박히는 값이라 `.env.local`의 `localhost:3000`이 아니라
+   `https://talk-theme-maker.jupi4784.workers.dev`로 오버라이드해서 재빌드.
+
+결과: `https://talk-theme-maker.jupi4784.workers.dev`에서 실제 앱이 렌더링되고, `/api/me`·`/api/session`이
+정상 응답하며, 클라이언트 번들에 실제 Supabase URL이 박혀 있음을 확인(로그인 자체는 브라우저에서 최종 확인
+필요).
 
 ### CF-4 — OpenNext 도입 + 설정 정리
 > CF-0 스파이크에서 `@opennextjs/cloudflare`/`wrangler` 설치 + 최소 `wrangler.jsonc`/`open-next.config.ts`는
-> 이미 만들어져 있음(스파이크 검증용). 여기서는 그걸 실제 배포용으로 다듬는다(R2 incremental cache, 실제
-> Cloudflare 계정/프로젝트 연결, 배포 파이프라인).
-- [ ] `@opennextjs/cloudflare` 도입, 빌드/배포 파이프라인(Cloudflare Workers) 구성
-- [ ] `next.config.ts`에서 Vercel 전용 항목 정리: `outputFileTracingIncludes/Excludes`, `proxyClientMaxBodySize`
+> 이미 만들어져 있었고, 위 과정에서 실제 배포·시크릿 이전까지 끝났다. 남은 건 Vercel 전용 설정 정리뿐.
+- [x] `@opennextjs/cloudflare` 도입, 빌드/배포 파이프라인(Cloudflare Workers) 구성 — Cloudflare Workers
+      Builds(Git 연동)로 `cloudflare-pages-migration` 브랜치 push마다 자동배포되도록 완료
+- [ ] `next.config.ts`에서 Vercel 전용 항목 정리: `outputFileTracingIncludes/Excludes`
 - [ ] 라우트 `runtime="nodejs"`/`maxDuration` 선언 재검토(엣지에선 무의미) — 잔류 Node 라우트에만 유지
-- [ ] 시크릿/환경변수 이전: WIF 설정값·GCP 버킷/Job·Supabase 시크릿·PayApp 키를 Cloudflare 시크릿/변수로
-- **완료 기준**: `npx tsc --noEmit` 통과 + OpenNext 빌드 성공 + Cloudflare Preview 부팅.
+- [x] 시크릿/환경변수 이전: `SUPABASE_SECRET_KEY`, `PAYAPP_USER_ID/LINK_KEY/LINK_VALUE`, `GCP_PROJECT_ID`,
+      `GCP_PROJECT_NUMBER`, `GCP_BUILDER_SA_EMAIL`, `GCP_BUILD_INPUT_BUCKET/OUTPUT_BUCKET/JOB_REGION/JOB_NAME`,
+      `ANDROID_EXPORT_ASYNC`를 Cloudflare Worker 시크릿으로 이전 완료. `NEXT_PUBLIC_*`(빌드 타임 인라인)는
+      실제 배포 URL로 오버라이드해 재빌드 완료.
+- **완료 기준**: `npx tsc --noEmit` 통과 + OpenNext 빌드 성공(완료) + 실제 배포 부팅 및 시크릿 반영 확인(완료).
+  남은 건 `next.config.ts`/`runtime="nodejs"` Vercel 전용 설정 정리뿐.
 
 ### CF-5 — 전 경로 회귀 감사 + 검증
 - [ ] Node 전용 API 사용처 최종 감사(전 라우트) — 특히 export 그래프에서 buildCore 완전 분리 재확인
