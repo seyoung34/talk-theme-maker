@@ -24,6 +24,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ signedUrl: data.signedUrl });
   } catch (error) {
     console.error("Theme asset signed URL creation failed.", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Signed URL 생성에 실패했습니다." }, { status: 500 });
+    return NextResponse.json({ error: "Signed URL 생성에 실패했습니다.", reason: "signed_url_failed" }, { status: 500 });
   }
 }

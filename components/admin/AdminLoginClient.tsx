@@ -3,12 +3,13 @@
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
+import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
 import { createClient } from "@/lib/supabase/client";
 
 export default function AdminLoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = searchParams.get("returnTo") || "/admin";
+  const returnTo = getSafeReturnTarget(searchParams.get("returnTo"), "/admin");
   const reason = searchParams.get("reason");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

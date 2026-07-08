@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, LoaderCircle, LockKeyhole } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
+import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "signin" | "signup";
@@ -20,14 +21,10 @@ function getAuthErrorMessage(error: unknown) {
   return "인증을 완료하지 못했습니다. 입력 내용을 확인하고 다시 시도해 주세요.";
 }
 
-function safeReturnTo(value: string | null) {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/account";
-}
-
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = safeReturnTo(searchParams.get("returnTo"));
+  const returnTo = getSafeReturnTarget(searchParams.get("returnTo"));
   const reason = searchParams.get("reason");
   const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");

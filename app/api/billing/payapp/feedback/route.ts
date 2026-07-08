@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { payappFormDataToRecord } from "@/lib/billing/payapp";
+import { timingSafeEqualStrings } from "@/lib/security/timingSafe";
 import { requirePayappServerConfig } from "@/lib/supabase/config";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -20,12 +21,12 @@ export async function POST(request: Request) {
 
   const paymentId = payload.var1; //payments테이블 row uuid
   const orderId = payload.var2; //payments테이블 주문번호 order_id
+  const hasRequiredIds = Boolean(paymentId) && Boolean(orderId);
   const isTrusted =
-    payload.userid === config.payappUserId &&
-    payload.linkkey === config.payappLinkKey &&
-    payload.linkval === config.payappLinkValue &&
-    Boolean(paymentId) &&
-    Boolean(orderId);
+    hasRequiredIds &&
+    timingSafeEqualStrings(payload.userid ?? "", config.payappUserId) &&
+    timingSafeEqualStrings(payload.linkkey ?? "", config.payappLinkKey) &&
+    timingSafeEqualStrings(payload.linkval ?? "", config.payappLinkValue);
 
   if (!isTrusted) {
     return new NextResponse("FAIL", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });

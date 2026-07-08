@@ -424,7 +424,10 @@ CF-3 검증을 실제 배포로 하는 과정에서 CF-4의 상당 부분이 자
   필요하면 별도로 붙인다.
 
 ### CF-5 — 전 경로 회귀 감사 + 검증
-- [ ] Node 전용 API 사용처 최종 감사(전 라우트) — 특히 export 그래프에서 buildCore 완전 분리 재확인
+- [x] Node 전용 API 사용처 최종 감사(전 라우트) — `rg` 기준 Node import는 `lib/theme/android/apk.ts`,
+      `lib/theme/android/buildCore.ts`, `lib/theme/android/request.ts`, `lib/billing/creditCodes.server.ts`에만 남아 있고,
+      실제 Cloudflare 경로인 `app/api/export/android/route.ts`는 `exportRouteAsync.ts`→`buildJobClient.ts`만 타서
+      export 그래프에서 `buildCore`가 다시 섞이지 않음을 재확인.
 - [ ] Supabase auth/session·이미지·서명 URL·CORS(출력 버킷)·결제(PayApp) 엣지 동작 회귀
 - [ ] Cloudflare Preview E2E: 로그인 → Android 비동기 내보내기(큐잉→폴링→서명URL) → iOS 내보내기 → 크레딧
       예약/완료/환불 → 실기기 APK 설치
@@ -433,7 +436,7 @@ CF-3 검증을 실제 배포로 하는 과정에서 CF-4의 상당 부분이 자
       `middleware.ts`) CPU 시간을 관찰해 Free 10ms 한도에 얼마나 가까운지 기록. 막는 기준은 아니고(§비용
       분석 결정 유지), Paid 전환 판단 근거 자료로 남긴다.
 - [ ] **PayApp 콜백(`/api/billing/payapp/feedback`) 별도 검증** — 코드 자체는 이미 엣지 안전(Node 의존 없음,
-      `request.formData()` + Web Crypto만 사용, `lib/billing/payapp.ts:1-2` 확인함)하지만, 이 라우트는
+      `request.formData()` + 순수 Web API/문자열 비교 helper만 사용)하지만, 이 라우트는
       **사용자 브라우저가 아니라 PayApp 서버가 직접 호출하는 웹훅**이라 위 "로그인→내보내기→크레딧" E2E로는
       전혀 exercise되지 않는다. 실결제 1건 또는 실제 페이로드 형태를 모사한 POST로 별도 확인 필요:
       1) PayApp 판매자 대시보드에 등록된 콜백 URL이 새 Cloudflare 도메인을 가리키도록 갱신됐는지,

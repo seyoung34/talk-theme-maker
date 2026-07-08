@@ -32,8 +32,14 @@ export async function POST(request: Request) {
   } catch (error) {
     const raw = typeof error === "object" && error && "raw" in error ? (error as { raw?: unknown }).raw : null;
     await admin.from("payments").update({ status: "failed", raw_payload: raw ?? { error: error instanceof Error ? error.message : "PayApp request failed." } }).eq("id", payment.id);
-    const message = error instanceof Error ? error.message : "PayApp 결제 요청에 실패했습니다.";
+    const message = error instanceof Error ? error.message : "";
     const status = message.includes("PayApp server configuration is missing") ? 503 : 400;
-    return NextResponse.json({ error: status === 503 ? "PayApp 환경변수가 설정되지 않았습니다." : message, reason: status === 503 ? "payapp_config_missing" : "payapp_prepare_failed" }, { status });
+    return NextResponse.json(
+      {
+        error: status === 503 ? "PayApp 환경변수가 설정되지 않았습니다." : "PayApp 결제 요청에 실패했습니다.",
+        reason: status === 503 ? "payapp_config_missing" : "payapp_prepare_failed",
+      },
+      { status },
+    );
   }
 }
