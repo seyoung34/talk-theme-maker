@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { getCurrentUserOrNull } from "@/lib/billing/credits";
 import { resolveAndroidExportStatus } from "@/lib/theme/android/androidExportStatus";
 
-export const runtime = "nodejs";
-
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(request: Request) {

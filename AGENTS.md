@@ -48,6 +48,6 @@ npx tsc --noEmit
 npm run build
 ```
 
-After `npm run build`, check `next-env.d.ts`; if Next changed the import to `./.next/types/routes.d.ts`, restore the local dev import `./.next/dev/types/routes.d.ts`.
+Next 15 uses `./.next/types/routes.d.ts` for generated route types in this project; keep `next-env.d.ts` on that path.
 
 `npm run build` may show existing Turbopack/NFT warnings around the Android sample project. Treat warnings as pre-existing unless the current change clearly introduced them.

@@ -2,6 +2,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { access, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+export { validateAndroidApplicationId, validateAndroidVersionName } from "@/lib/theme/android/validation";
+import { validateAndroidApplicationId, validateAndroidVersionName } from "@/lib/theme/android/validation";
 
 const sampleProjectRoot = path.join(/* turbopackIgnore: true */ process.cwd(), "android-sample-theme", "apeach-26.1.0-source");
 const defaultGradleTimeoutMs = 4 * 60 * 1000;
@@ -186,29 +188,6 @@ export function buildExportBaseName(name: string, versionName?: string) {
   return `${safeName}_${safeVersion}`;
 }
 
-export function validateAndroidApplicationId(value: string) {
-  if (!/^[a-z0-9_.]+$/.test(value)) {
-    throw new AndroidBuildError("invalid_application_id", "applicationId 형식이 올바르지 않습니다.");
-  }
-
-  const segments = value.split(".");
-  if (segments.length < 2) {
-    throw new AndroidBuildError("invalid_application_id", "applicationId는 두 개 이상의 패키지 구간이 필요합니다.");
-  }
-
-  for (const segment of segments) {
-    if (!segment || !/^[a-z_][a-z0-9_]*$/.test(segment) || androidPackageSegmentReservedWords.has(segment)) {
-      throw new AndroidBuildError("invalid_application_id", `applicationId 구간이 올바르지 않습니다: ${segment || "(비어 있음)"}`);
-    }
-  }
-}
-
-export function validateAndroidVersionName(value: string) {
-  if (value.length > 40 || !/^\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?$/.test(value)) {
-    throw new AndroidBuildError("invalid_version_name", "versionName은 숫자와 점을 사용한 버전 형식이어야 합니다.");
-  }
-}
-
 function shouldCopySampleEntry(source: string) {
   const relativePath = path.relative(sampleProjectRoot, source).replaceAll("\\", "/");
   if (!relativePath) return true;
@@ -369,56 +348,3 @@ function sanitizeFileNamePart(value: string, fallback: string) {
     .replace(/-+/g, "-")
     .replace(/^[._-]+|[._-]+$/g, "") || fallback;
 }
-
-const androidPackageSegmentReservedWords = new Set([
-  "abstract",
-  "assert",
-  "boolean",
-  "break",
-  "byte",
-  "case",
-  "catch",
-  "char",
-  "class",
-  "const",
-  "continue",
-  "default",
-  "do",
-  "double",
-  "else",
-  "enum",
-  "extends",
-  "final",
-  "finally",
-  "float",
-  "for",
-  "goto",
-  "if",
-  "implements",
-  "import",
-  "instanceof",
-  "int",
-  "interface",
-  "long",
-  "native",
-  "new",
-  "package",
-  "private",
-  "protected",
-  "public",
-  "return",
-  "short",
-  "static",
-  "strictfp",
-  "super",
-  "switch",
-  "synchronized",
-  "this",
-  "throw",
-  "throws",
-  "transient",
-  "try",
-  "void",
-  "volatile",
-  "while",
-]);

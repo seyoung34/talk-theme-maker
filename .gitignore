@@ -6,6 +6,10 @@ out/
 coverage/
 *.tsbuildinfo
 
+# OpenNext / Cloudflare (Cloudflare migration spike)
+.open-next/
+.wrangler/
+
 # Logs
 *.log
 npm-debug.log*

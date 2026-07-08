@@ -9,8 +9,11 @@
     "check:ios-slots": "node scripts/verify-ios-slot-metadata.mjs",
     "check:android-colors": "node scripts/verify-android-color-slots.mjs",
     "check:android-assets": "node scripts/verify-android-bundled-assets.mjs",
+    "check:edge-imports": "node scripts/verify-edge-safe-imports.mjs",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.21.0",
@@ -20,19 +23,20 @@
     "@radix-ui/react-tooltip": "^1.2.10",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
-    "@vercel/oidc": "^3.8.0",
     "lucide-react": "^1.17.0",
-    "next": "^16.2.7",
+    "next": "^15.5.20",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.1",
     "@tailwindcss/postcss": "^4.3.0",
     "@types/node": "25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wrangler": "^4.107.1"
   }
 }
