@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, LoaderCircle, LockKeyhole } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, LoaderCircle, LockKeyhole, MessageCircle, Sparkles, Star } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
@@ -111,38 +111,75 @@ export default function LoginClient() {
   };
 
   return (
-    <main className="min-h-screen bg-[var(--color-background)] text-[var(--color-on-background)]">
+    <main className="min-h-screen overflow-x-clip bg-[linear-gradient(180deg,#e8f1ff_0%,#f4f9ff_18%,#ffffff_42%,#f7fbff_70%,#e9f2ff_100%)] text-[var(--color-on-background)]">
       <SiteHeader currentPath="/login" />
-      <div className="mx-auto grid min-h-[calc(100dvh-65px)] w-full max-w-6xl items-center gap-10 px-5 py-10 md:grid-cols-[minmax(0,0.9fr)_minmax(400px,0.72fr)] md:px-8 md:py-14">
-        <section className="hidden max-w-xl md:block" aria-label="서비스 안내">
-          <div className="mb-6 inline-flex size-12 items-center justify-center rounded-2xl bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]">
-            <LockKeyhole aria-hidden="true" size={23} strokeWidth={2.2} />
+      <div className="relative mx-auto grid min-h-[calc(100dvh-73px)] w-full max-w-7xl items-center gap-10 px-5 py-10 md:px-8 md:py-14 lg:grid-cols-[minmax(0,0.98fr)_minmax(390px,0.72fr)]">
+        <Star className="pointer-events-none absolute left-[4%] top-[10%] hidden h-7 w-7 rotate-12 text-[#fee500] lg:block" />
+        <MessageCircle className="pointer-events-none absolute left-[1%] top-[44%] hidden h-10 w-10 -rotate-6 text-[#9bc0f5] lg:block" />
+        <Sparkles className="pointer-events-none absolute right-[38%] top-[14%] hidden h-7 w-7 text-[#fbbf24] lg:block" />
+
+        <section className="relative max-w-2xl" aria-label="서비스 안내">
+          <div className="pointer-events-none absolute -left-10 top-8 hidden h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(91,155,255,0.22),transparent_72%)] blur-3xl md:block" />
+          <div className="pointer-events-none absolute left-28 top-28 hidden h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(254,229,0,0.2),transparent_72%)] blur-3xl md:block" />
+
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/85 px-3.5 py-1.5 text-[12px] font-black text-[#3d7bd6] shadow-sm backdrop-blur">
+            <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
+            계정으로 테마와 크레딧을 이어서 관리
+          </span>
+
+          <div className="mt-6 inline-flex size-14 items-center justify-center rounded-[22px] bg-[#fff2a8] text-[#665300] shadow-[0_18px_40px_rgba(254,229,0,0.28)]">
+            <LockKeyhole aria-hidden="true" size={24} strokeWidth={2.2} />
           </div>
-          <p className="text-sm font-extrabold tracking-[0.12em] text-[var(--color-secondary)]">TALK THEME MAKER</p>
-          <h2 className="mt-3 font-[var(--font-display)] text-4xl font-semibold leading-tight tracking-[-0.04em] text-[var(--color-on-surface)]">만든 테마와 크레딧을<br />한 계정에서 관리하세요.</h2>
-          <ul className="mt-8 grid gap-4 text-sm font-semibold text-[var(--color-on-surface-variant)]">
-            {["카카오 계정으로 빠르게 시작", "결제한 크레딧과 사용 내역 확인", "내보내기 기록을 기기와 상관없이 관리"].map((item) => (
-              <li key={item} className="flex items-center gap-3"><CheckCircle2 className="shrink-0 text-[var(--color-secondary)]" size={19} aria-hidden="true" />{item}</li>
+
+          <h2 className="mt-6 text-balance font-[var(--font-display)] text-[40px] font-semibold leading-[1.12] tracking-[-0.05em] text-[var(--color-on-surface)] sm:text-[52px] lg:text-[64px]">
+            만든 테마와 크레딧을
+            <span className="mt-1 block text-[#2f6bbf]">한 계정에서 가볍게</span>
+            이어가세요.
+          </h2>
+          <p className="mt-5 max-w-xl text-[16px] font-semibold leading-8 text-[var(--color-on-surface-variant)] sm:text-[18px]">
+            카카오 로그인이나 이메일 계정으로 접속하면 결제한 크레딧과 내보내기 이력을 한곳에서
+            정리할 수 있습니다. 작업을 멈췄다가 다시 돌아와도 흐름이 끊기지 않습니다.
+          </p>
+
+          <ul className="mt-8 grid gap-3 sm:grid-cols-3">
+            {[
+              "카카오 계정으로 빠르게 시작",
+              "결제한 크레딧과 사용 내역 확인",
+              "내보내기 기록을 기기와 상관없이 관리",
+            ].map((item, index) => (
+              <li
+                key={item}
+                className={`rounded-[26px] border border-[#dbe8fb] bg-white/82 p-4 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)] shadow-[0_18px_42px_rgba(47,107,191,0.08)] backdrop-blur ${index === 1 ? "sm:-translate-y-2" : ""}`}
+              >
+                <CheckCircle2 className="mb-3 text-[#2f6bbf]" size={20} aria-hidden="true" />
+                {item}
+              </li>
             ))}
           </ul>
+
+          <p className="mt-6 inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-2 text-xs font-bold text-[var(--color-on-surface-variant)] shadow-sm">
+            <Star className="h-3.5 w-3.5 fill-[#fee500] text-[#fee500]" />
+            {context.destination}
+          </p>
         </section>
 
-        <section className="w-full rounded-[24px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-lowest)] p-5 shadow-[0_20px_55px_rgba(48,49,46,0.08)] sm:p-7" aria-labelledby="auth-title">
+        <section className="relative w-full overflow-hidden rounded-[30px] border border-[#dbe8fb] bg-white/88 p-5 shadow-[0_28px_80px_rgba(47,107,191,0.14)] backdrop-blur sm:p-7" aria-labelledby="auth-title">
+          <div className="pointer-events-none absolute inset-x-8 top-0 h-24 rounded-b-[32px] bg-[linear-gradient(180deg,rgba(232,241,255,0.95),rgba(255,255,255,0))]" />
           <div className="mb-6">
-            <p className="text-xs font-extrabold tracking-[0.14em] text-[var(--color-secondary)]">계정</p>
-            <h1 id="auth-title" className="mt-2 font-[var(--font-display)] text-[28px] font-semibold tracking-[-0.035em] text-[var(--color-on-surface)]">{context.title}</h1>
-            <p className="mt-2 text-sm font-medium leading-6 text-[var(--color-on-surface-variant)]">{context.description}</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#3d7bd6]">Account</p>
+            <h1 id="auth-title" className="mt-2 font-[var(--font-display)] text-[30px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">{context.title}</h1>
+            <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{context.description}</p>
           </div>
 
-          <div className="mb-5 grid grid-cols-2 rounded-xl bg-[var(--color-surface-low)] p-1" role="tablist" aria-label="인증 방식">
+          <div className="mb-5 grid grid-cols-2 rounded-full border border-[#dbe8fb] bg-[#f4f9ff] p-1.5" role="tablist" aria-label="인증 방식">
             {(["signin", "signup"] as const).map((item) => (
-              <button key={item} type="button" role="tab" aria-selected={mode === item} className={`rounded-[9px] px-3 py-2.5 text-sm font-extrabold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] ${mode === item ? "bg-white text-[var(--color-on-surface)] shadow-sm" : "text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)]"}`} onClick={() => changeMode(item)} disabled={isSubmitting}>
+              <button key={item} type="button" role="tab" aria-selected={mode === item} className={`rounded-full px-3 py-2.5 text-sm font-extrabold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] ${mode === item ? "bg-white text-[var(--color-on-surface)] shadow-[0_8px_18px_rgba(47,107,191,0.12)]" : "text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)]"}`} onClick={() => changeMode(item)} disabled={isSubmitting}>
                 {item === "signin" ? "로그인" : "회원가입"}
               </button>
             ))}
           </div>
 
-          <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] transition hover:bg-[#f5dc00] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting}>
+          <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting}>
             {isSubmitting ? <LoaderCircle className="animate-spin" size={18} aria-hidden="true" /> : <span className="text-base" aria-hidden="true">●</span>}
             카카오로 {mode === "signin" ? "로그인" : "시작하기"}
           </button>
@@ -170,7 +207,7 @@ export default function LoginClient() {
               </div>
             ) : null}
 
-            <button className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-extrabold text-[var(--color-inverse-on-surface)] transition hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" type="submit" disabled={isSubmitting}>
+            <button className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-secondary)] px-5 py-3 text-sm font-extrabold text-white shadow-[0_18px_34px_rgba(47,107,191,0.22)] transition hover:-translate-y-0.5 hover:bg-[#3d7bd6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" type="submit" disabled={isSubmitting}>
               {isSubmitting ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />처리 중</> : <>{mode === "signin" ? "이메일로 로그인" : "이메일로 가입"}<ArrowRight size={17} aria-hidden="true" /></>}
             </button>
           </form>

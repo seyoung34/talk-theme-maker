@@ -55,5 +55,8 @@ tmp/
 temp/
 *.tmp
 
+# docs
+docs/notes/
+
 .vercel
 .env*

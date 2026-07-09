@@ -790,7 +790,7 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
 
 function ModalScreenFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="relative aspect-9/19.5 w-[min(74vw,240px)] shrink-0 overflow-hidden rounded-[32px] border border-[var(--color-outline-variant)] bg-white shadow-[0_18px_40px_rgba(42,103,103,0.12)] sm:w-auto sm:h-[min(62dvh,540px)]">
+    <div className="relative aspect-9/19.5 h-[min(calc(74vw*19.5/9),62dvh,540px)] w-auto shrink-0 overflow-hidden rounded-[32px] border border-[var(--color-outline-variant)] bg-white shadow-[0_18px_40px_rgba(42,103,103,0.12)]">
       {children}
     </div>
   );

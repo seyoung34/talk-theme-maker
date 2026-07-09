@@ -106,16 +106,24 @@ export function ChatroomPreview({
   const [headerForeground, setHeaderForeground] = useState("#ffffff");
 
   const previewColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback);
+  const isIos = platform === "ios";
   const inputBackground = previewColor("chat_input_background_color", template.defaults.chatInputBackground);
   const sendButtonColor = previewColor("chat_send_button_color", template.defaults.chatSendButton);
   const chatBackgroundColor = previewColor("chat_background_color", template.defaults.chatBackground);
   const myBubbleTextColor = previewColor("chat_bubble_me_color", template.defaults.mainTitle);
   const friendBubbleTextColor = previewColor("chat_bubble_you_color", template.defaults.mainTitle);
   const unreadCountColor = previewColor("chat_unread_count_color", template.accent);
-  const inputTextColor = previewColor("chat_input_text_color", template.defaults.mainTitle);
   const sendIconColor = previewColor("chat_send_icon_color", template.defaults.mainTitle);
-  const menuIconColor = previewColor("chat_menu_icon_color", template.defaults.mainBody);
-  const menuButtonColor = previewColor("chat_menu_button_color", "#14000000");
+  // 입력바 텍스트/메뉴 색상은 android와 iOS가 서로 다른 role을 사용한다. (배경/보내기 계열은 공통 role)
+  const inputTextColor = isIos
+    ? previewColor("chat_button_text_color", template.defaults.mainTitle)
+    : previewColor("chat_input_text_color", template.defaults.mainTitle);
+  const menuIconColor = isIos
+    ? previewColor("chat_button_foreground_color", template.defaults.mainBody)
+    : previewColor("chat_menu_icon_color", template.defaults.mainBody);
+  const menuButtonColor = isIos
+    ? previewColor("chat_button_background_color", "#0FFFFFFF")
+    : previewColor("chat_menu_button_color", "#14000000");
 
   useLayoutEffect(() => {
     if (!backgroundFile) {
@@ -216,10 +224,10 @@ export function ChatroomPreview({
   const backgroundSlot = slotByRole.chat_background;
   const inputSlot = slotByRole.chat_input_background_color;
   const sendSlot = slotByRole.chat_send_button_color;
-  const inputTextSlot = slotByRole.chat_input_text_color;
+  const inputTextSlot = isIos ? slotByRole.chat_button_text_color : slotByRole.chat_input_text_color;
   const sendIconSlot = slotByRole.chat_send_icon_color;
-  const menuIconSlot = slotByRole.chat_menu_icon_color;
-  const menuButtonSlot = slotByRole.chat_menu_button_color;
+  const menuIconSlot = isIos ? slotByRole.chat_button_foreground_color : slotByRole.chat_menu_icon_color;
+  const menuButtonSlot = isIos ? slotByRole.chat_button_background_color : slotByRole.chat_menu_button_color;
 
   return (
     <div className="relative aspect-1080/2123 h-full w-full max-w-[310px] overflow-hidden rounded-xl border border-transparent bg-white shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
@@ -376,7 +384,8 @@ function ChatroomInputBarV2({
           <Plus className="h-[58%] w-[58%]" strokeWidth={2.4} />
         </button>
 
-        <div className="flex h-[clamp(2rem,72%,2.8rem)] min-w-0 flex-1 items-center gap-[clamp(0.35rem,2.4%,0.6rem)] rounded-full bg-[#edf6f8] pl-[clamp(0.85rem,5%,1.35rem)] pr-[clamp(0.35rem,2%,0.5rem)]">
+        {/* 입력 필드 배경은 메뉴 버튼 배경과 동일한 키를 공유한다(입력창 배경 컬러, 투명도 조절 가능). */}
+        <div className="flex h-[clamp(2rem,72%,2.8rem)] min-w-0 flex-1 items-center gap-[clamp(0.35rem,2.4%,0.6rem)] rounded-full pl-[clamp(0.85rem,5%,1.35rem)] pr-[clamp(0.35rem,2%,0.5rem)]" style={{ backgroundColor: menuButtonColor }}>
           <button
             type="button"
             className={`min-w-0 flex-1 truncate text-left text-[clamp(0.98rem,4.2cqw,1.55rem)] font-medium ${selectedSlotId === inputTextSlot?.id ? "rounded-full ring-2 ring-[#60a5fa]" : ""}`}
@@ -388,7 +397,7 @@ function ChatroomInputBarV2({
           >
             사용자 입력
           </button>
-          <span className="grid aspect-square h-[82%] shrink-0 place-items-center rounded-full bg-[#dbecef] text-[#386f79]">
+          <span className="grid aspect-square h-[82%] shrink-0 place-items-center rounded-full bg-[#D8D8D8] text-[#191919]">
             <Smile className="h-[58%] w-[58%]" strokeWidth={2.2} />
           </span>
         </div>
