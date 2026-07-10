@@ -9,6 +9,7 @@ import { ExportDialog } from "@/components/project/dialogs/ExportDialog";
 import { InitialTemplateErrorPanel, InitialTemplateLoadingPanel } from "@/components/project/dialogs/InitialTemplatePanels";
 import { SaveTemplateDialog } from "@/components/project/dialogs/SaveTemplateDialog";
 import { SystemTemplateSaveDialog } from "@/components/project/dialogs/SystemTemplateSaveDialog";
+import { getDefaultSlotCandidateId, getMissingRemoteUploadSlotIds, keepCurrentRemoteUploads, mergeSlotUploads } from "@/components/project/projectImporterHelpers";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { MobileEditActionBar } from "@/components/project/MobileEditActionBar";
 import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
@@ -561,17 +562,34 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const selectPreviewSlot = (slotId: string | undefined) => {
-    setSelectedSlotId(slotId);
-    if (slotId) setSelectionPulseKey((current) => current + 1);
+    focusSlot(slotId);
     const slot = slots.find((item) => item.id === slotId);
     if (!slot) return;
-    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
+    revealSlot(slot);
     if (viewportMode === "mobile") {
       setMobileSheetSnap("half");
     } else {
       setMobileEditSheetOpen(true);
     }
+  };
+
+  const revealSlot = (slot: ThemeAssetSlot) => {
+    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
+    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
+  };
+
+  const focusSlot = (slotId: string | undefined) => {
+    setSelectedSlotId(slotId);
+    if (slotId) setSelectionPulseKey((current) => current + 1);
+  };
+
+  const dropRemoteUploadRef = (slotId: string) => {
+    setRemoteUploadRefs((current) => {
+      const next = { ...current };
+      delete next[slotId];
+      remoteUploadRefsRef.current = next;
+      return next;
+    });
   };
 
   const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
@@ -583,17 +601,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       ...current,
       [slot.id]: [...(current[slot.id] ?? []), { id: uploadId, file, source: "user" as const }],
     }));
-    setRemoteUploadRefs((current) => {
-      const next = { ...current };
-      delete next[slot.id];
-      remoteUploadRefsRef.current = next;
-      return next;
-    });
+    dropRemoteUploadRef(slot.id);
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
-    setSelectedSlotId(slot.id);
-    setSelectionPulseKey((current) => current + 1);
-    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
+    focusSlot(slot.id);
+    revealSlot(slot);
   };
 
   const uploadEditedSlot = (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => {
@@ -617,17 +628,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         },
       ],
     }));
-    setRemoteUploadRefs((current) => {
-      const next = { ...current };
-      delete next[slot.id];
-      remoteUploadRefsRef.current = next;
-      return next;
-    });
+    dropRemoteUploadRef(slot.id);
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
-    setSelectedSlotId(slot.id);
-    setSelectionPulseKey((current) => current + 1);
-    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
+    focusSlot(slot.id);
+    revealSlot(slot);
   };
 
   const clearSlot = (slot: ThemeAssetSlot) => {
@@ -636,15 +640,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       delete next[slot.id];
       return next;
     });
-    setRemoteUploadRefs((current) => {
-      const next = { ...current };
-      delete next[slot.id];
-      remoteUploadRefsRef.current = next;
-      return next;
-    });
+    dropRemoteUploadRef(slot.id);
     setCandidateSelections((current) => ({
       ...current,
-      [slot.id]: getInitialSlotCandidateSelections([slot], templateId, activeTemplate)[slot.id],
+      [slot.id]: getDefaultSlotCandidateId(slot, templateId, activeTemplate),
     }));
   };
 
@@ -663,11 +662,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       if (current[slot.id] !== uploadId) return current;
       return {
         ...current,
-        [slot.id]: getInitialSlotCandidateSelections([slot], templateId, activeTemplate)[slot.id],
+        [slot.id]: getDefaultSlotCandidateId(slot, templateId, activeTemplate),
       };
     });
-    setSelectedSlotId(slot.id);
-    setSelectionPulseKey((current) => current + 1);
+    focusSlot(slot.id);
   };
 
   const changeColor = (slot: ThemeAssetSlot, value: string) => {
@@ -695,8 +693,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const selectCandidate = (slot: ThemeAssetSlot, candidateId: string) => {
     setCandidateSelections((current) => ({ ...current, [slot.id]: candidateId }));
-    setSelectedSlotId(slot.id);
-    setSelectionPulseKey((current) => current + 1);
+    focusSlot(slot.id);
 
     if (slot.kind === "color") {
       setColors((current) => {
@@ -714,12 +711,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       const nextEntries = entries.some((entry) => entry.id === asset.id) ? entries : [...entries, { id: asset.id, file, source: "admin" as const }];
       return { ...current, [slot.id]: nextEntries };
     });
-    setRemoteUploadRefs((current) => {
-      const next = { ...current };
-      delete next[slot.id];
-      remoteUploadRefsRef.current = next;
-      return next;
-    });
+    dropRemoteUploadRef(slot.id);
     if (asset.bubbleAdjustment) {
       if (asset.bubbleAdjustment.markers) {
         setBubbleMarkers((current) => ({ ...current, [slot.id]: asset.bubbleAdjustment?.markers }));
@@ -732,14 +724,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       }
     }
     setCandidateSelections((current) => ({ ...current, [slot.id]: asset.id }));
-    setSelectedSlotId(slot.id);
-    setSelectionPulseKey((current) => current + 1);
-    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
+    focusSlot(slot.id);
+    revealSlot(slot);
   };
 
   const openSaveDialog = () => {
-    const fallbackName = `${activeTemplate.name} 복사본`;
     setSaveMode(activeUserTemplate ? "overwrite" : "saveAs");
     setSaveName(activeUserTemplate?.name ?? `${displayTemplateName} 복사본`);
     setSaveDialogOpen(true);
@@ -1171,10 +1160,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                         contrastWarnings={contrastWarnings}
                         hideSlotPicker={mobileUsesSourceToggle}
                         onSelectSlot={(slot) => {
-                          setSelectedSlotId(slot.id);
-                          setSelectionPulseKey((current) => current + 1);
-                          if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-                          if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
+                          focusSlot(slot.id);
+                          revealSlot(slot);
                           setMobileSheetSnap("half");
                         }}
                       />
@@ -1217,10 +1204,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   template={activeTemplate}
                   contrastWarnings={contrastWarnings}
                   onSelectSlot={(slot) => {
-                    setSelectedSlotId(slot.id);
-                    setSelectionPulseKey((current) => current + 1);
-                    if (!isSlotVisibleInSection(slot, activeSection)) setActiveSection(slot.section);
-                    if (!isSlotVisibleInGroup(slot, activeGroup)) setActiveGroup(slot.group);
+                    focusSlot(slot.id);
+                    revealSlot(slot);
                     setMobileEditSheetOpen(true);
                   }}
                 />
@@ -1341,38 +1326,6 @@ function getInitialPreviewSlotIds(platform: ThemePlatform, uploadRefs: RemoteSlo
   const slots = getThemeSlots(platform);
   const roleOrder: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "profile_image_1"];
   return roleOrder.map((role) => slots.find((slot) => slot.role === role)?.id).filter((slotId): slotId is string => Boolean(slotId && uploadRefs[slotId]?.length));
-}
-
-function getMissingRemoteUploadSlotIds(uploadRefs: RemoteSlotUploads, uploads: SlotUploads, slotIds?: string[]) {
-  const targetSlotIds = slotIds?.length ? slotIds : Object.keys(uploadRefs);
-  return targetSlotIds.filter((slotId) => {
-    const refs = uploadRefs[slotId] ?? [];
-    if (!refs.length) return false;
-    const currentIds = new Set((uploads[slotId] ?? []).map((entry) => entry.id));
-    return refs.some((entry) => !currentIds.has(entry.id));
-  });
-}
-
-function keepCurrentRemoteUploads(uploads: SlotUploads, uploadRefs: RemoteSlotUploads): SlotUploads {
-  const next: SlotUploads = {};
-  for (const [slotId, entries] of Object.entries(uploads)) {
-    if (!entries?.length) continue;
-    const currentRefIds = new Set((uploadRefs[slotId] ?? []).map((entry) => entry.id));
-    const currentEntries = entries.filter((entry) => currentRefIds.has(entry.id));
-    if (currentEntries.length) next[slotId] = currentEntries;
-  }
-  return next;
-}
-
-function mergeSlotUploads(current: SlotUploads, incoming: SlotUploads): SlotUploads {
-  const next: SlotUploads = { ...current };
-  for (const [slotId, entries] of Object.entries(incoming)) {
-    if (!entries?.length) continue;
-    const currentEntries = next[slotId] ?? [];
-    const currentIds = new Set(currentEntries.map((entry) => entry.id));
-    next[slotId] = [...currentEntries, ...entries.filter((entry) => !currentIds.has(entry.id))];
-  }
-  return next;
 }
 
 function getBackgroundSourcePair(slot: ThemeAssetSlot, slots: ThemeAssetSlot[]) {

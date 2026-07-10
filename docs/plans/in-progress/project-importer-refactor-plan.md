@@ -1,6 +1,6 @@
 # ProjectImporterClient 점진적 분해 리팩토링 계획
 
-> 상태: R1 다이얼로그/패널 분리와 R2 세션 유틸 분리 완료. R3 반복 헬퍼·테스트가 남아 있다.
+> 상태: R1 다이얼로그/패널, R2 세션 유틸, R3 반복 헬퍼·테스트 완료. 다음은 R4 저장 로직 훅 추출이다.
 > 참고: 진단 근거 → [../../report/project-importer-client-refactor-2026-07-10.md](../../report/project-importer-client-refactor-2026-07-10.md)
 
 ## 목적
@@ -51,9 +51,9 @@
 
 ### Phase 3 (R3) — 반복 패턴 헬퍼 추출 · 저위험
 
-- [ ] `revealSlot(slot)`(섹션/그룹 노출), `focusSlot(slotId)`(선택 + 펄스),
+- [x] `revealSlot(slot)`(섹션/그룹 노출), `focusSlot(slotId)`(선택 + 펄스),
       `dropRemoteUploadRef(slotId)`, 단일 슬롯 기본 후보 헬퍼를 추출한다.
-- [ ] 순수 헬퍼(`mergeSlotUploads`/`keepCurrentRemoteUploads`/`getMissingRemoteUploadSlotIds` 등)에 단위 테스트를 추가한다.
+- [x] 순수 헬퍼(`mergeSlotUploads`/`keepCurrentRemoteUploads`/`getMissingRemoteUploadSlotIds` 등)에 단위 테스트를 추가한다.
 - 완료 기준: 6곳 이상의 복붙이 헬퍼 호출로 대체되고, 추출한 순수 헬퍼에 테스트가 붙는다.
 
 ### Phase 4 (R4) — 저장 로직 훅 추출 · 중위험
