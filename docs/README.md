@@ -22,6 +22,7 @@
 | 문서 | 내용 |
 |---|---|
 | [report/admin-assets-review-2026-07-10.md](report/admin-assets-review-2026-07-10.md) | `AdminAssetsClient` 성능·정합성·UX 진단 (후속: admin-assets-optimization-plan) |
+| [report/project-importer-client-refactor-2026-07-10.md](report/project-importer-client-refactor-2026-07-10.md) | `ProjectImporterClient`(2007줄) 구조·상태·성능·UX 진단 + 8단계 점진적 분해 로드맵 |
 
 ## notes — 형식 없는 메모
 
@@ -34,6 +35,7 @@
 | 문서 | 상태 |
 |---|---|
 | [plans/planned/easy-guide-plan.md](plans/planned/easy-guide-plan.md) | 이미지 중심 "쉬운 가이드" 기획 확정. 스크린샷/GIF 에셋 준비 후 구현 착수 예정 |
+| [plans/planned/project-importer-refactor-plan.md](plans/planned/project-importer-refactor-plan.md) | `ProjectImporterClient`(2007줄) 8단계 점진적 분해 계획. 테스트/lint 안전망 확보 완료, R1~R3부터 착수 예정 |
 
 ## plans/in-progress — 구현 진행중
 
