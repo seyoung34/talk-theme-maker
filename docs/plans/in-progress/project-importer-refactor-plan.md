@@ -1,6 +1,6 @@
 # ProjectImporterClient 점진적 분해 리팩토링 계획
 
-> 상태: 기획 확정. 구현 착수 전.
+> 상태: R1 다이얼로그/패널 분리 완료. R2 세션 유틸 분리와 R3 반복 헬퍼·테스트가 남아 있다.
 > 참고: 진단 근거 → [../../report/project-importer-client-refactor-2026-07-10.md](../../report/project-importer-client-refactor-2026-07-10.md)
 
 ## 목적
@@ -39,9 +39,9 @@
 
 ### Phase 1 (R1) — 다이얼로그/패널 파일 추출 · 저위험
 
-- [ ] `ExportDialog`, `SystemTemplateSaveDialog`, `SaveTemplateDialog`, `ExitConfirmDialog`,
+- [x] `ExportDialog`, `SystemTemplateSaveDialog`, `SaveTemplateDialog`, `ExitConfirmDialog`,
       `InitialTemplateLoadingPanel`+`InitialTemplateErrorPanel`을 `components/project/dialogs/`로 이동한다(로직 변경 없음).
-- [ ] 관련 라벨 상수(`systemTemplate*Labels`)와 `SelectField`도 함께 옮긴다.
+- [x] 관련 라벨 상수(`systemTemplate*Labels`)와 `SelectField`도 함께 옮긴다.
 - 완료 기준: `ProjectImporterClient.tsx`가 약 700줄 감소하고, 각 다이얼로그가 자체 파일에서 props로만 구동된다.
 
 ### Phase 2 (R2) — 세션 유틸 분리 · 저위험

@@ -4,7 +4,7 @@
 > 대상: [`components/project/ProjectImporterClient.tsx`](../../components/project/ProjectImporterClient.tsx) (2007줄)
 > 관련: [`hooks/useProjectExport.ts`](../../components/project/hooks/useProjectExport.ts), [`hooks/useProjectAutoColors.ts`](../../components/project/hooks/useProjectAutoColors.ts), [`hooks/useProjectAssetUploads.ts`](../../components/project/hooks/useProjectAssetUploads.ts), [`projectModel.ts`](../../components/project/projectModel.ts)
 > 리뷰 일자: 2026-07-10
-> 후속 계획: [../plans/planned/project-importer-refactor-plan.md](../plans/planned/project-importer-refactor-plan.md)
+> 후속 계획: [../plans/in-progress/project-importer-refactor-plan.md](../plans/in-progress/project-importer-refactor-plan.md)
 
 ## 범위
 
