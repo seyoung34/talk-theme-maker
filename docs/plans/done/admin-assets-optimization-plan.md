@@ -1,6 +1,6 @@
 # AdminAssetsClient 최적화 · UX 개선 계획
 
-> 상태: Phase 1~5 코드 구현 및 로컬 자동 검증(`npx tsc --noEmit`·`npm run check:text`) 완료. 남은 것: 관리자 화면 실사용 수동 검증, `notice` 성공/실패 색 구분(후속 과제).
+> 상태: Phase 1~5 구현 및 로컬 자동 검증(`npx tsc --noEmit`·`npm run check:text`) 완료, `/admin/assets` 실사용 수동 QA 확인 완료. 후속 과제: `notice` 성공/실패 색 구분(범위 밖으로 분리, 아래 Phase 4 참조).
 > 참고: 진단 근거 → [../../report/admin-assets-review-2026-07-10.md](../../report/admin-assets-review-2026-07-10.md)
 
 ## 목적

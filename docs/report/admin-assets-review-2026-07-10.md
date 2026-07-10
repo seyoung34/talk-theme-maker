@@ -3,7 +3,7 @@
 > 종류: 코드 리뷰 스냅샷 (특정 시점 진단). 상태 전환 대상 아님.
 > 대상: [`components/admin/AdminAssetsClient.tsx`](../../components/admin/AdminAssetsClient.tsx)
 > 리뷰 일자: 2026-07-10
-> 후속 계획: [../plans/in-progress/admin-assets-optimization-plan.md](../plans/in-progress/admin-assets-optimization-plan.md)
+> 후속 계획: [../plans/done/admin-assets-optimization-plan.md](../plans/done/admin-assets-optimization-plan.md)
 
 ## 범위
 
@@ -107,4 +107,4 @@
 ## 다음 단계
 
 본 진단을 기반으로 한 단계별 구현 계획은
-[../plans/in-progress/admin-assets-optimization-plan.md](../plans/in-progress/admin-assets-optimization-plan.md)에서 다룬다.
+[../plans/done/admin-assets-optimization-plan.md](../plans/done/admin-assets-optimization-plan.md)에서 다룬다.

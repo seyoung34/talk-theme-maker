@@ -39,7 +39,6 @@
 
 | 문서 | 상태 |
 |---|---|
-| [plans/in-progress/admin-assets-optimization-plan.md](plans/in-progress/admin-assets-optimization-plan.md) | `AdminAssetsClient` 성능·정합성·검증·UX 개선 Phase 1~5 구현 및 로컬 검증 완료. 실사용 수동 검증 + notice 색 구분(후속) 남음 |
 | [plans/in-progress/color-picker-ux-improvement-plan.md](plans/in-progress/color-picker-ux-improvement-plan.md) | 공용 컬러 피커 Phase 1·2 구현 완료. 반응형·접근성 및 실기기 검증 진행 예정 |
 | [plans/in-progress/android-build-cloud-run-plan.md](plans/in-progress/android-build-cloud-run-plan.md) | 비동기 Cloud Run Job 빌드 오프로딩은 완료. Cloudflare Pages 이전(Phase 3) 착수함 — 아래 문서 참조 |
 | [plans/in-progress/cloud-run-apk-builder-dev.md](plans/in-progress/cloud-run-apk-builder-dev.md) | Cloud Run Job 빌드 오프로딩 마일스톤 1~4차 완료(실기기 검증 포함). 남은 것: `apk-zip`/`project` 비동기화(3.7) + 후속 튜닝 |
@@ -49,6 +48,7 @@
 
 | 문서 | 내용 |
 |---|---|
+| [plans/done/admin-assets-optimization-plan.md](plans/done/admin-assets-optimization-plan.md) | `AdminAssetsClient` 성능·정합성·검증·UX 개선 Phase 1~5 구현 및 `/admin/assets` 실사용 QA 완료 |
 | [plans/done/android-export-413-plan.md](plans/done/android-export-413-plan.md) | Android/iOS 내보내기 413(payload 초과) 수정 완료 — 실기기 검증까지 확인 |
 | [plans/done/export-loading-ui-plan.md](plans/done/export-loading-ui-plan.md) | edit 창 내보내기 사전 준비 상태 UI 구현 완료 — 준비/제출 상태 분리, 다이얼로그 선오픈, 실패 재시도 및 로컬 검증 완료 |
 | [plans/done/migration-plan.md](plans/done/migration-plan.md) | Vite → Next.js App Router 마이그레이션 완료 기록 |
