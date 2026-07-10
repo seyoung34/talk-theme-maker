@@ -32,6 +32,17 @@ import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/t
 
 const assetKindOrder: AdminAssetKind[] = ["background", "icon", "bubble", "profile", "launcher", "passcode"];
 
+const ACCEPTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
+function pickValidImageFile(files: FileList | File[] | null | undefined): { file: File } | { error: string } {
+  const file = Array.from(files ?? []).find((item) => item.type.startsWith("image/"));
+  if (!file) return { error: "이미지 파일만 추가할 수 있습니다." };
+  if (!ACCEPTED_IMAGE_MIME_TYPES.includes(file.type)) return { error: "PNG, JPEG, WebP 이미지만 지원합니다." };
+  if (file.size > MAX_IMAGE_BYTES) return { error: "이미지 용량은 20MB 이하만 추가할 수 있습니다." };
+  return { file };
+}
+
 export default function AdminAssetsClient() {
   const [bubblePreviewPlatform, setBubblePreviewPlatform] = useState<ThemePlatform>("android");
   const [selectedSlotId, setSelectedSlotId] = useState("");
@@ -46,6 +57,7 @@ export default function AdminAssetsClient() {
   const [dragActive, setDragActive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingAsset, setEditingAsset] = useState<AdminAssetCandidate | null>(null);
+  const [assetPendingDelete, setAssetPendingDelete] = useState<AdminAssetCandidate | null>(null);
   const [assetCursor, setAssetCursor] = useState<string>();
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
   const [isSavingAsset, setIsSavingAsset] = useState(false);
@@ -54,6 +66,7 @@ export default function AdminAssetsClient() {
   const [assetSearch, setAssetSearch] = useState("");
   const [assetListFilter, setAssetListFilter] = useState<"all" | "exact" | "review" | "bubble">("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const assetRequestSeqRef = useRef(0);
 
   const slots = useMemo(getUnifiedAdminAssetSlots, []);
   const slotGroups = useMemo(() => groupSlotsByAssetKind(slots), [slots]);
@@ -64,23 +77,30 @@ export default function AdminAssetsClient() {
   const selectedSaveTargets = useMemo(() => (selectedSlot ? getAdminAssetSaveTargets(selectedSlot, assetKind) : []), [assetKind, selectedSlot]);
   const bubbleSpec = useMemo(() => (assetKind === "bubble" ? bubbleAdjustmentToSpec(bubbleAdjustment) : undefined), [assetKind, bubbleAdjustment]);
   const canSaveAsset = Boolean(file && selectedSlot && !isSavingAsset && selectedSaveTargets.length > 0 && (assetKind !== "bubble" || bubbleSpec));
-  const visibleAssets = assets.filter((asset) => selectedSlot && isAdminAssetVisibleForAdminSlot(selectedSlot, asset));
+  const visibleAssets = useMemo(
+    () => assets.filter((asset) => selectedSlot && isAdminAssetVisibleForAdminSlot(selectedSlot, asset)),
+    [assets, selectedSlot],
+  );
   const filteredAssets = useMemo(() => {
     const query = assetSearch.trim().toLowerCase();
-    return visibleAssets.filter((asset) => {
-      const warnings = getAdminAssetGuidance(selectedSlot, asset.assetKind ?? assetKind, asset.analysis ?? null);
-      const matchesQuery =
-        !query ||
-        asset.title.toLowerCase().includes(query) ||
-        asset.fileName.toLowerCase().includes(query) ||
-        asset.slotRole.toLowerCase().includes(query);
-      const matchesFilter =
-        assetListFilter === "all" ||
-        (assetListFilter === "exact" && selectedSlot && isExactAdminAssetTarget(selectedSlot, asset)) ||
-        (assetListFilter === "review" && warnings.length > 0) ||
-        (assetListFilter === "bubble" && Boolean(asset.bubbleAdjustment));
-      return matchesQuery && matchesFilter;
-    });
+    return visibleAssets
+      .map((asset) => ({
+        asset,
+        warnings: getAdminAssetGuidance(selectedSlot, asset.assetKind ?? assetKind, asset.analysis ?? null),
+      }))
+      .filter(({ asset, warnings }) => {
+        const matchesQuery =
+          !query ||
+          asset.title.toLowerCase().includes(query) ||
+          asset.fileName.toLowerCase().includes(query) ||
+          asset.slotRole.toLowerCase().includes(query);
+        const matchesFilter =
+          assetListFilter === "all" ||
+          (assetListFilter === "exact" && selectedSlot && isExactAdminAssetTarget(selectedSlot, asset)) ||
+          (assetListFilter === "review" && warnings.length > 0) ||
+          (assetListFilter === "bubble" && Boolean(asset.bubbleAdjustment));
+        return matchesQuery && matchesFilter;
+      });
   }, [assetKind, assetListFilter, assetSearch, selectedSlot, visibleAssets]);
   const guidanceItems = useMemo(() => getAdminAssetGuidance(selectedSlot, assetKind, analysis), [analysis, assetKind, selectedSlot]);
 
@@ -122,11 +142,22 @@ export default function AdminAssetsClient() {
   }, [assetKind, selectedSlot?.role]);
 
   useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 3500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
-      const pastedFile = Array.from(event.clipboardData?.files ?? []).find((item) => item.type.startsWith("image/"));
-      if (!pastedFile) return;
+      const hasImage = Array.from(event.clipboardData?.files ?? []).some((item) => item.type.startsWith("image/"));
+      if (!hasImage) return;
       event.preventDefault();
-      setFile(pastedFile);
+      const result = pickValidImageFile(event.clipboardData?.files);
+      if ("error" in result) {
+        setNotice(result.error);
+        return;
+      }
+      setFile(result.file);
       setIsAddAssetOpen(true);
       setNotice("클립보드 이미지를 추가했습니다.");
     };
@@ -137,16 +168,19 @@ export default function AdminAssetsClient() {
 
   const refreshAssets = async (cursor?: string, append = false) => {
     if (!selectedSlot) return;
+    const seq = ++assetRequestSeqRef.current;
     try {
       setIsLoadingAssets(true);
       const page = await listAdminAssetCandidatePage({ assetKind: inferAdminAssetKind(selectedSlot), cursor, limit: 24 });
+      if (seq !== assetRequestSeqRef.current) return;
       setAssets((current) => append ? [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))] : page.items);
       setAssetCursor(page.nextCursor);
     } catch (error) {
+      if (seq !== assetRequestSeqRef.current) return;
       console.error(error);
       setNotice("관리 후보를 불러오지 못했습니다.");
     } finally {
-      setIsLoadingAssets(false);
+      if (seq === assetRequestSeqRef.current) setIsLoadingAssets(false);
     }
   };
 
@@ -162,7 +196,7 @@ export default function AdminAssetsClient() {
       setIsSavingAsset(true);
       const representativeTarget = saveTargets[0];
       if (!representativeTarget) throw new Error("INVALID_ASSET_TARGET");
-      await saveAdminAssetCandidate({
+      const savedAsset = await saveAdminAssetCandidate({
         slotRole: representativeTarget.slotRole ?? selectedSlot.role,
         platform: representativeTarget.platform,
         assetKind,
@@ -182,7 +216,7 @@ export default function AdminAssetsClient() {
       setAnalysis(null);
       setIsAddAssetOpen(false);
       setNotice("플랫폼 공통 관리 후보를 추가했습니다.");
-      await refreshAssets();
+      setAssets((current) => [savedAsset, ...current.filter((item) => item.id !== savedAsset.id)]);
     } catch (error) {
       console.error(error);
       setNotice("관리 후보를 저장하지 못했습니다.");
@@ -193,13 +227,12 @@ export default function AdminAssetsClient() {
 
   const remove = async (asset: AdminAssetCandidate) => {
     if (deletingAssetId) return;
-    const confirmed = window.confirm(`"${asset.title}" 후보를 삭제할까요?`);
-    if (!confirmed) return;
     try {
       setDeletingAssetId(asset.id);
       await deleteAdminAssetCandidate(asset.id);
+      setAssets((current) => current.filter((item) => item.id !== asset.id));
+      setAssetPendingDelete(null);
       setNotice("관리 후보를 삭제했습니다.");
-      await refreshAssets();
     } catch (error) {
       console.error(error);
       setNotice("관리 후보를 삭제하지 못했습니다.");
@@ -209,12 +242,12 @@ export default function AdminAssetsClient() {
   };
 
   const applyDroppedFile = (files: FileList | null) => {
-    const nextFile = Array.from(files ?? []).find((item) => item.type.startsWith("image/"));
-    if (!nextFile) {
-      setNotice("이미지 파일만 추가할 수 있습니다.");
+    const result = pickValidImageFile(files);
+    if ("error" in result) {
+      setNotice(result.error);
       return;
     }
-    setFile(nextFile);
+    setFile(result.file);
     setIsAddAssetOpen(true);
   };
 
@@ -337,7 +370,7 @@ export default function AdminAssetsClient() {
               <label className="grid gap-2">
                 <span className="text-sm font-black text-[var(--color-on-surface)]">에셋 종류</span>
                 <select className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none" value={assetKind} onChange={(event) => setAssetKind(event.currentTarget.value as AdminAssetKind)}>
-                  {(["background", "icon", "bubble", "profile", "launcher", "passcode"] as const).map((kind) => (
+                  {assetKindOrder.map((kind) => (
                     <option key={kind} value={kind}>
                       {getAdminAssetKindLabel(kind)}
                     </option>
@@ -350,7 +383,15 @@ export default function AdminAssetsClient() {
                 </span>
 
                 <div
+                  role="button"
                   tabIndex={0}
+                  aria-label="이미지 파일 선택 또는 끌어놓기"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      fileInputRef.current?.click();
+                    }
+                  }}
                   className={`grid gap-2 rounded-2xl border-2 border-dashed px-4 py-5 transition ${dragActive
                     ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]"
                     : "border-[var(--color-outline-variant)] bg-[var(--color-surface-low)]"
@@ -399,9 +440,14 @@ export default function AdminAssetsClient() {
                     accept="image/png,image/jpeg,image/webp"
                     className="hidden"
                     onChange={(event) => {
-                      setFile(event.currentTarget.files?.[0] ?? null);
-                      setIsAddAssetOpen(true);
+                      const result = pickValidImageFile(event.currentTarget.files);
                       event.currentTarget.value = "";
+                      if ("error" in result) {
+                        setNotice(result.error);
+                        return;
+                      }
+                      setFile(result.file);
+                      setIsAddAssetOpen(true);
                     }}
                   />
 
@@ -547,8 +593,8 @@ export default function AdminAssetsClient() {
                 <AdminAssetSkeletonGrid />
               ) : filteredAssets.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {filteredAssets.map((asset) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} warnings={getAdminAssetGuidance(selectedSlot, asset.assetKind ?? assetKind, asset.analysis ?? null)} deleting={deletingAssetId === asset.id} onEdit={() => setEditingAsset(asset)} onDelete={() => void remove(asset)} />
+                  {filteredAssets.map(({ asset, warnings }) => (
+                    <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} warnings={warnings} deleting={deletingAssetId === asset.id} onEdit={() => setEditingAsset(asset)} onDelete={() => setAssetPendingDelete(asset)} />
                   ))}
                 </div>
               ) : (
@@ -590,6 +636,36 @@ export default function AdminAssetsClient() {
           setNotice("편집된 이미지를 적용했습니다.");
         }}
       />
+
+      <Dialog.Root open={Boolean(assetPendingDelete)} onOpenChange={(open) => { if (!open && !deletingAssetId) setAssetPendingDelete(null); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/45 backdrop-blur-[2px]" />
+          <Dialog.Content
+            className="fixed left-1/2 top-1/2 z-[61] w-[calc(100%-40px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[20px] border border-[var(--color-outline-variant)] bg-white p-5 shadow-[0_24px_72px_rgba(15,23,42,0.24)] outline-none"
+            onEscapeKeyDown={(event) => { if (deletingAssetId) event.preventDefault(); }}
+            onPointerDownOutside={(event) => { if (deletingAssetId) event.preventDefault(); }}
+          >
+            <span className="mb-4 grid size-10 place-items-center rounded-xl bg-red-50 text-red-600"><Trash2 size={20} aria-hidden="true" /></span>
+            <Dialog.Title className="text-xl font-extrabold text-[var(--color-on-surface)]">이 후보를 삭제할까요?</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
+              &ldquo;{assetPendingDelete?.title}&rdquo; 후보와 저장된 이미지가 영구히 삭제됩니다. 되돌릴 수 없습니다.
+            </Dialog.Description>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <Dialog.Close asChild>
+                <button type="button" className="min-h-11 rounded-xl border border-[var(--color-outline-variant)] px-4 py-2.5 text-sm font-extrabold text-[var(--color-on-surface-variant)] focus-visible:outline-2 focus-visible:outline-[var(--color-secondary)] disabled:opacity-55" disabled={Boolean(deletingAssetId)}>취소</button>
+              </Dialog.Close>
+              <button
+                type="button"
+                className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-extrabold text-white transition hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-red-600 disabled:opacity-55"
+                disabled={Boolean(deletingAssetId)}
+                onClick={() => { if (assetPendingDelete) void remove(assetPendingDelete); }}
+              >
+                {deletingAssetId ? <><LoaderCircle className="animate-spin" size={17} aria-hidden="true" />삭제 중</> : "삭제"}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </main>
   );
 }
@@ -760,20 +836,19 @@ function formatRange(range: { start: number; end: number }) {
   return `${range.start}-${range.end}`;
 }
 
+function formatPlatformLabel(platform: "all" | ThemePlatform) {
+  return platform === "all" ? "Android+iOS" : platform === "android" ? "Android" : "iOS";
+}
+
 function formatAdminAssetTargetInput(target: AdminAssetTargetInput) {
-  const platformLabel = target.platform === "all" ? "Android+iOS" : target.platform === "android" ? "Android" : "iOS";
+  const platformLabel = formatPlatformLabel(target.platform);
   return target.slotRole ? `${platformLabel} · ${target.slotRole}` : `${platformLabel} · ${target.targetKind}`;
 }
 
 function formatAdminAssetTargets(asset: AdminAssetCandidate) {
   const targets = asset.targets ?? [];
-  if (targets.length < 1) return asset.platform === "all" ? "Android+iOS" : asset.platform === "android" ? "Android" : "iOS";
-  return targets
-    .map((target) => {
-      const platformLabel = target.platform === "all" ? "Android+iOS" : target.platform === "android" ? "Android" : "iOS";
-      return target.slotRole ? `${platformLabel} · ${target.slotRole}` : `${platformLabel} · ${target.targetKind}`;
-    })
-    .join(" / ");
+  if (targets.length < 1) return formatPlatformLabel(asset.platform);
+  return targets.map(formatAdminAssetTargetInput).join(" / ");
 }
 
 function isExactAdminAssetTarget(slot: ThemeAssetSlot, asset: AdminAssetCandidate) {

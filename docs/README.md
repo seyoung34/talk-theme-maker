@@ -17,6 +17,12 @@
 |---|---|
 | [setup/supabase-setup.md](setup/supabase-setup.md) | Supabase 환경변수·DB 설정 |
 
+## report — 코드 리뷰 · 진단 스냅샷 (특정 시점 기록)
+
+| 문서 | 내용 |
+|---|---|
+| [report/admin-assets-review-2026-07-10.md](report/admin-assets-review-2026-07-10.md) | `AdminAssetsClient` 성능·정합성·UX 진단 (후속: admin-assets-optimization-plan) |
+
 ## notes — 형식 없는 메모
 
 [notes/scratch.md](notes/scratch.md) — 그때그때 떠오른 아이디어·가벼운 TODO. 분류/상태 규칙 대상 아님
@@ -33,6 +39,7 @@
 
 | 문서 | 상태 |
 |---|---|
+| [plans/in-progress/admin-assets-optimization-plan.md](plans/in-progress/admin-assets-optimization-plan.md) | `AdminAssetsClient` 성능·정합성·검증·UX 개선 Phase 1~5 구현 및 로컬 검증 완료. 실사용 수동 검증 + notice 색 구분(후속) 남음 |
 | [plans/in-progress/color-picker-ux-improvement-plan.md](plans/in-progress/color-picker-ux-improvement-plan.md) | 공용 컬러 피커 Phase 1·2 구현 완료. 반응형·접근성 및 실기기 검증 진행 예정 |
 | [plans/in-progress/android-build-cloud-run-plan.md](plans/in-progress/android-build-cloud-run-plan.md) | 비동기 Cloud Run Job 빌드 오프로딩은 완료. Cloudflare Pages 이전(Phase 3) 착수함 — 아래 문서 참조 |
 | [plans/in-progress/cloud-run-apk-builder-dev.md](plans/in-progress/cloud-run-apk-builder-dev.md) | Cloud Run Job 빌드 오프로딩 마일스톤 1~4차 완료(실기기 검증 포함). 남은 것: `apk-zip`/`project` 비동기화(3.7) + 후속 튜닝 |
