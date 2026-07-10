@@ -6,7 +6,7 @@ import { getResolvedColor, type SlotCandidateSelections } from "@/components/pro
 import { findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { ThemeResourceRole, ThemeSection } from "@/lib/theme/types";
+import type { ThemePlatform, ThemeResourceRole, ThemeSection } from "@/lib/theme/types";
 import { readableThemeForeground, themeColorToCss } from "@/lib/theme/color";
 
 type RoleFiles = Partial<Record<ThemeResourceRole, ThemeProjectFile>>;
@@ -117,7 +117,7 @@ export function ThemeScreensPreview({
         <FriendsScreen platform={platform} selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} profileUrls={profileUrls} onSelectSlot={onSelectSlot} />
       ) : section === "tabs" ? (
         <ChatsScreen platform={platform} selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} profileUrls={profileUrls} onSelectSlot={onSelectSlot} />
-      ) : <MoreScreen selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />}
+      ) : <MoreScreen platform={platform} selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />}
     </PhoneFrame>
   );
 }
@@ -437,10 +437,12 @@ function ChatsScreen({
 }
 
 //더보기 (Android/iOS 공통 프리뷰)
-function MoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
-  const headerSelected = selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id;
+function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { platform: ThemePlatform; selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
+  const headerColorSlot = platform === "android" ? slotByRole.main_background_color : slotByRole.main_header_color;
+  const headerSelected = selectedSlotId === headerColorSlot?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id;
+  const chipSelected = selectedSlotId === slotByRole.main_header_color?.id;
   const hasMainBackgroundImage = Boolean(urls.main_background);
-  const headerColor = hasMainBackgroundImage ? preview.headerBackgroundColor : preview.mainBackgroundColor;
+  const headerColor = platform === "android" ? preview.mainBackgroundColor : hasMainBackgroundImage ? preview.headerBackgroundColor : preview.mainBackgroundColor;
   const chipColor = preview.headerBackgroundColor;
 
   return (
@@ -450,7 +452,7 @@ function MoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot }:
           type="button"
           className={`flex w-full min-w-0 items-center justify-between gap-4 px-4 pb-3 pt-4 text-left ${headerSelected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
           style={{ backgroundColor: headerColor, color: preview.headerForegroundColor }}
-          onClick={(event) => { event.stopPropagation(); onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? ""); }}
+          onClick={(event) => { event.stopPropagation(); onSelectSlot?.(headerColorSlot?.id ?? slotByRole.main_header_foreground_color?.id ?? ""); }}
         >
           <strong className="shrink-0 text-xl font-semibold tracking-[-0.03em]">더보기</strong>
           <div className="flex shrink-0 items-center gap-4">
@@ -463,7 +465,7 @@ function MoreScreen({ selectedSlotId, preview, slotByRole, urls, onSelectSlot }:
           </div>
         </button>
 
-        <div className="flex min-w-0 items-center gap-2 px-4 pb-3" style={{ backgroundColor: chipColor }}>
+        <div className={`flex min-w-0 items-center gap-2 px-4 pb-3 ${chipSelected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ backgroundColor: chipColor }} onClick={(event) => { event.stopPropagation(); if (slotByRole.main_header_color) onSelectSlot?.(slotByRole.main_header_color.id); }}>
           <button
             type="button"
             className={`shrink-0 rounded-full px-4 py-1.5 text-[12px] font-bold ${selectedSlotId === slotByRole.main_title_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}

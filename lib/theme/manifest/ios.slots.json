@@ -45,8 +45,7 @@
     "required": true,
     "note": "친구·채팅·더보기 화면 상단의 제목과 아이콘 색상입니다. 배경과 충분히 구분되는 색을 선택하세요.",
     "visibleInSections": [
-      "tabs",
-      "more"
+      "tabs"
     ],
     "defaultColor": {
       "basic": "#664242"
@@ -296,9 +295,9 @@
     "id": "ios-tab-text-color",
     "platform": "ios",
     "role": "tab_text_color",
-    "section": "tabs",
-    "group": "bar",
-    "screen": "tabs",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
     "kind": "color",
     "label": "상단 탭 텍스트 색상",
     "required": false,
@@ -692,7 +691,7 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "입력바 텍스트",
+    "label": "입력 텍스트 색상",
     "required": false,
     "note": "채팅 입력 영역의 버튼 텍스트에 적용되는 색상입니다. 입력 영역 배경과 충분히 구분되어야 합니다.",
     "defaultColor": {
@@ -709,7 +708,7 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "메뉴 아이콘",
+    "label": "메뉴 버튼 아이콘 색상",
     "required": false,
     "note": "첨부와 메뉴 버튼의 기본 아이콘 색상입니다. 입력 영역 배경 위에서 선명하게 보이는지 확인하세요.",
     "defaultColor": {
@@ -726,7 +725,7 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "메뉴 아이콘 눌림 색상",
+    "label": "메뉴 버튼 아이콘 눌림 색상",
     "required": false,
     "note": "첨부와 메뉴 버튼을 누르는 동안 아이콘에 적용되는 색상입니다. 기본 상태와 자연스럽게 구분되어야 합니다.",
     "optionLevel": "advanced",
@@ -744,10 +743,9 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "메뉴 버튼 배경",
+    "label": "메뉴 버튼 배경 색상",
     "required": false,
     "note": "첨부와 메뉴 버튼 뒤에 표시되는 배경색과 투명도입니다. 아이콘을 가리지 않는 약한 색을 권장합니다.",
-    "optionLevel": "advanced",
     "defaultColor": {
       "basic": "#0FFFFFFF"
     },
@@ -762,7 +760,7 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "전송 버튼 배경",
+    "label": "전송 버튼 배경 색상",
     "required": true,
     "note": "전송 버튼의 기본 배경색입니다. 전송 아이콘과 충분한 대비를 유지하세요.",
     "defaultColor": {
@@ -779,7 +777,7 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "전송 아이콘",
+    "label": "전송 버튼 아이콘 색상",
     "required": false,
     "note": "전송 버튼 안의 아이콘 색상입니다. 버튼 배경 위에서 또렷하게 보여야 합니다.",
     "defaultColor": {
@@ -796,7 +794,7 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "전송 버튼 눌림 배경",
+    "label": "전송 버튼 배경 눌림 색상",
     "required": false,
     "note": "전송 버튼을 누르는 동안 표시되는 배경색입니다. 기본 상태와 자연스럽게 구분되어야 합니다.",
     "optionLevel": "advanced",
@@ -814,7 +812,7 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "전송 아이콘 눌림 색상",
+    "label": "전송 버튼 아이콘 눌림 색상",
     "required": false,
     "note": "전송 버튼을 누르는 동안 아이콘에 적용되는 색상입니다. 눌림 배경 위에서 잘 보이는지 확인하세요.",
     "optionLevel": "advanced",

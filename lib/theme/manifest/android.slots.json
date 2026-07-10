@@ -7,11 +7,11 @@
     "group": "background",
     "screen": "friends",
     "kind": "image",
-    "label": "메인 배경",
+    "label": "메인 배경 이미지",
     "fileName": "theme_background_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_background_image.png",
     "required": true,
-    "note": "친구·채팅 목록 위에 표시되는 배경 이미지입니다. 기본 템플릿은 이미지 없이 배경색으로 시작하며, 이미지를 추가하면 화면 색상을 이미지에 맞춰 자동 조정합니다.",
+    "note": "친구·채팅 목록 위에 표시되는 배경 이미지입니다. 색상보다 우선 적용됩니다",
     "visibleInSections": [
       "tabs"
     ],
@@ -36,7 +36,7 @@
     "group": "header",
     "screen": "friends",
     "kind": "color",
-    "label": "헤더·칩 영역 배경",
+    "label": "헤더·칩 영역 배경 색상",
     "required": true,
     "note": "친구 헤더와 채팅·더보기 상단 칩 영역의 공통 배경색",
     "visibleInSections": [
@@ -96,7 +96,7 @@
     "kind": "color",
     "label": "친구·채팅 배경 색상",
     "required": false,
-    "note": "배경 이미지의 투명 영역과 이미지가 표시되지 않는 기본 화면에 사용되는 색상입니다. 이미지가 있으면 평균색을 자동 추천합니다.",
+    "note": "배경 이미지 사용 안 함을 고르셔야 색상 적용이 됩니다.",
     "visibleInSections": [
       "tabs"
     ],
@@ -1057,28 +1057,12 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "입력 바 배경",
+    "label": "입력바 배경",
     "required": true,
     "note": "채팅 입력 바 전체 배경색",
     "colorKey": "theme_chatroom_input_bar_background_color",
     "defaultColor": {
       "basic": "#ffffff"
-    }
-  },
-  {
-    "id": "android-chat-send-button",
-    "platform": "android",
-    "role": "chat_send_button_color",
-    "section": "chatroom",
-    "group": "input",
-    "screen": "chatroom",
-    "kind": "color",
-    "label": "전송 버튼 색상",
-    "required": true,
-    "note": "입력 버튼 배경",
-    "colorKey": "theme_chatroom_input_bar_send_button_color",
-    "defaultColor": {
-      "basic": "#c9ff3d"
     }
   },
   {
@@ -1098,6 +1082,22 @@
     }
   },
   {
+    "id": "android-chat-send-button",
+    "platform": "android",
+    "role": "chat_send_button_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "전송 버튼 배경 색상",
+    "required": true,
+    "note": "전송 버튼 배경 색상",
+    "colorKey": "theme_chatroom_input_bar_send_button_color",
+    "defaultColor": {
+      "basic": "#c9ff3d"
+    }
+  },
+  {
     "id": "android-chat-menu-icon-color",
     "platform": "android",
     "role": "chat_menu_icon_color",
@@ -1105,10 +1105,9 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "입력 메뉴 아이콘",
+    "label": "메뉴 버튼 아이콘 색상",
     "required": false,
     "note": "채팅 입력 바 왼쪽 메뉴 아이콘 색상",
-    "optionLevel": "advanced",
     "colorKey": "theme_chatroom_input_bar_menu_icon_color"
   },
   {
@@ -1119,10 +1118,9 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "입력 메뉴 버튼 배경",
+    "label": "메뉴·입력창 배경 색상",
     "required": false,
-    "note": "채팅 입력 바 왼쪽 메뉴 버튼의 배경색",
-    "optionLevel": "advanced",
+    "note": "메뉴 버튼과 입력창의 배경 색상",
     "colorKey": "theme_chatroom_input_bar_menu_button_color"
   },
   {
@@ -1133,7 +1131,7 @@
     "group": "input",
     "screen": "chatroom",
     "kind": "color",
-    "label": "전송 아이콘 색상",
+    "label": "전송 버튼 아이콘 색상",
     "required": false,
     "note": "전송 버튼 아이콘 색상",
     "colorKey": "theme_chatroom_input_bar_send_icon_color",
