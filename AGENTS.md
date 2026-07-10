@@ -35,6 +35,8 @@ Choose the smallest useful check set for the files changed; do not run the full 
 - Slot metadata or iOS export mapping changes: `npm run check:ios-slots`.
 - Android color slot/export mapping changes: `npm run check:android-colors`.
 - TypeScript logic/API changes: `npx tsc --noEmit`.
+- Changes to `lib/theme` pure functions or other unit-tested logic: `npm test` (Vitest). Add/extend a `*.test.ts` beside the changed module when practical.
+- Code quality / catching unused vars and hook-deps issues: `npm run lint` (ESLint flat config; `next/core-web-vitals` + `next/typescript`). Currently reports pre-existing warnings — treat warnings as pre-existing unless the current change adds new ones; keep `error` count at 0.
 - Broad route/config/export packaging changes or release confidence pass: `npm run build`.
 
 Useful commands:
@@ -45,8 +47,12 @@ npm run check:text
 npm run check:ios-slots
 npm run check:android-colors
 npx tsc --noEmit
+npm test
+npm run lint
 npm run build
 ```
+
+Testing/lint setup: Vitest (`vitest.config.ts`, happy-dom env, `@/` alias, setup in `vitest.setup.ts`) with `@testing-library/react`; ESLint 9 flat config (`eslint.config.mjs`). `scripts/**` are Node-only and excluded from lint. All are devDependencies (no bundle/edge impact).
 
 Next 15 uses `./.next/types/routes.d.ts` for generated route types in this project; keep `next-env.d.ts` on that path.
 

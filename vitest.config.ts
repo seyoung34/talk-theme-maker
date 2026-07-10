@@ -1,0 +1,26 @@
+import path from "node:path";
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    // 순수 함수는 node로 충분하지만, @testing-library/react 컴포넌트 테스트를 위해
+    // 가벼운 happy-dom 환경을 기본값으로 둔다. (jsdom 대비 빠름)
+    environment: "happy-dom",
+    setupFiles: ["./vitest.setup.ts"],
+    globals: false,
+    include: ["**/*.{test,spec}.{ts,tsx}"],
+    exclude: [
+      "node_modules/**",
+      ".next/**",
+      ".open-next/**",
+      ".wrangler/**",
+      "android-sample-theme/**",
+    ],
+  },
+  resolve: {
+    // tsconfig의 "@/*" → "./*" 별칭을 vitest에서도 해석한다.
+    alias: {
+      "@": path.resolve(import.meta.dirname),
+    },
+  },
+});

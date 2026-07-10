@@ -12,6 +12,9 @@
     "check:edge-imports": "node scripts/verify-edge-safe-imports.mjs",
     "build": "next build",
     "start": "next start",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
   },
@@ -30,14 +33,22 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
     "@opennextjs/cloudflare": "^1.20.1",
     "@tailwindcss/postcss": "^4.3.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "25.9.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^15.5.20",
+    "happy-dom": "^20.10.6",
     "postcss": "^8.5.15",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
     "wrangler": "^4.107.1"
   }
 }
