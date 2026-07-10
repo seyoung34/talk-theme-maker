@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
+import { persistEditorSession, takeTemplateStartPayload } from "@/components/project/editorSession";
 import { ExitConfirmDialog } from "@/components/project/dialogs/ExitConfirmDialog";
 import { ExportDialog } from "@/components/project/dialogs/ExportDialog";
 import { InitialTemplateErrorPanel, InitialTemplateLoadingPanel } from "@/components/project/dialogs/InitialTemplatePanels";
@@ -42,7 +43,7 @@ import {
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
-import { getImageColorFallbackRole, readTemplateStartPayload } from "@/lib/theme/project/state";
+import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { systemTemplateRepository, type RemoteSlotUploads, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
@@ -51,15 +52,11 @@ import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
 import {
   getThemeSlots,
   getThemeTemplate,
-  templateStartStorageKey,
   type ThemeAssetSlot,
-  type ThemeStartPayload,
   type ThemeTemplate,
   type ThemeTemplateId,
 } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
-
-const editorSessionStorageKey = (mode: "user" | "admin") => `kakaotalk-theme-maker:editor-session:${mode}:v1`;
 
 type Notice = {
   tone: "info" | "success" | "warning" | "error";
@@ -1303,21 +1300,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       ) : null}
     </main>
   );
-}
-
-function takeTemplateStartPayload(mode: "user" | "admin") {
-  const pendingPayload = readTemplateStartPayload(templateStartStorageKey);
-  if (pendingPayload && (!pendingPayload.editMode || pendingPayload.editMode === mode)) {
-    persistEditorSession(mode, { ...pendingPayload, editMode: mode });
-    localStorage.removeItem(templateStartStorageKey);
-    return pendingPayload;
-  }
-
-  return readTemplateStartPayload(editorSessionStorageKey(mode));
-}
-
-function persistEditorSession(mode: "user" | "admin", payload: ThemeStartPayload) {
-  localStorage.setItem(editorSessionStorageKey(mode), JSON.stringify(payload));
 }
 
 function createInitialLoadProgress(message: string, current: number, total: number, detail?: string): InitialLoadState {

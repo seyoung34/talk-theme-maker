@@ -1,6 +1,6 @@
 # ProjectImporterClient 점진적 분해 리팩토링 계획
 
-> 상태: R1 다이얼로그/패널 분리 완료. R2 세션 유틸 분리와 R3 반복 헬퍼·테스트가 남아 있다.
+> 상태: R1 다이얼로그/패널 분리와 R2 세션 유틸 분리 완료. R3 반복 헬퍼·테스트가 남아 있다.
 > 참고: 진단 근거 → [../../report/project-importer-client-refactor-2026-07-10.md](../../report/project-importer-client-refactor-2026-07-10.md)
 
 ## 목적
@@ -46,7 +46,7 @@
 
 ### Phase 2 (R2) — 세션 유틸 분리 · 저위험
 
-- [ ] `takeTemplateStartPayload`/`persistEditorSession`/`editorSessionStorageKey`를 `components/project/editorSession.ts`로 옮긴다.
+- [x] `takeTemplateStartPayload`/`persistEditorSession`/`editorSessionStorageKey`를 `components/project/editorSession.ts`로 옮긴다.
 - 완료 기준: 세션 저장/복원 경로가 한 모듈에 모이고, 컴포넌트는 이를 import만 한다.
 
 ### Phase 3 (R3) — 반복 패턴 헬퍼 추출 · 저위험
