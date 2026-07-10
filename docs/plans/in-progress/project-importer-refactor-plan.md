@@ -1,6 +1,6 @@
 # ProjectImporterClient 점진적 분해 리팩토링 계획
 
-> 상태: R1~R4 완료. 다음은 R5 초기 로드 훅 추출이다.
+> 상태: R1~R5 완료. 다음은 R6 편집 상태 통합이다.
 > 참고: 진단 근거 → [../../report/project-importer-client-refactor-2026-07-10.md](../../report/project-importer-client-refactor-2026-07-10.md)
 
 ## 목적
@@ -63,7 +63,7 @@
 
 ### Phase 5 (R5) — 초기 로드 훅 추출 · 중위험
 
-- [ ] `loadStartedTemplate`(3분기: 시스템 로드 / 플랫폼 변환 / 사용자 템플릿)을 `useEditorBootstrap` 훅으로 옮기고
+- [x] `loadStartedTemplate`(3분기: 시스템 로드 / 플랫폼 변환 / 사용자 템플릿)을 `useEditorBootstrap` 훅으로 옮기고
       effect 의존성을 명시적으로 정리한다.
 - 완료 기준: 부트스트랩 정책이 렌더 함수 밖으로 나가고, ESLint hook-deps 경고가 새로 생기지 않는다.
 
