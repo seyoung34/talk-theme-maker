@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
-import { persistEditorSession, takeTemplateStartPayload } from "@/components/project/editorSession";
+import { persistEditorSession } from "@/components/project/editorSession";
+import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice as Notice } from "@/components/project/editorTypes";
 import { ExitConfirmDialog } from "@/components/project/dialogs/ExitConfirmDialog";
 import { ExportDialog } from "@/components/project/dialogs/ExportDialog";
 import { InitialTemplateErrorPanel, InitialTemplateLoadingPanel } from "@/components/project/dialogs/InitialTemplatePanels";
 import { SaveTemplateDialog } from "@/components/project/dialogs/SaveTemplateDialog";
 import { SystemTemplateSaveDialog } from "@/components/project/dialogs/SystemTemplateSaveDialog";
-import { getDefaultSlotCandidateId, getMissingRemoteUploadSlotIds, keepCurrentRemoteUploads, mergeSlotUploads } from "@/components/project/projectImporterHelpers";
+import { getDefaultSlotCandidateId } from "@/components/project/projectImporterHelpers";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { MobileEditActionBar } from "@/components/project/MobileEditActionBar";
 import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
@@ -24,11 +25,13 @@ import { useViewportMode } from "@/components/project/hooks/useViewportMode";
 import { useProjectAutoColors } from "@/components/project/hooks/useProjectAutoColors";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
 import { useProjectExport } from "@/components/project/hooks/useProjectExport";
+import { useEditorBootstrap } from "@/components/project/hooks/useEditorBootstrap";
+import { useTemplatePersistence } from "@/components/project/hooks/useTemplatePersistence";
+import { useThemeDraft } from "@/components/project/hooks/useThemeDraft";
 import {
   bubbleSlotFromRole,
   getCompletion,
   getInitialSlotCandidateSelections,
-  getResolvedColor,
   getSectionGroups,
   getSelectedCandidate,
   getSlotFile,
@@ -37,60 +40,20 @@ import {
   isSlotVisibleInSection,
   sectionLabels,
   type BubbleEditState,
-  type SlotCandidateSelections,
-  type SlotColors,
-  type SlotUploads,
 } from "@/components/project/projectModel";
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
-import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
 import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
-import { systemTemplateRepository, type RemoteSlotUploads, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
-import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
-import { getUserTemplate, saveUserTemplate } from "@/lib/theme/userTemplates";
+import { type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import {
   getThemeSlots,
   getThemeTemplate,
   type ThemeAssetSlot,
-  type ThemeTemplate,
   type ThemeTemplateId,
 } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
-
-type Notice = {
-  tone: "info" | "success" | "warning" | "error";
-  message: string;
-};
-
-type ActiveUserTemplate = {
-  id: string;
-  name: string;
-  createdAt: number;
-};
-
-type ActiveSystemTemplate = {
-  id: string;
-  bundleId?: string;
-  title: string;
-  description?: string;
-  tags: string[];
-  status: SystemTemplateStatus;
-  visibility: SystemTemplateVisibility;
-  pricingType: SystemTemplatePricingType;
-  priceAmount?: number;
-  creditCost?: number;
-  createdAt: number;
-};
-
-type InitialLoadState = {
-  status: "idle" | "ready" | "loading" | "error";
-  message?: string;
-  detail?: string;
-  current?: number;
-  total?: number;
-};
 
 type ProjectImporterClientProps = {
   mode?: "user" | "admin";
@@ -106,15 +69,24 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [activeGroup, setActiveGroup] = useState<ThemeSlotGroup>("background");
   const [selectedSlotId, setSelectedSlotId] = useState<string | undefined>();
   const [selectionPulseKey, setSelectionPulseKey] = useState(0);
-  const [uploads, setUploads] = useState<SlotUploads>({});
-  const [remoteUploadRefs, setRemoteUploadRefs] = useState<RemoteSlotUploads>({});
-  const [colors, setColors] = useState<SlotColors>({});
-  const [candidateSelections, setCandidateSelections] = useState<SlotCandidateSelections>({});
+  const {
+    draft: { uploads, remoteUploadRefs, colors, candidateSelections, bubbleMarkers, bubbleInsets, bubbleStretch },
+    ensureSystemTemplateUploadsHydrated,
+    hydratePreviewUploads,
+    hydrateSystemTemplateUploads,
+    replaceDraft,
+    setBubbleInsets,
+    setBubbleMarkers,
+    setBubbleStretch,
+    setCandidateSelections,
+    setColors,
+    setRemoteUploadRefs,
+    setUploads,
+  } = useThemeDraft();
   const [candidateOpen, setCandidateOpen] = useState(true);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
   const [mobileSheetLiveHeight, setMobileSheetLiveHeight] = useState<number | null>(null);
-  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
   const [systemTemplateBundleId, setSystemTemplateBundleId] = useState<string | null>(null);
@@ -130,27 +102,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [systemPricingType, setSystemPricingType] = useState<SystemTemplatePricingType>("free");
   const [systemPriceAmount, setSystemPriceAmount] = useState("");
   const [systemCreditCost, setSystemCreditCost] = useState("");
-  const [isSavingSystemTemplate, setIsSavingSystemTemplate] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
-  const [bubbleInsets, setBubbleInsets] = useState<Partial<Record<string, Insets>>>({});
-  const [bubbleStretch, setBubbleStretch] = useState<Partial<Record<string, StretchPoint>>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
-  const uploadsRef = useRef<SlotUploads>({});
-  const remoteUploadRefsRef = useRef<RemoteSlotUploads>({});
   const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
   const mobileEditTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileEditCloseButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    uploadsRef.current = uploads;
-  }, [uploads]);
-
-  useEffect(() => {
-    remoteUploadRefsRef.current = remoteUploadRefs;
-  }, [remoteUploadRefs]);
 
   useEffect(() => {
     if (!mobileEditSheetOpen || typeof window === "undefined") return;
@@ -218,168 +176,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     router.push("/template");
   };
 
-  useEffect(() => {
-    let active = true;
-    const payload = takeTemplateStartPayload(mode);
-    if (!payload) {
-      setInitialLoadState({ status: "ready" });
-      return () => {
-        active = false;
-      };
-    }
-
-    const requiresSystemTemplateLoad = Boolean(payload.systemTemplateId || (payload.sourceSystemTemplateId && payload.systemTemplateBundleId));
-    setInitialLoadState(requiresSystemTemplateLoad ? createInitialLoadProgress("템플릿 정보를 확인하는 중입니다.", 0, 3) : { status: "ready" });
-
-    const loadStartedTemplate = async () => {
-      setTemplateId(payload.templateId);
-      setPlatform(payload.platform);
-      setActiveSection("main");
-      setActiveGroup("background");
-      setSelectedSlotId(undefined);
-      setUploads({});
-      remoteUploadRefsRef.current = {};
-      setRemoteUploadRefs({});
-      setColors({});
-      setActiveUserTemplate(null);
-      setActiveSystemTemplate(null);
-      setSystemTemplateBundleId(payload.systemTemplateBundleId ?? null);
-
-      if (payload.systemTemplateId) {
-        try {
-          setInitialLoadState(createInitialLoadProgress("템플릿 정보를 확인하는 중입니다.", 0, 3));
-          const savedTemplate = await systemTemplateRepository.getMetadata(payload.systemTemplateId);
-          if (!active) return;
-          if (!savedTemplate) {
-            setInitialLoadState({ status: "error", message: "시스템 템플릿을 찾을 수 없습니다." });
-            return;
-          }
-
-          skipDefaultSelectionResetRef.current = true;
-          const normalizedOverrides = normalizeLegacyColorOverrides(savedTemplate.platform, savedTemplate.overrides.colors, savedTemplate.overrides.candidateSelections);
-          setTemplateId(savedTemplate.baseTemplateId);
-          setPlatform(payload.platform);
-          const previewSlotIds = getInitialPreviewSlotIds(savedTemplate.platform, savedTemplate.overrides.uploadRefs);
-          const progressTotal = Math.max(3, previewSlotIds.length + 2);
-          setInitialLoadState(
-            createInitialLoadProgress("미리보기 에셋을 준비하는 중입니다.", 1, progressTotal, previewSlotIds.length ? `${previewSlotIds.length}개 핵심 에셋을 불러옵니다.` : "저장된 색상과 기본 에셋으로 미리보기를 준비합니다."),
-          );
-          const previewUploads = await hydrateUploadSlotsWithProgress(savedTemplate.overrides.uploadRefs, previewSlotIds, (completed, total) => {
-            if (!active) return;
-            setInitialLoadState(createInitialLoadProgress("미리보기 에셋을 준비하는 중입니다.", 1 + completed, Math.max(3, total + 2), `${completed}/${total}개 에셋 완료`));
-          });
-          if (!active) return;
-          setInitialLoadState(createInitialLoadProgress("편집 화면을 구성하는 중입니다.", progressTotal - 1, progressTotal));
-          remoteUploadRefsRef.current = savedTemplate.overrides.uploadRefs;
-          setRemoteUploadRefs(savedTemplate.overrides.uploadRefs);
-          setUploads(previewUploads);
-          setColors(normalizedOverrides.colors);
-          setCandidateSelections(normalizedOverrides.candidateSelections);
-          setBubbleMarkers(savedTemplate.overrides.bubbleEdits.markers);
-          setBubbleInsets(savedTemplate.overrides.bubbleEdits.insets);
-          setBubbleStretch(savedTemplate.overrides.bubbleEdits.stretch);
-          setActiveSystemTemplate({
-            id: savedTemplate.id,
-            bundleId: savedTemplate.bundleId ?? savedTemplate.id,
-            title: savedTemplate.title,
-            description: savedTemplate.description,
-            tags: savedTemplate.tags,
-            status: savedTemplate.status,
-            visibility: savedTemplate.visibility,
-            pricingType: savedTemplate.pricingType,
-            priceAmount: savedTemplate.priceAmount,
-            creditCost: savedTemplate.creditCost,
-            createdAt: savedTemplate.createdAt,
-          });
-          setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 불러왔습니다.` });
-          setInitialLoadState({ status: "ready" });
-          void hydrateSystemTemplateUploads(savedTemplate.overrides.uploadRefs);
-        } catch (error) {
-          console.error(error);
-          setInitialLoadState({ status: "error", message: "시스템 템플릿 에셋을 불러오는 중 오류가 발생했습니다." });
-        }
-        return;
-      }
-
-      if (payload.sourceSystemTemplateId && payload.systemTemplateBundleId) {
-        try {
-          const sourceTemplate = await systemTemplateRepository.get(payload.sourceSystemTemplateId);
-          if (!active) return;
-          if (!sourceTemplate) {
-            setInitialLoadState({ status: "error", message: "원본 시스템 템플릿을 찾을 수 없습니다." });
-            return;
-          }
-
-          const baseTemplate = getThemeTemplate(sourceTemplate.baseTemplateId);
-          const converted = convertSystemTemplateOverridesByRole({
-            sourceOverrides: sourceTemplate.overrides,
-            sourceSlots: getThemeSlots(sourceTemplate.platform),
-            targetSlots: getThemeSlots(payload.platform),
-            templateId: sourceTemplate.baseTemplateId,
-            template: baseTemplate,
-          });
-
-          skipDefaultSelectionResetRef.current = true;
-          setTemplateId(sourceTemplate.baseTemplateId);
-          setPlatform(payload.platform);
-          setUploads(converted.uploads);
-          const normalizedOverrides = normalizeLegacyColorOverrides(payload.platform, converted.colors, converted.candidateSelections);
-          setColors(normalizedOverrides.colors);
-          setCandidateSelections(normalizedOverrides.candidateSelections);
-          setBubbleMarkers(converted.bubbleEdits.markers);
-          setBubbleInsets(converted.bubbleEdits.insets);
-          setBubbleStretch(converted.bubbleEdits.stretch);
-          setSystemTitle(sourceTemplate.title);
-          setSystemDescription(sourceTemplate.description ?? "");
-          setSystemTags(sourceTemplate.tags.join(", "));
-          setSystemStatus(sourceTemplate.status);
-          setSystemVisibility(sourceTemplate.visibility);
-          setSystemPricingType(sourceTemplate.pricingType);
-          setSystemPriceAmount(sourceTemplate.priceAmount ? String(sourceTemplate.priceAmount) : "");
-          setSystemCreditCost(sourceTemplate.creditCost ? String(sourceTemplate.creditCost) : "");
-          setNotice({ tone: "success", message: `${sourceTemplate.title} 시스템 템플릿을 ${payload.platform === "android" ? "Android" : "iOS"} 기준으로 변환했습니다.` });
-          setInitialLoadState({ status: "ready" });
-        } catch (error) {
-          console.error(error);
-          setInitialLoadState({ status: "error", message: "시스템 템플릿 변환 중 오류가 발생했습니다." });
-        }
-        return;
-      }
-
-      if (!payload.userTemplateId) return;
-
-      try {
-        const savedTemplate = await getUserTemplate(payload.userTemplateId);
-        if (!active) return;
-        if (!savedTemplate) {
-          setNotice({ tone: "warning", message: "저장한 템플릿을 찾을 수 없어 기본 템플릿으로 시작합니다." });
-          return;
-        }
-
-        skipDefaultSelectionResetRef.current = true;
-        const normalizedOverrides = normalizeLegacyColorOverrides(savedTemplate.platform, savedTemplate.colors, savedTemplate.candidateSelections);
-        setTemplateId(savedTemplate.templateId);
-        setPlatform(savedTemplate.platform);
-        setUploads(savedTemplate.uploads);
-        setColors(normalizedOverrides.colors);
-        setCandidateSelections(normalizedOverrides.candidateSelections);
-        setBubbleMarkers(savedTemplate.bubbleEdits.markers);
-        setBubbleInsets(savedTemplate.bubbleEdits.insets);
-        setBubbleStretch(savedTemplate.bubbleEdits.stretch);
-        setActiveUserTemplate({ id: savedTemplate.id, name: savedTemplate.name, createdAt: savedTemplate.createdAt });
-        setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 불러왔습니다.` });
-      } catch (error) {
-        console.error(error);
-        setNotice({ tone: "error", message: "저장한 템플릿을 불러오는 중 오류가 발생했습니다." });
-      }
-    };
-
-    void loadStartedTemplate();
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const activeTemplate = getThemeTemplate(templateId);
   const displayTemplateName = activeUserTemplate?.name ?? activeSystemTemplate?.title ?? activeTemplate.name;
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
@@ -390,7 +186,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       return;
     }
     setCandidateSelections(getInitialSlotCandidateSelections(slots, templateId, activeTemplate));
-  }, [activeTemplate, slots, templateId]);
+  }, [activeTemplate, setCandidateSelections, slots, templateId]);
 
   const viewportMode = useViewportMode();
   const groups = useMemo(() => getSectionGroups(activeSection, slots), [activeSection, slots]);
@@ -443,22 +239,41 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     isLoadingAdminAssets,
     loadMoreAdminAssets,
   } = useProjectAssetUploads({ platform, selectedSlot, setNotice });
+  const skipDefaultSelectionReset = useCallback(() => {
+    skipDefaultSelectionResetRef.current = true;
+  }, []);
 
-  const hydrateSystemTemplateUploads = async (uploadRefs: RemoteSlotUploads = remoteUploadRefsRef.current, slotIds?: string[]) => {
-    const targetSlotIds = getMissingRemoteUploadSlotIds(uploadRefs, uploadsRef.current, slotIds);
-    if (!targetSlotIds.length) return uploadsRef.current;
-
-    const hydrated = keepCurrentRemoteUploads(await systemTemplateRepository.hydrateUploads(uploadRefs, targetSlotIds), remoteUploadRefsRef.current);
-    let nextUploads = uploadsRef.current;
-    setUploads((current) => {
-      nextUploads = mergeSlotUploads(current, hydrated);
-      uploadsRef.current = nextUploads;
-      return nextUploads;
-    });
-    return nextUploads;
-  };
-
-  const ensureSystemTemplateUploadsHydrated = () => hydrateSystemTemplateUploads(remoteUploadRefsRef.current);
+  const { isSavingSystemTemplate, isSavingTemplate, saveCurrentTemplate, saveSystemTemplate } = useTemplatePersistence({
+    activeSystemTemplate,
+    activeUserTemplate,
+    bubbleInsets,
+    bubbleMarkers,
+    bubbleStretch,
+    candidateSelections,
+    colors,
+    ensureSystemTemplateUploadsHydrated,
+    isAdminMode,
+    mode,
+    platform,
+    saveMode,
+    saveName,
+    setActiveSystemTemplate,
+    setActiveUserTemplate,
+    setNotice,
+    setSaveDialogOpen,
+    setSystemSaveDialogOpen,
+    setSystemTemplateBundleId,
+    systemCreditCost,
+    systemDescription,
+    systemPriceAmount,
+    systemPricingType,
+    systemStatus,
+    systemTags,
+    systemTemplateBundleId,
+    systemTitle,
+    systemVisibility,
+    templateId,
+  });
   const {
     accountState,
     exportDialogOpen,
@@ -492,27 +307,36 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     templateId,
   });
 
-  const hydrateUploadSlotsWithProgress = async (uploadRefs: RemoteSlotUploads, slotIds: string[], onProgress: (completed: number, total: number) => void) => {
-    if (slotIds.length === 0) {
-      return {};
-    }
-
-    let nextUploads: SlotUploads = {};
-    let completed = 0;
-    onProgress(completed, slotIds.length);
-    for (const slotId of slotIds) {
-      const hydrated = await systemTemplateRepository.hydrateUploads(uploadRefs, [slotId]);
-      nextUploads = mergeSlotUploads(nextUploads, hydrated);
-      completed += 1;
-      onProgress(completed, slotIds.length);
-    }
-    return nextUploads;
-  };
+  useEditorBootstrap({
+    hydratePreviewUploads,
+    hydrateSystemTemplateUploads,
+    mode,
+    setActiveGroup,
+    setActiveSection,
+    setActiveSystemTemplate,
+    setActiveUserTemplate,
+    setInitialLoadState,
+    setNotice,
+    setPlatform,
+    setSelectedSlotId,
+    setSystemCreditCost,
+    setSystemDescription,
+    setSystemPriceAmount,
+    setSystemPricingType,
+    setSystemStatus,
+    setSystemTags,
+    setSystemTemplateBundleId,
+    setSystemTitle,
+    setSystemVisibility,
+    setTemplateId,
+    replaceDraft,
+    skipDefaultSelectionReset,
+  });
 
   useEffect(() => {
     if (initialLoadState.status !== "ready" || !selectedSlot) return;
-    void hydrateSystemTemplateUploads(remoteUploadRefsRef.current, [selectedSlot.id]).catch((error) => console.error(error));
-  }, [initialLoadState.status, selectedSlot?.id]);
+    void hydrateSystemTemplateUploads(remoteUploadRefs, [selectedSlot.id]).catch((error) => console.error(error));
+  }, [hydrateSystemTemplateUploads, initialLoadState.status, remoteUploadRefs, selectedSlot?.id]);
 
   const startDefaultTemplate = () => {
     persistEditorSession(mode, { templateId: "basic", platform: "android", editMode: mode });
@@ -522,14 +346,15 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setActiveSection("main");
     setActiveGroup("background");
     setSelectedSlotId(undefined);
-    setUploads({});
-    remoteUploadRefsRef.current = {};
-    setRemoteUploadRefs({});
-    setColors({});
-    setCandidateSelections(getInitialSlotCandidateSelections(getThemeSlots("android"), "basic", getThemeTemplate("basic")));
-    setBubbleMarkers({});
-    setBubbleInsets({});
-    setBubbleStretch({});
+    replaceDraft({
+      uploads: {},
+      remoteUploadRefs: {},
+      colors: {},
+      candidateSelections: getInitialSlotCandidateSelections(getThemeSlots("android"), "basic", getThemeTemplate("basic")),
+      bubbleMarkers: {},
+      bubbleInsets: {},
+      bubbleStretch: {},
+    });
     setActiveUserTemplate(null);
     setActiveSystemTemplate(null);
     setSystemTemplateBundleId(null);
@@ -587,7 +412,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setRemoteUploadRefs((current) => {
       const next = { ...current };
       delete next[slotId];
-      remoteUploadRefsRef.current = next;
       return next;
     });
   };
@@ -734,46 +558,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setSaveDialogOpen(true);
   };
 
-  const saveCurrentTemplate = async () => {
-    const name = saveMode === "overwrite" ? activeUserTemplate?.name ?? saveName.trim() : saveName.trim();
-    if (!name) return;
-
-    try {
-      setIsSavingTemplate(true);
-      setNotice({ tone: "info", message: "현재 편집 상태를 내 템플릿으로 저장하는 중입니다." });
-      const hydratedUploads = await ensureSystemTemplateUploadsHydrated();
-      const savedTemplate = await saveUserTemplate({
-        id: saveMode === "overwrite" ? activeUserTemplate?.id : undefined,
-        createdAt: saveMode === "overwrite" ? activeUserTemplate?.createdAt : undefined,
-        name,
-        templateId,
-        platform,
-        uploads: hydratedUploads,
-        colors,
-        candidateSelections,
-        bubbleEdits: {
-          markers: bubbleMarkers,
-          insets: bubbleInsets,
-          stretch: bubbleStretch,
-        },
-      });
-      setActiveUserTemplate({ id: savedTemplate.id, name: savedTemplate.name, createdAt: savedTemplate.createdAt });
-      persistEditorSession(mode, {
-        templateId: savedTemplate.templateId,
-        platform: savedTemplate.platform,
-        userTemplateId: savedTemplate.id,
-        editMode: mode,
-      });
-      setSaveDialogOpen(false);
-      setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 이 브라우저에 저장했습니다.` });
-    } catch (error) {
-      console.error(error);
-      setNotice({ tone: "error", message: "내 템플릿 저장 중 오류가 발생했습니다. 브라우저 저장소 권한을 확인하세요." });
-    } finally {
-      setIsSavingTemplate(false);
-    }
-  };
-
   const openSystemSaveDialog = () => {
     if (!isAdminMode) {
       setNotice({ tone: "warning", message: "시스템 템플릿 저장은 관리자 화면에서만 사용할 수 있습니다." });
@@ -790,79 +574,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setSystemPriceAmount(activeSystemTemplate?.priceAmount ? String(activeSystemTemplate.priceAmount) : systemPriceAmount);
     setSystemCreditCost(activeSystemTemplate?.creditCost ? String(activeSystemTemplate.creditCost) : systemCreditCost);
     setSystemSaveDialogOpen(true);
-  };
-
-  const saveSystemTemplate = async () => {
-    if (!isAdminMode) {
-      setSystemSaveDialogOpen(false);
-      setNotice({ tone: "warning", message: "일반 사용자 이미지는 브라우저 저장소에만 저장됩니다. 시스템 템플릿 저장은 관리자 전용입니다." });
-      return;
-    }
-
-    const title = systemTitle.trim();
-    if (!title) return;
-
-    try {
-      setIsSavingSystemTemplate(true);
-      setNotice({ tone: "info", message: "시스템 템플릿을 저장하는 중입니다." });
-      const hydratedUploads = await ensureSystemTemplateUploadsHydrated();
-      const savedTemplate = await systemTemplateRepository.save({
-        id: activeSystemTemplate?.id,
-        bundleId: activeSystemTemplate?.bundleId ?? systemTemplateBundleId ?? undefined,
-        createdAt: activeSystemTemplate?.createdAt,
-        title,
-        description: systemDescription.trim() || undefined,
-        baseTemplateId: "basic",
-        platform,
-        status: systemStatus,
-        visibility: systemVisibility,
-        pricingType: systemPricingType,
-        priceAmount: systemPricingType === "paid" ? Number(systemPriceAmount) || 0 : undefined,
-        creditCost: systemPricingType === "credit" ? Number(systemCreditCost) || 0 : undefined,
-        tags: systemTags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-        overrides: {
-          colors,
-          uploads: hydratedUploads,
-          candidateSelections,
-          bubbleEdits: {
-            markers: bubbleMarkers,
-            insets: bubbleInsets,
-            stretch: bubbleStretch,
-          },
-        },
-      });
-      setActiveSystemTemplate({
-        id: savedTemplate.id,
-        bundleId: savedTemplate.bundleId ?? savedTemplate.id,
-        title: savedTemplate.title,
-        description: savedTemplate.description,
-        tags: savedTemplate.tags,
-        status: savedTemplate.status,
-        visibility: savedTemplate.visibility,
-        pricingType: savedTemplate.pricingType,
-        priceAmount: savedTemplate.priceAmount,
-        creditCost: savedTemplate.creditCost,
-        createdAt: savedTemplate.createdAt,
-      });
-      setSystemTemplateBundleId(savedTemplate.bundleId ?? savedTemplate.id);
-      persistEditorSession(mode, {
-        templateId: savedTemplate.baseTemplateId,
-        platform: savedTemplate.platform,
-        systemTemplateId: savedTemplate.id,
-        systemTemplateBundleId: savedTemplate.bundleId ?? savedTemplate.id,
-        editMode: mode,
-      });
-      setSystemSaveDialogOpen(false);
-      setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 저장했습니다.` });
-    } catch (error) {
-      console.error(error);
-      setNotice({ tone: "error", message: "시스템 템플릿 저장 중 오류가 발생했습니다." });
-    } finally {
-      setIsSavingSystemTemplate(false);
-    }
   };
 
   const previewProps = {
@@ -1287,16 +998,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   );
 }
 
-function createInitialLoadProgress(message: string, current: number, total: number, detail?: string): InitialLoadState {
-  return {
-    status: "loading",
-    message,
-    detail,
-    current,
-    total,
-  };
-}
-
 function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {
   useEffect(() => {
     const timeout = window.setTimeout(onDismiss, 2500);
@@ -1320,12 +1021,6 @@ function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => 
       </button>
     </div>
   );
-}
-
-function getInitialPreviewSlotIds(platform: ThemePlatform, uploadRefs: RemoteSlotUploads) {
-  const slots = getThemeSlots(platform);
-  const roleOrder: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "profile_image_1"];
-  return roleOrder.map((role) => slots.find((slot) => slot.role === role)?.id).filter((slotId): slotId is string => Boolean(slotId && uploadRefs[slotId]?.length));
 }
 
 function getBackgroundSourcePair(slot: ThemeAssetSlot, slots: ThemeAssetSlot[]) {

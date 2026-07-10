@@ -1,6 +1,6 @@
 # ProjectImporterClient 점진적 분해 리팩토링 계획
 
-> 상태: R1 다이얼로그/패널, R2 세션 유틸, R3 반복 헬퍼·테스트 완료. 다음은 R4 저장 로직 훅 추출이다.
+> 상태: R1~R6 완료. 다음은 R7 다이얼로그 접근성 통일과 R8 렌더 안정화다.
 > 참고: 진단 근거 → [../../report/project-importer-client-refactor-2026-07-10.md](../../report/project-importer-client-refactor-2026-07-10.md)
 
 ## 목적
@@ -58,20 +58,20 @@
 
 ### Phase 4 (R4) — 저장 로직 훅 추출 · 중위험
 
-- [ ] `saveCurrentTemplate`/`saveSystemTemplate`와 관련 로딩/에러 상태를 `useTemplatePersistence` 훅으로 옮긴다.
+- [x] `saveCurrentTemplate`/`saveSystemTemplate`와 관련 로딩/에러 상태를 `useTemplatePersistence` 훅으로 옮긴다.
 - 완료 기준: 저장 흐름이 `useProjectExport`와 대칭 구조가 되고, 컴포넌트에서 저장 관련 `useState`가 사라진다.
 
 ### Phase 5 (R5) — 초기 로드 훅 추출 · 중위험
 
-- [ ] `loadStartedTemplate`(3분기: 시스템 로드 / 플랫폼 변환 / 사용자 템플릿)을 `useEditorBootstrap` 훅으로 옮기고
+- [x] `loadStartedTemplate`(3분기: 시스템 로드 / 플랫폼 변환 / 사용자 템플릿)을 `useEditorBootstrap` 훅으로 옮기고
       effect 의존성을 명시적으로 정리한다.
 - 완료 기준: 부트스트랩 정책이 렌더 함수 밖으로 나가고, ESLint hook-deps 경고가 새로 생기지 않는다.
 
 ### Phase 6 (R6) — 편집 상태 통합 · 고위험 (마지막)
 
-- [ ] 편집 상태 7종(`uploads`/`remoteUploadRefs`/`colors`/`candidateSelections`/`bubbleMarkers`/`bubbleInsets`/`bubbleStretch`)과
+- [x] 편집 상태 7종(`uploads`/`remoteUploadRefs`/`colors`/`candidateSelections`/`bubbleMarkers`/`bubbleInsets`/`bubbleStretch`)과
       그 갱신 핸들러를 `useThemeDraft`(`useReducer` 권장)로 통합한다.
-- [ ] `state`↔`ref` 수동 이중 동기화를 훅 내부 캡슐화로 제거한다.
+- [x] `state`↔`ref` 수동 이중 동기화를 훅 내부 캡슐화로 제거한다.
 - 완료 기준: 편집 상태 변경이 단일 액션 경로를 통하고, 컴포넌트에서 편집용 `useState`/미러 `ref`가 사라진다.
       (Immer 도입은 이 단계에서 별도 판단 — 불변 업데이트 보일러플레이트가 크면 채택.)
 
