@@ -1,35 +1,29 @@
 "use client";
 
-import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { takeTemplateStartPayload } from "@/components/project/editorSession";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice } from "@/components/project/editorTypes";
-import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
+import { createEmptyThemeDraft, type ThemeDraft } from "@/components/project/hooks/useThemeDraft";
+import type { SlotUploads } from "@/components/project/projectModel";
 import type { RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import { systemTemplateRepository } from "@/lib/theme/systemTemplates";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
 import { getUserTemplate } from "@/lib/theme/userTemplates";
 import { getThemeSlots, getThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
+import type { ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 type UseEditorBootstrapOptions = {
   hydratePreviewUploads: (uploadRefs: RemoteSlotUploads, slotIds: string[], onProgress: (completed: number, total: number) => void) => Promise<SlotUploads>;
   hydrateSystemTemplateUploads: (uploadRefs: RemoteSlotUploads) => Promise<SlotUploads>;
   mode: "user" | "admin";
-  remoteUploadRefsRef: MutableRefObject<RemoteSlotUploads>;
   setActiveGroup: Dispatch<SetStateAction<ThemeSlotGroup>>;
   setActiveSection: Dispatch<SetStateAction<ThemeSection>>;
   setActiveSystemTemplate: Dispatch<SetStateAction<ActiveSystemTemplate | null>>;
   setActiveUserTemplate: Dispatch<SetStateAction<ActiveUserTemplate | null>>;
-  setBubbleInsets: Dispatch<SetStateAction<Partial<Record<string, Insets>>>>;
-  setBubbleMarkers: Dispatch<SetStateAction<Partial<Record<string, Markers>>>>;
-  setBubbleStretch: Dispatch<SetStateAction<Partial<Record<string, StretchPoint>>>>;
-  setCandidateSelections: Dispatch<SetStateAction<SlotCandidateSelections>>;
-  setColors: Dispatch<SetStateAction<SlotColors>>;
   setInitialLoadState: Dispatch<SetStateAction<InitialLoadState>>;
   setNotice: Dispatch<SetStateAction<ProjectNotice | null>>;
   setPlatform: Dispatch<SetStateAction<ThemePlatform>>;
-  setRemoteUploadRefs: Dispatch<SetStateAction<RemoteSlotUploads>>;
   setSelectedSlotId: Dispatch<SetStateAction<string | undefined>>;
   setSystemCreditCost: Dispatch<SetStateAction<string>>;
   setSystemDescription: Dispatch<SetStateAction<string>>;
@@ -41,28 +35,21 @@ type UseEditorBootstrapOptions = {
   setSystemTitle: Dispatch<SetStateAction<string>>;
   setSystemVisibility: Dispatch<SetStateAction<"private" | "public" | "unlisted">>;
   setTemplateId: Dispatch<SetStateAction<ThemeTemplateId>>;
-  setUploads: Dispatch<SetStateAction<SlotUploads>>;
-  skipDefaultSelectionResetRef: MutableRefObject<boolean>;
+  replaceDraft: (draft: ThemeDraft) => void;
+  skipDefaultSelectionReset: () => void;
 };
 
 export function useEditorBootstrap({
   hydratePreviewUploads,
   hydrateSystemTemplateUploads,
   mode,
-  remoteUploadRefsRef,
   setActiveGroup,
   setActiveSection,
   setActiveSystemTemplate,
   setActiveUserTemplate,
-  setBubbleInsets,
-  setBubbleMarkers,
-  setBubbleStretch,
-  setCandidateSelections,
-  setColors,
   setInitialLoadState,
   setNotice,
   setPlatform,
-  setRemoteUploadRefs,
   setSelectedSlotId,
   setSystemCreditCost,
   setSystemDescription,
@@ -74,8 +61,8 @@ export function useEditorBootstrap({
   setSystemTitle,
   setSystemVisibility,
   setTemplateId,
-  setUploads,
-  skipDefaultSelectionResetRef,
+  replaceDraft,
+  skipDefaultSelectionReset,
 }: UseEditorBootstrapOptions) {
   useEffect(() => {
     let active = true;
@@ -94,10 +81,7 @@ export function useEditorBootstrap({
       setActiveSection("main");
       setActiveGroup("background");
       setSelectedSlotId(undefined);
-      setUploads({});
-      remoteUploadRefsRef.current = {};
-      setRemoteUploadRefs({});
-      setColors({});
+      replaceDraft(createEmptyThemeDraft());
       setActiveUserTemplate(null);
       setActiveSystemTemplate(null);
       setSystemTemplateBundleId(payload.systemTemplateBundleId ?? null);
@@ -112,7 +96,7 @@ export function useEditorBootstrap({
             return;
           }
 
-          skipDefaultSelectionResetRef.current = true;
+          skipDefaultSelectionReset();
           const normalizedOverrides = normalizeLegacyColorOverrides(savedTemplate.platform, savedTemplate.overrides.colors, savedTemplate.overrides.candidateSelections);
           setTemplateId(savedTemplate.baseTemplateId);
           setPlatform(payload.platform);
@@ -125,14 +109,15 @@ export function useEditorBootstrap({
           });
           if (!active) return;
           setInitialLoadState(createInitialLoadProgress("편집 화면을 구성하는 중입니다.", progressTotal - 1, progressTotal));
-          remoteUploadRefsRef.current = savedTemplate.overrides.uploadRefs;
-          setRemoteUploadRefs(savedTemplate.overrides.uploadRefs);
-          setUploads(previewUploads);
-          setColors(normalizedOverrides.colors);
-          setCandidateSelections(normalizedOverrides.candidateSelections);
-          setBubbleMarkers(savedTemplate.overrides.bubbleEdits.markers);
-          setBubbleInsets(savedTemplate.overrides.bubbleEdits.insets);
-          setBubbleStretch(savedTemplate.overrides.bubbleEdits.stretch);
+          replaceDraft({
+            uploads: previewUploads,
+            remoteUploadRefs: savedTemplate.overrides.uploadRefs,
+            colors: normalizedOverrides.colors,
+            candidateSelections: normalizedOverrides.candidateSelections,
+            bubbleMarkers: savedTemplate.overrides.bubbleEdits.markers,
+            bubbleInsets: savedTemplate.overrides.bubbleEdits.insets,
+            bubbleStretch: savedTemplate.overrides.bubbleEdits.stretch,
+          });
           setActiveSystemTemplate({ id: savedTemplate.id, bundleId: savedTemplate.bundleId ?? savedTemplate.id, title: savedTemplate.title, description: savedTemplate.description, tags: savedTemplate.tags, status: savedTemplate.status, visibility: savedTemplate.visibility, pricingType: savedTemplate.pricingType, priceAmount: savedTemplate.priceAmount, creditCost: savedTemplate.creditCost, createdAt: savedTemplate.createdAt });
           setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 불러왔습니다.` });
           setInitialLoadState({ status: "ready" });
@@ -155,16 +140,19 @@ export function useEditorBootstrap({
 
           const baseTemplate = getThemeTemplate(sourceTemplate.baseTemplateId);
           const converted = convertSystemTemplateOverridesByRole({ sourceOverrides: sourceTemplate.overrides, sourceSlots: getThemeSlots(sourceTemplate.platform), targetSlots: getThemeSlots(payload.platform), templateId: sourceTemplate.baseTemplateId, template: baseTemplate });
-          skipDefaultSelectionResetRef.current = true;
+          skipDefaultSelectionReset();
           setTemplateId(sourceTemplate.baseTemplateId);
           setPlatform(payload.platform);
-          setUploads(converted.uploads);
           const normalizedOverrides = normalizeLegacyColorOverrides(payload.platform, converted.colors, converted.candidateSelections);
-          setColors(normalizedOverrides.colors);
-          setCandidateSelections(normalizedOverrides.candidateSelections);
-          setBubbleMarkers(converted.bubbleEdits.markers);
-          setBubbleInsets(converted.bubbleEdits.insets);
-          setBubbleStretch(converted.bubbleEdits.stretch);
+          replaceDraft({
+            uploads: converted.uploads,
+            remoteUploadRefs: {},
+            colors: normalizedOverrides.colors,
+            candidateSelections: normalizedOverrides.candidateSelections,
+            bubbleMarkers: converted.bubbleEdits.markers,
+            bubbleInsets: converted.bubbleEdits.insets,
+            bubbleStretch: converted.bubbleEdits.stretch,
+          });
           setSystemTitle(sourceTemplate.title);
           setSystemDescription(sourceTemplate.description ?? "");
           setSystemTags(sourceTemplate.tags.join(", "));
@@ -191,16 +179,19 @@ export function useEditorBootstrap({
           return;
         }
 
-        skipDefaultSelectionResetRef.current = true;
+        skipDefaultSelectionReset();
         const normalizedOverrides = normalizeLegacyColorOverrides(savedTemplate.platform, savedTemplate.colors, savedTemplate.candidateSelections);
         setTemplateId(savedTemplate.templateId);
         setPlatform(savedTemplate.platform);
-        setUploads(savedTemplate.uploads);
-        setColors(normalizedOverrides.colors);
-        setCandidateSelections(normalizedOverrides.candidateSelections);
-        setBubbleMarkers(savedTemplate.bubbleEdits.markers);
-        setBubbleInsets(savedTemplate.bubbleEdits.insets);
-        setBubbleStretch(savedTemplate.bubbleEdits.stretch);
+        replaceDraft({
+          uploads: savedTemplate.uploads,
+          remoteUploadRefs: {},
+          colors: normalizedOverrides.colors,
+          candidateSelections: normalizedOverrides.candidateSelections,
+          bubbleMarkers: savedTemplate.bubbleEdits.markers,
+          bubbleInsets: savedTemplate.bubbleEdits.insets,
+          bubbleStretch: savedTemplate.bubbleEdits.stretch,
+        });
         setActiveUserTemplate({ id: savedTemplate.id, name: savedTemplate.name, createdAt: savedTemplate.createdAt });
         setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 불러왔습니다.` });
       } catch (error) {
@@ -212,12 +203,11 @@ export function useEditorBootstrap({
     void loadStartedTemplate();
     return () => { active = false; };
   }, [
-    hydratePreviewUploads, hydrateSystemTemplateUploads, mode, remoteUploadRefsRef, setActiveGroup, setActiveSection,
-    setActiveSystemTemplate, setActiveUserTemplate, setBubbleInsets, setBubbleMarkers, setBubbleStretch,
-    setCandidateSelections, setColors, setInitialLoadState, setNotice, setPlatform, setRemoteUploadRefs,
+    hydratePreviewUploads, hydrateSystemTemplateUploads, mode, setActiveGroup, setActiveSection,
+    setActiveSystemTemplate, setActiveUserTemplate, setInitialLoadState, setNotice, setPlatform,
     setSelectedSlotId, setSystemCreditCost, setSystemDescription, setSystemPriceAmount, setSystemPricingType,
     setSystemStatus, setSystemTags, setSystemTemplateBundleId, setSystemTitle, setSystemVisibility, setTemplateId,
-    setUploads, skipDefaultSelectionResetRef,
+    replaceDraft, skipDefaultSelectionReset,
   ]);
 }
 

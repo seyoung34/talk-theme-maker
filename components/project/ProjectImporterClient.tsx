@@ -10,7 +10,7 @@ import { ExportDialog } from "@/components/project/dialogs/ExportDialog";
 import { InitialTemplateErrorPanel, InitialTemplateLoadingPanel } from "@/components/project/dialogs/InitialTemplatePanels";
 import { SaveTemplateDialog } from "@/components/project/dialogs/SaveTemplateDialog";
 import { SystemTemplateSaveDialog } from "@/components/project/dialogs/SystemTemplateSaveDialog";
-import { getDefaultSlotCandidateId, getMissingRemoteUploadSlotIds, keepCurrentRemoteUploads, mergeSlotUploads } from "@/components/project/projectImporterHelpers";
+import { getDefaultSlotCandidateId } from "@/components/project/projectImporterHelpers";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { MobileEditActionBar } from "@/components/project/MobileEditActionBar";
 import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
@@ -27,6 +27,7 @@ import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAss
 import { useProjectExport } from "@/components/project/hooks/useProjectExport";
 import { useEditorBootstrap } from "@/components/project/hooks/useEditorBootstrap";
 import { useTemplatePersistence } from "@/components/project/hooks/useTemplatePersistence";
+import { useThemeDraft } from "@/components/project/hooks/useThemeDraft";
 import {
   bubbleSlotFromRole,
   getCompletion,
@@ -39,16 +40,13 @@ import {
   isSlotVisibleInSection,
   sectionLabels,
   type BubbleEditState,
-  type SlotCandidateSelections,
-  type SlotColors,
-  type SlotUploads,
 } from "@/components/project/projectModel";
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
-import { systemTemplateRepository, type RemoteSlotUploads, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
+import { type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import {
   getThemeSlots,
   getThemeTemplate,
@@ -71,10 +69,20 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [activeGroup, setActiveGroup] = useState<ThemeSlotGroup>("background");
   const [selectedSlotId, setSelectedSlotId] = useState<string | undefined>();
   const [selectionPulseKey, setSelectionPulseKey] = useState(0);
-  const [uploads, setUploads] = useState<SlotUploads>({});
-  const [remoteUploadRefs, setRemoteUploadRefs] = useState<RemoteSlotUploads>({});
-  const [colors, setColors] = useState<SlotColors>({});
-  const [candidateSelections, setCandidateSelections] = useState<SlotCandidateSelections>({});
+  const {
+    draft: { uploads, remoteUploadRefs, colors, candidateSelections, bubbleMarkers, bubbleInsets, bubbleStretch },
+    ensureSystemTemplateUploadsHydrated,
+    hydratePreviewUploads,
+    hydrateSystemTemplateUploads,
+    replaceDraft,
+    setBubbleInsets,
+    setBubbleMarkers,
+    setBubbleStretch,
+    setCandidateSelections,
+    setColors,
+    setRemoteUploadRefs,
+    setUploads,
+  } = useThemeDraft();
   const [candidateOpen, setCandidateOpen] = useState(true);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
@@ -96,24 +104,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [systemCreditCost, setSystemCreditCost] = useState("");
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
-  const [bubbleInsets, setBubbleInsets] = useState<Partial<Record<string, Insets>>>({});
-  const [bubbleStretch, setBubbleStretch] = useState<Partial<Record<string, StretchPoint>>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
-  const uploadsRef = useRef<SlotUploads>({});
-  const remoteUploadRefsRef = useRef<RemoteSlotUploads>({});
   const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
   const mobileEditTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileEditCloseButtonRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    uploadsRef.current = uploads;
-  }, [uploads]);
-
-  useEffect(() => {
-    remoteUploadRefsRef.current = remoteUploadRefs;
-  }, [remoteUploadRefs]);
 
   useEffect(() => {
     if (!mobileEditSheetOpen || typeof window === "undefined") return;
@@ -191,7 +186,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       return;
     }
     setCandidateSelections(getInitialSlotCandidateSelections(slots, templateId, activeTemplate));
-  }, [activeTemplate, slots, templateId]);
+  }, [activeTemplate, setCandidateSelections, slots, templateId]);
 
   const viewportMode = useViewportMode();
   const groups = useMemo(() => getSectionGroups(activeSection, slots), [activeSection, slots]);
@@ -244,22 +239,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     isLoadingAdminAssets,
     loadMoreAdminAssets,
   } = useProjectAssetUploads({ platform, selectedSlot, setNotice });
-
-  const hydrateSystemTemplateUploads = useCallback(async (uploadRefs: RemoteSlotUploads = remoteUploadRefsRef.current, slotIds?: string[]) => {
-    const targetSlotIds = getMissingRemoteUploadSlotIds(uploadRefs, uploadsRef.current, slotIds);
-    if (!targetSlotIds.length) return uploadsRef.current;
-
-    const hydrated = keepCurrentRemoteUploads(await systemTemplateRepository.hydrateUploads(uploadRefs, targetSlotIds), remoteUploadRefsRef.current);
-    let nextUploads = uploadsRef.current;
-    setUploads((current) => {
-      nextUploads = mergeSlotUploads(current, hydrated);
-      uploadsRef.current = nextUploads;
-      return nextUploads;
-    });
-    return nextUploads;
+  const skipDefaultSelectionReset = useCallback(() => {
+    skipDefaultSelectionResetRef.current = true;
   }, []);
 
-  const ensureSystemTemplateUploadsHydrated = useCallback(() => hydrateSystemTemplateUploads(remoteUploadRefsRef.current), [hydrateSystemTemplateUploads]);
   const { isSavingSystemTemplate, isSavingTemplate, saveCurrentTemplate, saveSystemTemplate } = useTemplatePersistence({
     activeSystemTemplate,
     activeUserTemplate,
@@ -324,41 +307,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     templateId,
   });
 
-  const hydrateUploadSlotsWithProgress = useCallback(async (uploadRefs: RemoteSlotUploads, slotIds: string[], onProgress: (completed: number, total: number) => void) => {
-    if (slotIds.length === 0) {
-      return {};
-    }
-
-    let nextUploads: SlotUploads = {};
-    let completed = 0;
-    onProgress(completed, slotIds.length);
-    for (const slotId of slotIds) {
-      const hydrated = await systemTemplateRepository.hydrateUploads(uploadRefs, [slotId]);
-      nextUploads = mergeSlotUploads(nextUploads, hydrated);
-      completed += 1;
-      onProgress(completed, slotIds.length);
-    }
-    return nextUploads;
-  }, []);
-
   useEditorBootstrap({
-    hydratePreviewUploads: hydrateUploadSlotsWithProgress,
+    hydratePreviewUploads,
     hydrateSystemTemplateUploads,
     mode,
-    remoteUploadRefsRef,
     setActiveGroup,
     setActiveSection,
     setActiveSystemTemplate,
     setActiveUserTemplate,
-    setBubbleInsets,
-    setBubbleMarkers,
-    setBubbleStretch,
-    setCandidateSelections,
-    setColors,
     setInitialLoadState,
     setNotice,
     setPlatform,
-    setRemoteUploadRefs,
     setSelectedSlotId,
     setSystemCreditCost,
     setSystemDescription,
@@ -370,14 +329,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setSystemTitle,
     setSystemVisibility,
     setTemplateId,
-    setUploads,
-    skipDefaultSelectionResetRef,
+    replaceDraft,
+    skipDefaultSelectionReset,
   });
 
   useEffect(() => {
     if (initialLoadState.status !== "ready" || !selectedSlot) return;
-    void hydrateSystemTemplateUploads(remoteUploadRefsRef.current, [selectedSlot.id]).catch((error) => console.error(error));
-  }, [hydrateSystemTemplateUploads, initialLoadState.status, selectedSlot?.id]);
+    void hydrateSystemTemplateUploads(remoteUploadRefs, [selectedSlot.id]).catch((error) => console.error(error));
+  }, [hydrateSystemTemplateUploads, initialLoadState.status, remoteUploadRefs, selectedSlot?.id]);
 
   const startDefaultTemplate = () => {
     persistEditorSession(mode, { templateId: "basic", platform: "android", editMode: mode });
@@ -387,14 +346,15 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setActiveSection("main");
     setActiveGroup("background");
     setSelectedSlotId(undefined);
-    setUploads({});
-    remoteUploadRefsRef.current = {};
-    setRemoteUploadRefs({});
-    setColors({});
-    setCandidateSelections(getInitialSlotCandidateSelections(getThemeSlots("android"), "basic", getThemeTemplate("basic")));
-    setBubbleMarkers({});
-    setBubbleInsets({});
-    setBubbleStretch({});
+    replaceDraft({
+      uploads: {},
+      remoteUploadRefs: {},
+      colors: {},
+      candidateSelections: getInitialSlotCandidateSelections(getThemeSlots("android"), "basic", getThemeTemplate("basic")),
+      bubbleMarkers: {},
+      bubbleInsets: {},
+      bubbleStretch: {},
+    });
     setActiveUserTemplate(null);
     setActiveSystemTemplate(null);
     setSystemTemplateBundleId(null);
@@ -452,7 +412,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setRemoteUploadRefs((current) => {
       const next = { ...current };
       delete next[slotId];
-      remoteUploadRefsRef.current = next;
       return next;
     });
   };

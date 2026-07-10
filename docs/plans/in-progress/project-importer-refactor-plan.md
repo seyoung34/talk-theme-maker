@@ -1,6 +1,6 @@
 # ProjectImporterClient 점진적 분해 리팩토링 계획
 
-> 상태: R1~R5 완료. 다음은 R6 편집 상태 통합이다.
+> 상태: R1~R6 완료. 다음은 R7 다이얼로그 접근성 통일과 R8 렌더 안정화다.
 > 참고: 진단 근거 → [../../report/project-importer-client-refactor-2026-07-10.md](../../report/project-importer-client-refactor-2026-07-10.md)
 
 ## 목적
@@ -69,9 +69,9 @@
 
 ### Phase 6 (R6) — 편집 상태 통합 · 고위험 (마지막)
 
-- [ ] 편집 상태 7종(`uploads`/`remoteUploadRefs`/`colors`/`candidateSelections`/`bubbleMarkers`/`bubbleInsets`/`bubbleStretch`)과
+- [x] 편집 상태 7종(`uploads`/`remoteUploadRefs`/`colors`/`candidateSelections`/`bubbleMarkers`/`bubbleInsets`/`bubbleStretch`)과
       그 갱신 핸들러를 `useThemeDraft`(`useReducer` 권장)로 통합한다.
-- [ ] `state`↔`ref` 수동 이중 동기화를 훅 내부 캡슐화로 제거한다.
+- [x] `state`↔`ref` 수동 이중 동기화를 훅 내부 캡슐화로 제거한다.
 - 완료 기준: 편집 상태 변경이 단일 액션 경로를 통하고, 컴포넌트에서 편집용 `useState`/미러 `ref`가 사라진다.
       (Immer 도입은 이 단계에서 별도 판단 — 불변 업데이트 보일러플레이트가 크면 채택.)
 
