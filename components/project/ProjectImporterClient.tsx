@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { persistEditorSession, takeTemplateStartPayload } from "@/components/project/editorSession";
+import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice as Notice } from "@/components/project/editorTypes";
 import { ExitConfirmDialog } from "@/components/project/dialogs/ExitConfirmDialog";
 import { ExportDialog } from "@/components/project/dialogs/ExportDialog";
 import { InitialTemplateErrorPanel, InitialTemplateLoadingPanel } from "@/components/project/dialogs/InitialTemplatePanels";
@@ -24,6 +25,7 @@ import { useViewportMode } from "@/components/project/hooks/useViewportMode";
 import { useProjectAutoColors } from "@/components/project/hooks/useProjectAutoColors";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
 import { useProjectExport } from "@/components/project/hooks/useProjectExport";
+import { useTemplatePersistence } from "@/components/project/hooks/useTemplatePersistence";
 import {
   bubbleSlotFromRole,
   getCompletion,
@@ -59,39 +61,6 @@ import {
 } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
-type Notice = {
-  tone: "info" | "success" | "warning" | "error";
-  message: string;
-};
-
-type ActiveUserTemplate = {
-  id: string;
-  name: string;
-  createdAt: number;
-};
-
-type ActiveSystemTemplate = {
-  id: string;
-  bundleId?: string;
-  title: string;
-  description?: string;
-  tags: string[];
-  status: SystemTemplateStatus;
-  visibility: SystemTemplateVisibility;
-  pricingType: SystemTemplatePricingType;
-  priceAmount?: number;
-  creditCost?: number;
-  createdAt: number;
-};
-
-type InitialLoadState = {
-  status: "idle" | "ready" | "loading" | "error";
-  message?: string;
-  detail?: string;
-  current?: number;
-  total?: number;
-};
-
 type ProjectImporterClientProps = {
   mode?: "user" | "admin";
 };
@@ -114,7 +83,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
   const [mobileSheetLiveHeight, setMobileSheetLiveHeight] = useState<number | null>(null);
-  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
   const [systemTemplateBundleId, setSystemTemplateBundleId] = useState<string | null>(null);
@@ -130,7 +98,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [systemPricingType, setSystemPricingType] = useState<SystemTemplatePricingType>("free");
   const [systemPriceAmount, setSystemPriceAmount] = useState("");
   const [systemCreditCost, setSystemCreditCost] = useState("");
-  const [isSavingSystemTemplate, setIsSavingSystemTemplate] = useState(false);
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [bubbleMarkers, setBubbleMarkers] = useState<Partial<Record<string, Markers>>>({});
@@ -459,6 +426,37 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const ensureSystemTemplateUploadsHydrated = () => hydrateSystemTemplateUploads(remoteUploadRefsRef.current);
+  const { isSavingSystemTemplate, isSavingTemplate, saveCurrentTemplate, saveSystemTemplate } = useTemplatePersistence({
+    activeSystemTemplate,
+    activeUserTemplate,
+    bubbleInsets,
+    bubbleMarkers,
+    bubbleStretch,
+    candidateSelections,
+    colors,
+    ensureSystemTemplateUploadsHydrated,
+    isAdminMode,
+    mode,
+    platform,
+    saveMode,
+    saveName,
+    setActiveSystemTemplate,
+    setActiveUserTemplate,
+    setNotice,
+    setSaveDialogOpen,
+    setSystemSaveDialogOpen,
+    setSystemTemplateBundleId,
+    systemCreditCost,
+    systemDescription,
+    systemPriceAmount,
+    systemPricingType,
+    systemStatus,
+    systemTags,
+    systemTemplateBundleId,
+    systemTitle,
+    systemVisibility,
+    templateId,
+  });
   const {
     accountState,
     exportDialogOpen,
@@ -734,46 +732,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setSaveDialogOpen(true);
   };
 
-  const saveCurrentTemplate = async () => {
-    const name = saveMode === "overwrite" ? activeUserTemplate?.name ?? saveName.trim() : saveName.trim();
-    if (!name) return;
-
-    try {
-      setIsSavingTemplate(true);
-      setNotice({ tone: "info", message: "현재 편집 상태를 내 템플릿으로 저장하는 중입니다." });
-      const hydratedUploads = await ensureSystemTemplateUploadsHydrated();
-      const savedTemplate = await saveUserTemplate({
-        id: saveMode === "overwrite" ? activeUserTemplate?.id : undefined,
-        createdAt: saveMode === "overwrite" ? activeUserTemplate?.createdAt : undefined,
-        name,
-        templateId,
-        platform,
-        uploads: hydratedUploads,
-        colors,
-        candidateSelections,
-        bubbleEdits: {
-          markers: bubbleMarkers,
-          insets: bubbleInsets,
-          stretch: bubbleStretch,
-        },
-      });
-      setActiveUserTemplate({ id: savedTemplate.id, name: savedTemplate.name, createdAt: savedTemplate.createdAt });
-      persistEditorSession(mode, {
-        templateId: savedTemplate.templateId,
-        platform: savedTemplate.platform,
-        userTemplateId: savedTemplate.id,
-        editMode: mode,
-      });
-      setSaveDialogOpen(false);
-      setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 이 브라우저에 저장했습니다.` });
-    } catch (error) {
-      console.error(error);
-      setNotice({ tone: "error", message: "내 템플릿 저장 중 오류가 발생했습니다. 브라우저 저장소 권한을 확인하세요." });
-    } finally {
-      setIsSavingTemplate(false);
-    }
-  };
-
   const openSystemSaveDialog = () => {
     if (!isAdminMode) {
       setNotice({ tone: "warning", message: "시스템 템플릿 저장은 관리자 화면에서만 사용할 수 있습니다." });
@@ -790,79 +748,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setSystemPriceAmount(activeSystemTemplate?.priceAmount ? String(activeSystemTemplate.priceAmount) : systemPriceAmount);
     setSystemCreditCost(activeSystemTemplate?.creditCost ? String(activeSystemTemplate.creditCost) : systemCreditCost);
     setSystemSaveDialogOpen(true);
-  };
-
-  const saveSystemTemplate = async () => {
-    if (!isAdminMode) {
-      setSystemSaveDialogOpen(false);
-      setNotice({ tone: "warning", message: "일반 사용자 이미지는 브라우저 저장소에만 저장됩니다. 시스템 템플릿 저장은 관리자 전용입니다." });
-      return;
-    }
-
-    const title = systemTitle.trim();
-    if (!title) return;
-
-    try {
-      setIsSavingSystemTemplate(true);
-      setNotice({ tone: "info", message: "시스템 템플릿을 저장하는 중입니다." });
-      const hydratedUploads = await ensureSystemTemplateUploadsHydrated();
-      const savedTemplate = await systemTemplateRepository.save({
-        id: activeSystemTemplate?.id,
-        bundleId: activeSystemTemplate?.bundleId ?? systemTemplateBundleId ?? undefined,
-        createdAt: activeSystemTemplate?.createdAt,
-        title,
-        description: systemDescription.trim() || undefined,
-        baseTemplateId: "basic",
-        platform,
-        status: systemStatus,
-        visibility: systemVisibility,
-        pricingType: systemPricingType,
-        priceAmount: systemPricingType === "paid" ? Number(systemPriceAmount) || 0 : undefined,
-        creditCost: systemPricingType === "credit" ? Number(systemCreditCost) || 0 : undefined,
-        tags: systemTags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-        overrides: {
-          colors,
-          uploads: hydratedUploads,
-          candidateSelections,
-          bubbleEdits: {
-            markers: bubbleMarkers,
-            insets: bubbleInsets,
-            stretch: bubbleStretch,
-          },
-        },
-      });
-      setActiveSystemTemplate({
-        id: savedTemplate.id,
-        bundleId: savedTemplate.bundleId ?? savedTemplate.id,
-        title: savedTemplate.title,
-        description: savedTemplate.description,
-        tags: savedTemplate.tags,
-        status: savedTemplate.status,
-        visibility: savedTemplate.visibility,
-        pricingType: savedTemplate.pricingType,
-        priceAmount: savedTemplate.priceAmount,
-        creditCost: savedTemplate.creditCost,
-        createdAt: savedTemplate.createdAt,
-      });
-      setSystemTemplateBundleId(savedTemplate.bundleId ?? savedTemplate.id);
-      persistEditorSession(mode, {
-        templateId: savedTemplate.baseTemplateId,
-        platform: savedTemplate.platform,
-        systemTemplateId: savedTemplate.id,
-        systemTemplateBundleId: savedTemplate.bundleId ?? savedTemplate.id,
-        editMode: mode,
-      });
-      setSystemSaveDialogOpen(false);
-      setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 저장했습니다.` });
-    } catch (error) {
-      console.error(error);
-      setNotice({ tone: "error", message: "시스템 템플릿 저장 중 오류가 발생했습니다." });
-    } finally {
-      setIsSavingSystemTemplate(false);
-    }
   };
 
   const previewProps = {
