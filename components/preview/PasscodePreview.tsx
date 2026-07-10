@@ -3,7 +3,7 @@
 import { Delete, Grid3X3, KeyRound, RotateCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getResolvedColor, type SlotCandidateSelections } from "@/components/project/projectModel";
-import { findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
+import { findBestFile, imageUrlForThemeFile, previewRoleFilesSignature } from "@/components/preview/previewResourceUtils";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeResourceRole } from "@/lib/theme/types";
@@ -225,6 +225,7 @@ function selectRoleFiles(analysis: ThemeProjectAnalysis): RoleFiles {
 }
 
 function useRoleUrls(files: RoleFiles): RoleUrls {
+  const fileSignature = previewRoleFilesSignature(files);
   const [urls, setUrls] = useState<RoleUrls>({});
   useEffect(() => {
     let cancelled = false;
@@ -241,7 +242,7 @@ function useRoleUrls(files: RoleFiles): RoleUrls {
     }
     void load();
     return () => { cancelled = true; objectUrls.forEach((url) => URL.revokeObjectURL(url)); };
-  }, [files]);
+  }, [fileSignature]);
   return urls;
 }
 

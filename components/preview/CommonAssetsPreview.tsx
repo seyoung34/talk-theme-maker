@@ -2,7 +2,7 @@
 
 import { ImageIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
+import { findBestFile, imageUrlForThemeFile, previewRoleFilesSignature } from "@/components/preview/previewResourceUtils";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { ThemeResourceRole, ThemeSlotGroup } from "@/lib/theme/types";
@@ -80,6 +80,7 @@ function selectRoleFiles(analysis: ThemeProjectAnalysis, groupSlots: ThemeAssetS
 }
 
 function useRoleUrls(files: Partial<Record<ThemeResourceRole, ThemeProjectFile>>): RoleUrls {
+  const fileSignature = previewRoleFilesSignature(files);
   const [urls, setUrls] = useState<RoleUrls>({});
 
   useEffect(() => {
@@ -102,7 +103,7 @@ function useRoleUrls(files: Partial<Record<ThemeResourceRole, ThemeProjectFile>>
       cancelled = true;
       for (const url of objectUrls) URL.revokeObjectURL(url);
     };
-  }, [files]);
+  }, [fileSignature]);
 
   return urls;
 }

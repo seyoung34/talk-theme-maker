@@ -2,7 +2,10 @@
 
 import { useEffect, useId, useState, type MutableRefObject } from "react";
 import { ImageOff, Plus, Sliders, X } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
+import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
+import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import {
   buildSlotCandidates,
   disabledImageCandidateId,
@@ -57,16 +60,7 @@ type MobileQuickEditPanelProps = {
 
 export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
   const { slot, slots, file, uploads, colors, selections, adminAssets, templateId, template } = props;
-  const [uploadPreviewUrls, setUploadPreviewUrls] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    const entries = Object.values(uploads).flatMap((items) => items ?? []);
-    const next = Object.fromEntries(entries.map((entry) => [entry.id, URL.createObjectURL(entry.file)]));
-    setUploadPreviewUrls(next);
-    return () => {
-      Object.values(next).forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [uploads]);
+  const uploadPreviewUrls = useUploadPreviewUrls(uploads);
 
   if (!slot) {
     return <p className="px-1 py-6 text-center text-[13px] font-medium text-[#94a3b8]">편집할 슬롯을 선택하세요.</p>;
@@ -214,17 +208,16 @@ function ColorControls({
   return (
     <div className="grid gap-3">
       <div className="flex items-center gap-2">
-        <label htmlFor={colorInputId} className="relative size-11 shrink-0 overflow-hidden rounded-xl border border-black/10 shadow-sm ring-offset-2 transition hover:ring-2 hover:ring-[#bfdbfe] focus-within:ring-2 focus-within:ring-[#2563eb]">
-          <span className="absolute inset-0" style={{ backgroundColor: themeColorToCss(value) }} aria-hidden="true" />
-          <input
+        <ThemeColorPicker value={value} label={slot.label} onChange={(nextValue) => onColorChange(slot, nextValue)}>
+          <button
             id={colorInputId}
-            type="color"
-            value={hex}
-            className="absolute inset-0 opacity-0 cursor-pointer size-full"
-            aria-label={`${slot.label} 색상 선택`}
-            onChange={(event) => onColorChange(slot, setThemeColorRgb(value, event.currentTarget.value))}
-          />
-        </label>
+            type="button"
+            aria-label={`${slot.label} 색상 선택 열기`}
+            className="relative size-11 shrink-0 overflow-hidden rounded-xl border border-black/10 shadow-sm ring-offset-2 transition hover:ring-2 hover:ring-[#bfdbfe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] active:scale-95"
+          >
+            <span className="absolute inset-0" style={{ backgroundColor: themeColorToCss(value) }} aria-hidden="true" />
+          </button>
+        </ThemeColorPicker>
         <label className="sr-only" htmlFor={`mqe-hex-${slot.id}`}>색상 코드</label>
         <input
           id={`mqe-hex-${slot.id}`}

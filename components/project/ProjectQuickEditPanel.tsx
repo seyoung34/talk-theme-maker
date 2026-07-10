@@ -2,11 +2,11 @@
 
 import { useEffect, useId, useState, type DragEvent, type MutableRefObject } from "react";
 import { Edit3, ImageOff, Info, Link2, RefreshCw, X } from "lucide-react";
-import * as Dialog from "@radix-ui/react-dialog";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import { HexColorPicker } from "react-colorful";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
+import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
+import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, getSlotUploadEntries, slotStatusLabel, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
@@ -16,8 +16,6 @@ import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import { normalizeThemeColor, readableThemeForeground, setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
-
-const colorPickerPresets = ["#191919", "#FFFFFF", "#EF4444", "#F97316", "#FACC15", "#22C55E", "#06B6D4", "#3B82F6", "#6366F1", "#A855F7", "#EC4899", "#94A3B8"];
 
 export function ProjectQuickEditPanel({
   slot,
@@ -102,20 +100,12 @@ export function ProjectQuickEditPanel({
 }) {
   const [dragActive, setDragActive] = useState(false);
   const [pasteFeedback, setPasteFeedback] = useState(false);
-  const [uploadPreviewUrls, setUploadPreviewUrls] = useState<Record<string, string>>({});
+  const uploadPreviewUrls = useUploadPreviewUrls(uploads);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [preparedEditSourceFile, setPreparedEditSourceFile] = useState<File | null>(null);
   const [isPreparingEditSource, setIsPreparingEditSource] = useState(false);
   const [editSourceError, setEditSourceError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const entries = Object.values(uploads).flatMap((items) => items ?? []);
-    const next = Object.fromEntries(entries.map((entry) => [entry.id, URL.createObjectURL(entry.file)]));
-    setUploadPreviewUrls(next);
-    return () => {
-      Object.values(next).forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [uploads]);
 
   useEffect(() => {
     if (!slot || slot.kind === "color") return;
@@ -558,7 +548,6 @@ function ColorEditor({
   onApplyAutoColorToAll: () => void;
 }) {
   const [draft, setDraft] = useState(value);
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
   const colorId = useId();
   const alphaId = useId();
   const normalizedDraft = normalizeThemeColor(draft);
@@ -602,16 +591,17 @@ function ColorEditor({
         ) : null}
         <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
           <label className="grid gap-1.5 text-[11px] font-bold text-[#475569]" htmlFor={colorId}>색상
-            <button
-              id={colorId}
-              type="button"
-              aria-label={`${slot.label} 색상 선택 열기`}
-              className="group relative block size-12 overflow-hidden rounded-xl outline-none ring-offset-2 transition hover:ring-2 hover:ring-[#bfdbfe] focus-visible:ring-2 focus-visible:ring-[#2563eb] active:scale-95"
-              onClick={() => setColorPickerOpen(true)}
-            >
-              <ColorSwatch value={effectiveColor} className="size-full rounded-xl" />
-              <span className="absolute inset-x-0 bottom-0 bg-black/45 py-0.5 text-center text-[9px] font-black tracking-wide text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">선택</span>
-            </button>
+            <ThemeColorPicker value={effectiveColor} label={slot.label} onChange={commit}>
+              <button
+                id={colorId}
+                type="button"
+                aria-label={`${slot.label} 색상 선택 열기`}
+                className="group relative block size-12 overflow-hidden rounded-xl outline-none ring-offset-2 transition hover:ring-2 hover:ring-[#bfdbfe] focus-visible:ring-2 focus-visible:ring-[#2563eb] active:scale-95"
+              >
+                <ColorSwatch value={effectiveColor} className="size-full rounded-xl" />
+                <span className="absolute inset-x-0 bottom-0 bg-black/45 py-0.5 text-center text-[9px] font-black tracking-wide text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">선택</span>
+              </button>
+            </ThemeColorPicker>
           </label>
           <input
             type="text"
@@ -622,13 +612,6 @@ function ColorEditor({
             className={`h-12 min-w-0 rounded-xl border bg-white px-4 font-mono text-sm font-semibold text-[#111827] outline-none focus:ring-2 ${normalizedDraft ? "border-[#d1d5db] focus:border-[#60a5fa] focus:ring-[#bfdbfe]" : "border-[#ef4444] focus:ring-[#fecaca]"}`}
             onChange={(event) => commit(event.currentTarget.value)}
             onBlur={() => normalizedDraft && setDraft(normalizedDraft)}
-          />
-          <ThemeColorPickerDialog
-            open={colorPickerOpen}
-            slotLabel={slot.label}
-            value={effectiveColor}
-            onChange={commit}
-            onOpenChange={setColorPickerOpen}
           />
         </div>
         {!normalizedDraft ? <p id={`${colorId}-error`} className="text-[11px] font-semibold text-[#b91c1c]" role="alert">#RRGGBB 또는 Android #AARRGGBB 형식으로 입력해 주세요.</p> : null}
@@ -645,48 +628,6 @@ function ColorEditor({
         ) : null}
       </div>
     </Tooltip.Provider>
-  );
-}
-
-function ThemeColorPickerDialog({
-  open,
-  slotLabel,
-  value,
-  onChange,
-  onOpenChange,
-}: {
-  open: boolean;
-  slotLabel: string;
-  value: string;
-  onChange: (value: string) => void;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const rgbValue = themeColorRgbHex(value);
-
-  return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[110] bg-[#0f172a]/45 backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed inset-x-0 bottom-0 z-[111] mx-auto grid max-h-[min(680px,calc(100dvh-12px))] w-full max-w-xl grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-t-[28px] border border-white/70 bg-[#f8fafc] shadow-[0_-16px_52px_rgba(15,23,42,0.24)] outline-none md:bottom-auto md:left-1/2 md:top-6 md:max-h-[calc(100dvh-48px)] md:w-[min(460px,calc(100%-32px))] md:-translate-x-1/2 md:translate-y-0 md:rounded-[28px]">
-          <div className="border-b border-[#e2e8f0] bg-white px-5 pb-4 pt-3.5">
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[#cbd5e1] md:hidden" aria-hidden="true" />
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0"><Dialog.Title className="text-base font-black text-[#0f172a]">색상 선택</Dialog.Title><Dialog.Description className="mt-1 truncate text-xs font-semibold text-[#64748b]">{slotLabel}에 적용할 색상을 고르세요.</Dialog.Description></div>
-              <Dialog.Close asChild><button type="button" className="grid size-9 shrink-0 place-items-center rounded-full text-[#64748b] transition hover:bg-[#f1f5f9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]" aria-label="색상 선택 닫기"><X size={18} aria-hidden="true" /></button></Dialog.Close>
-            </div>
-          </div>
-          <div className="overflow-y-auto px-5 py-5">
-            <div className="[&_.react-colorful]:h-56 [&_.react-colorful]:w-full [&_.react-colorful__saturation]:rounded-2xl [&_.react-colorful__hue]:mt-4 [&_.react-colorful__hue]:h-4 [&_.react-colorful__hue]:rounded-full [&_.react-colorful__pointer]:size-5 [&_.react-colorful__pointer]:border-2 [&_.react-colorful__pointer]:border-white [&_.react-colorful__pointer]:shadow-md">
-              <HexColorPicker color={rgbValue} onChange={(nextRgb) => onChange(setThemeColorRgb(value, nextRgb))} />
-            </div>
-            <div className="mt-5 flex items-center justify-between rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3"><div><p className="text-[10px] font-black tracking-[0.08em] text-[#2563eb]">CURRENT RGB</p><p className="mt-0.5 font-mono text-sm font-black text-[#0f172a]">{rgbValue.toUpperCase()}</p></div><ColorSwatch value={value} className="size-11 rounded-xl" /></div>
-            <div className="mt-5"><p className="text-[11px] font-black text-[#475569]">빠른 색상</p><div className="mt-2.5 grid grid-cols-6 gap-2">{colorPickerPresets.map((preset) => <button key={preset} type="button" aria-label={`${preset} 적용`} className={`relative rounded-xl p-0.5 transition hover:scale-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${rgbValue.toLowerCase() === preset.toLowerCase() ? "ring-2 ring-[#2563eb] ring-offset-2" : ""}`} onClick={() => onChange(setThemeColorRgb(value, preset))}><ColorSwatch value={preset} className="aspect-square w-full rounded-[10px]" /></button>)}</div></div>
-            <p className="mt-5 text-center text-[11px] font-semibold leading-5 text-[#64748b]">투명도는 편집 패널의 슬라이더에서 조절할 수 있습니다.</p>
-          </div>
-          <div className="border-t border-[#e2e8f0] bg-white px-5 py-4"><Dialog.Close asChild><button type="button" className="min-h-11 w-full rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white transition hover:bg-[#1e293b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]">완료</button></Dialog.Close></div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
   );
 }
 

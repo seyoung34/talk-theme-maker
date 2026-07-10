@@ -1,6 +1,14 @@
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeResourceRole } from "@/lib/theme/types";
 
+
+export function previewRoleFilesSignature(files: Partial<Record<ThemeResourceRole, ThemeProjectFile>>) {
+  return Object.entries(files)
+    .sort(([leftRole], [rightRole]) => leftRole.localeCompare(rightRole))
+    .map(([role, file]) => [role, file?.path, file?.sourceUrl, file?.file?.name, file?.file?.size, file?.file?.lastModified].join(":"))
+    .join("|");
+}
+
 export function findResourceIdByPath(analysis: ThemeProjectAnalysis, path?: string) {
   if (!path) return undefined;
   return analysis.resources.find((resource) => resource.filePath === path)?.id;

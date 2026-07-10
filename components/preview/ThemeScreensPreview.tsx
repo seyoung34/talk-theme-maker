@@ -3,7 +3,7 @@
 import { Bell, CalendarCheck2, CalendarClock, ChevronRight, Cloud, Gamepad2, Gift, IdCard, ListPlus, MessageCirclePlus, PackageOpen, PawPrint, Percent, Radio, Scan, Search, Settings, Share2, Smile, Store, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getResolvedColor, type SlotCandidateSelections } from "@/components/project/projectModel";
-import { findBestFile, imageUrlForThemeFile } from "@/components/preview/previewResourceUtils";
+import { findBestFile, imageUrlForThemeFile, previewRoleFilesSignature } from "@/components/preview/previewResourceUtils";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole, ThemeSection } from "@/lib/theme/types";
@@ -790,6 +790,7 @@ function selectRoleFiles(analysis: ThemeProjectAnalysis): RoleFiles {
 }
 
 function useRoleUrls(files: RoleFiles): RoleUrls {
+  const fileSignature = previewRoleFilesSignature(files);
   const [urls, setUrls] = useState<RoleUrls>({});
 
   useEffect(() => {
@@ -812,7 +813,7 @@ function useRoleUrls(files: RoleFiles): RoleUrls {
       cancelled = true;
       for (const url of objectUrls) URL.revokeObjectURL(url);
     };
-  }, [files]);
+  }, [fileSignature]);
 
   return urls;
 }
