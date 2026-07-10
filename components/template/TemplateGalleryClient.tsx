@@ -302,7 +302,7 @@ export default function TemplateGalleryClient() {
           </div>
         ) : null}
 
-        <section className="grid gap-5 rounded-[32px] border border-[var(--color-outline-variant)] bg-white/92 p-5 shadow-[0_18px_48px_rgba(42,103,103,0.08)] md:p-6">
+        <section className={`grid rounded-[32px] border border-[var(--color-outline-variant)] ${hasSavedTemplates ? "gap-5 bg-white/92 p-5 shadow-[0_18px_48px_rgba(42,103,103,0.08)] md:p-6" : "gap-3 bg-white/70 p-4 md:p-5"}`}>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="mt-2 flex items-center gap-1.5">
@@ -320,10 +320,12 @@ export default function TemplateGalleryClient() {
                 이 브라우저에만 저장된 작업입니다. 직접 올린 개인 이미지는 서버에 업로드되지 않습니다.
               </p>
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-surface-low)] px-3 py-2 text-xs font-bold text-[var(--color-on-surface-variant)]">
-              <Clock3 className="w-4 h-4" />
-              최근 수정순
-            </div>
+            {hasSavedTemplates ? (
+              <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-surface-low)] px-3 py-2 text-xs font-bold text-[var(--color-on-surface-variant)]">
+                <Clock3 className="w-4 h-4" />
+                최근 수정순
+              </div>
+            ) : null}
           </div>
 
           {hasSavedTemplates ? (
@@ -354,22 +356,17 @@ export default function TemplateGalleryClient() {
               ))}
             </div>
           ) : (
-            <div className="grid gap-4 rounded-[24px] border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-              <div>
-                <strong className="block text-lg font-black text-[var(--color-on-surface)]">저장된 템플릿이 아직 없습니다.</strong>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-on-surface-variant)]">
-                  기본 템플릿으로 시작해 편집 상태를 저장하면, 다음부터는 이 브라우저에서 바로 이어서 작업할 수 있습니다.
-                </p>
-              </div>
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm font-semibold text-[var(--color-on-surface-variant)]">
+              아직 저장된 템플릿이 없어요.
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-4 py-2.5 text-sm font-black text-[var(--color-inverse-on-surface)]"
+                className="inline-flex items-center gap-1 font-black text-[var(--color-on-surface)] underline-offset-4 hover:underline"
                 onClick={() => setSelectedGalleryTemplateId(basicGalleryTemplateId)}
               >
                 기본 템플릿 보기
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="size-4" />
               </button>
-            </div>
+            </p>
           )}
         </section>
 

@@ -86,31 +86,38 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
                 </button>
               </Popover.Trigger>
               <Popover.Portal>
-                <Popover.Content align="end" sideOffset={10} collisionPadding={16} className="radix-popover-content z-50 w-[min(300px,calc(100vw-40px))] overflow-hidden rounded-2xl border border-[var(--color-outline-variant)] bg-white shadow-[0_18px_55px_rgba(48,49,46,0.18)] outline-none" aria-label="계정 메뉴">
+                <Popover.Content align="end" sideOffset={10} collisionPadding={16} className="radix-popover-content z-50 w-[min(300px,calc(100vw-40px))] overflow-hidden rounded-[20px] border border-[#cfe0ff] bg-white shadow-[0_20px_50px_rgba(47,107,191,0.22)] outline-none" aria-label="계정 메뉴">
                   {session === null ? (
-                    <div className="flex items-center gap-2 px-4 py-5 text-sm font-semibold text-[var(--color-on-surface-variant)]" role="status"><LoaderCircle className="animate-spin" size={17} aria-hidden="true" />계정 확인 중</div>
+                    <div className="flex items-center gap-2 px-4 py-5 text-sm font-semibold text-[#5b6b82]" role="status"><LoaderCircle className="animate-spin text-[#3d7bd6]" size={17} aria-hidden="true" />계정 확인 중</div>
                   ) : session.user ? (
                     <>
-                      <div className="border-b border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3.5">
-                        <p className="text-xs font-bold text-[var(--color-on-surface-variant)]">로그인한 계정</p>
-                        <p className="mt-1 truncate text-sm font-extrabold text-[var(--color-on-surface)]">{session.user.displayName || session.user.email || "사용자"}</p>
-                        {session.user.displayName && session.user.email ? <p className="mt-0.5 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{session.user.email}</p> : null}
+                      <div className="flex items-center gap-3 border-b border-[#e4eefc] bg-[#f4f9ff] px-4 py-3.5">
+                        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#2f6bbf] text-white shadow-[0_6px_14px_rgba(47,107,191,0.28)]">
+                          <UserRound size={18} aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-extrabold text-[#1f2a44]">{session.user.displayName || session.user.email || "사용자"}</p>
+                          <p className="truncate text-xs font-semibold text-[#5b6b82]">{session.user.displayName && session.user.email ? session.user.email : "로그인한 계정"}</p>
+                        </div>
                       </div>
                       <div className="p-2">
                         <PopoverLink href="/account" label="마이페이지" icon={<UserRound size={18} aria-hidden="true" />} active={currentPath === "/account"} onClick={() => setIsOpen(false)} />
                         {session.isAdmin ? <PopoverLink href="/admin" label="관리자 페이지" icon={<LayoutDashboard size={18} aria-hidden="true" />} active={Boolean(currentPath?.startsWith("/admin"))} onClick={() => setIsOpen(false)} /> : null}
+                        <div className="my-1 border-t border-[#eef4fc]" />
                         <button type="button" className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-extrabold text-[var(--color-error)] transition hover:bg-[var(--color-error-container)] focus-visible:outline-2 focus-visible:outline-[var(--color-error)]" onClick={openSignOutConfirm}>
                           <LogOut size={18} aria-hidden="true" />로그아웃
                         </button>
                       </div>
                     </>
                   ) : (
-                    <div className="p-2">
-                      <div className="px-3 pb-3 pt-2"><p className="text-sm font-extrabold">로그인이 필요합니다</p><p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">크레딧과 Export 이력을 계정에서 관리하세요.</p></div>
-                      <PopoverLink href="/login" label="로그인 / 회원가입" icon={<LogIn size={18} aria-hidden="true" />} active={currentPath === "/login"} onClick={() => setIsOpen(false)} />
+                    <div className="p-3">
+                      <div className="px-1 pb-3 pt-1"><p className="text-sm font-extrabold text-[#1f2a44]">로그인이 필요해요</p><p className="mt-1 text-xs font-semibold leading-5 text-[#5b6b82]">크레딧과 Export 이력을 계정에서 관리하세요.</p></div>
+                      <Link href="/login" aria-current={currentPath === "/login" ? "page" : undefined} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2f6bbf] px-3 text-sm font-extrabold text-white shadow-[0_10px_22px_rgba(47,107,191,0.24)] transition hover:bg-[#2a60ac] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]" onClick={() => setIsOpen(false)}>
+                        <LogIn size={18} aria-hidden="true" />로그인 / 회원가입
+                      </Link>
                     </div>
                   )}
-                  <Popover.Arrow className="fill-[var(--color-outline-variant)]" width={14} height={7} />
+                  <Popover.Arrow className="fill-white" width={14} height={7} />
                 </Popover.Content>
               </Popover.Portal>
             </Popover.Root>
@@ -139,5 +146,5 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
 }
 
 function PopoverLink({ href, label, icon, active, onClick }: { href: string; label: string; icon: React.ReactNode; active: boolean; onClick: () => void }) {
-  return <Link href={href} aria-current={active ? "page" : undefined} className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-extrabold transition focus-visible:outline-2 focus-visible:outline-[var(--color-secondary)] ${active ? "bg-[var(--color-surface-low)] text-[var(--color-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`} onClick={onClick}>{icon}{label}</Link>;
+  return <Link href={href} aria-current={active ? "page" : undefined} className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-extrabold transition focus-visible:outline-2 focus-visible:outline-[var(--color-secondary)] ${active ? "bg-[#eaf2fe] text-[#2f6bbf]" : "text-[#3f4a5c] hover:bg-[#f4f9ff] hover:text-[#2f6bbf]"}`} onClick={onClick}>{icon}{label}</Link>;
 }
