@@ -28,7 +28,6 @@
 | 문서 | 상태 |
 |---|---|
 | [plans/planned/easy-guide-plan.md](plans/planned/easy-guide-plan.md) | 이미지 중심 "쉬운 가이드" 기획 확정. 스크린샷/GIF 에셋 준비 후 구현 착수 예정 |
-| [plans/planned/export-loading-ui-plan.md](plans/planned/export-loading-ui-plan.md) | edit 창 내보내기 사전 준비 구간의 로딩/진행 상태 노출 기획 확정. `isPreparingExport` 분리와 다이얼로그 선오픈 방향 |
 
 ## plans/in-progress — 구현 진행중
 
@@ -43,4 +42,5 @@
 | 문서 | 내용 |
 |---|---|
 | [plans/done/android-export-413-plan.md](plans/done/android-export-413-plan.md) | Android/iOS 내보내기 413(payload 초과) 수정 완료 — 실기기 검증까지 확인 |
+| [plans/done/export-loading-ui-plan.md](plans/done/export-loading-ui-plan.md) | edit 창 내보내기 사전 준비 상태 UI 구현 완료 — 준비/제출 상태 분리, 다이얼로그 선오픈, 실패 재시도 및 로컬 검증 완료 |
 | [plans/done/migration-plan.md](plans/done/migration-plan.md) | Vite → Next.js App Router 마이그레이션 완료 기록 |

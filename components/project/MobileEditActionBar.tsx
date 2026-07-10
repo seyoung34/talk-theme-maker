@@ -8,6 +8,7 @@ export function MobileEditActionBar({
   isAdminMode,
   isSaving,
   isExporting,
+  isPreparingExport,
   templateName,
   onBack,
   onSave,
@@ -17,6 +18,7 @@ export function MobileEditActionBar({
   readonly isAdminMode: boolean;
   readonly isSaving: boolean;
   readonly isExporting: boolean;
+  readonly isPreparingExport: boolean;
   readonly templateName?: string;
   readonly onBack: () => void;
   readonly onSave: () => void;
@@ -60,11 +62,11 @@ export function MobileEditActionBar({
               type="button"
               className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-[#0f172a] px-3 text-xs font-bold text-white  transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
               onClick={onExport}
-              disabled={isExporting}
+              disabled={isPreparingExport || isExporting}
               tabIndex={hiddenTabIndex}
             >
               <Download size={15} strokeWidth={2.2} aria-hidden="true" />
-              <span>{isExporting ? "내보내는 중" : "내보내기"}</span>
+              <span>{isExporting ? "내보내는 중" : isPreparingExport ? "준비 중" : "내보내기"}</span>
             </button>
           </div>
         </div>

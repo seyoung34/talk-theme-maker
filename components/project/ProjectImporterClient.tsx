@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Archive, Download, Package, ShieldCheck, Wrench, X } from "lucide-react";
+import { Archive, Download, LoaderCircle, Package, ShieldCheck, Wrench, X } from "lucide-react";
 import { getExportNotice, getExportProgressSteps } from "@/components/project/exportClient";
 import type { AccountState, ExportMode } from "@/components/project/exportModel";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
@@ -470,7 +470,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     exportVersionName,
     isAccountLoading,
     isExporting,
+    isPreparingExport,
     openExportDialog,
+    exportPreparationError,
     setExportDialogOpen,
     setExportMode,
     setExportName,
@@ -992,6 +994,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       {exportDialogOpen ? (
         <ExportDialog
           isExporting={isExporting}
+          isPreparingExport={isPreparingExport}
+          preparationError={exportPreparationError}
           platform={platform}
           exportMode={exportMode}
           exportName={exportName}
@@ -1012,6 +1016,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onVersionNameChange={setExportVersionName}
           onLogin={() => router.push(`/login?returnTo=${encodeURIComponent("/edit")}&reason=export`)}
           onBuyCredits={() => router.push("/credits")}
+          onRetryPreparation={() => void openExportDialog()}
           onSubmit={() => void submitExport()}
         />
       ) : null}
@@ -1109,9 +1114,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   type="button"
                   className={`${isAdminMode ? "hidden" : ""} rounded-xl bg-[#0f172a] px-3 py-2.5 text-xs font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60 md:px-4 md:text-sm`}
                   onClick={() => void openExportDialog()}
-                  disabled={isExporting}
+                  disabled={isPreparingExport || isExporting}
                 >
-                  {isExporting ? "내보내는 중.." : "내보내기"}
+                  {isExporting ? "내보내는 중.." : isPreparingExport ? "내보내기 준비 중…" : "내보내기"}
                 </button>
               </div>
             </header>
@@ -1124,6 +1129,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 isAdminMode={isAdminMode}
                 isSaving={isAdminMode ? isSavingSystemTemplate : isSavingTemplate}
                 isExporting={isExporting}
+                isPreparingExport={isPreparingExport}
                 templateName={displayTemplateName}
                 onBack={requestExit}
                 onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
@@ -1681,6 +1687,8 @@ function SelectField({
 
 function ExportDialog({
   isExporting,
+  isPreparingExport,
+  preparationError,
   platform,
   exportMode,
   exportName,
@@ -1695,9 +1703,12 @@ function ExportDialog({
   onVersionNameChange,
   onLogin,
   onBuyCredits,
+  onRetryPreparation,
   onSubmit,
 }: {
   isExporting: boolean;
+  isPreparingExport: boolean;
+  preparationError: string | null;
   platform: ThemePlatform;
   exportMode: ExportMode;
   exportName: string;
@@ -1712,6 +1723,7 @@ function ExportDialog({
   onVersionNameChange: (value: string) => void;
   onLogin: () => void;
   onBuyCredits: () => void;
+  onRetryPreparation: () => void;
   onSubmit: () => void;
 }) {
   const steps = getExportProgressSteps(exportMode);
@@ -1745,8 +1757,8 @@ function ExportDialog({
         >
           <div className="flex items-start justify-between gap-4 border-b border-[#e2e8f0] px-5 py-4">
             <div className="grid gap-1">
-              <Dialog.Title className="text-lg font-bold text-[#0f172a]">{platform === "android" ? "Android 내보내기" : "iOS 내보내기"}</Dialog.Title>
-              <Dialog.Description className="text-xs font-medium text-[#64748b]">완성된 테마를 설치하거나 보관할 파일로 만듭니다.</Dialog.Description>
+              <Dialog.Title className="text-lg font-bold text-[#0f172a]">{isPreparingExport ? "내보내기 정보를 준비하는 중입니다" : platform === "android" ? "Android 내보내기" : "iOS 내보내기"}</Dialog.Title>
+              <Dialog.Description className="text-xs font-medium text-[#64748b]">{isPreparingExport ? "버전 정보와 계정 상태를 확인하고 있습니다." : "완성된 테마를 설치하거나 보관할 파일로 만듭니다."}</Dialog.Description>
             </div>
             <Dialog.Close asChild>
               <button type="button" className="grid size-9 shrink-0 place-items-center rounded-full text-[#64748b] transition hover:bg-[#f1f5f9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-40" disabled={isExporting} aria-label="내보내기 창 닫기"><X size={18} /></button>
@@ -1760,6 +1772,16 @@ function ExportDialog({
                 <div><p className="text-base font-bold text-[#0f172a]">{getExportNotice(exportMode)}</p><p className="mt-2 text-sm font-medium text-[#64748b]">{steps[Math.min(progressStep, steps.length - 1)]} · {formatElapsedTime(elapsedSeconds)}</p></div>
                 <div className="mx-auto h-2 w-56 max-w-full overflow-hidden rounded-full bg-[#e2e8f0]"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#2563eb]" /></div>
                 <p className="text-xs font-medium text-[#64748b]">완료될 때까지 이 창을 유지해 주세요.</p>
+              </div>
+            ) : isPreparingExport ? (
+              <div className="grid min-h-56 place-content-center gap-4 py-4 text-center" role="status" aria-live="polite">
+                <span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><LoaderCircle className="animate-spin" size={22} aria-hidden="true" /></span>
+                <div><p className="text-base font-bold text-[#0f172a]">내보내기 정보를 준비하는 중입니다</p><p className="mt-2 text-sm font-medium text-[#64748b]">버전 정보를 불러오고 계정 상태를 확인하고 있습니다.</p></div>
+              </div>
+            ) : preparationError ? (
+              <div className="grid min-h-56 place-content-center gap-3 py-4 text-center" role="alert">
+                <span className="mx-auto grid size-12 place-items-center rounded-full bg-[#fef2f2] text-[#dc2626]"><X size={22} aria-hidden="true" /></span>
+                <div><p className="text-base font-bold text-[#0f172a]">내보내기 정보를 준비하지 못했습니다</p><p className="mt-2 max-w-md text-sm font-medium leading-6 text-[#64748b]">{preparationError}</p></div>
               </div>
             ) : <>
 
@@ -1878,14 +1900,20 @@ function ExportDialog({
             <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={isExporting}>
               취소
             </button>
-            <button
-              type="button"
-              className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit}
-              disabled={isExporting || isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}
-            >
-              {isExporting ? "내보내는 중…" : ctaLabel}
-            </button>
+            {preparationError ? (
+              <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white" onClick={onRetryPreparation}>
+                다시 시도
+              </button>
+            ) : !isPreparingExport ? (
+              <button
+                type="button"
+                className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit}
+                disabled={isExporting || isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}
+              >
+                {isExporting ? "내보내는 중…" : ctaLabel}
+              </button>
+            ) : null}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

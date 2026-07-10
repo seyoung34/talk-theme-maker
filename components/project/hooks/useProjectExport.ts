@@ -45,7 +45,10 @@ export function useProjectExport({
   templateId,
 }: UseProjectExportOptions) {
   const router = useRouter();
+  const exportPreparingRef = useRef(false);
   const exportSubmittingRef = useRef(false);
+  const [isPreparingExport, setIsPreparingExport] = useState(false);
+  const [exportPreparationError, setExportPreparationError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportMode, setExportMode] = useState<ExportMode>("apk");
@@ -70,6 +73,16 @@ export function useProjectExport({
   }, []);
 
   const openExportDialog = useCallback(async () => {
+    if (exportPreparingRef.current) return;
+    exportPreparingRef.current = true;
+    setIsPreparingExport(true);
+    setExportPreparationError(null);
+    setExportDialogOpen(true);
+    setExportName(displayTemplateName);
+    setExportMode(platform === "android" ? "apk" : "ktheme");
+    setExportProgressStep(0);
+    setExportElapsedSeconds(0);
+
     try {
       if (!exportVersionName) {
         const response = await fetch(platform === "android" ? "/api/export/android" : "/api/export/ios");
@@ -79,15 +92,15 @@ export function useProjectExport({
         }
         setExportVersionName(payload.versionName ?? "1.0.0");
       }
-      setExportName(displayTemplateName);
-      setExportMode(platform === "android" ? "apk" : "ktheme");
-      setExportProgressStep(0);
-      setExportElapsedSeconds(0);
       await refreshAccountState();
-      setExportDialogOpen(true);
     } catch (error) {
       console.error(error);
-      setNotice({ tone: "error", message: error instanceof Error ? error.message : "Android export 설정을 불러오는 중 오류가 발생했습니다." });
+      const message = error instanceof Error ? error.message : "내보내기 정보를 준비하는 중 오류가 발생했습니다.";
+      setExportPreparationError(message);
+      setNotice({ tone: "error", message });
+    } finally {
+      exportPreparingRef.current = false;
+      setIsPreparingExport(false);
     }
   }, [displayTemplateName, exportVersionName, platform, refreshAccountState, setNotice]);
 
@@ -229,7 +242,9 @@ export function useProjectExport({
     exportVersionName,
     isAccountLoading,
     isExporting,
+    isPreparingExport,
     openExportDialog,
+    exportPreparationError,
     refreshAccountState,
     setExportDialogOpen,
     setExportMode,
