@@ -110,12 +110,14 @@ export function useProjectExport({
     exportSubmittingRef.current = true;
     const progressSteps = getExportProgressSteps(exportMode);
     let progressTimer: number | null = null;
+    let isCreditBlocked = false;
 
     try {
       setIsExporting(true);
       setExportProgressStep(0);
       setExportElapsedSeconds(0);
       setNotice({ tone: "info", message: getExportNotice(exportMode) });
+      trackAnalyticsEvent("export_started", { platform, export_mode: exportMode });
       progressTimer = window.setInterval(() => {
         setExportElapsedSeconds((current) => current + 1);
       }, 1000);
@@ -153,6 +155,7 @@ export function useProjectExport({
         }
         if (response.status === 402 || errorBody?.reason === "insufficient_credits") {
           await refreshAccountState();
+          isCreditBlocked = true;
           trackAnalyticsEvent("export_blocked_insufficient_credits", { platform, export_mode: exportMode, credits_remaining: accountState?.credits ?? 0 });
           throw new Error("크레딧이 부족합니다. 크레딧 충전 후 다시 시도해 주세요.");
         }
@@ -184,6 +187,7 @@ export function useProjectExport({
         triggerDownload(asyncBlob, outcome.fileName);
         await refreshAccountState();
         setExportDialogOpen(false);
+        trackAnalyticsEvent("export_completed", { platform, export_mode: exportMode });
         setNotice({ tone: "success", message: `${queued.exportNumber ? `내보내기 #${queued.exportNumber} · ` : ""}${outcome.fileName} 파일을 생성했습니다.` });
         return;
       }
@@ -204,9 +208,11 @@ export function useProjectExport({
       }));
       const exportNumber = response.headers.get("X-Export-Number");
       setExportDialogOpen(false);
+      trackAnalyticsEvent("export_completed", { platform, export_mode: exportMode });
       setNotice({ tone: "success", message: `${exportNumber ? `내보내기 #${exportNumber} · ` : ""}${fileName} 파일을 생성했습니다.` });
     } catch (error) {
       console.error(error);
+      if (!isCreditBlocked) trackAnalyticsEvent("export_failed", { platform, export_mode: exportMode, failure_reason: "export_failed" });
       setNotice({ tone: "error", message: error instanceof Error ? error.message : `${platform === "android" ? "Android" : "iOS"} 내보내기 중 오류가 발생했습니다.` });
     } finally {
       if (progressTimer) window.clearInterval(progressTimer);

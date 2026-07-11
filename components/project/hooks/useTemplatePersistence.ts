@@ -2,6 +2,7 @@
 
 import { useCallback, useState, type Dispatch, type SetStateAction } from "react";
 import { persistEditorSession } from "@/components/project/editorSession";
+import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import type { ActiveSystemTemplate, ActiveUserTemplate, ProjectNotice } from "@/components/project/editorTypes";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
 import { systemTemplateRepository, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
@@ -68,6 +69,7 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
       persistEditorSession(options.mode, { templateId: savedTemplate.templateId, platform: savedTemplate.platform, userTemplateId: savedTemplate.id, editMode: options.mode });
       options.setSaveDialogOpen(false);
       options.setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 이 브라우저에 저장했습니다.` });
+      trackAnalyticsEvent("template_save_completed", { save_mode: options.saveMode, platform: options.platform });
     } catch (error) {
       console.error(error);
       options.setNotice({ tone: "error", message: "내 템플릿 저장 중 오류가 발생했습니다. 브라우저 저장소 권한을 확인하세요." });
@@ -134,6 +136,7 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
       });
       options.setSystemSaveDialogOpen(false);
       options.setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 저장했습니다.` });
+      trackAnalyticsEvent("template_save_completed", { save_mode: "system", platform: options.platform });
     } catch (error) {
       console.error(error);
       options.setNotice({ tone: "error", message: "시스템 템플릿 저장 중 오류가 발생했습니다." });

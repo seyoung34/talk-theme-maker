@@ -7,7 +7,7 @@ import { AlertCircle, ArrowLeft, Check, CheckCircle2, Clock3, Coins, CreditCard,
 import SiteHeader from "@/components/layout/SiteHeader";
 import type { AccountMeResponse, CreditCodeRedeemResponse, PayappPrepareResponse, PayappStatusResponse, PaymentStatus } from "@/lib/billing/apiTypes";
 import { creditProducts, type CreditProductId } from "@/lib/billing/products";
-import { trackAnalyticsEvent, trackPurchaseOnce } from "@/lib/analytics/ga4";
+import { getKnownCampaignKey, trackAnalyticsEvent, trackPurchaseOnce } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
 
 type PaymentOutcome = { status: PaymentStatus | "checking"; credits?: number; message: string } | null;
@@ -15,7 +15,6 @@ type ChargePhase = "idle" | "preparing" | "redirecting";
 type RedeemMessage = { tone: "success" | "error"; text: string } | null;
 
 const MAX_PAYMENT_CHECKS = 4;
-const campaignKeys = new Set(["instagram_personal_launch"]);
 
 function normalizePhone(value: string) { return value.replace(/\D/g, "").slice(0, 11); }
 function formatPhone(value: string) {
@@ -26,7 +25,6 @@ function formatPhone(value: string) {
 }
 function isValidPhone(value: string) { return /^01[016789]\d{7,8}$/.test(normalizePhone(value)); }
 function getSafeReturnTo(value: string | null) { return value === "/edit" ? value : null; }
-function getCampaignKey(value: string | null) { return value && campaignKeys.has(value) ? value : null; }
 
 function getPrepareError(payload: PayappPrepareResponse) {
   if (payload.reason === "invalid_product") return "충전 상품을 다시 선택해 주세요.";
@@ -52,7 +50,7 @@ export default function CreditsClient() {
   const [isRedeeming, setIsRedeeming] = useState(false);
 
   const returnTo = getSafeReturnTo(searchParams.get("returnTo"));
-  const campaignKey = getCampaignKey(searchParams.get("campaign"));
+  const campaignKey = getKnownCampaignKey(searchParams.get("campaign"));
   const creditsPath = useMemo(() => {
     const params = new URLSearchParams();
     if (returnTo) params.set("returnTo", returnTo);

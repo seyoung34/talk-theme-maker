@@ -23,6 +23,9 @@ pnpm-debug.log*
 !.env.example
 *.local
 
+# Supabase CLI local project link metadata
+supabase/.temp/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -60,3 +63,4 @@ docs/notes/
 
 .vercel
 .env*
+!.env.example

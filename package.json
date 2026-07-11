@@ -46,6 +46,7 @@
     "eslint-config-next": "^15.5.20",
     "happy-dom": "^20.10.6",
     "postcss": "^8.5.15",
+    "supabase": "2.109.1",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",

@@ -11,6 +11,7 @@ import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplate
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
 import { deleteUserTemplate, getUserTemplate, listUserTemplates, type UserTemplateRecord, type UserTemplateSummary } from "@/lib/theme/userTemplates";
+import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 type GalleryTemplateItem =
@@ -68,6 +69,7 @@ export default function TemplateGalleryClient() {
   const [isUserTemplatePreviewLoading, setIsUserTemplatePreviewLoading] = useState(false);
   const [isUserTemplateInfoOpen, setIsUserTemplateInfoOpen] = useState(false);
   const userTemplateCardPreviewUrlsRef = useRef<Record<string, Record<string, string>>>({});
+  const viewedTemplateRef = useRef<string | null>(null);
   const galleryTemplates = useMemo(
     () =>
       createGalleryTemplates(systemTemplates, systemUploadPreviewUrls).map((item) => ({
@@ -207,11 +209,13 @@ export default function TemplateGalleryClient() {
   }, [notice]);
 
   const start = (template: ThemeTemplate, platform: ThemePlatform) => {
+    trackAnalyticsEvent("template_started", { template_key: template.id, template_source: "base", platform });
     localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.id, platform }));
     router.push("/edit");
   };
 
   function startUserTemplate(template: UserTemplateSummary) {
+    trackAnalyticsEvent("template_started", { template_key: "user_template", template_source: "user", platform: template.platform });
     localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.templateId, platform: template.platform, userTemplateId: template.id }));
     router.push("/edit");
   }
@@ -242,9 +246,31 @@ export default function TemplateGalleryClient() {
   };
 
   const startSystemTemplateWithPlatform = (template: SystemTemplateSummary, platform: ThemePlatform) => {
+    trackAnalyticsEvent("template_started", { template_key: template.baseTemplateId, template_source: "system", platform });
     localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.baseTemplateId, platform, systemTemplateId: template.id, systemTemplateBundleId: template.bundleId ?? template.id, editMode: "user" }));
     router.push("/edit");
   };
+
+  useEffect(() => {
+    if (selectedGalleryTemplate) {
+      const platform = selectedGalleryTemplate.kind === "system" ? selectedGalleryTemplate.previewTemplate.platform : undefined;
+      const key = `${selectedGalleryTemplate.kind}:${selectedGalleryTemplate.id}:${platform ?? "not_selected"}`;
+      if (viewedTemplateRef.current === key) return;
+      viewedTemplateRef.current = key;
+      trackAnalyticsEvent("template_viewed", { template_key: selectedGalleryTemplate.baseTemplate.id, template_source: selectedGalleryTemplate.kind, ...(platform ? { platform } : {}) });
+    } else {
+      viewedTemplateRef.current = null;
+    }
+  }, [selectedGalleryTemplate]);
+
+  useEffect(() => {
+    if (selectedUserTemplateRecord) {
+      const key = `user:${selectedUserTemplateRecord.id}:${selectedUserTemplateRecord.platform}`;
+      if (viewedTemplateRef.current === key) return;
+      viewedTemplateRef.current = key;
+      trackAnalyticsEvent("template_viewed", { template_key: "user_template", template_source: "user", platform: selectedUserTemplateRecord.platform });
+    }
+  }, [selectedUserTemplateRecord]);
 
   async function handleDeleteUserTemplate(template: UserTemplateSummary) {
     const confirmed = window.confirm(`"${template.name}" 템플릿을 삭제하시겠습니까?`);

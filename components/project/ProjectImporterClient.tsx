@@ -110,6 +110,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
   const mobileEditTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileEditCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+  const analyticsEditorReadyRef = useRef<string | null>(null);
+  const analyticsInteractionTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!mobileEditSheetOpen || typeof window === "undefined") return;
@@ -339,6 +341,27 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     void hydrateSystemTemplateUploads(remoteUploadRefs, [selectedSlot.id]).catch((error) => console.error(error));
   }, [hydrateSystemTemplateUploads, initialLoadState.status, remoteUploadRefs, selectedSlot?.id]);
 
+  useEffect(() => {
+    if (initialLoadState.status !== "ready") return;
+    const templateSource = activeSystemTemplate ? "system" : activeUserTemplate ? "user" : "base";
+    const key = `${templateSource}:${templateId}:${platform}`;
+    if (analyticsEditorReadyRef.current === key) return;
+    analyticsEditorReadyRef.current = key;
+    trackAnalyticsEvent("editor_ready", { template_source: templateSource, platform });
+  }, [activeSystemTemplate, activeUserTemplate, initialLoadState.status, platform, templateId]);
+
+  useEffect(() => () => {
+    if (analyticsInteractionTimerRef.current) window.clearTimeout(analyticsInteractionTimerRef.current);
+  }, []);
+
+  const scheduleInteractionEvent = useCallback((name: "color_changed" | "bubble_edit_completed", slot: ThemeAssetSlot, extra: Record<string, string> = {}) => {
+    if (analyticsInteractionTimerRef.current) window.clearTimeout(analyticsInteractionTimerRef.current);
+    analyticsInteractionTimerRef.current = window.setTimeout(() => {
+      trackAnalyticsEvent(name, { slot_role: slot.role, section: slot.section, ...extra });
+      analyticsInteractionTimerRef.current = null;
+    }, 500);
+  }, []);
+
   const startDefaultTemplate = () => {
     persistEditorSession(mode, { templateId: "basic", platform: "android", editMode: mode });
     skipDefaultSelectionResetRef.current = true;
@@ -430,6 +453,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
     focusSlot(slot.id);
     revealSlot(slot);
+    trackAnalyticsEvent("slot_upload_completed", { slot_role: slot.role, section: slot.section, asset_source: "user" });
   };
 
   const uploadEditedSlot = (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => {
@@ -457,6 +481,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
     focusSlot(slot.id);
     revealSlot(slot);
+    trackAnalyticsEvent("slot_upload_completed", { slot_role: slot.role, section: slot.section, asset_source: "user" });
   };
 
   const clearSlot = (slot: ThemeAssetSlot) => {
@@ -499,6 +524,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       setCandidateSelections((current) => ({ ...current, [slot.id]: getSelectedCandidate(slot, {}, templateId, activeTemplate)?.id }));
     }
     setSelectedSlotId(slot.id);
+    scheduleInteractionEvent("color_changed", slot);
   };
 
   const applyAutoColor = (slot: ThemeAssetSlot) => {
@@ -507,6 +533,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (!color) return;
     setColors((current) => ({ ...current, [slot.id]: color }));
     setCandidateSelections((current) => ({ ...current, [slot.id]: autoMainPaletteCandidateId }));
+    scheduleInteractionEvent("color_changed", slot, { asset_source: "auto" });
   };
 
   const applyAutoColorToAll = () => {
@@ -527,6 +554,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         return next;
       });
     }
+    const assetSource = candidateId.startsWith(`${slot.id}:`) ? "user" : adminAssetsWithPreview.some((asset) => asset.id === candidateId) ? "admin" : "template";
+    trackAnalyticsEvent("candidate_selected", { slot_role: slot.role, section: slot.section, asset_source: assetSource });
   };
 
   const selectAdminAsset = async (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => {
@@ -551,6 +580,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setCandidateSelections((current) => ({ ...current, [slot.id]: asset.id }));
     focusSlot(slot.id);
     revealSlot(slot);
+    trackAnalyticsEvent("candidate_selected", { slot_role: slot.role, section: slot.section, asset_source: "admin" });
   };
 
   const openSaveDialog = () => {
@@ -630,9 +660,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
-      onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
-      onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
-      onStretchChange={(stretch) => selectedSlot && setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch }))}
+      onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "markers" }); }}
+      onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "insets" }); }}
+      onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "stretch" }); }}
       canAdjustInline={canAdjustInline}
       candidateOpen={candidateOpen}
       onToggleCandidates={() => setCandidateOpen((current) => !current)}
@@ -666,9 +696,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
-      onMarkersChange={(markers) => selectedSlot && setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers }))}
-      onInsetsChange={(insets) => selectedSlot && setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets }))}
-      onStretchChange={(stretch) => selectedSlot && setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch }))}
+      onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "markers" }); }}
+      onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "insets" }); }}
+      onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "stretch" }); }}
       onPullSheet={() => setMobileSheetSnap("full")}
     />
   );

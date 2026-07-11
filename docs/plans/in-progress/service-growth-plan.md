@@ -3,7 +3,7 @@
 GA4 도입 문서가 "동의 기반 익명 수집 인프라"를 다룬다면, 이 문서는 그 위에서 **무엇을 성장시킬지와
 어떻게 측정·판단할지**를 다룬다. 즉 관측(observability)이 아니라 성장(growth) 기획이다.
 
-> 상태: Phase 1(동의 기반 GA4·출시 프로모션/결제 퍼널) 구현 진행 중. DebugView 검증과 실제 인스타그램 코드 발급이 남아 있다.
+> 상태: Phase 1(동의 기반 GA4·출시 프로모션/결제 퍼널) 구현 진행 중. GA4 측정 ID 설정·DebugView 검증·대시보드 구성이 남아 있다.
 > 참고: GA4 수집 인프라·프라이버시 원칙 → [../../report/ga4-introduction-plan-2026-07-11.md](../../report/ga4-introduction-plan-2026-07-11.md)
 
 ## 배경과 문제의식
@@ -104,6 +104,16 @@ GA4 도입 문서의 원칙을 상속하고, 결제 관련만 명시적으로 �
 - [ ] **Phase 2 — 출시 직후**: 리텐션/재개 + North Star 대시보드 + 목표치 1차 캘리브레이션.
 - [ ] **Phase 3 — 성장기**: 관리형 에셋 포함률, 세그먼트별 코호트, 공유/바이럴, 실험 프레임워크(이벤트 스키마 사전 설계). North Star를 유료 전환 중심으로 옮길지 재검토.
 
+### Phase 1 진행 현황
+
+- [x] 동의 전 무수집, 동의 후 태그 로드·페이지뷰·동의 철회 UI를 구현했다.
+- [x] `template_viewed`/`template_started`/`editor_ready`, 편집·저장·내보내기 및 수익화 이벤트를 연결했다.
+- [x] 허용한 인스타그램 UTM 키와 referrer 호스트만 세션 유입 정보로 수집한다.
+- [x] 크레딧 부족 → 충전/코드 리딤 → `/edit` 복귀와 표준 `purchase` 중복 방지를 구현했다.
+- [x] 개인 인스타그램용 1크레딧 코드(총 30회·코드별 계정당 1회·발급 후 7일)를 발급했다.
+- [ ] GA4 속성의 측정 ID를 `NEXT_PUBLIC_GA_MEASUREMENT_ID`에 설정하고 DebugView에서 실측한다.
+- [ ] GA4 맞춤 측정기준과 일간 대시보드(템플릿/플랫폼/수익화)를 구성한다.
+
 ## 완료 기준
 
 - 수익화 퍼널 이벤트(`export_blocked_insufficient_credits` → `begin_checkout`/`purchase` 또는 리딤)가 중복·누락 없이 수집된다.
@@ -115,5 +125,5 @@ GA4 도입 문서의 원칙을 상속하고, 결제 관련만 명시적으로 �
 ## 다음 단계
 
 1. (구현 중, Phase 1B) 크레딧 벽·`billing/*`·`credits/redeem` 경로에 수익화 이벤트 연결 → `purchase` 표준 스키마 매핑.
-2. (운영 준비) 발급 코드의 해시를 DB에 등록한다: 총 30회, 사용자별 한 번, 발급 시점부터 7일. 인스타그램 링크에는 원문 코드가 아닌 `campaign=instagram_personal_launch`만 넣는다.
+2. (운영) 인스타그램 링크에는 원문 코드가 아닌 `campaign=instagram_personal_launch`만 넣는다.
 3. (검증) DebugView에서 동의 전 무수집, 크레딧 부족→충전/리딤→`/edit` 복귀, `purchase` 중복 방지와 payload의 PII 미포함을 확인한다.
