@@ -344,10 +344,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   useEffect(() => {
     if (initialLoadState.status !== "ready") return;
     const templateSource = activeSystemTemplate ? "system" : activeUserTemplate ? "user" : "base";
-    const key = `${templateSource}:${templateId}:${platform}`;
+    const templateKey = activeSystemTemplate ? `system:${activeSystemTemplate.bundleId ?? activeSystemTemplate.id}` : activeUserTemplate ? "user_template" : templateId;
+    const key = `${templateSource}:${templateKey}:${platform}`;
     if (analyticsEditorReadyRef.current === key) return;
     analyticsEditorReadyRef.current = key;
-    trackAnalyticsEvent("editor_ready", { template_source: templateSource, platform });
+    trackAnalyticsEvent("editor_ready", { template_key: templateKey, template_source: templateSource, platform });
   }, [activeSystemTemplate, activeUserTemplate, initialLoadState.status, platform, templateId]);
 
   useEffect(() => () => {

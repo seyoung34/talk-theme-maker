@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
+import { getAnalyticsBootstrapScript, getAnalyticsMeasurementId } from "@/lib/analytics/ga4";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,9 +9,18 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const measurementId = getAnalyticsMeasurementId();
   return (
     <html lang="ko">
-      <body>{children}<AnalyticsProvider /></body>
+      {measurementId ? (
+        <head>
+          <script dangerouslySetInnerHTML={{ __html: getAnalyticsBootstrapScript(measurementId) }} />
+        </head>
+      ) : null}
+      <body>
+        {children}
+        <AnalyticsProvider />
+      </body>
     </html>
   );
 }

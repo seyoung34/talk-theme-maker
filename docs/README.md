@@ -24,6 +24,7 @@
 | [report/admin-assets-review-2026-07-10.md](report/admin-assets-review-2026-07-10.md) | `AdminAssetsClient` 성능·정합성·UX 진단 (후속: admin-assets-optimization-plan) |
 | [report/project-importer-client-refactor-2026-07-10.md](report/project-importer-client-refactor-2026-07-10.md) | `ProjectImporterClient`(2007줄) 구조·상태·성능·UX 진단 + 8단계 점진적 분해 로드맵 |
 | [report/ga4-introduction-plan-2026-07-11.md](report/ga4-introduction-plan-2026-07-11.md) | GA4 출시 전 도입 기획 — 동의 기반 익명 수집, 일간 퍼널·템플릿/플랫폼 대시보드, 에셋 분석 확장 |
+| [report/ga4-collection-failure-diagnosis-2026-07-11.md](report/ga4-collection-failure-diagnosis-2026-07-11.md) | GA4 클라이언트 수집(`collect`) 미발생 진단 — 동의 지연 로드가 원인, Consent Mode 패턴으로 전환. `page_view` 타이밍 회귀 수정 미커밋 상태 |
 
 ## notes — 형식 없는 메모
 

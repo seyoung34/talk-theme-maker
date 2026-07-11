@@ -246,7 +246,7 @@ export default function TemplateGalleryClient() {
   };
 
   const startSystemTemplateWithPlatform = (template: SystemTemplateSummary, platform: ThemePlatform) => {
-    trackAnalyticsEvent("template_started", { template_key: template.baseTemplateId, template_source: "system", platform });
+    trackAnalyticsEvent("template_started", { template_key: `system:${template.bundleId ?? template.id}`, template_source: "system", platform });
     localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.baseTemplateId, platform, systemTemplateId: template.id, systemTemplateBundleId: template.bundleId ?? template.id, editMode: "user" }));
     router.push("/edit");
   };
@@ -257,7 +257,8 @@ export default function TemplateGalleryClient() {
       const key = `${selectedGalleryTemplate.kind}:${selectedGalleryTemplate.id}:${platform ?? "not_selected"}`;
       if (viewedTemplateRef.current === key) return;
       viewedTemplateRef.current = key;
-      trackAnalyticsEvent("template_viewed", { template_key: selectedGalleryTemplate.baseTemplate.id, template_source: selectedGalleryTemplate.kind, ...(platform ? { platform } : {}) });
+      const templateKey = selectedGalleryTemplate.kind === "system" ? `system:${selectedGalleryTemplate.bundleId}` : selectedGalleryTemplate.baseTemplate.id;
+      trackAnalyticsEvent("template_viewed", { template_key: templateKey, template_source: selectedGalleryTemplate.kind, ...(platform ? { platform } : {}) });
     } else {
       viewedTemplateRef.current = null;
     }
