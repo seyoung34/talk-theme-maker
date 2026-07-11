@@ -21,12 +21,12 @@ export default function AnalyticsProvider() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
-    setConsent(getAnalyticsConsent());
+    const initialConsent = getAnalyticsConsent();
+    if (initialConsent === "granted" && measurementId) initializeAnalytics(measurementId);
+    setConsent(initialConsent);
+    // Runs once on mount; measurementId is derived from env and never changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (consent === "granted" && measurementId) initializeAnalytics(measurementId);
-  }, [consent, measurementId]);
 
   const chooseConsent = (nextConsent: AnalyticsConsent) => {
     saveAnalyticsConsent(nextConsent);
@@ -34,6 +34,10 @@ export default function AnalyticsProvider() {
       window.location.reload();
       return;
     }
+    // Must run before setConsent so the gtag "config" command is queued ahead of
+    // any page_view event the newly-mounted AnalyticsPageTracker fires (child
+    // effects run before this parent's effects).
+    if (nextConsent === "granted" && measurementId) initializeAnalytics(measurementId);
     setConsent(nextConsent);
     setIsSettingsOpen(false);
   };
