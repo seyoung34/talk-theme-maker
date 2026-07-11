@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Script from "next/script";
 import { usePathname } from "next/navigation";
-import { getAcquisitionContext, getAnalyticsConsent, getAnalyticsMeasurementId, initializeAnalytics, saveAnalyticsConsent, trackAnalyticsEvent, type AnalyticsConsent } from "@/lib/analytics/ga4";
+import { getAcquisitionContext, getAnalyticsConsent, getAnalyticsMeasurementId, initializeAnalytics, saveAnalyticsConsent, trackAnalyticsEvent, updateAnalyticsConsent, type AnalyticsConsent } from "@/lib/analytics/ga4";
 
 function AnalyticsPageTracker() {
   const pathname = usePathname();
@@ -22,7 +22,11 @@ export default function AnalyticsProvider() {
 
   useEffect(() => {
     const initialConsent = getAnalyticsConsent();
-    if (initialConsent === "granted" && measurementId) initializeAnalytics(measurementId);
+    // The gtag.js load + "js"/"config" commands run unconditionally and as early as possible
+    // (Google's recommended Consent Mode pattern); actual data collection is gated by the
+    // "consent" command below, not by delaying script injection. Delaying injection until after
+    // consent was granted reproducibly failed to transmit hits in production.
+    if (measurementId) initializeAnalytics(measurementId, initialConsent);
     setConsent(initialConsent);
     // Runs once on mount; measurementId is derived from env and never changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -30,14 +34,7 @@ export default function AnalyticsProvider() {
 
   const chooseConsent = (nextConsent: AnalyticsConsent) => {
     saveAnalyticsConsent(nextConsent);
-    if (consent === "granted" && nextConsent === "denied") {
-      window.location.reload();
-      return;
-    }
-    // Must run before setConsent so the gtag "config" command is queued ahead of
-    // any page_view event the newly-mounted AnalyticsPageTracker fires (child
-    // effects run before this parent's effects).
-    if (nextConsent === "granted" && measurementId) initializeAnalytics(measurementId);
+    updateAnalyticsConsent(nextConsent);
     setConsent(nextConsent);
     setIsSettingsOpen(false);
   };
@@ -46,7 +43,8 @@ export default function AnalyticsProvider() {
 
   return (
     <>
-      {consent === "granted" ? <><Script src={`https://www.googletagmanager.com/gtag/js?id=${measurementId}`} strategy="afterInteractive" /><AnalyticsPageTracker /></> : null}
+      <Script src={`https://www.googletagmanager.com/gtag/js?id=${measurementId}`} strategy="afterInteractive" />
+      <AnalyticsPageTracker />
       {consent === null ? (
         <aside className="fixed inset-x-4 bottom-4 z-[200] mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-xl sm:flex sm:items-center sm:gap-4" role="dialog" aria-label="분석 쿠키 동의">
           <p className="text-sm font-medium leading-5 text-slate-700">서비스 이용 흐름을 익명으로 분석하기 위해 분석 쿠키를 사용합니다. 동의 전에는 분석 데이터를 수집하지 않습니다.</p>

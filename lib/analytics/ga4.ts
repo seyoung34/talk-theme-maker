@@ -46,12 +46,27 @@ export function getKnownCampaignKey(value: string | null) {
   return value && knownCampaignKeys.has(value) ? value : null;
 }
 
-export function initializeAnalytics(measurementId: string) {
+// Loads gtag.js and configures it unconditionally, as early as possible, matching Google's
+// recommended Consent Mode pattern: the tag itself always loads, and actual data collection is
+// gated by the consent signal below rather than by delaying script injection. Delaying injection
+// until after consent was granted (the previous approach) reproducibly failed to transmit hits.
+export function initializeAnalytics(measurementId: string, consent: AnalyticsConsent | null) {
   if (typeof window === "undefined") return;
   window.dataLayer = window.dataLayer ?? [];
   window.gtag = window.gtag ?? ((...args: unknown[]) => { window.dataLayer?.push(args); });
+  window.gtag("consent", "default", {
+    analytics_storage: consent === "granted" ? "granted" : "denied",
+    ad_storage: "denied",
+    ad_user_data: "denied",
+    ad_personalization: "denied",
+  });
   window.gtag("js", new Date());
   window.gtag("config", measurementId, { send_page_view: false });
+}
+
+export function updateAnalyticsConsent(consent: AnalyticsConsent) {
+  if (typeof window === "undefined") return;
+  window.gtag?.("consent", "update", { analytics_storage: consent === "granted" ? "granted" : "denied" });
 }
 
 export function trackAnalyticsEvent(name: string, params: AnalyticsEventParams = {}) {

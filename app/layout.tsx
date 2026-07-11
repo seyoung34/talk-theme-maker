@@ -10,15 +10,6 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
-      {/* DEBUG: vanilla gtag.js snippet for isolating client-side transmission issue. Remove before merging. */}
-      <head>
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-08DYYZDY6D" />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `window.dataLayer = window.dataLayer || [];\nfunction gtag(){dataLayer.push(arguments);}\ngtag('js', new Date());\ngtag('config', 'G-08DYYZDY6D');`,
-          }}
-        />
-      </head>
       <body>{children}<AnalyticsProvider /></body>
     </html>
   );
