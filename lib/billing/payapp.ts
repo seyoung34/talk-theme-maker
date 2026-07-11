@@ -25,14 +25,20 @@ export async function createPayappCreditCheckout({
   orderId,
   phone,
   product,
+  returnTo,
 }: {
   paymentId: string;
   orderId: string;
   phone: string;
   product: CreditProduct;
+  returnTo?: "/edit";
 }): Promise<PayappRequestResult> {
   const { payappUserId } = requirePayappServerConfig();
   const siteUrl = getSiteUrl();
+  const returnUrl = new URL("/credits", siteUrl);
+  returnUrl.searchParams.set("billing", "payapp-return");
+  returnUrl.searchParams.set("paymentId", paymentId);
+  if (returnTo) returnUrl.searchParams.set("returnTo", returnTo);
   const params = new URLSearchParams({
     cmd: "payrequest",
     userid: payappUserId, //페이앱 아이디
@@ -43,7 +49,7 @@ export async function createPayappCreditCheckout({
     memo: `${product.credits} credits`,  //결제요청 메모
     reqaddr: "0", //주소요청
     feedbackurl: `${siteUrl}/api/billing/payapp/feedback`,  //결제요청 성공 URL방향
-    returnurl: `${siteUrl}/credits?billing=payapp-return&paymentId=${encodeURIComponent(paymentId)}`, //결제완료 이동 URL
+    returnurl: returnUrl.toString(), //결제완료 이동 URL
     var1: paymentId,  //임의 사용 변수 1
     var2: orderId,  //임의 사용 변수 2
     smsuse: "n",  //결제요청 문자 발송여부

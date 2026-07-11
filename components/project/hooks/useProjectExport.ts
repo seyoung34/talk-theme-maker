@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
+import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAndroidExportStatus, triggerDownload } from "@/components/project/exportClient";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
@@ -152,6 +153,7 @@ export function useProjectExport({
         }
         if (response.status === 402 || errorBody?.reason === "insufficient_credits") {
           await refreshAccountState();
+          trackAnalyticsEvent("export_blocked_insufficient_credits", { platform, export_mode: exportMode, credits_remaining: accountState?.credits ?? 0 });
           throw new Error("크레딧이 부족합니다. 크레딧 충전 후 다시 시도해 주세요.");
         }
         if (errorBody?.refunded) await refreshAccountState();
@@ -212,6 +214,7 @@ export function useProjectExport({
       setIsExporting(false);
     }
   }, [
+    accountState?.credits,
     accountState?.isAdmin,
     accountState?.user,
     activeTemplate,

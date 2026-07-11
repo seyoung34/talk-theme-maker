@@ -25,6 +25,7 @@ import { useViewportMode } from "@/components/project/hooks/useViewportMode";
 import { useProjectAutoColors } from "@/components/project/hooks/useProjectAutoColors";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
 import { useProjectExport } from "@/components/project/hooks/useProjectExport";
+import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { useEditorBootstrap } from "@/components/project/hooks/useEditorBootstrap";
 import { useTemplatePersistence } from "@/components/project/hooks/useTemplatePersistence";
 import { useThemeDraft } from "@/components/project/hooks/useThemeDraft";
@@ -713,7 +714,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           }}
           onVersionNameChange={setExportVersionName}
           onLogin={() => router.push(`/login?returnTo=${encodeURIComponent("/edit")}&reason=export`)}
-          onBuyCredits={() => router.push("/credits")}
+          onBuyCredits={() => {
+            trackAnalyticsEvent("export_blocked_insufficient_credits", { platform, export_mode: exportMode, credits_remaining: accountState?.credits ?? 0 });
+            router.push("/credits?entry=export_block&returnTo=%2Fedit");
+          }}
           onRetryPreparation={() => void openExportDialog()}
           onSubmit={() => void submitExport()}
         />

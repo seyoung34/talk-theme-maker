@@ -40,7 +40,7 @@ export type PayappPrepareResponse = {
 };
 
 export type PayappStatusResponse = {
-  payment?: { id: string; status: PaymentStatus; amount: number; credits: number };
+  payment?: { id: string; status: PaymentStatus; amount: number; credits: number; analytics_transaction_id?: string };
   error?: string;
 };
 

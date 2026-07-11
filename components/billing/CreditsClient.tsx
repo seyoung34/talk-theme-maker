@@ -7,6 +7,7 @@ import { AlertCircle, ArrowLeft, Check, CheckCircle2, Clock3, Coins, CreditCard,
 import SiteHeader from "@/components/layout/SiteHeader";
 import type { AccountMeResponse, CreditCodeRedeemResponse, PayappPrepareResponse, PayappStatusResponse, PaymentStatus } from "@/lib/billing/apiTypes";
 import { creditProducts, type CreditProductId } from "@/lib/billing/products";
+import { trackAnalyticsEvent, trackPurchaseOnce } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
 
 type PaymentOutcome = { status: PaymentStatus | "checking"; credits?: number; message: string } | null;
@@ -14,6 +15,7 @@ type ChargePhase = "idle" | "preparing" | "redirecting";
 type RedeemMessage = { tone: "success" | "error"; text: string } | null;
 
 const MAX_PAYMENT_CHECKS = 4;
+const campaignKeys = new Set(["instagram_personal_launch"]);
 
 function normalizePhone(value: string) { return value.replace(/\D/g, "").slice(0, 11); }
 function formatPhone(value: string) {
@@ -23,6 +25,8 @@ function formatPhone(value: string) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 function isValidPhone(value: string) { return /^01[016789]\d{7,8}$/.test(normalizePhone(value)); }
+function getSafeReturnTo(value: string | null) { return value === "/edit" ? value : null; }
+function getCampaignKey(value: string | null) { return value && campaignKeys.has(value) ? value : null; }
 
 function getPrepareError(payload: PayappPrepareResponse) {
   if (payload.reason === "invalid_product") return "충전 상품을 다시 선택해 주세요.";
@@ -46,6 +50,16 @@ export default function CreditsClient() {
   const [grantCode, setGrantCode] = useState("");
   const [redeemMessage, setRedeemMessage] = useState<RedeemMessage>(null);
   const [isRedeeming, setIsRedeeming] = useState(false);
+
+  const returnTo = getSafeReturnTo(searchParams.get("returnTo"));
+  const campaignKey = getCampaignKey(searchParams.get("campaign"));
+  const creditsPath = useMemo(() => {
+    const params = new URLSearchParams();
+    if (returnTo) params.set("returnTo", returnTo);
+    if (campaignKey) params.set("campaign", campaignKey);
+    const query = params.toString();
+    return query ? `/credits?${query}` : "/credits";
+  }, [campaignKey, returnTo]);
 
   const selectedProduct = useMemo(() => creditProducts.find((product) => product.id === selectedProductId) ?? creditProducts[1], [selectedProductId]);
 
@@ -72,7 +86,8 @@ export default function CreditsClient() {
         const response = await fetch(`/api/billing/payapp/status?paymentId=${encodeURIComponent(paymentId)}`, { cache: "no-store" });
         const payload = await readJsonResponse<PayappStatusResponse>(response);
         if (response.status === 401) {
-          router.push(`/login?returnTo=${encodeURIComponent(`/credits?billing=payapp-return&paymentId=${paymentId}`)}&reason=billing`);
+          const callbackPath = `/credits?billing=payapp-return&paymentId=${encodeURIComponent(paymentId)}${returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ""}`;
+          router.push(`/login?returnTo=${encodeURIComponent(callbackPath)}&reason=billing`);
           return;
         }
         if (!response.ok || !payload.payment) {
@@ -82,8 +97,16 @@ export default function CreditsClient() {
         const { status, credits } = payload.payment;
         if (status === "paid") {
           setPaymentOutcome({ status, credits, message: `${credits}크레딧이 충전되었습니다.` });
+          const product = creditProducts.find((item) => item.credits === credits && item.amount === payload.payment?.amount);
+          if (payload.payment.analytics_transaction_id) {
+            trackPurchaseOnce(payload.payment.analytics_transaction_id, {
+              currency: "KRW",
+              value: payload.payment.amount,
+              items: [{ item_id: product?.id ?? `credit-${credits}`, item_name: product?.name ?? `${credits} credits`, price: payload.payment.amount, quantity: 1 }],
+            });
+          }
           await refreshMe();
-          router.replace("/credits", { scroll: false });
+          router.replace(returnTo ?? "/credits", { scroll: false });
           return;
         }
         if (status === "failed" || status === "canceled") {
@@ -97,7 +120,7 @@ export default function CreditsClient() {
       }
     }
     setPaymentOutcome({ status: "pending", message: "아직 결제 확인 중입니다. 잠시 후 다시 확인해 주세요." });
-  }, [refreshMe, router]);
+  }, [refreshMe, returnTo, router]);
 
   useEffect(() => {
     const paymentId = searchParams.get("paymentId");
@@ -105,10 +128,14 @@ export default function CreditsClient() {
     void checkPayment(paymentId, true);
   }, [checkPayment, searchParams]);
 
+  useEffect(() => {
+    trackAnalyticsEvent("credit_purchase_viewed", { entry_point: searchParams.get("entry") === "export_block" ? "export_block" : "menu", provider: "payapp" });
+  }, [searchParams]);
+
   const chargeCredits = async () => {
     if (chargePhase !== "idle") return;
     if (!me?.user) {
-      router.push("/login?returnTo=%2Fcredits&reason=billing");
+      router.push(`/login?returnTo=${encodeURIComponent(creditsPath)}&reason=billing`);
       return;
     }
     if (!isValidPhone(phone)) {
@@ -122,14 +149,15 @@ export default function CreditsClient() {
       const response = await fetch("/api/billing/payapp/prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: normalizePhone(phone), productId: selectedProduct.id }),
+        body: JSON.stringify({ phone: normalizePhone(phone), productId: selectedProduct.id, returnTo }),
       });
       const payload = await readJsonResponse<PayappPrepareResponse>(response);
       if (response.status === 401) {
-        router.push("/login?returnTo=%2Fcredits&reason=billing");
+        router.push(`/login?returnTo=${encodeURIComponent(creditsPath)}&reason=billing`);
         return;
       }
       if (!response.ok || !payload.checkoutUrl) throw new Error(getPrepareError(payload));
+      trackAnalyticsEvent("begin_checkout", { currency: "KRW", value: selectedProduct.amount, provider: "payapp", items: [{ item_id: selectedProduct.id, item_name: selectedProduct.name, price: selectedProduct.amount, quantity: 1 }] });
       setChargePhase("redirecting");
       window.location.assign(payload.checkoutUrl);
     } catch (error) {
@@ -144,7 +172,7 @@ export default function CreditsClient() {
     event.preventDefault();
     if (isRedeeming) return;
     if (!me?.user) {
-      router.push("/login?returnTo=%2Fcredits&reason=billing");
+      router.push(`/login?returnTo=${encodeURIComponent(creditsPath)}&reason=billing`);
       return;
     }
     const normalizedCode = grantCode.trim().toUpperCase();
@@ -162,13 +190,15 @@ export default function CreditsClient() {
       });
       const payload = await readJsonResponse<CreditCodeRedeemResponse>(response);
       if (response.status === 401) {
-        router.push("/login?returnTo=%2Fcredits&reason=billing");
+        router.push(`/login?returnTo=${encodeURIComponent(creditsPath)}&reason=billing`);
         return;
       }
       if (!response.ok || payload.creditsGranted == null || payload.balance == null) throw new Error(payload.error ?? "코드를 처리하지 못했습니다.");
       setMe((current) => current ? { ...current, credits: payload.balance! } : current);
       setGrantCode("");
       setRedeemMessage({ tone: "success", text: `${payload.creditsGranted}크레딧이 지급되었습니다. 현재 잔액은 ${payload.balance}크레딧입니다.` });
+      trackAnalyticsEvent("credit_redeem_completed", { credits_granted: payload.creditsGranted, source: campaignKey ?? "direct" });
+      if (returnTo) router.replace(returnTo);
     } catch (error) {
       setRedeemMessage({ tone: "error", text: error instanceof Error ? error.message : "코드를 처리하지 못했습니다." });
     } finally {
@@ -248,7 +278,7 @@ export default function CreditsClient() {
                 </button>
               </>
             ) : (
-              <div className="mt-5 rounded-[24px] bg-[#f7fbff] p-4"><p className="text-sm font-extrabold">결제하려면 로그인이 필요합니다.</p><Link href="/login?returnTo=%2Fcredits&reason=billing" className="mt-3 flex min-h-11 items-center justify-center rounded-full bg-[#2f6bbf] px-4 py-2.5 text-sm font-extrabold text-white">로그인</Link></div>
+              <div className="mt-5 rounded-[24px] bg-[#f7fbff] p-4"><p className="text-sm font-extrabold">결제하려면 로그인이 필요합니다.</p><Link href={`/login?returnTo=${encodeURIComponent(creditsPath)}&reason=billing`} className="mt-3 flex min-h-11 items-center justify-center rounded-full bg-[#2f6bbf] px-4 py-2.5 text-sm font-extrabold text-white">로그인</Link></div>
             )}
 
             <div className="mt-4 flex items-start gap-2 text-[11px] font-semibold leading-5 text-[var(--color-outline)]"><ShieldCheck className="mt-0.5 shrink-0" size={14} aria-hidden="true" />결제는 외부 PayApp 화면에서 안전하게 진행됩니다.</div>
@@ -269,7 +299,7 @@ export default function CreditsClient() {
               </div>
               {redeemMessage ? <p id="grant-code-message" className={`flex items-start gap-1.5 text-xs font-bold leading-5 ${redeemMessage.tone === "success" ? "text-[#155d45]" : "text-[var(--color-error)]"}`} role={redeemMessage.tone === "success" ? "status" : "alert"}>{redeemMessage.tone === "success" ? <CheckCircle2 className="mt-0.5 shrink-0" size={14} aria-hidden="true" /> : <AlertCircle className="mt-0.5 shrink-0" size={14} aria-hidden="true" />}{redeemMessage.text}</p> : null}
             </form>
-          ) : <Link href="/login?returnTo=%2Fcredits&reason=billing" className="flex min-h-12 items-center justify-center rounded-full bg-[#2f6bbf] px-4 py-3 text-sm font-extrabold text-white">로그인하고 코드 등록</Link>}
+          ) : <Link href={`/login?returnTo=${encodeURIComponent(creditsPath)}&reason=billing`} className="flex min-h-12 items-center justify-center rounded-full bg-[#2f6bbf] px-4 py-3 text-sm font-extrabold text-white">로그인하고 코드 등록</Link>}
         </section>
 
       </div>
