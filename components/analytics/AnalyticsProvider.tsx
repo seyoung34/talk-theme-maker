@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Script from "next/script";
 import { usePathname } from "next/navigation";
-import { analyticsConsentStorageKey, getAcquisitionContext, getAnalyticsConsent, getAnalyticsMeasurementId, initializeAnalytics, trackAnalyticsEvent, type AnalyticsConsent } from "@/lib/analytics/ga4";
+import { getAcquisitionContext, getAnalyticsConsent, getAnalyticsMeasurementId, initializeAnalytics, saveAnalyticsConsent, trackAnalyticsEvent, type AnalyticsConsent } from "@/lib/analytics/ga4";
 
 function AnalyticsPageTracker() {
   const pathname = usePathname();
@@ -29,7 +29,7 @@ export default function AnalyticsProvider() {
   }, [consent, measurementId]);
 
   const chooseConsent = (nextConsent: AnalyticsConsent) => {
-    window.localStorage.setItem(analyticsConsentStorageKey, nextConsent);
+    saveAnalyticsConsent(nextConsent);
     if (consent === "granted" && nextConsent === "denied") {
       window.location.reload();
       return;

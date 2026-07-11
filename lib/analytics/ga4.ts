@@ -1,4 +1,5 @@
 export const analyticsConsentStorageKey = "talktheme:analytics-consent:v1";
+const analyticsConsentCookieName = "talktheme_analytics_consent";
 const acquisitionStorageKey = "talktheme:analytics-acquisition:v1";
 const allowedUtmValues = {
   utm_source: new Set(["instagram"]),
@@ -27,8 +28,18 @@ export function getAnalyticsMeasurementId() {
 
 export function getAnalyticsConsent(): AnalyticsConsent | null {
   if (typeof window === "undefined") return null;
-  const value = window.localStorage.getItem(analyticsConsentStorageKey);
+  const value = readStoredConsent() ?? readConsentCookie();
   return value === "granted" || value === "denied" ? value : null;
+}
+
+export function saveAnalyticsConsent(consent: AnalyticsConsent) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(analyticsConsentStorageKey, consent);
+  } catch {
+    // Privacy extensions can block localStorage. The first-party cookie below is the fallback.
+  }
+  document.cookie = `${analyticsConsentCookieName}=${consent}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
 }
 
 export function getKnownCampaignKey(value: string | null) {
@@ -74,6 +85,19 @@ function readAcquisitionContext(): AcquisitionContext | null {
   } catch {
     return null;
   }
+}
+
+function readStoredConsent() {
+  try {
+    return window.localStorage.getItem(analyticsConsentStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+function readConsentCookie() {
+  const prefix = `${analyticsConsentCookieName}=`;
+  return document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith(prefix))?.slice(prefix.length) ?? null;
 }
 
 function getReferrerHost(referrer: string) {
