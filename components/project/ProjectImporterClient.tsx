@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import { persistEditorSession } from "@/components/project/editorSession";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice as Notice } from "@/components/project/editorTypes";
@@ -46,6 +46,7 @@ import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAss
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
+import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import {
@@ -63,6 +64,8 @@ type ProjectImporterClientProps = {
 export default function ProjectImporterClient({ mode = "user" }: ProjectImporterClientProps) {
   const isAdminMode = mode === "admin";
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const resumeToken = searchParams.get("resume");
   const [templateId, setTemplateId] = useState<ThemeTemplateId>("basic");
   const [initialLoadState, setInitialLoadState] = useState<InitialLoadState>({ status: "idle" });
   const [platform, setPlatform] = useState<ThemePlatform>("android");
@@ -183,6 +186,40 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const displayTemplateName = activeUserTemplate?.name ?? activeSystemTemplate?.title ?? activeTemplate.name;
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
 
+  const persistRecoveryThenNavigate = useCallback(async (
+    reason: "login_required" | "insufficient_credits",
+    destination: "login" | "credits",
+    exportOptions: RecoveryExportOptions,
+  ) => {
+    try {
+      const recovery = await saveRecoveryDraft({
+        resume: { reason },
+        editor: {
+          mode,
+          templateId,
+          platform,
+          activeUserTemplate: activeUserTemplate ?? undefined,
+          activeSystemTemplate: activeSystemTemplate ? { ...activeSystemTemplate, bundleId: activeSystemTemplate.bundleId ?? activeSystemTemplate.id } : undefined,
+          systemTemplateBundleId: systemTemplateBundleId ?? undefined,
+          activeSection,
+          activeGroup,
+          selectedSlotId,
+        },
+        draft: { uploads, remoteUploadRefs, colors, candidateSelections, bubbleMarkers, bubbleInsets, bubbleStretch },
+        exportOptions,
+      });
+      const returnTo = `/edit?resume=${encodeURIComponent(recovery.resume.token)}`;
+      router.push(destination === "login"
+        ? `/login?returnTo=${encodeURIComponent(returnTo)}&reason=export`
+        : `/credits?entry=export_block&returnTo=${encodeURIComponent(returnTo)}`);
+    } catch (error) {
+      console.error(error);
+      const continueWithoutRecovery = window.confirm("편집 내용을 임시 저장하지 못했습니다. 작업 내용을 잃을 수 있습니다. 그래도 이동할까요?");
+      if (!continueWithoutRecovery) return;
+      router.push(destination === "login" ? "/login?returnTo=%2Fedit&reason=export" : "/credits?entry=export_block&returnTo=%2Fedit");
+    }
+  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
+
   useEffect(() => {
     if (skipDefaultSelectionResetRef.current) {
       skipDefaultSelectionResetRef.current = false;
@@ -289,6 +326,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     isExporting,
     isPreparingExport,
     openExportDialog,
+    resumeExportDialog,
     exportPreparationError,
     setExportDialogOpen,
     setExportMode,
@@ -304,16 +342,23 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     colors,
     displayTemplateName,
     ensureSystemTemplateUploadsHydrated,
+    onExportCompleted: () => clearRecoveryDraft(mode),
+    onUnauthenticated: (exportOptions) => persistRecoveryThenNavigate("login_required", "login", exportOptions),
     platform,
     setNotice,
     slots,
     templateId,
   });
+  const handleRecoveryRestored = useCallback((exportOptions: RecoveryExportOptions) => {
+    void resumeExportDialog(exportOptions);
+  }, [resumeExportDialog]);
 
   useEditorBootstrap({
     hydratePreviewUploads,
     hydrateSystemTemplateUploads,
     mode,
+    onRecoveryRestored: handleRecoveryRestored,
+    resumeToken,
     setActiveGroup,
     setActiveSection,
     setActiveSystemTemplate,
@@ -364,6 +409,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   }, []);
 
   const startDefaultTemplate = () => {
+    void clearRecoveryDraft(mode).catch((error) => console.error(error));
     persistEditorSession(mode, { templateId: "basic", platform: "android", editMode: mode });
     skipDefaultSelectionResetRef.current = true;
     setTemplateId("basic");
@@ -744,10 +790,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             setExportName(value);
           }}
           onVersionNameChange={setExportVersionName}
-          onLogin={() => router.push(`/login?returnTo=${encodeURIComponent("/edit")}&reason=export`)}
+          onLogin={() => void persistRecoveryThenNavigate("login_required", "login", { exportMode, name: exportName, versionName: exportVersionName })}
           onBuyCredits={() => {
             trackAnalyticsEvent("export_blocked_insufficient_credits", { platform, export_mode: exportMode, credits_remaining: accountState?.credits ?? 0 });
-            router.push("/credits?entry=export_block&returnTo=%2Fedit");
+            void persistRecoveryThenNavigate("insufficient_credits", "credits", { exportMode, name: exportName, versionName: exportVersionName });
           }}
           onRetryPreparation={() => void openExportDialog()}
           onSubmit={() => void submitExport()}

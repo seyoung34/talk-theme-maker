@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server";
 import { createPayappCreditCheckout, isValidKoreanPhone } from "@/lib/billing/payapp";
+import { getSafeBillingReturnTo } from "@/lib/billing/returnTo";
 import { getCurrentUserOrNull } from "@/lib/billing/credits";
 import { getCreditProduct } from "@/lib/billing/products";
 import { createAdminClient } from "@/lib/supabase/server";
 
 type PrepareBody = { phone?: string; productId?: string; returnTo?: string };
-
-function getSafeReturnTo(value: string | undefined) {
-  return value === "/edit" ? value : undefined;
-}
 
 export async function POST(request: Request) {
   const user = await getCurrentUserOrNull();
@@ -29,7 +26,7 @@ export async function POST(request: Request) {
   if (error) throw error;
 
   try {
-    const checkout = await createPayappCreditCheckout({ paymentId: payment.id, orderId: payment.order_id, phone: body.phone, product, returnTo: getSafeReturnTo(body.returnTo) });
+    const checkout = await createPayappCreditCheckout({ paymentId: payment.id, orderId: payment.order_id, phone: body.phone, product, returnTo: getSafeBillingReturnTo(body.returnTo) });
     const { error: updateError } = await admin.from("payments").update({ provider_payment_id: checkout.providerPaymentId, checkout_url: checkout.checkoutUrl, receipt_url: checkout.receiptUrl, raw_payload: checkout.raw }).eq("id", payment.id);
     if (updateError) throw updateError;
     return NextResponse.json({ paymentId: payment.id, checkoutUrl: checkout.checkoutUrl, amount: payment.amount, credits: payment.credits });

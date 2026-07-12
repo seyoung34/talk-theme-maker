@@ -9,6 +9,7 @@ import type { RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import { systemTemplateRepository } from "@/lib/theme/systemTemplates";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
+import { clearRecoveryDraft, readRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 import { getUserTemplate } from "@/lib/theme/userTemplates";
 import { getThemeSlots, getThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
@@ -17,6 +18,8 @@ type UseEditorBootstrapOptions = {
   hydratePreviewUploads: (uploadRefs: RemoteSlotUploads, slotIds: string[], onProgress: (completed: number, total: number) => void) => Promise<SlotUploads>;
   hydrateSystemTemplateUploads: (uploadRefs: RemoteSlotUploads) => Promise<SlotUploads>;
   mode: "user" | "admin";
+  onRecoveryRestored: (options: RecoveryExportOptions) => void;
+  resumeToken: string | null;
   setActiveGroup: Dispatch<SetStateAction<ThemeSlotGroup>>;
   setActiveSection: Dispatch<SetStateAction<ThemeSection>>;
   setActiveSystemTemplate: Dispatch<SetStateAction<ActiveSystemTemplate | null>>;
@@ -43,6 +46,8 @@ export function useEditorBootstrap({
   hydratePreviewUploads,
   hydrateSystemTemplateUploads,
   mode,
+  onRecoveryRestored,
+  resumeToken,
   setActiveGroup,
   setActiveSection,
   setActiveSystemTemplate,
@@ -67,15 +72,53 @@ export function useEditorBootstrap({
   useEffect(() => {
     let active = true;
     const payload = takeTemplateStartPayload(mode);
-    if (!payload) {
-      setInitialLoadState({ status: "ready" });
-      return () => { active = false; };
-    }
-
-    const requiresSystemTemplateLoad = Boolean(payload.systemTemplateId || (payload.sourceSystemTemplateId && payload.systemTemplateBundleId));
-    setInitialLoadState(requiresSystemTemplateLoad ? createInitialLoadProgress("템플릿 정보를 확인하는 중입니다.", 0, 3) : { status: "ready" });
 
     const loadStartedTemplate = async () => {
+      if (resumeToken) {
+        try {
+          const recovery = await readRecoveryDraft(mode, resumeToken);
+          if (!active) return;
+          if (recovery) {
+            setTemplateId(recovery.editor.templateId);
+            setPlatform(recovery.editor.platform);
+            setActiveSection(recovery.editor.activeSection);
+            setActiveGroup(recovery.editor.activeGroup);
+            setSelectedSlotId(recovery.editor.selectedSlotId);
+            replaceDraft(recovery.draft);
+            setActiveUserTemplate(recovery.editor.activeUserTemplate ?? null);
+            setActiveSystemTemplate(recovery.editor.activeSystemTemplate ?? null);
+            setSystemTemplateBundleId(recovery.editor.systemTemplateBundleId ?? recovery.editor.activeSystemTemplate?.bundleId ?? null);
+            if (recovery.editor.activeSystemTemplate) {
+              const systemTemplate = recovery.editor.activeSystemTemplate;
+              setSystemTitle(systemTemplate.title);
+              setSystemDescription(systemTemplate.description ?? "");
+              setSystemTags(systemTemplate.tags.join(", "));
+              setSystemStatus(systemTemplate.status);
+              setSystemVisibility(systemTemplate.visibility);
+              setSystemPricingType(systemTemplate.pricingType);
+              setSystemPriceAmount(systemTemplate.priceAmount ? String(systemTemplate.priceAmount) : "");
+              setSystemCreditCost(systemTemplate.creditCost ? String(systemTemplate.creditCost) : "");
+            }
+            setInitialLoadState({ status: "ready" });
+            setNotice({ tone: "success", message: "이전 내보내기 준비 작업을 복원했어요. 내용을 확인한 뒤 내보내세요." });
+            onRecoveryRestored(recovery.exportOptions);
+            return;
+          }
+        } catch (error) {
+          console.error(error);
+          if (!active) return;
+          setNotice({ tone: "warning", message: "이전 내보내기 준비 작업을 복원하지 못했습니다. 현재 템플릿으로 계속할 수 있습니다." });
+        }
+      }
+
+      if (!payload) {
+        setInitialLoadState({ status: "ready" });
+        return;
+      }
+
+      if (!resumeToken) void clearRecoveryDraft(mode).catch((error) => console.error(error));
+      const requiresSystemTemplateLoad = Boolean(payload.systemTemplateId || (payload.sourceSystemTemplateId && payload.systemTemplateBundleId));
+      setInitialLoadState(requiresSystemTemplateLoad ? createInitialLoadProgress("템플릿 정보를 확인하는 중입니다.", 0, 3) : { status: "ready" });
       setTemplateId(payload.templateId);
       setPlatform(payload.platform);
       setActiveSection("main");
@@ -203,7 +246,7 @@ export function useEditorBootstrap({
     void loadStartedTemplate();
     return () => { active = false; };
   }, [
-    hydratePreviewUploads, hydrateSystemTemplateUploads, mode, setActiveGroup, setActiveSection,
+    hydratePreviewUploads, hydrateSystemTemplateUploads, mode, onRecoveryRestored, resumeToken, setActiveGroup, setActiveSection,
     setActiveSystemTemplate, setActiveUserTemplate, setInitialLoadState, setNotice, setPlatform,
     setSelectedSlotId, setSystemCreditCost, setSystemDescription, setSystemPriceAmount, setSystemPricingType,
     setSystemStatus, setSystemTags, setSystemTemplateBundleId, setSystemTitle, setSystemVisibility, setTemplateId,

@@ -1,5 +1,6 @@
+import { Suspense } from "react";
 import TemplateEditorClient from "@/components/template/TemplateEditorClient";
 
 export default function EditPage() {
-  return <TemplateEditorClient />;
+  return <Suspense fallback={null}><TemplateEditorClient /></Suspense>;
 }

@@ -1002,7 +1002,7 @@ function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
       className="grid h-full grid-rows-[auto_minmax(0,1fr)_auto] bg-cover bg-center"
       style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
     >
-      <div className="flex items-center gap-2 bg-black/5 px-3 py-2.5 text-[var(--color-on-surface)] backdrop-blur-sm">
+      <div className="flex items-center gap-2 rounded-t-[31px] bg-black/5 px-3 py-2.5 text-[var(--color-on-surface)] backdrop-blur-sm">
         <ArrowLeft className="size-3.5" aria-hidden="true" />
         <strong className="flex-1 truncate text-[12px] font-bold">수아</strong>
         <Search className="size-3.5" aria-hidden="true" />
@@ -1015,7 +1015,7 @@ function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
         ))}
       </div>
 
-      <div className="flex items-center gap-1.5 bg-white/85 px-2.5 py-2 backdrop-blur-sm">
+      <div className="flex items-center gap-1.5 rounded-b-[31px] bg-white/85 px-2.5 py-2 backdrop-blur-sm">
         <Plus className="size-3.5 shrink-0 text-[#868e96]" aria-hidden="true" />
         <span className="flex-1 truncate rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-[#868e96] shadow-sm">메시지 입력</span>
         <Smile className="size-3.5 shrink-0 text-[#868e96]" aria-hidden="true" />

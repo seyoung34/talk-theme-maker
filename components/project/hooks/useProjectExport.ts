@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { useRouter } from "next/navigation";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
@@ -10,6 +9,7 @@ import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/compone
 import type { AccountState, ExportErrorResponse, ExportMode, ExportVersionResponse } from "@/components/project/exportModel";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 
 type ProjectNotice = {
   tone: "info" | "success" | "warning" | "error";
@@ -25,6 +25,8 @@ type UseProjectExportOptions = {
   colors: SlotColors;
   displayTemplateName: string;
   ensureSystemTemplateUploadsHydrated: () => Promise<SlotUploads>;
+  onExportCompleted?: () => Promise<void> | void;
+  onUnauthenticated?: (options: RecoveryExportOptions) => Promise<void>;
   platform: ThemePlatform;
   setNotice: Dispatch<SetStateAction<ProjectNotice | null>>;
   slots: ThemeAssetSlot[];
@@ -40,12 +42,13 @@ export function useProjectExport({
   colors,
   displayTemplateName,
   ensureSystemTemplateUploadsHydrated,
+  onExportCompleted,
+  onUnauthenticated,
   platform,
   setNotice,
   slots,
   templateId,
 }: UseProjectExportOptions) {
-  const router = useRouter();
   const exportPreparingRef = useRef(false);
   const exportSubmittingRef = useRef(false);
   const [isPreparingExport, setIsPreparingExport] = useState(false);
@@ -105,6 +108,30 @@ export function useProjectExport({
     }
   }, [displayTemplateName, exportVersionName, platform, refreshAccountState, setNotice]);
 
+  const resumeExportDialog = useCallback(async (options: RecoveryExportOptions) => {
+    if (exportPreparingRef.current) return;
+    exportPreparingRef.current = true;
+    setIsPreparingExport(true);
+    setExportPreparationError(null);
+    setExportDialogOpen(true);
+    setExportName(options.name);
+    setExportMode(options.exportMode);
+    setExportVersionName(options.versionName);
+    setExportProgressStep(0);
+    setExportElapsedSeconds(0);
+    try {
+      await refreshAccountState();
+    } catch (error) {
+      console.error(error);
+      const message = error instanceof Error ? error.message : "내보내기 정보를 준비하는 중 오류가 발생했습니다.";
+      setExportPreparationError(message);
+      setNotice({ tone: "error", message });
+    } finally {
+      exportPreparingRef.current = false;
+      setIsPreparingExport(false);
+    }
+  }, [refreshAccountState, setNotice]);
+
   const submitExport = useCallback(async () => {
     if (exportSubmittingRef.current) return;
     exportSubmittingRef.current = true;
@@ -150,7 +177,7 @@ export function useProjectExport({
       if (!response.ok) {
         const errorBody = await readJsonResponse<ExportErrorResponse>(response).catch(() => null);
         if (response.status === 401 || errorBody?.reason === "unauthenticated") {
-          router.push(`/login?returnTo=${encodeURIComponent("/edit")}&reason=export`);
+          await onUnauthenticated?.({ exportMode, name: exportName, versionName: exportVersionName });
           return;
         }
         if (response.status === 402 || errorBody?.reason === "insufficient_credits") {
@@ -186,6 +213,7 @@ export function useProjectExport({
         const asyncBlob = await downloadResponse.blob();
         triggerDownload(asyncBlob, outcome.fileName);
         await refreshAccountState();
+        await onExportCompleted?.();
         setExportDialogOpen(false);
         trackAnalyticsEvent("export_completed", { platform, export_mode: exportMode });
         setNotice({ tone: "success", message: `${queued.exportNumber ? `내보내기 #${queued.exportNumber} · ` : ""}${outcome.fileName} 파일을 생성했습니다.` });
@@ -207,6 +235,7 @@ export function useProjectExport({
         isAdmin: current?.isAdmin ?? accountState?.isAdmin ?? false,
       }));
       const exportNumber = response.headers.get("X-Export-Number");
+      await onExportCompleted?.();
       setExportDialogOpen(false);
       trackAnalyticsEvent("export_completed", { platform, export_mode: exportMode });
       setNotice({ tone: "success", message: `${exportNumber ? `내보내기 #${exportNumber} · ` : ""}${fileName} 파일을 생성했습니다.` });
@@ -235,7 +264,8 @@ export function useProjectExport({
     exportVersionName,
     platform,
     refreshAccountState,
-    router,
+    onExportCompleted,
+    onUnauthenticated,
     setNotice,
     slots,
     templateId,
@@ -253,6 +283,7 @@ export function useProjectExport({
     isExporting,
     isPreparingExport,
     openExportDialog,
+    resumeExportDialog,
     exportPreparationError,
     refreshAccountState,
     setExportDialogOpen,

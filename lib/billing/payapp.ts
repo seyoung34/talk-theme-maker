@@ -1,4 +1,5 @@
 import type { CreditProduct } from "@/lib/billing/products";
+import type { BillingReturnTo } from "@/lib/billing/returnTo";
 import { getSiteUrl, requirePayappServerConfig } from "@/lib/supabase/config";
 
 const payappApiUrl = "https://api.payapp.kr/oapi/apiLoad.html";
@@ -31,7 +32,7 @@ export async function createPayappCreditCheckout({
   orderId: string;
   phone: string;
   product: CreditProduct;
-  returnTo?: "/edit";
+  returnTo?: BillingReturnTo;
 }): Promise<PayappRequestResult> {
   const { payappUserId } = requirePayappServerConfig();
   const siteUrl = getSiteUrl();

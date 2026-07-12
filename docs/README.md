@@ -49,6 +49,7 @@
 | [plans/in-progress/cloudflare-workers-opennext-migration-plan.md](plans/in-progress/cloudflare-workers-opennext-migration-plan.md) | Cloudflare Workers(OpenNext) 이전. CF-0~CF-2 완료, CF-3 자체 OIDC/JWKS 코드 반영 중. 남은 것: Cloudflare Secret/env 등록, GCP WIF provider 생성, STS/impersonation 실측 검증 |
 | [plans/in-progress/project-importer-refactor-plan.md](plans/in-progress/project-importer-refactor-plan.md) | `ProjectImporterClient` 점진적 분해. R1~R6 완료, R7~R8 진행 예정 |
 | [plans/in-progress/service-growth-plan.md](plans/in-progress/service-growth-plan.md) | GA4 기반 성장 기획. Phase 1 동의 기반 수집·크레딧 벽/결제/코드 리딤 퍼널과 인스타그램 프로모션을 구현 중 |
+| [plans/in-progress/editor-draft-recovery-plan.md](plans/in-progress/editor-draft-recovery-plan.md) | 로그인·크레딧 충전 이탈을 위한 IndexedDB 임시저장·resume token 복구를 구현 중. 저장소 테스트와 실제 왕복 QA가 남음 |
 
 ## plans/done — 구현·검증 완료
 

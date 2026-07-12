@@ -9,6 +9,7 @@ import type { AccountMeResponse, CreditCodeRedeemResponse, PayappPrepareResponse
 import { creditProducts, type CreditProductId } from "@/lib/billing/products";
 import { getKnownCampaignKey, trackAnalyticsEvent, trackPurchaseOnce } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
+import { getSafeBillingReturnTo } from "@/lib/billing/returnTo";
 
 type PaymentOutcome = { status: PaymentStatus | "checking"; credits?: number; message: string } | null;
 type ChargePhase = "idle" | "preparing" | "redirecting";
@@ -24,8 +25,6 @@ function formatPhone(value: string) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 function isValidPhone(value: string) { return /^01[016789]\d{7,8}$/.test(normalizePhone(value)); }
-function getSafeReturnTo(value: string | null) { return value === "/edit" ? value : null; }
-
 function getPrepareError(payload: PayappPrepareResponse) {
   if (payload.reason === "invalid_product") return "충전 상품을 다시 선택해 주세요.";
   if (payload.reason === "invalid_phone") return "휴대폰번호를 정확히 입력해 주세요.";
@@ -49,7 +48,7 @@ export default function CreditsClient() {
   const [redeemMessage, setRedeemMessage] = useState<RedeemMessage>(null);
   const [isRedeeming, setIsRedeeming] = useState(false);
 
-  const returnTo = getSafeReturnTo(searchParams.get("returnTo"));
+  const returnTo = getSafeBillingReturnTo(searchParams.get("returnTo"));
   const campaignKey = getKnownCampaignKey(searchParams.get("campaign"));
   const creditsPath = useMemo(() => {
     const params = new URLSearchParams();
