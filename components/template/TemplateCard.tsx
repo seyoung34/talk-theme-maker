@@ -33,7 +33,7 @@ export default function TemplateCard({
     <article
       role="button"
       tabIndex={0}
-      className={`group grid min-h-0 w-full content-between gap-2 overflow-hidden rounded-[16px] border border-[var(--color-outline-variant)] bg-white/92 p-2 text-left shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)] sm:min-h-[360px] sm:gap-4 sm:rounded-[28px] sm:p-4 ${className}`}
+      className={`group grid min-h-0 w-full content-between gap-2 overflow-hidden rounded-[16px] border border-[var(--color-outline-variant)] bg-white/92 p-2 text-left shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)] sm:gap-3 sm:rounded-[28px] sm:p-4 ${className}`}
       onClick={onOpen}
       onKeyDown={handleKeyDown}
     >
@@ -57,7 +57,7 @@ export default function TemplateCard({
       </div>
 
       {/* 데스크톱: 각 호출부가 채우는 상세 레이아웃 */}
-      <div className="hidden sm:grid sm:gap-4">
+      <div className="hidden sm:grid sm:gap-2.5">
         {desktopVisual}
         {desktopContent}
       </div>

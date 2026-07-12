@@ -50,6 +50,7 @@
 | [plans/in-progress/project-importer-refactor-plan.md](plans/in-progress/project-importer-refactor-plan.md) | `ProjectImporterClient` 점진적 분해. R1~R6 완료, R7~R8 진행 예정 |
 | [plans/in-progress/service-growth-plan.md](plans/in-progress/service-growth-plan.md) | GA4 기반 성장 기획. Phase 1 동의 기반 수집·크레딧 벽/결제/코드 리딤 퍼널과 인스타그램 프로모션을 구현 중 |
 | [plans/in-progress/editor-draft-recovery-plan.md](plans/in-progress/editor-draft-recovery-plan.md) | 로그인·크레딧 충전 이탈을 위한 IndexedDB 임시저장·resume token 복구를 구현 중. 저장소 테스트와 실제 왕복 QA가 남음 |
+| [plans/in-progress/gallery-thumbnail-simplify-plan.md](plans/in-progress/gallery-thumbnail-simplify-plan.md) | 갤러리 카드 정적 썸네일(`thumbnail.ts`) 단순화 — 텍스트 제거·실제 탭 아이콘·비율 레이아웃 구현 완료(타입체크·lint 통과). 로컬 육안 QA 남음 |
 
 ## plans/done — 구현·검증 완료
 

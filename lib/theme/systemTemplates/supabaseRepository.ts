@@ -3,7 +3,7 @@ import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, th
 import { getResolvedColor } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
-import { generateSystemTemplateThumbnail } from "@/lib/theme/systemTemplates/thumbnail";
+import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
 import type { BubblePreviewShape, RemoteSlotUploads, SystemTemplateMetadataRecord, SystemTemplatePage, SystemTemplatePreviewMetadata, SystemTemplateRecord, SystemTemplateSaveInput, SystemTemplateSummary, ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, getThemeTemplate, type ThemeAssetSlot, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
@@ -204,7 +204,7 @@ export const systemTemplateRepository: SystemTemplateRepository = {
     let cardPreviewPath = row.preview_metadata?.cardPreviewPath;
     try {
       const slots = getThemeSlots(row.platform);
-      const thumbnailRoles: ThemeResourceRole[] = ["main_background", "chat_background", "bubble_me_1", "bubble_you_1", "profile_image_1"];
+      const thumbnailRoles: ThemeResourceRole[] = ["main_background", "chat_background", "bubble_me_1", "bubble_you_1", "profile_image_1", ...thumbnailTabIconRoles];
       const pathByRole = new Map<ThemeResourceRole, string>();
       for (const role of thumbnailRoles) {
         const storagePath = resolvePreviewStoragePath(slots, role, uploadRefs, candidateSelections);

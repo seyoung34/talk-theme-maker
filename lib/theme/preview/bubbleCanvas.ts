@@ -1,7 +1,7 @@
 // 말풍선 캔버스 렌더링의 단일 소스.
 // 편집기 프리뷰(ChatroomPreview)와 갤러리 모달이 동일한 9-slice/텍스트영역 계산을 공유해
 // 픽셀 단위로 일치하도록 한다. 모든 계산은 소스 픽셀 공간에서 이뤄지고, 표시 크기는 CSS로 축소한다.
-import { mapContentRect, renderNinePatch } from "@/lib/theme/android/ninepatch";
+import { mapContentRect, renderNinePatch, shrinkFixed } from "@/lib/theme/android/ninepatch";
 import type { BubbleEditState } from "@/lib/theme/project/state";
 import type { BubbleAsset, BubbleSlot, Insets, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -139,10 +139,9 @@ function renderCapInset(ctx: CanvasRenderingContext2D, asset: BubbleAsset, stret
   const safeInsets = stretchPointToInsets(stretch, source.width, source.height);
   const sx = [0, safeInsets.left, source.width - safeInsets.right, source.width];
   const sy = [0, safeInsets.top, source.height - safeInsets.bottom, source.height];
-  const fixedLeft = safeInsets.left;
-  const fixedRight = safeInsets.right;
-  const fixedTop = safeInsets.top;
-  const fixedBottom = safeInsets.bottom;
+  // 대상이 cap-inset 고정 코너 합보다 작으면(작은 썸네일 말풍선) 코너를 비례 축소해 왜곡을 막는다.
+  const [fixedLeft, fixedRight] = shrinkFixed(safeInsets.left, safeInsets.right, width);
+  const [fixedTop, fixedBottom] = shrinkFixed(safeInsets.top, safeInsets.bottom, height);
   const midWidth = Math.max(1, width - fixedLeft - fixedRight);
   const midHeight = Math.max(1, height - fixedTop - fixedBottom);
   const dx = [x, x + fixedLeft, x + fixedLeft + midWidth, x + width];

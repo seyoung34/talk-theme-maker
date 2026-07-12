@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowRight, Clock3, Eye, Gift, Hash, Info, Menu, SendHorizon
 import SiteHeader from "@/components/layout/SiteHeader";
 import BubbleCanvasPreview from "@/components/preview/BubbleCanvasPreview";
 import TemplateCard from "@/components/template/TemplateCard";
+import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
 import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
@@ -20,7 +21,6 @@ type GalleryTemplateItem =
     kind: "base";
     title: string;
     description?: string;
-    badge: string;
     baseTemplate: ThemeTemplate;
     visual: TemplatePreviewVisual;
   }
@@ -29,7 +29,6 @@ type GalleryTemplateItem =
     kind: "system";
     title: string;
     description?: string;
-    badge: string;
     baseTemplate: ThemeTemplate;
     bundleId: string;
     variants: Partial<Record<ThemePlatform, SystemTemplateSummary>>;
@@ -368,7 +367,7 @@ export default function TemplateGalleryClient() {
                     userTemplateCardVisuals[template.id] ? (
                       <TemplateVisualPreview visual={userTemplateCardVisuals[template.id]} size="thumb" />
                     ) : (
-                      <div className="aspect-[4/3] animate-pulse rounded-[12px] bg-[var(--color-surface-low)]" />
+                      <div className="aspect-[16/15] animate-pulse rounded-[12px] bg-[var(--color-surface-low)]" />
                     )
                   }
                   desktopVisual={<UserTemplateDesktopVisual template={template} visual={userTemplateCardVisuals[template.id]} />}
@@ -415,12 +414,7 @@ export default function TemplateGalleryClient() {
                 mobileVisual={<TemplateVisualPreview visual={template.visual} size="thumb" />}
                 desktopVisual={<TemplateVisualPreview visual={template.visual} size="card" />}
                 desktopContent={<GalleryTemplateDesktopContent template={template} />}
-                desktopFooter={
-                  <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
-                    템플릿 확인
-                    <ArrowRight className="w-4 h-4" />
-                  </span>
-                }
+                desktopFooter={<GalleryTemplateDesktopFooter template={template} />}
               />
             ))}
             {isSystemTemplatesLoading ? <TemplateGallerySkeletonCards count={5} /> : null}
@@ -454,7 +448,6 @@ function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], upload
       kind: "base",
       title: basicTemplate.name,
       description: basicTemplate.description,
-      badge: "기본",
       baseTemplate: basicTemplate,
       visual: createBaseTemplatePreviewVisual(basicTemplate),
     },
@@ -617,17 +610,34 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
   };
 }
 
+function getGalleryPlatforms(template: GalleryTemplateItem): ThemePlatform[] {
+  return template.kind === "system" ? (Object.keys(template.variants) as ThemePlatform[]) : ["android", "ios"];
+}
+
 function GalleryTemplateDesktopContent({ template }: { template: GalleryTemplateItem }) {
   return (
-    <div className="grid gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded-full px-2.5 py-1 text-[11px] font-black uppercase ${template.kind === "base" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]"}`}>
-          {template.badge}
-        </span>
-        {template.kind === "system" ? <span className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-black uppercase text-[var(--color-on-surface-variant)]">{Object.keys(template.variants).join(" / ")}</span> : null}
+    <div className="grid gap-1">
+      <strong className="font-[var(--font-display)] text-[22px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.title}</strong>
+      {template.description ? <span className="line-clamp-1 text-xs leading-5 text-[var(--color-on-surface-variant)]">{template.description}</span> : null}
+    </div>
+  );
+}
+
+// 하단 행: 플랫폼 태그(좌) + 확인 버튼(우)을 한 줄에 배치
+function GalleryTemplateDesktopFooter({ template }: { template: GalleryTemplateItem }) {
+  return (
+    <div className="mt-4 flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {getGalleryPlatforms(template).map((platform) => (
+          <span key={platform} className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-black uppercase text-[var(--color-on-surface-variant)]">
+            {platform === "android" ? "Android" : "iOS"}
+          </span>
+        ))}
       </div>
-      <strong className="font-[var(--font-display)] text-[26px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.title}</strong>
-      {template.description ? <span className="line-clamp-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">{template.description}</span> : null}
+      <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
+        템플릿 확인
+        <ArrowRight className="w-4 h-4" />
+      </span>
     </div>
   );
 }
@@ -658,7 +668,7 @@ function UserTemplateDesktopContent({ template }: { template: UserTemplateSummar
 
 function UserMiniPreviewSkeleton() {
   return (
-    <div className="grid aspect-[4/3] grid-cols-[0.8fr_1fr] gap-2">
+    <div className="grid aspect-[16/15] grid-cols-[0.8fr_1fr] gap-2">
       <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white shadow-[0_10px_24px_rgba(42,103,103,0.08)]">
         <div className="flex items-center justify-between h-8 px-3">
           <span className="w-12 h-3 rounded-full bg-black/12" />
@@ -693,14 +703,14 @@ function TemplateGallerySkeletonCards({ count }: { count: number }) {
       {Array.from({ length: count }).map((_, index) => (
         <div key={index} className="grid min-h-0 content-between gap-2 overflow-hidden rounded-[16px] border border-[var(--color-outline-variant)] bg-white/70 p-2 shadow-[0_16px_36px_rgba(42,103,103,0.04)] sm:min-h-[360px] sm:gap-4 sm:rounded-[28px] sm:p-4">
           <div className="grid gap-1.5 sm:hidden">
-            <div className="aspect-[4/3] animate-pulse rounded-[12px] bg-[var(--color-surface-low)]" />
+            <div className="aspect-[16/15] animate-pulse rounded-[12px] bg-[var(--color-surface-low)]" />
             <div className="flex items-center justify-between gap-2">
               <span className="h-4 w-2/3 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
               <span className="size-6 shrink-0 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
             </div>
           </div>
           <div className="hidden sm:grid sm:gap-4">
-            <div className="aspect-[4/3] animate-pulse rounded-[22px] bg-[var(--color-surface-low)]" />
+            <div className="aspect-[16/15] animate-pulse rounded-[22px] bg-[var(--color-surface-low)]" />
             <div className="grid gap-2">
               <span className="h-5 w-20 animate-pulse rounded-full bg-[var(--color-surface-low)]" />
               <span className="h-8 w-4/5 animate-pulse rounded-xl bg-[var(--color-surface-low)]" />
@@ -1118,103 +1128,6 @@ function TemplatePreviewLoadingOverlay() {
   );
 }
 
-//템플릿 프리뷰
-function TemplateVisualPreview({
-  visual,
-  size = "card",
-}: {
-  visual: TemplatePreviewVisual;
-  size?: "card" | "thumb";
-}) {
-  const isThumb = size === "thumb";
-
-  if (visual.cardPreviewImage) {
-    return (
-      <img
-        src={visual.cardPreviewImage}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        className={`
-          aspect-[4/3] w-full border border-[var(--color-outline-variant)]
-          bg-[var(--color-surface-low)] object-cover
-          ${isThumb ? "rounded-[12px]" : "rounded-[22px]"}
-        `}
-      />
-    );
-  }
-
-  if (isThumb) {
-    // 모바일 카드 썸네일용: 아이콘/텍스트 없이 배경·말풍선(이미지 우선)만 축소 표시
-    return (
-      <div className="relative aspect-[4/3] overflow-hidden rounded-[12px] border border-[var(--color-outline-variant)] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
-        <div className="grid h-full grid-cols-[0.84fr_1fr] gap-1 p-1">
-          <div
-            className="rounded-[8px] bg-cover bg-center"
-            style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
-          />
-          <div
-            className="grid grid-rows-3 gap-0.5 rounded-[8px] bg-cover bg-center p-1"
-            style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
-          >
-            <MiniBubbleSwatch visual={visual} tone="friend" width="w-[70%]" />
-            <MiniBubbleSwatch visual={visual} tone="me" width="w-[78%]" />
-            <MiniBubbleSwatch visual={visual} tone="friend" width="w-[85%]" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="relative aspect-[4/3] overflow-hidden rounded-[22px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
-    >
-      {/* 기존 TemplateMiniPreview 내부 JSX 그대로 */}
-      {/* 친구탭 프리뷰 */}
-      <div className="absolute inset-0 " />
-      <div className="relative grid h-full grid-cols-[0.84fr_1fr] gap-2.5 p-3">
-        <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white/70 bg-contain bg-center bg-no-repeat shadow-[0_12px_26px_rgba(42,103,103,0.08)]"
-          style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}>
-          <div className="flex items-center justify-between px-3 h-9">
-            <strong className="text-sm font-black text-[var(--color-on-surface)]">친구</strong>
-            <div className="flex items-center gap-1.5 text-[var(--color-on-surface)]">
-              <Search className="h-3.5 w-3.5" />
-              <Settings className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="grid gap-2 px-3 pb-3">
-            <MiniFriendRow visual={visual} width="w-[74%]" />
-            <MiniFriendRow visual={visual} width="w-[92%]" />
-          </div>
-          <MiniTabBar visual={visual} compact />
-        </div>
-
-        <div
-          className="relative grid min-h-0 content-between overflow-hidden rounded-[18px] bg-cover bg-center p-2.5 shadow-[0_12px_26px_rgba(42,103,103,0.08)]"
-          style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
-        >
-          {/* <div className="flex h-7 items-center justify-between rounded-full bg-white/84 px-2.5 text-[10px] font-black text-[var(--color-on-surface)]">
-            <span>테마</span>
-            <MessageCircle className="h-3.5 w-3.5" />
-          </div> */}
-          <div className="grid h-full w-full grid-rows-3 gap-1.5">
-            <MiniBubble visual={visual} tone="friend" width="w-[72%]" />
-            <MiniBubble visual={visual} tone="me" width="w-[78%]" />
-            <MiniBubble visual={visual} tone="friend" width="w-[88%]" />
-          </div>
-          <div className="absolute bottom-1 left-2 w-[90%] grid grid-cols-[18px_minmax(0,1fr)_18px] items-center gap-1.5 rounded-full bg-white/82 p-1.5">
-            <Plus className="h-3.5 w-3.5 justify-self-center text-[var(--color-on-surface-variant)]" />
-            <span className="h-3 rounded-full bg-black/8" />
-            <SendHorizontal className="h-3.5 w-3.5 justify-self-center text-[var(--color-on-surface-variant)]" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
 // 템플릿 미리보기 폰 프리뷰
 function TemplatePhonePreview({ template, visual }: { template: ThemeTemplate; visual: TemplatePreviewVisual }) {
   return (
@@ -1245,74 +1158,11 @@ function TemplatePhonePreview({ template, visual }: { template: ThemeTemplate; v
   );
 }
 
-function MiniFriendRow({ visual, width }: { visual: TemplatePreviewVisual; width: string }) {
-  return (
-    <div className={`grid grid-cols-[22px_minmax(0,1fr)] items-center gap-2 ${width}`}>
-      <MiniAvatar src={visual.profileImage} />
-      <span className="h-4 rounded-full bg-black/10" />
-    </div>
-  );
-}
-
 function MiniAvatar({ src }: { src?: string }) {
   return (
     <span className="grid h-6 w-6 place-items-center overflow-hidden rounded-full bg-[var(--color-primary-container)]/55">
       {src ? <img src={src} alt="" className="object-cover w-full h-full" /> : <UserRound className="h-3.5 w-3.5 text-[var(--color-on-primary-container)]" />}
     </span>
-  );
-}
-
-function MiniTabBar({ visual, compact = false }: { visual: TemplatePreviewVisual; compact?: boolean }) {
-  return (
-    <div
-      className={`grid grid-cols-5 items-center bg-cover bg-center ${compact ? "h-8 px-2" : "h-12 px-3"}`}
-      style={{ backgroundColor: visual.tabBackgroundColor, backgroundImage: visual.tabBackgroundImage ? `url(${visual.tabBackgroundImage})` : undefined }}
-    >
-      {Array.from({ length: 5 }).map((_, index) => (
-        <span key={index} className={`justify-self-center rounded-full ${index === 1 ? "bg-[var(--color-primary-container)]" : "bg-black/14"} ${compact ? "h-3.5 w-3.5" : "h-5 w-5"}`} />
-      ))}
-    </div>
-  );
-}
-
-function MiniBubble({ visual, tone, width }: { visual: TemplatePreviewVisual; tone: "me" | "friend"; width: string }) {
-  const mine = tone === "me";
-  const bubbleImage = mine ? visual.myBubbleImage : visual.friendBubbleImage;
-  if (bubbleImage) {
-    return (
-      <span className={`${width} relative block h-full min-h-0 overflow-hidden ${mine ? "justify-self-end" : ""}`}>
-        <img src={bubbleImage} alt="" className="absolute inset-[-2px] h-[calc(100%+4px)] w-[calc(100%+4px)] max-w-none object-fill" />
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className={`${width} h-7 rounded-[12px] bg-[length:100%_100%] bg-no-repeat ${mine ? "justify-self-end" : ""}`}
-      style={{
-        backgroundColor: mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor,
-      }}
-    />
-  );
-}
-
-// 모바일 썸네일용: 말풍선 이미지가 있으면 이미지를, 없으면 색상 캡슐을 표시
-function MiniBubbleSwatch({ visual, tone, width }: { visual: TemplatePreviewVisual; tone: "me" | "friend"; width: string }) {
-  const mine = tone === "me";
-  const bubbleImage = mine ? visual.myBubbleImage : visual.friendBubbleImage;
-  if (bubbleImage) {
-    return (
-      <span className={`${width} relative block h-full min-h-0 overflow-hidden ${mine ? "justify-self-end" : ""}`}>
-        <img src={bubbleImage} alt="" className="absolute inset-[-2px] h-[calc(100%+4px)] w-[calc(100%+4px)] max-w-none object-fill" />
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className={`${width} h-full rounded-full ${mine ? "justify-self-end" : ""}`}
-      style={{ backgroundColor: mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor }}
-    />
   );
 }
 

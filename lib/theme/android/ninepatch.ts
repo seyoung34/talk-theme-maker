@@ -54,6 +54,15 @@ export function parseImage(source: HTMLImageElement, name: string, slot: BubbleS
   };
 }
 
+// 고정(코너) 두 변의 합이 대상 길이를 넘으면 비례 축소해 [start, end] 고정폭을 반환한다.
+// 합이 대상 안에 들어가면 원본 픽셀 고정폭을 그대로 유지한다.
+export function shrinkFixed(startFixed: number, endFixed: number, target: number): [number, number] {
+  const total = startFixed + endFixed;
+  if (total <= 0 || total <= target) return [startFixed, endFixed];
+  const scale = target / total;
+  return [startFixed * scale, endFixed * scale];
+}
+
 export function defaultMarkers(width: number, height: number): Markers {
   return {
     top: { start: Math.max(1, Math.round(width * 0.35)), end: Math.min(width - 1, Math.round(width * 0.65)) },
@@ -82,10 +91,10 @@ export function renderNinePatch(
 
   const sx = [0, top.start, top.end, innerWidth];
   const sy = [0, left.start, left.end, innerHeight];
-  const fixedLeft = top.start;
-  const fixedRight = innerWidth - top.end;
-  const fixedTop = left.start;
-  const fixedBottom = innerHeight - left.end;
+  // 대상 크기가 고정 코너 합보다 작으면(예: 작은 썸네일 말풍선) 코너를 비례 축소해
+  // 코너끼리 겹치거나 가운데가 뭉개지는 왜곡을 막는다.
+  const [fixedLeft, fixedRight] = shrinkFixed(top.start, innerWidth - top.end, width);
+  const [fixedTop, fixedBottom] = shrinkFixed(left.start, innerHeight - left.end, height);
   const midWidth = Math.max(1, width - fixedLeft - fixedRight);
   const midHeight = Math.max(1, height - fixedTop - fixedBottom);
   const dx = [x, x + fixedLeft, x + fixedLeft + midWidth, x + width];
