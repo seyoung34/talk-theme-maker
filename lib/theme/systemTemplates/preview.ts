@@ -2,7 +2,7 @@ import { getResolvedAssetUrl, getResolvedColor } from "@/lib/theme/project/state
 import { getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
 import type { RemoteSlotUploads, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
-import type { Insets, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 export type TemplatePreviewVisual = {
   platform: ThemePlatform;
@@ -10,18 +10,24 @@ export type TemplatePreviewVisual = {
   chatBackgroundColor: string;
   mainBackgroundColor: string;
   tabBackgroundColor: string;
-  myBubbleColor: string;
-  friendBubbleColor: string;
+  // 말풍선 글자색(chat_bubble_me/you_color). Android/iOS export·편집기와 동일하게 글자색으로 쓴다.
+  myBubbleTextColor: string;
+  friendBubbleTextColor: string;
+  // 말풍선 배경(fill) 색. 말풍선 이미지가 없을 때 캡슐/캔버스 배경으로 쓴다(template.defaults.myBubble/friendBubble).
+  myBubbleFillColor: string;
+  friendBubbleFillColor: string;
   chatBackgroundImage?: string;
   mainBackgroundImage?: string;
   tabBackgroundImage?: string;
   myBubbleImage?: string;
   friendBubbleImage?: string;
-  // 말풍선 9-slice 렌더용 stretch/inset (원본 이미지 픽셀 기준). 없으면 렌더러가 기본값 사용.
+  // 말풍선 9-slice 렌더용 stretch/inset (iOS) 및 markers (Android 나인패치). 없으면 렌더러가 기본값 사용.
   myBubbleStretch?: StretchPoint;
   myBubbleInsets?: Insets;
+  myBubbleMarkers?: Markers;
   friendBubbleStretch?: StretchPoint;
   friendBubbleInsets?: Insets;
+  friendBubbleMarkers?: Markers;
   profileImage?: string;
   // 채팅목록탭 헤더/리스트 미리보기용
   mainHeaderColor: string;
@@ -123,8 +129,10 @@ export function createSystemTemplatePreviewVisual({
     chatBackgroundColor: summary.previewMetadata.colors?.chatBackground ?? resolveColor(slots, "chat_background_color", summary, templateId, template, template.defaults.chatBackground),
     mainBackgroundColor: summary.previewMetadata.colors?.mainBackground ?? resolveColor(slots, "main_background_color", summary, templateId, template, template.defaults.mainBackground),
     tabBackgroundColor: summary.previewMetadata.colors?.tabBackground ?? resolveColor(slots, "tab_background", summary, templateId, template, template.defaults.tabBackground),
-    myBubbleColor: summary.previewMetadata.colors?.myBubble ?? resolveColor(slots, "chat_bubble_me_color", summary, templateId, template, template.defaults.myBubble),
-    friendBubbleColor: summary.previewMetadata.colors?.friendBubble ?? resolveColor(slots, "chat_bubble_you_color", summary, templateId, template, template.defaults.friendBubble),
+    myBubbleTextColor: summary.previewMetadata.colors?.myBubble ?? resolveColor(slots, "chat_bubble_me_color", summary, templateId, template, template.defaults.mainTitle),
+    friendBubbleTextColor: summary.previewMetadata.colors?.friendBubble ?? resolveColor(slots, "chat_bubble_you_color", summary, templateId, template, template.defaults.mainTitle),
+    myBubbleFillColor: template.defaults.myBubble,
+    friendBubbleFillColor: template.defaults.friendBubble,
     chatBackgroundImage: resolveImage(slots, "chat_background", summary, templateId, template, signedUrls),
     mainBackgroundImage: resolveImage(slots, "main_background", summary, templateId, template, signedUrls),
     tabBackgroundImage: resolveImage(slots, "tab_background_image", summary, templateId, template, signedUrls),
@@ -132,8 +140,10 @@ export function createSystemTemplatePreviewVisual({
     friendBubbleImage: resolveImage(slots, "bubble_you_1", summary, templateId, template, signedUrls),
     myBubbleStretch: summary.previewMetadata.bubbles?.myBubble?.stretch,
     myBubbleInsets: summary.previewMetadata.bubbles?.myBubble?.insets,
+    myBubbleMarkers: summary.previewMetadata.bubbles?.myBubble?.markers,
     friendBubbleStretch: summary.previewMetadata.bubbles?.friendBubble?.stretch,
     friendBubbleInsets: summary.previewMetadata.bubbles?.friendBubble?.insets,
+    friendBubbleMarkers: summary.previewMetadata.bubbles?.friendBubble?.markers,
     profileImage: resolveImage(slots, "profile_image_1", summary, templateId, template, signedUrls),
     mainHeaderColor: resolveColor(slots, "main_header_color", summary, templateId, template, template.defaults.mainHeader),
     mainHeaderForegroundColor: resolveColor(slots, "main_header_foreground_color", summary, templateId, template, template.defaults.mainTitle),

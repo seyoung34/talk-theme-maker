@@ -37,7 +37,9 @@ export default function BubbleCanvasPreview({
     (async () => {
       try {
         const dataUrl = await fetchAsDataUrl(imageUrl);
-        const loaded = await loadNinePatchDataUrl(dataUrl, `${slot}-bubble.png`, slot);
+        // 편집기와 동일한 소스 캔버스(innerCanvas/fullCanvas)를 고르도록 원본 URL의 .9.png 여부를 이름에 보존한다.
+        const isNinePatch = imageUrl.split("?")[0].toLowerCase().endsWith(".9.png");
+        const loaded = await loadNinePatchDataUrl(dataUrl, `${slot}-bubble${isNinePatch ? ".9" : ""}.png`, slot);
         if (active) setAsset(loaded);
       } catch {
         if (active) setAsset(null);
@@ -53,11 +55,14 @@ export default function BubbleCanvasPreview({
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const { width, height } = getAutoBubbleSize(ctx, asset, platform, edit, text);
+    // 편집기 ChatroomPreview와 동일하게 편집 마커를 asset에 반영한다.
+    // (Android renderNinePatch는 asset.markers로 stretch 영역을 그리므로 edit만으로는 부족하다.)
+    const drawAsset = asset && edit?.markers ? { ...asset, markers: edit.markers } : asset;
+    const { width, height } = getAutoBubbleSize(ctx, drawAsset, platform, edit, text);
     canvas.width = width;
     canvas.height = height;
     ctx.clearRect(0, 0, width, height);
-    drawBubble(ctx, { asset, edit, platform, x: 0, y: 0, width, height, text, fill: fillColor, textColor });
+    drawBubble(ctx, { asset: drawAsset, edit, platform, x: 0, y: 0, width, height, text, fill: fillColor, textColor });
     canvas.style.width = `${Math.round(width * scale)}px`;
     canvas.style.height = `${Math.round(height * scale)}px`;
   }, [asset, platform, edit, text, textColor, fillColor, scale]);

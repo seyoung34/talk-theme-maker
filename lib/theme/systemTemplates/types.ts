@@ -57,10 +57,11 @@ export type RemoteUploadEntry = {
 export type RemoteSlotUploads = Record<string, RemoteUploadEntry[] | undefined>;
 
 // 말풍선 이미지를 프리뷰에서 9-slice로 그리기 위한 stretch/inset 정보.
-// stretch/insets는 원본 이미지 픽셀 기준(export의 iOS cap-inset 계산과 동일 소스).
+// stretch/insets는 iOS cap-inset(원본 이미지 픽셀 기준), markers는 Android 나인패치 편집값.
 export type BubblePreviewShape = {
   stretch?: StretchPoint;
   insets?: Insets;
+  markers?: Markers;
 };
 
 export type SystemTemplatePreviewMetadata = {

@@ -523,8 +523,9 @@ function resolvePreviewBubbleShape(slots: ThemeAssetSlot[], role: ThemeResourceR
   if (!slot) return undefined;
   const stretch = bubbleEdits.stretch[slot.id];
   const insets = bubbleEdits.insets[slot.id];
-  if (!stretch && !insets) return undefined;
-  return { stretch, insets };
+  const markers = bubbleEdits.markers[slot.id];
+  if (!stretch && !insets && !markers) return undefined;
+  return { stretch, insets, markers };
 }
 
 function resolvePreviewColor(

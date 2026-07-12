@@ -465,7 +465,7 @@ function MiniBubble({ visual, tone, width }: { visual: TemplatePreviewVisual; to
       </span>
     );
   }
-  return <span className={`${width} h-7 rounded-[12px] ${mine ? "justify-self-end" : ""}`} style={{ backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor }} />;
+  return <span className={`${width} h-7 rounded-[12px] ${mine ? "justify-self-end" : ""}`} style={{ backgroundColor: mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor }} />;
 }
 
 function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual; mine: boolean; text: string }) {
@@ -475,7 +475,7 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
       {!mine ? <MiniAvatar src={visual.profileImage} /> : null}
       <span
         className={`max-w-[84%] rounded-[18px] bg-[length:100%_100%] bg-no-repeat px-4 py-3 text-sm font-semibold leading-5 text-[var(--color-on-surface)] ${mine ? "justify-self-end" : ""}`}
-        style={{ backgroundColor: bubbleImage ? "transparent" : mine ? visual.myBubbleColor : visual.friendBubbleColor, backgroundImage: bubbleImage ? `url(${bubbleImage})` : undefined }}
+        style={{ backgroundColor: bubbleImage ? "transparent" : mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor, backgroundImage: bubbleImage ? `url(${bubbleImage})` : undefined }}
       >
         {text}
       </span>

@@ -539,13 +539,21 @@ function createUserTemplatePreviewVisual(record: UserTemplateRecord, template: T
     chatBackgroundColor: resolveUserTemplateColor(slots, "chat_background_color", record, template, template.defaults.chatBackground),
     mainBackgroundColor: resolveUserTemplateColor(slots, "main_background_color", record, template, template.defaults.mainBackground),
     tabBackgroundColor: resolveUserTemplateColor(slots, "tab_background", record, template, template.defaults.tabBackground),
-    myBubbleColor: resolveUserTemplateColor(slots, "chat_bubble_me_color", record, template, template.defaults.myBubble),
-    friendBubbleColor: resolveUserTemplateColor(slots, "chat_bubble_you_color", record, template, template.defaults.friendBubble),
+    myBubbleTextColor: resolveUserTemplateColor(slots, "chat_bubble_me_color", record, template, template.defaults.mainTitle),
+    friendBubbleTextColor: resolveUserTemplateColor(slots, "chat_bubble_you_color", record, template, template.defaults.mainTitle),
+    myBubbleFillColor: template.defaults.myBubble,
+    friendBubbleFillColor: template.defaults.friendBubble,
     chatBackgroundImage: resolveUserTemplateImage(slots, "chat_background", record, templateId, template, uploadPreviewUrls),
     mainBackgroundImage: resolveUserTemplateImage(slots, "main_background", record, templateId, template, uploadPreviewUrls),
     tabBackgroundImage: resolveUserTemplateImage(slots, "tab_background_image", record, templateId, template, uploadPreviewUrls),
     myBubbleImage: resolveUserTemplateImage(slots, "bubble_me_1", record, templateId, template, uploadPreviewUrls),
     friendBubbleImage: resolveUserTemplateImage(slots, "bubble_you_1", record, templateId, template, uploadPreviewUrls),
+    myBubbleStretch: record.bubbleEdits.stretch[findSlotByRole(slots, "bubble_me_1")?.id ?? ""],
+    myBubbleInsets: record.bubbleEdits.insets[findSlotByRole(slots, "bubble_me_1")?.id ?? ""],
+    myBubbleMarkers: record.bubbleEdits.markers[findSlotByRole(slots, "bubble_me_1")?.id ?? ""],
+    friendBubbleStretch: record.bubbleEdits.stretch[findSlotByRole(slots, "bubble_you_1")?.id ?? ""],
+    friendBubbleInsets: record.bubbleEdits.insets[findSlotByRole(slots, "bubble_you_1")?.id ?? ""],
+    friendBubbleMarkers: record.bubbleEdits.markers[findSlotByRole(slots, "bubble_you_1")?.id ?? ""],
     profileImage: resolveUserTemplateImage(slots, "profile_image_1", record, templateId, template, uploadPreviewUrls),
     mainHeaderColor: resolveUserTemplateColor(slots, "main_header_color", record, template, template.defaults.mainHeader),
     mainHeaderForegroundColor: resolveUserTemplateColor(slots, "main_header_foreground_color", record, template, template.defaults.mainTitle),
@@ -1031,18 +1039,20 @@ function ChatroomBubble({ visual, mine, text, time }: { visual: TemplatePreviewV
   const image = mine ? visual.myBubbleImage : visual.friendBubbleImage;
   const stretch = mine ? visual.myBubbleStretch : visual.friendBubbleStretch;
   const insets = mine ? visual.myBubbleInsets : visual.friendBubbleInsets;
-  const textColor = mine ? visual.myBubbleColor : visual.friendBubbleColor;
-  const edit = stretch || insets ? { stretch, insets } : undefined;
+  const markers = mine ? visual.myBubbleMarkers : visual.friendBubbleMarkers;
+  const textColor = mine ? visual.myBubbleTextColor : visual.friendBubbleTextColor;
+  const fillColor = mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor;
+  const edit = stretch || insets || markers ? { stretch, insets, markers } : undefined;
   return (
     <div className={`flex items-end gap-1.5 ${mine ? "justify-end" : "justify-start"}`}>
       {!mine ? <ScreenAvatar src={visual.profileImage} sizeClass="size-6" /> : null}
       {mine ? <span className="mb-0.5 text-[7px] font-medium text-[var(--color-on-surface-variant)]">{time}</span> : null}
       {image ? (
-        <BubbleCanvasPreview imageUrl={image} platform={visual.platform} slot={mine ? "me" : "you"} edit={edit} text={text} textColor={textColor} fillColor={textColor} scale={0.24} className="shrink-0" />
+        <BubbleCanvasPreview imageUrl={image} platform={visual.platform} slot={mine ? "me" : "you"} edit={edit} text={text} textColor={textColor} fillColor={fillColor} scale={0.24} className="shrink-0" />
       ) : (
         <span
-          className={`max-w-[68%] px-2.5 py-1.5 text-[11px] font-medium leading-snug text-[var(--color-on-surface)] ${mine ? "rounded-[14px] rounded-br-[4px]" : "rounded-[14px] rounded-bl-[4px]"}`}
-          style={{ backgroundColor: textColor }}
+          className={`max-w-[68%] px-2.5 py-1.5 text-[11px] font-medium leading-snug ${mine ? "rounded-[14px] rounded-br-[4px]" : "rounded-[14px] rounded-bl-[4px]"}`}
+          style={{ backgroundColor: fillColor, color: textColor }}
         >
           {text}
         </span>
@@ -1280,7 +1290,7 @@ function MiniBubble({ visual, tone, width }: { visual: TemplatePreviewVisual; to
     <span
       className={`${width} h-7 rounded-[12px] bg-[length:100%_100%] bg-no-repeat ${mine ? "justify-self-end" : ""}`}
       style={{
-        backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor,
+        backgroundColor: mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor,
       }}
     />
   );
@@ -1301,7 +1311,7 @@ function MiniBubbleSwatch({ visual, tone, width }: { visual: TemplatePreviewVisu
   return (
     <span
       className={`${width} h-full rounded-full ${mine ? "justify-self-end" : ""}`}
-      style={{ backgroundColor: mine ? visual.myBubbleColor : visual.friendBubbleColor }}
+      style={{ backgroundColor: mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor }}
     />
   );
 }
@@ -1310,17 +1320,19 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
   const bubbleImage = mine ? visual.myBubbleImage : visual.friendBubbleImage;
   const stretch = mine ? visual.myBubbleStretch : visual.friendBubbleStretch;
   const insets = mine ? visual.myBubbleInsets : visual.friendBubbleInsets;
-  const textColor = mine ? visual.myBubbleColor : visual.friendBubbleColor;
-  const edit = stretch || insets ? { stretch, insets } : undefined;
+  const markers = mine ? visual.myBubbleMarkers : visual.friendBubbleMarkers;
+  const textColor = mine ? visual.myBubbleTextColor : visual.friendBubbleTextColor;
+  const fillColor = mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor;
+  const edit = stretch || insets || markers ? { stretch, insets, markers } : undefined;
   return (
     <div className={`grid gap-1.5 ${mine ? "justify-items-end" : "grid-cols-[28px_minmax(0,1fr)] items-end"}`}>
       {!mine ? <MiniAvatar src={visual.profileImage} /> : null}
       {bubbleImage ? (
-        <BubbleCanvasPreview imageUrl={bubbleImage} platform={visual.platform} slot={mine ? "me" : "you"} edit={edit} text={text} textColor={textColor} fillColor={textColor} scale={0.3} className={mine ? "justify-self-end" : ""} />
+        <BubbleCanvasPreview imageUrl={bubbleImage} platform={visual.platform} slot={mine ? "me" : "you"} edit={edit} text={text} textColor={textColor} fillColor={fillColor} scale={0.3} className={mine ? "justify-self-end" : ""} />
       ) : (
         <span
           className={`min-h-[46px] min-w-[100px] max-w-[84%] rounded-[18px] px-6 py-4 text-sm font-semibold leading-5 ${mine ? "justify-self-end" : ""}`}
-          style={{ backgroundColor: textColor }}
+          style={{ backgroundColor: fillColor, color: textColor }}
         >
           {text}
         </span>
@@ -1336,8 +1348,13 @@ function createBaseTemplatePreviewVisual(template: ThemeTemplate): TemplatePrevi
     chatBackgroundColor: template.defaults.chatBackground,
     mainBackgroundColor: template.defaults.mainBackground,
     tabBackgroundColor: template.defaults.tabBackground,
-    myBubbleColor: template.defaults.myBubble,
-    friendBubbleColor: template.defaults.friendBubble,
+    myBubbleTextColor: template.defaults.mainTitle,
+    friendBubbleTextColor: template.defaults.mainTitle,
+    myBubbleFillColor: template.defaults.myBubble,
+    friendBubbleFillColor: template.defaults.friendBubble,
+    // 편집기 ChatroomPreview와 동일하게 기본 나인패치 말풍선을 캔버스로 그리도록 기본 이미지를 채운다.
+    myBubbleImage: getResolvedAssetUrl(findSlotByRole(slots, "bubble_me_1"), {}, {}, template.id, template),
+    friendBubbleImage: getResolvedAssetUrl(findSlotByRole(slots, "bubble_you_1"), {}, {}, template.id, template),
     mainHeaderColor: template.defaults.mainHeader,
     mainHeaderForegroundColor: template.defaults.mainTitle,
     bodyCellColor: template.defaults.mainBackground,
