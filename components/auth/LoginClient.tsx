@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, LoaderCircle, LockKeyhole, MessageCircle, Sparkles, Star } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
@@ -9,6 +10,9 @@ import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "signin" | "signup";
 type Message = { tone: "error" | "success"; text: string } | null;
+type AuthStage = "form" | "check-email";
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function getAuthErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
@@ -26,15 +30,25 @@ export default function LoginClient() {
   const searchParams = useSearchParams();
   const returnTo = getSafeReturnTarget(searchParams.get("returnTo"));
   const reason = searchParams.get("reason");
+  const authError = searchParams.get("authError");
   const [mode, setMode] = useState<AuthMode>("signin");
+  const [stage, setStage] = useState<AuthStage>("form");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [message, setMessage] = useState<Message>(null);
+  const [message, setMessage] = useState<Message>(() => authError ? { tone: "error", text: authError } : null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setInterval(() => setResendCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
 
   const context = useMemo(() => {
-    if (reason === "export") {
+    if (reason === "export" && mode === "signin") {
       return {
         title: "내보내기를 계속하려면 로그인해 주세요",
         description: "로그인 후 편집 화면으로 돌아가 현재 작업을 이어갈 수 있습니다. 테마 내보내기에는 1크레딧이 사용됩니다.",
@@ -53,18 +67,25 @@ export default function LoginClient() {
     setMode(nextMode);
     setMessage(null);
     setPassword("");
+    setConfirmPassword("");
+    setShowPassword(false);
+    setStage("form");
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSubmitting) return;
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || !normalizedEmail.includes("@")) {
+    if (!emailPattern.test(normalizedEmail)) {
       setMessage({ tone: "error", text: "사용할 이메일 주소를 정확히 입력해 주세요." });
       return;
     }
     if (password.length < 8) {
       setMessage({ tone: "error", text: "비밀번호는 8자 이상 입력해 주세요." });
+      return;
+    }
+    if (mode === "signup" && password !== confirmPassword) {
+      setMessage({ tone: "error", text: "비밀번호와 비밀번호 확인이 일치하지 않습니다." });
       return;
     }
 
@@ -81,11 +102,34 @@ export default function LoginClient() {
         });
       if (result.error) throw result.error;
       if (mode === "signup" && !result.data.session) {
-        setMessage({ tone: "success", text: `${normalizedEmail}로 인증 메일을 보냈습니다. 메일의 인증 링크를 누르면 가입이 완료됩니다.` });
+        setStage("check-email");
+        setResendCooldown(60);
+        setMessage(null);
         return;
       }
       router.replace(returnTo);
       router.refresh();
+    } catch (error) {
+      setMessage({ tone: "error", text: getAuthErrorMessage(error) });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resendSignupEmail = async () => {
+    if (isSubmitting || resendCooldown > 0) return;
+    setIsSubmitting(true);
+    setMessage(null);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: email.trim().toLowerCase(),
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}` },
+      });
+      if (error) throw error;
+      setResendCooldown(60);
+      setMessage({ tone: "success", text: "인증 메일을 다시 보냈습니다." });
     } catch (error) {
       setMessage({ tone: "error", text: getAuthErrorMessage(error) });
     } finally {
@@ -112,13 +156,15 @@ export default function LoginClient() {
 
   return (
     <main className="min-h-screen overflow-x-clip bg-[linear-gradient(180deg,#e8f1ff_0%,#f4f9ff_18%,#ffffff_42%,#f7fbff_70%,#e9f2ff_100%)] text-[var(--color-on-background)]">
-      <SiteHeader currentPath="/login" />
-      <div className="relative mx-auto grid min-h-[calc(100dvh-73px)] w-full max-w-7xl items-center gap-10 px-5 py-10 md:px-8 md:py-14 lg:grid-cols-[minmax(0,0.98fr)_minmax(390px,0.72fr)]">
+      <div className="hidden lg:block">
+        <SiteHeader currentPath="/login" />
+      </div>
+      <div className="relative mx-auto grid min-h-dvh w-full max-w-7xl items-center gap-10 px-0 py-0 sm:px-6 sm:py-8 lg:min-h-[calc(100dvh-73px)] lg:grid-cols-[minmax(0,0.98fr)_minmax(390px,0.72fr)] lg:px-8 lg:py-14">
         <Star className="pointer-events-none absolute left-[4%] top-[10%] hidden h-7 w-7 rotate-12 text-[#fee500] lg:block" />
         <MessageCircle className="pointer-events-none absolute left-[1%] top-[44%] hidden h-10 w-10 -rotate-6 text-[#9bc0f5] lg:block" />
         <Sparkles className="pointer-events-none absolute right-[38%] top-[14%] hidden h-7 w-7 text-[#fbbf24] lg:block" />
 
-        <section className="relative max-w-2xl" aria-label="서비스 안내">
+        <section className="relative hidden max-w-2xl lg:block" aria-label="서비스 안내">
           <div className="pointer-events-none absolute -left-10 top-8 hidden h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(91,155,255,0.22),transparent_72%)] blur-3xl md:block" />
           <div className="pointer-events-none absolute left-28 top-28 hidden h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(254,229,0,0.2),transparent_72%)] blur-3xl md:block" />
 
@@ -163,14 +209,36 @@ export default function LoginClient() {
           </p>
         </section>
 
-        <section className="relative w-full overflow-hidden rounded-[30px] border border-[#dbe8fb] bg-white/88 p-5 shadow-[0_28px_80px_rgba(47,107,191,0.14)] backdrop-blur sm:p-7" aria-labelledby="auth-title">
-          <div className="pointer-events-none absolute inset-x-8 top-0 h-24 rounded-b-[32px] bg-[linear-gradient(180deg,rgba(232,241,255,0.95),rgba(255,255,255,0))]" />
+        <section className="relative grid min-h-dvh w-full content-center overflow-hidden bg-white px-5 py-8 sm:min-h-0 sm:max-w-lg sm:justify-self-center sm:rounded-[30px] sm:border sm:border-[#dbe8fb] sm:bg-[linear-gradient(180deg,rgba(232,241,255,0.72)_0%,rgba(255,255,255,0.96)_24%,rgba(255,255,255,0.96)_100%)] sm:p-7 sm:shadow-[0_28px_80px_rgba(47,107,191,0.14)] lg:max-w-none" aria-labelledby="auth-title">
           <div className="mb-6">
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#3d7bd6]">Account</p>
             <h1 id="auth-title" className="mt-2 font-[var(--font-display)] text-[30px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">{context.title}</h1>
             <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{context.description}</p>
           </div>
 
+          {stage === "check-email" ? (
+            <div className="grid gap-5 rounded-[24px] border border-[#cfe0ff] bg-white/80 p-5 text-center">
+              <CheckCircle2 className="mx-auto text-[#2f6bbf]" size={36} aria-hidden="true" />
+              <div>
+                <h2 className="text-xl font-black text-[var(--color-on-surface)]">인증 메일을 확인해 주세요</h2>
+                <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
+                  <strong className="text-[var(--color-on-surface)]">{email.trim().toLowerCase()}</strong>로 인증 링크를 보냈습니다. 링크를 누르면 회원가입이 완료됩니다.
+                </p>
+              </div>
+              {message ? (
+                <div className={`rounded-xl border px-3.5 py-3 text-sm font-semibold ${message.tone === "error" ? "border-[#f1b7b1] bg-[var(--color-error-container)] text-[var(--color-on-error-container)]" : "border-[#9ed5c1] bg-[#e4f6ee] text-[#155d45]"}`} role={message.tone === "error" ? "alert" : "status"}>
+                  {message.text}
+                </div>
+              ) : null}
+              <button type="button" className="min-h-11 rounded-full border border-[#cfe0ff] bg-white px-4 text-sm font-extrabold text-[#2f6bbf] disabled:opacity-50" onClick={() => void resendSignupEmail()} disabled={isSubmitting || resendCooldown > 0}>
+                {isSubmitting ? "전송 중" : resendCooldown > 0 ? `${resendCooldown}초 후 다시 보내기` : "인증 메일 다시 보내기"}
+              </button>
+              <button type="button" className="text-sm font-bold text-[var(--color-on-surface-variant)] underline underline-offset-4" onClick={() => { setStage("form"); setMessage(null); }} disabled={isSubmitting}>
+                이메일 주소 수정
+              </button>
+            </div>
+          ) : (
+            <>
           <div className="mb-5 grid grid-cols-2 rounded-full border border-[#dbe8fb] bg-[#f4f9ff] p-1.5" role="tablist" aria-label="인증 방식">
             {(["signin", "signup"] as const).map((item) => (
               <button key={item} type="button" role="tab" aria-selected={mode === item} className={`rounded-full px-3 py-2.5 text-sm font-extrabold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] ${mode === item ? "bg-white text-[var(--color-on-surface)] shadow-[0_8px_18px_rgba(47,107,191,0.12)]" : "text-[var(--color-on-surface-variant)] hover:text-[var(--color-on-surface)]"}`} onClick={() => changeMode(item)} disabled={isSubmitting}>
@@ -201,6 +269,23 @@ export default function LoginClient() {
               </span>
             </label>
 
+            {mode === "signup" ? (
+              <label className="grid gap-2 text-sm font-extrabold text-[var(--color-on-surface)]">
+                비밀번호 확인
+                <input className="h-12 w-full rounded-xl border border-[var(--color-outline-variant)] bg-white px-3.5 text-sm font-semibold outline-none transition placeholder:text-[var(--color-outline)] focus:border-[var(--color-secondary)] focus:ring-3 focus:ring-[var(--color-secondary-container)] disabled:bg-[var(--color-surface-low)]" type={showPassword ? "text" : "password"} value={confirmPassword} onChange={(event) => setConfirmPassword(event.currentTarget.value)} placeholder="비밀번호 다시 입력" required minLength={8} autoComplete="new-password" disabled={isSubmitting} aria-invalid={message?.tone === "error" && password !== confirmPassword} />
+              </label>
+            ) : null}
+
+            {mode === "signin" ? (
+              <Link href={`/forgot-password?returnTo=${encodeURIComponent(returnTo)}`} className="justify-self-end text-xs font-bold text-[#2f6bbf] underline-offset-4 hover:underline">
+                비밀번호를 잊으셨나요?
+              </Link>
+            ) : (
+              <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
+                회원가입을 진행하면 서비스 이용 정책과 개인정보 처리 안내에 동의한 것으로 봅니다.
+              </p>
+            )}
+
             {message ? (
               <div className={`flex gap-2 rounded-xl border px-3.5 py-3 text-sm font-semibold leading-5 ${message.tone === "error" ? "border-[#f1b7b1] bg-[var(--color-error-container)] text-[var(--color-on-error-container)]" : "border-[#9ed5c1] bg-[#e4f6ee] text-[#155d45]"}`} role={message.tone === "error" ? "alert" : "status"}>
                 {message.tone === "error" ? <AlertCircle className="mt-0.5 shrink-0" size={17} aria-hidden="true" /> : <CheckCircle2 className="mt-0.5 shrink-0" size={17} aria-hidden="true" />}{message.text}
@@ -211,6 +296,8 @@ export default function LoginClient() {
               {isSubmitting ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />처리 중</> : <>{mode === "signin" ? "이메일로 로그인" : "이메일로 가입"}<ArrowRight size={17} aria-hidden="true" /></>}
             </button>
           </form>
+            </>
+          )}
 
           <p className="mt-5 border-t border-[var(--color-outline-variant)] pt-4 text-center text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{context.destination}</p>
         </section>
