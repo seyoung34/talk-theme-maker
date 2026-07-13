@@ -1,5 +1,5 @@
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
-import type { RemoteSlotUploads, SystemTemplateMetadataRecord, SystemTemplateRecord, SystemTemplateSaveInput, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
+import { normalizeSystemTemplateVisibility, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
 
 const storeName = themeDatabaseStores.systemTemplates;
@@ -28,7 +28,7 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
 
   async get(id: string) {
     const record = await withThemeDatabaseStore<SystemTemplateRecord | undefined>(storeName, "readonly", (store) => store.get(id));
-    return record ?? null;
+    return record ? { ...record, visibility: normalizeSystemTemplateVisibility(record.visibility) } : null;
   },
 
   async hydrateUploads(uploadRefs: RemoteSlotUploads) {
@@ -49,6 +49,23 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
     return record;
   },
 
+  async updatePublication(bundleId, input) {
+    const records = await withThemeDatabaseStore<SystemTemplateRecord[]>(storeName, "readonly", (store) => store.getAll());
+    const now = Date.now();
+    let updated = false;
+    for (const record of records) {
+      if ((record.bundleId ?? record.id) !== bundleId) continue;
+      await withThemeDatabaseStore(storeName, "readwrite", (store) => store.put({
+        ...record,
+        status: input.status,
+        visibility: input.visibility,
+        updatedAt: now,
+      }));
+      updated = true;
+    }
+    if (!updated) throw new Error("System template bundle was not updated.");
+  },
+
   async regeneratePreviewMetadata() {
     // 로컬(dev) 저장소는 previewMetadata를 별도 보관하지 않으므로 재계산이 필요 없다.
   },
@@ -67,7 +84,7 @@ function toSummary(record: SystemTemplateRecord): SystemTemplateSummary {
     baseTemplateId: record.baseTemplateId,
     platform: record.platform,
     status: record.status,
-    visibility: record.visibility,
+    visibility: normalizeSystemTemplateVisibility(record.visibility),
     pricingType: record.pricingType,
     priceAmount: record.priceAmount,
     creditCost: record.creditCost,
@@ -86,6 +103,7 @@ function toSummary(record: SystemTemplateRecord): SystemTemplateSummary {
 function toMetadataRecord(record: SystemTemplateRecord): SystemTemplateMetadataRecord {
   return {
     ...record,
+    visibility: normalizeSystemTemplateVisibility(record.visibility),
     overrides: {
       ...record.overrides,
       uploadRefs: {},

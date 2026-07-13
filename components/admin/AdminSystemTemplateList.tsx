@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Plus, RefreshCw, SendHorizontal, Settings, Trash2, UserRound } from "lucide-react";
+import { ArrowRight, Plus, RefreshCw, Save, SendHorizontal, Settings, Trash2, UserRound } from "lucide-react";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
-import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
+import { systemTemplateRepository, type SystemTemplateStatus, type SystemTemplateSummary, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { templateStartStorageKey, themeTemplates } from "@/lib/theme/templates";
 import type { ThemePlatform } from "@/lib/theme/types";
 
@@ -16,6 +16,8 @@ type SystemTemplateBundle = {
   description?: string;
   variants: Partial<Record<ThemePlatform, SystemTemplateSummary>>;
   previewTemplate: SystemTemplateSummary;
+  status: SystemTemplateStatus;
+  visibility: SystemTemplateVisibility;
   visual: TemplatePreviewVisual;
   updatedAt: number;
 };
@@ -138,6 +140,24 @@ export default function AdminSystemTemplateList() {
     }
   };
 
+  const updatePublication = async (bundle: SystemTemplateBundle, status: SystemTemplateStatus, visibility: SystemTemplateVisibility) => {
+    try {
+      setError(null);
+      await systemTemplateRepository.updatePublication(bundle.id, { status, visibility });
+      const updatedAt = Date.now();
+      setTemplates((current) => current.map((template) =>
+        (template.bundleId ?? template.id) === bundle.id
+          ? { ...template, status, visibility, updatedAt }
+          : template,
+      ));
+      setNotice("게시 설정을 저장했습니다.");
+    } catch (saveError) {
+      console.error(saveError);
+      setError("게시 설정을 저장하지 못했습니다.");
+      throw saveError;
+    }
+  };
+
   const deleteSelected = async () => {
     if (!deleteTarget) return;
 
@@ -223,6 +243,7 @@ export default function AdminSystemTemplateList() {
           onCreateVariant={createVariant}
           onDelete={(platform) => setDeleteTarget({ bundle: selectedBundle, platform })}
           onDeleteBundle={() => setDeleteTarget({ bundle: selectedBundle })}
+          onSavePublication={(status, visibility) => updatePublication(selectedBundle, status, visibility)}
         />
       ) : null}
 
@@ -248,13 +269,23 @@ function SystemTemplateCard({ bundle, onOpen }: { bundle: SystemTemplateBundle; 
       onOpen={() => onOpen(bundle.id)}
       openLabel={`${bundle.title} 관리`}
       className="sm:min-h-[392px]"
-      mobileVisual={<TemplateVisualPreview visual={bundle.visual} size="thumb" />}
+      mobileVisual={
+        <div className="relative">
+          <TemplateVisualPreview visual={bundle.visual} size="thumb" />
+          <div className="absolute left-2 top-2 flex flex-wrap gap-1">
+            <PublicationTag kind="status" value={bundle.status} compact />
+            <PublicationTag kind="visibility" value={bundle.visibility} compact />
+          </div>
+        </div>
+      }
       desktopVisual={<TemplateVisualPreview visual={bundle.visual} size="card" />}
       desktopContent={
         <div className="grid gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-[var(--color-tertiary-container)]/50 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-tertiary-container)]">System</span>
             <span className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-black uppercase text-[var(--color-on-surface-variant)]">{Object.keys(bundle.variants).join(" / ")}</span>
+            <PublicationTag kind="status" value={bundle.status} />
+            <PublicationTag kind="visibility" value={bundle.visibility} />
           </div>
           <strong className="font-[var(--font-display)] text-[26px] font-semibold leading-tight text-[var(--color-on-surface)]">{bundle.title}</strong>
           {bundle.description ? <span className="line-clamp-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">{bundle.description}</span> : null}
@@ -291,6 +322,83 @@ function SystemTemplateSkeletonCards({ count }: { count: number }) {
   );
 }
 
+const publicationStatusOptions: { value: SystemTemplateStatus; label: string; description: string }[] = [
+  { value: "draft", label: "초안", description: "작업 중인 상태로 갤러리에 노출하지 않습니다." },
+  { value: "published", label: "게시됨", description: "공개 범위가 전체 공개이면 갤러리에 노출합니다." },
+  { value: "archived", label: "보관", description: "운영을 종료하고 갤러리에서 숨깁니다." },
+];
+
+const publicationVisibilityOptions: { value: SystemTemplateVisibility; label: string; description: string }[] = [
+  { value: "private", label: "비공개", description: "관리자 화면에서만 관리합니다." },
+  { value: "public", label: "전체 공개", description: "게시된 템플릿을 일반 갤러리에 표시합니다." },
+];
+
+function PublicationOptionGroup<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string; description: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <fieldset className="grid gap-2">
+      <legend className="text-sm font-black text-[var(--color-on-surface)]">{label}</legend>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {options.map((option) => {
+          const isSelected = option.value === value;
+          return (
+            <label
+              key={option.value}
+              className={`grid cursor-pointer gap-1 rounded-[16px] border p-3 transition ${isSelected ? "border-[var(--color-primary)] bg-[var(--color-primary-container)]/45 shadow-[0_8px_20px_rgba(42,103,103,0.08)]" : "border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] hover:bg-white"}`}
+            >
+              <span className="flex items-center gap-2 text-sm font-black text-[var(--color-on-surface)]">
+                <input
+                  type="radio"
+                  className="size-4 accent-[var(--color-primary)]"
+                  name={label}
+                  value={option.value}
+                  checked={isSelected}
+                  onChange={() => onChange(option.value)}
+                />
+                {option.label}
+              </span>
+              <span className="pl-6 text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)]">{option.description}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+type PublicationTagProps = (
+  | { kind: "status"; value: SystemTemplateStatus }
+  | { kind: "visibility"; value: SystemTemplateVisibility }
+) & { compact?: boolean };
+
+function PublicationTag(props: PublicationTagProps) {
+  const { compact = false } = props;
+  const statusClasses: Record<SystemTemplateStatus, string> = {
+    draft: "border-amber-200 bg-amber-50 text-amber-800",
+    published: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    archived: "border-slate-200 bg-slate-100 text-slate-600",
+  };
+  const visibilityClasses: Record<SystemTemplateVisibility, string> = {
+    private: "border-slate-200 bg-white text-slate-600",
+    public: "border-sky-200 bg-sky-50 text-sky-700",
+  };
+  const className = props.kind === "status" ? statusClasses[props.value] : visibilityClasses[props.value];
+  const label = props.kind === "status"
+    ? publicationStatusOptions.find((option) => option.value === props.value)?.label
+    : publicationVisibilityOptions.find((option) => option.value === props.value)?.label;
+
+  return <span className={`rounded-full border font-black shadow-sm ${compact ? "px-2 py-0.5 text-[9px]" : "px-2.5 py-1 text-[11px]"} ${className}`}>{label}</span>;
+}
+
 function SystemTemplateManageModal({
   bundle,
   onClose,
@@ -298,6 +406,7 @@ function SystemTemplateManageModal({
   onCreateVariant,
   onDelete,
   onDeleteBundle,
+  onSavePublication,
 }: {
   bundle: SystemTemplateBundle;
   onClose: () => void;
@@ -305,7 +414,30 @@ function SystemTemplateManageModal({
   onCreateVariant: (bundle: SystemTemplateBundle, platform: ThemePlatform) => void;
   onDelete: (platform: ThemePlatform) => void;
   onDeleteBundle: () => void;
+  onSavePublication: (status: SystemTemplateStatus, visibility: SystemTemplateVisibility) => Promise<void>;
 }) {
+  const [status, setStatus] = useState(bundle.status);
+  const [visibility, setVisibility] = useState(bundle.visibility);
+  const [savedPublication, setSavedPublication] = useState({ status: bundle.status, visibility: bundle.visibility });
+  const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
+  const [isSavingPublication, setIsSavingPublication] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const isPublicationDirty = status !== savedPublication.status || visibility !== savedPublication.visibility;
+
+  const savePublication = async () => {
+    try {
+      setIsSavingPublication(true);
+      setSaveError(null);
+      await onSavePublication(status, visibility);
+      setSavedPublication({ status, visibility });
+      setIsSaveConfirmOpen(false);
+    } catch {
+      setSaveError("게시 설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setIsSavingPublication(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${bundle.title} 관리`}>
       <section className="grid max-h-[calc(100dvh-24px)] w-full max-w-5xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:max-h-[calc(100dvh-32px)] sm:rounded-[32px]">
@@ -323,6 +455,50 @@ function SystemTemplateManageModal({
         <div className="grid min-h-0 gap-4 overflow-auto p-4 lg:grid-cols-[360px_minmax(0,1fr)]">
           <TemplatePhonePreview bundle={bundle} />
           <div className="grid content-start gap-4">
+            <section className="grid gap-4 rounded-[22px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--color-on-surface-variant)]">Publication</p>
+                  <h3 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">게시 설정</h3>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">두 설정이 모두 ‘게시됨’과 ‘전체 공개’일 때 일반 갤러리에 노출됩니다.</p>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <PublicationTag kind="status" value={status} />
+                  <PublicationTag kind="visibility" value={visibility} />
+                </div>
+              </div>
+
+              <PublicationOptionGroup
+                label="게시 상태"
+                value={status}
+                options={publicationStatusOptions}
+                onChange={setStatus}
+              />
+              <PublicationOptionGroup
+                label="공개 범위"
+                value={visibility}
+                options={publicationVisibilityOptions}
+                onChange={setVisibility}
+              />
+
+              {saveError ? <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700" role="alert">{saveError}</p> : null}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--color-outline-variant)] pt-4">
+                <span className="text-xs font-semibold text-[var(--color-on-surface-variant)]">{isPublicationDirty ? "저장하지 않은 변경사항이 있습니다." : "게시 설정이 저장되어 있습니다."}</span>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-4 py-2.5 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  onClick={() => {
+                    setSaveError(null);
+                    setIsSaveConfirmOpen(true);
+                  }}
+                  disabled={!isPublicationDirty}
+                >
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                  변경사항 저장
+                </button>
+              </div>
+            </section>
+
             <div className="grid gap-3 sm:grid-cols-2">
               {(["android", "ios"] as const).map((platform) => {
                 const variant = bundle.variants[platform];
@@ -334,8 +510,6 @@ function SystemTemplateManageModal({
                     </div>
                     {variant ? (
                       <div className="grid gap-2 text-xs font-bold text-[var(--color-on-surface-variant)]">
-                        <span>상태: {variant.status}</span>
-                        <span>공개: {variant.visibility}</span>
                         <span>이미지: {variant.uploadCount}개</span>
                       </div>
                     ) : (
@@ -368,6 +542,20 @@ function SystemTemplateManageModal({
           </div>
         </div>
       </section>
+
+      {isSaveConfirmOpen ? (
+        <PublicationSaveConfirmDialog
+          bundle={bundle}
+          status={status}
+          visibility={visibility}
+          isSaving={isSavingPublication}
+          error={saveError}
+          onClose={() => {
+            if (!isSavingPublication) setIsSaveConfirmOpen(false);
+          }}
+          onConfirm={() => void savePublication()}
+        />
+      ) : null}
     </div>
   );
 }
@@ -411,6 +599,62 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
       >
         {text}
       </span>
+    </div>
+  );
+}
+
+function PublicationSaveConfirmDialog({
+  bundle,
+  status,
+  visibility,
+  isSaving,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  bundle: SystemTemplateBundle;
+  status: SystemTemplateStatus;
+  visibility: SystemTemplateVisibility;
+  isSaving: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const willAppearInGallery = status === "published" && visibility === "public";
+
+  return (
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.48)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="publication-save-title">
+      <section className="grid w-full max-w-[480px] gap-5 rounded-[28px] border border-[#e5e7eb] bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.2)] sm:p-6">
+        <div className="grid gap-3">
+          <span className="w-fit rounded-full bg-[var(--color-primary-container)] px-3 py-1 text-xs font-black text-[var(--color-on-primary-container)]">저장 확인</span>
+          <div>
+            <h3 id="publication-save-title" className="font-[var(--font-display)] text-2xl font-semibold text-[var(--color-on-surface)]">게시 설정을 변경할까요?</h3>
+            <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]"><strong className="text-[var(--color-on-surface)]">{bundle.title}</strong>의 설정을 아래와 같이 저장합니다.</p>
+          </div>
+          <dl className="grid gap-2 rounded-[18px] bg-[var(--color-surface-low)] p-4 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-bold text-[var(--color-on-surface-variant)]">게시 상태</dt>
+              <dd><PublicationTag kind="status" value={status} /></dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-bold text-[var(--color-on-surface-variant)]">공개 범위</dt>
+              <dd><PublicationTag kind="visibility" value={visibility} /></dd>
+            </div>
+          </dl>
+          <p className={`rounded-[16px] px-4 py-3 text-sm font-black leading-5 ${willAppearInGallery ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+            {willAppearInGallery ? "저장하면 일반 템플릿 갤러리에 노출됩니다." : "저장하면 일반 템플릿 갤러리에서 숨겨집니다."}
+          </p>
+          {error ? <p className="text-sm font-bold text-red-700" role="alert">{error}</p> : null}
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2.5 text-sm font-semibold text-[#334155] disabled:opacity-50" onClick={onClose} disabled={isSaving}>
+            취소
+          </button>
+          <button type="button" className="rounded-xl bg-[var(--color-inverse-surface)] px-4 py-2.5 text-sm font-semibold text-[var(--color-inverse-on-surface)] disabled:cursor-wait disabled:opacity-60" onClick={onConfirm} disabled={isSaving}>
+            {isSaving ? "저장 중..." : "확인하고 저장"}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -474,6 +718,8 @@ function createBundles(templates: SystemTemplateSummary[], uploadPreviewUrls: Si
         description: previewTemplate.description,
         variants: bundle.variants,
         previewTemplate,
+        status: previewTemplate.status,
+        visibility: previewTemplate.visibility,
         visual: createSystemTemplatePreviewVisual({
           template: baseTemplate,
           platform: previewTemplate.platform,

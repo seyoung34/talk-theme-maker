@@ -1,5 +1,6 @@
 export { localSystemTemplateRepository } from "@/lib/theme/systemTemplates/localRepository";
 export { systemTemplateRepository } from "@/lib/theme/systemTemplates/supabaseRepository";
+export { normalizeSystemTemplateVisibility } from "@/lib/theme/systemTemplates/types";
 export type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 export type {
   SystemTemplatePricingType,

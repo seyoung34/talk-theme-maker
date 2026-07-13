@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { Cookie } from "lucide-react";
 import { getAcquisitionContext, getAnalyticsConsent, getAnalyticsMeasurementId, saveAnalyticsConsent, trackAnalyticsEvent, updateAnalyticsConsent, type AnalyticsConsent } from "@/lib/analytics/ga4";
 
 function AnalyticsPageTracker({ consent }: { consent: AnalyticsConsent | null }) {
@@ -48,7 +49,17 @@ export default function AnalyticsProvider() {
           </div>
         </aside>
       ) : null}
-      {consent !== null ? <button type="button" className="fixed bottom-3 left-3 z-[200] rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm ring-1 ring-slate-200" onClick={() => setIsSettingsOpen(true)}>분석 쿠키 설정</button> : null}
+      {consent !== null ? (
+        <button
+          type="button"
+          className="fixed bottom-3 left-3 z-[200] grid size-10 place-items-center rounded-full bg-white/90 text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700"
+          aria-label="분석 쿠키 설정"
+          title="분석 쿠키 설정"
+          onClick={() => setIsSettingsOpen(true)}
+        >
+          <Cookie size={18} aria-hidden="true" />
+        </button>
+      ) : null}
       {isSettingsOpen ? (
         <aside className="fixed inset-x-4 bottom-4 z-[201] mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-xl" role="dialog" aria-label="분석 쿠키 설정">
           <p className="text-sm font-medium leading-5 text-slate-700">{consent === "granted" ? "분석 쿠키를 끄면 이 브라우저에서 이후 분석 이벤트를 전송하지 않습니다." : "분석 쿠키를 켜면 동의 이후의 서비스 이용 흐름을 익명으로 분석합니다."}</p>

@@ -1,4 +1,4 @@
-import type { RemoteSlotUploads } from "@/lib/theme/systemTemplates";
+import { normalizeSystemTemplateVisibility, type RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeTemplateId } from "@/lib/theme/templates";
@@ -16,7 +16,7 @@ export type RecoveryActiveSystemTemplate = {
   description?: string;
   tags: string[];
   status: "draft" | "published" | "archived";
-  visibility: "private" | "public" | "unlisted";
+  visibility: "private" | "public";
   pricingType: "free" | "paid" | "credit";
   priceAmount?: number;
   creditCost?: number;
@@ -91,7 +91,19 @@ export async function readRecoveryDraft(mode: EditorMode, token: string | null |
     await clearRecoveryDraft(mode);
     return null;
   }
-  return record.resume.token === token ? record : null;
+  if (record.resume.token !== token) return null;
+  const activeSystemTemplate = record.editor.activeSystemTemplate;
+  if (!activeSystemTemplate) return record;
+  return {
+    ...record,
+    editor: {
+      ...record.editor,
+      activeSystemTemplate: {
+        ...activeSystemTemplate,
+        visibility: normalizeSystemTemplateVisibility(activeSystemTemplate.visibility),
+      },
+    },
+  };
 }
 
 export async function clearRecoveryDraft(mode: EditorMode) {

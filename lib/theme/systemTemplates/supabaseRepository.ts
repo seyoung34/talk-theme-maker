@@ -4,7 +4,7 @@ import { getResolvedColor } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
-import type { BubblePreviewShape, RemoteSlotUploads, SystemTemplateMetadataRecord, SystemTemplatePage, SystemTemplatePreviewMetadata, SystemTemplateRecord, SystemTemplateSaveInput, SystemTemplateSummary, ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
+import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, getThemeTemplate, type ThemeAssetSlot, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -169,7 +169,7 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       baseTemplateId: variant.base_template_id,
       platform: variant.platform,
       status: bundle.status,
-      visibility: bundle.visibility,
+      visibility: normalizeSystemTemplateVisibility(bundle.visibility),
       pricingType: bundle.pricing_type,
       priceAmount: bundle.price_amount ?? undefined,
       creditCost: bundle.credit_cost ?? undefined,
@@ -183,6 +183,18 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       createdAt: input.createdAt ?? dateToMs(bundle.created_at) ?? now,
       updatedAt: dateToMs(variant.updated_at) ?? now,
     };
+  },
+
+  async updatePublication(bundleId, input) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("system_template_bundles")
+      .update({ status: input.status, visibility: input.visibility })
+      .eq("id", bundleId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("System template bundle was not updated.");
   },
 
   async regeneratePreviewMetadata(id) {
@@ -356,7 +368,7 @@ async function toRecord(row: VariantRow): Promise<SystemTemplateRecord> {
     baseTemplateId: row.base_template_id,
     platform: row.platform,
     status: bundle.status,
-    visibility: bundle.visibility,
+    visibility: normalizeSystemTemplateVisibility(bundle.visibility),
     pricingType: bundle.pricing_type,
     priceAmount: bundle.price_amount ?? undefined,
     creditCost: bundle.credit_cost ?? undefined,
@@ -382,7 +394,7 @@ function toMetadataRecord(row: VariantRow): SystemTemplateMetadataRecord {
     baseTemplateId: row.base_template_id,
     platform: row.platform,
     status: bundle.status,
-    visibility: bundle.visibility,
+    visibility: normalizeSystemTemplateVisibility(bundle.visibility),
     pricingType: bundle.pricing_type,
     priceAmount: bundle.price_amount ?? undefined,
     creditCost: bundle.credit_cost ?? undefined,
@@ -443,7 +455,7 @@ function toSummary(row: VariantRow): SystemTemplateSummary {
     baseTemplateId: row.base_template_id,
     platform: row.platform,
     status: bundle.status,
-    visibility: bundle.visibility,
+    visibility: normalizeSystemTemplateVisibility(bundle.visibility),
     pricingType: bundle.pricing_type,
     priceAmount: bundle.price_amount ?? undefined,
     creditCost: bundle.credit_cost ?? undefined,

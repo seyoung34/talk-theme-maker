@@ -37,6 +37,7 @@
 
 | 문서 | 상태 |
 |---|---|
+| [plans/planned/commercial-launch-remediation-plan.md](plans/planned/commercial-launch-remediation-plan.md) | 문제 소지 시스템 템플릿 비공개 조치 이후 남은 상업 출시 P0(정책·저장·환불·안전장치·실기기)와 P1 전환 개선 계획 |
 | [plans/planned/easy-guide-plan.md](plans/planned/easy-guide-plan.md) | 이미지 중심 "쉬운 가이드" 기획 확정. 스크린샷/GIF 에셋 준비 후 구현 착수 예정 |
 | [plans/planned/system-template-lineup-plan.md](plans/planned/system-template-lineup-plan.md) | 첫인상·완성 경험용 시스템 템플릿(basic+overrides 8종)·에셋 팩 라인업. 활성화(Aha) 레버, 무료 스타터 3종부터 |
 

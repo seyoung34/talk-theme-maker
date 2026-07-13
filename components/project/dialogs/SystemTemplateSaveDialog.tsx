@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { SystemTemplatePricingType, SystemTemplateStatus, SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 
 const systemTemplateStatusLabels: Record<SystemTemplateStatus, string> = { draft: "초안", published: "게시됨", archived: "보관됨" };
-const systemTemplateVisibilityLabels: Record<SystemTemplateVisibility, string> = { private: "비공개", public: "공개", unlisted: "일부 공개" };
+const systemTemplateVisibilityLabels: Record<SystemTemplateVisibility, string> = { private: "비공개", public: "전체 공개" };
 const systemTemplatePricingLabels: Record<SystemTemplatePricingType, string> = { free: "무료", paid: "유료 결제", credit: "크레딧" };
 
 export function SystemTemplateSaveDialog({
@@ -34,7 +34,7 @@ export function SystemTemplateSaveDialog({
             <button type="button" className="flex items-center justify-between gap-3 text-left text-sm font-semibold text-[#0f172a]" onClick={() => setAdvancedOpen((current) => !current)} disabled={isSaving}><span>고급 설정</span><span className="text-xs text-[#64748b]">{advancedOpen ? "접기" : "열기"}</span></button>
             {advancedOpen ? <div className="grid gap-3 md:grid-cols-2">
               <SelectField label="상태" value={status} options={["draft", "published", "archived"]} optionLabels={systemTemplateStatusLabels} disabled={isSaving} onChange={(value) => onStatusChange(value as SystemTemplateStatus)} />
-              <SelectField label="공개 범위" value={visibility} options={["private", "public", "unlisted"]} optionLabels={systemTemplateVisibilityLabels} disabled={isSaving} onChange={(value) => onVisibilityChange(value as SystemTemplateVisibility)} />
+              <SelectField label="공개 범위" value={visibility} options={["private", "public"]} optionLabels={systemTemplateVisibilityLabels} disabled={isSaving} onChange={(value) => onVisibilityChange(value as SystemTemplateVisibility)} />
               <SelectField label="가격 정책" value={pricingType} options={["free", "paid", "credit"]} optionLabels={systemTemplatePricingLabels} disabled={isSaving} onChange={(value) => onPricingTypeChange(value as SystemTemplatePricingType)} />
               {pricingType === "paid" ? <label className="grid gap-2"><span className="text-sm font-semibold text-[#0f172a]">판매 가격</span><input type="number" min="0" value={priceAmount} onChange={(event) => onPriceAmountChange(event.currentTarget.value)} disabled={isSaving} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" /></label> : null}
               {pricingType === "credit" ? <label className="grid gap-2"><span className="text-sm font-semibold text-[#0f172a]">필요 크레딧</span><input type="number" min="0" value={creditCost} onChange={(event) => onCreditCostChange(event.currentTarget.value)} disabled={isSaving} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" /></label> : null}

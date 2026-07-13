@@ -4,8 +4,12 @@ import type { BaseTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
 export type SystemTemplateStatus = "draft" | "published" | "archived";
-export type SystemTemplateVisibility = "private" | "public" | "unlisted";
+export type SystemTemplateVisibility = "private" | "public";
 export type SystemTemplatePricingType = "free" | "paid" | "credit";
+
+export function normalizeSystemTemplateVisibility(value: unknown): SystemTemplateVisibility {
+  return value === "public" ? "public" : "private";
+}
 
 export type ThemeEditOverrides = {
   colors: SlotColors;

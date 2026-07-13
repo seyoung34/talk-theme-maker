@@ -36,7 +36,7 @@ type UseEditorBootstrapOptions = {
   setSystemTags: Dispatch<SetStateAction<string>>;
   setSystemTemplateBundleId: Dispatch<SetStateAction<string | null>>;
   setSystemTitle: Dispatch<SetStateAction<string>>;
-  setSystemVisibility: Dispatch<SetStateAction<"private" | "public" | "unlisted">>;
+  setSystemVisibility: Dispatch<SetStateAction<"private" | "public">>;
   setTemplateId: Dispatch<SetStateAction<ThemeTemplateId>>;
   replaceDraft: (draft: ThemeDraft) => void;
   skipDefaultSelectionReset: () => void;
