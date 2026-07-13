@@ -25,6 +25,7 @@
 | [report/project-importer-client-refactor-2026-07-10.md](report/project-importer-client-refactor-2026-07-10.md) | `ProjectImporterClient`(2007줄) 구조·상태·성능·UX 진단 + 8단계 점진적 분해 로드맵 |
 | [report/ga4-introduction-plan-2026-07-11.md](report/ga4-introduction-plan-2026-07-11.md) | GA4 출시 전 도입 기획 — 동의 기반 익명 수집, 일간 퍼널·템플릿/플랫폼 대시보드, 에셋 분석 확장 |
 | [report/ga4-collection-failure-diagnosis-2026-07-11.md](report/ga4-collection-failure-diagnosis-2026-07-11.md) | GA4 클라이언트 수집(`collect`) 미발생 진단 — 동의 지연 로드가 원인, Consent Mode 패턴으로 전환. `page_view` 타이밍 회귀 수정 미커밋 상태 |
+| [report/commercial-launch-readiness-review-2026-07-13.md](report/commercial-launch-readiness-review-2026-07-13.md) | 공개 유료 서비스 출시 준비도 진단 — 지식재산권·개인정보·계정 저장·환불/결제 운영·프로덕션 안전장치의 P0/P1 개선 우선순위 |
 
 ## notes — 형식 없는 메모
 
