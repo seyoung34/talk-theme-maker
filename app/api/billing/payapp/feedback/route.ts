@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { payappFormDataToRecord } from "@/lib/billing/payapp";
+import { payappFormDataToRecord, sanitizePayappPayload } from "@/lib/billing/payapp";
 import { timingSafeEqualStrings } from "@/lib/security/timingSafe";
 import { requirePayappServerConfig } from "@/lib/supabase/config";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -10,6 +10,7 @@ const canceledStates = new Set(["8", "16", "31", "32", "9", "64", "70", "71"]);
 export async function POST(request: Request) {
   const formData = await request.formData();
   const payload = payappFormDataToRecord(formData);
+  const storedPayload = sanitizePayappPayload(payload);
   const admin = createAdminClient();
 
   let config: ReturnType<typeof requirePayappServerConfig>;
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
   }
 
   if (String(payment.amount) !== String(payload.price)) {
-    await admin.from("payments").update({ status: "failed", raw_payload: payload }).eq("id", payment.id);
+    await admin.from("payments").update({ status: "failed", raw_payload: storedPayload }).eq("id", payment.id);
     return new NextResponse("FAIL", { status: 400, headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
 
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
         provider_payment_id: payload.mul_no || null,
         checkout_url: payload.payurl || null,
         receipt_url: payload.csturl || null,
-        raw_payload: payload,
+        raw_payload: storedPayload,
       })
       .eq("id", payment.id);
 
@@ -73,13 +74,13 @@ export async function POST(request: Request) {
         provider_payment_id: payload.mul_no || null,
         checkout_url: payload.payurl || null,
         receipt_url: payload.csturl || null,
-        raw_payload: payload,
+        raw_payload: storedPayload,
       })
       .eq("id", payment.id);
     return successResponse();
   }
 
-  await admin.from("payments").update({ raw_payload: payload }).eq("id", payment.id);
+  await admin.from("payments").update({ raw_payload: storedPayload }).eq("id", payment.id);
   return successResponse();
 }
 

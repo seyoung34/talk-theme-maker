@@ -10,6 +10,7 @@
 | [architecture/roadmap.md](architecture/roadmap.md) | 제품 정의, 핵심 가치, 현재 상태 개요 |
 | [architecture/theme-architecture.md](architecture/theme-architecture.md) | 테마 데이터 모델(Template/Platform/Section/...)·폴더 구조 설계 |
 | [architecture/ux-flow.md](architecture/ux-flow.md) | `/template` → `/edit` 사용자 흐름 |
+| [architecture/commercial-launch-phase-1-data-policy.md](architecture/commercial-launch-phase-1-data-policy.md) | 상업 출시 Phase 1 데이터 흐름·정책·동의·PayApp 최소화·GCS 보관 운영 기준 |
 
 ## setup — 환경 구성
 
@@ -37,7 +38,6 @@
 
 | 문서 | 상태 |
 |---|---|
-| [plans/planned/commercial-launch-remediation-plan.md](plans/planned/commercial-launch-remediation-plan.md) | 문제 소지 시스템 템플릿 비공개 조치 이후 남은 상업 출시 P0(정책·저장·환불·안전장치·실기기)와 P1 전환 개선 계획 |
 | [plans/planned/easy-guide-plan.md](plans/planned/easy-guide-plan.md) | 이미지 중심 "쉬운 가이드" 기획 확정. 스크린샷/GIF 에셋 준비 후 구현 착수 예정 |
 | [plans/planned/system-template-lineup-plan.md](plans/planned/system-template-lineup-plan.md) | 첫인상·완성 경험용 시스템 템플릿(basic+overrides 8종)·에셋 팩 라인업. 활성화(Aha) 레버, 무료 스타터 3종부터 |
 
@@ -45,6 +45,7 @@
 
 | 문서 | 상태 |
 |---|---|
+| [plans/in-progress/commercial-launch-remediation-plan.md](plans/in-progress/commercial-launch-remediation-plan.md) | 상업 출시 Phase 1 사업자 기본 정보·개인정보 문의처·만 14세 가입 제한 및 migration 반영. 운영 정보·법률 검토·실가입/GCS 실측 대기 |
 | [plans/in-progress/color-picker-ux-improvement-plan.md](plans/in-progress/color-picker-ux-improvement-plan.md) | 공용 컬러 피커 Phase 1·2 구현 완료. 반응형·접근성 및 실기기 검증 진행 예정 |
 | [plans/in-progress/android-build-cloud-run-plan.md](plans/in-progress/android-build-cloud-run-plan.md) | 비동기 Cloud Run Job 빌드 오프로딩은 완료. Cloudflare Pages 이전(Phase 3) 착수함 — 아래 문서 참조 |
 | [plans/in-progress/cloud-run-apk-builder-dev.md](plans/in-progress/cloud-run-apk-builder-dev.md) | Cloud Run Job 빌드 오프로딩 마일스톤 1~4차 완료(실기기 검증 포함). 남은 것: `apk-zip`/`project` 비동기화(3.7) + 후속 튜닝 |

@@ -343,7 +343,7 @@ export default function TemplateGalleryClient() {
                 </button>
               </div>
               <p className="mt-2 hidden max-w-2xl text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:block">
-                이 브라우저에만 저장된 작업입니다. 직접 올린 개인 이미지는 서버에 업로드되지 않습니다.
+                편집 상태와 직접 올린 이미지는 이 브라우저에 저장됩니다. 내보내기를 시작하면 파일 생성에 필요한 데이터가 서버로 일시 전송됩니다.
               </p>
             </div>
             {hasSavedTemplates ? (
@@ -509,14 +509,14 @@ function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPrevie
 
   return {
     title: record.name,
-    description: "저장한 색상과 업로드 이미지를 실제 편집에 들어가기 전에 확인합니다. 개인 이미지는 이 브라우저에만 남습니다.",
+    description: "저장한 색상과 업로드 이미지를 실제 편집에 들어가기 전에 확인합니다. 편집 데이터는 현재 브라우저에 저장됩니다.",
     eyebrow: "내 템플릿 미리보기",
     closeLabel: "닫기",
     androidLabel: record.platform === "android" ? "Android 편집 계속하기" : "Android 사용 불가",
     iosLabel: record.platform === "ios" ? "iOS 편집 계속하기" : "iOS 사용 불가",
     visual,
     availablePlatforms: [record.platform],
-    note: "개인 사진은 서버가 아니라 이 브라우저에만 저장됩니다.",
+    note: "내보내기를 시작하면 파일 생성에 필요한 이미지와 설정이 서버로 일시 전송됩니다.",
     onStart: () => onStart(summary),
     onDelete: () => onDelete(summary),
     deleteLabel: "삭제",
@@ -1104,7 +1104,7 @@ function UserTemplateInfoModal({ onClose }: { onClose: () => void }) {
       <div className="max-w-sm rounded-[24px] bg-white p-5 shadow-[0_28px_64px_rgba(42,103,103,0.2)]" onClick={(event) => event.stopPropagation()}>
         <strong className="block text-lg font-black text-[var(--color-on-surface)]">내 템플릿 안내</strong>
         <p className="mt-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">
-          이 브라우저에만 저장된 작업입니다. 직접 올린 개인 이미지는 서버에 업로드되지 않습니다.
+          편집 상태와 직접 올린 이미지는 이 브라우저에 저장됩니다. 내보내기를 시작하면 파일 생성에 필요한 데이터가 서버로 일시 전송됩니다.
         </p>
         <button
           type="button"

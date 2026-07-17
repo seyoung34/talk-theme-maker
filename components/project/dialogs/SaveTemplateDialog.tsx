@@ -17,7 +17,7 @@ export function SaveTemplateDialog({ activeUserTemplate, isSaving, mode, name, o
     <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.42)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="내 템플릿 저장">
       <section className="grid w-full max-w-[420px] gap-5 rounded-[28px] border border-[#e5e7eb] bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
         <div className="flex items-start justify-between gap-4">
-          <div className="grid gap-1"><h2 className="text-lg font-semibold text-[#0f172a]">내 템플릿 저장</h2><p className="text-sm leading-6 text-[#64748b]">현재 편집 상태를 이 브라우저에만 저장합니다. 직접 업로드한 개인 이미지는 서버에 저장되지 않습니다.</p></div>
+          <div className="grid gap-1"><h2 className="text-lg font-semibold text-[#0f172a]">내 템플릿 저장</h2><p className="text-sm leading-6 text-[#64748b]">현재 편집 상태와 직접 업로드한 이미지를 이 브라우저에 저장합니다. 내보내기를 시작하기 전에는 파일 생성 서버로 전송하지 않습니다.</p></div>
           <button type="button" className="shrink-0 rounded-full border border-[#e5e7eb] px-3 py-2 text-sm font-semibold text-[#475569]" onClick={onClose} disabled={isSaving}>닫기</button>
         </div>
         <div className="grid gap-3">

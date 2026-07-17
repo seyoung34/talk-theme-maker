@@ -1,6 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import Link from "next/link";
 import { Archive, Download, LoaderCircle, Package, ShieldCheck, Wrench, X } from "lucide-react";
 import { getExportNotice, getExportProgressSteps } from "@/components/project/exportClient";
 import type { AccountState, ExportMode } from "@/components/project/exportModel";
@@ -50,6 +51,7 @@ export function ExportDialog({
                 </>}
               </div>
               <div className="mt-4 grid gap-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="font-semibold text-[#475569]">비용 <strong className="ml-1 text-[#0f172a]">1크레딧</strong></span><span className="font-semibold text-[#475569]">보유 <strong className={`ml-1 ${hasCredits ? "text-emerald-700" : "text-rose-700"}`}>{isAccountLoading ? "확인 중" : `${credits}크레딧`}</strong></span></div></div>
+              <p className="mt-3 text-xs font-medium leading-5 text-[#64748b]">편집과 ‘내 템플릿’ 저장은 현재 브라우저에서 처리됩니다. 내보내기를 시작하면 결과물 생성을 위해 필요한 이미지와 설정이 서버로 일시 전송됩니다. <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2563eb] underline underline-offset-2">자세히 보기</Link></p>
             </>}
           </div>
           <div className="flex items-center justify-end gap-2 border-t border-[#e2e8f0] bg-white px-5 py-4"><button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={isExporting}>취소</button>{preparationError ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white" onClick={onRetryPreparation}>다시 시도</button> : !isPreparingExport ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit} disabled={isExporting || isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}>{isExporting ? "내보내는 중…" : ctaLabel}</button> : null}</div>

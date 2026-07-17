@@ -104,3 +104,40 @@ export function payappFormDataToRecord(formData: FormData) {
   });
   return output;
 }
+
+const payappStoredFieldNames = ["pay_state", "state", "price", "goodname", "mul_no", "errorCode", "errcode", "errorMessage", "errormsg"] as const;
+
+export type SanitizedPayappPayload = Record<string, string | string[]>;
+
+export function sanitizePayappPayload(payload: Record<string, string>): SanitizedPayappPayload {
+  const sanitized: SanitizedPayappPayload = {
+    received_fields: Object.keys(payload).sort(),
+  };
+
+  for (const key of payappStoredFieldNames) {
+    const value = payload[key];
+    if (!value) continue;
+    sanitized[key] = redactPayappText(value).slice(0, 500);
+  }
+
+  return sanitized;
+}
+
+export function sanitizePayappError(error: unknown): SanitizedPayappPayload {
+  if (isStringRecord(error)) return sanitizePayappPayload(error);
+  const message = error instanceof Error ? error.message : "PayApp request failed.";
+  return { error: redactPayappText(message).slice(0, 500) };
+}
+
+function redactPayappText(value: string) {
+  return value
+    .replace(/\b01[016789][\s-]?\d{3,4}[\s-]?\d{4}\b/g, "[PHONE_REDACTED]")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[EMAIL_REDACTED]");
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  return Object.values(value).every((entry) => typeof entry === "string");
+}

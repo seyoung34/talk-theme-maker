@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createPayappCreditCheckout, isValidKoreanPhone } from "@/lib/billing/payapp";
+import { createPayappCreditCheckout, isValidKoreanPhone, sanitizePayappError, sanitizePayappPayload } from "@/lib/billing/payapp";
 import { getSafeBillingReturnTo } from "@/lib/billing/returnTo";
 import { getCurrentUserOrNull } from "@/lib/billing/credits";
 import { getCreditProduct } from "@/lib/billing/products";
@@ -27,12 +27,12 @@ export async function POST(request: Request) {
 
   try {
     const checkout = await createPayappCreditCheckout({ paymentId: payment.id, orderId: payment.order_id, phone: body.phone, product, returnTo: getSafeBillingReturnTo(body.returnTo) });
-    const { error: updateError } = await admin.from("payments").update({ provider_payment_id: checkout.providerPaymentId, checkout_url: checkout.checkoutUrl, receipt_url: checkout.receiptUrl, raw_payload: checkout.raw }).eq("id", payment.id);
+    const { error: updateError } = await admin.from("payments").update({ provider_payment_id: checkout.providerPaymentId, checkout_url: checkout.checkoutUrl, receipt_url: checkout.receiptUrl, raw_payload: sanitizePayappPayload(checkout.raw) }).eq("id", payment.id);
     if (updateError) throw updateError;
     return NextResponse.json({ paymentId: payment.id, checkoutUrl: checkout.checkoutUrl, amount: payment.amount, credits: payment.credits });
   } catch (error) {
     const raw = typeof error === "object" && error && "raw" in error ? (error as { raw?: unknown }).raw : null;
-    await admin.from("payments").update({ status: "failed", raw_payload: raw ?? { error: error instanceof Error ? error.message : "PayApp request failed." } }).eq("id", payment.id);
+    await admin.from("payments").update({ status: "failed", raw_payload: sanitizePayappError(raw ?? error) }).eq("id", payment.id);
     const message = error instanceof Error ? error.message : "";
     const status = message.includes("PayApp server configuration is missing") ? 503 : 400;
     return NextResponse.json(

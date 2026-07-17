@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
+import SiteFooter from "@/components/layout/SiteFooter";
 import { getAnalyticsBootstrapScript, getAnalyticsMeasurementId } from "@/lib/analytics/ga4";
 import "./globals.css";
 
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       ) : null}
       <body>
         {children}
+        <SiteFooter />
         <AnalyticsProvider />
       </body>
     </html>

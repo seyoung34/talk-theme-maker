@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, ArrowLeft, Check, CheckCircle2, Clock3, Coins, CreditCard, Gift, LoaderCircle, RefreshCw, ShieldCheck, Smartphone, Sparkles, Star, XCircle } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, Clock3, CreditCard, Gift, LoaderCircle, RefreshCw, ShieldCheck, Smartphone, Sparkles, Star, XCircle } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import type { AccountMeResponse, CreditCodeRedeemResponse, PayappPrepareResponse, PayappStatusResponse, PaymentStatus } from "@/lib/billing/apiTypes";
 import { creditProducts, type CreditProductId } from "@/lib/billing/products";
@@ -268,17 +268,18 @@ export default function CreditsClient() {
               <>
                 <label htmlFor="billing-phone" className="block mt-5 text-sm font-extrabold">결제 요청 휴대폰번호</label>
                 <div className="relative mt-2"><Smartphone className="absolute left-3 top-3.5 text-[var(--color-outline)]" size={18} aria-hidden="true" /><input id="billing-phone" className="h-12 w-full rounded-xl border border-[var(--color-outline-variant)] bg-white pl-10 pr-3 text-sm font-semibold outline-none transition placeholder:text-[var(--color-outline)] focus:border-[var(--color-secondary)] focus:ring-3 focus:ring-[var(--color-secondary-container)] disabled:bg-[var(--color-surface-low)]" inputMode="numeric" autoComplete="tel" placeholder="010-1234-5678" value={formatPhone(phone)} onChange={(event) => { setPhone(normalizePhone(event.currentTarget.value)); setPhoneError(null); }} onBlur={() => { if (phone && !isValidPhone(phone)) setPhoneError("010으로 시작하는 휴대폰번호를 정확히 입력해 주세요."); }} aria-describedby="phone-help phone-error" aria-invalid={Boolean(phoneError)} disabled={chargePhase !== "idle"} /></div>
-                <p id="phone-help" className="mt-2 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">PayApp 결제 요청을 전송하는 용도로만 사용합니다.</p>
+                <p id="phone-help" className="mt-2 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">PayApp 결제 요청을 전송하는 용도로만 사용하며 결제 테이블에 별도 저장하지 않습니다. <Link href="/privacy" className="underline underline-offset-2">개인정보 처리방침</Link></p>
                 {phoneError ? <p id="phone-error" className="mt-2 flex items-center gap-1.5 text-xs font-bold text-[var(--color-error)]" role="alert"><AlertCircle size={14} aria-hidden="true" />{phoneError}</p> : null}
                 <button type="button" className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#fee500] px-4 py-3 text-sm font-extrabold text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void chargeCredits()} disabled={chargePhase !== "idle" || isLoading}>
                   {chargePhase === "preparing" ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />결제 요청 준비 중</> : chargePhase === "redirecting" ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />PayApp으로 이동 중</> : <>{selectedProduct.amount.toLocaleString("ko-KR")}원 결제하기</>}
                 </button>
+                <p className="mt-3 text-[11px] font-semibold leading-5 text-[var(--color-outline)]">결제하면 <Link href="/terms" className="underline underline-offset-2">이용약관</Link>과 <Link href="/refund" className="underline underline-offset-2">환불·청약철회 안내</Link>를 확인한 것으로 처리됩니다. 문의는 <Link href="/support" className="underline underline-offset-2">고객지원</Link>에서 접수할 수 있습니다.</p>
               </>
             ) : (
               <div className="mt-5 rounded-[24px] bg-[#f7fbff] p-4"><p className="text-sm font-extrabold">결제하려면 로그인이 필요합니다.</p><Link href={`/login?returnTo=${encodeURIComponent(creditsPath)}&reason=billing`} className="mt-3 flex min-h-11 items-center justify-center rounded-full bg-[#2f6bbf] px-4 py-2.5 text-sm font-extrabold text-white">로그인</Link></div>
             )}
 
-            <div className="mt-4 flex items-start gap-2 text-[11px] font-semibold leading-5 text-[var(--color-outline)]"><ShieldCheck className="mt-0.5 shrink-0" size={14} aria-hidden="true" />결제는 외부 PayApp 화면에서 안전하게 진행됩니다.</div>
+            <div className="mt-4 flex items-start gap-2 text-[11px] font-semibold leading-5 text-[var(--color-outline)]"><ShieldCheck className="mt-0.5 shrink-0" size={14} aria-hidden="true" />결제는 외부 PayApp 화면에서 진행되며, 사업자 정보와 연락처는 <Link href="/support" className="underline underline-offset-2">고객지원</Link>에서 확인할 수 있습니다.</div>
           </aside>
         </div>
 

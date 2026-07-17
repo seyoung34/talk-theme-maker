@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
+import { addMinimumAgeConfirmationToCallbackUrl, addPolicyConsentToCallbackUrl, recordCurrentPolicyConsents } from "@/lib/policies/consent";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "signin" | "signup";
@@ -37,9 +38,14 @@ export default function LoginClient() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+  const [hasAcceptedPrivacy, setHasAcceptedPrivacy] = useState(false);
+  const [hasConfirmedMinimumAge, setHasConfirmedMinimumAge] = useState(false);
   const [message, setMessage] = useState<Message>(() => authError ? { tone: "error", text: authError } : null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const hasAcceptedRequiredPolicies = hasAcceptedTerms && hasAcceptedPrivacy;
+  const hasAcceptedSignupRequirements = hasAcceptedRequiredPolicies && hasConfirmedMinimumAge;
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -88,6 +94,10 @@ export default function LoginClient() {
       setMessage({ tone: "error", text: "비밀번호와 비밀번호 확인이 일치하지 않습니다." });
       return;
     }
+    if (mode === "signup" && !hasAcceptedSignupRequirements) {
+      setMessage({ tone: "error", text: "만 14세 이상임을 확인하고 필수 정책에 동의해 주세요." });
+      return;
+    }
 
     setIsSubmitting(true);
     setMessage(null);
@@ -98,9 +108,12 @@ export default function LoginClient() {
         : await supabase.auth.signUp({
           email: normalizedEmail,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}` },
+          options: { emailRedirectTo: getAuthCallbackUrl("email_signup") },
         });
       if (result.error) throw result.error;
+      if (mode === "signup" && result.data.session) {
+        await recordCurrentPolicyConsents(supabase, "email_signup");
+      }
       if (mode === "signup" && !result.data.session) {
         setStage("check-email");
         setResendCooldown(60);
@@ -125,7 +138,7 @@ export default function LoginClient() {
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: email.trim().toLowerCase(),
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}` },
+        options: { emailRedirectTo: getAuthCallbackUrl("email_signup") },
       });
       if (error) throw error;
       setResendCooldown(60);
@@ -139,19 +152,33 @@ export default function LoginClient() {
 
   const signInWithKakao = async () => {
     if (isSubmitting) return;
+    if (!hasConfirmedMinimumAge) {
+      setMessage({ tone: "error", text: "카카오 계정으로 계속하려면 만 14세 이상임을 확인해 주세요." });
+      return;
+    }
+    if (mode === "signup" && !hasAcceptedRequiredPolicies) {
+      setMessage({ tone: "error", text: "이용약관과 개인정보 처리방침에 동의해 주세요." });
+      return;
+    }
     setMessage(null);
     setIsSubmitting(true);
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "kakao",
-        options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}` },
+        options: { redirectTo: mode === "signup" ? getAuthCallbackUrl("kakao_signup") : getAuthCallbackUrl(undefined, true) },
       });
       if (error) throw error;
     } catch (error) {
       setMessage({ tone: "error", text: getAuthErrorMessage(error) });
       setIsSubmitting(false);
     }
+  };
+
+  const getAuthCallbackUrl = (consentSource?: "email_signup" | "kakao_signup", includeMinimumAgeConfirmation = false) => {
+    const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`;
+    if (consentSource) return addPolicyConsentToCallbackUrl(callbackUrl, consentSource);
+    return includeMinimumAgeConfirmation ? addMinimumAgeConfirmationToCallbackUrl(callbackUrl, "kakao_signup") : callbackUrl;
   };
 
   return (
@@ -247,7 +274,14 @@ export default function LoginClient() {
             ))}
           </div>
 
-          <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting}>
+          {mode === "signin" ? (
+            <div className="mb-3 rounded-[16px] border border-[#dbe8fb] bg-[#f7fbff] p-3">
+              <MinimumAgeConfirmationCheck checked={hasConfirmedMinimumAge} onChange={setHasConfirmedMinimumAge} disabled={isSubmitting} />
+              <p className="mt-1.5 pl-6 text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)]">카카오 로그인은 처음 이용할 때 계정이 생성될 수 있어 연령 확인이 필요합니다.</p>
+            </div>
+          ) : null}
+
+          <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting || !hasConfirmedMinimumAge || (mode === "signup" && !hasAcceptedRequiredPolicies)}>
             {isSubmitting ? <LoaderCircle className="animate-spin" size={18} aria-hidden="true" /> : <span className="text-base" aria-hidden="true">●</span>}
             카카오로 {mode === "signin" ? "로그인" : "시작하기"}
           </button>
@@ -281,9 +315,13 @@ export default function LoginClient() {
                 비밀번호를 잊으셨나요?
               </Link>
             ) : (
-              <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
-                회원가입을 진행하면 서비스 이용 정책과 개인정보 처리 안내에 동의한 것으로 봅니다.
-              </p>
+              <fieldset className="grid gap-2.5 rounded-[18px] border border-[#dbe8fb] bg-[#f7fbff] p-3.5">
+                <legend className="px-1 text-xs font-extrabold text-[var(--color-on-surface)]">필수 정책 동의</legend>
+                <MinimumAgeConfirmationCheck checked={hasConfirmedMinimumAge} onChange={setHasConfirmedMinimumAge} disabled={isSubmitting} />
+                <PolicyConsentCheck id="accept-terms" checked={hasAcceptedTerms} onChange={setHasAcceptedTerms} label="이용약관에 동의합니다." href="/terms" linkLabel="약관 보기" disabled={isSubmitting} />
+                <PolicyConsentCheck id="accept-privacy" checked={hasAcceptedPrivacy} onChange={setHasAcceptedPrivacy} label="개인정보 처리방침에 동의합니다." href="/privacy" linkLabel="내용 보기" disabled={isSubmitting} />
+                <p className="pl-7 text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)]">동의한 정책 버전과 시각은 계정에 기록됩니다.</p>
+              </fieldset>
             )}
 
             {message ? (
@@ -292,7 +330,7 @@ export default function LoginClient() {
               </div>
             ) : null}
 
-            <button className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-secondary)] px-5 py-3 text-sm font-extrabold text-white shadow-[0_18px_34px_rgba(47,107,191,0.22)] transition hover:-translate-y-0.5 hover:bg-[#3d7bd6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" type="submit" disabled={isSubmitting}>
+            <button className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-secondary)] px-5 py-3 text-sm font-extrabold text-white shadow-[0_18px_34px_rgba(47,107,191,0.22)] transition hover:-translate-y-0.5 hover:bg-[#3d7bd6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" type="submit" disabled={isSubmitting || (mode === "signup" && !hasAcceptedSignupRequirements)}>
               {isSubmitting ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />처리 중</> : <>{mode === "signin" ? "이메일로 로그인" : "이메일로 가입"}<ArrowRight size={17} aria-hidden="true" /></>}
             </button>
           </form>
@@ -303,5 +341,26 @@ export default function LoginClient() {
         </section>
       </div>
     </main>
+  );
+}
+
+function MinimumAgeConfirmationCheck({ checked, onChange, disabled }: { checked: boolean; onChange: (checked: boolean) => void; disabled: boolean }) {
+  return (
+    <div className="flex items-start gap-2.5 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
+      <input id="confirm-minimum-age" type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#2f6bbf]" checked={checked} onChange={(event) => onChange(event.currentTarget.checked)} disabled={disabled} />
+      <label htmlFor="confirm-minimum-age" className="cursor-pointer text-[var(--color-on-surface)]">[필수] 만 14세 이상입니다.</label>
+    </div>
+  );
+}
+
+function PolicyConsentCheck({ id, checked, onChange, label, href, linkLabel, disabled }: { id: string; checked: boolean; onChange: (checked: boolean) => void; label: string; href: string; linkLabel: string; disabled: boolean }) {
+  return (
+    <div className="flex items-start gap-2.5 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
+      <input id={id} type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[#2f6bbf]" checked={checked} onChange={(event) => onChange(event.currentTarget.checked)} disabled={disabled} />
+      <div className="min-w-0 flex-1 sm:flex sm:items-start sm:justify-between sm:gap-3">
+        <label htmlFor={id} className="cursor-pointer text-[var(--color-on-surface)]">[필수] {label}</label>
+        <Link href={href} target="_blank" rel="noopener noreferrer" className="ml-1 whitespace-nowrap font-extrabold text-[#2f6bbf] underline underline-offset-2 sm:ml-0">{linkLabel}</Link>
+      </div>
+    </div>
   );
 }
