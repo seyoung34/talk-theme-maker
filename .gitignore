@@ -57,19 +57,10 @@ local.properties
 tmp/
 temp/
 *.tmp
+.template-factory/
 
-# docs
-docs/notes/
-docs/report/
-docs/*
-!docs/architecture/
-docs/architecture/*
-!docs/architecture/commercial-launch-phase-1-data-policy.md
-!docs/plans/
-docs/plans/*
-!docs/plans/in-progress/
-docs/plans/in-progress/*
-!docs/plans/in-progress/commercial-launch-remediation-plan.md
+# Local project documents
+docs/
 
 .vercel
 .env*
