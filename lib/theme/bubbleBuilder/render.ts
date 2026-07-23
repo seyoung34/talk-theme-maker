@@ -1,4 +1,4 @@
-import { getAndroidBubbleMarkers, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
+import { bubbleDecorationBaseSize, bubbleDecorationMaxScale, getAndroidBubbleMarkers, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleBuilderVariant, BubbleFamilyDesignSpec, BubbleRect, GeneratedBubbleAsset, GeneratedBubbleDesign, GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder/types";
 import type { Markers, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -66,11 +66,6 @@ function drawBubbleBody(
   design: BubbleFamilyDesignSpec["design"],
 ) {
   context.save();
-  if (design.shadow === "soft") {
-    context.shadowColor = "rgba(15, 23, 42, 0.18)";
-    context.shadowBlur = 6;
-    context.shadowOffsetY = 3;
-  }
   roundedRectPath(context, body, radius);
   context.fillStyle = design.fill;
   context.fill();
@@ -93,21 +88,20 @@ function drawDecoration(
   canvasHeight: number,
   decoration: NonNullable<BubbleFamilyDesignSpec["design"]["decoration"]>,
 ): BubbleRect {
-  const baseScale = Math.min(1, 30 / Math.max(bitmap.width, bitmap.height));
-  const scale = baseScale * Math.max(0.1, Math.min(2, decoration.scale));
+  const baseScale = Math.min(1, bubbleDecorationBaseSize / Math.max(bitmap.width, bitmap.height));
+  const scale = baseScale * Math.max(0.1, Math.min(bubbleDecorationMaxScale, decoration.scale));
   const width = Math.max(1, bitmap.width * scale);
   const height = Math.max(1, bitmap.height * scale);
-  const x = canvasWidth / 2 + decoration.offsetX - width / 2;
-  const y = canvasHeight / 2 + decoration.offsetY - height / 2;
+  const centerX = canvasWidth / 2 + decoration.offsetX;
+  const centerY = canvasHeight / 2 + decoration.offsetY;
+  const x = centerX - width / 2;
+  const y = centerY - height / 2;
 
   context.save();
-  if (decoration.flipX) {
-    context.translate(x + width, y);
-    context.scale(-1, 1);
-    context.drawImage(bitmap, 0, 0, width, height);
-  } else {
-    context.drawImage(bitmap, x, y, width, height);
-  }
+  context.translate(centerX, centerY);
+  if (decoration.rotation) context.rotate((decoration.rotation * Math.PI) / 180);
+  if (decoration.flipX) context.scale(-1, 1);
+  context.drawImage(bitmap, -width / 2, -height / 2, width, height);
   context.restore();
   return { x, y, width, height };
 }

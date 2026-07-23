@@ -15,7 +15,6 @@ const spec: BubbleFamilyDesignSpec = {
     fill: "#FEE500",
     borderColor: "#D1D5DB",
     borderWidth: 0,
-    shadow: "none",
     textColor: "#111827",
     syncTextColorOnApply: false,
     decoration: { offsetX: 90, offsetY: -55, scale: 1, flipX: false },
@@ -42,16 +41,17 @@ describe("BubbleBuilderDialog decoration input", () => {
 
     fireEvent.paste(window, { clipboardData: { files: [file] } });
 
-    expect(screen.getByText("clipboard-cat.png")).toBeInTheDocument();
+    // 데스크톱/모바일 두 뷰가 동시에 DOM에 존재하므로 파일명이 여러 벌 나타날 수 있다.
+    expect(screen.getAllByText("clipboard-cat.png").length).toBeGreaterThan(0);
   });
 
   it("accepts an image dropped onto the upload zone", () => {
     renderDialog();
     const file = new File(["image"], "dropped-dog.webp", { type: "image/webp" });
 
-    fireEvent.drop(screen.getByTestId("bubble-decoration-dropzone"), { dataTransfer: { files: [file] } });
+    fireEvent.drop(screen.getAllByTestId("bubble-decoration-dropzone")[0], { dataTransfer: { files: [file] } });
 
-    expect(screen.getByText("dropped-dog.webp")).toBeInTheDocument();
+    expect(screen.getAllByText("dropped-dog.webp").length).toBeGreaterThan(0);
   });
 });
 

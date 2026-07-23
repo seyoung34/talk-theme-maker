@@ -2,11 +2,16 @@ import type { Insets, Markers } from "@/lib/theme/types";
 import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
 
 const variantPresets: Record<BubbleBuilderVariant, { width: number; height: number; bodyWidth: number; bodyHeight: number }> = {
-  first: { width: 210, height: 190, bodyWidth: 170, bodyHeight: 150 },
-  group: { width: 210, height: 150, bodyWidth: 170, bodyHeight: 110 },
+  first: { width: 250, height: 230, bodyWidth: 95, bodyHeight: 80 },
+  group: { width: 250, height: 190, bodyWidth: 95, bodyHeight: 60 },
 };
 
 export const bubbleBuilderPresetVersion = "bubble-builder-v1" as const;
+
+// 장식 이미지의 기본 표시 크기(논리 px). preview와 render가 공유해 미리보기와 실제 결과가 일치한다.
+export const bubbleDecorationBaseSize = 96;
+// 장식 크기 배율 상한. 캐릭터를 말풍선 본체보다 크게 얹을 수 있어야 한다.
+export const bubbleDecorationMaxScale = 4;
 
 export function createBubbleFamilyDesignSpec(side: BubbleBuilderSide, textColor = "#111827"): BubbleFamilyDesignSpec {
   const now = Date.now();
@@ -21,11 +26,10 @@ export function createBubbleFamilyDesignSpec(side: BubbleBuilderSide, textColor 
       radius: 28,
       fill: side === "me" ? "#FEE500" : "#FFFFFF",
       borderColor: "#D1D5DB",
-      borderWidth: 0,
-      shadow: "none",
+      borderWidth: 4,
       textColor,
       syncTextColorOnApply: false,
-      decoration: { offsetX: side === "me" ? 90 : -90, offsetY: -55, scale: 1, flipX: side === "you" },
+      decoration: { offsetX: 0, offsetY: -64, scale: 1.6, flipX: false, rotation: 0 },
     },
     createdAt: now,
     updatedAt: now,
@@ -43,8 +47,8 @@ export function getBubbleVariantGeometry(design: BubbleSideDesignSpec, variant: 
   const bodyWidth = design.preset === "circle" ? Math.min(source.bodyWidth, source.bodyHeight) : source.bodyWidth;
   const bodyHeight = design.preset === "circle" ? bodyWidth : source.bodyHeight;
   const body: BubbleRect = {
-    x: Math.round((source.width - bodyWidth) / 2),
-    y: Math.round((source.height - bodyHeight) / 2),
+    x: clamp(Math.round((source.width - bodyWidth) / 2) + Math.round(design.bodyOffsetX ?? 0), 0, source.width - bodyWidth),
+    y: clamp(Math.round((source.height - bodyHeight) / 2) + Math.round(design.bodyOffsetY ?? 0), 0, source.height - bodyHeight),
     width: bodyWidth,
     height: bodyHeight,
   };

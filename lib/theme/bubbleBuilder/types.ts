@@ -9,6 +9,7 @@ export type BubbleDecorationTransform = {
   offsetY: number;
   scale: number;
   flipX: boolean;
+  rotation?: number;
 };
 
 export type BubbleSideDesignSpec = {
@@ -18,9 +19,10 @@ export type BubbleSideDesignSpec = {
   fill: string;
   borderColor: string;
   borderWidth: number;
-  shadow: "none" | "soft";
   textColor: string;
   syncTextColorOnApply: boolean;
+  bodyOffsetX?: number;
+  bodyOffsetY?: number;
   decoration?: BubbleDecorationTransform;
 };
 

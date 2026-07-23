@@ -9,25 +9,24 @@ const baseDesign: BubbleSideDesignSpec = {
   fill: "#FFE27A",
   borderColor: "#334155",
   borderWidth: 3,
-  shadow: "none",
   textColor: "#111111",
   syncTextColorOnApply: false,
 };
 
 describe("bubble builder geometry", () => {
-  it("starts decoration in the outer bleed area for each side", () => {
-    expect(createBubbleFamilyDesignSpec("me").design.decoration).toMatchObject({ offsetX: 90, offsetY: -55, flipX: false });
-    expect(createBubbleFamilyDesignSpec("you").design.decoration).toMatchObject({ offsetX: -90, offsetY: -55, flipX: true });
+  it("starts decoration centered above the bubble body for each side", () => {
+    expect(createBubbleFamilyDesignSpec("me").design.decoration).toMatchObject({ offsetX: 0, offsetY: -64, scale: 1.6, flipX: false });
+    expect(createBubbleFamilyDesignSpec("you").design.decoration).toMatchObject({ offsetX: 0, offsetY: -64, scale: 1.6, flipX: false });
   });
 
   it("keeps first and group geometry independent", () => {
     const first = getBubbleVariantGeometry(baseDesign, "first");
     const group = getBubbleVariantGeometry(baseDesign, "group");
 
-    expect(first.canvas).toEqual({ width: 210, height: 190 });
-    expect(group.canvas).toEqual({ width: 210, height: 150 });
-    expect(first.body.height).toBe(150);
-    expect(group.body.height).toBe(110);
+    expect(first.canvas).toEqual({ width: 250, height: 230 });
+    expect(group.canvas).toEqual({ width: 250, height: 190 });
+    expect(first.body.height).toBe(80);
+    expect(group.body.height).toBe(60);
     expect(first.content.height).toBeGreaterThan(group.content.height);
   });
 
@@ -35,9 +34,19 @@ describe("bubble builder geometry", () => {
     const design = { ...baseDesign, preset: "capsule" as const, radius: 999 };
     const geometry = getBubbleVariantGeometry(design, "first");
 
-    expect(getBubbleRadiusMax("capsule", "first")).toBe(75);
-    expect(geometry.radius).toBe(75);
-    expect(geometry.stretch).toEqual({ x: 105, y: 95 });
+    expect(getBubbleRadiusMax("capsule", "first")).toBe(40);
+    expect(geometry.radius).toBe(40);
+    expect(geometry.stretch).toEqual({ x: 125, y: 115 });
+  });
+
+  it("shifts the body within the canvas by bodyOffset and clamps to bounds", () => {
+    const moved = getBubbleVariantGeometry({ ...baseDesign, bodyOffsetX: 20, bodyOffsetY: -10 }, "first");
+    expect(moved.body.x).toBe(98);
+    expect(moved.body.y).toBe(65);
+
+    const clamped = getBubbleVariantGeometry({ ...baseDesign, bodyOffsetX: 9999, bodyOffsetY: -9999 }, "first");
+    expect(clamped.body.x).toBe(250 - 95);
+    expect(clamped.body.y).toBe(0);
   });
 
   it("makes the circle body square and preserves a text-safe rect", () => {
