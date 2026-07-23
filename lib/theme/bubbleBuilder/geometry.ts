@@ -1,5 +1,5 @@
 import type { Insets, Markers } from "@/lib/theme/types";
-import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
+import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDecorationLayer, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
 
 const variantPresets: Record<BubbleBuilderVariant, { width: number; height: number; bodyWidth: number; bodyHeight: number }> = {
   first: { width: 250, height: 230, bodyWidth: 95, bodyHeight: 80 },
@@ -29,11 +29,25 @@ export function createBubbleFamilyDesignSpec(side: BubbleBuilderSide, textColor 
       borderWidth: 4,
       textColor,
       syncTextColorOnApply: false,
-      decoration: { offsetX: 0, offsetY: -64, scale: 1.6, flipX: false, rotation: 0 },
+      decorations: [],
     },
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export function createBubbleDecorationLayer(id: string, sourceName?: string): BubbleDecorationLayer {
+  return { id, sourceName, offsetX: 0, offsetY: -64, scale: 1.6, flipX: false, rotation: 0 };
+}
+
+/**
+ * 장식 레이어 목록을 읽는다.
+ * 단일 장식만 저장하던 이전 recipe는 familyId를 레이어 id로 승격해 원본 파일 key와 호환시킨다.
+ */
+export function getBubbleDecorationLayers(spec: BubbleFamilyDesignSpec): BubbleDecorationLayer[] {
+  if (spec.design.decorations) return spec.design.decorations;
+  if (spec.design.decoration) return [{ ...spec.design.decoration, id: spec.familyId, sourceName: spec.decorationSourceName }];
+  return [];
 }
 
 export function getBubbleRadiusMax(preset: BubbleShapePreset, variant: BubbleBuilderVariant) {

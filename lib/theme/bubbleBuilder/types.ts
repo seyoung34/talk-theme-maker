@@ -12,6 +12,12 @@ export type BubbleDecorationTransform = {
   rotation?: number;
 };
 
+// 장식 레이어. id는 원본 파일(BubbleDecorationSources)의 key로도 쓴다.
+export type BubbleDecorationLayer = BubbleDecorationTransform & {
+  id: string;
+  sourceName?: string;
+};
+
 export type BubbleSideDesignSpec = {
   side: BubbleBuilderSide;
   preset: BubbleShapePreset;
@@ -23,7 +29,9 @@ export type BubbleSideDesignSpec = {
   syncTextColorOnApply: boolean;
   bodyOffsetX?: number;
   bodyOffsetY?: number;
+  /** @deprecated 단일 장식 시절 필드. 읽기 호환용이며 새 저장은 decorations를 사용한다. */
   decoration?: BubbleDecorationTransform;
+  decorations?: BubbleDecorationLayer[];
 };
 
 export type BubbleFamilyDesignSpec = {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createBubbleFamilyDesignSpec, getAndroidBubbleMarkers, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
+import { createBubbleDecorationLayer, createBubbleFamilyDesignSpec, getAndroidBubbleMarkers, getBubbleDecorationLayers, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleSideDesignSpec } from "@/lib/theme/bubbleBuilder/types";
 
 const baseDesign: BubbleSideDesignSpec = {
@@ -14,9 +14,29 @@ const baseDesign: BubbleSideDesignSpec = {
 };
 
 describe("bubble builder geometry", () => {
-  it("starts decoration centered above the bubble body for each side", () => {
-    expect(createBubbleFamilyDesignSpec("me").design.decoration).toMatchObject({ offsetX: 0, offsetY: -64, scale: 1.6, flipX: false });
-    expect(createBubbleFamilyDesignSpec("you").design.decoration).toMatchObject({ offsetX: 0, offsetY: -64, scale: 1.6, flipX: false });
+  it("starts with no decoration and places new layers centered above the body", () => {
+    expect(createBubbleFamilyDesignSpec("me").design.decorations).toEqual([]);
+    expect(createBubbleDecorationLayer("layer-1", "cat.png")).toMatchObject({
+      id: "layer-1",
+      sourceName: "cat.png",
+      offsetX: 0,
+      offsetY: -64,
+      scale: 1.6,
+      flipX: false,
+    });
+  });
+
+  it("reads legacy single-decoration recipes as one layer keyed by familyId", () => {
+    const legacy = {
+      ...createBubbleFamilyDesignSpec("me"),
+      familyId: "family-1",
+      decorationSourceName: "old.png",
+      design: { ...baseDesign, decorations: undefined, decoration: { offsetX: 12, offsetY: -20, scale: 1.2, flipX: true } },
+    };
+
+    expect(getBubbleDecorationLayers(legacy)).toEqual([
+      { id: "family-1", sourceName: "old.png", offsetX: 12, offsetY: -20, scale: 1.2, flipX: true },
+    ]);
   });
 
   it("keeps first and group geometry independent", () => {

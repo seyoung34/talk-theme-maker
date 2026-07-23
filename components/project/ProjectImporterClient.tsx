@@ -48,6 +48,7 @@ import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
+import { getBubbleDecorationLayers } from "@/lib/theme/bubbleBuilder";
 import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDesigns, BubbleFamilyDesignSpec, GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
@@ -640,7 +641,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     trackAnalyticsEvent("candidate_selected", { slot_role: slot.role, section: slot.section, asset_source: "admin" });
   };
 
-  const applyBubbleDesign = (result: GeneratedBubbleDesign, decorationFile?: File) => {
+  const applyBubbleDesign = (result: GeneratedBubbleDesign, decorationFiles: Partial<Record<string, File>>) => {
     if (!selectedSlot || !selectedBubbleSlot || result.asset.role !== selectedSlot.role) {
       setNotice({ tone: "error", message: "선택한 말풍선 슬롯과 생성 결과가 일치하지 않습니다." });
       return;
@@ -674,8 +675,20 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       const colorSlot = slots.find((slot) => slot.role === colorRole);
       if (colorSlot) nextDraft.colors[colorSlot.id] = result.spec.design.textColor;
     }
-    if (decorationFile) nextDraft.bubbleDecorationSources[result.spec.familyId] = decorationFile;
-    else delete nextDraft.bubbleDecorationSources[result.spec.familyId];
+    // 장식 원본은 레이어 id를 key로 보관한다. 제거된 레이어와 단일 장식 시절 key는 함께 정리한다.
+    const previousDesign = bubbleDesigns[selectedSlot.role];
+    const nextLayers = result.spec.design.decorations ?? [];
+    const nextLayerIds = new Set(nextLayers.map((layer) => layer.id));
+    if (previousDesign) {
+      for (const previousLayer of getBubbleDecorationLayers(previousDesign)) {
+        if (!nextLayerIds.has(previousLayer.id)) delete nextDraft.bubbleDecorationSources[previousLayer.id];
+      }
+    }
+    delete nextDraft.bubbleDecorationSources[result.spec.familyId];
+    for (const layer of nextLayers) {
+      const file = decorationFiles[layer.id];
+      if (file) nextDraft.bubbleDecorationSources[layer.id] = file;
+    }
     replaceDraft(nextDraft);
     const warningSuffix = result.warnings.length ? ` ${result.warnings[0].message}` : "";
     setNotice({ tone: result.warnings.length ? "warning" : "success", message: `${selectedSlot.label} 슬롯에 말풍선을 적용했습니다.${warningSuffix}` });
@@ -806,7 +819,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   return (
     <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
-      {selectedSlot && selectedBubbleSlot && selectedBubbleVariant ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} variant={selectedBubbleVariant} slotLabel={selectedSlot.label} platform={platform} initialSpec={selectedBubbleDesign} initialDecorationFile={selectedBubbleDesign ? bubbleDecorationSources[selectedBubbleDesign.familyId] : undefined} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleDesign} /> : null}
+      {selectedSlot && selectedBubbleSlot && selectedBubbleVariant ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} variant={selectedBubbleVariant} slotLabel={selectedSlot.label} platform={platform} initialSpec={selectedBubbleDesign} initialDecorationFiles={bubbleDecorationSources} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleDesign} /> : null}
       {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
       {saveDialogOpen ? (
         <SaveTemplateDialog

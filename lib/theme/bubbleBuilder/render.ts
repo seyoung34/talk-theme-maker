@@ -1,43 +1,62 @@
-import { bubbleDecorationBaseSize, bubbleDecorationMaxScale, getAndroidBubbleMarkers, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
-import type { BubbleBuilderVariant, BubbleFamilyDesignSpec, BubbleRect, GeneratedBubbleAsset, GeneratedBubbleDesign, GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder/types";
+import { bubbleDecorationBaseSize, bubbleDecorationMaxScale, getAndroidBubbleMarkers, getBubbleDecorationLayers, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
+import type { BubbleBuilderVariant, BubbleDecorationLayer, BubbleFamilyDesignSpec, BubbleRect, GeneratedBubbleAsset, GeneratedBubbleDesign, GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder/types";
 import type { Markers, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 type GenerateBubbleFamilyOptions = {
   spec: BubbleFamilyDesignSpec;
   platform: ThemePlatform;
-  decorationFile?: File;
+  decorationFiles?: Partial<Record<string, File>>;
 };
 
 type GenerateBubbleAssetOptions = GenerateBubbleFamilyOptions & { variant: BubbleBuilderVariant };
 
-export async function generateBubbleAsset({ spec, platform, variant, decorationFile }: GenerateBubbleAssetOptions): Promise<GeneratedBubbleDesign> {
-  const decoration = decorationFile ? await createImageBitmap(decorationFile) : undefined;
+type DecorationBitmap = { layer: BubbleDecorationLayer; bitmap: ImageBitmap };
+
+async function loadDecorationBitmaps(spec: BubbleFamilyDesignSpec, decorationFiles?: Partial<Record<string, File>>): Promise<DecorationBitmap[]> {
+  if (!decorationFiles) return [];
+  const layers = getBubbleDecorationLayers(spec);
+  const loaded = await Promise.all(
+    layers.map(async (layer) => {
+      const file = decorationFiles[layer.id];
+      if (!file) return null;
+      return { layer, bitmap: await createImageBitmap(file) };
+    }),
+  );
+  return loaded.filter((item): item is DecorationBitmap => item !== null);
+}
+
+function closeDecorationBitmaps(decorations: DecorationBitmap[]) {
+  for (const item of decorations) item.bitmap.close();
+}
+
+export async function generateBubbleAsset({ spec, platform, variant, decorationFiles }: GenerateBubbleAssetOptions): Promise<GeneratedBubbleDesign> {
+  const decorations = await loadDecorationBitmaps(spec, decorationFiles);
   try {
-    const { asset, warnings } = await renderBubbleAsset(spec, platform, variant, decoration);
+    const { asset, warnings } = await renderBubbleAsset(spec, platform, variant, decorations);
     return { spec, asset, warnings };
   } finally {
-    decoration?.close();
+    closeDecorationBitmaps(decorations);
   }
 }
 
-export async function generateBubbleFamily({ spec, platform, decorationFile }: GenerateBubbleFamilyOptions): Promise<GeneratedBubbleFamily> {
-  const decoration = decorationFile ? await createImageBitmap(decorationFile) : undefined;
+export async function generateBubbleFamily({ spec, platform, decorationFiles }: GenerateBubbleFamilyOptions): Promise<GeneratedBubbleFamily> {
+  const decorations = await loadDecorationBitmaps(spec, decorationFiles);
   const warnings: GeneratedBubbleFamily["warnings"] = [];
   try {
     const assets = await Promise.all(
       (["first", "group"] as const).map(async (variant) => {
-        const rendered = await renderBubbleAsset(spec, platform, variant, variant === "first" ? decoration : undefined);
+        const rendered = await renderBubbleAsset(spec, platform, variant, variant === "first" ? decorations : []);
         warnings.push(...rendered.warnings);
         return rendered.asset;
       }),
     );
     return { spec, assets, warnings: dedupeWarnings(warnings) };
   } finally {
-    decoration?.close();
+    closeDecorationBitmaps(decorations);
   }
 }
 
-async function renderBubbleAsset(spec: BubbleFamilyDesignSpec, platform: ThemePlatform, variant: BubbleBuilderVariant, decoration?: ImageBitmap) {
+async function renderBubbleAsset(spec: BubbleFamilyDesignSpec, platform: ThemePlatform, variant: BubbleBuilderVariant, decorations: DecorationBitmap[] = []) {
   const geometry = getBubbleVariantGeometry(spec.design, variant);
   const artwork = document.createElement("canvas");
   artwork.width = geometry.canvas.width;
@@ -47,8 +66,8 @@ async function renderBubbleAsset(spec: BubbleFamilyDesignSpec, platform: ThemePl
   context.clearRect(0, 0, artwork.width, artwork.height);
   drawBubbleBody(context, geometry.body, geometry.radius, spec.design);
 
-  if (decoration && spec.design.decoration) {
-    const decorationRect = drawDecoration(context, decoration, artwork.width, artwork.height, spec.design.decoration);
+  for (const { layer, bitmap } of decorations) {
+    const decorationRect = drawDecoration(context, bitmap, artwork.width, artwork.height, layer);
     if (rectsOverlap(decorationRect, geometry.content)) warnings.push({ code: "decoration-overlap", message: "꾸미기 이미지가 글자 영역과 겹쳐요." });
   }
   if (geometry.content.width < 24 || geometry.content.height < 24) warnings.push({ code: "content-too-small", message: "글자가 들어갈 영역이 너무 작아요." });
@@ -86,7 +105,7 @@ function drawDecoration(
   bitmap: ImageBitmap,
   canvasWidth: number,
   canvasHeight: number,
-  decoration: NonNullable<BubbleFamilyDesignSpec["design"]["decoration"]>,
+  decoration: BubbleDecorationLayer,
 ): BubbleRect {
   const baseScale = Math.min(1, bubbleDecorationBaseSize / Math.max(bitmap.width, bitmap.height));
   const scale = baseScale * Math.max(0.1, Math.min(bubbleDecorationMaxScale, decoration.scale));

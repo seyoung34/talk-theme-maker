@@ -283,9 +283,9 @@ export default function AdminAssetsClient() {
 
         <section className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="grid content-start gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4">
-            <div className="rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3">
-              <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[#1d4ed8]">Asset workflow</span>
-              <p className="mt-1 text-sm font-black leading-5 text-[#0f172a]">에셋 종류와 대표 슬롯만 고르면 Android/iOS 공통 대상으로 저장합니다.</p>
+            <div className="rounded-2xl border border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-3">
+              <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Asset workflow</span>
+              <p className="mt-1 text-sm font-black leading-5 text-[var(--color-on-surface)]">에셋 종류와 대표 슬롯만 고르면 Android/iOS 공통 대상으로 저장합니다.</p>
             </div>
 
             <div className="grid gap-2">
@@ -294,12 +294,12 @@ export default function AdminAssetsClient() {
                 <button
                   key={group.kind}
                   type="button"
-                  className={`flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition ${assetKind === group.kind ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)]"}`}
+                  className={`flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition ${assetKind === group.kind ? "border-[var(--color-info)] bg-[var(--color-info-container)] text-[var(--color-info-strong)]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)]"}`}
                   onClick={() => setAssetKind(group.kind)}
                   aria-current={assetKind === group.kind ? "true" : undefined}
                 >
                   <span className="text-sm font-black">{getAdminAssetKindLabel(group.kind)}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${assetKind === group.kind ? "bg-white text-[#1d4ed8]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{group.slots.length}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${assetKind === group.kind ? "bg-white text-[var(--color-info-strong)]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{group.slots.length}</span>
                 </button>
               ))}
             </div>
@@ -310,7 +310,7 @@ export default function AdminAssetsClient() {
                 <button
                   key={slot.id}
                   type="button"
-                  className={`rounded-2xl border px-3 py-3 text-left transition ${selectedSlot?.id === slot.id ? "border-[#2563eb] bg-[#eff6ff]" : "border-[var(--color-outline-variant)] bg-white hover:bg-[var(--color-surface-low)]"}`}
+                  className={`rounded-2xl border px-3 py-3 text-left transition ${selectedSlot?.id === slot.id ? "border-[var(--color-info)] bg-[var(--color-info-container)]" : "border-[var(--color-outline-variant)] bg-white hover:bg-[var(--color-surface-low)]"}`}
                   onClick={() => setSelectedSlotId(slot.id)}
                 >
                   <span className="block text-sm font-black text-[var(--color-on-surface)]">{slot.label}</span>
@@ -351,15 +351,15 @@ export default function AdminAssetsClient() {
                 >
                   {isSavingAsset ? (
                     <div className="absolute inset-0 z-10 grid place-items-center bg-white/72 backdrop-blur-[1px]" role="status" aria-live="polite">
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-4 py-2 text-sm font-black text-[#1d4ed8] shadow-sm">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-4 py-2 text-sm font-black text-[var(--color-info-strong)] shadow-sm">
                         <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
                         {selectedSaveTargets.length > 1 ? `${selectedSaveTargets.length}개 target 저장 중` : "관리 후보 저장 중"}
                       </div>
                     </div>
                   ) : null}
-                  <div className="grid gap-2 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] px-4 py-3 md:col-span-2">
-                    <strong className="text-sm font-black text-[#1e3a8a]">저장 방식</strong>
-                    <p className="text-xs font-semibold leading-5 text-[#475569]">
+                  <div className="grid gap-2 rounded-2xl border border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-3 md:col-span-2">
+                    <strong className="text-sm font-black text-[var(--color-on-info-container)]">저장 방식</strong>
+                    <p className="text-xs font-semibold leading-5 text-[var(--color-on-info-container-variant)]">
                       업로드한 파일은 한 번만 저장하고, 대표 슬롯을 기준으로 Android/iOS에 필요한 target을 자동 생성합니다. 말풍선만 Android marker와 iOS inset/stretch 값을 함께 확인합니다.
                     </p>
                   </div>
@@ -393,7 +393,7 @@ export default function AdminAssetsClient() {
                     }
                   }}
                   className={`grid gap-2 rounded-2xl border-2 border-dashed px-4 py-5 transition ${dragActive
-                    ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]"
+                    ? "border-[var(--color-info)] bg-[var(--color-info-container)] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.12)]"
                     : "border-[var(--color-outline-variant)] bg-[var(--color-surface-low)]"
                     }`}
                   onDragEnter={(event) => {
@@ -454,7 +454,7 @@ export default function AdminAssetsClient() {
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      className="group inline-flex min-h-10 items-center gap-2 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-4 text-xs font-black text-[#1d4ed8] shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[#93c5fd] hover:bg-[#dbeafe] hover:shadow-md active:translate-y-0 active:scale-[0.98]"
+                      className="group inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-4 text-xs font-black text-[var(--color-info-strong)] shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--color-info-outline-strong)] hover:bg-[var(--color-info-container-high)] hover:shadow-md active:translate-y-0 active:scale-[0.98]"
                       onClick={() => fileInputRef.current?.click()}
                     >
                       <ImagePlus
@@ -467,7 +467,7 @@ export default function AdminAssetsClient() {
 
                     <button
                       type="button"
-                      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 text-xs font-black text-[var(--color-on-surface-variant)] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[#bfdbfe] hover:bg-[#eff6ff] hover:text-[#1d4ed8] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
+                      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 text-xs font-black text-[var(--color-on-surface-variant)] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--color-info-outline)] hover:bg-[var(--color-info-container)] hover:text-[var(--color-info-strong)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
                       disabled={!file}
                       onClick={() => setImageEditOpen(true)}
                     >
@@ -516,7 +516,7 @@ export default function AdminAssetsClient() {
                     </div>
                     <button
                       type="button"
-                      className="rounded-full bg-white px-4 py-2 text-xs font-black text-[var(--color-on-surface)] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#eff6ff] active:translate-y-0"
+                      className="rounded-full bg-white px-4 py-2 text-xs font-black text-[var(--color-on-surface)] shadow-sm transition hover:-translate-y-0.5 hover:bg-[var(--color-info-container)] active:translate-y-0"
                       onClick={applyRecommendedBubbleAdjustment}
                     >
                       공통 기준 자동 맞춤
@@ -566,7 +566,7 @@ export default function AdminAssetsClient() {
                     value={assetSearch}
                     onChange={(event) => setAssetSearch(event.currentTarget.value)}
                     placeholder="이름, 파일명, role 검색"
-                    className="h-11 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-sm font-semibold outline-none transition focus:border-[#93c5fd] focus:bg-white focus:ring-3 focus:ring-[#dbeafe]"
+                    className="h-11 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-sm font-semibold outline-none transition focus:border-[var(--color-info-outline-strong)] focus:bg-white focus:ring-3 focus:ring-[var(--color-info-container-high)]"
                     aria-label="관리 후보 검색"
                   />
                 </div>
@@ -819,12 +819,12 @@ function BubblePlatformCard({
   return (
     <button
       type="button"
-      className={`grid gap-2 rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-0.5 active:translate-y-0 ${active ? "border-[#2563eb] bg-[#eff6ff]" : "border-[var(--color-outline-variant)] bg-white hover:bg-[var(--color-surface-low)]"}`}
+      className={`grid gap-2 rounded-2xl border px-4 py-3 text-left transition hover:-translate-y-0.5 active:translate-y-0 ${active ? "border-[var(--color-info)] bg-[var(--color-info-container)]" : "border-[var(--color-outline-variant)] bg-white hover:bg-[var(--color-surface-low)]"}`}
       onClick={onSelect}
     >
       <span className="flex items-center justify-between gap-2">
         <strong className="text-sm font-black text-[var(--color-on-surface)]">{title}</strong>
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${active ? "bg-white text-[#1d4ed8]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{platform}</span>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase ${active ? "bg-white text-[var(--color-info-strong)]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{platform}</span>
       </span>
       <span className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{description}</span>
       <span className="rounded-xl bg-[var(--color-surface-low)] px-3 py-2 text-[11px] font-bold leading-5 text-[var(--color-on-surface-variant)]">{detail}</span>
@@ -1063,7 +1063,7 @@ function AdminAssetEditDialog({
                     disabled={saving}
                     aria-pressed={targetMode === "keep"}
                     onClick={() => setTargetMode("keep")}
-                    className={`rounded-2xl border px-4 py-3 text-left text-xs font-bold leading-5 transition hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-45 ${targetMode === "keep" ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
+                    className={`rounded-2xl border px-4 py-3 text-left text-xs font-bold leading-5 transition hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-45 ${targetMode === "keep" ? "border-[var(--color-info)] bg-[var(--color-info-container)] text-[var(--color-info-strong)]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
                   >
                     기존 대상 유지
                   </button>
@@ -1072,7 +1072,7 @@ function AdminAssetEditDialog({
                     disabled={saving}
                     aria-pressed={targetMode === "shared"}
                     onClick={() => setTargetMode("shared")}
-                    className={`rounded-2xl border px-4 py-3 text-left text-xs font-bold leading-5 transition hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-45 ${targetMode === "shared" ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
+                    className={`rounded-2xl border px-4 py-3 text-left text-xs font-bold leading-5 transition hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-45 ${targetMode === "shared" ? "border-[var(--color-info)] bg-[var(--color-info-container)] text-[var(--color-info-strong)]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
                   >
                     Android+iOS 공통 대상으로 정리
                   </button>
