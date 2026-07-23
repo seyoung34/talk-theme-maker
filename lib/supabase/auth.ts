@@ -27,7 +27,16 @@ export async function getCurrentAdmin() {
   return { user: userData.user, profile, configured: true };
 }
 
+// 로컬 QA 전용 우회. 프로덕션에서는 절대 활성화되지 않도록 NODE_ENV와 명시적 플래그를 이중으로 확인한다.
+function isAdminQaBypassEnabled() {
+  return process.env.NODE_ENV !== "production" && process.env.ADMIN_QA_BYPASS === "1";
+}
+
 export async function requireAdmin(returnTo = "/admin") {
+  if (isAdminQaBypassEnabled()) {
+    console.warn("[admin] ADMIN_QA_BYPASS가 켜져 있어 관리자 인증을 건너뜁니다. 프로덕션에서는 절대 사용하지 마세요.");
+    return { user: null, profile: null, configured: true } as Awaited<ReturnType<typeof getCurrentAdmin>>;
+  }
   const admin = await getCurrentAdmin();
   if (!admin.configured) redirect(`/admin-login?returnTo=${encodeURIComponent(returnTo)}&reason=missing-config`);
   if (!admin.user) redirect(`/admin-login?returnTo=${encodeURIComponent(returnTo)}`);
