@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
+import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
 import { persistEditorSession } from "@/components/project/editorSession";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice as Notice } from "@/components/project/editorTypes";
 import { ExitConfirmDialog } from "@/components/project/dialogs/ExitConfirmDialog";
@@ -47,6 +48,7 @@ import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
+import type { GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import {
@@ -74,7 +76,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [selectedSlotId, setSelectedSlotId] = useState<string | undefined>();
   const [selectionPulseKey, setSelectionPulseKey] = useState(0);
   const {
-    draft: { uploads, remoteUploadRefs, colors, candidateSelections, bubbleMarkers, bubbleInsets, bubbleStretch },
+    draft,
     ensureSystemTemplateUploadsHydrated,
     hydratePreviewUploads,
     hydrateSystemTemplateUploads,
@@ -87,6 +89,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setRemoteUploadRefs,
     setUploads,
   } = useThemeDraft();
+  const { uploads, remoteUploadRefs, colors, candidateSelections, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleDesigns, bubbleDecorationSources } = draft;
   const [candidateOpen, setCandidateOpen] = useState(true);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
@@ -107,6 +110,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [systemPriceAmount, setSystemPriceAmount] = useState("");
   const [systemCreditCost, setSystemCreditCost] = useState("");
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  const [bubbleBuilderOpen, setBubbleBuilderOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
@@ -205,7 +209,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           activeGroup,
           selectedSlotId,
         },
-        draft: { uploads, remoteUploadRefs, colors, candidateSelections, bubbleMarkers, bubbleInsets, bubbleStretch },
+        draft: { uploads, remoteUploadRefs, colors, candidateSelections, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleDesigns, bubbleDecorationSources },
         exportOptions,
       });
       const returnTo = `/edit?resume=${encodeURIComponent(recovery.resume.token)}`;
@@ -218,7 +222,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       if (!continueWithoutRecovery) return;
       router.push(destination === "login" ? "/login?returnTo=%2Fedit&reason=export" : "/credits?entry=export_block&returnTo=%2Fedit");
     }
-  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
+  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, bubbleDecorationSources, bubbleDesigns, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
 
   useEffect(() => {
     if (skipDefaultSelectionResetRef.current) {
@@ -289,6 +293,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     bubbleInsets,
     bubbleMarkers,
     bubbleStretch,
+    bubbleDesigns,
+    bubbleDecorationSources,
     candidateSelections,
     colors,
     ensureSystemTemplateUploadsHydrated,
@@ -425,6 +431,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       bubbleMarkers: {},
       bubbleInsets: {},
       bubbleStretch: {},
+      bubbleDesigns: {},
+      bubbleDecorationSources: {},
     });
     setActiveUserTemplate(null);
     setActiveSystemTemplate(null);
@@ -630,6 +638,55 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     trackAnalyticsEvent("candidate_selected", { slot_role: slot.role, section: slot.section, asset_source: "admin" });
   };
 
+  const applyBubbleFamily = (family: GeneratedBubbleFamily, decorationFile?: File) => {
+    const generatedAt = Date.now();
+    const applied: Array<{ slot: ThemeAssetSlot; uploadId: string; asset: GeneratedBubbleFamily["assets"][number] }> = [];
+    for (const asset of family.assets) {
+      const slot = slots.find((candidate) => candidate.role === asset.role);
+      if (!slot) continue;
+      applied.push({ slot, uploadId: `${slot.id}:bubble-builder:${family.spec.familyId}:${generatedAt}:${asset.variant}`, asset });
+    }
+    if (!applied.length) {
+      setNotice({ tone: "error", message: "현재 플랫폼에서 적용할 말풍선 슬롯을 찾지 못했습니다." });
+      return;
+    }
+
+    const nextDraft = {
+      ...draft,
+      uploads: { ...uploads },
+      remoteUploadRefs: { ...remoteUploadRefs },
+      candidateSelections: { ...candidateSelections },
+      bubbleMarkers: { ...bubbleMarkers },
+      bubbleInsets: { ...bubbleInsets },
+      bubbleStretch: { ...bubbleStretch },
+      bubbleDesigns: { ...bubbleDesigns, [family.spec.side]: family.spec },
+      bubbleDecorationSources: { ...bubbleDecorationSources },
+      colors: { ...colors },
+    };
+    for (const { slot, uploadId, asset } of applied) {
+      nextDraft.uploads[slot.id] = [...(nextDraft.uploads[slot.id] ?? []), { id: uploadId, file: asset.file, source: "user" as const }];
+      delete nextDraft.remoteUploadRefs[slot.id];
+      nextDraft.candidateSelections[slot.id] = uploadId;
+      delete nextDraft.bubbleMarkers[slot.id];
+      delete nextDraft.bubbleInsets[slot.id];
+      delete nextDraft.bubbleStretch[slot.id];
+      if (asset.markers) nextDraft.bubbleMarkers[slot.id] = asset.markers;
+      if (asset.insets) nextDraft.bubbleInsets[slot.id] = asset.insets;
+      if (asset.stretch) nextDraft.bubbleStretch[slot.id] = asset.stretch;
+    }
+    if (family.spec.design.syncTextColorOnApply) {
+      const colorRole = family.spec.side === "me" ? "chat_bubble_me_color" : "chat_bubble_you_color";
+      const colorSlot = slots.find((slot) => slot.role === colorRole);
+      if (colorSlot) nextDraft.colors[colorSlot.id] = family.spec.design.textColor;
+    }
+    if (decorationFile) nextDraft.bubbleDecorationSources[family.spec.familyId] = decorationFile;
+    else delete nextDraft.bubbleDecorationSources[family.spec.familyId];
+    replaceDraft(nextDraft);
+    const warningSuffix = family.warnings.length ? ` ${family.warnings[0].message}` : "";
+    setNotice({ tone: family.warnings.length ? "warning" : "success", message: `${family.spec.side === "me" ? "내" : "상대방"} 말풍선 2종을 적용했습니다.${warningSuffix}` });
+    if (selectedSlot) scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "builder" });
+  };
+
   const openSaveDialog = () => {
     setSaveMode(activeUserTemplate ? "overwrite" : "saveAs");
     setSaveName(activeUserTemplate?.name ?? `${displayTemplateName} 복사본`);
@@ -713,6 +770,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       canAdjustInline={canAdjustInline}
       candidateOpen={candidateOpen}
       onToggleCandidates={() => setCandidateOpen((current) => !current)}
+      onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
     />
   );
 
@@ -747,11 +805,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "insets" }); }}
       onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "stretch" }); }}
       onPullSheet={() => setMobileSheetSnap("full")}
+      onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
     />
   );
 
   return (
     <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
+      {selectedBubbleSlot ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} platform={platform} initialSpec={bubbleDesigns[selectedBubbleSlot]} initialDecorationFile={bubbleDesigns[selectedBubbleSlot] ? bubbleDecorationSources[bubbleDesigns[selectedBubbleSlot].familyId] : undefined} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleFamily} /> : null}
       {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
       {saveDialogOpen ? (
         <SaveTemplateDialog

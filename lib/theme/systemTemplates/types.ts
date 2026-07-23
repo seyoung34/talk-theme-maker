@@ -2,6 +2,7 @@ import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/the
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { BaseTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { BubbleDesigns } from "@/lib/theme/bubbleBuilder";
 
 export type SystemTemplateStatus = "draft" | "published" | "archived";
 export type SystemTemplateVisibility = "private" | "public";
@@ -19,6 +20,7 @@ export type ThemeEditOverrides = {
     markers: Partial<Record<string, Markers>>;
     insets: Partial<Record<string, Insets>>;
     stretch: Partial<Record<string, StretchPoint>>;
+    designs: BubbleDesigns;
   };
 };
 

@@ -1,5 +1,5 @@
 import type { Insets, Markers } from "@/lib/theme/types";
-import type { BubbleBuilderVariant, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
+import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
 
 const variantPresets: Record<BubbleBuilderVariant, { width: number; height: number; bodyWidth: number; bodyHeight: number }> = {
   first: { width: 210, height: 190, bodyWidth: 170, bodyHeight: 150 },
@@ -7,6 +7,30 @@ const variantPresets: Record<BubbleBuilderVariant, { width: number; height: numb
 };
 
 export const bubbleBuilderPresetVersion = "bubble-builder-v1" as const;
+
+export function createBubbleFamilyDesignSpec(side: BubbleBuilderSide, textColor = "#111827"): BubbleFamilyDesignSpec {
+  const now = Date.now();
+  return {
+    version: 1,
+    familyId: crypto.randomUUID(),
+    presetVersion: bubbleBuilderPresetVersion,
+    side,
+    design: {
+      side,
+      preset: "rounded",
+      radius: 28,
+      fill: side === "me" ? "#FEE500" : "#FFFFFF",
+      borderColor: "#D1D5DB",
+      borderWidth: 0,
+      shadow: "none",
+      textColor,
+      syncTextColorOnApply: false,
+      decoration: { offsetX: side === "me" ? 90 : -90, offsetY: -55, scale: 1, flipX: side === "you" },
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 export function getBubbleRadiusMax(preset: BubbleShapePreset, variant: BubbleBuilderVariant) {
   const source = variantPresets[variant];

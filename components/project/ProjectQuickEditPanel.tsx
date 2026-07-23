@@ -57,6 +57,7 @@ export function ProjectQuickEditPanel({
   canAdjustInline,
   candidateOpen,
   onToggleCandidates,
+  onOpenBubbleBuilder,
 }: {
   slot?: ThemeAssetSlot;
   slots: ThemeAssetSlot[];
@@ -97,6 +98,7 @@ export function ProjectQuickEditPanel({
   canAdjustInline: boolean;
   candidateOpen: boolean;
   onToggleCandidates: () => void;
+  onOpenBubbleBuilder: () => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
   const [pasteFeedback, setPasteFeedback] = useState(false);
@@ -277,12 +279,12 @@ export function ProjectQuickEditPanel({
                 <button
                   type="button"
                   className="inline-flex items-center gap-2 rounded-lg border border-[#d1d5db] bg-white px-4 py-3 text-sm font-semibold text-[#374151] transition enabled:hover:border-[#bfdbfe] enabled:hover:bg-[#eff6ff] enabled:hover:text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45"
-                  disabled={!canOpenImageEditor || isPreparingEditSource}
-                  onClick={() => void openImageEditor()}
-                  title={canOpenImageEditor ? "현재 이미지를 복사해 비파괴 편집합니다." : "이미지가 있는 슬롯에서 사용할 수 있습니다."}
+                  disabled={!slot.editableInBubbleEditor && (!canOpenImageEditor || isPreparingEditSource)}
+                  onClick={() => slot.editableInBubbleEditor ? onOpenBubbleBuilder() : void openImageEditor()}
+                  title={slot.editableInBubbleEditor ? "모양과 색을 골라 말풍선 한 세트를 만듭니다." : canOpenImageEditor ? "현재 이미지를 복사해 비파괴 편집합니다." : "이미지가 있는 슬롯에서 사용할 수 있습니다."}
                 >
-                  {isPreparingEditSource ? <RefreshCw className="animate-spin" size={16} aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
-                  {isPreparingEditSource ? "편집 준비 중" : "이미지 편집"}
+                  {isPreparingEditSource && !slot.editableInBubbleEditor ? <RefreshCw className="animate-spin" size={16} aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
+                  {slot.editableInBubbleEditor ? "나만의 말풍선 만들기" : isPreparingEditSource ? "편집 준비 중" : "이미지 편집"}
                 </button>
               </div>
               {editSourceError ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold leading-5 text-[#be123c]" role="alert">{editSourceError}</p> : null}

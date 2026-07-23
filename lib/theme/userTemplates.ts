@@ -2,6 +2,7 @@ import type { SlotCandidateSelections, SlotColors, SlotUploadEntry, SlotUploadSo
 import { normalizeThemeTemplateId, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
+import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
 
 const storeName = themeDatabaseStores.userTemplates;
 
@@ -22,6 +23,8 @@ export type UserTemplateRecord = {
   uploads: SlotUploads;
   candidateSelections: SlotCandidateSelections;
   bubbleEdits: UserTemplateBubbleEdits;
+  bubbleDesigns?: BubbleDesigns;
+  bubbleDecorationSources?: BubbleDecorationSources;
 };
 
 export type UserTemplateSummary = Pick<UserTemplateRecord, "id" | "name" | "templateId" | "platform" | "createdAt" | "updatedAt"> & {
@@ -37,6 +40,8 @@ export async function saveUserTemplate(record: Omit<UserTemplateRecord, "id" | "
     createdAt: record.createdAt ?? now,
     updatedAt: now,
     uploads: normalizeIndexedDbOnlyUploads(record.uploads),
+    bubbleDesigns: record.bubbleDesigns ?? {},
+    bubbleDecorationSources: normalizeDecorationSources(record.bubbleDecorationSources),
   };
 
   await withThemeDatabaseStore(storeName, "readwrite", (store) => store.put(next));
@@ -70,6 +75,8 @@ function normalizeUserTemplateRecord(record: UserTemplateRecord): UserTemplateRe
   return {
     ...(templateId === record.templateId ? record : { ...record, templateId }),
     uploads: normalizeIndexedDbOnlyUploads(record.uploads),
+    bubbleDesigns: record.bubbleDesigns ?? {},
+    bubbleDecorationSources: normalizeDecorationSources(record.bubbleDecorationSources),
   };
 }
 
@@ -120,4 +127,8 @@ function isSlotUploadSource(value: unknown): value is SlotUploadSource {
 
 function isFileLike(value: unknown): value is File {
   return typeof File !== "undefined" && value instanceof File;
+}
+
+function normalizeDecorationSources(sources: BubbleDecorationSources | undefined): BubbleDecorationSources {
+  return Object.fromEntries(Object.entries(sources ?? {}).filter((entry): entry is [string, File] => isFileLike(entry[1])));
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAndroidBubbleMarkers, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
+import { createBubbleFamilyDesignSpec, getAndroidBubbleMarkers, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleSideDesignSpec } from "@/lib/theme/bubbleBuilder/types";
 
 const baseDesign: BubbleSideDesignSpec = {
@@ -15,6 +15,11 @@ const baseDesign: BubbleSideDesignSpec = {
 };
 
 describe("bubble builder geometry", () => {
+  it("starts decoration in the outer bleed area for each side", () => {
+    expect(createBubbleFamilyDesignSpec("me").design.decoration).toMatchObject({ offsetX: 90, offsetY: -55, flipX: false });
+    expect(createBubbleFamilyDesignSpec("you").design.decoration).toMatchObject({ offsetX: -90, offsetY: -55, flipX: true });
+  });
+
   it("keeps first and group geometry independent", () => {
     const first = getBubbleVariantGeometry(baseDesign, "first");
     const group = getBubbleVariantGeometry(baseDesign, "group");

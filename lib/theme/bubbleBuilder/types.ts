@@ -35,6 +35,9 @@ export type BubbleFamilyDesignSpec = {
   updatedAt: number;
 };
 
+export type BubbleDesigns = Partial<Record<BubbleBuilderSide, BubbleFamilyDesignSpec>>;
+export type BubbleDecorationSources = Partial<Record<string, File>>;
+
 export type BubbleRect = { x: number; y: number; width: number; height: number };
 
 export type BubbleVariantGeometry = {

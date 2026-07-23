@@ -2,7 +2,6 @@
 
 import { useEffect, useId, useState, type MutableRefObject } from "react";
 import { ImageOff, Plus, Sliders, X } from "lucide-react";
-import * as Dialog from "@radix-ui/react-dialog";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
@@ -56,6 +55,7 @@ type MobileQuickEditPanelProps = {
   onInsetsChange: (insets: Insets) => void;
   onStretchChange: (stretch: StretchPoint) => void;
   onPullSheet: () => void;
+  onOpenBubbleBuilder: () => void;
 };
 
 export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
@@ -295,6 +295,7 @@ function ImageControls({
   onInsetsChange,
   onStretchChange,
   onPullSheet,
+  onOpenBubbleBuilder,
   file,
 }: MobileQuickEditPanelProps & {
   slot: ThemeAssetSlot;
@@ -372,6 +373,10 @@ function ImageControls({
       />
 
       {slot.editableInBubbleEditor ? (
+        <>
+        <button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-[13px] font-black text-white shadow-sm hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={onOpenBubbleBuilder}>
+          <Sliders size={17} aria-hidden="true" />나만의 말풍선 만들기
+        </button>
         <details
           className="group rounded-xl border border-[#dbe3ed] bg-[#f8fafc]"
           open={bubbleEditorOpen}
@@ -409,6 +414,7 @@ function ImageControls({
             </div>
           ) : null}
         </details>
+        </>
       ) : null}
     </div>
   );

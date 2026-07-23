@@ -88,7 +88,7 @@ export function convertSystemTemplateOverridesByRole({
     colors,
     uploads,
     candidateSelections,
-    bubbleEdits: { markers, insets, stretch },
+    bubbleEdits: { markers, insets, stretch, designs: sourceOverrides.bubbleEdits.designs ?? {} },
   };
 }
 

@@ -78,7 +78,7 @@ function drawDecoration(
   canvasHeight: number,
   decoration: NonNullable<BubbleFamilyDesignSpec["design"]["decoration"]>,
 ): BubbleRect {
-  const baseScale = Math.min(1, 90 / Math.max(bitmap.width, bitmap.height));
+  const baseScale = Math.min(1, 30 / Math.max(bitmap.width, bitmap.height));
   const scale = baseScale * Math.max(0.1, Math.min(2, decoration.scale));
   const width = Math.max(1, bitmap.width * scale);
   const height = Math.max(1, bitmap.height * scale);

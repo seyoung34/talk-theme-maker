@@ -482,6 +482,7 @@ function normalizeBubbleEdits(value: Partial<ThemeEditOverrides["bubbleEdits"]> 
     markers: value?.markers ?? {},
     insets: value?.insets ?? {},
     stretch: value?.stretch ?? {},
+    designs: value?.designs ?? {},
   };
 }
 

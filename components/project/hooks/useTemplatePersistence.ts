@@ -9,6 +9,7 @@ import { systemTemplateRepository, type SystemTemplatePricingType, type SystemTe
 import { saveUserTemplate } from "@/lib/theme/userTemplates";
 import type { ThemeTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
 
 type UseTemplatePersistenceOptions = {
   activeSystemTemplate: ActiveSystemTemplate | null;
@@ -16,6 +17,8 @@ type UseTemplatePersistenceOptions = {
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleMarkers: Partial<Record<string, Markers>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;
+  bubbleDesigns: BubbleDesigns;
+  bubbleDecorationSources: BubbleDecorationSources;
   candidateSelections: SlotCandidateSelections;
   colors: SlotColors;
   ensureSystemTemplateUploadsHydrated: () => Promise<SlotUploads>;
@@ -64,6 +67,8 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
         colors: options.colors,
         candidateSelections: options.candidateSelections,
         bubbleEdits: { markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch },
+        bubbleDesigns: options.bubbleDesigns,
+        bubbleDecorationSources: options.bubbleDecorationSources,
       });
       options.setActiveUserTemplate({ id: savedTemplate.id, name: savedTemplate.name, createdAt: savedTemplate.createdAt });
       persistEditorSession(options.mode, { templateId: savedTemplate.templateId, platform: savedTemplate.platform, userTemplateId: savedTemplate.id, editMode: options.mode });
@@ -110,7 +115,7 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
           colors: options.colors,
           uploads,
           candidateSelections: options.candidateSelections,
-          bubbleEdits: { markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch },
+          bubbleEdits: { markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch, designs: options.bubbleDesigns },
         },
       });
       options.setActiveSystemTemplate({

@@ -84,7 +84,7 @@ export function useEditorBootstrap({
             setActiveSection(recovery.editor.activeSection);
             setActiveGroup(recovery.editor.activeGroup);
             setSelectedSlotId(recovery.editor.selectedSlotId);
-            replaceDraft(recovery.draft);
+            replaceDraft({ ...recovery.draft, bubbleDesigns: recovery.draft.bubbleDesigns ?? {}, bubbleDecorationSources: recovery.draft.bubbleDecorationSources ?? {} });
             setActiveUserTemplate(recovery.editor.activeUserTemplate ?? null);
             setActiveSystemTemplate(recovery.editor.activeSystemTemplate ?? null);
             setSystemTemplateBundleId(recovery.editor.systemTemplateBundleId ?? recovery.editor.activeSystemTemplate?.bundleId ?? null);
@@ -160,6 +160,8 @@ export function useEditorBootstrap({
             bubbleMarkers: savedTemplate.overrides.bubbleEdits.markers,
             bubbleInsets: savedTemplate.overrides.bubbleEdits.insets,
             bubbleStretch: savedTemplate.overrides.bubbleEdits.stretch,
+            bubbleDesigns: savedTemplate.overrides.bubbleEdits.designs ?? {},
+            bubbleDecorationSources: {},
           });
           setActiveSystemTemplate({ id: savedTemplate.id, bundleId: savedTemplate.bundleId ?? savedTemplate.id, title: savedTemplate.title, description: savedTemplate.description, tags: savedTemplate.tags, status: savedTemplate.status, visibility: savedTemplate.visibility, pricingType: savedTemplate.pricingType, priceAmount: savedTemplate.priceAmount, creditCost: savedTemplate.creditCost, createdAt: savedTemplate.createdAt });
           setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 불러왔습니다.` });
@@ -195,6 +197,8 @@ export function useEditorBootstrap({
             bubbleMarkers: converted.bubbleEdits.markers,
             bubbleInsets: converted.bubbleEdits.insets,
             bubbleStretch: converted.bubbleEdits.stretch,
+            bubbleDesigns: converted.bubbleEdits.designs ?? {},
+            bubbleDecorationSources: {},
           });
           setSystemTitle(sourceTemplate.title);
           setSystemDescription(sourceTemplate.description ?? "");
@@ -234,6 +238,8 @@ export function useEditorBootstrap({
           bubbleMarkers: savedTemplate.bubbleEdits.markers,
           bubbleInsets: savedTemplate.bubbleEdits.insets,
           bubbleStretch: savedTemplate.bubbleEdits.stretch,
+          bubbleDesigns: savedTemplate.bubbleDesigns ?? {},
+          bubbleDecorationSources: savedTemplate.bubbleDecorationSources ?? {},
         });
         setActiveUserTemplate({ id: savedTemplate.id, name: savedTemplate.name, createdAt: savedTemplate.createdAt });
         setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 불러왔습니다.` });
