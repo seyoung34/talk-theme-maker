@@ -1191,10 +1191,18 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
   );
 }
 
+// 내장 템플릿의 사전 생성 카드 썸네일. 에셋이 바뀌면 /dev/bake-thumbnails에서 다시 굽는다.
+const baseTemplateCardPreviewImages: Partial<Record<string, string>> = {
+  basic: "/template-assets/basic/card-preview.webp",
+};
+
 function createBaseTemplatePreviewVisual(template: ThemeTemplate): TemplatePreviewVisual {
   const slots = getThemeSlots(template.defaults.platform);
   return {
     platform: template.defaults.platform,
+    // 내장 템플릿은 시스템 템플릿 저장 경로를 타지 않아 썸네일이 없다.
+    // /dev/bake-thumbnails로 미리 구운 카드 이미지를 사용해 카드에서도 9-slice 결과를 그대로 보여준다.
+    cardPreviewImage: baseTemplateCardPreviewImages[template.id],
     chatBackgroundColor: template.defaults.chatBackground,
     mainBackgroundColor: template.defaults.mainBackground,
     tabBackgroundColor: template.defaults.tabBackground,
