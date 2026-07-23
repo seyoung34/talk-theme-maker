@@ -1,5 +1,5 @@
 export { bubbleBuilderPresetVersion, createBubbleFamilyDesignSpec, getAndroidBubbleMarkers, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
-export { generateBubbleFamily } from "@/lib/theme/bubbleBuilder/render";
+export { generateBubbleAsset, generateBubbleFamily } from "@/lib/theme/bubbleBuilder/render";
 export type {
   BubbleBuilderSide,
   BubbleBuilderVariant,
@@ -10,5 +10,6 @@ export type {
   BubbleShapePreset,
   BubbleSideDesignSpec,
   GeneratedBubbleAsset,
+  GeneratedBubbleDesign,
   GeneratedBubbleFamily,
 } from "@/lib/theme/bubbleBuilder/types";

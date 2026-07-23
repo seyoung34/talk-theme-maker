@@ -48,7 +48,7 @@ import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
-import type { GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder";
+import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDesigns, BubbleFamilyDesignSpec, GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import {
@@ -275,6 +275,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? visibleSlots[0] ?? slots[0];
   const selectedFile = getSlotFile(selectedSlot, analysis.files);
   const selectedBubbleSlot = selectedSlot ? bubbleSlotFromRole(selectedSlot.role) : null;
+  const selectedBubbleVariant = selectedSlot ? bubbleVariantFromRole(selectedSlot.role) : null;
+  const selectedBubbleDesign = selectedSlot && selectedBubbleSlot ? getBubbleDesign(bubbleDesigns, selectedSlot.role, selectedBubbleSlot) : undefined;
   const canAdjustInline = Boolean(selectedSlot?.editableInBubbleEditor && selectedFile && selectedBubbleSlot);
   const completion = getCompletion(slots, uploads, colors, candidateSelections, templateId, activeTemplate);
   const {
@@ -638,18 +640,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     trackAnalyticsEvent("candidate_selected", { slot_role: slot.role, section: slot.section, asset_source: "admin" });
   };
 
-  const applyBubbleFamily = (family: GeneratedBubbleFamily, decorationFile?: File) => {
-    const generatedAt = Date.now();
-    const applied: Array<{ slot: ThemeAssetSlot; uploadId: string; asset: GeneratedBubbleFamily["assets"][number] }> = [];
-    for (const asset of family.assets) {
-      const slot = slots.find((candidate) => candidate.role === asset.role);
-      if (!slot) continue;
-      applied.push({ slot, uploadId: `${slot.id}:bubble-builder:${family.spec.familyId}:${generatedAt}:${asset.variant}`, asset });
-    }
-    if (!applied.length) {
-      setNotice({ tone: "error", message: "현재 플랫폼에서 적용할 말풍선 슬롯을 찾지 못했습니다." });
+  const applyBubbleDesign = (result: GeneratedBubbleDesign, decorationFile?: File) => {
+    if (!selectedSlot || !selectedBubbleSlot || result.asset.role !== selectedSlot.role) {
+      setNotice({ tone: "error", message: "선택한 말풍선 슬롯과 생성 결과가 일치하지 않습니다." });
       return;
     }
+    const generatedAt = Date.now();
+    const uploadId = `${selectedSlot.id}:bubble-builder:${result.spec.familyId}:${generatedAt}:${result.asset.variant}`;
 
     const nextDraft = {
       ...draft,
@@ -659,31 +656,29 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       bubbleMarkers: { ...bubbleMarkers },
       bubbleInsets: { ...bubbleInsets },
       bubbleStretch: { ...bubbleStretch },
-      bubbleDesigns: { ...bubbleDesigns, [family.spec.side]: family.spec },
+      bubbleDesigns: { ...bubbleDesigns, [selectedSlot.role]: result.spec },
       bubbleDecorationSources: { ...bubbleDecorationSources },
       colors: { ...colors },
     };
-    for (const { slot, uploadId, asset } of applied) {
-      nextDraft.uploads[slot.id] = [...(nextDraft.uploads[slot.id] ?? []), { id: uploadId, file: asset.file, source: "user" as const }];
-      delete nextDraft.remoteUploadRefs[slot.id];
-      nextDraft.candidateSelections[slot.id] = uploadId;
-      delete nextDraft.bubbleMarkers[slot.id];
-      delete nextDraft.bubbleInsets[slot.id];
-      delete nextDraft.bubbleStretch[slot.id];
-      if (asset.markers) nextDraft.bubbleMarkers[slot.id] = asset.markers;
-      if (asset.insets) nextDraft.bubbleInsets[slot.id] = asset.insets;
-      if (asset.stretch) nextDraft.bubbleStretch[slot.id] = asset.stretch;
-    }
-    if (family.spec.design.syncTextColorOnApply) {
-      const colorRole = family.spec.side === "me" ? "chat_bubble_me_color" : "chat_bubble_you_color";
+    nextDraft.uploads[selectedSlot.id] = [...(nextDraft.uploads[selectedSlot.id] ?? []), { id: uploadId, file: result.asset.file, source: "user" as const }];
+    delete nextDraft.remoteUploadRefs[selectedSlot.id];
+    nextDraft.candidateSelections[selectedSlot.id] = uploadId;
+    delete nextDraft.bubbleMarkers[selectedSlot.id];
+    delete nextDraft.bubbleInsets[selectedSlot.id];
+    delete nextDraft.bubbleStretch[selectedSlot.id];
+    if (result.asset.markers) nextDraft.bubbleMarkers[selectedSlot.id] = result.asset.markers;
+    if (result.asset.insets) nextDraft.bubbleInsets[selectedSlot.id] = result.asset.insets;
+    if (result.asset.stretch) nextDraft.bubbleStretch[selectedSlot.id] = result.asset.stretch;
+    if (result.spec.design.syncTextColorOnApply) {
+      const colorRole = result.spec.side === "me" ? "chat_bubble_me_color" : "chat_bubble_you_color";
       const colorSlot = slots.find((slot) => slot.role === colorRole);
-      if (colorSlot) nextDraft.colors[colorSlot.id] = family.spec.design.textColor;
+      if (colorSlot) nextDraft.colors[colorSlot.id] = result.spec.design.textColor;
     }
-    if (decorationFile) nextDraft.bubbleDecorationSources[family.spec.familyId] = decorationFile;
-    else delete nextDraft.bubbleDecorationSources[family.spec.familyId];
+    if (decorationFile) nextDraft.bubbleDecorationSources[result.spec.familyId] = decorationFile;
+    else delete nextDraft.bubbleDecorationSources[result.spec.familyId];
     replaceDraft(nextDraft);
-    const warningSuffix = family.warnings.length ? ` ${family.warnings[0].message}` : "";
-    setNotice({ tone: family.warnings.length ? "warning" : "success", message: `${family.spec.side === "me" ? "내" : "상대방"} 말풍선 2종을 적용했습니다.${warningSuffix}` });
+    const warningSuffix = result.warnings.length ? ` ${result.warnings[0].message}` : "";
+    setNotice({ tone: result.warnings.length ? "warning" : "success", message: `${selectedSlot.label} 슬롯에 말풍선을 적용했습니다.${warningSuffix}` });
     if (selectedSlot) scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "builder" });
   };
 
@@ -811,7 +806,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   return (
     <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
-      {selectedBubbleSlot ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} platform={platform} initialSpec={bubbleDesigns[selectedBubbleSlot]} initialDecorationFile={bubbleDesigns[selectedBubbleSlot] ? bubbleDecorationSources[bubbleDesigns[selectedBubbleSlot].familyId] : undefined} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleFamily} /> : null}
+      {selectedSlot && selectedBubbleSlot && selectedBubbleVariant ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} variant={selectedBubbleVariant} slotLabel={selectedSlot.label} platform={platform} initialSpec={selectedBubbleDesign} initialDecorationFile={selectedBubbleDesign ? bubbleDecorationSources[selectedBubbleDesign.familyId] : undefined} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleDesign} /> : null}
       {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
       {saveDialogOpen ? (
         <SaveTemplateDialog
@@ -1175,6 +1170,16 @@ function getBackgroundSourcePair(slot: ThemeAssetSlot, slots: ThemeAssetSlot[]) 
   const colorRole = getImageColorFallbackRole(imageSlot.role);
   const colorSlot = slots.find((candidate) => candidate.kind === "color" && candidate.role === colorRole);
   return colorSlot ? { imageSlot, colorSlot } : null;
+}
+
+function bubbleVariantFromRole(role: ThemeResourceRole): BubbleBuilderVariant | null {
+  if (role === "bubble_me_1" || role === "bubble_you_1") return "first";
+  if (role === "bubble_me_2" || role === "bubble_you_2") return "group";
+  return null;
+}
+
+function getBubbleDesign(designs: BubbleDesigns, role: ThemeResourceRole, legacySide: BubbleBuilderSide): BubbleFamilyDesignSpec | undefined {
+  return designs[role] ?? (designs as Record<string, BubbleFamilyDesignSpec | undefined>)[legacySide];
 }
 
 function getFocusableElements(container: HTMLElement | null) {

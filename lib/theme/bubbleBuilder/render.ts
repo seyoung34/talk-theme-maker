@@ -1,5 +1,5 @@
 import { getAndroidBubbleMarkers, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
-import type { BubbleBuilderVariant, BubbleFamilyDesignSpec, BubbleRect, GeneratedBubbleAsset, GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder/types";
+import type { BubbleBuilderVariant, BubbleFamilyDesignSpec, BubbleRect, GeneratedBubbleAsset, GeneratedBubbleDesign, GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder/types";
 import type { Markers, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 type GenerateBubbleFamilyOptions = {
@@ -8,40 +8,55 @@ type GenerateBubbleFamilyOptions = {
   decorationFile?: File;
 };
 
+type GenerateBubbleAssetOptions = GenerateBubbleFamilyOptions & { variant: BubbleBuilderVariant };
+
+export async function generateBubbleAsset({ spec, platform, variant, decorationFile }: GenerateBubbleAssetOptions): Promise<GeneratedBubbleDesign> {
+  const decoration = decorationFile ? await createImageBitmap(decorationFile) : undefined;
+  try {
+    const { asset, warnings } = await renderBubbleAsset(spec, platform, variant, decoration);
+    return { spec, asset, warnings };
+  } finally {
+    decoration?.close();
+  }
+}
+
 export async function generateBubbleFamily({ spec, platform, decorationFile }: GenerateBubbleFamilyOptions): Promise<GeneratedBubbleFamily> {
   const decoration = decorationFile ? await createImageBitmap(decorationFile) : undefined;
   const warnings: GeneratedBubbleFamily["warnings"] = [];
   try {
     const assets = await Promise.all(
       (["first", "group"] as const).map(async (variant) => {
-        const geometry = getBubbleVariantGeometry(spec.design, variant);
-        const artwork = document.createElement("canvas");
-        artwork.width = geometry.canvas.width;
-        artwork.height = geometry.canvas.height;
-        const context = getCanvasContext(artwork);
-        context.clearRect(0, 0, artwork.width, artwork.height);
-        drawBubbleBody(context, geometry.body, geometry.radius, spec.design);
-
-        if (decoration && spec.design.decoration && variant === "first") {
-          const decorationRect = drawDecoration(context, decoration, artwork.width, artwork.height, spec.design.decoration);
-          if (rectsOverlap(decorationRect, geometry.content)) {
-            warnings.push({ code: "decoration-overlap", message: "꾸미기 이미지가 글자 영역과 겹쳐요." });
-          }
-        }
-
-        if (geometry.content.width < 24 || geometry.content.height < 24) {
-          warnings.push({ code: "content-too-small", message: "글자가 들어갈 영역이 너무 작아요." });
-        }
-
-        return platform === "android"
-          ? renderAndroidAsset(artwork, geometry, spec.design.side, variant)
-          : renderIosAsset(artwork, geometry, spec.design.side, variant);
+        const rendered = await renderBubbleAsset(spec, platform, variant, variant === "first" ? decoration : undefined);
+        warnings.push(...rendered.warnings);
+        return rendered.asset;
       }),
     );
     return { spec, assets, warnings: dedupeWarnings(warnings) };
   } finally {
     decoration?.close();
   }
+}
+
+async function renderBubbleAsset(spec: BubbleFamilyDesignSpec, platform: ThemePlatform, variant: BubbleBuilderVariant, decoration?: ImageBitmap) {
+  const geometry = getBubbleVariantGeometry(spec.design, variant);
+  const artwork = document.createElement("canvas");
+  artwork.width = geometry.canvas.width;
+  artwork.height = geometry.canvas.height;
+  const context = getCanvasContext(artwork);
+  const warnings: GeneratedBubbleDesign["warnings"] = [];
+  context.clearRect(0, 0, artwork.width, artwork.height);
+  drawBubbleBody(context, geometry.body, geometry.radius, spec.design);
+
+  if (decoration && spec.design.decoration) {
+    const decorationRect = drawDecoration(context, decoration, artwork.width, artwork.height, spec.design.decoration);
+    if (rectsOverlap(decorationRect, geometry.content)) warnings.push({ code: "decoration-overlap", message: "꾸미기 이미지가 글자 영역과 겹쳐요." });
+  }
+  if (geometry.content.width < 24 || geometry.content.height < 24) warnings.push({ code: "content-too-small", message: "글자가 들어갈 영역이 너무 작아요." });
+
+  const asset = platform === "android"
+    ? await renderAndroidAsset(artwork, geometry, spec.design.side, variant)
+    : await renderIosAsset(artwork, geometry, spec.design.side, variant);
+  return { asset, warnings };
 }
 
 function drawBubbleBody(
