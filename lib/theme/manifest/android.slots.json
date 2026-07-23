@@ -11,7 +11,14 @@
     "fileName": "theme_background_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_background_image.png",
     "required": true,
-    "note": "친구·채팅 목록 위에 표시되는 배경 이미지입니다. 색상보다 우선 적용됩니다",
+    "note": "친구·채팅 목록 위에 표시되는 배경 이미지입니다. 색상보다 우선 적용되며, 가로 1:세로 2 원본을 상단 기준으로 크롭합니다.",
+    "constraints": {
+      "aspectRatio": { "width": 1, "height": 2 },
+      "recommendedSize": { "width": 1080, "height": 1920, "scale": 1 },
+      "fit": "cover",
+      "focalPoint": "top-center",
+      "alpha": "mixed"
+    },
     "visibleInSections": [
       "tabs"
     ],
@@ -456,7 +463,12 @@
     "fileName": "theme_maintab_cell_image.9.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_maintab_cell_image.9.png",
     "required": false,
-    "note": "하단 탭바 영역 배경 9-patch 이미지"
+    "note": "하단 탭바 영역 배경 9-patch 이미지입니다. 1442×214px 전체 canvas에서 1440×212px artwork를 사용하고 1px marker는 후처리합니다.",
+    "constraints": {
+      "recommendedSize": { "width": 1442, "height": 214, "scale": 1 },
+      "fit": "stretch-region",
+      "alpha": "mixed"
+    }
   },
   {
     "id": "android-tab-background",
@@ -909,7 +921,14 @@
     "fileName": "theme_chatroom_background_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_chatroom_background_image.png",
     "required": true,
-    "note": "1080 x 1920 기준 채팅방 배경 이미지",
+    "note": "가로 1:세로 2, 1080×1920 기준 채팅방 배경 이미지입니다.",
+    "constraints": {
+      "aspectRatio": { "width": 1, "height": 2 },
+      "recommendedSize": { "width": 1080, "height": 1920, "scale": 1 },
+      "fit": "exact",
+      "focalPoint": "free",
+      "alpha": "mixed"
+    },
     "export": {
       "android": {
         "type": "file",
@@ -1151,7 +1170,12 @@
     "fileName": "theme_passcode_background_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_passcode_background_image.png",
     "required": false,
-    "note": "잠금화면 배경 이미지",
+    "note": "잠금화면 배경 이미지입니다. 키패드 상단 영역은 센터 기준으로 크롭됩니다.",
+    "constraints": {
+      "fit": "cover",
+      "focalPoint": "center",
+      "alpha": "mixed"
+    },
     "export": {
       "android": {
         "type": "file",
@@ -1397,6 +1421,28 @@
     }
   },
   {
+    "id": "android-common-theme-icon",
+    "platform": "android",
+    "role": "theme_icon",
+    "section": "common",
+    "group": "icon",
+    "screen": "profile",
+    "kind": "image",
+    "label": "테마 대표 아이콘",
+    "fileName": "icon.png",
+    "path": "src/main/theme/drawable-xxhdpi/icon.png",
+    "required": true,
+    "note": "카카오톡 테마 목록에 표시되는 144×144px 대표 아이콘입니다. Android 앱 런처 아이콘과는 별도 리소스입니다.",
+    "constraints": {
+      "recommendedSize": { "width": 144, "height": 144, "scale": 1 },
+      "fit": "exact",
+      "alpha": "mixed"
+    },
+    "defaultAssetUrls": {
+      "basic": "/template-assets/basic/android/icon.png"
+    }
+  },
+  {
     "id": "android-common-profile-1",
     "platform": "android",
     "role": "profile_image_1",
@@ -1408,7 +1454,12 @@
     "fileName": "theme_profile_01_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_profile_01_image.png",
     "required": true,
-    "note": "기본 프로필 이미지 1",
+    "note": "기본 프로필 이미지 1입니다. drawable-xxhdpi 기준 220×220px이며 원형 crop에도 핵심 motif가 남아야 합니다.",
+    "constraints": {
+      "recommendedSize": { "width": 220, "height": 220, "scale": 1 },
+      "fit": "exact",
+      "alpha": "mixed"
+    },
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_profile_01_image.png"
     }
@@ -1453,7 +1504,12 @@
     "fileName": "theme_profile_01_image_full.png",
     "path": "src/main/theme/drawable-nodpi/theme_profile_01_image_full.png",
     "required": true,
-    "note": "전체 보기용 기본 프로필 이미지 1",
+    "note": "전체 보기용 기본 프로필 이미지 1입니다. drawable-nodpi 기준 320×320px입니다.",
+    "constraints": {
+      "recommendedSize": { "width": 320, "height": 320, "scale": 1 },
+      "fit": "exact",
+      "alpha": "mixed"
+    },
     "optionLevel": "advanced"
   },
   {
@@ -1534,7 +1590,14 @@
     "fileName": "theme_splash_image.png",
     "path": "src/main/theme/drawable-xxhdpi/theme_splash_image.png",
     "required": true,
-    "note": "카카오톡 실행 시 짧게 표시되는 스플래시 화면 이미지입니다. 세로/가로 화면 모두에 동일한 이미지가 적용됩니다.",
+    "note": "카카오톡 실행 시 Android 12 미만에서 표시되는 세로 스플래시 이미지입니다. 가로 화면은 별도 slot으로 내보냅니다.",
+    "constraints": {
+      "recommendedSize": { "width": 1440, "height": 2560, "scale": 1 },
+      "fit": "cover",
+      "focalPoint": "center",
+      "alpha": "opaque",
+      "runtimeNotes": ["Android 12 미만에서만 테마 splash가 적용됩니다."]
+    },
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_splash_image.png"
     },
@@ -1545,10 +1608,40 @@
         "scaleTargets": [
           "src/main/theme/drawable-xxhdpi/theme_splash_image.png",
           "src/main/theme/drawable-xhdpi/theme_splash_image.png",
-          "src/main/theme/drawable-sw600dp/theme_splash_image.png",
-          "src/main/theme/drawable-sw600dp-land/theme_splash_image.png",
+          "src/main/theme/drawable-sw600dp/theme_splash_image.png"
+        ],
+        "transform": "copy"
+      }
+    }
+  },
+  {
+    "id": "android-common-splash-landscape",
+    "platform": "android",
+    "role": "splash_landscape",
+    "section": "common",
+    "group": "launcher",
+    "screen": "profile",
+    "kind": "image",
+    "label": "실행 스플래시 이미지 (가로)",
+    "fileName": "theme_splash_image.png",
+    "path": "src/main/theme/drawable-land-xxhdpi/theme_splash_image.png",
+    "required": true,
+    "note": "가로 화면용 필수 스플래시 이미지입니다. 세로 이미지와 별도로 16:9 구도로 제작해야 합니다.",
+    "constraints": {
+      "recommendedSize": { "width": 2560, "height": 1440, "scale": 1 },
+      "fit": "cover",
+      "focalPoint": "center",
+      "alpha": "opaque",
+      "runtimeNotes": ["Android 12 미만에서만 테마 splash가 적용됩니다."]
+    },
+    "export": {
+      "android": {
+        "type": "file",
+        "target": "src/main/theme/drawable-land-xxhdpi/theme_splash_image.png",
+        "scaleTargets": [
           "src/main/theme/drawable-land-xhdpi/theme_splash_image.png",
-          "src/main/theme/drawable-land-xxhdpi/theme_splash_image.png"
+          "src/main/theme/drawable-land-xxhdpi/theme_splash_image.png",
+          "src/main/theme/drawable-sw600dp-land/theme_splash_image.png"
         ],
         "transform": "copy"
       }

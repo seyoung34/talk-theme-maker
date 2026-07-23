@@ -11,7 +11,12 @@
     "fileName": "mainBgImage.png",
     "path": "Images/mainBgImage.png",
     "required": true,
-    "note": "친구와 채팅 목록의 배경에 표시되는 이미지입니다. 기본 템플릿은 이미지 없이 배경색으로 시작하며, 이미지를 추가한 뒤 이름과 상태 메시지가 잘 읽히는지 확인하세요.",
+    "note": "친구와 채팅 목록의 배경에 표시되는 이미지입니다. 헤더 배경은 상단/센터 기준으로 크롭되며, 이름과 상태 메시지가 잘 읽히는지 확인하세요.",
+    "constraints": {
+      "fit": "cover",
+      "focalPoint": "top-center",
+      "alpha": "mixed"
+    },
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-background-image"
   },
@@ -232,7 +237,12 @@
     "fileName": "maintabBgImage.png",
     "path": "Images/maintabBgImage.png",
     "required": false,
-    "note": "화면 하단의 메인 탭 영역에 표시되는 배경 이미지입니다. 모든 탭 아이콘이 잘 보이는지 확인하세요.",
+    "note": "화면 하단의 메인 탭 영역에 표시되는 배경 이미지입니다. 센터 기준으로 크롭되며 모든 탭 아이콘이 잘 보여야 합니다.",
+    "constraints": {
+      "fit": "cover",
+      "focalPoint": "center",
+      "alpha": "mixed"
+    },
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "-ios-background-image"
   },
@@ -500,6 +510,86 @@
     "cssProperty": "-ios-more-selected-icon-image"
   },
   {
+    "id": "ios-tab-piccoma",
+    "platform": "ios",
+    "role": "tab_icon_piccoma",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "Piccoma 탭 아이콘",
+    "fileName": "maintabIcoPiccoma.png",
+    "path": "Images/maintabIcoPiccoma.png",
+    "required": false,
+    "note": "Piccoma 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 글로벌 버전 일부 화면에서만 노출될 수 있습니다.",
+    "constraints": {
+      "fit": "exact",
+      "alpha": "transparent"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-piccoma-normal-icon-image"
+  },
+  {
+    "id": "ios-tab-piccoma-focused",
+    "platform": "ios",
+    "role": "tab_icon_piccoma_focused",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "Piccoma 탭 선택 아이콘",
+    "fileName": "maintabIcoPiccomaSelected.png",
+    "path": "Images/maintabIcoPiccomaSelected.png",
+    "required": false,
+    "note": "Piccoma 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 상태와 canvas와 중심을 동일하게 유지하세요.",
+    "constraints": {
+      "fit": "exact",
+      "alpha": "transparent"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-piccoma-selected-icon-image"
+  },
+  {
+    "id": "ios-tab-call",
+    "platform": "ios",
+    "role": "tab_icon_call",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "통화 탭 아이콘",
+    "fileName": "maintabIcoCall.png",
+    "path": "Images/maintabIcoCall.png",
+    "required": false,
+    "note": "통화 탭이 선택되지 않았을 때 표시되는 아이콘입니다. 글로벌 버전 일부 화면에서만 노출될 수 있습니다.",
+    "constraints": {
+      "fit": "exact",
+      "alpha": "transparent"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-call-normal-icon-image"
+  },
+  {
+    "id": "ios-tab-call-focused",
+    "platform": "ios",
+    "role": "tab_icon_call_focused",
+    "section": "tabs",
+    "group": "icons",
+    "screen": "tabs",
+    "kind": "image",
+    "label": "통화 탭 선택 아이콘",
+    "fileName": "maintabIcoCallSelected.png",
+    "path": "Images/maintabIcoCallSelected.png",
+    "required": false,
+    "note": "통화 탭이 선택되었을 때 표시되는 아이콘입니다. 기본 상태와 canvas와 중심을 동일하게 유지하세요.",
+    "constraints": {
+      "fit": "exact",
+      "alpha": "transparent"
+    },
+    "cssSelector": "TabBarStyle-Main",
+    "cssProperty": "-ios-call-selected-icon-image"
+  },
+  {
     "id": "ios-chat-background-image",
     "platform": "ios",
     "role": "chat_background",
@@ -613,6 +703,70 @@
     "cssProperty": "-ios-group-background-image"
   },
   {
+    "id": "ios-bubble-me-1-selected",
+    "platform": "ios",
+    "role": "bubble_me_1_selected",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "image",
+    "label": "내 말풍선 1 선택",
+    "fileName": "chatroomBubbleSend01Selected.png",
+    "path": "Images/chatroomBubbleSend01Selected.png",
+    "required": false,
+    "note": "내가 보낸 첫 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 기본 말풍선과 같은 geometry를 유지하세요.",
+    "cssSelector": "MessageCellStyle-Send",
+    "cssProperty": "-ios-selected-background-image"
+  },
+  {
+    "id": "ios-bubble-me-2-selected",
+    "platform": "ios",
+    "role": "bubble_me_2_selected",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "image",
+    "label": "내 말풍선 2 선택",
+    "fileName": "chatroomBubbleSend02Selected.png",
+    "path": "Images/chatroomBubbleSend02Selected.png",
+    "required": false,
+    "note": "내가 보낸 연속 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 기본 그룹 말풍선과 같은 geometry를 유지하세요.",
+    "cssSelector": "MessageCellStyle-Send",
+    "cssProperty": "-ios-group-selected-background-image"
+  },
+  {
+    "id": "ios-bubble-you-1-selected",
+    "platform": "ios",
+    "role": "bubble_you_1_selected",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "image",
+    "label": "상대 말풍선 1 선택",
+    "fileName": "chatroomBubbleReceive01Selected.png",
+    "path": "Images/chatroomBubbleReceive01Selected.png",
+    "required": false,
+    "note": "상대가 보낸 첫 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 기본 말풍선과 같은 geometry를 유지하세요.",
+    "cssSelector": "MessageCellStyle-Receive",
+    "cssProperty": "-ios-selected-background-image"
+  },
+  {
+    "id": "ios-bubble-you-2-selected",
+    "platform": "ios",
+    "role": "bubble_you_2_selected",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "image",
+    "label": "상대 말풍선 2 선택",
+    "fileName": "chatroomBubbleReceive02Selected.png",
+    "path": "Images/chatroomBubbleReceive02Selected.png",
+    "required": false,
+    "note": "상대가 보낸 연속 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 기본 그룹 말풍선과 같은 geometry를 유지하세요.",
+    "cssSelector": "MessageCellStyle-Receive",
+    "cssProperty": "-ios-group-selected-background-image"
+  },
+  {
     "id": "ios-chat-bubble-me-color",
     "platform": "ios",
     "role": "chat_bubble_me_color",
@@ -630,6 +784,23 @@
     "cssProperty": "-ios-text-color"
   },
   {
+    "id": "ios-chat-bubble-me-selected-color",
+    "platform": "ios",
+    "role": "chat_bubble_me_selected_color",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "내 말풍선 선택 텍스트",
+    "required": false,
+    "note": "내 말풍선을 누르는 동안 적용되는 메시지 글자색입니다. 기본 텍스트와 충분히 구분되는지 확인하세요.",
+    "defaultColor": {
+      "basic": "#111111"
+    },
+    "cssSelector": "MessageCellStyle-Send",
+    "cssProperty": "-ios-selected-text-color"
+  },
+  {
     "id": "ios-chat-bubble-you-color",
     "platform": "ios",
     "role": "chat_bubble_you_color",
@@ -645,6 +816,23 @@
     },
     "cssSelector": "MessageCellStyle-Receive",
     "cssProperty": "-ios-text-color"
+  },
+  {
+    "id": "ios-chat-bubble-you-selected-color",
+    "platform": "ios",
+    "role": "chat_bubble_you_selected_color",
+    "section": "chatroom",
+    "group": "bubbles",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "상대 말풍선 선택 텍스트",
+    "required": false,
+    "note": "상대 말풍선을 누르는 동안 적용되는 메시지 글자색입니다. 기본 텍스트와 충분히 구분되는지 확인하세요.",
+    "defaultColor": {
+      "basic": "#111111"
+    },
+    "cssSelector": "MessageCellStyle-Receive",
+    "cssProperty": "-ios-selected-text-color"
   },
   {
     "id": "ios-chat-unread-count-color",
@@ -821,6 +1009,132 @@
     },
     "cssSelector": "InputBarStyle-Chat",
     "cssProperty": "-ios-send-highlighted-foreground-color"
+  },
+  {
+    "id": "ios-notification-background-color",
+    "platform": "ios",
+    "role": "notification_background_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "메시지 알림 배경",
+    "required": false,
+    "note": "채팅방 상단의 메시지 알림 배너 배경색입니다.",
+    "optionLevel": "advanced",
+    "defaultColor": {
+      "basic": "#FCC5C5"
+    },
+    "cssSelector": "BackgroundStyle-MessageNotificationBar",
+    "cssProperty": "background-color"
+  },
+  {
+    "id": "ios-notification-name-color",
+    "platform": "ios",
+    "role": "notification_name_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "메시지 알림 이름",
+    "required": false,
+    "note": "메시지 알림 배너의 발신자 이름 색상입니다.",
+    "optionLevel": "advanced",
+    "defaultColor": {
+      "basic": "#604242"
+    },
+    "cssSelector": "LabelStyle-MessageNotificationBarName",
+    "cssProperty": "-ios-text-color"
+  },
+  {
+    "id": "ios-notification-text-color",
+    "platform": "ios",
+    "role": "notification_text_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "메시지 알림 텍스트",
+    "required": false,
+    "note": "메시지 알림 배너의 안내 메시지 색상입니다.",
+    "optionLevel": "advanced",
+    "defaultColor": {
+      "basic": "#805959"
+    },
+    "cssSelector": "LabelStyle-MessageNotificationBarMessage",
+    "cssProperty": "-ios-text-color"
+  },
+  {
+    "id": "ios-direct-share-background-color",
+    "platform": "ios",
+    "role": "direct_share_background_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "전달완료 배너 배경",
+    "required": false,
+    "note": "전달완료 배너의 배경색입니다.",
+    "optionLevel": "advanced",
+    "defaultColor": {
+      "basic": "#FFFFFF"
+    },
+    "cssSelector": "BackgroundStyle-DirectShareBar",
+    "cssProperty": "background-color"
+  },
+  {
+    "id": "ios-direct-share-name-color",
+    "platform": "ios",
+    "role": "direct_share_name_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "전달완료 이름",
+    "required": false,
+    "note": "전달완료 배너의 대상 이름 색상입니다.",
+    "optionLevel": "advanced",
+    "defaultColor": {
+      "basic": "#B35959"
+    },
+    "cssSelector": "LabelStyle-DirectShareBarName",
+    "cssProperty": "-ios-text-color"
+  },
+  {
+    "id": "ios-direct-share-text-color",
+    "platform": "ios",
+    "role": "direct_share_text_color",
+    "section": "more",
+    "group": "elements",
+    "screen": "more",
+    "kind": "color",
+    "label": "전달완료 안내 텍스트",
+    "required": false,
+    "note": "전달완료 배너의 안내 메시지 색상입니다.",
+    "optionLevel": "advanced",
+    "defaultColor": {
+      "basic": "#D47B82"
+    },
+    "cssSelector": "LabelStyle-DirectShareBarMessage",
+    "cssProperty": "-ios-text-color"
+  },
+  {
+    "id": "ios-bottom-banner-background-color",
+    "platform": "ios",
+    "role": "bottom_banner_background_color",
+    "section": "tabs",
+    "group": "bar",
+    "screen": "tabs",
+    "kind": "color",
+    "label": "하단 배너 배경",
+    "required": false,
+    "note": "하단 배너의 배경색입니다. 어두운 색을 권장합니다.",
+    "optionLevel": "advanced",
+    "defaultColor": {
+      "basic": "#664142"
+    },
+    "cssSelector": "BottomBannerStyle",
+    "cssProperty": "background-color"
   },
   {
     "id": "ios-passcode-background-image",
@@ -1066,7 +1380,12 @@
     "fileName": "commonIcoTheme.png",
     "path": "Images/commonIcoTheme.png",
     "required": true,
-    "note": "카카오톡 테마 목록에서 사용되는 대표 아이콘입니다. 작은 크기에서도 테마를 알아볼 수 있게 단순하게 구성하세요.",
+    "note": "카카오톡 테마 목록에서 사용되는 162×162px 대표 아이콘입니다. 작은 크기에서도 테마를 알아볼 수 있게 단순하게 구성하세요.",
+    "constraints": {
+      "recommendedSize": { "width": 162, "height": 162, "scale": 1 },
+      "fit": "exact",
+      "alpha": "mixed"
+    },
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/icon.png"
     }

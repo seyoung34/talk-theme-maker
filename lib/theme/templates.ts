@@ -81,6 +81,16 @@ export type ThemeSlotCandidate = {
   isDefault?: boolean;
 };
 
+export type ThemeAssetConstraints = {
+  aspectRatio?: { width: number; height: number };
+  recommendedSize?: { width: number; height: number; scale?: number };
+  minSize?: { width: number; height: number; unit?: "px" | "dp" };
+  fit?: "exact" | "cover" | "contain" | "stretch-region";
+  focalPoint?: "top-center" | "center" | "free";
+  alpha?: "opaque" | "transparent" | "mixed";
+  runtimeNotes?: string[];
+};
+
 export type ThemeAssetSlot = {
   id: string;
   platform: ThemePlatform;
@@ -92,6 +102,7 @@ export type ThemeAssetSlot = {
   label: string;
   required: boolean;
   editableInBubbleEditor?: boolean;
+  constraints?: ThemeAssetConstraints;
   note: string;
   optionLevel?: "basic" | "advanced";
   autoColorRecipe?: ThemeAutoColorRecipe;

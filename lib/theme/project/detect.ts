@@ -119,6 +119,10 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
   if (name.startsWith("profileImg01")) return "profile_image_1";
   if (name.startsWith("findBtnAddFriend")) return "find_add_friend";
   if (name.startsWith("chatroomBgImage")) return "chat_background";
+  if (name.startsWith("chatroomBubbleSend01Selected")) return "bubble_me_1_selected";
+  if (name.startsWith("chatroomBubbleSend02Selected")) return "bubble_me_2_selected";
+  if (name.startsWith("chatroomBubbleReceive01Selected")) return "bubble_you_1_selected";
+  if (name.startsWith("chatroomBubbleReceive02Selected")) return "bubble_you_2_selected";
   if (name.startsWith("chatroomBubbleSend01")) return "bubble_me_1";
   if (name.startsWith("chatroomBubbleSend02")) return "bubble_me_2";
   if (name.startsWith("chatroomBubbleReceive01")) return "bubble_you_1";
@@ -135,6 +139,10 @@ function detectRole(path: string, name: string, platform: ThemePlatform): ThemeR
   if (name.startsWith("maintabIcoShopping") || name.startsWith("maintabIcoTab4")) return "tab_icon_shopping";
   if (name.startsWith("maintabIcoMoreSelected") || name.startsWith("maintabIcoMoreFocused")) return "tab_icon_more_focused";
   if (name.startsWith("maintabIcoMore")) return "tab_icon_more";
+  if (name.startsWith("maintabIcoPiccomaSelected")) return "tab_icon_piccoma_focused";
+  if (name.startsWith("maintabIcoPiccoma")) return "tab_icon_piccoma";
+  if (name.startsWith("maintabIcoCallSelected")) return "tab_icon_call_focused";
+  if (name.startsWith("maintabIcoCall")) return "tab_icon_call";
   if (name.startsWith("profileImg")) return "profile_image";
   if (name.startsWith("passcodeBgImage")) return "passcode_background";
   if (name.startsWith("passcodeImgCode01Selected")) return "passcode_indicator_1_checked";
