@@ -10,6 +10,7 @@ import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
 import {
   deleteAdminAssetCandidate,
   adminAssetToFile,
+  adminAssetBubbleDecorationToFile,
   bubbleAdjustmentToSpec,
   describeAdminAssetAnalysis,
   getAdminAssetKindLabel,
@@ -46,6 +47,8 @@ type AdminBubbleBuilderDraft = {
   readonly bubbleSpec: AdminBubbleSpec;
 };
 
+type AdminBubbleBuilderInitial = Pick<AdminBubbleBuilderDraft, "recipe" | "decorations">;
+
 function pickValidImageFile(files: FileList | File[] | null | undefined): { file: File } | { error: string } {
   const file = Array.from(files ?? []).find((item) => item.type.startsWith("image/"));
   if (!file) return { error: "이미지 파일만 추가할 수 있습니다." };
@@ -79,6 +82,7 @@ export default function AdminAssetsClient() {
   const [assetListFilter, setAssetListFilter] = useState<"all" | "exact" | "review" | "bubble">("all");
   const [bubbleBuilderOpen, setBubbleBuilderOpen] = useState(false);
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
+  const [bubbleBuilderInitial, setBubbleBuilderInitial] = useState<AdminBubbleBuilderInitial | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const assetRequestSeqRef = useRef(0);
 
@@ -166,6 +170,7 @@ export default function AdminAssetsClient() {
 
   useEffect(() => {
     setBubbleBuilderDraft(null);
+    setBubbleBuilderInitial(null);
     setEditingAsset(null);
   }, [selectedSlot?.role]);
 
@@ -213,6 +218,34 @@ export default function AdminAssetsClient() {
 
   const submit = async () => {
     if (!selectedSlot || isSavingAsset || (!editingAsset && !file)) return;
+    if (editingAsset && bubbleBuilderDraft) {
+      try {
+        setIsSavingAsset(true);
+        const updatedAsset = await saveAdminBubbleBuilderCandidate({
+          id: editingAsset.id,
+          title: title.trim() || editingAsset.title,
+          slotRole: selectedSlot.role,
+          targets: getAdminBubbleBuilderTargets(selectedSlot),
+          variants: bubbleBuilderDraft.variants.map((result) => ({ platform: result.asset.platform, file: result.asset.file, analysis: analysis ?? undefined })),
+          bubbleSpec: bubbleBuilderDraft.bubbleSpec,
+          recipe: bubbleBuilderDraft.recipe,
+          decorations: bubbleBuilderDraft.decorations,
+          geometryMode: "generated",
+          enabled: editingAsset.enabled,
+        });
+        setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? updatedAsset : asset)));
+        setEditingAsset(updatedAsset);
+        setBubbleBuilderDraft(null);
+        setBubbleBuilderInitial({ recipe: updatedAsset.bubbleDesign?.recipe ?? bubbleBuilderDraft.recipe, decorations: bubbleBuilderDraft.decorations });
+        setNotice("빌더 말풍선을 다시 생성했습니다.");
+      } catch (error) {
+        console.error(error);
+        setNotice("빌더 말풍선을 저장하지 못했습니다.");
+      } finally {
+        setIsSavingAsset(false);
+      }
+      return;
+    }
     if (editingAsset) {
       try {
         setIsSavingAsset(true);
@@ -339,6 +372,7 @@ export default function AdminAssetsClient() {
     if (isSavingAsset || isLoadingEditAsset) return;
     setEditingAsset(asset);
     setBubbleBuilderDraft(null);
+    setBubbleBuilderInitial(null);
     setTitle(asset.title);
     setFile(null);
     setAnalysis(asset.analysis ?? null);
@@ -349,6 +383,10 @@ export default function AdminAssetsClient() {
       setIsLoadingEditAsset(true);
       const source = await adminAssetToFile(asset);
       setFile(source);
+      if (asset.bubbleDesign) {
+        const decorations = Object.fromEntries(await Promise.all(asset.bubbleDesign.decorations.map(async (decoration) => [decoration.layerId, await adminAssetBubbleDecorationToFile(decoration)] as const)));
+        setBubbleBuilderInitial({ recipe: asset.bubbleDesign.recipe, decorations });
+      }
     } catch (error) {
       console.error(error);
       setNotice("말풍선 원본을 불러오지 못했습니다. geometry 저장은 다시 시도할 수 있습니다.");
@@ -361,6 +399,7 @@ export default function AdminAssetsClient() {
     if (isSavingAsset) return;
     setEditingAsset(null);
     setBubbleBuilderDraft(null);
+    setBubbleBuilderInitial(null);
     setTitle("");
     clearFile();
     setNotice("새 후보 등록으로 돌아왔습니다.");
@@ -371,12 +410,14 @@ export default function AdminAssetsClient() {
     const variant = bubbleVariantFromRole(selectedSlot.role);
     if (!variant) return;
     try {
+      if (editingAsset?.bubbleDesign?.geometryMode === "manual" && typeof window !== "undefined" && !window.confirm("빌더를 다시 적용하면 수동 geometry 조정값이 자동 계산값으로 바뀝니다. 계속할까요?")) return;
       const results = await Promise.all((['android', 'ios'] as const).map((platform) => generateBubbleAsset({ spec: result.spec, platform, variant, decorationFiles: decorations })));
       const android = results.find((item) => item.asset.platform === "android")?.asset;
       const ios = results.find((item) => item.asset.platform === "ios")?.asset;
       if (!android?.markers || !ios?.insets || !ios.stretch) throw new Error("INVALID_BUBBLE_BUILDER_RESULT");
       const nextSpec = { androidMarkers: android.markers, iosInsets: ios.insets, iosStretch: ios.stretch };
       setBubbleBuilderDraft({ recipe: result.spec, decorations, variants: results, bubbleSpec: nextSpec });
+      setBubbleBuilderInitial({ recipe: result.spec, decorations });
       setBubbleAdjustment({ markers: android.markers, insets: ios.insets, stretch: ios.stretch });
       setFile(android.file);
       setTitle((current) => current || `${selectedSlot.label} 빌더 말풍선`);
@@ -806,8 +847,8 @@ export default function AdminAssetsClient() {
         variant={bubbleVariantFromRole(selectedSlot.role) ?? "first"}
         slotLabel={selectedSlot.label}
         platform={bubblePreviewPlatform}
-        initialSpec={bubbleBuilderDraft?.recipe}
-        initialDecorationFiles={bubbleBuilderDraft?.decorations}
+        initialSpec={bubbleBuilderDraft?.recipe ?? bubbleBuilderInitial?.recipe}
+        initialDecorationFiles={bubbleBuilderDraft?.decorations ?? bubbleBuilderInitial?.decorations}
         onOpenChange={setBubbleBuilderOpen}
         onApply={(result, decorations) => { void applyBubbleBuilder(result, decorations); }}
       /> : null}

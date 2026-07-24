@@ -23,6 +23,7 @@ import {
   type AdminAssetListOptions,
   type AdminAssetPage,
   type AdminAssetTargetInput,
+  type AdminAssetBubbleDecoration,
   type AdminBubbleSpec,
   type AdminAssetAnalysis,
 } from "@/lib/theme/adminAssetDomain";
@@ -364,6 +365,10 @@ export async function adminAssetToFile(asset: AdminAssetCandidate): Promise<File
     if (response.ok) return new File([await response.blob()], asset.fileName, { type: asset.mimeType });
   }
   return storagePathToFile(asset.storagePath, asset.fileName, asset.mimeType);
+}
+
+export async function adminAssetBubbleDecorationToFile(decoration: AdminAssetBubbleDecoration): Promise<File> {
+  return storagePathToFile(decoration.storagePath, decoration.fileName, decoration.mimeType);
 }
 
 export function getAdminAssetKindLabel(kind: AdminAssetKind): string {
