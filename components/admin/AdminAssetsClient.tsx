@@ -6,7 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { AlertTriangle, ChevronDown, Edit3, ImagePlus, LoaderCircle, Pencil, Save, Search, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
-import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
+import { BubbleBuilderEditor } from "@/components/editor/BubbleBuilderDialog";
 import {
   deleteAdminAssetCandidate,
   adminAssetToFile,
@@ -48,6 +48,7 @@ type AdminBubbleBuilderDraft = {
 };
 
 type AdminBubbleBuilderInitial = Pick<AdminBubbleBuilderDraft, "recipe" | "decorations">;
+type BubbleWorkspaceMode = "library" | "adjust" | "builder";
 
 function pickValidImageFile(files: FileList | File[] | null | undefined): { file: File } | { error: string } {
   const file = Array.from(files ?? []).find((item) => item.type.startsWith("image/"));
@@ -80,7 +81,7 @@ export default function AdminAssetsClient() {
   const [imageEditOpen, setImageEditOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
   const [assetListFilter, setAssetListFilter] = useState<"all" | "exact" | "review" | "bubble">("all");
-  const [bubbleBuilderOpen, setBubbleBuilderOpen] = useState(false);
+  const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
   const [bubbleBuilderInitial, setBubbleBuilderInitial] = useState<AdminBubbleBuilderInitial | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +173,7 @@ export default function AdminAssetsClient() {
     setBubbleBuilderDraft(null);
     setBubbleBuilderInitial(null);
     setEditingAsset(null);
+    setBubbleWorkspaceMode("library");
   }, [selectedSlot?.role]);
 
   useEffect(() => {
@@ -379,6 +381,7 @@ export default function AdminAssetsClient() {
     setBubbleAdjustment(asset.bubbleAdjustment ?? createDefaultBubbleAdjustment(asset.analysis));
     setNotice(null);
     if (!(asset.assetKind === "bubble" || asset.slotRole.startsWith("bubble_"))) return;
+    setBubbleWorkspaceMode("adjust");
     try {
       setIsLoadingEditAsset(true);
       const source = await adminAssetToFile(asset);
@@ -402,6 +405,7 @@ export default function AdminAssetsClient() {
     setBubbleBuilderInitial(null);
     setTitle("");
     clearFile();
+    setBubbleWorkspaceMode("library");
     setNotice("새 후보 등록으로 돌아왔습니다.");
   };
 
@@ -421,6 +425,7 @@ export default function AdminAssetsClient() {
       setBubbleAdjustment({ markers: android.markers, insets: ios.insets, stretch: ios.stretch });
       setFile(android.file);
       setTitle((current) => current || `${selectedSlot.label} 빌더 말풍선`);
+      setBubbleWorkspaceMode("adjust");
       setNotice("Android/iOS 말풍선 결과를 만들었습니다. 저장하면 하나의 관리 후보로 등록됩니다.");
     } catch (error) {
       console.error(error);
@@ -446,11 +451,6 @@ export default function AdminAssetsClient() {
       <div className="grid min-h-full gap-0 xl:h-full xl:min-h-0 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
         <section className="grid min-h-0 gap-0 xl:contents">
           <aside className="grid content-start gap-0 border-b border-[var(--color-outline-variant)] bg-white xl:col-start-1 xl:row-start-1 xl:h-full xl:overflow-y-auto xl:border-b-0 xl:border-r">
-            <div className="border-b border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-3">
-              <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Asset workflow</span>
-              <p className="mt-1 text-sm font-black leading-5 text-[var(--color-on-surface)]">에셋 종류와 대표 슬롯만 고르면 Android/iOS 공통 대상으로 저장합니다.</p>
-            </div>
-
             <div className="grid gap-2 border-b border-[var(--color-outline-variant)] p-4">
               <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">에셋 종류</span>
               {slotGroups.map((group) => (
@@ -527,12 +527,6 @@ export default function AdminAssetsClient() {
                       </div>
                     </div>
                   ) : null}
-                  <div className="grid gap-2 rounded-2xl border border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-3 md:col-span-2">
-                    <strong className="text-sm font-black text-[var(--color-on-info-container)]">저장 방식</strong>
-                    <p className="text-xs font-semibold leading-5 text-[var(--color-on-info-container-variant)]">
-                      업로드한 파일은 한 번만 저장하고, 대표 슬롯을 기준으로 Android/iOS에 필요한 target을 자동 생성합니다. 말풍선만 Android marker와 iOS inset/stretch 값을 함께 확인합니다.
-                    </p>
-                  </div>
               <label className="grid gap-2">
                 <span className="text-sm font-black text-[var(--color-on-surface)]">후보 이름</span>
                 <input className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={file?.name ?? "예: 심플 말풍선"} />
@@ -672,44 +666,9 @@ export default function AdminAssetsClient() {
                 </div>
               ) : null}
               {assetKind === "bubble" ? (
-                <div className="grid gap-3 md:col-span-2">
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3">
-                    <div>
-                      <strong className="block text-sm font-black text-[var(--color-on-surface)]">말풍선 공통 기준</strong>
-                      <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
-                        현재 이미지 크기에서 기본 stretch와 여백을 추천합니다. 저장값은 Android 9-patch와 iOS inset 편집에서 함께 사용됩니다.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="rounded-full bg-[var(--color-inverse-surface)] px-4 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] shadow-sm transition hover:-translate-y-0.5 active:translate-y-0"
-                        onClick={() => setBubbleBuilderOpen(true)}
-                      >
-                        나만의 말풍선 만들기
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full bg-white px-4 py-2 text-xs font-black text-[var(--color-on-surface)] shadow-sm transition hover:-translate-y-0.5 hover:bg-[var(--color-info-container)] active:translate-y-0"
-                        onClick={applyRecommendedBubbleAdjustment}
-                      >
-                        공통 기준 자동 맞춤
-                      </button>
-                    </div>
-                  </div>
-                  {bubbleBuilderDraft ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold leading-5 text-emerald-800">빌더 결과 준비됨 · Android 9-patch와 iOS PNG를 함께 저장합니다. 현재 선택한 {selectedSlot?.label} 슬롯에만 적용됩니다.</div> : null}
-                  <BubblePlatformSummary adjustment={bubbleAdjustment} activePlatform={bubblePreviewPlatform} onSelectPlatform={setBubblePreviewPlatform} />
-                  <InlineBubbleAdjuster
-                    file={adminBubbleFile}
-                    slot={selectedBubbleSlot}
-                    platform={bubblePreviewPlatform}
-                    markers={bubbleAdjustment.markers}
-                    insets={bubbleAdjustment.insets}
-                    stretch={bubbleAdjustment.stretch}
-                    onMarkersChange={(markers) => setBubbleAdjustment((current) => ({ ...current, markers }))}
-                    onInsetsChange={(insets) => setBubbleAdjustment((current) => ({ ...current, insets }))}
-                    onStretchChange={(stretch) => setBubbleAdjustment((current) => ({ ...current, stretch }))}
-                  />
+                <div className="flex flex-wrap items-center gap-2 md:col-span-2">
+                  <button type="button" className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]" onClick={() => setBubbleWorkspaceMode("builder")}>말풍선 빌더 열기</button>
+                  <button type="button" className="rounded-lg border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]" onClick={() => { applyRecommendedBubbleAdjustment(); setBubbleWorkspaceMode("adjust"); }}>중앙에서 조정</button>
                 </div>
               ) : null}
               <div className="grid gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3 md:col-span-2">
@@ -728,6 +687,52 @@ export default function AdminAssetsClient() {
             </div>
 
             <section className="grid min-w-0 content-start gap-4 bg-[var(--color-background)] p-4 xl:col-start-2 xl:row-start-1 xl:h-full xl:overflow-y-auto">
+              {assetKind === "bubble" && bubbleWorkspaceMode !== "library" ? (
+                <div className="grid min-h-full content-start gap-4">
+                  <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-outline-variant)] pb-3">
+                    <div>
+                      <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Bubble workbench</span>
+                      <h2 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">{bubbleWorkspaceMode === "builder" ? "나만의 말풍선 만들기" : selectedSlot?.label ?? "말풍선 편집"}</h2>
+                    </div>
+                    <button type="button" onClick={() => setBubbleWorkspaceMode("library")} className="rounded-lg border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]">후보 라이브러리</button>
+                  </header>
+                  {bubbleWorkspaceMode === "builder" ? (
+                    <BubbleBuilderEditor
+                      side={selectedBubbleSlot}
+                      variant={bubbleVariantFromRole(selectedSlot?.role ?? "") ?? "first"}
+                      slotLabel={selectedSlot?.label ?? "말풍선"}
+                      platform={bubblePreviewPlatform}
+                      initialSpec={bubbleBuilderDraft?.recipe ?? bubbleBuilderInitial?.recipe}
+                      initialDecorationFiles={bubbleBuilderDraft?.decorations ?? bubbleBuilderInitial?.decorations}
+                      closeOnApply={false}
+                      onClose={() => setBubbleWorkspaceMode("library")}
+                      onApply={(result, decorations) => { void applyBubbleBuilder(result, decorations); }}
+                    />
+                  ) : (
+                    <div className="grid gap-4">
+                      {editingAsset ? <div className="flex flex-wrap items-center justify-between gap-3 border border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-3 text-xs font-bold text-[var(--color-info-strong)]"><span>편집 중 · {editingAsset.title}</span><button type="button" className="rounded-md bg-white px-2.5 py-1.5 font-black text-[var(--color-on-surface-variant)]" onClick={exitInPlaceEdit}>새 후보</button></div> : null}
+                      {bubbleBuilderDraft ? <div className="border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold leading-5 text-emerald-800">빌더 결과가 준비되었습니다. 우측 패널에서 저장하면 Android/iOS 후보가 함께 등록됩니다.</div> : null}
+                      <BubblePlatformSummary adjustment={bubbleAdjustment} activePlatform={bubblePreviewPlatform} onSelectPlatform={setBubblePreviewPlatform} />
+                      <InlineBubbleAdjuster
+                        file={adminBubbleFile}
+                        slot={selectedBubbleSlot}
+                        platform={bubblePreviewPlatform}
+                        markers={bubbleAdjustment.markers}
+                        insets={bubbleAdjustment.insets}
+                        stretch={bubbleAdjustment.stretch}
+                        onMarkersChange={(markers) => setBubbleAdjustment((current) => ({ ...current, markers }))}
+                        onInsetsChange={(insets) => setBubbleAdjustment((current) => ({ ...current, insets }))}
+                        onStretchChange={(stretch) => setBubbleAdjustment((current) => ({ ...current, stretch }))}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setBubbleWorkspaceMode("builder")} className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]">빌더로 다시 만들기</button>
+                        <button type="button" onClick={applyRecommendedBubbleAdjustment} className="rounded-lg border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]">자동 기준 적용</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-black text-[var(--color-on-surface)]">등록된 관리 후보</h2>
@@ -782,6 +787,8 @@ export default function AdminAssetsClient() {
                     </p>
                   </div>
                 </div>
+              )}
+                </>
               )}
             </section>
             {assetCursor ? (
@@ -841,17 +848,6 @@ export default function AdminAssetsClient() {
         }}
       />
       <AdminAssetEditDialog asset={null} onClose={() => undefined} onSaved={() => undefined} />
-      {selectedSlot && assetKind === "bubble" && selectedBubbleSlot ? <BubbleBuilderDialog
-        open={bubbleBuilderOpen}
-        side={selectedBubbleSlot}
-        variant={bubbleVariantFromRole(selectedSlot.role) ?? "first"}
-        slotLabel={selectedSlot.label}
-        platform={bubblePreviewPlatform}
-        initialSpec={bubbleBuilderDraft?.recipe ?? bubbleBuilderInitial?.recipe}
-        initialDecorationFiles={bubbleBuilderDraft?.decorations ?? bubbleBuilderInitial?.decorations}
-        onOpenChange={setBubbleBuilderOpen}
-        onApply={(result, decorations) => { void applyBubbleBuilder(result, decorations); }}
-      /> : null}
 
       <Dialog.Root open={Boolean(assetPendingDelete)} onOpenChange={(open) => { if (!open && !deletingAssetId) setAssetPendingDelete(null); }}>
         <Dialog.Portal>

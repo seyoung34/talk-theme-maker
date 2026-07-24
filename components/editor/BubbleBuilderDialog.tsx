@@ -40,9 +40,15 @@ type BubbleBuilderDialogProps = {
   onApply: (result: GeneratedBubbleDesign, decorationFiles: DecorationFiles) => void;
 };
 
+type BubbleBuilderEditorProps = Omit<BubbleBuilderDialogProps, "open" | "onOpenChange"> & {
+  active?: boolean;
+  onClose?: () => void;
+  closeOnApply?: boolean;
+};
+
 const decorationMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
-export function BubbleBuilderDialog({ open, side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onOpenChange, onApply }: BubbleBuilderDialogProps) {
+export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, active = true, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
   const [spec, setSpec] = useState(() => initialSpec ?? createBubbleFamilyDesignSpec(side));
   const [decorationFiles, setDecorationFiles] = useState<DecorationFiles>({});
   const [decorationUrls, setDecorationUrls] = useState<Partial<Record<string, string>>>({});
@@ -109,7 +115,7 @@ export function BubbleBuilderDialog({ open, side, variant, slotLabel, platform, 
   const decorationCollision = collidingLayerIds.length > 0;
 
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     const source = initialSpec ?? createBubbleFamilyDesignSpec(side);
     const sourceLayers = getBubbleDecorationLayers(source);
     setSpec({
@@ -127,10 +133,10 @@ export function BubbleBuilderDialog({ open, side, variant, slotLabel, platform, 
     setError(undefined);
     setDragActive(false);
     setStep(0);
-  }, [initialDecorationFiles, initialSpec, open, side, variant]);
+  }, [active, initialDecorationFiles, initialSpec, side, variant]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!active) return;
     const handlePaste = (event: ClipboardEvent) => {
       const file = Array.from(event.clipboardData?.files ?? []).find((candidate) => decorationMimeTypes.has(candidate.type));
       if (!file) return;
@@ -139,7 +145,7 @@ export function BubbleBuilderDialog({ open, side, variant, slotLabel, platform, 
     };
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, [acceptDecorationFile, open]);
+  }, [acceptDecorationFile, active]);
 
   useEffect(() => {
     const created: Record<string, string> = {};
@@ -171,7 +177,7 @@ export function BubbleBuilderDialog({ open, side, variant, slotLabel, platform, 
       const nextSpec = { ...spec, decorationSourceName: undefined, updatedAt: Date.now() };
       const result = await generateBubbleAsset({ spec: nextSpec, platform, variant, decorationFiles });
       onApply(result, decorationFiles);
-      onOpenChange(false);
+      if (closeOnApply) onClose?.();
     } catch (cause) {
       console.error(cause);
       setError("말풍선 이미지를 만들지 못했습니다. 장식 이미지를 바꾸거나 다시 시도해 주세요.");
@@ -247,14 +253,11 @@ export function BubbleBuilderDialog({ open, side, variant, slotLabel, platform, 
   );
 
   return (
-    <Dialog.Root open={open} onOpenChange={(next) => !isApplying && onOpenChange(next)}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[90] bg-slate-950/45 backdrop-blur-sm" />
-        <Dialog.Content className="fixed inset-x-3 top-1/2 z-[91] mx-auto max-h-[92dvh] w-auto max-w-4xl -translate-y-1/2 overflow-y-auto rounded-3xl bg-white p-4 shadow-2xl focus:outline-none [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1] md:p-6">
+    <section className="grid gap-5 bg-white p-4 text-slate-950 md:p-6">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <Dialog.Title className="flex items-center gap-2 text-xl font-black text-slate-950">나만의 말풍선 만들기</Dialog.Title>
-              <Dialog.Description className="mt-1 truncate text-sm font-medium text-slate-500">{slotLabel} 슬롯에 적용됩니다.</Dialog.Description>
+              <h2 className="flex items-center gap-2 text-xl font-black text-slate-950">나만의 말풍선 만들기</h2>
+              <p className="mt-1 truncate text-sm font-medium text-slate-500">{slotLabel} 슬롯에 적용됩니다.</p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Popover.Root>
@@ -271,7 +274,7 @@ export function BubbleBuilderDialog({ open, side, variant, slotLabel, platform, 
                   </Popover.Content>
                 </Popover.Portal>
               </Popover.Root>
-              <Dialog.Close className="grid size-10 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2" aria-label="닫기"><X size={20} /></Dialog.Close>
+              {onClose ? <button type="button" disabled={isApplying} onClick={onClose} className="grid size-10 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50" aria-label="닫기"><X size={20} /></button> : null}
             </div>
           </div>
 
@@ -325,6 +328,17 @@ export function BubbleBuilderDialog({ open, side, variant, slotLabel, platform, 
               </div>
             </div>
           </div>
+    </section>
+  );
+}
+
+export function BubbleBuilderDialog({ open, onOpenChange, ...editorProps }: BubbleBuilderDialogProps) {
+  return (
+    <Dialog.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[90] bg-slate-950/45 backdrop-blur-sm" />
+        <Dialog.Content className="fixed inset-x-3 top-1/2 z-[91] mx-auto max-h-[92dvh] w-auto max-w-4xl -translate-y-1/2 overflow-y-auto rounded-3xl bg-white shadow-2xl focus:outline-none [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
+          <BubbleBuilderEditor {...editorProps} active={open} onClose={() => onOpenChange(false)} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
