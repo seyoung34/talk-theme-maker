@@ -433,8 +433,8 @@ export default function AdminAssetsClient() {
   };
 
   return (
-    <main className="grid h-[100dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[var(--color-background)] text-[var(--color-on-background)]">
-      <header className="flex min-h-12 items-center justify-between gap-4 border-b border-[var(--color-outline-variant)] bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.03)]">
+    <main className="grid h-[100dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-slate-50 text-slate-950 [--color-background:#f8fafc] [--color-error-container:#fff1f2] [--color-info:#2563eb] [--color-info-container:#eff6ff] [--color-info-container-high:#dbeafe] [--color-info-outline:#93c5fd] [--color-info-outline-strong:#2563eb] [--color-info-strong:#1d4ed8] [--color-inverse-on-surface:#ffffff] [--color-inverse-surface:#1d4ed8] [--color-on-background:#0f172a] [--color-on-info-container:#172554] [--color-on-info-container-variant:#1e40af] [--color-on-surface:#0f172a] [--color-on-surface-variant:#475569] [--color-outline-variant:#dbeafe] [--color-surface-low:#f1f5f9]">
+      <header className="flex min-h-12 items-center justify-between gap-4 border-b border-blue-100 bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.03)]">
         <div className="flex min-w-0 items-center gap-3">
           <Link href="/admin" className="rounded-full px-2 py-1 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)]">← 관리자</Link>
           <span className="h-4 w-px bg-[var(--color-outline-variant)]" aria-hidden="true" />
@@ -446,10 +446,10 @@ export default function AdminAssetsClient() {
         </div>
       </header>
 
-      <div className="min-h-0 overflow-y-auto xl:overflow-hidden">
-      <div className="grid min-h-full gap-0 xl:h-full xl:min-h-0 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
-        <section className="grid min-h-0 gap-0 xl:contents">
-          <aside className="grid content-start gap-0 border-b border-[var(--color-outline-variant)] bg-white xl:col-start-1 xl:row-start-1 xl:h-full xl:overflow-y-auto xl:border-b-0 xl:border-r">
+      <div className="min-h-0 overflow-y-auto lg:overflow-hidden">
+      <div className="grid min-h-full gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[240px_minmax(0,1fr)_360px] xl:grid-cols-[272px_minmax(0,1fr)_400px]">
+        <section className="grid min-h-0 gap-0 lg:contents">
+          <aside className="grid content-start gap-0 border-b border-[var(--color-outline-variant)] bg-white lg:col-start-1 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r">
             <div className="grid gap-2 border-b border-[var(--color-outline-variant)] p-4">
               <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">에셋 종류</span>
               {slotGroups.map((group) => (
@@ -466,7 +466,7 @@ export default function AdminAssetsClient() {
               ))}
             </div>
 
-            <div className="grid max-h-[42dvh] gap-2 overflow-auto p-4 [scrollbar-width:thin] xl:max-h-none">
+            <div className="grid max-h-[42dvh] gap-2 overflow-auto p-4 [scrollbar-width:thin] lg:max-h-none">
               <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">대표 슬롯</span>
               {activeKindSlots.map((slot) => (
                 <button
@@ -482,8 +482,8 @@ export default function AdminAssetsClient() {
             </div>
           </aside>
 
-          <section className="contents">
-            <div className="min-w-0 overflow-hidden border-b border-[var(--color-outline-variant)] bg-white xl:col-start-3 xl:row-start-1 xl:h-full xl:overflow-y-auto xl:border-b-0 xl:border-l">
+          <section className="grid min-w-0 content-start gap-0 lg:contents">
+            <div className="min-w-0 overflow-hidden border-b border-[var(--color-outline-variant)] bg-white lg:col-start-3 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-l">
               <div className="border-b border-[var(--color-outline-variant)] px-4 py-4">
                 <span className="min-w-0">
                   <span className="block text-sm font-black text-[var(--color-on-surface)]">에셋 등록</span>
@@ -522,7 +522,7 @@ export default function AdminAssetsClient() {
                   ))}
                 </select>
               </label>
-              <div className="grid gap-2 md:col-span-2">
+              <div className="grid gap-2">
                 <span className="text-sm font-black text-[var(--color-on-surface)]">
                   이미지 파일
                 </span>
@@ -628,12 +628,12 @@ export default function AdminAssetsClient() {
                 </div>
               </div>
               {file ? (
-                <div className="rounded-2xl bg-[var(--color-surface-low)] px-4 py-3 text-xs font-bold text-[var(--color-on-surface-variant)] md:col-span-2">
+                <div className="rounded-2xl bg-[var(--color-surface-low)] px-4 py-3 text-xs font-bold text-[var(--color-on-surface-variant)]">
                   자동 분석: {describeAdminAssetAnalysis(analysis ?? { shapes: inferShapesFromFileName(file.name) })}
                 </div>
               ) : null}
               {guidanceItems.length > 0 ? (
-                <div className="grid gap-2 px-4 py-3 border rounded-2xl border-amber-200 bg-amber-50 md:col-span-2">
+                <div className="grid gap-2 px-4 py-3 border rounded-2xl border-amber-200 bg-amber-50">
                   <div className="flex items-center gap-2 text-sm font-black text-amber-950">
                     <AlertTriangle size={17} aria-hidden="true" />
                     저장 전 확인
@@ -646,31 +646,31 @@ export default function AdminAssetsClient() {
                 </div>
               ) : null}
               {assetKind === "bubble" ? (
-                <div className="flex flex-wrap items-center gap-2 md:col-span-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button type="button" className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]" onClick={() => setBubbleWorkspaceMode("builder")}>말풍선 빌더 열기</button>
                   <button type="button" className="rounded-lg border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]" onClick={() => { applyRecommendedBubbleAdjustment(); setBubbleWorkspaceMode("adjust"); }}>중앙에서 조정</button>
                 </div>
               ) : null}
-              <div className="grid gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3 md:col-span-2">
+              <div className="grid gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3">
                 <span className="text-sm font-black text-[var(--color-on-surface)]">자동 적용 대상</span>
                 <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
                   저장 시 파일 1개와 target {selectedSaveTargets.length || 0}개를 생성합니다
                   {selectedSaveTargets.length > 0 ? ` · ${selectedSaveTargets.map(formatAdminAssetTargetInput).join(" / ")}` : ""}.
                 </p>
               </div>
-              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:opacity-40 md:col-span-2" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
+              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
                 {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : "관리 후보 저장"}
               </button>
               </div>
             </div>
 
-            <section className="grid min-w-0 content-start gap-4 bg-[var(--color-background)] p-4 xl:col-start-2 xl:row-start-1 xl:h-full xl:overflow-y-auto">
+            <section className="relative grid min-w-0 content-start gap-4 bg-[var(--color-background)] p-4 lg:col-start-2 lg:row-start-1 lg:h-full lg:overflow-y-auto">
               {assetKind === "bubble" ? (
-                <div className="sticky top-0 z-30 -mt-4 -mr-4 flex justify-end bg-gradient-to-l from-[var(--color-background)] via-[var(--color-background)] to-transparent py-3 pr-4">
-                  <div className="pointer-events-auto inline-flex border border-[var(--color-outline-variant)] bg-white shadow-sm">
-                    <button type="button" onClick={() => setBubbleWorkspaceMode("library")} aria-label="말풍선 후보 라이브러리 보기" aria-pressed={bubbleWorkspaceMode === "library"} title="후보 라이브러리" className={`grid size-8 place-items-center transition ${bubbleWorkspaceMode === "library" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`}><Library size={15} aria-hidden="true" /></button>
-                    <button type="button" onClick={() => setBubbleWorkspaceMode("adjust")} aria-label="말풍선 편집 화면 보기" aria-pressed={bubbleWorkspaceMode !== "library"} title="말풍선 편집" className={`grid size-8 place-items-center border-l border-[var(--color-outline-variant)] transition ${bubbleWorkspaceMode !== "library" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`}><SlidersHorizontal size={15} aria-hidden="true" /></button>
+                <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2">
+                  <div className="pointer-events-auto inline-flex rounded-full border border-blue-200 bg-white/95 p-1 shadow-[0_8px_24px_rgba(37,99,235,0.16)] backdrop-blur">
+                    <button type="button" onClick={() => setBubbleWorkspaceMode("library")} aria-label="말풍선 후보 라이브러리 보기" aria-pressed={bubbleWorkspaceMode === "library"} title="후보 라이브러리" className={`grid size-8 place-items-center rounded-full transition ${bubbleWorkspaceMode === "library" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"}`}><Library size={15} aria-hidden="true" /></button>
+                    <button type="button" onClick={() => setBubbleWorkspaceMode("adjust")} aria-label="말풍선 편집 화면 보기" aria-pressed={bubbleWorkspaceMode !== "library"} title="말풍선 편집" className={`grid size-8 place-items-center rounded-full transition ${bubbleWorkspaceMode !== "library" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"}`}><SlidersHorizontal size={15} aria-hidden="true" /></button>
                   </div>
                 </div>
               ) : null}
@@ -706,6 +706,7 @@ export default function AdminAssetsClient() {
                         markers={bubbleAdjustment.markers}
                         insets={bubbleAdjustment.insets}
                         stretch={bubbleAdjustment.stretch}
+                        tone="blue"
                         onMarkersChange={(markers) => setBubbleAdjustment((current) => ({ ...current, markers }))}
                         onInsetsChange={(insets) => setBubbleAdjustment((current) => ({ ...current, insets }))}
                         onStretchChange={(stretch) => setBubbleAdjustment((current) => ({ ...current, stretch }))}

@@ -23,6 +23,7 @@ export default function InlineBubbleAdjuster({
   onMarkersChange,
   onInsetsChange,
   onStretchChange,
+  tone = "default",
 }: {
   file?: ThemeProjectFile;
   slot: BubbleSlot;
@@ -33,6 +34,7 @@ export default function InlineBubbleAdjuster({
   onMarkersChange: (markers: Markers) => void;
   onInsetsChange: (insets: Insets) => void;
   onStretchChange: (stretch: StretchPoint) => void;
+  tone?: "default" | "blue";
 }) {
   const [asset, setAsset] = useState<BubbleAsset | null>(null);
   const [loading, setLoading] = useState(false);
@@ -73,9 +75,12 @@ export default function InlineBubbleAdjuster({
     if (!asset) return null;
     return markers ? { ...asset, markers } : asset;
   }, [asset, markers]);
+  const surfaceClassName = tone === "blue"
+    ? "border border-blue-100 bg-white text-slate-500"
+    : "border border-[#d7ddd8] bg-[#f6f7f5] text-[#5d6670]";
 
   if (loading) {
-    return <div className="rounded-[22px] border border-[#d7ddd8] bg-[#f6f7f5] px-4 py-5 text-sm font-bold text-[#5d6670]">말풍선 편집기를 준비하는 중입니다.</div>;
+    return <div className={`rounded-[22px] px-4 py-5 text-sm font-bold ${surfaceClassName}`}>말풍선 편집기를 준비하는 중입니다.</div>;
   }
 
   if (error) {
@@ -83,11 +88,11 @@ export default function InlineBubbleAdjuster({
   }
 
   if (!displayAsset) {
-    return <div className="rounded-[22px] border border-[#d7ddd8] bg-[#f6f7f5] px-4 py-5 text-sm font-bold text-[#5d6670]">이미지를 업로드하거나 기본 말풍선이 있는 슬롯을 선택하세요.</div>;
+    return <div className={`rounded-[22px] px-4 py-5 text-sm font-bold ${surfaceClassName}`}>이미지를 업로드하거나 기본 말풍선이 있는 슬롯을 선택하세요.</div>;
   }
 
   return (
-    <section className="grid gap-4 rounded-[26px] border border-[#d7ddd8] bg-[#f6f7f5] p-4">
+    <section className={`grid gap-4 rounded-[26px] p-4 ${surfaceClassName}`}>
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.14em] text-[#5d6670]">inline bubble adjuster</p>
