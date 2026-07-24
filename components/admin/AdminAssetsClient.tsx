@@ -442,23 +442,16 @@ export default function AdminAssetsClient() {
         </div>
       </header>
 
-      <div className="min-h-0 overflow-y-auto">
-      <div className="grid gap-5 px-5 py-5 md:px-8">
-        <header className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Admin</p>
-            <h1 className="mt-1 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">이미지 후보 관리</h1>
-          </div>
-        </header>
-
-        <section className="grid min-h-0 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
-          <aside className="grid content-start gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 xl:max-h-[calc(100dvh-9rem)] xl:overflow-y-auto">
-            <div className="rounded-2xl border border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-3">
+      <div className="min-h-0 overflow-y-auto xl:overflow-hidden">
+      <div className="grid min-h-full gap-0 xl:h-full xl:min-h-0 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
+        <section className="grid min-h-0 gap-0 xl:contents">
+          <aside className="grid content-start gap-0 border-b border-[var(--color-outline-variant)] bg-white xl:col-start-1 xl:row-start-1 xl:h-full xl:overflow-y-auto xl:border-b-0 xl:border-r">
+            <div className="border-b border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-3">
               <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Asset workflow</span>
               <p className="mt-1 text-sm font-black leading-5 text-[var(--color-on-surface)]">에셋 종류와 대표 슬롯만 고르면 Android/iOS 공통 대상으로 저장합니다.</p>
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-2 border-b border-[var(--color-outline-variant)] p-4">
               <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">에셋 종류</span>
               {slotGroups.map((group) => (
                 <button
@@ -474,7 +467,7 @@ export default function AdminAssetsClient() {
               ))}
             </div>
 
-            <div className="grid max-h-[42dvh] gap-2 overflow-auto pr-1 [scrollbar-width:thin]">
+            <div className="grid max-h-[42dvh] gap-2 overflow-auto p-4 [scrollbar-width:thin] xl:max-h-none">
               <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">대표 슬롯</span>
               {activeKindSlots.map((slot) => (
                 <button
@@ -490,8 +483,8 @@ export default function AdminAssetsClient() {
             </div>
           </aside>
 
-          <section className="grid min-w-0 content-start gap-4 xl:max-h-[calc(100dvh-9rem)] xl:overflow-y-auto xl:pr-1">
-            <div className="overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white">
+          <section className="contents">
+            <div className="min-w-0 overflow-hidden border-b border-[var(--color-outline-variant)] bg-white xl:col-start-3 xl:row-start-1 xl:h-full xl:overflow-y-auto xl:border-b-0 xl:border-l">
               <button
                 id="admin-asset-add-trigger"
                 type="button"
@@ -512,6 +505,13 @@ export default function AdminAssetsClient() {
                   <ChevronDown className={`size-4 transition-transform ${isAddAssetOpen ? "rotate-180" : ""}`} aria-hidden="true" />
                 </span>
               </button>
+              {editingAsset ? (
+                <div className="flex items-center justify-between gap-2 border-t border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-2.5">
+                  <span className="min-w-0 truncate text-xs font-black text-[var(--color-info-strong)]">편집 중 · {editingAsset.title}</span>
+                  <button type="button" disabled={isSavingAsset} onClick={exitInPlaceEdit} className="rounded-md bg-white px-2.5 py-1.5 text-[11px] font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] disabled:opacity-50">새 후보</button>
+                </div>
+              ) : null}
+              {isLoadingEditAsset ? <div className="inline-flex items-center gap-2 border-t border-[var(--color-outline-variant)] px-4 py-2.5 text-xs font-bold text-[var(--color-on-surface-variant)]"><LoaderCircle size={14} className="animate-spin" /> 원본 불러오는 중</div> : null}
               {isAddAssetOpen ? (
                 <div
                   id="admin-asset-add-panel"
@@ -719,15 +719,15 @@ export default function AdminAssetsClient() {
                   {selectedSaveTargets.length > 0 ? ` · ${selectedSaveTargets.map(formatAdminAssetTargetInput).join(" / ")}` : ""}.
                 </p>
               </div>
-              <button className="hidden" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
+              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:opacity-40 md:col-span-2" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
-                {isSavingAsset ? "저장 중" : "공통 관리 후보 추가"}
+                {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : "관리 후보 저장"}
               </button>
                 </div>
               ) : null}
             </div>
 
-            <section className="hidden">
+            <section className="grid min-w-0 content-start gap-4 bg-[var(--color-background)] p-4 xl:col-start-2 xl:row-start-1 xl:h-full xl:overflow-y-auto">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-black text-[var(--color-on-surface)]">등록된 관리 후보</h2>
@@ -790,7 +790,7 @@ export default function AdminAssetsClient() {
               </button>
             ) : null}
             </section>
-            <aside className="grid content-start gap-4 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 xl:max-h-[calc(100dvh-9rem)] xl:overflow-y-auto">
+            <aside className="hidden">
               <div>
                 <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Inspector</span>
                 <h2 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">{selectedSlot?.label ?? "슬롯 선택"}</h2>
@@ -814,7 +814,7 @@ export default function AdminAssetsClient() {
               </button>
             </aside>
           </section>
-          <section className="sticky bottom-0 z-20 grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white/95 p-4 shadow-[0_-16px_36px_rgba(42,103,103,0.08)] backdrop-blur">
+          <section className="hidden">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0"><span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Library</span><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{selectedSlot?.label ?? "선택 슬롯"} · {filteredAssets.length}/{visibleAssets.length}개</p></div>
               <div className="relative min-w-[220px] flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" /><input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.currentTarget.value)} placeholder="후보 검색" className="h-10 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-xs font-semibold outline-none focus:bg-white" aria-label="관리 후보 검색" /></div>
