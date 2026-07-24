@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertTriangle, ChevronDown, Edit3, ImagePlus, LoaderCircle, Pencil, Save, Search, X, Trash2 } from "lucide-react";
+import { AlertTriangle, Edit3, ImagePlus, Library, LoaderCircle, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import { BubbleBuilderEditor } from "@/components/editor/BubbleBuilderDialog";
@@ -68,7 +68,6 @@ export default function AdminAssetsClient() {
   const [bubbleAdjustment, setBubbleAdjustment] = useState<AdminBubbleAdjustment>(createDefaultBubbleAdjustment());
   const [file, setFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState("");
-  const [isAddAssetOpen, setIsAddAssetOpen] = useState(true);
   const [dragActive, setDragActive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingAsset, setEditingAsset] = useState<AdminAssetCandidate | null>(null);
@@ -485,26 +484,14 @@ export default function AdminAssetsClient() {
 
           <section className="contents">
             <div className="min-w-0 overflow-hidden border-b border-[var(--color-outline-variant)] bg-white xl:col-start-3 xl:row-start-1 xl:h-full xl:overflow-y-auto xl:border-b-0 xl:border-l">
-              <button
-                id="admin-asset-add-trigger"
-                type="button"
-                className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left transition hover:bg-[var(--color-surface-low)] disabled:cursor-wait disabled:opacity-80"
-                aria-expanded={isAddAssetOpen}
-                aria-controls="admin-asset-add-panel"
-                disabled={isSavingAsset}
-                onClick={() => setIsAddAssetOpen((open) => !open)}
-              >
+              <div className="border-b border-[var(--color-outline-variant)] px-4 py-4">
                 <span className="min-w-0">
-                  <span className="block text-sm font-black text-[var(--color-on-surface)]">통합 에셋 등록</span>
+                  <span className="block text-sm font-black text-[var(--color-on-surface)]">에셋 등록</span>
                   <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">
                     {file ? file.name : `${getAdminAssetKindLabel(assetKind)} · ${selectedSlot?.label ?? "대표 슬롯"}`}
                   </span>
                 </span>
-                <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)]">
-                  {isSavingAsset ? "저장 중" : isAddAssetOpen ? "접기" : "펼치기"}
-                  <ChevronDown className={`size-4 transition-transform ${isAddAssetOpen ? "rotate-180" : ""}`} aria-hidden="true" />
-                </span>
-              </button>
+              </div>
               {editingAsset ? (
                 <div className="flex items-center justify-between gap-2 border-t border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-2.5">
                   <span className="min-w-0 truncate text-xs font-black text-[var(--color-info-strong)]">편집 중 · {editingAsset.title}</span>
@@ -512,13 +499,7 @@ export default function AdminAssetsClient() {
                 </div>
               ) : null}
               {isLoadingEditAsset ? <div className="inline-flex items-center gap-2 border-t border-[var(--color-outline-variant)] px-4 py-2.5 text-xs font-bold text-[var(--color-on-surface-variant)]"><LoaderCircle size={14} className="animate-spin" /> 원본 불러오는 중</div> : null}
-              {isAddAssetOpen ? (
-                <div
-                  id="admin-asset-add-panel"
-                  className="relative grid gap-3 border-t border-[var(--color-outline-variant)] p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-                  role="region"
-                  aria-labelledby="admin-asset-add-trigger"
-                >
+                <div id="admin-asset-add-panel" className="relative grid gap-3 p-4" role="region" aria-label="에셋 등록">
                   {isSavingAsset ? (
                     <div className="absolute inset-0 z-10 grid place-items-center bg-white/72 backdrop-blur-[1px]" role="status" aria-live="polite">
                       <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-4 py-2 text-sm font-black text-[var(--color-info-strong)] shadow-sm">
@@ -607,7 +588,6 @@ export default function AdminAssetsClient() {
                       const files = event.currentTarget.files;
                       event.currentTarget.value = "";
                       applyDroppedFile(files);
-                      setIsAddAssetOpen(true);
                     }}
                   />
 
@@ -682,11 +662,18 @@ export default function AdminAssetsClient() {
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
                 {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : "관리 후보 저장"}
               </button>
-                </div>
-              ) : null}
+              </div>
             </div>
 
             <section className="grid min-w-0 content-start gap-4 bg-[var(--color-background)] p-4 xl:col-start-2 xl:row-start-1 xl:h-full xl:overflow-y-auto">
+              {assetKind === "bubble" ? (
+                <div className="sticky top-0 z-30 -mt-4 -mr-4 flex justify-end bg-gradient-to-l from-[var(--color-background)] via-[var(--color-background)] to-transparent py-3 pr-4">
+                  <div className="pointer-events-auto inline-flex border border-[var(--color-outline-variant)] bg-white shadow-sm">
+                    <button type="button" onClick={() => setBubbleWorkspaceMode("library")} aria-label="말풍선 후보 라이브러리 보기" aria-pressed={bubbleWorkspaceMode === "library"} title="후보 라이브러리" className={`grid size-8 place-items-center transition ${bubbleWorkspaceMode === "library" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`}><Library size={15} aria-hidden="true" /></button>
+                    <button type="button" onClick={() => setBubbleWorkspaceMode("adjust")} aria-label="말풍선 편집 화면 보기" aria-pressed={bubbleWorkspaceMode !== "library"} title="말풍선 편집" className={`grid size-8 place-items-center border-l border-[var(--color-outline-variant)] transition ${bubbleWorkspaceMode !== "library" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`}><SlidersHorizontal size={15} aria-hidden="true" /></button>
+                  </div>
+                </div>
+              ) : null}
               {assetKind === "bubble" && bubbleWorkspaceMode !== "library" ? (
                 <div className="grid min-h-full content-start gap-4">
                   <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-outline-variant)] pb-3">
@@ -694,7 +681,6 @@ export default function AdminAssetsClient() {
                       <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Bubble workbench</span>
                       <h2 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">{bubbleWorkspaceMode === "builder" ? "나만의 말풍선 만들기" : selectedSlot?.label ?? "말풍선 편집"}</h2>
                     </div>
-                    <button type="button" onClick={() => setBubbleWorkspaceMode("library")} className="rounded-lg border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]">후보 라이브러리</button>
                   </header>
                   {bubbleWorkspaceMode === "builder" ? (
                     <BubbleBuilderEditor
