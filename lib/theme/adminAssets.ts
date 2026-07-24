@@ -335,11 +335,15 @@ export function withAdminAssetPlatformVariant(asset: AdminAssetCandidate, platfo
 
 export async function deleteAdminAssetCandidate(id: string): Promise<void> {
   const supabase = createClient();
-  const { data } = await supabase.from("admin_assets").select("storage_path").eq("id", id).maybeSingle();
-  const storagePath = readStoragePath(data);
+  const { data } = await supabase
+    .from("admin_assets")
+    .select("storage_path,admin_asset_variants(storage_path),admin_asset_bubble_designs(admin_asset_bubble_decorations(storage_path))")
+    .eq("id", id)
+    .maybeSingle();
+  const storagePaths = readAdminAssetStoragePaths(data);
   const { error } = await supabase.from("admin_assets").delete().eq("id", id);
   if (error) throw error;
-  if (storagePath) await supabase.storage.from(themeAssetsBucketName).remove([storagePath]);
+  if (storagePaths.length) await supabase.storage.from(themeAssetsBucketName).remove(storagePaths);
 }
 
 export async function adminAssetToFile(asset: AdminAssetCandidate): Promise<File> {
@@ -442,10 +446,27 @@ function requireObject(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function readStoragePath(value: unknown): string | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+function readAdminAssetStoragePaths(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   const record = value as Record<string, unknown>;
-  return typeof record.storage_path === "string" ? record.storage_path : undefined;
+  const paths = new Set<string>();
+  if (typeof record.storage_path === "string") paths.add(record.storage_path);
+  if (Array.isArray(record.admin_asset_variants)) {
+    for (const variant of record.admin_asset_variants) {
+      if (variant && typeof variant === "object" && !Array.isArray(variant) && typeof (variant as Record<string, unknown>).storage_path === "string") paths.add((variant as Record<string, string>).storage_path);
+    }
+  }
+  if (Array.isArray(record.admin_asset_bubble_designs)) {
+    for (const design of record.admin_asset_bubble_designs) {
+      if (!design || typeof design !== "object" || Array.isArray(design)) continue;
+      const decorations = (design as Record<string, unknown>).admin_asset_bubble_decorations;
+      if (!Array.isArray(decorations)) continue;
+      for (const decoration of decorations) {
+        if (decoration && typeof decoration === "object" && !Array.isArray(decoration) && typeof (decoration as Record<string, unknown>).storage_path === "string") paths.add((decoration as Record<string, string>).storage_path);
+      }
+    }
+  }
+  return [...paths];
 }
 
 function encodeCursor(updatedAt: string, id: string): string {
