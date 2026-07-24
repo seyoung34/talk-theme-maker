@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Gift,
   Heart,
@@ -195,14 +197,15 @@ export default function HomePage() {
         <Heart className="pointer-events-none absolute bottom-[16%] left-[44%] -z-0 hidden h-7 w-7 rotate-6 fill-[#ffd6df] text-[#ffb3c2] lg:block" />
         <Star className="pointer-events-none absolute right-[46%] top-[10%] -z-0 hidden h-6 w-6 fill-[#fee500] text-[#fee500] lg:block" />
 
-        <div className="mx-auto grid max-w-7xl items-center gap-8 px-5 py-12 md:px-8 lg:min-h-[calc(100svh-73px)] lg:grid-cols-[minmax(0,0.94fr)_minmax(420px,1.06fr)] lg:py-14">
-          <div className="relative z-10 max-w-3xl">
+        <div className="mx-auto grid max-w-7xl items-center gap-6 px-5 py-8 md:gap-8 md:px-8 md:py-12 lg:min-h-[calc(100svh-73px)] lg:grid-cols-[minmax(0,0.94fr)_minmax(420px,1.06fr)] lg:py-14">
+          {/* 좁은 화면에서는 헤드라인을 가운데로 모으고, CTA는 목업 아래로 내린다 */}
+          <div className="relative z-10 max-w-3xl text-center lg:text-left">
             <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-1.5 text-[12px] font-black text-[#3d7bd6] shadow-sm backdrop-blur">
               <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
               세상에 하나뿐인 카카오톡 테마
             </span>
 
-            <h1 className="mt-5 text-[42px] font-black leading-[1.14] text-[var(--color-on-background)] sm:text-[58px] lg:text-[74px]">
+            <h1 className="mt-4 text-[34px] font-black leading-[1.14] text-[var(--color-on-background)] sm:mt-5 sm:text-[58px] lg:text-[74px]">
               <span className="block">내가 좋아하는</span>
               <span className="block mt-1">
                 <span className="relative inline-block align-baseline">
@@ -220,50 +223,39 @@ export default function HomePage() {
                 </span>
                 으로
               </span>
-              <span className="block mt-1">카카오톡 테마를 만들어보세요</span>
+              {/* 자동 줄바꿈에 맡기면 끊기는 위치가 화면 폭마다 달라져 "카카오톡 테마를 / 만들어보세요"로 고정한다 */}
+              <span className="block mt-1">
+                카카오톡 테마를
+                <br />
+                만들어보세요
+              </span>
             </h1>
 
-            <p className="mt-6 max-w-xl text-pretty text-[17px] font-semibold leading-8 text-[var(--color-on-surface-variant)] sm:text-[19px]">
+            <p className="mt-4 max-w-xl text-pretty text-[15px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-6 sm:text-[19px] sm:leading-8">
               똑같은 카톡은 재미없으니까. 내 사진과 최애로 나만의 테마를 만들고,
               기억에 남는 선물로 보내거나 웃긴 테마를 만들어 친구들과 함께 놀아보세요.
             </p>
 
-            <div className="flex flex-col gap-3 mt-8 sm:flex-row">
-              <Link
-                href="/template"
-                className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#fee500] px-6 py-4 text-base font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8]"
-              >
-                내 테마 만들기
-                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-              </Link>
-              <Link
-                href="/guide"
-                className="inline-flex items-center justify-center rounded-full border border-[#cfe0ff] bg-white/85 px-6 py-4 text-base font-black text-[#2f6bbf] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus:ring-4 focus:ring-[#dcebff]"
-              >
-                만드는 법 보기
-              </Link>
+            {/* 넓은 화면에서는 텍스트 컬럼 안에 그대로 둔다 */}
+            <div className="hidden lg:block">
+              <div className="mt-8">
+                <HeroActions />
+              </div>
+              <div className="mt-6">
+                <HeroBadges />
+              </div>
             </div>
-
-            {/* 신뢰 · 사용 시나리오 뱃지 */}
-            <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-bold text-[var(--color-on-surface-variant)]">
-              <span className="inline-flex items-center gap-1.5">
-                <Star className="h-4 w-4 fill-[#fee500] text-[#fee500]" />
-                나만 가질 수 있는 하나뿐인 테마
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Gift className="h-4 w-4 text-[#ff9db0]" />
-                기억에 남는 선물
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Laugh className="h-4 w-4 text-[#5b9bff]" />
-                친구랑 웃긴 테마로 놀기
-              </span>
-            </div>
-
-
           </div>
 
           <HeroMockup active={active} />
+
+          {/* 좁은 화면 전용: 목업 아래에 CTA와 뱃지를 둔다 */}
+          <div className="lg:hidden">
+            <HeroActions />
+            <div className="mt-5">
+              <HeroBadges />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -280,20 +272,20 @@ export default function HomePage() {
       <section className="relative">
         <Sparkles className="pointer-events-none absolute left-[12%] top-[24%] z-0 hidden h-7 w-7 rotate-12 text-[#fee500] lg:block" />
         <Heart className="pointer-events-none absolute right-[14%] bottom-[24%] -z-0 hidden h-6 w-6 rotate-6 fill-[#ffd6df] text-[#ffb3c2] lg:block" />
-        <div className="max-w-4xl px-5 py-20 mx-auto text-center md:px-8 md:py-28">
+        <div className="max-w-4xl px-5 py-12 mx-auto text-center md:px-8 md:py-28">
           <Reveal>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-1.5 text-[12px] font-black text-[#3d7bd6] shadow-sm backdrop-blur">
               <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
               세상에 하나뿐인 카톡, 지금 시작
             </span>
-            <h2 className="mt-5 text-balance text-[34px] font-black leading-tight sm:text-[52px]">
+            <h2 className="mt-4 text-balance text-[28px] font-black leading-tight sm:mt-5 sm:text-[52px]">
               오늘, 내 카톡을 나답게 바꿔보세요
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-[17px] font-semibold leading-8 text-[var(--color-on-surface-variant)]">
+            <p className="mx-auto mt-3 max-w-xl text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[17px] sm:leading-8">
               좋아하는 사진 한 장이면 충분해요. 나만 쓰든, 선물하든, 친구랑 웃긴 테마로 놀든
               — 여기서 세상에 하나뿐인 카톡이 시작됩니다.
             </p>
-            <div className="flex justify-center mt-8">
+            <div className="flex justify-center mt-6 sm:mt-8">
               <Link
                 href="/template"
                 className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#fee500] px-8 py-4 text-base font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8]"
@@ -386,40 +378,41 @@ function UseCaseSection() {
       <Sparkles className="pointer-events-none absolute right-[8%] top-[12%] -z-0 hidden h-7 w-7 rotate-12 text-[#fee500] lg:block" />
       <MessageCircle className="pointer-events-none absolute left-[6%] bottom-[14%] -z-0 hidden h-8 w-8 -rotate-6 text-[#8fc0ff] lg:block" />
 
-      <div className="px-5 py-16 mx-auto max-w-7xl md:px-8 md:py-24">
+      <div className="px-5 py-10 mx-auto max-w-7xl md:px-8 md:py-24">
         <Reveal className="max-w-2xl mx-auto text-center">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#3d7bd6]">
             Why TalkTheme
           </p>
-          <h2 className="mt-3 text-balance text-[32px] font-black leading-tight sm:text-[44px]">
+          <h2 className="mt-3 text-balance text-[26px] font-black leading-tight sm:text-[44px]">
             이런 순간에, 톡테마
           </h2>
-          <p className="mt-4 text-[16px] font-semibold leading-8 text-[var(--color-on-surface-variant)]">
+          <p className="mt-3 text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
             빠르게 만드는 게 중요한 게 아니에요. 세상에 하나뿐이라서 특별하고,
             그래서 선물하거나 함께 놀기에 딱 좋습니다.
           </p>
         </Reveal>
 
-        <div className="grid gap-4 mt-12 sm:grid-cols-2 lg:grid-cols-4">
+        {/* 모바일부터 2열로 묶어 세로 스크롤을 절반으로 줄인다 */}
+        <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-12 sm:gap-4 lg:grid-cols-4">
           {useCases.map((item, index) => {
             const Icon = item.icon;
             return (
               <Reveal key={item.title} delay={(index % 4) * 90}>
-                <article className="group relative h-full overflow-hidden rounded-[28px] border border-[#e3ecf7] bg-white p-6 shadow-[0_18px_42px_rgba(47,107,191,0.06)] transition hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(47,107,191,0.14)]">
+                <article className="group relative h-full overflow-hidden rounded-[20px] border border-[#e3ecf7] bg-white p-4 shadow-[0_18px_42px_rgba(47,107,191,0.06)] transition hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(47,107,191,0.14)] sm:rounded-[28px] sm:p-6">
                   <span
-                    className="absolute text-2xl transition right-4 top-4 opacity-90 group-hover:scale-110"
+                    className="absolute text-lg transition right-3 top-3 opacity-90 group-hover:scale-110 sm:right-4 sm:top-4 sm:text-2xl"
                     aria-hidden="true"
                   >
                     {item.emoji}
                   </span>
                   <span
-                    className="grid w-12 h-12 place-items-center rounded-2xl"
+                    className="grid h-10 w-10 place-items-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl"
                     style={{ background: item.tint, color: item.accent }}
                   >
-                    <Icon className="w-6 h-6" />
+                    <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
                   </span>
-                  <h3 className="mt-5 text-lg font-black">{item.title}</h3>
-                  <p className="mt-2 text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)]">
+                  <h3 className="mt-3 text-[15px] font-black sm:mt-5 sm:text-lg">{item.title}</h3>
+                  <p className="mt-1.5 text-[13px] font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:mt-2 sm:text-[14px] sm:leading-7">
                     {item.body}
                   </p>
                 </article>
@@ -433,26 +426,45 @@ function UseCaseSection() {
 }
 
 function ShowcaseSection() {
+  // 좁은 화면에서는 좌우 버튼으로 한 장씩 넘긴다(스와이프 대신 명시적 컨트롤).
+  const [slide, setSlide] = useState(0);
+  const lastSlide = showcaseThemes.length - 1;
+
   return (
     <section className="relative">
 
-      <div className="px-5 py-16 mx-auto max-w-7xl md:px-8 md:py-24">
-        <Reveal className="max-w-2xl mx-auto text-center">
+      <div className="py-10 mx-auto max-w-7xl md:py-24">
+        <Reveal className="max-w-2xl px-5 mx-auto text-center md:px-8">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]">
             Real Result
           </p>
-          <h2 className="mt-3 text-balance text-[32px] font-black leading-tight sm:text-[44px]">
+          <h2 className="mt-3 text-balance text-[26px] font-black leading-tight sm:text-[44px]">
             목업이 아니라, 진짜 완성된 화면이에요
           </h2>
-          <p className="mt-4 text-[16px] font-semibold leading-8 text-[var(--color-on-surface-variant)]">
+          <p className="mt-3 text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
             연인, 캐릭터, 반려동물까지. 내 사진과 색으로 만든 테마가 실제 카카오톡 채팅방에서
             이렇게 보입니다.
           </p>
         </Reveal>
 
-        <div className="grid items-end gap-10 mt-14 sm:grid-cols-3 sm:gap-4 lg:gap-8">
+        {/*
+          좁은 화면: 좌우 버튼으로 넘기는 캐러셀(translateX). 넓은 화면: 기존 3열 그리드.
+          Reveal은 컨테이너에 한 번만 건다 — 개별 아이템에 걸면 화면 밖 카드가 opacity 0으로 남는다.
+        */}
+        <Reveal className="mt-8 sm:mt-14">
+          {/*
+            가로 이동을 감추려면 overflow-hidden이 필요한데, 그대로 두면 목업의 float 애니메이션과
+            glow(blur-3xl)가 위아래로 잘려 경계가 드러난다. 상하 여백을 넉넉히 주고 음수 마진으로
+            되돌려, 레이아웃 높이는 그대로 두면서 잘림만 없앤다.
+          */}
+          <div className="-my-12 overflow-hidden px-5 py-12 sm:my-0 sm:overflow-visible sm:px-8 sm:py-0">
+          {/* transform은 CSS 변수로 넘겨 sm 이상에서 Tailwind 클래스로 되돌릴 수 있게 한다(인라인 style은 미디어쿼리가 안 먹는다) */}
+          <div
+            className="flex translate-x-[var(--slide)] items-end transition-transform duration-500 ease-out sm:grid sm:translate-x-0 sm:grid-cols-3 sm:gap-4 sm:transition-none lg:gap-8"
+            style={{ ["--slide" as string]: `-${slide * 100}%` }}
+          >
           {showcaseThemes.map((theme, index) => (
-            <Reveal key={theme.label} delay={index * 120}>
+            <div key={theme.label} className="w-full shrink-0 sm:w-auto sm:shrink sm:[transform:none]">
               <figure
                 className={`group relative mx-auto flex max-w-[260px] flex-col items-center ${theme.raised ? "sm:-translate-y-8 lg:-translate-y-12" : ""}`}
               >
@@ -476,21 +488,57 @@ function ShowcaseSection() {
                     className="h-auto w-full drop-shadow-[0_34px_60px_rgba(27,28,25,0.24)]"
                   />
                 </div>
-                <figcaption className="flex flex-col items-center text-center mt-7">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white/85 px-3.5 py-1.5 text-[13px] font-black text-[var(--color-on-surface)] shadow-sm backdrop-blur">
+                <figcaption className="mt-4 flex flex-col items-center text-center sm:mt-7">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white/85 px-3 py-1 text-[12px] font-black text-[var(--color-on-surface)] shadow-sm backdrop-blur sm:px-3.5 sm:py-1.5 sm:text-[13px]">
                     <span className="h-2.5 w-2.5 rounded-full" style={{ background: theme.accent }} />
                     {theme.label}
                   </span>
-                  <p className="mt-2.5 max-w-[230px] text-[13px] font-semibold leading-6 text-[var(--color-on-surface-variant)]">
+                  <p className="mt-2 line-clamp-2 max-w-[230px] text-[12px] font-semibold leading-5 text-[var(--color-on-surface-variant)] sm:mt-2.5 sm:line-clamp-none sm:text-[13px] sm:leading-6">
                     {theme.desc}
                   </p>
                 </figcaption>
               </figure>
-            </Reveal>
+            </div>
           ))}
-        </div>
+          </div>
+          </div>
 
-        <Reveal delay={200} className="flex justify-center mt-14">
+          {/* 좁은 화면 전용 컨트롤: 좌우 버튼 + 인디케이터 */}
+          <div className="mt-4 flex items-center justify-center gap-4 sm:hidden">
+            <button
+              type="button"
+              aria-label="이전 테마 보기"
+              onClick={() => setSlide((current) => (current === 0 ? lastSlide : current - 1))}
+              className="grid size-10 place-items-center rounded-full border border-[#cfe0ff] bg-white/90 text-[#2f6bbf] shadow-sm transition hover:bg-white"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2">
+              {showcaseThemes.map((theme, index) => (
+                <button
+                  key={theme.label}
+                  type="button"
+                  aria-label={`${theme.label} 보기`}
+                  aria-current={slide === index ? "true" : undefined}
+                  onClick={() => setSlide(index)}
+                  className={`h-2 rounded-full transition-all ${slide === index ? "w-5 bg-[#2f6bbf]" : "w-2 bg-[#cfe0ff]"}`}
+                />
+              ))}
+            </div>
+
+            <button
+              type="button"
+              aria-label="다음 테마 보기"
+              onClick={() => setSlide((current) => (current === lastSlide ? 0 : current + 1))}
+              className="grid size-10 place-items-center rounded-full border border-[#cfe0ff] bg-white/90 text-[#2f6bbf] shadow-sm transition hover:bg-white"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+          </div>
+        </Reveal>
+
+        <Reveal delay={200} className="mt-8 flex justify-center px-5 sm:mt-14 md:px-8">
           <Link
             href="/template"
             className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#fee500] px-7 py-4 text-base font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8]"
@@ -507,36 +555,36 @@ function ShowcaseSection() {
 function FlowSection() {
   return (
     <section className="relative">
-      <div className="mx-auto grid max-w-7xl gap-8 px-5 py-16 md:px-8 md:py-24 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+      <div className="mx-auto grid max-w-7xl gap-6 px-5 py-10 md:gap-8 md:px-8 md:py-24 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
         <Reveal>
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]">
             Simple Flow
           </p>
-          <h2 className="mt-3 max-w-lg text-balance text-[32px] font-black leading-tight sm:text-[44px]">
-            설명보다 결과가 먼저 보이는 제작 흐름
+          <h2 className="mt-3 max-w-lg text-balance text-[26px] font-black leading-tight sm:text-[44px]">
+            고르고 바꾸면, 바로 보여요
           </h2>
-          <p className="mt-4 max-w-md text-[16px] font-semibold leading-8 text-[var(--color-on-surface-variant)]">
+          <p className="mt-3 max-w-md text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
             템플릿을 고르고 이미지를 교체하면 미리보기에서 바로 결과가 보입니다. 마음에 들면 그대로
             다운로드하면 됩니다.
           </p>
         </Reveal>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3">
           {steps.map((step, index) => {
             const Icon = step.icon;
             return (
               <Reveal key={step.title} delay={(index % 2) * 90}>
-                <article className="h-full rounded-[28px] border border-[var(--color-outline-variant)] bg-white/80 p-5 shadow-[0_18px_42px_rgba(27,28,25,0.05)] transition hover:-translate-y-1 hover:shadow-[0_24px_54px_rgba(27,28,25,0.1)]">
+                <article className="h-full rounded-[20px] border border-[var(--color-outline-variant)] bg-white/80 p-4 shadow-[0_18px_42px_rgba(27,28,25,0.05)] transition hover:-translate-y-1 hover:shadow-[0_24px_54px_rgba(27,28,25,0.1)] sm:rounded-[28px] sm:p-5">
                   <div className="flex items-center justify-between">
-                    <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]">
-                      <Icon className="w-5 h-5" />
+                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)] sm:h-11 sm:w-11 sm:rounded-2xl">
+                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                     </span>
-                    <span className="text-[13px] font-black text-[var(--color-outline)]">
+                    <span className="text-[12px] font-black text-[var(--color-outline)] sm:text-[13px]">
                       0{index + 1}
                     </span>
                   </div>
-                  <h3 className="mt-5 text-xl font-black">{step.title}</h3>
-                  <p className="mt-2 text-sm font-semibold leading-7 text-[var(--color-on-surface-variant)]">
+                  <h3 className="mt-3 text-[15px] font-black sm:mt-5 sm:text-xl">{step.title}</h3>
+                  <p className="mt-1.5 line-clamp-3 text-[13px] font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:mt-2 sm:line-clamp-none sm:text-sm sm:leading-7">
                     {step.body}
                   </p>
                 </article>
@@ -549,9 +597,49 @@ function FlowSection() {
   );
 }
 
+// "만드는 법 보기"가 왼쪽, "내 테마 만들기"가 오른쪽.
+function HeroActions() {
+  return (
+    <div className="flex flex-row gap-2.5 sm:gap-3 lg:justify-start">
+      <Link
+        href="/guide"
+        className="inline-flex flex-1 items-center justify-center rounded-full border border-[#cfe0ff] bg-white/85 px-4 py-3.5 text-[15px] font-black text-[#2f6bbf] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus:ring-4 focus:ring-[#dcebff] lg:flex-none lg:px-6 lg:py-4 lg:text-base"
+      >
+        만드는 법 보기
+      </Link>
+      <Link
+        href="/template"
+        className="group inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-[#fee500] px-4 py-3.5 text-[15px] font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] lg:flex-none lg:px-6 lg:py-4 lg:text-base"
+      >
+        내 테마 만들기
+        <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+      </Link>
+    </div>
+  );
+}
+
+function HeroBadges() {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1.5 text-[12px] font-bold text-[var(--color-on-surface-variant)] lg:justify-start lg:gap-x-5 lg:gap-y-2 lg:text-[13px]">
+      <span className="inline-flex items-center gap-1.5">
+        <Star className="h-4 w-4 fill-[#fee500] text-[#fee500]" />
+        나만 가질 수 있는 하나뿐인 테마
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <Gift className="h-4 w-4 text-[#ff9db0]" />
+        기억에 남는 선물
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <Laugh className="h-4 w-4 text-[#5b9bff]" />
+        친구랑 웃긴 테마로 놀기
+      </span>
+    </div>
+  );
+}
+
 function HeroMockup({ active }: { active: Subject }) {
   return (
-    <div className="relative flex min-h-[480px] items-center justify-center md:min-h-[640px]">
+    <div className="relative flex min-h-[340px] items-center justify-center md:min-h-[640px]">
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[620px] w-[620px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.5),transparent_62%)] blur-2xl" />
       <div
         className="pointer-events-none absolute left-1/2 top-1/2 h-[86%] w-[88%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl transition-[background] duration-700 ease-out"
@@ -561,7 +649,7 @@ function HeroMockup({ active }: { active: Subject }) {
       />
 
       <div
-        className="relative w-[min(78vw,332px)] pt-6 md:w-[356px] md:pt-10 motion-safe:animate-[float-soft_8s_ease-in-out_infinite]"
+        className="relative w-[min(56vw,232px)] pt-2 md:w-[356px] md:pt-10 motion-safe:animate-[float-soft_8s_ease-in-out_infinite]"
         style={{ ["--float-base" as string]: "rotate(0deg)" }}
       >
         <img
