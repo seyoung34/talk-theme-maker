@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertTriangle, Edit3, ImagePlus, Library, LoaderCircle, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
+import { AlertTriangle, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import { BubbleBuilderEditor } from "@/components/editor/BubbleBuilderDialog";
@@ -39,6 +39,10 @@ const assetKindOrder: AdminAssetKind[] = ["background", "icon", "bubble", "profi
 
 const ACCEPTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const MIN_LEFT_SIDEBAR_WIDTH = 208;
+const MAX_LEFT_SIDEBAR_WIDTH = 420;
+const MIN_RIGHT_SIDEBAR_WIDTH = 320;
+const MAX_RIGHT_SIDEBAR_WIDTH = 560;
 
 type AdminBubbleBuilderDraft = {
   readonly recipe: BubbleFamilyDesignSpec;
@@ -49,6 +53,7 @@ type AdminBubbleBuilderDraft = {
 
 type AdminBubbleBuilderInitial = Pick<AdminBubbleBuilderDraft, "recipe" | "decorations">;
 type BubbleWorkspaceMode = "library" | "adjust" | "builder";
+type SidebarResize = { side: "left" | "right"; startX: number; startWidth: number };
 
 function pickValidImageFile(files: FileList | File[] | null | undefined): { file: File } | { error: string } {
   const file = Array.from(files ?? []).find((item) => item.type.startsWith("image/"));
@@ -83,8 +88,13 @@ export default function AdminAssetsClient() {
   const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
   const [bubbleBuilderInitial, setBubbleBuilderInitial] = useState<AdminBubbleBuilderInitial | null>(null);
+  const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
+  const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState(272);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(400);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const assetRequestSeqRef = useRef(0);
+  const sidebarResizeRef = useRef<SidebarResize | null>(null);
 
   const slots = useMemo(getUnifiedAdminAssetSlots, []);
   const slotGroups = useMemo(() => groupSlotsByAssetKind(slots), [slots]);
@@ -182,6 +192,30 @@ export default function AdminAssetsClient() {
   }, [notice]);
 
   useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const resize = sidebarResizeRef.current;
+      if (!resize) return;
+      if (resize.side === "left") {
+        setLeftSidebarWidth(Math.min(MAX_LEFT_SIDEBAR_WIDTH, Math.max(MIN_LEFT_SIDEBAR_WIDTH, resize.startWidth + event.clientX - resize.startX)));
+      } else {
+        setRightSidebarWidth(Math.min(MAX_RIGHT_SIDEBAR_WIDTH, Math.max(MIN_RIGHT_SIDEBAR_WIDTH, resize.startWidth - (event.clientX - resize.startX))));
+      }
+    };
+    const stopResize = () => {
+      if (!sidebarResizeRef.current) return;
+      sidebarResizeRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResize);
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResize);
+    };
+  }, []);
+
+  useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
       const hasImage = Array.from(event.clipboardData?.files ?? []).some((item) => item.type.startsWith("image/"));
       if (!hasImage) return;
@@ -215,6 +249,18 @@ export default function AdminAssetsClient() {
     } finally {
       if (seq === assetRequestSeqRef.current) setIsLoadingAssets(false);
     }
+  };
+
+  const startSidebarResize = (side: SidebarResize["side"], event: React.PointerEvent<HTMLButtonElement>) => {
+    if (side === "left" && isLeftSidebarCollapsed) return;
+    event.preventDefault();
+    sidebarResizeRef.current = { side, startX: event.clientX, startWidth: side === "left" ? leftSidebarWidth : rightSidebarWidth };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  const requestSave = () => {
+    if (canSaveAsset) setIsSaveConfirmOpen(true);
   };
 
   const submit = async () => {
@@ -439,6 +485,9 @@ export default function AdminAssetsClient() {
           <Link href="/admin" className="rounded-full px-2 py-1 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)]">← 관리자</Link>
           <span className="h-4 w-px bg-[var(--color-outline-variant)]" aria-hidden="true" />
           <h1 className="truncate font-[var(--font-display)] text-base font-semibold text-[var(--color-on-surface)]">에셋 워크스페이스</h1>
+          <button type="button" onClick={() => setIsLeftSidebarCollapsed((current) => !current)} aria-label={isLeftSidebarCollapsed ? "좌측 패널 열기" : "좌측 패널 접기"} title={isLeftSidebarCollapsed ? "좌측 패널 열기" : "좌측 패널 접기"} className="hidden size-8 place-items-center rounded-lg border border-blue-100 text-blue-700 transition hover:bg-blue-50 lg:grid">
+            {isLeftSidebarCollapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}
+          </button>
         </div>
         <div className="flex items-center gap-2">
           {isSavingAsset ? <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-info-container)] px-3 py-1.5 text-xs font-black text-[var(--color-info-strong)]"><LoaderCircle size={13} className="animate-spin" /> 저장 중</span> : null}
@@ -447,9 +496,9 @@ export default function AdminAssetsClient() {
       </header>
 
       <div className="min-h-0 overflow-y-auto lg:overflow-hidden">
-      <div className="grid min-h-full gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[240px_minmax(0,1fr)_360px] xl:grid-cols-[272px_minmax(0,1fr)_400px]">
+      <div className="grid min-h-full gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[var(--admin-left)_minmax(0,1fr)_var(--admin-right)]" style={{ "--admin-left": isLeftSidebarCollapsed ? "0px" : `${leftSidebarWidth}px`, "--admin-right": `${rightSidebarWidth}px` } as CSSProperties}>
         <section className="grid min-h-0 gap-0 lg:contents">
-          <aside className="grid content-start gap-0 border-b border-[var(--color-outline-variant)] bg-white lg:col-start-1 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r">
+          <aside className={`relative grid min-w-0 content-start gap-0 border-b border-[var(--color-outline-variant)] bg-white transition-[opacity] duration-200 lg:col-start-1 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r ${isLeftSidebarCollapsed ? "lg:pointer-events-none lg:border-r-0 lg:opacity-0" : ""}`}>
             <div className="grid gap-2 border-b border-[var(--color-outline-variant)] p-4">
               <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">에셋 종류</span>
               {slotGroups.map((group) => (
@@ -480,10 +529,12 @@ export default function AdminAssetsClient() {
                 </button>
               ))}
             </div>
+            {!isLeftSidebarCollapsed ? <button type="button" aria-label="좌측 패널 너비 조절" title="드래그하여 좌측 패널 너비 조절" onPointerDown={(event) => startSidebarResize("left", event)} className="group absolute inset-y-0 right-0 z-40 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition hover:bg-blue-500/30 lg:block"><span className="absolute left-1/2 top-1/2 h-10 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-300 opacity-0 transition group-hover:opacity-100" /></button> : null}
           </aside>
 
           <section className="grid min-w-0 content-start gap-0 lg:contents">
-            <div className="min-w-0 overflow-hidden border-b border-[var(--color-outline-variant)] bg-white lg:col-start-3 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-l">
+            <div className="relative min-w-0 overflow-hidden border-b border-[var(--color-outline-variant)] bg-white lg:col-start-3 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-l">
+              <button type="button" aria-label="우측 패널 너비 조절" title="드래그하여 우측 패널 너비 조절" onPointerDown={(event) => startSidebarResize("right", event)} className="absolute inset-y-0 left-0 z-40 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition hover:bg-blue-500/30 lg:block" />
               <div className="border-b border-[var(--color-outline-variant)] px-4 py-4">
                 <span className="min-w-0">
                   <span className="block text-sm font-black text-[var(--color-on-surface)]">에셋 등록</span>
@@ -658,7 +709,7 @@ export default function AdminAssetsClient() {
                   {selectedSaveTargets.length > 0 ? ` · ${selectedSaveTargets.map(formatAdminAssetTargetInput).join(" / ")}` : ""}.
                 </p>
               </div>
-              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
+              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={requestSave}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
                 {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : "관리 후보 저장"}
               </button>
@@ -802,7 +853,7 @@ export default function AdminAssetsClient() {
               </section>
               {file ? <section className="grid gap-2 rounded-2xl bg-[var(--color-surface-low)] p-3"><span className="text-xs font-black text-[var(--color-on-surface)]">자동 분석</span><p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{describeAdminAssetAnalysis(analysis ?? { shapes: inferShapesFromFileName(file.name) })}</p></section> : null}
               {guidanceItems.length > 0 ? <section className="grid gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3"><span className="inline-flex items-center gap-1.5 text-xs font-black text-amber-950"><AlertTriangle size={14} /> 저장 전 확인</span><ul className="grid gap-1.5">{guidanceItems.map((item) => <li key={item} className="text-xs font-semibold leading-5 text-amber-900">{item}</li>)}</ul></section> : null}
-              <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
+              <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={requestSave}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
                 {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : "관리 후보 저장"}
               </button>
@@ -835,6 +886,31 @@ export default function AdminAssetsClient() {
         }}
       />
       <AdminAssetEditDialog asset={null} onClose={() => undefined} onSaved={() => undefined} />
+      <Dialog.Root open={isSaveConfirmOpen} onOpenChange={(open) => { if (!isSavingAsset) setIsSaveConfirmOpen(open); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[60] bg-slate-950/35 backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[61] w-[calc(100%-40px)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-blue-100 bg-white p-5 shadow-[0_24px_72px_rgba(15,23,42,0.22)] outline-none">
+            <span className="mb-4 grid size-10 place-items-center rounded-xl bg-blue-50 text-blue-700"><Save size={20} aria-hidden="true" /></span>
+            <Dialog.Title className="text-xl font-extrabold text-slate-950">관리 후보를 저장할까요?</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-slate-600">아래 정보를 확인한 뒤 저장하세요. 저장 후 후보는 현재 슬롯의 관리 라이브러리에 표시됩니다.</Dialog.Description>
+            <dl className="mt-4 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+              <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">후보 이름</dt><dd className="max-w-[65%] text-right font-black text-slate-900">{title.trim() || file?.name || selectedSlot?.label || "새 관리 후보"}</dd></div>
+              <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">에셋 종류</dt><dd className="text-right font-black text-slate-900">{getAdminAssetKindLabel(assetKind)}</dd></div>
+              <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">적용 대상</dt><dd className="max-w-[65%] text-right font-black leading-5 text-slate-900">{selectedSaveTargets.map(formatAdminAssetTargetInput).join(" / ") || "없음"}</dd></div>
+              {bubbleBuilderDraft ? <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">생성 방식</dt><dd className="text-right font-black text-blue-700">Android/iOS 빌더 결과</dd></div> : null}
+            </dl>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <Dialog.Close asChild>
+                <button type="button" className="min-h-11 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-extrabold text-slate-600 disabled:opacity-55" disabled={isSavingAsset}>취소</button>
+              </Dialog.Close>
+              <button type="button" className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:opacity-55" disabled={isSavingAsset} onClick={() => { setIsSaveConfirmOpen(false); void submit(); }}>
+                {isSavingAsset ? <LoaderCircle className="animate-spin" size={17} aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
+                {isSavingAsset ? "저장 중" : "저장하기"}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <Dialog.Root open={Boolean(assetPendingDelete)} onOpenChange={(open) => { if (!open && !deletingAssetId) setAssetPendingDelete(null); }}>
         <Dialog.Portal>
