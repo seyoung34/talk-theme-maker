@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/server";
-import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, type AdminAssetCandidate, type AdminAssetKind, type AdminAssetTarget } from "@/lib/theme/adminAssets";
+import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAssetPlatformVariant, type AdminAssetCandidate, type AdminAssetKind, type AdminAssetTarget } from "@/lib/theme/adminAssets";
 
 const bucketName = "theme-assets";
 const allowedPlatforms = new Set(["android", "ios"]);
@@ -60,8 +60,9 @@ export async function GET(request: NextRequest) {
           "enabled",
           "created_at",
           "updated_at",
-          "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
-          "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch)",
+           "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
+           "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch)",
+           "admin_asset_variants(id,asset_id,platform,storage_path,file_name,mime_type,analysis)",
         ].join(","),
       )
       .eq("enabled", true)
@@ -79,13 +80,14 @@ export async function GET(request: NextRequest) {
     const cursorFiltered = cursor ? ranked.filter((item) => compareRankedAssetToCursor(item, cursor) > 0) : ranked;
     const page = cursorFiltered.slice(0, limit);
     const hasMore = cursorFiltered.length > limit;
-    const signedUrls = await createSignedUrlMap(
-      admin,
-      page.map((item) => item.asset.storagePath),
-    );
+    const signedUrls = await createSignedUrlMap(admin, page.map((item) => item.asset.variants.find((variant) => variant.platform === platform)?.storagePath ?? item.asset.storagePath));
+    const signedUrlRecord = Object.fromEntries(signedUrls);
 
     const items: readonly RecommendedResponseItem[] = page.map((item) => ({
-      ...canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath)),
+      ...withAdminAssetPlatformVariant(
+        canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord),
+        platform,
+      ),
       target: item.target,
       matchRank: item.matchRank,
     }));

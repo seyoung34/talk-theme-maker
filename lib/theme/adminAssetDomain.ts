@@ -36,6 +36,17 @@ export type AdminAssetTarget = {
   readonly enabled: boolean;
 };
 
+export type AdminAssetPlatformVariant = {
+  readonly id?: string;
+  readonly assetId?: string;
+  readonly platform: ThemePlatform;
+  readonly storagePath: string;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly analysis?: AdminAssetAnalysis;
+  readonly previewUrl?: string;
+};
+
 export type AdminAssetCandidate = {
   readonly id: string;
   readonly slotRole: ThemeResourceRole;
@@ -45,6 +56,7 @@ export type AdminAssetCandidate = {
   readonly bubbleAdjustment?: AdminBubbleAdjustment;
   readonly bubbleSpec?: AdminBubbleSpec;
   readonly targets?: readonly AdminAssetTarget[];
+  readonly variants?: readonly AdminAssetPlatformVariant[];
   readonly title: string;
   readonly note?: string;
   readonly tags: string[];
@@ -106,6 +118,7 @@ export type CanonicalAdminAsset = {
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly targets: readonly AdminAssetTarget[];
+  readonly variants: readonly AdminAssetPlatformVariant[];
 };
 
 export type AdminAssetRecommendationItem = CanonicalAdminAsset & {
@@ -215,6 +228,7 @@ export function mapCanonicalAdminAssetRow(row: unknown): CanonicalAdminAsset {
   const title = requireString(record.title).trim();
   if (!title) throw new AdminAssetDomainError("INVALID_CANONICAL_ASSET_ROW");
   const targets = parseTargets(record.admin_asset_targets, id, record);
+  const variants = parseVariants(record.admin_asset_variants, id);
   const assetKind = parseOptionalAssetKind(record.asset_kind);
   const bubbleSpec = parseOptionalBubbleSpec(record.admin_asset_bubble_specs ?? record.bubble_spec);
   if (assetKind === "bubble" && bubbleSpec && !isValidBubbleSpec(bubbleSpec)) throw new AdminAssetDomainError("INVALID_BUBBLE_SPEC");
@@ -233,10 +247,15 @@ export function mapCanonicalAdminAssetRow(row: unknown): CanonicalAdminAsset {
     createdAt: dateToMs(readOptionalString(record.created_at)),
     updatedAt: dateToMs(readOptionalString(record.updated_at)),
     targets,
+    variants,
   };
 }
 
-export function canonicalAdminAssetToCandidate(asset: CanonicalAdminAsset, previewUrl?: string): AdminAssetCandidate {
+export function canonicalAdminAssetToCandidate(
+  asset: CanonicalAdminAsset,
+  previewUrl?: string,
+  variantPreviewUrls: Readonly<Record<string, string>> = {},
+): AdminAssetCandidate {
   const representative = selectRepresentativeTarget(asset.targets);
   return {
     id: asset.id,
@@ -247,6 +266,7 @@ export function canonicalAdminAssetToCandidate(asset: CanonicalAdminAsset, previ
     bubbleAdjustment: asset.bubbleSpec ? bubbleSpecToAdjustment(asset.bubbleSpec) : undefined,
     bubbleSpec: asset.bubbleSpec,
     targets: asset.targets,
+    variants: asset.variants.map((variant) => ({ ...variant, previewUrl: variantPreviewUrls[variant.storagePath] })),
     title: asset.title,
     note: asset.note,
     tags: asset.tags,
@@ -258,6 +278,10 @@ export function canonicalAdminAssetToCandidate(asset: CanonicalAdminAsset, previ
     updatedAt: asset.updatedAt,
     enabled: asset.enabled,
   };
+}
+
+export function selectAdminAssetPlatformVariant(asset: Pick<AdminAssetCandidate, "variants">, platform: ThemePlatform): AdminAssetPlatformVariant | undefined {
+  return asset.variants?.find((variant) => variant.platform === platform);
 }
 
 export function bubbleSpecToAdjustment(spec: AdminBubbleSpec): AdminBubbleAdjustment {
@@ -333,6 +357,22 @@ function parseTargets(value: unknown, assetId: string, fallback: Record<string, 
       enabled: readBoolean(fallback.enabled, true),
     },
   ];
+}
+
+function parseVariants(value: unknown, assetId: string): readonly AdminAssetPlatformVariant[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const record = requireRecord(item);
+    return {
+      id: readOptionalString(record.id),
+      assetId: readOptionalString(record.asset_id) ?? assetId,
+      platform: parseThemePlatform(record.platform),
+      storagePath: requireString(record.storage_path),
+      fileName: requireString(record.file_name),
+      mimeType: requireString(record.mime_type),
+      analysis: parseOptionalAnalysis(record.analysis),
+    };
+  });
 }
 
 function parseTarget(value: unknown, assetId: string): AdminAssetTarget {
@@ -451,6 +491,11 @@ function parseOptionalAssetKind(value: unknown): AdminAssetKind | undefined {
 
 function parsePlatform(value: unknown): AdminAssetPlatform {
   if (value === "android" || value === "ios" || value === "all") return value;
+  throw new AdminAssetDomainError("INVALID_CANONICAL_ASSET_ROW");
+}
+
+function parseThemePlatform(value: unknown): ThemePlatform {
+  if (value === "android" || value === "ios") return value;
   throw new AdminAssetDomainError("INVALID_CANONICAL_ASSET_ROW");
 }
 

@@ -4,7 +4,6 @@ import {
   getThemeAssetSignedUrls,
   sanitizeStoragePathPart,
   storagePathToFile,
-  storagePathToPreviewUrl,
   themeAssetsBucketName,
 } from "@/lib/theme/remoteAssets";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
@@ -69,6 +68,7 @@ const adminAssetSelect = [
   "updated_at",
   "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
   "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch)",
+  "admin_asset_variants(id,asset_id,platform,storage_path,file_name,mime_type,analysis)",
 ].join(",");
 
 export async function listAdminAssetCandidates(): Promise<AdminAssetCandidate[]> {
@@ -99,8 +99,8 @@ export async function listAdminAssetCandidatePage(options: AdminAssetListOptions
   const hasMore = platformRows.length > limit;
   const pageRows = hasMore ? platformRows.slice(0, limit) : platformRows;
   const canonicalAssets = pageRows.map(mapCanonicalAdminAssetRow);
-  const previewUrls = await getThemeAssetSignedUrls(canonicalAssets.map((asset) => asset.storagePath));
-  const items = canonicalAssets.map((asset) => canonicalAdminAssetToCandidate(asset, previewUrls[asset.storagePath]));
+  const previewUrls = await getThemeAssetSignedUrls(canonicalAssets.flatMap((asset) => [asset.storagePath, ...asset.variants.map((variant) => variant.storagePath)]));
+  const items = canonicalAssets.map((asset) => canonicalAdminAssetToCandidate(asset, previewUrls[asset.storagePath], previewUrls));
   const last = canonicalAssets.at(-1);
   return { items, nextCursor: hasMore && last ? encodeCursor(new Date(last.updatedAt).toISOString(), last.id) : undefined };
 }
@@ -187,7 +187,21 @@ export async function getAdminAssetCandidate(id: string): Promise<AdminAssetCand
   const { data, error } = await supabase.from("admin_assets").select(adminAssetSelect).eq("id", id).single();
   if (error) throw error;
   const canonical = mapCanonicalAdminAssetRow(data);
-  return canonicalAdminAssetToCandidate(canonical, await storagePathToPreviewUrl(canonical.storagePath));
+  const previewUrls = await getThemeAssetSignedUrls([canonical.storagePath, ...canonical.variants.map((variant) => variant.storagePath)]);
+  return canonicalAdminAssetToCandidate(canonical, previewUrls[canonical.storagePath], previewUrls);
+}
+
+export function withAdminAssetPlatformVariant(asset: AdminAssetCandidate, platform: ThemePlatform): AdminAssetCandidate {
+  const variant = asset.variants?.find((item) => item.platform === platform);
+  if (!variant) return asset;
+  return {
+    ...asset,
+    analysis: variant.analysis ?? asset.analysis,
+    fileName: variant.fileName,
+    mimeType: variant.mimeType,
+    storagePath: variant.storagePath,
+    previewUrl: variant.previewUrl ?? asset.previewUrl,
+  };
 }
 
 export async function deleteAdminAssetCandidate(id: string): Promise<void> {
