@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertTriangle, ChevronDown, Edit3, ImagePlus, LoaderCircle, Pencil, Save, Search, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
-import SiteHeader from "@/components/layout/SiteHeader";
 import {
   deleteAdminAssetCandidate,
   adminAssetToFile,
@@ -178,7 +178,6 @@ export default function AdminAssetsClient() {
         return;
       }
       setFile(result.file);
-      setIsAddAssetOpen(true);
       setNotice("클립보드 이미지를 추가했습니다.");
     };
 
@@ -245,7 +244,6 @@ export default function AdminAssetsClient() {
       setFile(null);
       setAnalysis(null);
       setBubbleBuilderDraft(null);
-      setIsAddAssetOpen(false);
       setNotice("플랫폼 공통 관리 후보를 추가했습니다.");
       setAssets((current) => [savedAsset, ...current.filter((item) => item.id !== savedAsset.id)]);
     } catch (error) {
@@ -279,7 +277,6 @@ export default function AdminAssetsClient() {
       return;
     }
     setFile(result.file);
-    setIsAddAssetOpen(true);
   };
 
   const applyRecommendedBubbleAdjustment = () => {
@@ -322,16 +319,26 @@ export default function AdminAssetsClient() {
   };
 
   return (
-    <main className="min-h-screen bg-[var(--color-background)] text-[var(--color-on-background)]">
-      <SiteHeader currentPath="/admin/assets" />
+    <main className="grid h-[100dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[var(--color-background)] text-[var(--color-on-background)]">
+      <header className="flex min-h-12 items-center justify-between gap-4 border-b border-[var(--color-outline-variant)] bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.03)]">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link href="/admin" className="rounded-full px-2 py-1 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)]">← 관리자</Link>
+          <span className="h-4 w-px bg-[var(--color-outline-variant)]" aria-hidden="true" />
+          <h1 className="truncate font-[var(--font-display)] text-base font-semibold text-[var(--color-on-surface)]">에셋 워크스페이스</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          {isSavingAsset ? <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-info-container)] px-3 py-1.5 text-xs font-black text-[var(--color-info-strong)]"><LoaderCircle size={13} className="animate-spin" /> 저장 중</span> : null}
+          {notice ? <span className="max-w-[42vw] truncate rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--color-on-surface-variant)]">{notice}</span> : null}
+        </div>
+      </header>
 
-      <div className="grid gap-5 px-5 py-8 mx-auto max-w-7xl md:px-8">
+      <div className="min-h-0 overflow-y-auto">
+      <div className="grid gap-5 px-5 py-5 md:px-8">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Admin</p>
             <h1 className="mt-1 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">이미지 후보 관리</h1>
           </div>
-          {notice ? <span className="rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2 text-sm font-bold text-[var(--color-on-surface-variant)]">{notice}</span> : null}
         </header>
 
         <section className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -500,6 +507,7 @@ export default function AdminAssetsClient() {
                         return;
                       }
                       setFile(result.file);
+                      setIsAddAssetOpen(true);
                       setIsAddAssetOpen(true);
                     }}
                   />
@@ -678,6 +686,7 @@ export default function AdminAssetsClient() {
             ) : null}
           </section>
         </section>
+      </div>
       </div>
 
       <AdminAssetEditDialog
