@@ -5,6 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { AlertTriangle, ChevronDown, Edit3, ImagePlus, LoaderCircle, Pencil, Save, Search, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
+import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
 import SiteHeader from "@/components/layout/SiteHeader";
 import {
   deleteAdminAssetCandidate,
@@ -16,6 +17,7 @@ import {
   isAdminAssetRecommendedForSlot,
   listAdminAssetCandidatePage,
   saveAdminAssetCandidate,
+  saveAdminBubbleBuilderCandidate,
   updateAdminAssetCandidate,
   type AdminAssetAnalysis,
   type AdminBubbleAdjustment,
@@ -23,8 +25,10 @@ import {
   type AdminAssetKind,
   type AdminAssetShape,
   type AdminAssetTargetInput,
+  type AdminBubbleSpec,
 } from "@/lib/theme/adminAssets";
 import { bubbleSlotFromRole } from "@/lib/theme/project/state";
+import { generateBubbleAsset, type BubbleFamilyDesignSpec, type GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import { getThemeSlots } from "@/lib/theme/templates";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
@@ -34,6 +38,13 @@ const assetKindOrder: AdminAssetKind[] = ["background", "icon", "bubble", "profi
 
 const ACCEPTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+
+type AdminBubbleBuilderDraft = {
+  readonly recipe: BubbleFamilyDesignSpec;
+  readonly decorations: Partial<Record<string, File>>;
+  readonly variants: readonly GeneratedBubbleDesign[];
+  readonly bubbleSpec: AdminBubbleSpec;
+};
 
 function pickValidImageFile(files: FileList | File[] | null | undefined): { file: File } | { error: string } {
   const file = Array.from(files ?? []).find((item) => item.type.startsWith("image/"));
@@ -65,6 +76,8 @@ export default function AdminAssetsClient() {
   const [imageEditOpen, setImageEditOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
   const [assetListFilter, setAssetListFilter] = useState<"all" | "exact" | "review" | "bubble">("all");
+  const [bubbleBuilderOpen, setBubbleBuilderOpen] = useState(false);
+  const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const assetRequestSeqRef = useRef(0);
 
@@ -74,8 +87,11 @@ export default function AdminAssetsClient() {
   const selectedSlot = activeKindSlots.find((slot) => slot.id === selectedSlotId) ?? activeKindSlots[0] ?? slots[0];
   const adminBubbleFile = useMemo<ThemeProjectFile | undefined>(() => (file ? { path: file.name, name: file.name, size: file.size, file } : undefined), [file]);
   const selectedBubbleSlot = selectedSlot ? (bubbleSlotFromRole(selectedSlot.role) ?? "me") : "me";
-  const selectedSaveTargets = useMemo(() => (selectedSlot ? getAdminAssetSaveTargets(selectedSlot, assetKind) : []), [assetKind, selectedSlot]);
-  const bubbleSpec = useMemo(() => (assetKind === "bubble" ? bubbleAdjustmentToSpec(bubbleAdjustment) : undefined), [assetKind, bubbleAdjustment]);
+  const selectedSaveTargets = useMemo(() => {
+    if (!selectedSlot) return [];
+    return bubbleBuilderDraft ? getAdminBubbleBuilderTargets(selectedSlot) : getAdminAssetSaveTargets(selectedSlot, assetKind);
+  }, [assetKind, bubbleBuilderDraft, selectedSlot]);
+  const bubbleSpec = useMemo(() => bubbleBuilderDraft?.bubbleSpec ?? (assetKind === "bubble" ? bubbleAdjustmentToSpec(bubbleAdjustment) : undefined), [assetKind, bubbleAdjustment, bubbleBuilderDraft]);
   const canSaveAsset = Boolean(file && selectedSlot && !isSavingAsset && selectedSaveTargets.length > 0 && (assetKind !== "bubble" || bubbleSpec));
   const visibleAssets = useMemo(
     () => assets.filter((asset) => selectedSlot && isAdminAssetVisibleForAdminSlot(selectedSlot, asset)),
@@ -142,6 +158,10 @@ export default function AdminAssetsClient() {
   }, [assetKind, selectedSlot?.role]);
 
   useEffect(() => {
+    setBubbleBuilderDraft(null);
+  }, [selectedSlot?.role]);
+
+  useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), 3500);
     return () => clearTimeout(timer);
@@ -196,7 +216,17 @@ export default function AdminAssetsClient() {
       setIsSavingAsset(true);
       const representativeTarget = saveTargets[0];
       if (!representativeTarget) throw new Error("INVALID_ASSET_TARGET");
-      const savedAsset = await saveAdminAssetCandidate({
+      const savedAsset = bubbleBuilderDraft
+        ? await saveAdminBubbleBuilderCandidate({
+            title: title.trim() || `${selectedSlot.label} 빌더 말풍선`,
+            slotRole: selectedSlot.role,
+            targets: saveTargets,
+            variants: bubbleBuilderDraft.variants.map((result) => ({ platform: result.asset.platform, file: result.asset.file, analysis: analysis ?? undefined })),
+            bubbleSpec: bubbleBuilderDraft.bubbleSpec,
+            recipe: bubbleBuilderDraft.recipe,
+            decorations: bubbleBuilderDraft.decorations,
+          })
+        : await saveAdminAssetCandidate({
         slotRole: representativeTarget.slotRole ?? selectedSlot.role,
         platform: representativeTarget.platform,
         assetKind,
@@ -214,6 +244,7 @@ export default function AdminAssetsClient() {
       setTitle("");
       setFile(null);
       setAnalysis(null);
+      setBubbleBuilderDraft(null);
       setIsAddAssetOpen(false);
       setNotice("플랫폼 공통 관리 후보를 추가했습니다.");
       setAssets((current) => [savedAsset, ...current.filter((item) => item.id !== savedAsset.id)]);
@@ -262,9 +293,31 @@ export default function AdminAssetsClient() {
     }
 
     setFile(null);
+    setBubbleBuilderDraft(null);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  };
+
+  const applyBubbleBuilder = async (result: GeneratedBubbleDesign, decorations: Partial<Record<string, File>>) => {
+    if (!selectedSlot) return;
+    const variant = bubbleVariantFromRole(selectedSlot.role);
+    if (!variant) return;
+    try {
+      const results = await Promise.all((['android', 'ios'] as const).map((platform) => generateBubbleAsset({ spec: result.spec, platform, variant, decorationFiles: decorations })));
+      const android = results.find((item) => item.asset.platform === "android")?.asset;
+      const ios = results.find((item) => item.asset.platform === "ios")?.asset;
+      if (!android?.markers || !ios?.insets || !ios.stretch) throw new Error("INVALID_BUBBLE_BUILDER_RESULT");
+      const nextSpec = { androidMarkers: android.markers, iosInsets: ios.insets, iosStretch: ios.stretch };
+      setBubbleBuilderDraft({ recipe: result.spec, decorations, variants: results, bubbleSpec: nextSpec });
+      setBubbleAdjustment({ markers: android.markers, insets: ios.insets, stretch: ios.stretch });
+      setFile(android.file);
+      setTitle((current) => current || `${selectedSlot.label} 빌더 말풍선`);
+      setNotice("Android/iOS 말풍선 결과를 만들었습니다. 저장하면 하나의 관리 후보로 등록됩니다.");
+    } catch (error) {
+      console.error(error);
+      setNotice("말풍선 빌더 결과를 준비하지 못했습니다.");
     }
   };
 
@@ -514,14 +567,24 @@ export default function AdminAssetsClient() {
                         현재 이미지 크기에서 기본 stretch와 여백을 추천합니다. 저장값은 Android 9-patch와 iOS inset 편집에서 함께 사용됩니다.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      className="rounded-full bg-white px-4 py-2 text-xs font-black text-[var(--color-on-surface)] shadow-sm transition hover:-translate-y-0.5 hover:bg-[var(--color-info-container)] active:translate-y-0"
-                      onClick={applyRecommendedBubbleAdjustment}
-                    >
-                      공통 기준 자동 맞춤
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="rounded-full bg-[var(--color-inverse-surface)] px-4 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] shadow-sm transition hover:-translate-y-0.5 active:translate-y-0"
+                        onClick={() => setBubbleBuilderOpen(true)}
+                      >
+                        나만의 말풍선 만들기
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full bg-white px-4 py-2 text-xs font-black text-[var(--color-on-surface)] shadow-sm transition hover:-translate-y-0.5 hover:bg-[var(--color-info-container)] active:translate-y-0"
+                        onClick={applyRecommendedBubbleAdjustment}
+                      >
+                        공통 기준 자동 맞춤
+                      </button>
+                    </div>
                   </div>
+                  {bubbleBuilderDraft ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold leading-5 text-emerald-800">빌더 결과 준비됨 · Android 9-patch와 iOS PNG를 함께 저장합니다. 현재 선택한 {selectedSlot?.label} 슬롯에만 적용됩니다.</div> : null}
                   <BubblePlatformSummary adjustment={bubbleAdjustment} activePlatform={bubblePreviewPlatform} onSelectPlatform={setBubblePreviewPlatform} />
                   <InlineBubbleAdjuster
                     file={adminBubbleFile}
@@ -636,6 +699,17 @@ export default function AdminAssetsClient() {
           setNotice("편집된 이미지를 적용했습니다.");
         }}
       />
+      {selectedSlot && assetKind === "bubble" && selectedBubbleSlot ? <BubbleBuilderDialog
+        open={bubbleBuilderOpen}
+        side={selectedBubbleSlot}
+        variant={bubbleVariantFromRole(selectedSlot.role) ?? "first"}
+        slotLabel={selectedSlot.label}
+        platform={bubblePreviewPlatform}
+        initialSpec={bubbleBuilderDraft?.recipe}
+        initialDecorationFiles={bubbleBuilderDraft?.decorations}
+        onOpenChange={setBubbleBuilderOpen}
+        onApply={(result, decorations) => { void applyBubbleBuilder(result, decorations); }}
+      /> : null}
 
       <Dialog.Root open={Boolean(assetPendingDelete)} onOpenChange={(open) => { if (!open && !deletingAssetId) setAssetPendingDelete(null); }}>
         <Dialog.Portal>
@@ -703,6 +777,15 @@ function getAdminAssetSaveTargets(slot: ThemeAssetSlot, assetKind: AdminAssetKin
     return [{ platform: "all", slotRole: platformSlots[0].slot.role, targetKind: "exact_role", priority: 0, enabled: true }];
   }
   return platformSlots.map((target) => ({ platform: target.platform, slotRole: target.slot.role, targetKind: "exact_role", priority: 0, enabled: true }));
+}
+
+function getAdminBubbleBuilderTargets(slot: ThemeAssetSlot): AdminAssetTargetInput[] {
+  return [{ platform: "all", slotRole: slot.role, targetKind: "exact_role", priority: 0, enabled: true }];
+}
+
+function bubbleVariantFromRole(role: string): "first" | "group" | null {
+  if (!role.startsWith("bubble_")) return null;
+  return role.endsWith("_2") ? "group" : "first";
 }
 
 function getSharedAdminAssetTargets(asset: AdminAssetCandidate): AdminAssetTargetInput[] {

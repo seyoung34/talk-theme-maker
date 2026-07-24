@@ -211,7 +211,7 @@ export type AdminBubbleBuilderCandidateInput = {
   readonly variants: readonly AdminAssetPlatformVariantInput[];
   readonly bubbleSpec: AdminBubbleSpec;
   readonly recipe: BubbleFamilyDesignSpec;
-  readonly decorations: Readonly<Record<string, File>>;
+  readonly decorations: Partial<Record<string, File>>;
   readonly geometryMode?: "generated" | "manual";
   readonly enabled?: boolean;
 };
