@@ -72,6 +72,7 @@ export default function AdminAssetsClient() {
   const [assetCursor, setAssetCursor] = useState<string>();
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
   const [isSavingAsset, setIsSavingAsset] = useState(false);
+  const [isLoadingEditAsset, setIsLoadingEditAsset] = useState(false);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [imageEditOpen, setImageEditOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
@@ -92,7 +93,13 @@ export default function AdminAssetsClient() {
     return bubbleBuilderDraft ? getAdminBubbleBuilderTargets(selectedSlot) : getAdminAssetSaveTargets(selectedSlot, assetKind);
   }, [assetKind, bubbleBuilderDraft, selectedSlot]);
   const bubbleSpec = useMemo(() => bubbleBuilderDraft?.bubbleSpec ?? (assetKind === "bubble" ? bubbleAdjustmentToSpec(bubbleAdjustment) : undefined), [assetKind, bubbleAdjustment, bubbleBuilderDraft]);
-  const canSaveAsset = Boolean(file && selectedSlot && !isSavingAsset && selectedSaveTargets.length > 0 && (assetKind !== "bubble" || bubbleSpec));
+  const canSaveAsset = Boolean(
+    selectedSlot &&
+      !isSavingAsset &&
+      (editingAsset ? title.trim() : file) &&
+      (editingAsset || selectedSaveTargets.length > 0) &&
+      (assetKind !== "bubble" || bubbleSpec),
+  );
   const visibleAssets = useMemo(
     () => assets.filter((asset) => selectedSlot && isAdminAssetVisibleForAdminSlot(selectedSlot, asset)),
     [assets, selectedSlot],
@@ -159,6 +166,7 @@ export default function AdminAssetsClient() {
 
   useEffect(() => {
     setBubbleBuilderDraft(null);
+    setEditingAsset(null);
   }, [selectedSlot?.role]);
 
   useEffect(() => {
@@ -204,7 +212,27 @@ export default function AdminAssetsClient() {
   };
 
   const submit = async () => {
-    if (!selectedSlot || !file || isSavingAsset) return;
+    if (!selectedSlot || isSavingAsset || (!editingAsset && !file)) return;
+    if (editingAsset) {
+      try {
+        setIsSavingAsset(true);
+        const updatedAsset = await updateAdminAssetCandidate(editingAsset.id, {
+          title: title.trim() || editingAsset.title,
+          bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined,
+          bubbleSpec: assetKind === "bubble" ? bubbleSpec : undefined,
+        });
+        setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? updatedAsset : asset)));
+        setEditingAsset(updatedAsset);
+        setNotice("에셋 정보를 저장했습니다.");
+      } catch (error) {
+        console.error(error);
+        setNotice("에셋 정보를 저장하지 못했습니다.");
+      } finally {
+        setIsSavingAsset(false);
+      }
+      return;
+    }
+    if (!file) return;
     const saveTargets = selectedSaveTargets;
     if (saveTargets.length === 0) {
       setNotice("적용할 플랫폼 슬롯을 찾지 못했습니다.");
@@ -260,6 +288,11 @@ export default function AdminAssetsClient() {
       setDeletingAssetId(asset.id);
       await deleteAdminAssetCandidate(asset.id);
       setAssets((current) => current.filter((item) => item.id !== asset.id));
+      if (editingAsset?.id === asset.id) {
+        setEditingAsset(null);
+        setTitle("");
+        setFile(null);
+      }
       setAssetPendingDelete(null);
       setNotice("관리 후보를 삭제했습니다.");
     } catch (error) {
@@ -275,6 +308,11 @@ export default function AdminAssetsClient() {
     if ("error" in result) {
       setNotice(result.error);
       return;
+    }
+    if (editingAsset) {
+      setEditingAsset(null);
+      setTitle("");
+      setNotice("기존 후보 원본은 바꾸지 않습니다. 새 후보 등록으로 전환했습니다.");
     }
     setFile(result.file);
   };
@@ -295,6 +333,37 @@ export default function AdminAssetsClient() {
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  };
+
+  const beginInPlaceEdit = async (asset: AdminAssetCandidate) => {
+    if (isSavingAsset || isLoadingEditAsset) return;
+    setEditingAsset(asset);
+    setBubbleBuilderDraft(null);
+    setTitle(asset.title);
+    setFile(null);
+    setAnalysis(asset.analysis ?? null);
+    setBubbleAdjustment(asset.bubbleAdjustment ?? createDefaultBubbleAdjustment(asset.analysis));
+    setNotice(null);
+    if (!(asset.assetKind === "bubble" || asset.slotRole.startsWith("bubble_"))) return;
+    try {
+      setIsLoadingEditAsset(true);
+      const source = await adminAssetToFile(asset);
+      setFile(source);
+    } catch (error) {
+      console.error(error);
+      setNotice("말풍선 원본을 불러오지 못했습니다. geometry 저장은 다시 시도할 수 있습니다.");
+    } finally {
+      setIsLoadingEditAsset(false);
+    }
+  };
+
+  const exitInPlaceEdit = () => {
+    if (isSavingAsset) return;
+    setEditingAsset(null);
+    setBubbleBuilderDraft(null);
+    setTitle("");
+    clearFile();
+    setNotice("새 후보 등록으로 돌아왔습니다.");
   };
 
   const applyBubbleBuilder = async (result: GeneratedBubbleDesign, decorations: Partial<Record<string, File>>) => {
@@ -500,13 +569,9 @@ export default function AdminAssetsClient() {
                     accept="image/png,image/jpeg,image/webp"
                     className="hidden"
                     onChange={(event) => {
-                      const result = pickValidImageFile(event.currentTarget.files);
+                      const files = event.currentTarget.files;
                       event.currentTarget.value = "";
-                      if ("error" in result) {
-                        setNotice(result.error);
-                        return;
-                      }
-                      setFile(result.file);
+                      applyDroppedFile(files);
                       setIsAddAssetOpen(true);
                     }}
                   />
@@ -664,7 +729,7 @@ export default function AdminAssetsClient() {
               ) : filteredAssets.length > 0 ? (
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {filteredAssets.map(({ asset, warnings }) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} warnings={warnings} deleting={deletingAssetId === asset.id} onEdit={() => setEditingAsset(asset)} onDelete={() => setAssetPendingDelete(asset)} />
+                    <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} warnings={warnings} deleting={deletingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />
                   ))}
                 </div>
               ) : (
@@ -690,6 +755,8 @@ export default function AdminAssetsClient() {
                 <h2 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">{selectedSlot?.label ?? "슬롯 선택"}</h2>
                 <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{getAdminAssetKindLabel(assetKind)} · {selectedSlot?.role ?? "대표 슬롯"}</p>
               </div>
+              {editingAsset ? <div className="flex items-center justify-between gap-2 rounded-2xl border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-3 py-2.5"><span className="min-w-0 truncate text-xs font-black text-[var(--color-info-strong)]">편집 중 · {editingAsset.title}</span><button type="button" disabled={isSavingAsset} onClick={exitInPlaceEdit} className="rounded-lg bg-white px-2 py-1 text-[10px] font-black text-[var(--color-on-surface-variant)] disabled:opacity-50">새로 만들기</button></div> : null}
+              {isLoadingEditAsset ? <div className="inline-flex items-center gap-2 text-xs font-bold text-[var(--color-on-surface-variant)]"><LoaderCircle size={14} className="animate-spin" /> 원본 불러오는 중</div> : null}
               <label className="grid gap-2">
                 <span className="text-xs font-black text-[var(--color-on-surface-variant)]">후보 이름</span>
                 <input className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none focus:border-[var(--color-info)]" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={file?.name ?? "예: 심플 말풍선"} />
@@ -702,7 +769,7 @@ export default function AdminAssetsClient() {
               {guidanceItems.length > 0 ? <section className="grid gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3"><span className="inline-flex items-center gap-1.5 text-xs font-black text-amber-950"><AlertTriangle size={14} /> 저장 전 확인</span><ul className="grid gap-1.5">{guidanceItems.map((item) => <li key={item} className="text-xs font-semibold leading-5 text-amber-900">{item}</li>)}</ul></section> : null}
               <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
-                {isSavingAsset ? "저장 중" : bubbleBuilderDraft ? "빌더 후보 저장" : "관리 후보 저장"}
+                {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : "관리 후보 저장"}
               </button>
             </aside>
           </section>
@@ -715,22 +782,13 @@ export default function AdminAssetsClient() {
             <div className="flex min-h-[132px] gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
               {isLoadingAssets && assets.length === 0 ? <span className="grid min-w-48 place-items-center rounded-2xl bg-[var(--color-surface-low)] text-xs font-bold text-[var(--color-on-surface-variant)]">후보를 불러오는 중</span> : null}
               {!isLoadingAssets && filteredAssets.length === 0 ? <span className="grid min-w-64 place-items-center rounded-2xl border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 text-center text-xs font-bold text-[var(--color-on-surface-variant)]">표시할 관리 후보가 없습니다.</span> : null}
-              {filteredAssets.map(({ asset, warnings }) => <AdminAssetDockCard key={asset.id} asset={asset} warnings={warnings} selectedSlot={selectedSlot} onEdit={() => setEditingAsset(asset)} onDelete={() => setAssetPendingDelete(asset)} />)}
+              {filteredAssets.map(({ asset, warnings }) => <AdminAssetDockCard key={asset.id} asset={asset} warnings={warnings} selectedSlot={selectedSlot} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />)}
               {assetCursor ? <button type="button" className="min-h-[132px] min-w-28 rounded-2xl border border-dashed border-[var(--color-outline-variant)] px-3 text-xs font-black text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)] disabled:opacity-50" disabled={isLoadingAssets} onClick={() => void refreshAssets(assetCursor, true)}>{isLoadingAssets ? "불러오는 중" : "더 보기"}</button> : null}
             </div>
           </section>
       </div>
       </div>
 
-      <AdminAssetEditDialog
-        asset={editingAsset}
-        onClose={() => setEditingAsset(null)}
-        onSaved={(updatedAsset) => {
-          setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? updatedAsset : asset)));
-          setEditingAsset(null);
-          setNotice("에셋 정보를 수정했습니다.");
-        }}
-      />
       <ImageEditDialog
         open={imageEditOpen}
         sourceFile={file}
@@ -741,6 +799,7 @@ export default function AdminAssetsClient() {
           setNotice("편집된 이미지를 적용했습니다.");
         }}
       />
+      <AdminAssetEditDialog asset={null} onClose={() => undefined} onSaved={() => undefined} />
       {selectedSlot && assetKind === "bubble" && selectedBubbleSlot ? <BubbleBuilderDialog
         open={bubbleBuilderOpen}
         side={selectedBubbleSlot}
