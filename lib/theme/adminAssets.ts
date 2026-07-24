@@ -75,7 +75,7 @@ const adminAssetSelect = [
   "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
   "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch)",
   "admin_asset_variants(id,asset_id,platform,storage_path,file_name,mime_type,analysis)",
-  "admin_asset_bubble_designs(asset_id,recipe,geometry_mode,admin_asset_bubble_decorations(layer_id,storage_path,file_name,mime_type))",
+  "admin_asset_bubble_designs!admin_asset_bubble_designs_asset_id_fkey(asset_id,recipe,geometry_mode,admin_asset_bubble_decorations(layer_id,storage_path,file_name,mime_type))",
 ].join(",");
 
 export async function listAdminAssetCandidates(): Promise<AdminAssetCandidate[]> {
@@ -348,7 +348,7 @@ export async function deleteAdminAssetCandidate(id: string): Promise<void> {
   const supabase = createClient();
   const { data } = await supabase
     .from("admin_assets")
-    .select("storage_path,admin_asset_variants(storage_path),admin_asset_bubble_designs(admin_asset_bubble_decorations(storage_path))")
+    .select("storage_path,admin_asset_variants(storage_path),admin_asset_bubble_designs!admin_asset_bubble_designs_asset_id_fkey(admin_asset_bubble_decorations(storage_path))")
     .eq("id", id)
     .maybeSingle();
   const storagePaths = readAdminAssetStoragePaths(data);
