@@ -37,35 +37,6 @@ export default function AccountClient() {
         <Star className="pointer-events-none absolute left-[2%] top-10 hidden h-7 w-7 rotate-12 text-[#fee500] lg:block" />
         <Sparkles className="pointer-events-none absolute right-[8%] top-16 hidden h-7 w-7 text-[#fbbf24] lg:block" />
 
-        <header className="relative mb-7 overflow-hidden rounded-[32px] border border-[#dbe8fb] bg-white/82 px-6 py-7 shadow-[0_24px_70px_rgba(47,107,191,0.1)] backdrop-blur sm:px-8 sm:py-8">
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(circle_at_top_right,rgba(91,155,255,0.18),transparent_58%)]" />
-          <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-[#f7fbff] px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-[#3d7bd6]">
-            <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
-            My Page
-          </span>
-          <h1 className="mt-4 max-w-2xl font-[var(--font-display)] text-[34px] font-semibold tracking-[-0.05em] text-[var(--color-on-surface)] sm:text-[44px]">
-            계정, 크레딧, 최근 Export를
-            <span className="block text-[#2f6bbf]">한 화면에서 확인하세요.</span>
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:text-[16px]">
-            지금 로그인한 계정 정보와 보유 크레딧, 최근 작업 상태를 빠르게 점검할 수 있습니다.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3 text-xs font-bold text-[var(--color-on-surface-variant)]">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#dbe8fb] bg-white px-3.5 py-2">
-              <UserRound className="h-3.5 w-3.5 text-[#2f6bbf]" />
-              로그인 정보 확인
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#dbe8fb] bg-white px-3.5 py-2">
-              <Coins className="h-3.5 w-3.5 text-[#f2b705]" />
-              크레딧 잔액 확인
-            </span>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#dbe8fb] bg-white px-3.5 py-2">
-              <Download className="h-3.5 w-3.5 text-[#34c98a]" />
-              최근 Export 이력
-            </span>
-          </div>
-        </header>
-
         {accountError ? (
           <div className="mb-5 flex items-center justify-between gap-3 rounded-[22px] border border-[#f1b7b1] bg-[var(--color-error-container)] px-4 py-3 text-sm font-semibold text-[var(--color-on-error-container)]" role="alert">
             <span className="flex items-center gap-2"><AlertCircle size={17} aria-hidden="true" />{accountError}</span>
@@ -73,9 +44,12 @@ export default function AccountClient() {
           </div>
         ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
-          <div className="grid content-start gap-6">
-            <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6" aria-labelledby="account-info-title">
+        {/*
+          1열로 접히면 DOM 순서대로 사용자 정보 → 보유 크레딧 → Export 이력이 된다.
+          넓은 화면에서는 좌측 컬럼에 정보/이력, 우측 컬럼에 크레딧을 명시적으로 배치한다.
+        */}
+        <div className="grid content-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+            <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6 lg:col-start-1 lg:row-start-1" aria-labelledby="account-info-title">
               <div className="mb-5 flex items-center gap-3">
                 <span className="grid size-11 place-items-center rounded-2xl bg-[#eaf2ff] text-[var(--color-secondary)]"><UserRound size={20} aria-hidden="true" /></span>
                 <div><h2 id="account-info-title" className="text-base font-extrabold">사용자 정보</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">현재 로그인한 계정입니다.</p></div>
@@ -91,20 +65,7 @@ export default function AccountClient() {
               )}
             </section>
 
-            <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6" aria-labelledby="export-history-title">
-              <div className="mb-5 flex items-center gap-3">
-                <span className="grid size-11 place-items-center rounded-2xl bg-[#eafaf1] text-[#34c98a]"><Download size={20} aria-hidden="true" /></span>
-                <div><h2 id="export-history-title" className="text-base font-extrabold">최근 Export 이력</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">최근 10개의 내보내기 작업입니다.</p></div>
-              </div>
-              {(me?.exports ?? []).length === 0 ? <div className="rounded-[24px] bg-[#f7fbff] px-4 py-8 text-center text-sm font-semibold text-[var(--color-on-surface-variant)]">아직 내보내기 이력이 없습니다.</div> : (
-                <div className="overflow-hidden rounded-[24px] border border-[#e3ecf7] bg-[#fcfdff] divide-y divide-[var(--color-outline-variant)]">
-                  {(me?.exports ?? []).map((item) => <ExportRow key={item.id} item={item} />)}
-                </div>
-              )}
-            </section>
-          </div>
-
-          <aside className="grid content-start gap-4">
+          <aside className="grid content-start gap-4 lg:col-start-2 lg:row-start-1">
             <section className="overflow-hidden rounded-[30px] border border-[#dbe8fb] bg-white/88 shadow-[0_24px_68px_rgba(47,107,191,0.1)] backdrop-blur" aria-labelledby="credit-balance-title">
               <div className="bg-[linear-gradient(180deg,#f7fbff_0%,#eef5ff_100%)] p-5 sm:p-6">
                 <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--color-on-surface-variant)]"><Coins size={18} aria-hidden="true" /><h2 id="credit-balance-title">보유 크레딧</h2></div>
@@ -119,6 +80,18 @@ export default function AccountClient() {
               </div>
             </section>
           </aside>
+
+            <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6 lg:col-start-1 lg:row-start-2" aria-labelledby="export-history-title">
+              <div className="mb-5 flex items-center gap-3">
+                <span className="grid size-11 place-items-center rounded-2xl bg-[#eafaf1] text-[#34c98a]"><Download size={20} aria-hidden="true" /></span>
+                <div><h2 id="export-history-title" className="text-base font-extrabold">최근 Export 이력</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">최근 10개의 내보내기 작업입니다.</p></div>
+              </div>
+              {(me?.exports ?? []).length === 0 ? <div className="rounded-[24px] bg-[#f7fbff] px-4 py-8 text-center text-sm font-semibold text-[var(--color-on-surface-variant)]">아직 내보내기 이력이 없습니다.</div> : (
+                <div className="overflow-hidden rounded-[24px] border border-[#e3ecf7] bg-[#fcfdff] divide-y divide-[var(--color-outline-variant)]">
+                  {(me?.exports ?? []).map((item) => <ExportRow key={item.id} item={item} />)}
+                </div>
+              )}
+            </section>
         </div>
       </div>
     </main>

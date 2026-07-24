@@ -278,8 +278,25 @@ export default function HomePage() {
               <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
               세상에 하나뿐인 카톡, 지금 시작
             </span>
-            <h2 className="mt-4 text-balance text-[28px] font-black leading-tight sm:mt-5 sm:text-[52px]">
-              오늘, 내 카톡을 나답게 바꿔보세요
+            <h2 className="mt-4 text-[28px] font-black leading-tight sm:mt-5 sm:text-[52px]">
+              <span className="block">세상에 하나뿐인</span>
+              {/* "나만의 테마"만 글자별로 순차 bounce. 원문은 aria-label로 읽히고 각 글자는 aria-hidden */}
+              <span className="mt-1 block text-[#2f6bbf]" aria-label="나만의 테마">
+                {Array.from("나만의 테마").map((char, index) =>
+                  char === " " ? (
+                    <span key={index} aria-hidden="true" className="inline-block w-[0.28em]" />
+                  ) : (
+                    <span
+                      key={index}
+                      aria-hidden="true"
+                      className="inline-block motion-safe:animate-[letter-bounce_1.6s_ease-in-out_infinite]"
+                      style={{ animationDelay: `${index * 90}ms` }}
+                    >
+                      {char}
+                    </span>
+                  ),
+                )}
+              </span>
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[17px] sm:leading-8">
               좋아하는 사진 한 장이면 충분해요. 나만 쓰든, 선물하든, 친구랑 웃긴 테마로 놀든
@@ -326,6 +343,16 @@ export default function HomePage() {
           100% {
             opacity: 1;
             transform: none;
+          }
+        }
+        @keyframes letter-bounce {
+          0%,
+          45%,
+          100% {
+            transform: translateY(0);
+          }
+          22% {
+            transform: translateY(-0.24em);
           }
         }
         .reveal-item {
@@ -387,8 +414,8 @@ function UseCaseSection() {
             이런 순간에, 톡테마
           </h2>
           <p className="mt-3 text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
-            빠르게 만드는 게 중요한 게 아니에요. 세상에 하나뿐이라서 특별하고,
-            그래서 선물하거나 함께 놀기에 딱 좋습니다.
+            세상에 하나뿐인 나만의 테마,
+            선물하기 좋아요.
           </p>
         </Reveal>
 
@@ -439,7 +466,7 @@ function ShowcaseSection() {
             Real Result
           </p>
           <h2 className="mt-3 text-balance text-[26px] font-black leading-tight sm:text-[44px]">
-            목업이 아니라, 진짜 완성된 화면이에요
+            매일 여는 카톡이 달라져요
           </h2>
           <p className="mt-3 text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
             연인, 캐릭터, 반려동물까지. 내 사진과 색으로 만든 테마가 실제 카카오톡 채팅방에서
