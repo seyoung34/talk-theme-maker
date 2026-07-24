@@ -301,7 +301,12 @@ export async function saveAdminBubbleBuilderCandidate(input: AdminBubbleBuilderC
         ios_stretch: input.bubbleSpec.iosStretch,
       },
       p_bubble_design: { recipe: input.recipe, geometry_mode: input.geometryMode ?? "generated" },
-      p_decorations: decorationRows.map(({ file: _file, ...decoration }) => decoration),
+      p_decorations: decorationRows.map((decoration) => ({
+        layer_id: decoration.layer_id,
+        storage_path: decoration.storage_path,
+        file_name: decoration.file_name,
+        mime_type: decoration.mime_type,
+      })),
     });
     if (error) throw error;
 
