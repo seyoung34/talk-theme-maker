@@ -1,4 +1,5 @@
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
+import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 export type AdminAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode";
@@ -47,6 +48,20 @@ export type AdminAssetPlatformVariant = {
   readonly previewUrl?: string;
 };
 
+export type AdminAssetBubbleDecoration = {
+  readonly layerId: string;
+  readonly storagePath: string;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly previewUrl?: string;
+};
+
+export type AdminAssetBubbleDesign = {
+  readonly recipe: BubbleFamilyDesignSpec;
+  readonly geometryMode: "generated" | "manual";
+  readonly decorations: readonly AdminAssetBubbleDecoration[];
+};
+
 export type AdminAssetCandidate = {
   readonly id: string;
   readonly slotRole: ThemeResourceRole;
@@ -57,6 +72,7 @@ export type AdminAssetCandidate = {
   readonly bubbleSpec?: AdminBubbleSpec;
   readonly targets?: readonly AdminAssetTarget[];
   readonly variants?: readonly AdminAssetPlatformVariant[];
+  readonly bubbleDesign?: AdminAssetBubbleDesign;
   readonly title: string;
   readonly note?: string;
   readonly tags: string[];
@@ -119,6 +135,7 @@ export type CanonicalAdminAsset = {
   readonly updatedAt: number;
   readonly targets: readonly AdminAssetTarget[];
   readonly variants: readonly AdminAssetPlatformVariant[];
+  readonly bubbleDesign?: AdminAssetBubbleDesign;
 };
 
 export type AdminAssetRecommendationItem = CanonicalAdminAsset & {
@@ -231,6 +248,7 @@ export function mapCanonicalAdminAssetRow(row: unknown): CanonicalAdminAsset {
   const variants = parseVariants(record.admin_asset_variants, id);
   const assetKind = parseOptionalAssetKind(record.asset_kind);
   const bubbleSpec = parseOptionalBubbleSpec(record.admin_asset_bubble_specs ?? record.bubble_spec);
+  const bubbleDesign = parseBubbleDesign(record.admin_asset_bubble_designs);
   if (assetKind === "bubble" && bubbleSpec && !isValidBubbleSpec(bubbleSpec)) throw new AdminAssetDomainError("INVALID_BUBBLE_SPEC");
   return {
     id,
@@ -248,6 +266,7 @@ export function mapCanonicalAdminAssetRow(row: unknown): CanonicalAdminAsset {
     updatedAt: dateToMs(readOptionalString(record.updated_at)),
     targets,
     variants,
+    bubbleDesign,
   };
 }
 
@@ -267,6 +286,7 @@ export function canonicalAdminAssetToCandidate(
     bubbleSpec: asset.bubbleSpec,
     targets: asset.targets,
     variants: asset.variants.map((variant) => ({ ...variant, previewUrl: variantPreviewUrls[variant.storagePath] })),
+    bubbleDesign: asset.bubbleDesign,
     title: asset.title,
     note: asset.note,
     tags: asset.tags,
@@ -373,6 +393,29 @@ function parseVariants(value: unknown, assetId: string): readonly AdminAssetPlat
       analysis: parseOptionalAnalysis(record.analysis),
     };
   });
+}
+
+function parseBubbleDesign(value: unknown): AdminAssetBubbleDesign | undefined {
+  const source = Array.isArray(value) ? value[0] : value;
+  if (source == null) return undefined;
+  const record = requireRecord(source);
+  const recipe = record.recipe;
+  if (!recipe || typeof recipe !== "object" || Array.isArray(recipe)) throw new AdminAssetDomainError("INVALID_CANONICAL_ASSET_ROW");
+  const geometryMode = record.geometry_mode;
+  if (geometryMode !== "generated" && geometryMode !== "manual") throw new AdminAssetDomainError("INVALID_CANONICAL_ASSET_ROW");
+  const decorationRows = record.admin_asset_bubble_decorations;
+  const decorations = Array.isArray(decorationRows)
+    ? decorationRows.map((item) => {
+        const decoration = requireRecord(item);
+        return {
+          layerId: requireString(decoration.layer_id),
+          storagePath: requireString(decoration.storage_path),
+          fileName: requireString(decoration.file_name),
+          mimeType: requireString(decoration.mime_type),
+        };
+      })
+    : [];
+  return { recipe: recipe as BubbleFamilyDesignSpec, geometryMode, decorations };
 }
 
 function parseTarget(value: unknown, assetId: string): AdminAssetTarget {

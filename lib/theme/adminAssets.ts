@@ -7,7 +7,8 @@ import {
   themeAssetsBucketName,
 } from "@/lib/theme/remoteAssets";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
-import type { ThemePlatform } from "@/lib/theme/types";
+import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 import {
   assertValidAdminAssetCandidateInput,
   canonicalAdminAssetToCandidate,
@@ -21,6 +22,7 @@ import {
   type AdminAssetKind,
   type AdminAssetListOptions,
   type AdminAssetPage,
+  type AdminAssetTargetInput,
   type AdminBubbleSpec,
   type AdminAssetAnalysis,
 } from "@/lib/theme/adminAssetDomain";
@@ -45,6 +47,9 @@ export {
   type AdminAssetTarget,
   type AdminAssetTargetInput,
   type AdminAssetTargetKind,
+  type AdminAssetPlatformVariant,
+  type AdminAssetBubbleDecoration,
+  type AdminAssetBubbleDesign,
   type AdminBubbleAdjustment,
   type AdminBubbleSpec,
   type CanonicalAdminAsset,
@@ -69,6 +74,7 @@ const adminAssetSelect = [
   "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
   "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch)",
   "admin_asset_variants(id,asset_id,platform,storage_path,file_name,mime_type,analysis)",
+  "admin_asset_bubble_designs(asset_id,recipe,geometry_mode,admin_asset_bubble_decorations(layer_id,storage_path,file_name,mime_type))",
 ].join(",");
 
 export async function listAdminAssetCandidates(): Promise<AdminAssetCandidate[]> {
@@ -189,6 +195,129 @@ export async function getAdminAssetCandidate(id: string): Promise<AdminAssetCand
   const canonical = mapCanonicalAdminAssetRow(data);
   const previewUrls = await getThemeAssetSignedUrls([canonical.storagePath, ...canonical.variants.map((variant) => variant.storagePath)]);
   return canonicalAdminAssetToCandidate(canonical, previewUrls[canonical.storagePath], previewUrls);
+}
+
+export type AdminAssetPlatformVariantInput = {
+  readonly platform: ThemePlatform;
+  readonly file: File;
+  readonly analysis?: AdminAssetAnalysis;
+};
+
+export type AdminBubbleBuilderCandidateInput = {
+  readonly id?: string;
+  readonly title: string;
+  readonly slotRole: ThemeResourceRole;
+  readonly targets: readonly AdminAssetTargetInput[];
+  readonly variants: readonly AdminAssetPlatformVariantInput[];
+  readonly bubbleSpec: AdminBubbleSpec;
+  readonly recipe: BubbleFamilyDesignSpec;
+  readonly decorations: Readonly<Record<string, File>>;
+  readonly geometryMode?: "generated" | "manual";
+  readonly enabled?: boolean;
+};
+
+export async function saveAdminBubbleBuilderCandidate(input: AdminBubbleBuilderCandidateInput): Promise<AdminAssetCandidate> {
+  const title = input.title.trim();
+  if (!title || title.length > 100) throw new Error("INVALID_ASSET_TITLE");
+  const androidVariant = input.variants.find((variant) => variant.platform === "android");
+  const iosVariant = input.variants.find((variant) => variant.platform === "ios");
+  if (!androidVariant || !iosVariant || input.variants.length !== 2) throw new Error("INVALID_PLATFORM_VARIANTS");
+  if (!input.targets.length || input.targets.some((target) => target.targetKind !== "exact_role" || target.slotRole !== input.slotRole)) {
+    throw new Error("INVALID_BUBBLE_TARGETS");
+  }
+  const layers = input.recipe.design.decorations ?? [];
+  if (layers.some((layer) => !input.decorations[layer.id])) throw new Error("MISSING_BUBBLE_DECORATION");
+
+  const supabase = createClient();
+  const id = input.id ?? crypto.randomUUID();
+  const previous = input.id ? await getAdminAssetCandidate(input.id) : undefined;
+  const revision = crypto.randomUUID();
+  const uploadedPaths: string[] = [];
+  const variantRows = input.variants.map((variant) => ({
+    platform: variant.platform,
+    storage_path: `admin-assets/${id}/revisions/${revision}/${variant.platform}/${sanitizeStoragePathPart(variant.file.name)}`,
+    file_name: variant.file.name,
+    mime_type: variant.file.type || "image/png",
+    analysis: variant.analysis ?? null,
+  }));
+  const decorationRows = layers.map((layer) => {
+    const file = input.decorations[layer.id];
+    if (!file) throw new Error("MISSING_BUBBLE_DECORATION");
+    return {
+      layer_id: layer.id,
+      storage_path: `admin-assets/${id}/revisions/${revision}/decorations/${sanitizeStoragePathPart(layer.id)}/${sanitizeStoragePathPart(file.name)}`,
+      file_name: file.name,
+      mime_type: file.type || "application/octet-stream",
+      file,
+    };
+  });
+
+  try {
+    for (const [index, variant] of input.variants.entries()) {
+      const row = variantRows[index];
+      if (!row) throw new Error("INVALID_PLATFORM_VARIANTS");
+      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(row.storage_path, variant.file, { contentType: row.mime_type, upsert: false });
+      if (error) throw error;
+      uploadedPaths.push(row.storage_path);
+    }
+    for (const decoration of decorationRows) {
+      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(decoration.storage_path, decoration.file, { contentType: decoration.mime_type, upsert: false });
+      if (error) throw error;
+      uploadedPaths.push(decoration.storage_path);
+    }
+
+    const primary = variantRows.find((variant) => variant.platform === "android");
+    if (!primary) throw new Error("INVALID_PLATFORM_VARIANTS");
+    const { error } = await supabase.rpc("upsert_admin_asset_bundle", {
+      p_asset: {
+        id,
+        slot_role: input.slotRole,
+        platform: "all",
+        asset_kind: "bubble",
+        analysis: primary.analysis,
+        bubble_adjustment: {
+          markers: input.bubbleSpec.androidMarkers,
+          insets: input.bubbleSpec.iosInsets,
+          stretch: input.bubbleSpec.iosStretch,
+        },
+        title,
+        tags: [],
+        file_name: primary.file_name,
+        mime_type: primary.mime_type,
+        storage_path: primary.storage_path,
+        enabled: input.enabled ?? true,
+      },
+      p_targets: input.targets.map((target) => ({
+        platform: target.platform,
+        slot_role: target.slotRole ?? null,
+        target_kind: target.targetKind,
+        priority: target.priority,
+        enabled: target.enabled,
+      })),
+      p_variants: variantRows,
+      p_bubble_spec: {
+        android_markers: input.bubbleSpec.androidMarkers,
+        ios_insets: input.bubbleSpec.iosInsets,
+        ios_stretch: input.bubbleSpec.iosStretch,
+      },
+      p_bubble_design: { recipe: input.recipe, geometry_mode: input.geometryMode ?? "generated" },
+      p_decorations: decorationRows.map(({ file: _file, ...decoration }) => decoration),
+    });
+    if (error) throw error;
+
+    const saved = await getAdminAssetCandidate(id);
+    const stalePaths = previous
+      ? [
+          ...previous.variants?.map((variant) => variant.storagePath) ?? [],
+          ...previous.bubbleDesign?.decorations.map((decoration) => decoration.storagePath) ?? [],
+        ].filter((path) => !uploadedPaths.includes(path))
+      : [];
+    if (stalePaths.length) await supabase.storage.from(themeAssetsBucketName).remove(stalePaths);
+    return saved;
+  } catch (error) {
+    if (uploadedPaths.length) await supabase.storage.from(themeAssetsBucketName).remove(uploadedPaths);
+    throw error;
+  }
 }
 
 export function withAdminAssetPlatformVariant(asset: AdminAssetCandidate, platform: ThemePlatform): AdminAssetCandidate {
