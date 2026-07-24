@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
-import { addMinimumAgeConfirmationToCallbackUrl, addPolicyConsentToCallbackUrl, recordCurrentPolicyConsents } from "@/lib/policies/consent";
+import { addPolicyConsentToCallbackUrl, recordCurrentPolicyConsents } from "@/lib/policies/consent";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthMode = "signin" | "signup";
@@ -152,7 +152,8 @@ export default function LoginClient() {
 
   const signInWithKakao = async () => {
     if (isSubmitting) return;
-    if (!hasConfirmedMinimumAge) {
+    // 로그인은 연령 확인 없이 진행한다. 연령 확인과 정책 동의는 회원가입에서만 받는다.
+    if (mode === "signup" && !hasConfirmedMinimumAge) {
       setMessage({ tone: "error", text: "카카오 계정으로 계속하려면 만 14세 이상임을 확인해 주세요." });
       return;
     }
@@ -166,7 +167,7 @@ export default function LoginClient() {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "kakao",
-        options: { redirectTo: mode === "signup" ? getAuthCallbackUrl("kakao_signup") : getAuthCallbackUrl(undefined, true) },
+        options: { redirectTo: mode === "signup" ? getAuthCallbackUrl("kakao_signup") : getAuthCallbackUrl() },
       });
       if (error) throw error;
     } catch (error) {
@@ -175,10 +176,9 @@ export default function LoginClient() {
     }
   };
 
-  const getAuthCallbackUrl = (consentSource?: "email_signup" | "kakao_signup", includeMinimumAgeConfirmation = false) => {
+  const getAuthCallbackUrl = (consentSource?: "email_signup" | "kakao_signup") => {
     const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`;
-    if (consentSource) return addPolicyConsentToCallbackUrl(callbackUrl, consentSource);
-    return includeMinimumAgeConfirmation ? addMinimumAgeConfirmationToCallbackUrl(callbackUrl, "kakao_signup") : callbackUrl;
+    return consentSource ? addPolicyConsentToCallbackUrl(callbackUrl, consentSource) : callbackUrl;
   };
 
   return (
@@ -274,14 +274,7 @@ export default function LoginClient() {
             ))}
           </div>
 
-          {mode === "signin" ? (
-            <div className="mb-3 rounded-[16px] border border-[#dbe8fb] bg-[#f7fbff] p-3">
-              <MinimumAgeConfirmationCheck checked={hasConfirmedMinimumAge} onChange={setHasConfirmedMinimumAge} disabled={isSubmitting} />
-              <p className="mt-1.5 pl-6 text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)]">카카오 로그인은 처음 이용할 때 계정이 생성될 수 있어 연령 확인이 필요합니다.</p>
-            </div>
-          ) : null}
-
-          <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting || !hasConfirmedMinimumAge || (mode === "signup" && !hasAcceptedRequiredPolicies)}>
+          <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting || (mode === "signup" && !hasAcceptedSignupRequirements)}>
             {isSubmitting ? <LoaderCircle className="animate-spin" size={18} aria-hidden="true" /> : <span className="text-base" aria-hidden="true">●</span>}
             카카오로 {mode === "signin" ? "로그인" : "시작하기"}
           </button>
