@@ -135,18 +135,13 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
   try {
     const { data: userData } = await supabase.auth.getUser();
     const payload = createAdminAssetPersistencePayload(input, id, storagePath, userData.user?.id ?? null);
-    const { data, error } = await supabase.from("admin_assets").upsert(payload.asset).select(adminAssetSelect).single();
+    const { error } = await supabase.from("admin_assets").upsert(payload.asset).select(adminAssetSelect).single();
     if (error) throw error;
 
     await replaceAdminAssetTargets(id, payload.targets);
     await replaceAdminAssetBubbleSpec(id, payload.bubbleSpec);
 
-    const canonical = mapCanonicalAdminAssetRow({
-      ...requireObject(data),
-      admin_asset_targets: payload.targets,
-      admin_asset_bubble_specs: payload.bubbleSpec,
-    });
-    return canonicalAdminAssetToCandidate(canonical, await storagePathToPreviewUrl(canonical.storagePath));
+    return getAdminAssetCandidate(id);
   } catch (error) {
     if (!input.id) {
       await supabase.from("admin_assets").delete().eq("id", id);
@@ -163,16 +158,14 @@ export async function updateAdminAssetCandidate(id: string, input: AdminAssetCan
 
   const supabase = createClient();
   const bubbleSpec = input.bubbleSpec;
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("admin_assets")
     .update({
       title,
       ...(typeof input.enabled === "boolean" ? { enabled: input.enabled } : {}),
       ...(input.bubbleAdjustment ? { bubble_adjustment: input.bubbleAdjustment } : {}),
     })
-    .eq("id", id)
-    .select(adminAssetSelect)
-    .single();
+    .eq("id", id);
   if (error) throw error;
 
   const targetRows = input.targets?.map((target) => ({ asset_id: id, platform: target.platform, slot_role: target.slotRole ?? null, target_kind: target.targetKind, priority: target.priority, enabled: target.enabled }));
@@ -186,7 +179,14 @@ export async function updateAdminAssetCandidate(id: string, input: AdminAssetCan
     });
   }
 
-  const canonical = mapCanonicalAdminAssetRow(targetRows ? { ...requireObject(data), admin_asset_targets: targetRows } : data);
+  return getAdminAssetCandidate(id);
+}
+
+export async function getAdminAssetCandidate(id: string): Promise<AdminAssetCandidate> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("admin_assets").select(adminAssetSelect).eq("id", id).single();
+  if (error) throw error;
+  const canonical = mapCanonicalAdminAssetRow(data);
   return canonicalAdminAssetToCandidate(canonical, await storagePathToPreviewUrl(canonical.storagePath));
 }
 
