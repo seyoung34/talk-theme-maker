@@ -183,6 +183,11 @@ export async function updateAdminAssetCandidate(id: string, input: AdminAssetCan
       ios_insets: bubbleSpec.iosInsets,
       ios_stretch: bubbleSpec.iosStretch,
     });
+    const { error: geometryModeError } = await supabase
+      .from("admin_asset_bubble_designs")
+      .update({ geometry_mode: "manual" })
+      .eq("asset_id", id);
+    if (geometryModeError) throw geometryModeError;
   }
 
   return getAdminAssetCandidate(id);
