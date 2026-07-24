@@ -65,24 +65,25 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-[#dbe8fb]/80 bg-[color:rgba(244,249,255,0.82)] backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 py-3.5 md:px-8">
-          <Link href="/" className="min-w-0 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
-            <p className="truncate text-[14px] font-extrabold uppercase tracking-[0.14em] text-[#3d7bd6] sm:text-[11px] sm:tracking-[0.18em]">Talk Theme</p>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:px-5 sm:py-3.5 md:px-8">
+          {/* 좁은 화면에서도 상호명은 줄이지 않는다. 대신 자간을 좁혀 폭을 확보한다 */}
+          <Link href="/" className="shrink-0 rounded focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
+            <p className="text-[13px] font-extrabold uppercase tracking-[0.08em] text-[#3d7bd6] sm:text-[11px] sm:tracking-[0.18em]">Talk Theme</p>
           </Link>
 
           <nav className="flex shrink-0 items-center gap-1 sm:gap-2" aria-label="주요 메뉴">
-            <Link href="/template" aria-current={currentPath === "/template" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-3.5 py-2 text-xs font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/template" ? "bg-[#2f6bbf] text-white shadow-[0_10px_22px_rgba(47,107,191,0.24)]" : "text-[#3d7bd6] hover:bg-white"}`}>
+            <Link href="/template" aria-current={currentPath === "/template" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-2.5 py-2 text-[12px] font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/template" ? "bg-[#2f6bbf] text-white shadow-[0_10px_22px_rgba(47,107,191,0.24)]" : "text-[#3d7bd6] hover:bg-white"}`}>
               테마 만들기
             </Link>
 
-            <Link href="/guide" aria-current={currentPath === "/guide" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-3 py-2 text-xs font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/guide" ? "bg-[#2f6bbf] text-white shadow-[0_10px_22px_rgba(47,107,191,0.24)]" : "text-[#3d7bd6] hover:bg-white"}`}>
+            <Link href="/guide" aria-current={currentPath === "/guide" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-2.5 py-2 text-[12px] font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/guide" ? "bg-[#2f6bbf] text-white shadow-[0_10px_22px_rgba(47,107,191,0.24)]" : "text-[#3d7bd6] hover:bg-white"}`}>
               가이드 문서
             </Link>
 
             <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
               <Popover.Trigger asChild>
-                <button type="button" className={`flex size-11 items-center justify-center rounded-full border transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] ${isOpen || isAccountArea ? "border-[#2f6bbf] bg-[#2f6bbf] text-white" : "border-[#cfe0ff] bg-white text-[#3d7bd6] hover:border-[#9bc0f5]"}`} aria-label={session?.user ? "계정 메뉴 열기" : "로그인 메뉴 열기"} aria-expanded={isOpen}>
-                  <CircleUserRound size={22} strokeWidth={2} aria-hidden="true" />
+                <button type="button" className={`flex size-10 items-center justify-center rounded-full border transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:size-11 ${isOpen || isAccountArea ? "border-[#2f6bbf] bg-[#2f6bbf] text-white" : "border-[#cfe0ff] bg-white text-[#3d7bd6] hover:border-[#9bc0f5]"}`} aria-label={session?.user ? "계정 메뉴 열기" : "로그인 메뉴 열기"} aria-expanded={isOpen}>
+                  <CircleUserRound className="size-5 sm:size-[22px]" strokeWidth={2} aria-hidden="true" />
                 </button>
               </Popover.Trigger>
               <Popover.Portal>
