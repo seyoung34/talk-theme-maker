@@ -341,8 +341,8 @@ export default function AdminAssetsClient() {
           </div>
         </header>
 
-        <section className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <aside className="grid content-start gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4">
+        <section className="grid min-h-0 gap-4 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+          <aside className="grid content-start gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 xl:max-h-[calc(100dvh-9rem)] xl:overflow-y-auto">
             <div className="rounded-2xl border border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-3">
               <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Asset workflow</span>
               <p className="mt-1 text-sm font-black leading-5 text-[var(--color-on-surface)]">에셋 종류와 대표 슬롯만 고르면 Android/iOS 공통 대상으로 저장합니다.</p>
@@ -380,7 +380,7 @@ export default function AdminAssetsClient() {
             </div>
           </aside>
 
-          <section className="grid content-start gap-4">
+          <section className="grid min-w-0 content-start gap-4 xl:max-h-[calc(100dvh-9rem)] xl:overflow-y-auto xl:pr-1">
             <div className="overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white">
               <button
                 id="admin-asset-add-trigger"
@@ -508,7 +508,6 @@ export default function AdminAssetsClient() {
                       }
                       setFile(result.file);
                       setIsAddAssetOpen(true);
-                      setIsAddAssetOpen(true);
                     }}
                   />
 
@@ -614,7 +613,7 @@ export default function AdminAssetsClient() {
                   {selectedSaveTargets.length > 0 ? ` · ${selectedSaveTargets.map(formatAdminAssetTargetInput).join(" / ")}` : ""}.
                 </p>
               </div>
-              <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 md:col-span-2" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
+              <button className="hidden" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
                 {isSavingAsset ? "저장 중" : "공통 관리 후보 추가"}
               </button>
@@ -622,7 +621,7 @@ export default function AdminAssetsClient() {
               ) : null}
             </div>
 
-            <section className="grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4">
+            <section className="hidden">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-black text-[var(--color-on-surface)]">등록된 관리 후보</h2>
@@ -680,12 +679,46 @@ export default function AdminAssetsClient() {
               )}
             </section>
             {assetCursor ? (
-              <button type="button" className="mx-auto min-h-11 rounded-full border border-[var(--color-outline-variant)] bg-white px-5 text-sm font-black text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)] disabled:opacity-50" disabled={isLoadingAssets} onClick={() => void refreshAssets(assetCursor, true)}>
+              <button type="button" className="hidden" disabled={isLoadingAssets} onClick={() => void refreshAssets(assetCursor, true)}>
                 {isLoadingAssets ? "불러오는 중" : "에셋 더 보기"}
               </button>
             ) : null}
+            </section>
+            <aside className="grid content-start gap-4 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 xl:max-h-[calc(100dvh-9rem)] xl:overflow-y-auto">
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Inspector</span>
+                <h2 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">{selectedSlot?.label ?? "슬롯 선택"}</h2>
+                <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{getAdminAssetKindLabel(assetKind)} · {selectedSlot?.role ?? "대표 슬롯"}</p>
+              </div>
+              <label className="grid gap-2">
+                <span className="text-xs font-black text-[var(--color-on-surface-variant)]">후보 이름</span>
+                <input className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none focus:border-[var(--color-info)]" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={file?.name ?? "예: 심플 말풍선"} />
+              </label>
+              <section className="grid gap-2 rounded-2xl bg-[var(--color-surface-low)] p-3">
+                <span className="text-xs font-black text-[var(--color-on-surface)]">적용 대상</span>
+                <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{selectedSaveTargets.length > 0 ? selectedSaveTargets.map(formatAdminAssetTargetInput).join(" / ") : "저장할 대상이 없습니다."}</p>
+              </section>
+              {file ? <section className="grid gap-2 rounded-2xl bg-[var(--color-surface-low)] p-3"><span className="text-xs font-black text-[var(--color-on-surface)]">자동 분석</span><p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{describeAdminAssetAnalysis(analysis ?? { shapes: inferShapesFromFileName(file.name) })}</p></section> : null}
+              {guidanceItems.length > 0 ? <section className="grid gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3"><span className="inline-flex items-center gap-1.5 text-xs font-black text-amber-950"><AlertTriangle size={14} /> 저장 전 확인</span><ul className="grid gap-1.5">{guidanceItems.map((item) => <li key={item} className="text-xs font-semibold leading-5 text-amber-900">{item}</li>)}</ul></section> : null}
+              <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={() => void submit()}>
+                {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
+                {isSavingAsset ? "저장 중" : bubbleBuilderDraft ? "빌더 후보 저장" : "관리 후보 저장"}
+              </button>
+            </aside>
           </section>
-        </section>
+          <section className="sticky bottom-0 z-20 grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white/95 p-4 shadow-[0_-16px_36px_rgba(42,103,103,0.08)] backdrop-blur">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0"><span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Library</span><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{selectedSlot?.label ?? "선택 슬롯"} · {filteredAssets.length}/{visibleAssets.length}개</p></div>
+              <div className="relative min-w-[220px] flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" /><input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.currentTarget.value)} placeholder="후보 검색" className="h-10 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-xs font-semibold outline-none focus:bg-white" aria-label="관리 후보 검색" /></div>
+              <div className="flex flex-wrap gap-1">{([["all", "전체"], ["exact", "정확"], ["review", "확인"], ["bubble", "말풍선"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setAssetListFilter(value)} aria-pressed={assetListFilter === value} className={`rounded-full px-2.5 py-1.5 text-[11px] font-black ${assetListFilter === value ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{label}</button>)}</div>
+            </div>
+            <div className="flex min-h-[132px] gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
+              {isLoadingAssets && assets.length === 0 ? <span className="grid min-w-48 place-items-center rounded-2xl bg-[var(--color-surface-low)] text-xs font-bold text-[var(--color-on-surface-variant)]">후보를 불러오는 중</span> : null}
+              {!isLoadingAssets && filteredAssets.length === 0 ? <span className="grid min-w-64 place-items-center rounded-2xl border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 text-center text-xs font-bold text-[var(--color-on-surface-variant)]">표시할 관리 후보가 없습니다.</span> : null}
+              {filteredAssets.map(({ asset, warnings }) => <AdminAssetDockCard key={asset.id} asset={asset} warnings={warnings} selectedSlot={selectedSlot} onEdit={() => setEditingAsset(asset)} onDelete={() => setAssetPendingDelete(asset)} />)}
+              {assetCursor ? <button type="button" className="min-h-[132px] min-w-28 rounded-2xl border border-dashed border-[var(--color-outline-variant)] px-3 text-xs font-black text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)] disabled:opacity-50" disabled={isLoadingAssets} onClick={() => void refreshAssets(assetCursor, true)}>{isLoadingAssets ? "불러오는 중" : "더 보기"}</button> : null}
+            </div>
+          </section>
       </div>
       </div>
 
@@ -1003,6 +1036,29 @@ function AdminAssetCard({
           {deleting ? "삭제 중" : "삭제"}
         </button>
       </div>
+    </article>
+  );
+}
+
+function AdminAssetDockCard({
+  asset,
+  warnings,
+  selectedSlot,
+  onEdit,
+  onDelete,
+}: {
+  asset: AdminAssetCandidate;
+  warnings: string[];
+  selectedSlot?: ThemeAssetSlot;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <article className="grid min-w-48 max-w-48 grid-rows-[76px_auto] gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-white p-2.5 shadow-[0_8px_18px_rgba(42,103,103,0.06)]">
+      <button type="button" onClick={onEdit} className="relative overflow-hidden rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] bg-contain bg-center bg-no-repeat text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-info)]" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} aria-label={`${asset.title} 수정`}>
+        {warnings.length > 0 ? <span className="absolute right-1.5 top-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-800">확인 {warnings.length}</span> : null}
+      </button>
+      <div className="min-w-0"><button type="button" onClick={onEdit} className="block w-full truncate text-left text-xs font-black text-[var(--color-on-surface)] hover:underline">{asset.title}</button><span className="mt-0.5 block truncate text-[10px] font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : asset.slotRole}{selectedSlot && asset.slotRole !== selectedSlot.role ? " · 유사" : ""}</span><div className="mt-2 flex gap-1"><button type="button" onClick={onEdit} className="rounded-lg bg-[var(--color-surface-low)] px-2 py-1 text-[10px] font-black text-[var(--color-on-surface-variant)]">수정</button><button type="button" onClick={onDelete} className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-700">삭제</button></div></div>
     </article>
   );
 }
