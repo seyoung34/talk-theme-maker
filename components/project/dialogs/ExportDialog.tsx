@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
-import { Archive, Download, LoaderCircle, Package, ShieldCheck, Wrench, X } from "lucide-react";
+import { Archive, Download, LoaderCircle, Package, ShieldCheck, X } from "lucide-react";
 import { getExportNotice, getExportProgressSteps } from "@/components/project/exportClient";
 import type { AccountState, ExportDownloadResult, ExportMode } from "@/components/project/exportModel";
 import type { ThemePlatform } from "@/lib/theme/types";
@@ -24,7 +24,6 @@ export function ExportDialog({
   const isLoggedIn = Boolean(accountState?.user);
   const credits = accountState?.credits ?? 0;
   const hasCredits = credits >= 1;
-  const isAdmin = accountState?.isAdmin ?? false;
   const ctaLabel = !isLoggedIn ? "로그인 후 다운로드" : !hasCredits ? "크레딧 충전" : "다운로드 시작";
 
   return (
@@ -44,8 +43,7 @@ export function ExportDialog({
                 <div className="flex items-start gap-3 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 text-[#1e3a8a] sm:col-span-2"><ShieldCheck className="mt-0.5 shrink-0" size={17} aria-hidden="true" /><div>{platform === "android" ? <><p className="text-sm font-bold">고유 앱 ID 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 applicationId를 서버에서 생성합니다.</p></> : <><p className="text-sm font-bold">고유 테마 identifier 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 identifier를 서버에서 생성하고 CSS에 적용합니다.</p></>}</div></div>
               </div>
               <div className="grid gap-2 mt-4 sm:grid-cols-2" role="radiogroup" aria-label="출력 형식">
-                {platform === "ios" ? <><ModeButton selected={exportMode === "ktheme"} onClick={() => onModeChange("ktheme")} disabled={isExporting} label="카카오톡으로 공유·적용" description=".ktheme · 기본 추천" /><ModeButton selected={exportMode === "theme-zip"} onClick={() => onModeChange("theme-zip")} disabled={isExporting} label="테마 ZIP" description="보관 또는 구조 확인용" /></> : <>
-                  {isAdmin ? <ModeButton selected={exportMode === "project"} onClick={() => onModeChange("project")} disabled={isExporting} label="프로젝트 ZIP" description="관리자 디버깅용 빌드 전 소스" icon={<Wrench size={16} aria-hidden="true" />} /> : null}
+                {platform === "ios" ? <ModeButton selected={exportMode === "ktheme"} onClick={() => onModeChange("ktheme")} disabled={isExporting} label="카카오톡으로 공유·적용" description=".ktheme · 기본 추천" /> : <>
                   <ModeButton selected={exportMode === "apk"} onClick={() => onModeChange("apk")} disabled={isExporting} label="내가 바로 설치" description=".apk · 이 Android 기기에 설치" icon={<Package size={16} aria-hidden="true" />} />
                   <ModeButton selected={exportMode === "apk-zip"} onClick={() => onModeChange("apk-zip")} disabled={isExporting} label="카카오톡으로 공유하기 쉬운 파일" description=".apk를 한 번 압축한 .zip · 받은 뒤 압축 해제" icon={<Archive size={16} aria-hidden="true" />} />
                 </>}

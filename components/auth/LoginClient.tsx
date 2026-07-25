@@ -295,7 +295,7 @@ export default function LoginClient() {
                 <ArrowRight size={17} aria-hidden="true" />
               </button>
 
-              {emailSignupOpen ? <SignupEmailForm email={email} password={password} confirmPassword={confirmPassword} showPassword={showPassword} isSubmitting={isSubmitting} message={message} onEmailChange={setEmail} onPasswordChange={setPassword} onConfirmPasswordChange={setConfirmPassword} onTogglePassword={() => setShowPassword((value) => !value)} onSubmit={submit} /> : null}
+              {emailSignupOpen ? <div className="origin-top motion-safe:animate-[signup-email-form-in_220ms_cubic-bezier(0.22,1,0.36,1)]"><SignupEmailForm email={email} password={password} confirmPassword={confirmPassword} showPassword={showPassword} isSubmitting={isSubmitting} message={message} onEmailChange={setEmail} onPasswordChange={setPassword} onConfirmPasswordChange={setConfirmPassword} onTogglePassword={() => setShowPassword((value) => !value)} onSubmit={submit} /></div> : null}
               {message && !emailSignupOpen ? <AuthMessage message={message} /> : null}
             </div>
           ) : (
