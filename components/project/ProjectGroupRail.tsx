@@ -6,9 +6,28 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeSlotGroup } from "@/lib/theme/types";
 import { disabledImageCandidateId, groupLabels, slotStatusLabel, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { getInheritedSourceSlot, getResolvedAssetUrl, getSelectedUpload, isImageSlotDisabled } from "@/lib/theme/project/state";
+import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import { normalizeThemeColor, themeColorToCss } from "@/lib/theme/color";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
+
+// 이미지 슬롯의 현재 적용 미리보기 URL(상속 반영). 색상 슬롯은 대상이 아니다.
+function getSlotThumbnailUrl(
+  slot: ThemeAssetSlot,
+  uploads: SlotUploads,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  allSlots: ThemeAssetSlot[],
+  uploadPreviewUrls: Record<string, string>,
+): string | undefined {
+  if (slot.kind === "color" || isImageSlotDisabled(slot, selections)) return undefined;
+  const sourceSlot = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots) ?? slot;
+  const upload = getSelectedUpload(sourceSlot, uploads, selections);
+  if (upload) return uploadPreviewUrls[upload.id];
+  return getResolvedAssetUrl(sourceSlot, uploads, selections, templateId, template);
+}
 
 export function ProjectGroupRail({
   groups,
@@ -40,6 +59,7 @@ export function ProjectGroupRail({
   variant?: "panel" | "sheet";
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const uploadPreviewUrls = useUploadPreviewUrls(uploads);
   const basicSlots = useMemo(() => slots.filter((slot) => slot.optionLevel !== "advanced"), [slots]);
   const advancedSlots = useMemo(() => slots.filter((slot) => slot.optionLevel === "advanced"), [slots]);
   const modifiedAdvancedCount = advancedSlots.filter((slot) => {
@@ -77,6 +97,7 @@ export function ProjectGroupRail({
             slot={slot}
             selected={selectedSlotId === slot.id}
             status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)}
+            thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, slots, uploadPreviewUrls)}
             warning={contrastWarnings[slot.id]}
             onSelect={() => onSelectSlot(slot)}
           />
@@ -94,7 +115,7 @@ export function ProjectGroupRail({
               <span className="rounded-full bg-[#e2e8f0] px-1.5 py-0.5 text-[10px] text-[#334155]">{modifiedAdvancedCount}/{advancedSlots.length}</span>
               <ChevronDown size={14} className={`transition-transform ${advancedOpen ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
-            {advancedOpen ? advancedSlots.map((slot) => <SlotRailItem key={slot.id} slot={slot} selected={selectedSlotId === slot.id} status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)} warning={contrastWarnings[slot.id]} onSelect={() => onSelectSlot(slot)} />) : null}
+            {advancedOpen ? advancedSlots.map((slot) => <SlotRailItem key={slot.id} slot={slot} selected={selectedSlotId === slot.id} status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)} thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, slots, uploadPreviewUrls)} warning={contrastWarnings[slot.id]} onSelect={() => onSelectSlot(slot)} />) : null}
           </div>
         ) : null}
       </div>
@@ -103,9 +124,10 @@ export function ProjectGroupRail({
   );
 }
 
-function SlotRailItem({ slot, selected, status, warning, onSelect }: { slot: ThemeAssetSlot; selected: boolean; status: string; warning?: SlotContrastWarning; onSelect: () => void }) {
+function SlotRailItem({ slot, selected, status, thumbnailUrl, warning, onSelect }: { slot: ThemeAssetSlot; selected: boolean; status: string; thumbnailUrl?: string; warning?: SlotContrastWarning; onSelect: () => void }) {
   const helpText = getSlotHelpText(slot);
   const colorPreview = slot.kind === "color" ? getStatusColorPreview(status) : null;
+  const isImageSlot = slot.kind !== "color";
   return (
     <div className="group relative">
       <button type="button" className={`w-full rounded-xl border px-3 py-3 pr-10 text-left transition ${selected ? "border-[#93c5fd] bg-[#eff6ff] shadow-sm" : warning ? "border-amber-200 bg-amber-50/70 hover:border-amber-300 hover:bg-amber-50" : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1] hover:bg-[#fcfcfd]"}`} onClick={onSelect}>
@@ -125,6 +147,13 @@ function SlotRailItem({ slot, selected, status, warning, onSelect }: { slot: The
               aria-hidden="true"
             >
               <span className="absolute inset-0" style={{ backgroundColor: colorPreview }} />
+            </span>
+          ) : isImageSlot ? (
+            <span
+              className="relative size-5 shrink-0 overflow-hidden rounded-[5px] border border-black/10 bg-[linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] bg-[length:6px_6px] bg-[position:0_0,0_3px,3px_-3px,-3px_0px] shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+              aria-hidden="true"
+            >
+              {thumbnailUrl ? <span className="absolute inset-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${thumbnailUrl})` }} /> : null}
             </span>
           ) : null}
           <span className="min-w-0 truncate">{status}</span>

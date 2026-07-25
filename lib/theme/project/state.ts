@@ -63,6 +63,10 @@ export function getImageAssetFallbackRole(role: ThemeResourceRole): ThemeResourc
   if (role === "profile_image_full_1") return "profile_image_1";
   if (role === "profile_image_full_2") return "profile_image_2";
   if (role === "profile_image_full_3") return "profile_image_3";
+  // 탭 선택(focused) 아이콘은 별도 지정이 없으면 기본 아이콘을 상속한다.
+  if (role.startsWith("tab_icon_") && role.endsWith("_focused")) {
+    return role.slice(0, -"_focused".length) as ThemeResourceRole;
+  }
   return undefined;
 }
 
@@ -270,6 +274,26 @@ export function getSelectedUpload(slot: ThemeAssetSlot | undefined, uploads: Slo
   return uploadEntries.find((entry) => entry.id === selectedId);
 }
 
+// 파생 슬롯(예: 탭 선택 아이콘)이 직접 선택 없이 기본 슬롯을 상속 중이면 그 기본 슬롯을 돌려준다.
+// - 별도 업로드를 골랐거나 기본 candidate 외의 것을 직접 선택했으면 상속하지 않는다(독립).
+export function getInheritedSourceSlot(
+  slot: ThemeAssetSlot | undefined,
+  uploads: SlotUploads,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  allSlots: ThemeAssetSlot[],
+): ThemeAssetSlot | undefined {
+  if (!slot) return undefined;
+  const fallbackRole = getImageAssetFallbackRole(slot.role);
+  if (!fallbackRole) return undefined;
+  if (getSelectedUpload(slot, uploads, selections)) return undefined;
+  const selectedId = selections[slot.id];
+  const defaultCandidate = getDefaultSelectedCandidate(slot, templateId, template);
+  if (selectedId && defaultCandidate && selectedId !== defaultCandidate.id) return undefined;
+  return allSlots.find((candidate) => candidate.role === fallbackRole && candidate.platform === slot.platform);
+}
+
 export function getResolvedAssetUrl(
   slot: ThemeAssetSlot | undefined,
   uploads: SlotUploads,
@@ -324,9 +348,11 @@ export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colo
     return color ? color.toUpperCase() : "값 필요";
   }
   if (isImageSlotDisabled(slot, selections)) return getImageColorFallbackRole(slot.role) ? "색상 사용 중" : "이미지 사용 안 함";
-  const selectedUpload = getSelectedUpload(slot, uploads, selections);
+  // 파생 슬롯(탭 선택 아이콘 등)이 연동 중이면 기본 슬롯의 선택 상태를 그대로 표시한다.
+  const sourceSlot = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots) ?? slot;
+  const selectedUpload = getSelectedUpload(sourceSlot, uploads, selections);
   if (selectedUpload) return selectedUpload.file.name;
-  const selected = getSelectedCandidate(slot, selections, templateId, template);
+  const selected = getSelectedCandidate(sourceSlot, selections, templateId, template);
   if (selected?.label) return selected.label;
   if (slot.required) return "필수 파일 필요";
   return "선택 파일";

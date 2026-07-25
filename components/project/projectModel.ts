@@ -1,4 +1,5 @@
 import {
+  getInheritedSourceSlot,
   getResolvedColor,
   getSelectedCandidate,
   getSelectedUpload,
@@ -25,6 +26,8 @@ export type SlotCandidate = {
   previewUrl?: string;
   colorValue?: string;
   adminAsset?: AdminAssetCandidate;
+  // 파생 슬롯(탭 선택 아이콘 등)이 기본 슬롯의 선택을 상속해 표시 중인 항목. 읽기 전용(연동 배지).
+  inherited?: boolean;
 };
 
 export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom", "more", "passcode", "common"];
@@ -104,9 +107,12 @@ export function buildSlotCandidates(
 ): SlotCandidate[] {
   if (!slot) return [];
 
-  const selected = getSelectedCandidate(slot, selections, templateId, template);
-  const uploadEntries = getSlotUploadEntries(slot, uploads);
-  const selectedUpload = getSelectedUpload(slot, uploads, selections);
+  // 파생 슬롯(탭 선택 아이콘 등)이 직접 선택 없이 연동 중이면 기본 슬롯의 선택 상태를 상속해 표시한다.
+  const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
+  const sourceSlot = inheritedSource ?? slot;
+  const selected = getSelectedCandidate(sourceSlot, selections, templateId, template);
+  const uploadEntries = getSlotUploadEntries(sourceSlot, uploads);
+  const selectedUpload = getSelectedUpload(sourceSlot, uploads, selections);
   const candidates = getSlotCandidates(slot, templateId, template);
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
 
@@ -151,7 +157,10 @@ export function buildSlotCandidates(
   const paletteItems = slot.kind === "color" ? buildPaletteCandidates(slot, allSlots, uploads, colors, selections, templateId, template) : [];
   const adminItems = slot.kind !== "color" ? buildAdminCandidates(slot, selectedUpload?.id, adminAssets) : [];
 
-  return [...templateItems, ...uploadItems, ...adminItems, ...paletteItems, ...baseItems];
+  const allItems = [...templateItems, ...uploadItems, ...adminItems, ...paletteItems, ...baseItems];
+  // 연동(기본 슬롯 상속) 중이면 선택 표시된 항목은 읽기 전용 상속 항목으로 표시한다.
+  if (inheritedSource) return allItems.map((item) => (item.selected ? { ...item, inherited: true } : item));
+  return allItems;
 }
 
 function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | undefined, adminAssets: Array<AdminAssetCandidate & { previewUrl?: string }>): SlotCandidate[] {

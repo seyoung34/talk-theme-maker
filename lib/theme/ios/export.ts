@@ -1,4 +1,4 @@
-import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { Insets, StretchPoint, ThemeResourceRole } from "@/lib/theme/types";
@@ -89,7 +89,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
 
   for (const slot of iosSlots) {
     if (slot.kind === "color" || !slot.path) continue;
-    const source = await resolveIosSlotSource(slot, uploads, selections, templateId, template);
+    const source = await resolveIosSlotSource(slot, uploads, selections, templateId, template, iosSlots);
     if (!source) continue;
     sourceScaleBySlotId[slot.id] = source.sourceScale;
     files.push(...(await createIosImageExportFiles(slot, source)));
@@ -117,7 +117,11 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   return files;
 }
 
-async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate): Promise<IosSlotSource | null> {
+async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[]): Promise<IosSlotSource | null> {
+  // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯 소스를 그대로 사용한다.
+  const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
+  if (inheritedSource) return resolveIosSlotSource(inheritedSource, uploads, selections, templateId, template, allSlots);
+
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   if (selectedUpload) {
     return {
@@ -128,7 +132,13 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
   }
 
   const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template);
-  if (!assetUrl) return null;
+  if (!assetUrl) {
+    // 별도 지정이 없으면 상속 슬롯(예: 탭 선택 아이콘 → 기본 아이콘)의 소스를 사용한다.
+    const fallbackRole = getImageAssetFallbackRole(slot.role);
+    const fallbackSlot = fallbackRole ? allSlots.find((candidate) => candidate.role === fallbackRole) : undefined;
+    if (!fallbackSlot) return null;
+    return resolveIosSlotSource(fallbackSlot, uploads, selections, templateId, template, allSlots);
+  }
   const sourceScale = getIosSourceScale(slot, uploads, selections, templateId);
   if (canUseServerAssetReference(slot, assetUrl)) {
     return {

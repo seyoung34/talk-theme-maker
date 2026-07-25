@@ -1,5 +1,5 @@
 import { exportNinePatch, loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
-import { getImageAssetFallbackRole, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -88,6 +88,10 @@ async function resolveAndroidSlotSource(
   bubbleEdit?: BubbleEditState,
   allSlots: ThemeAssetSlot[] = [],
 ): Promise<AndroidExportSource | null> {
+  // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯 소스를 그대로 사용한다.
+  const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
+  if (inheritedSource) return resolveAndroidSlotSource(inheritedSource, uploads, selections, templateId, template, bubbleEdit, allSlots);
+
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   if (slot.kind === "ninepatch") {
     const sourceDataUrl = selectedUpload ? await readThemeProjectFileAsDataUrl(selectedUpload.file) : await assetUrlToDataUrl(getResolvedAssetUrl(slot, uploads, selections, templateId, template));

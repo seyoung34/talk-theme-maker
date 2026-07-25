@@ -335,8 +335,12 @@ function ImageControls({
               <button
                 type="button"
                 aria-pressed={candidate.selected}
+                aria-disabled={candidate.inherited}
                 className={`grid w-full gap-1 rounded-xl border p-1.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${candidate.selected ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-                onClick={() => applyCandidate(candidate)}
+                onClick={() => {
+                  if (candidate.inherited) return;
+                  applyCandidate(candidate);
+                }}
               >
                 <span className="grid aspect-square place-items-center overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f8fafc]">
                   {preview ? (

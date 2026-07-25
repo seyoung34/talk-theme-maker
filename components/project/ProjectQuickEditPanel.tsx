@@ -469,13 +469,17 @@ function CandidateCard({ candidate, onApply }: { candidate: SlotCandidate; onApp
   return (
     <button
       type="button"
+      aria-disabled={candidate.inherited}
       className={`flex h-[104px] w-40 shrink-0 flex-col justify-between rounded-xl border px-3 py-3 text-left transition ${candidate.selected
         ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]"
         : candidate.active
           ? "border-[#cbd5e1] bg-white"
           : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1]"
-        }`}
-      onClick={() => onApply(candidate)}
+        } ${candidate.inherited ? "cursor-default" : ""}`}
+      onClick={() => {
+        if (candidate.inherited) return;
+        onApply(candidate);
+      }}
     >
       <div className="flex items-start gap-2">
         <CandidateSwatch candidate={candidate} />
@@ -485,7 +489,11 @@ function CandidateCard({ candidate, onApply }: { candidate: SlotCandidate; onApp
         </div>
       </div>
       <div className="grid gap-1">
-        {candidate.selected ? <span className="text-[10px] font-semibold text-[#2563eb]">사용 중</span> : null}
+        {candidate.inherited ? (
+          <span className="text-[10px] font-semibold text-[#2563eb]">연동중 · 기본과 동일</span>
+        ) : candidate.selected ? (
+          <span className="text-[10px] font-semibold text-[#2563eb]">사용 중</span>
+        ) : null}
         <span className="line-clamp-2 text-[11px] font-medium leading-[1.3] text-[#6b7280]">{candidate.status}</span>
       </div>
     </button>
