@@ -337,8 +337,8 @@ function ChatsScreen({
         </div>
       </button>
 
-      <div className="grid content-start min-h-0 gap-3 pb-1 overflow-hidden">
-        <div className={`px-4 pt-2 ${selectedSlotId === (platform === "ios" ? slotByRole.main_background_color?.id : slotByRole.main_header_color?.id) ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ backgroundColor: hexToRgba(preview.headerBackgroundColor, platform === "ios" && urls.main_background ? 0.32 : 1) }} onClick={(event) => { event.stopPropagation(); const target = platform === "ios" ? slotByRole.main_background_color : slotByRole.main_header_color; if (target) onSelectSlot?.(target.id); }}>
+      <div className="grid min-w-0 content-start min-h-0 gap-3 pb-1 overflow-hidden">
+        <div className={`min-w-0 px-4 pt-2 ${selectedSlotId === (platform === "ios" ? slotByRole.main_background_color?.id : slotByRole.main_header_color?.id) ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ backgroundColor: hexToRgba(preview.headerBackgroundColor, platform === "ios" && urls.main_background ? 0.32 : 1) }} onClick={(event) => { event.stopPropagation(); const target = platform === "ios" ? slotByRole.main_background_color : slotByRole.main_header_color; if (target) onSelectSlot?.(target.id); }}>
           <div className="flex items-center gap-2 overflow-hidden">
             <FilterPill compact dark color={preview.headerForegroundColor}>전체</FilterPill>
             <FilterPill compact color={preview.headerForegroundColor}>
@@ -367,13 +367,13 @@ function ChatsScreen({
 
 
 
-        <div className="grid min-h-0 gap-0 px-4 overflow-hidden">
+        <div className="grid min-w-0 min-h-0 gap-0 px-4 overflow-hidden">
           {chatRows.map((row, index) => (
             <div
               key={`${row.name}-${index}`}
               role="button"
               tabIndex={0}
-              className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg px-1 py-2 text-left ${selectedSlotId === slotByRole.main_body_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
+              className={`grid min-w-0 grid-cols-[auto_1fr_auto] items-center gap-3 rounded-lg px-1 py-2 text-left ${selectedSlotId === slotByRole.main_body_cell_color?.id ? "ring-2 ring-[#60a5fa]" : ""}`}
               style={{ backgroundColor: getVisibleCellBackground(preview.bodyCellColor) }}
               onClick={(event) => {
                 event.stopPropagation();
@@ -488,7 +488,7 @@ function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSel
       <div className="grid min-h-0 min-w-0 content-start gap-3 overflow-hidden px-4 py-3" style={{ backgroundColor: preview.bodySecondaryColor }}>
         <div className="grid min-w-0 gap-1 rounded-2xl bg-[#fee500] px-4 py-3" aria-label="pay 잔액 예시 영역 (테마와 무관)">
           <div className="flex min-w-0 items-center justify-between gap-2">
-            <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#2b2b2b]">pay 303,747원</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#2b2b2b]">pay 100,000원</span>
             <span className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-[#2b2b2b]/75">
               송금<span className="opacity-30">|</span>자산<span className="opacity-30">|</span>결제
             </span>
@@ -601,7 +601,7 @@ function PhoneFrame({
 }) {
   return (
     <div
-      className={`mx-auto aspect-[1080/2340] h-full w-full max-w-[310px] overflow-hidden rounded-[32px] border shadow-[0_12px_32px_rgba(15,23,42,0.08)] ${selected ? "border-[#60a5fa]" : "border-transparent"}`}
+      className={`mx-auto aspect-[1080/2340] h-full max-h-full w-auto max-w-full overflow-hidden rounded-[32px] border shadow-[0_12px_32px_rgba(15,23,42,0.08)] ${selected ? "border-[#60a5fa]" : "border-transparent"}`}
       role="button"
       tabIndex={0}
       onClick={onSelect}
@@ -689,16 +689,16 @@ function TabAsset({
   return (
     <button
       type="button"
-      className={`relative grid justify-items-center gap-0.5 rounded-[18px] px-0.5 py-0.5 ${selected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
+      aria-label={label}
+      className={`relative grid place-items-center rounded-[18px] px-0.5 py-2 ${selected ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
       onClick={(event) => {
         event.stopPropagation();
         if (slot) onSelectSlot?.(slot.id);
       }}
     >
-      <span className="relative grid h-8 w-8 place-items-center rounded-full">
-        <span className="h-7 w-7 bg-center bg-no-repeat bg-contain" style={{ backgroundImage: `url(${active ? focusedUrl || defaultUrl || "" : defaultUrl || focusedUrl || ""})` }} />
+      <span className="relative grid h-9 w-9 place-items-center rounded-full">
+        <span className="h-full w-full bg-center bg-no-repeat bg-contain" style={{ backgroundImage: `url(${active ? focusedUrl || defaultUrl || "" : defaultUrl || focusedUrl || ""})` }} />
       </span>
-      <span className="text-[9px] font-semibold text-[#57737a]">{label}</span>
       {badge ? <span className="absolute left-1/2 top-0 rounded-full bg-[#ff6b37] px-1.5 py-px text-[9px] font-bold text-white">{badge}</span> : null}
       {dot ? <span className="absolute right-1.5 top-1 h-1.5 w-1.5 rounded-full bg-[#ff6b37]" /> : null}
     </button>

@@ -230,7 +230,7 @@ export function ChatroomPreview({
   const menuButtonSlot = isIos ? slotByRole.chat_button_background_color : slotByRole.chat_menu_button_color;
 
   return (
-    <div className="relative aspect-1080/2123 h-full w-full max-w-[310px] overflow-hidden rounded-xl border border-transparent bg-white shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
+    <div className="relative mx-auto aspect-1080/2123 h-full max-h-full w-auto max-w-full overflow-hidden rounded-xl border border-transparent bg-white shadow-[0_12px_32px_rgba(15,23,42,0.08)]">
       {backgroundSlot ? (
         <button
           type="button"

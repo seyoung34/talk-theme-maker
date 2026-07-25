@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertTriangle, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import { BubbleBuilderEditor } from "@/components/editor/BubbleBuilderDialog";
@@ -43,6 +43,15 @@ const MIN_LEFT_SIDEBAR_WIDTH = 208;
 const MAX_LEFT_SIDEBAR_WIDTH = 420;
 const MIN_RIGHT_SIDEBAR_WIDTH = 320;
 const MAX_RIGHT_SIDEBAR_WIDTH = 560;
+
+// 투명 영역을 흰색이 아닌 체커무늬로 표시하기 위한 배경 스타일.
+const TRANSPARENCY_CHECKER_STYLE: CSSProperties = {
+  backgroundColor: "#ffffff",
+  backgroundImage:
+    "linear-gradient(45deg, #dce1e5 25%, transparent 25%), linear-gradient(-45deg, #dce1e5 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #dce1e5 75%), linear-gradient(-45deg, transparent 75%, #dce1e5 75%)",
+  backgroundSize: "18px 18px",
+  backgroundPosition: "0 0, 0 9px, 9px -9px, -9px 0",
+};
 
 type AdminBubbleBuilderDraft = {
   readonly recipe: BubbleFamilyDesignSpec;
@@ -85,6 +94,7 @@ export default function AdminAssetsClient() {
   const [imageEditOpen, setImageEditOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
   const [assetListFilter, setAssetListFilter] = useState<"all" | "exact" | "review" | "bubble">("all");
+  const [assetGridColumns, setAssetGridColumns] = useState<3 | 4 | 5>(3);
   const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
   const [bubbleBuilderInitial, setBubbleBuilderInitial] = useState<AdminBubbleBuilderInitial | null>(null);
@@ -625,9 +635,14 @@ export default function AdminAssetsClient() {
 
                   {filePreviewUrl ? (
                     <div
-                      className="mt-2 aspect-[4/3] max-h-64 rounded-2xl border border-[var(--color-outline-variant)] bg-white bg-contain bg-center bg-no-repeat"
-                      style={{ backgroundImage: `url(${filePreviewUrl})` }}
-                    />
+                      className="mt-2 aspect-[4/3] max-h-64 overflow-hidden rounded-2xl border border-[var(--color-outline-variant)]"
+                      style={TRANSPARENCY_CHECKER_STYLE}
+                    >
+                      <div
+                        className="size-full bg-contain bg-center bg-no-repeat"
+                        style={{ backgroundImage: `url(${filePreviewUrl})` }}
+                      />
+                    </div>
                   ) : null}
 
                   <input
@@ -790,28 +805,52 @@ export default function AdminAssetsClient() {
                   />
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {([
-                  ["all", "전체"],
-                  ["exact", "정확한 슬롯"],
-                  ["review", "확인 필요"],
-                  ["bubble", "말풍선 조정"],
-                ] as const).map(([value, label]) => (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
-                    key={value}
                     type="button"
-                    className={`rounded-full px-3 py-2 text-xs font-black transition ${assetListFilter === value ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`}
-                    onClick={() => setAssetListFilter(value)}
-                    aria-pressed={assetListFilter === value}
+                    className={`rounded-full px-3 py-2 text-xs font-black transition ${assetListFilter === "all" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`}
+                    onClick={() => setAssetListFilter("all")}
+                    aria-pressed={assetListFilter === "all"}
                   >
-                    {label}
+                    전체
                   </button>
-                ))}
+                  <div className="relative">
+                    <select
+                      value={assetListFilter === "all" ? "" : assetListFilter}
+                      onChange={(event) => {
+                        const value = event.currentTarget.value;
+                        setAssetListFilter(value === "" ? "all" : (value as "exact" | "review" | "bubble"));
+                      }}
+                      aria-label="세부 필터"
+                      className={`h-[34px] appearance-none rounded-full border pl-3 pr-8 text-xs font-black outline-none transition ${assetListFilter !== "all" ? "border-transparent bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`}
+                    >
+                      <option value="">세부 필터</option>
+                      <option value="exact">정확한 슬롯</option>
+                      <option value="review">확인 필요</option>
+                      <option value="bubble">말풍선 조정</option>
+                    </select>
+                    <ChevronDown className={`pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 ${assetListFilter !== "all" ? "text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)]"}`} aria-hidden="true" />
+                  </div>
+                </div>
+                <div className="relative">
+                  <select
+                    value={assetGridColumns}
+                    onChange={(event) => setAssetGridColumns(Number(event.currentTarget.value) as 3 | 4 | 5)}
+                    aria-label="열 개수"
+                    className="h-[34px] appearance-none rounded-full border border-[var(--color-outline-variant)] bg-white pl-3 pr-8 text-xs font-black text-[var(--color-on-surface-variant)] outline-none transition hover:bg-[var(--color-surface-low)]"
+                  >
+                    <option value={3}>3열</option>
+                    <option value={4}>4열</option>
+                    <option value={5}>5열</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" />
+                </div>
               </div>
-              {isLoadingAssets && assets.length === 0 ? (
-                <AdminAssetSkeletonGrid />
+              {isLoadingAssets && filteredAssets.length === 0 ? (
+                <AdminAssetSkeletonGrid columns={assetGridColumns} />
               ) : filteredAssets.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div className={`grid gap-3 sm:grid-cols-2 ${assetGridColumns === 3 ? "xl:grid-cols-3" : assetGridColumns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
                   {filteredAssets.map(({ asset, warnings }) => (
                     <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} warnings={warnings} deleting={deletingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />
                   ))}
@@ -1222,9 +1261,9 @@ function AdminAssetDockCard({
   );
 }
 
-function AdminAssetSkeletonGrid() {
+function AdminAssetSkeletonGrid({ columns = 3 }: { columns?: 3 | 4 | 5 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <div className={`grid gap-3 sm:grid-cols-2 ${columns === 3 ? "xl:grid-cols-3" : columns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
       {Array.from({ length: 6 }).map((_, index) => (
         <div key={index} className="grid gap-3 rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.04)]">
           <span className="aspect-[4/3] animate-pulse rounded-[18px] bg-[var(--color-surface-low)]" />

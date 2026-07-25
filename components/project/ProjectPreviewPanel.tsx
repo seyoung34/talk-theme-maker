@@ -39,7 +39,7 @@ export function ProjectPreviewPanel({
   return (
     <aside className={`preview-selection-motion grid min-h-0 place-items-center  overflow-hidden  ${className ?? ""}`} data-selection-pulse={selectionPulseKey % 2}>
       <div
-        className={`col-start-1 row-start-1 grid h-full w-full place-items-center ${chatroomActive ? "" : "pointer-events-none invisible"}`}
+        className={`col-start-1 row-start-1 grid h-full min-h-0 w-full min-w-0 place-items-center ${chatroomActive ? "" : "pointer-events-none invisible"}`}
         aria-hidden={!chatroomActive}
       >
         <ChatroomPreview
@@ -56,7 +56,7 @@ export function ProjectPreviewPanel({
         />
       </div>
       {!chatroomActive ? (
-        <div className="grid w-full h-full col-start-1 row-start-1 place-items-center">
+        <div className="grid w-full min-w-0 h-full min-h-0 col-start-1 row-start-1 place-items-center">
           {activeSection === "common" ? (
             <CommonAssetsPreview
               analysis={analysis}

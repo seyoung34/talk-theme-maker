@@ -43,7 +43,7 @@ export const groupLabels: Record<ThemeSlotGroup, string> = {
   header: "헤더",
   list: "목록",
   bar: "탭 바",
-  icons: "아이콘",
+  icons: "탭 아이콘",
   elements: "부가 요소",
   bubbles: "말풍선",
   input: "입력 바",
