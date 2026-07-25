@@ -41,6 +41,7 @@ export default function LoginClient() {
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [hasAcceptedPrivacy, setHasAcceptedPrivacy] = useState(false);
   const [hasConfirmedMinimumAge, setHasConfirmedMinimumAge] = useState(false);
+  const [emailSignupOpen, setEmailSignupOpen] = useState(false);
   const [message, setMessage] = useState<Message>(() => authError ? { tone: "error", text: authError } : null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -75,6 +76,7 @@ export default function LoginClient() {
     setPassword("");
     setConfirmPassword("");
     setShowPassword(false);
+    setEmailSignupOpen(false);
     setStage("form");
   };
 
@@ -274,14 +276,38 @@ export default function LoginClient() {
             ))}
           </div>
 
-          <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting || (mode === "signup" && !hasAcceptedSignupRequirements)}>
-            {isSubmitting ? <LoaderCircle className="animate-spin" size={18} aria-hidden="true" /> : <span className="text-base" aria-hidden="true">●</span>}
-            카카오로 {mode === "signin" ? "로그인" : "시작하기"}
-          </button>
+          {mode === "signup" ? (
+            <div className="grid gap-4">
+              <fieldset className="grid gap-2.5 rounded-[18px] border border-[#dbe8fb] bg-[#f7fbff] p-3.5">
+                <legend className="px-1 text-xs font-extrabold text-[var(--color-on-surface)]">필수 정책 동의</legend>
+                <MinimumAgeConfirmationCheck checked={hasConfirmedMinimumAge} onChange={setHasConfirmedMinimumAge} disabled={isSubmitting} />
+                <PolicyConsentCheck id="accept-terms" checked={hasAcceptedTerms} onChange={setHasAcceptedTerms} label="이용약관에 동의합니다." href="/terms" linkLabel="약관 보기" disabled={isSubmitting} />
+                <PolicyConsentCheck id="accept-privacy" checked={hasAcceptedPrivacy} onChange={setHasAcceptedPrivacy} label="개인정보 처리방침에 동의합니다." href="/privacy" linkLabel="내용 보기" disabled={isSubmitting} />
+                <p className="pl-7 text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)]">동의한 정책 버전과 시각은 계정에 기록됩니다.</p>
+              </fieldset>
 
-          <div className="my-5 flex items-center gap-3 text-xs font-semibold text-[var(--color-outline)]" aria-hidden="true"><span className="h-px flex-1 bg-[var(--color-outline-variant)]" />또는 이메일로 계속<span className="h-px flex-1 bg-[var(--color-outline-variant)]" /></div>
+              <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting || !hasAcceptedSignupRequirements}>
+                {isSubmitting ? <LoaderCircle className="animate-spin" size={18} aria-hidden="true" /> : <span className="text-base" aria-hidden="true">●</span>}
+                카카오로 시작하기
+              </button>
+              <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#cfe0ff] bg-white px-4 py-3 text-sm font-extrabold text-[#2f6bbf] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f6bbf] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => { setEmailSignupOpen(true); setMessage(null); }} disabled={isSubmitting || !hasAcceptedSignupRequirements} aria-expanded={emailSignupOpen}>
+                이메일로 가입
+                <ArrowRight size={17} aria-hidden="true" />
+              </button>
 
-          <form className="grid gap-4" onSubmit={submit} noValidate>
+              {emailSignupOpen ? <SignupEmailForm email={email} password={password} confirmPassword={confirmPassword} showPassword={showPassword} isSubmitting={isSubmitting} message={message} onEmailChange={setEmail} onPasswordChange={setPassword} onConfirmPasswordChange={setConfirmPassword} onTogglePassword={() => setShowPassword((value) => !value)} onSubmit={submit} /> : null}
+              {message && !emailSignupOpen ? <AuthMessage message={message} /> : null}
+            </div>
+          ) : (
+            <>
+              <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting}>
+                {isSubmitting ? <LoaderCircle className="animate-spin" size={18} aria-hidden="true" /> : <span className="text-base" aria-hidden="true">●</span>}
+                카카오로 로그인
+              </button>
+
+              <div className="my-5 flex items-center gap-3 text-xs font-semibold text-[var(--color-outline)]" aria-hidden="true"><span className="h-px flex-1 bg-[var(--color-outline-variant)]" />또는 이메일로 계속<span className="h-px flex-1 bg-[var(--color-outline-variant)]" /></div>
+
+              <form className="grid gap-4" onSubmit={submit} noValidate>
             <label className="grid gap-2 text-sm font-extrabold text-[var(--color-on-surface)]">
               이메일
               <input className="h-12 rounded-xl border border-[var(--color-outline-variant)] bg-white px-3.5 text-sm font-semibold outline-none transition placeholder:text-[var(--color-outline)] focus:border-[var(--color-secondary)] focus:ring-3 focus:ring-[var(--color-secondary-container)] disabled:bg-[var(--color-surface-low)]" type="email" value={email} onChange={(event) => setEmail(event.currentTarget.value)} placeholder="name@example.com" required autoComplete="email" disabled={isSubmitting} aria-invalid={message?.tone === "error"} />
@@ -296,26 +322,9 @@ export default function LoginClient() {
               </span>
             </label>
 
-            {mode === "signup" ? (
-              <label className="grid gap-2 text-sm font-extrabold text-[var(--color-on-surface)]">
-                비밀번호 확인
-                <input className="h-12 w-full rounded-xl border border-[var(--color-outline-variant)] bg-white px-3.5 text-sm font-semibold outline-none transition placeholder:text-[var(--color-outline)] focus:border-[var(--color-secondary)] focus:ring-3 focus:ring-[var(--color-secondary-container)] disabled:bg-[var(--color-surface-low)]" type={showPassword ? "text" : "password"} value={confirmPassword} onChange={(event) => setConfirmPassword(event.currentTarget.value)} placeholder="비밀번호 다시 입력" required minLength={8} autoComplete="new-password" disabled={isSubmitting} aria-invalid={message?.tone === "error" && password !== confirmPassword} />
-              </label>
-            ) : null}
-
-            {mode === "signin" ? (
-              <Link href={`/forgot-password?returnTo=${encodeURIComponent(returnTo)}`} className="justify-self-end text-xs font-bold text-[#2f6bbf] underline-offset-4 hover:underline">
-                비밀번호를 잊으셨나요?
-              </Link>
-            ) : (
-              <fieldset className="grid gap-2.5 rounded-[18px] border border-[#dbe8fb] bg-[#f7fbff] p-3.5">
-                <legend className="px-1 text-xs font-extrabold text-[var(--color-on-surface)]">필수 정책 동의</legend>
-                <MinimumAgeConfirmationCheck checked={hasConfirmedMinimumAge} onChange={setHasConfirmedMinimumAge} disabled={isSubmitting} />
-                <PolicyConsentCheck id="accept-terms" checked={hasAcceptedTerms} onChange={setHasAcceptedTerms} label="이용약관에 동의합니다." href="/terms" linkLabel="약관 보기" disabled={isSubmitting} />
-                <PolicyConsentCheck id="accept-privacy" checked={hasAcceptedPrivacy} onChange={setHasAcceptedPrivacy} label="개인정보 처리방침에 동의합니다." href="/privacy" linkLabel="내용 보기" disabled={isSubmitting} />
-                <p className="pl-7 text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)]">동의한 정책 버전과 시각은 계정에 기록됩니다.</p>
-              </fieldset>
-            )}
+                <Link href={`/forgot-password?returnTo=${encodeURIComponent(returnTo)}`} className="justify-self-end text-xs font-bold text-[#2f6bbf] underline-offset-4 hover:underline">
+                  비밀번호를 잊으셨나요?
+                </Link>
 
             {message ? (
               <div className={`flex gap-2 rounded-xl border px-3.5 py-3 text-sm font-semibold leading-5 ${message.tone === "error" ? "border-[#f1b7b1] bg-[var(--color-error-container)] text-[var(--color-on-error-container)]" : "border-[#9ed5c1] bg-[#e4f6ee] text-[#155d45]"}`} role={message.tone === "error" ? "alert" : "status"}>
@@ -323,10 +332,12 @@ export default function LoginClient() {
               </div>
             ) : null}
 
-            <button className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-secondary)] px-5 py-3 text-sm font-extrabold text-white shadow-[0_18px_34px_rgba(47,107,191,0.22)] transition hover:-translate-y-0.5 hover:bg-[#3d7bd6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" type="submit" disabled={isSubmitting || (mode === "signup" && !hasAcceptedSignupRequirements)}>
-              {isSubmitting ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />처리 중</> : <>{mode === "signin" ? "이메일로 로그인" : "이메일로 가입"}<ArrowRight size={17} aria-hidden="true" /></>}
-            </button>
-          </form>
+                <button className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-secondary)] px-5 py-3 text-sm font-extrabold text-white shadow-[0_18px_34px_rgba(47,107,191,0.22)] transition hover:-translate-y-0.5 hover:bg-[#3d7bd6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />처리 중</> : <>이메일로 로그인<ArrowRight size={17} aria-hidden="true" /></>}
+                </button>
+              </form>
+            </>
+          )}
             </>
           )}
 
@@ -335,6 +346,55 @@ export default function LoginClient() {
       </div>
     </main>
   );
+}
+
+function SignupEmailForm({
+  email, password, confirmPassword, showPassword, isSubmitting, message,
+  onEmailChange, onPasswordChange, onConfirmPasswordChange, onTogglePassword, onSubmit,
+}: {
+  email: string;
+  password: string;
+  confirmPassword: string;
+  showPassword: boolean;
+  isSubmitting: boolean;
+  message: Message;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onConfirmPasswordChange: (value: string) => void;
+  onTogglePassword: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="grid gap-4 rounded-[18px] border border-[#dbe8fb] bg-white p-4" onSubmit={onSubmit} noValidate>
+      <label className="grid gap-2 text-sm font-extrabold text-[var(--color-on-surface)]">
+        이메일
+        <input className="h-12 rounded-xl border border-[var(--color-outline-variant)] bg-white px-3.5 text-sm font-semibold outline-none transition placeholder:text-[var(--color-outline)] focus:border-[var(--color-secondary)] focus:ring-3 focus:ring-[var(--color-secondary-container)] disabled:bg-[var(--color-surface-low)]" type="email" value={email} onChange={(event) => onEmailChange(event.currentTarget.value)} placeholder="name@example.com" required autoComplete="email" disabled={isSubmitting} aria-invalid={message?.tone === "error"} />
+      </label>
+      <label className="grid gap-2 text-sm font-extrabold text-[var(--color-on-surface)]">
+        비밀번호
+        <span className="relative">
+          <input className="h-12 w-full rounded-xl border border-[var(--color-outline-variant)] bg-white px-3.5 pr-12 text-sm font-semibold outline-none transition placeholder:text-[var(--color-outline)] focus:border-[var(--color-secondary)] focus:ring-3 focus:ring-[var(--color-secondary-container)] disabled:bg-[var(--color-surface-low)]" type={showPassword ? "text" : "password"} value={password} onChange={(event) => onPasswordChange(event.currentTarget.value)} placeholder="8자 이상" required minLength={8} autoComplete="new-password" disabled={isSubmitting} aria-invalid={message?.tone === "error"} />
+          <button type="button" className="absolute right-1.5 top-1.5 grid size-9 place-items-center rounded-lg text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)] focus-visible:outline-2 focus-visible:outline-[var(--color-secondary)]" onClick={onTogglePassword} aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 표시"} disabled={isSubmitting}>
+            {showPassword ? <EyeOff size={19} aria-hidden="true" /> : <Eye size={19} aria-hidden="true" />}
+          </button>
+        </span>
+      </label>
+      <label className="grid gap-2 text-sm font-extrabold text-[var(--color-on-surface)]">
+        비밀번호 확인
+        <input className="h-12 w-full rounded-xl border border-[var(--color-outline-variant)] bg-white px-3.5 text-sm font-semibold outline-none transition placeholder:text-[var(--color-outline)] focus:border-[var(--color-secondary)] focus:ring-3 focus:ring-[var(--color-secondary-container)] disabled:bg-[var(--color-surface-low)]" type={showPassword ? "text" : "password"} value={confirmPassword} onChange={(event) => onConfirmPasswordChange(event.currentTarget.value)} placeholder="비밀번호 다시 입력" required minLength={8} autoComplete="new-password" disabled={isSubmitting} aria-invalid={message?.tone === "error" && password !== confirmPassword} />
+      </label>
+      {message ? <AuthMessage message={message} /> : null}
+      <button className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-secondary)] px-5 py-3 text-sm font-extrabold text-white shadow-[0_18px_34px_rgba(47,107,191,0.22)] transition hover:-translate-y-0.5 hover:bg-[#3d7bd6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" type="submit" disabled={isSubmitting}>
+        {isSubmitting ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />처리 중</> : <>이메일 가입 완료<ArrowRight size={17} aria-hidden="true" /></>}
+      </button>
+    </form>
+  );
+}
+
+function AuthMessage({ message }: { message: Exclude<Message, null> }) {
+  return <div className={`flex gap-2 rounded-xl border px-3.5 py-3 text-sm font-semibold leading-5 ${message.tone === "error" ? "border-[#f1b7b1] bg-[var(--color-error-container)] text-[var(--color-on-error-container)]" : "border-[#9ed5c1] bg-[#e4f6ee] text-[#155d45]"}`} role={message.tone === "error" ? "alert" : "status"}>
+    {message.tone === "error" ? <AlertCircle className="mt-0.5 shrink-0" size={17} aria-hidden="true" /> : <CheckCircle2 className="mt-0.5 shrink-0" size={17} aria-hidden="true" />}{message.text}
+  </div>;
 }
 
 function MinimumAgeConfirmationCheck({ checked, onChange, disabled }: { checked: boolean; onChange: (checked: boolean) => void; disabled: boolean }) {
