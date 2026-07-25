@@ -158,7 +158,7 @@ export function ImageEditDialog({
                 <label className="grid gap-2 text-sm font-black text-[#0f172a]">
                   크기
                   <span className="flex items-center gap-3">
-                    <input type="range" min="25" max="300" value={Math.round(state.scale * 100)} className="w-full accent-[#2563eb]" onChange={(event) => setState((current) => ({ ...current, scale: clampImageScale(Number(event.currentTarget.value) / 100) }))} />
+                    <input type="range" min="25" max="300" value={Math.round(state.scale * 100)} className="w-full accent-[#2563eb]" onChange={(event) => { const scale = clampImageScale(Number(event.currentTarget.value) / 100); setState((current) => ({ ...current, scale })); }} />
                     <span className="w-12 text-right text-xs font-black text-[#475569]">{Math.round(state.scale * 100)}%</span>
                   </span>
                 </label>
