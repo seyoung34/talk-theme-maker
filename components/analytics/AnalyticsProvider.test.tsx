@@ -4,7 +4,9 @@ import { createElement } from "react";
 import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
 import { analyticsConsentStorageKey } from "@/lib/analytics/ga4";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/template" }));
+let pathname = "/template";
+
+vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
 
 describe("AnalyticsProvider", () => {
   const gtag = vi.fn();
@@ -16,6 +18,7 @@ describe("AnalyticsProvider", () => {
     window.sessionStorage.clear();
     window.gtag = gtag;
     gtag.mockClear();
+    pathname = "/template";
   });
 
   afterEach(() => cleanup());
@@ -62,5 +65,16 @@ describe("AnalyticsProvider", () => {
     await waitFor(() => expect(window.localStorage.getItem(analyticsConsentStorageKey)).toBe("granted"));
     expect(gtag).toHaveBeenCalledWith("consent", "update", { analytics_storage: "granted" });
     expect(gtag).toHaveBeenCalledWith("event", "page_view", expect.objectContaining({ page_path: "/template" }));
+  });
+
+  it("hides consent controls on the editor route without changing saved consent", async () => {
+    pathname = "/edit";
+    window.localStorage.setItem(analyticsConsentStorageKey, "granted");
+
+    render(createElement(AnalyticsProvider));
+
+    await waitFor(() => expect(gtag).toHaveBeenCalledWith("event", "page_view", expect.objectContaining({ page_path: "/edit" })));
+    expect(screen.queryByRole("button", { name: "분석 쿠키 설정" })).toBeNull();
+    expect(window.localStorage.getItem(analyticsConsentStorageKey)).toBe("granted");
   });
 });

@@ -21,8 +21,10 @@ function AnalyticsPageTracker({ consent }: { consent: AnalyticsConsent | null })
 
 export default function AnalyticsProvider() {
   const measurementId = getAnalyticsMeasurementId();
+  const pathname = usePathname();
   const [consent, setConsent] = useState<AnalyticsConsent | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const shouldShowConsentUi = pathname !== "/edit";
 
   useEffect(() => {
     const initialConsent = getAnalyticsConsent();
@@ -41,7 +43,7 @@ export default function AnalyticsProvider() {
   return (
     <>
       <AnalyticsPageTracker consent={consent} />
-      {consent === null ? (
+      {shouldShowConsentUi && consent === null ? (
         <aside className="fixed inset-x-4 bottom-4 z-[200] mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-xl sm:flex sm:items-center sm:gap-4" role="dialog" aria-label="분석 쿠키 동의">
           <p className="text-sm font-medium leading-5 text-slate-700">서비스 이용 흐름을 분석하기 위해 분석 쿠키를 사용합니다. 동의 전에는 분석 쿠키와 사용자 행동 이벤트를 수집하지 않습니다. <Link href="/privacy" className="font-semibold underline underline-offset-2">개인정보 처리방침</Link></p>
           <div className="mt-3 flex shrink-0 gap-2 sm:mt-0">
@@ -50,7 +52,7 @@ export default function AnalyticsProvider() {
           </div>
         </aside>
       ) : null}
-      {consent !== null ? (
+      {shouldShowConsentUi && consent !== null ? (
         <button
           type="button"
           className="fixed bottom-3 left-3 z-[200] grid size-10 place-items-center rounded-full bg-white/90 text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-white hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700"
