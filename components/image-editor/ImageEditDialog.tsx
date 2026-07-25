@@ -20,7 +20,7 @@ export function ImageEditDialog({
   initialState?: ImageEditState;
   target?: ImageEditTarget;
   onOpenChange: (open: boolean) => void;
-  onApply: (file: File, state: ImageEditState) => void;
+  onApply: (file: File, state: ImageEditState, outputSize?: { width: number; height: number }) => void;
 }) {
   const [state, setState] = useState<ImageEditState>(initialState ?? defaultImageEditState);
   const [sourceUrl, setSourceUrl] = useState("");
@@ -85,7 +85,7 @@ export function ImageEditDialog({
       setIsApplying(true);
       setError(null);
       const editedFile = await renderEditedImageFile(sourceFile, state, undefined, target);
-      onApply(editedFile, state);
+      onApply(editedFile, state, outputSize ? { width: outputSize.width, height: outputSize.height } : undefined);
       onOpenChange(false);
     } catch (applyError) {
       console.error(applyError);

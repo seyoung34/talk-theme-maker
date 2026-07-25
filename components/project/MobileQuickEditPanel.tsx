@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useId, useState, type MutableRefObject } from "react";
-import { ImageOff, Plus, Sliders, X } from "lucide-react";
+import { Edit3, ImageOff, Plus, RefreshCw, Sliders, X } from "lucide-react";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
+import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import {
@@ -10,6 +11,7 @@ import {
   disabledImageCandidateId,
   getDefaultColor,
   getSelectedCandidate,
+  getSelectedUpload,
   getSlotUploadEntries,
   slotStatusLabel,
   type SlotCandidate,
@@ -19,6 +21,7 @@ import {
 } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -47,6 +50,7 @@ type MobileQuickEditPanelProps = {
   canApplyAutoColor: boolean;
   fileInputRefs: MutableRefObject<Record<string, HTMLInputElement | null>>;
   onUpload: (slot: ThemeAssetSlot, files: FileList | readonly File[] | null) => void;
+  onEditedUpload: (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => void;
   onRemoveUpload: (slot: ThemeAssetSlot, uploadId: string) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
@@ -58,6 +62,7 @@ type MobileQuickEditPanelProps = {
   onPullSheet: () => void;
   onOpenBubbleBuilder: () => void;
   onCopyBubbleToPair: (slot: ThemeAssetSlot) => void;
+  onBubbleFlip: (slot: ThemeAssetSlot, width: number) => void;
 };
 
 export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
@@ -287,6 +292,7 @@ function ImageControls({
   uploadPreviewUrls,
   fileInputRefs,
   onUpload,
+  onEditedUpload,
   onRemoveUpload,
   platform,
   selectedBubbleSlot,
@@ -300,7 +306,11 @@ function ImageControls({
   onOpenBubbleBuilder,
   pairedBubbleSlot,
   onCopyBubbleToPair,
+  onBubbleFlip,
   file,
+  selections,
+  templateId,
+  template,
 }: MobileQuickEditPanelProps & {
   slot: ThemeAssetSlot;
   candidates: SlotCandidate[];
@@ -311,12 +321,45 @@ function ImageControls({
   const userUploadIds = new Set(getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id)).map((entry) => entry.id));
   const hasImage = Boolean(file?.file || file?.sourceUrl);
   const [bubbleEditorOpen, setBubbleEditorOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [preparedEditSourceFile, setPreparedEditSourceFile] = useState<File | null>(null);
+  const [isPreparingEditSource, setIsPreparingEditSource] = useState(false);
+  const [editSourceError, setEditSourceError] = useState<string | null>(null);
+  const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
+  const selectedUploadEntry = getSelectedUpload(slot, uploads, selections);
+  const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
+  const directEditableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;
+  const editableSourceUrl = !directEditableSourceFile ? file?.sourceUrl ?? selectedPickerCandidate?.previewUrl ?? selectedCandidate?.previewUrl ?? selectedCandidate?.assetUrl : undefined;
+  const editableSourceFile = preparedEditSourceFile ?? directEditableSourceFile;
+  const canOpenImageEditor = Boolean(directEditableSourceFile || editableSourceUrl);
+  const imageEditTarget = selectedUploadEntry?.imageEdit?.target ?? getImageEditTarget(selectedCandidate);
 
   useEffect(() => {
     setBubbleEditorOpen(false);
   }, [slot.id]);
 
   const canAdjustBubble = Boolean(slot.editableInBubbleEditor && selectedBubbleSlot);
+
+  const openImageEditor = async () => {
+    if (!canOpenImageEditor) return;
+    setEditSourceError(null);
+    if (directEditableSourceFile) {
+      setPreparedEditSourceFile(null);
+      setEditDialogOpen(true);
+      return;
+    }
+    if (!editableSourceUrl) return;
+    try {
+      setIsPreparingEditSource(true);
+      setPreparedEditSourceFile(await imageUrlToEditableFile(editableSourceUrl, slot.fileName ?? `${slot.id}.png`));
+      setEditDialogOpen(true);
+    } catch (error) {
+      console.error(error);
+      setEditSourceError("현재 이미지를 편집용으로 불러오지 못했습니다. 직접 업로드한 뒤 다시 편집해 주세요.");
+    } finally {
+      setIsPreparingEditSource(false);
+    }
+  };
 
   return (
     <div className="grid gap-3">
@@ -385,6 +428,10 @@ function ImageControls({
         <button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-[13px] font-black text-white shadow-sm hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={onOpenBubbleBuilder}>
           <Sliders size={17} aria-hidden="true" />나만의 말풍선 만들기
         </button>
+        <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#d1d5db] bg-white px-4 text-[13px] font-black text-[#334155] transition enabled:hover:border-[#bfdbfe] enabled:hover:bg-[#eff6ff] enabled:hover:text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45" disabled={!canOpenImageEditor || isPreparingEditSource} onClick={() => void openImageEditor()}>
+          {isPreparingEditSource ? <RefreshCw size={16} className="animate-spin" aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
+          {isPreparingEditSource ? "편집 준비 중" : "현재 이미지 편집"}
+        </button>
         {pairedBubbleSlot ? <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 text-[13px] font-black text-[#1d4ed8] transition hover:bg-[#dbeafe]" onClick={() => onCopyBubbleToPair(slot)}>
           {pairedBubbleSlot.label}에 같은 말풍선 적용
         </button> : null}
@@ -425,10 +472,62 @@ function ImageControls({
             </div>
           ) : null}
         </details>
+        {editSourceError ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold leading-5 text-[#be123c]" role="alert">{editSourceError}</p> : null}
         </>
       ) : null}
+      <ImageEditDialog
+        open={editDialogOpen}
+        sourceFile={editableSourceFile}
+        slotLabel={slot.label}
+        initialState={selectedUploadEntry?.imageEdit?.state}
+        target={imageEditTarget}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setPreparedEditSourceFile(null);
+            setEditSourceError(null);
+          }
+        }}
+        onApply={(editedFile, editState, outputSize) => {
+          if (!editableSourceFile) return;
+          if (slot.editableInBubbleEditor && outputSize && (selectedUploadEntry?.imageEdit?.state.flipX ?? false) !== editState.flipX) {
+            onBubbleFlip(slot, outputSize.width);
+          }
+          onEditedUpload(slot, editedFile, editState, editableSourceFile, imageEditTarget);
+        }}
+      />
     </div>
   );
+}
+
+async function imageUrlToEditableFile(url: string, fallbackName: string) {
+  const response = await fetch(url, { cache: "force-cache" });
+  if (!response.ok) throw new Error(`Image source could not be loaded: ${response.status}`);
+  const blob = await response.blob();
+  const mimeType = blob.type || inferImageMimeType(fallbackName) || "image/png";
+  return new File([blob], ensureImageFileExtension(fallbackName, mimeType), { type: mimeType });
+}
+
+function getImageEditTarget(candidate: ReturnType<typeof getSelectedCandidate>): ImageEditTarget | undefined {
+  const width = candidate?.metadata?.width;
+  const height = candidate?.metadata?.height;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || !width || !height) return undefined;
+  return { width, height, label: "선택 후보 기준" };
+}
+
+function inferImageMimeType(fileName: string) {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".png") || lower.endsWith(".9.png")) return "image/png";
+  return undefined;
+}
+
+function ensureImageFileExtension(fileName: string, mimeType: string) {
+  if (/\.(png|jpe?g|webp)$/i.test(fileName)) return fileName;
+  if (mimeType === "image/jpeg") return `${fileName}.jpg`;
+  if (mimeType === "image/webp") return `${fileName}.webp`;
+  return `${fileName}.png`;
 }
 
 function getBackgroundSourcePair(slot: ThemeAssetSlot, slots: ThemeAssetSlot[]) {

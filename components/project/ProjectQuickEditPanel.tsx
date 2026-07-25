@@ -60,6 +60,7 @@ export function ProjectQuickEditPanel({
   onToggleCandidates,
   onOpenBubbleBuilder,
   onCopyBubbleToPair,
+  onBubbleFlip,
 }: {
   slot?: ThemeAssetSlot;
   slots: ThemeAssetSlot[];
@@ -103,6 +104,7 @@ export function ProjectQuickEditPanel({
   onToggleCandidates: () => void;
   onOpenBubbleBuilder: () => void;
   onCopyBubbleToPair: (slot: ThemeAssetSlot) => void;
+  onBubbleFlip: (slot: ThemeAssetSlot, width: number) => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
   const [pasteFeedback, setPasteFeedback] = useState(false);
@@ -338,8 +340,11 @@ export function ProjectQuickEditPanel({
                   setEditSourceError(null);
                 }
               }}
-              onApply={(editedFile, editState) => {
+              onApply={(editedFile, editState, outputSize) => {
                 if (!editableSourceFile) return;
+                if (slot.editableInBubbleEditor && outputSize && (selectedUploadEntry?.imageEdit?.state.flipX ?? false) !== editState.flipX) {
+                  onBubbleFlip(slot, outputSize.width);
+                }
                 onEditedUpload(slot, editedFile, editState, editableSourceFile, imageEditTarget);
               }}
             />

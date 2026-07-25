@@ -47,6 +47,7 @@ import {
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getBubblePairRole, getImageColorFallbackRole, getSlotCandidates } from "@/lib/theme/project/state";
+import { flipBubbleInsetsHorizontally, flipBubbleMarkersHorizontally, flipBubbleStretchHorizontally } from "@/lib/theme/bubbleEditTransforms";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 import { getBubbleDecorationLayers } from "@/lib/theme/bubbleBuilder";
@@ -669,6 +670,22 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
   };
 
+  const flipCurrentBubbleHorizontally = (slot: ThemeAssetSlot, width: number) => {
+    setBubbleMarkers((current) => {
+      const markers = current[slot.id];
+      return markers ? { ...current, [slot.id]: flipBubbleMarkersHorizontally(markers, width) } : current;
+    });
+    setBubbleInsets((current) => {
+      const insets = current[slot.id];
+      return insets ? { ...current, [slot.id]: flipBubbleInsetsHorizontally(insets) } : current;
+    });
+    setBubbleStretch((current) => {
+      const stretch = current[slot.id];
+      return stretch ? { ...current, [slot.id]: flipBubbleStretchHorizontally(stretch, width) } : current;
+    });
+    scheduleInteractionEvent("bubble_edit_completed", slot, { edit_type: "flip_horizontal" });
+  };
+
   const selectAdminAsset = async (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => {
     const file = await adminAssetToFile(asset);
     setUploads((current) => {
@@ -834,6 +851,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onToggleCandidates={() => setCandidateOpen((current) => !current)}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
       onCopyBubbleToPair={(slot) => void copyBubbleToPair(slot)}
+      onBubbleFlip={flipCurrentBubbleHorizontally}
     />
   );
 
@@ -860,6 +878,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
       fileInputRefs={fileInputRefs}
       onUpload={uploadSlot}
+      onEditedUpload={uploadEditedSlot}
       onRemoveUpload={removeUploadedSlotCandidate}
       onColorChange={changeColor}
       onSelectCandidate={selectCandidate}
@@ -871,6 +890,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onPullSheet={() => setMobileSheetSnap("full")}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
       onCopyBubbleToPair={(slot) => void copyBubbleToPair(slot)}
+      onBubbleFlip={flipCurrentBubbleHorizontally}
     />
   );
 
