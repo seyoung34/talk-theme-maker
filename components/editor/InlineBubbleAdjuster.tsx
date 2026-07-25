@@ -3,15 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
 import { loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
+import { defaultInsets as bubbleDefaultInsets, defaultStretch as bubbleDefaultStretch } from "@/lib/theme/preview/bubbleCanvas";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { BubbleAsset, BubbleSlot, Insets, Markers, Range, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
 type MarkerSide = keyof Markers;
 type InsetSide = keyof Insets;
 type StretchPointSide = keyof StretchPoint;
-
-const defaultInsets: Insets = { top: 24, right: 28, bottom: 24, left: 28 };
-const defaultStretch: StretchPoint = { x: 28, y: 24 };
 
 export default function InlineBubbleAdjuster({
   file,
@@ -105,8 +103,8 @@ export default function InlineBubbleAdjuster({
       ) : (
         <InsetEditor
           asset={displayAsset}
-          insets={insets ?? defaultInsets}
-          stretch={stretch ?? defaultStretch}
+          insets={insets ?? bubbleDefaultInsets[slot]}
+          stretch={stretch ?? bubbleDefaultStretch[slot]}
           onChange={onInsetsChange}
           onStretchChange={onStretchChange}
         />
@@ -438,8 +436,7 @@ function normalizeRange(range: Range, max: number): Range {
   return { start, end };
 }
 
-function normalizeInsets(insets: Insets | undefined, sourceWidth: number, sourceHeight: number): Insets {
-  const current = insets ?? defaultInsets;
+function normalizeInsets(current: Insets, sourceWidth: number, sourceHeight: number): Insets {
   const maxHorizontal = Math.max(0, Math.floor(sourceWidth - 1));
   const maxVertical = Math.max(0, Math.floor(sourceHeight - 1));
   const left = clamp(Math.round(current.left), 0, maxHorizontal);
@@ -449,8 +446,7 @@ function normalizeInsets(insets: Insets | undefined, sourceWidth: number, source
   return { top, right, bottom, left };
 }
 
-function normalizeStretchPoint(stretch: StretchPoint | undefined, sourceWidth: number, sourceHeight: number): StretchPoint {
-  const current = stretch ?? defaultStretch;
+function normalizeStretchPoint(current: StretchPoint, sourceWidth: number, sourceHeight: number): StretchPoint {
   return {
     x: clamp(Math.round(current.x), 0, Math.max(0, sourceWidth - 1)),
     y: clamp(Math.round(current.y), 0, Math.max(0, sourceHeight - 1)),
