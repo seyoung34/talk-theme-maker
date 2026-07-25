@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { SystemTemplatePricingType, SystemTemplateStatus, SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
+import { templateNameMaxLength, validateTemplateName } from "@/lib/theme/templateName";
 
 const systemTemplateStatusLabels: Record<SystemTemplateStatus, string> = { draft: "초안", published: "게시됨", archived: "보관됨" };
 const systemTemplateVisibilityLabels: Record<SystemTemplateVisibility, string> = { private: "비공개", public: "전체 공개" };
@@ -19,7 +20,10 @@ export function SystemTemplateSaveDialog({
   onVisibilityChange: (value: SystemTemplateVisibility) => void; onPricingTypeChange: (value: SystemTemplatePricingType) => void;
   onPriceAmountChange: (value: string) => void; onCreditCostChange: (value: string) => void; onSubmit: () => void;
 }) {
-  const canSubmit = title.trim().length > 0;
+  const [initialTitle] = useState(title);
+  const titleValidation = validateTemplateName(title);
+  const isUnchangedLegacyTitle = title === initialTitle;
+  const canSubmit = !titleValidation.error || isUnchangedLegacyTitle;
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   return (
@@ -27,7 +31,7 @@ export function SystemTemplateSaveDialog({
       <section className="grid w-full max-w-[560px] gap-5 rounded-[28px] border border-[#e5e7eb] bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
         <div className="flex items-start justify-between gap-4"><div className="grid gap-1"><h2 className="text-lg font-semibold text-[#0f172a]">시스템 템플릿으로 저장</h2><p className="text-sm text-[#64748b]">현재 편집 상태를 basic 기반 overrides로 저장합니다.</p></div><button type="button" className="rounded-full border border-[#e5e7eb] px-3 py-1 text-sm font-semibold text-[#475569]" onClick={onClose} disabled={isSaving}>닫기</button></div>
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="grid gap-2 md:col-span-2"><span className="text-sm font-semibold text-[#0f172a]">Title</span><input type="text" value={title} onChange={(event) => onTitleChange(event.currentTarget.value)} disabled={isSaving} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" /></label>
+          <label className="grid gap-2 md:col-span-2"><span className="text-sm font-semibold text-[#0f172a]">Title</span><input type="text" value={title} onChange={(event) => onTitleChange(event.currentTarget.value)} disabled={isSaving} maxLength={templateNameMaxLength * 2} aria-invalid={Boolean(titleValidation.error) && !isUnchangedLegacyTitle} className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" /><span className={`flex justify-between text-xs ${titleValidation.error && !isUnchangedLegacyTitle ? "font-semibold text-[#dc2626]" : "text-[#64748b]"}`}><span>{titleValidation.error && !isUnchangedLegacyTitle ? titleValidation.error : ""}</span><span>{Array.from(title.trim()).length}/{templateNameMaxLength}</span></span></label>
           <label className="grid gap-2 md:col-span-2"><span className="text-sm font-semibold text-[#0f172a]">Description</span><textarea value={description} onChange={(event) => onDescriptionChange(event.currentTarget.value)} disabled={isSaving} className="min-h-20 rounded-xl border border-[#d1d5db] bg-white px-3 py-2 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" /></label>
           <label className="grid gap-2 md:col-span-2"><span className="text-sm font-semibold text-[#0f172a]">Tags</span><input type="text" value={tags} onChange={(event) => onTagsChange(event.currentTarget.value)} disabled={isSaving} placeholder="쉼표로 구분" className="h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-medium text-[#111827] outline-none transition focus:border-[#2563eb]" /></label>
           <div className="grid gap-3 rounded-2xl border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3 md:col-span-2">

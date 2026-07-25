@@ -10,6 +10,7 @@ import { saveUserTemplate } from "@/lib/theme/userTemplates";
 import type { ThemeTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
+import { validateTemplateName } from "@/lib/theme/templateName";
 
 type UseTemplatePersistenceOptions = {
   activeSystemTemplate: ActiveSystemTemplate | null;
@@ -51,7 +52,11 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
 
   const saveCurrentTemplate = useCallback(async () => {
     const name = options.saveMode === "overwrite" ? options.activeUserTemplate?.name ?? options.saveName.trim() : options.saveName.trim();
-    if (!name) return;
+    const nameValidation = validateTemplateName(name);
+    if (nameValidation.error && name !== options.activeUserTemplate?.name) {
+      options.setNotice({ tone: "error", message: nameValidation.error });
+      return;
+    }
 
     try {
       setIsSavingTemplate(true);
@@ -60,7 +65,7 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
       const savedTemplate = await saveUserTemplate({
         id: options.saveMode === "overwrite" ? options.activeUserTemplate?.id : undefined,
         createdAt: options.saveMode === "overwrite" ? options.activeUserTemplate?.createdAt : undefined,
-        name,
+        name: nameValidation.value,
         templateId: options.templateId,
         platform: options.platform,
         uploads,
@@ -91,7 +96,11 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
     }
 
     const title = options.systemTitle.trim();
-    if (!title) return;
+    const titleValidation = validateTemplateName(title);
+    if (titleValidation.error && title !== options.activeSystemTemplate?.title) {
+      options.setNotice({ tone: "error", message: titleValidation.error });
+      return;
+    }
 
     try {
       setIsSavingSystemTemplate(true);
@@ -101,7 +110,8 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
         id: options.activeSystemTemplate?.id,
         bundleId: options.activeSystemTemplate?.bundleId ?? options.systemTemplateBundleId ?? undefined,
         createdAt: options.activeSystemTemplate?.createdAt,
-        title,
+        title: titleValidation.value,
+        legacyTitle: options.activeSystemTemplate?.title,
         description: options.systemDescription.trim() || undefined,
         baseTemplateId: "basic",
         platform: options.platform,

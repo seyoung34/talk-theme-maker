@@ -1,6 +1,7 @@
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { normalizeSystemTemplateVisibility, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
+import { assertValidTemplateName } from "@/lib/theme/templateName";
 
 const storeName = themeDatabaseStores.systemTemplates;
 
@@ -38,8 +39,10 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
 
   async save(input: SystemTemplateSaveInput) {
     const now = Date.now();
+    const { legacyTitle, ...recordInput } = input;
     const record: SystemTemplateRecord = {
-      ...input,
+      ...recordInput,
+      title: assertValidTemplateName(input.title, legacyTitle),
       id: input.id ?? `system-template:${now}:${Math.random().toString(36).slice(2, 8)}`,
       bundleId: input.bundleId ?? input.id ?? `system-template-bundle:${now}:${Math.random().toString(36).slice(2, 8)}`,
       createdAt: input.createdAt ?? now,

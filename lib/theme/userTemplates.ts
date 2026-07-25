@@ -3,6 +3,7 @@ import { normalizeThemeTemplateId, type ThemeTemplateId } from "@/lib/theme/temp
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
 import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
+import { assertValidTemplateName } from "@/lib/theme/templateName";
 
 const storeName = themeDatabaseStores.userTemplates;
 
@@ -33,9 +34,15 @@ export type UserTemplateSummary = Pick<UserTemplateRecord, "id" | "name" | "temp
 };
 
 export async function saveUserTemplate(record: Omit<UserTemplateRecord, "id" | "createdAt" | "updatedAt"> & Partial<Pick<UserTemplateRecord, "id" | "createdAt">>) {
+  const existingId = record.id;
+  const existing = existingId
+    ? await withThemeDatabaseStore<UserTemplateRecord | undefined>(storeName, "readonly", (store) => store.get(existingId))
+    : undefined;
+  const name = assertValidTemplateName(record.name, existing?.name);
   const now = Date.now();
   const next: UserTemplateRecord = {
     ...record,
+    name,
     id: record.id ?? `user-template:${now}`,
     createdAt: record.createdAt ?? now,
     updatedAt: now,

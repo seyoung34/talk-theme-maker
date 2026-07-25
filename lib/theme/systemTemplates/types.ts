@@ -49,7 +49,10 @@ export type SystemTemplateRecord = {
   updatedAt: number;
 };
 
-export type SystemTemplateSaveInput = Omit<SystemTemplateRecord, "id" | "createdAt" | "updatedAt"> & Partial<Pick<SystemTemplateRecord, "id" | "createdAt">>;
+export type SystemTemplateSaveInput = Omit<SystemTemplateRecord, "id" | "createdAt" | "updatedAt"> & Partial<Pick<SystemTemplateRecord, "id" | "createdAt">> & {
+  // 25자 도입 전에 저장된 이름을 다른 값으로 바꾸지 않고 덮어쓸 때만 허용한다.
+  legacyTitle?: string;
+};
 
 export type RemoteUploadEntry = {
   id: string;

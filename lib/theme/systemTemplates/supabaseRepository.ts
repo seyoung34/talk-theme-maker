@@ -5,6 +5,7 @@ import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/s
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
 import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
+import { assertValidTemplateName } from "@/lib/theme/templateName";
 import { getThemeSlots, getThemeTemplate, type ThemeAssetSlot, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -113,12 +114,13 @@ export const systemTemplateRepository: SystemTemplateRepository = {
   async save(input) {
     const supabase = createClient();
     const now = Date.now();
+    const title = assertValidTemplateName(input.title, input.legacyTitle);
     const bundleId = input.bundleId && isUuid(input.bundleId) ? input.bundleId : undefined;
     const variantId = input.id && isUuid(input.id) ? input.id : undefined;
 
     const { data: userData } = await supabase.auth.getUser();
     const bundlePayload = {
-      title: input.title,
+      title,
       description: input.description ?? null,
       status: input.status,
       visibility: input.visibility,
