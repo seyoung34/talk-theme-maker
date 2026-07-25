@@ -51,6 +51,14 @@ export function bubbleSlotFromRole(role: ThemeResourceRole): BubbleSlot | null {
   return null;
 }
 
+export function getBubblePairRole(role: ThemeResourceRole): ThemeResourceRole | undefined {
+  if (role === "bubble_me_1") return "bubble_me_2";
+  if (role === "bubble_me_2") return "bubble_me_1";
+  if (role === "bubble_you_1") return "bubble_you_2";
+  if (role === "bubble_you_2") return "bubble_you_1";
+  return undefined;
+}
+
 export function getImageColorFallbackRole(role: ThemeResourceRole): ThemeResourceRole | undefined {
   if (role === "main_background") return "main_background_color";
   if (role === "chat_background") return "chat_background_color";

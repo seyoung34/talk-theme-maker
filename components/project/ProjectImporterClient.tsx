@@ -36,6 +36,7 @@ import {
   getInitialSlotCandidateSelections,
   getSectionGroups,
   getSelectedCandidate,
+  getSelectedUpload,
   getSlotFile,
   groupLabels,
   isSlotVisibleInGroup,
@@ -45,7 +46,7 @@ import {
 } from "@/components/project/projectModel";
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
-import { getImageColorFallbackRole } from "@/lib/theme/project/state";
+import { getBubblePairRole, getImageColorFallbackRole, getSlotCandidates } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 import { getBubbleDecorationLayers } from "@/lib/theme/bubbleBuilder";
@@ -276,6 +277,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? visibleSlots[0] ?? slots[0];
   const selectedFile = getSlotFile(selectedSlot, analysis.files);
   const selectedBubbleSlot = selectedSlot ? bubbleSlotFromRole(selectedSlot.role) : null;
+  const selectedBubblePairSlot = selectedSlot ? slots.find((slot) => slot.role === getBubblePairRole(selectedSlot.role)) : undefined;
   const selectedBubbleVariant = selectedSlot ? bubbleVariantFromRole(selectedSlot.role) : null;
   const selectedBubbleDesign = selectedSlot && selectedBubbleSlot ? getBubbleDesign(bubbleDesigns, selectedSlot.role, selectedBubbleSlot) : undefined;
   const canAdjustInline = Boolean(selectedSlot?.editableInBubbleEditor && selectedFile && selectedBubbleSlot);
@@ -617,6 +619,56 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     trackAnalyticsEvent("candidate_selected", { slot_role: slot.role, section: slot.section, asset_source: assetSource });
   };
 
+  const copyBubbleToPair = async (sourceSlot: ThemeAssetSlot) => {
+    const targetSlot = slots.find((slot) => slot.role === getBubblePairRole(sourceSlot.role));
+    if (!targetSlot) return;
+    const targetHasOverrides = Boolean(
+      (uploads[targetSlot.id]?.length ?? 0) ||
+      bubbleMarkers[targetSlot.id] ||
+      bubbleInsets[targetSlot.id] ||
+      bubbleStretch[targetSlot.id],
+    );
+    if (targetHasOverrides && !window.confirm(`${targetSlot.label}에 설정한 후보와 말풍선 편집값을 덮어쓸까요?`)) return;
+
+    const sourceUpload = getSelectedUpload(sourceSlot, uploads, candidateSelections);
+    const sourceCandidate = getSelectedCandidate(sourceSlot, candidateSelections, templateId, activeTemplate);
+    const copiedAt = Date.now();
+
+    try {
+      if (sourceUpload) {
+        const copiedId = `${targetSlot.id}:bubble-copy:${copiedAt}`;
+        setUploads((current) => ({
+          ...current,
+          [targetSlot.id]: [...(current[targetSlot.id] ?? []), { ...sourceUpload, id: copiedId, source: "user" }],
+        }));
+        setCandidateSelections((current) => ({ ...current, [targetSlot.id]: copiedId }));
+      } else if (sourceCandidate?.assetUrl) {
+        const matchingTargetCandidate = getSlotCandidates(targetSlot, templateId, activeTemplate).find((candidate) => candidate.assetUrl === sourceCandidate.assetUrl);
+        if (matchingTargetCandidate) {
+          setCandidateSelections((current) => ({ ...current, [targetSlot.id]: matchingTargetCandidate.id }));
+        } else {
+          const response = await fetch(sourceCandidate.assetUrl);
+          if (!response.ok) throw new Error("선택한 말풍선 이미지를 복사하지 못했습니다.");
+          const blob = await response.blob();
+          const copiedId = `${targetSlot.id}:bubble-copy:${copiedAt}`;
+          const file = new File([blob], targetSlot.fileName ?? `${targetSlot.id}.png`, { type: blob.type || "image/png" });
+          setUploads((current) => ({ ...current, [targetSlot.id]: [...(current[targetSlot.id] ?? []), { id: copiedId, file, source: "user" }] }));
+          setCandidateSelections((current) => ({ ...current, [targetSlot.id]: copiedId }));
+        }
+      } else {
+        throw new Error("복사할 말풍선 후보를 찾지 못했습니다.");
+      }
+
+      setBubbleMarkers((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
+      setBubbleInsets((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
+      setBubbleStretch((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
+      setNotice({ tone: "success", message: `${targetSlot.label}에 같은 말풍선과 편집값을 적용했습니다.` });
+      scheduleInteractionEvent("bubble_edit_completed", sourceSlot, { edit_type: "copy_to_pair" });
+    } catch (error) {
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "말풍선을 복사하지 못했습니다." });
+    }
+  };
+
   const selectAdminAsset = async (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => {
     const file = await adminAssetToFile(asset);
     setUploads((current) => {
@@ -753,6 +805,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       template={activeTemplate}
       platform={platform}
       selectedBubbleSlot={selectedBubbleSlot}
+      pairedBubbleSlot={selectedBubblePairSlot}
       markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
       insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
       stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
@@ -780,6 +833,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       candidateOpen={candidateOpen}
       onToggleCandidates={() => setCandidateOpen((current) => !current)}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
+      onCopyBubbleToPair={(slot) => void copyBubbleToPair(slot)}
     />
   );
 
@@ -796,6 +850,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       template={activeTemplate}
       platform={platform}
       selectedBubbleSlot={selectedBubbleSlot}
+      pairedBubbleSlot={selectedBubblePairSlot}
       markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
       insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
       stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
@@ -815,6 +870,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "stretch" }); }}
       onPullSheet={() => setMobileSheetSnap("full")}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
+      onCopyBubbleToPair={(slot) => void copyBubbleToPair(slot)}
     />
   );
 
@@ -1185,6 +1241,17 @@ function getBackgroundSourcePair(slot: ThemeAssetSlot, slots: ThemeAssetSlot[]) 
   const colorRole = getImageColorFallbackRole(imageSlot.role);
   const colorSlot = slots.find((candidate) => candidate.kind === "color" && candidate.role === colorRole);
   return colorSlot ? { imageSlot, colorSlot } : null;
+}
+
+function copyBubbleEditValue<T extends object>(current: Partial<Record<string, T>>, sourceSlotId: string, targetSlotId: string) {
+  const next = { ...current };
+  const value = current[sourceSlotId];
+  if (value === undefined) {
+    delete next[targetSlotId];
+  } else {
+    next[targetSlotId] = typeof structuredClone === "function" ? structuredClone(value) : { ...value };
+  }
+  return next;
 }
 
 function bubbleVariantFromRole(role: ThemeResourceRole): BubbleBuilderVariant | null {

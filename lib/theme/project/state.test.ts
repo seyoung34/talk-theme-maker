@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getImageAssetFallbackRole, getInheritedSourceSlot, getInitialSlotCandidateSelections } from "@/lib/theme/project/state";
+import { getBubblePairRole, getImageAssetFallbackRole, getInheritedSourceSlot, getInitialSlotCandidateSelections } from "@/lib/theme/project/state";
 import { getThemeSlots, themeTemplates } from "@/lib/theme/templates";
 
 // getImageAssetFallbackRole은 별도 지정이 없는 이미지 슬롯이 어떤 슬롯을 상속하는지 정의하는 순수 함수다.
@@ -28,6 +28,16 @@ describe("getImageAssetFallbackRole", () => {
   it("상속 규칙이 없는 슬롯은 undefined를 반환한다", () => {
     expect(getImageAssetFallbackRole("main_background")).toBeUndefined();
     expect(getImageAssetFallbackRole("chat_background")).toBeUndefined();
+  });
+});
+
+describe("getBubblePairRole", () => {
+  it("pairs first and grouped bubbles only within the same side", () => {
+    expect(getBubblePairRole("bubble_me_1")).toBe("bubble_me_2");
+    expect(getBubblePairRole("bubble_me_2")).toBe("bubble_me_1");
+    expect(getBubblePairRole("bubble_you_1")).toBe("bubble_you_2");
+    expect(getBubblePairRole("bubble_you_2")).toBe("bubble_you_1");
+    expect(getBubblePairRole("bubble_me_1_selected")).toBeUndefined();
   });
 });
 

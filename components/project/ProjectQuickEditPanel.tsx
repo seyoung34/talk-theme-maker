@@ -31,6 +31,7 @@ export function ProjectQuickEditPanel({
   template,
   platform,
   selectedBubbleSlot,
+  pairedBubbleSlot,
   markers,
   insets,
   stretch,
@@ -58,6 +59,7 @@ export function ProjectQuickEditPanel({
   candidateOpen,
   onToggleCandidates,
   onOpenBubbleBuilder,
+  onCopyBubbleToPair,
 }: {
   slot?: ThemeAssetSlot;
   slots: ThemeAssetSlot[];
@@ -72,6 +74,7 @@ export function ProjectQuickEditPanel({
   template: ThemeTemplate;
   platform: ThemePlatform;
   selectedBubbleSlot: BubbleSlot | null;
+  pairedBubbleSlot?: ThemeAssetSlot;
   markers?: Markers;
   insets?: Insets;
   stretch?: StretchPoint;
@@ -99,6 +102,7 @@ export function ProjectQuickEditPanel({
   candidateOpen: boolean;
   onToggleCandidates: () => void;
   onOpenBubbleBuilder: () => void;
+  onCopyBubbleToPair: (slot: ThemeAssetSlot) => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
   const [pasteFeedback, setPasteFeedback] = useState(false);
@@ -286,6 +290,23 @@ export function ProjectQuickEditPanel({
                   {isPreparingEditSource && !slot.editableInBubbleEditor ? <RefreshCw className="animate-spin" size={16} aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
                   {slot.editableInBubbleEditor ? "나만의 말풍선 만들기" : isPreparingEditSource ? "편집 준비 중" : "이미지 편집"}
                 </button>
+                {slot.editableInBubbleEditor ? (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#d1d5db] bg-white px-4 py-3 text-sm font-semibold text-[#374151] transition enabled:hover:border-[#bfdbfe] enabled:hover:bg-[#eff6ff] enabled:hover:text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45"
+                    disabled={!canOpenImageEditor || isPreparingEditSource}
+                    onClick={() => void openImageEditor()}
+                    title="현재 슬롯의 이미지에 좌우 반전 등 편집을 적용합니다."
+                  >
+                    {isPreparingEditSource ? <RefreshCw className="animate-spin" size={16} aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
+                    {isPreparingEditSource ? "편집 준비 중" : "현재 이미지 편집"}
+                  </button>
+                ) : null}
+                {slot.editableInBubbleEditor && pairedBubbleSlot ? (
+                  <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-sm font-semibold text-[#1d4ed8] transition hover:bg-[#dbeafe]" onClick={() => onCopyBubbleToPair(slot)}>
+                    <Link2 size={16} aria-hidden="true" />{pairedBubbleSlot.label}에 같은 말풍선 적용
+                  </button>
+                ) : null}
               </div>
               {editSourceError ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold leading-5 text-[#be123c]" role="alert">{editSourceError}</p> : null}
             </div>
