@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Plus, RefreshCw, Save, SendHorizontal, Settings, Trash2, UserRound, X } from "lucide-react";
+import { ArrowRight, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
@@ -503,7 +503,9 @@ function SystemTemplateManageModal({
         </header>
 
         <div className="grid min-h-0 gap-4 overflow-auto p-4 lg:grid-cols-[360px_minmax(0,1fr)]">
-          <TemplatePhonePreview bundle={bundle} />
+          <div className="grid content-start gap-3">
+            <TemplateVisualPreview visual={bundle.visual} size="card" />
+          </div>
           <div className="grid content-start gap-4">
             <section className="grid gap-4 rounded-[22px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -648,49 +650,6 @@ function SystemTemplateManageModal({
           onConfirm={() => void savePublication()}
         />
       ) : null}
-    </div>
-  );
-}
-
-function TemplatePhonePreview({ bundle }: { bundle: SystemTemplateBundle }) {
-  return (
-    <div
-      className="mx-auto grid h-[min(62dvh,540px)] min-h-[340px] w-full max-w-[340px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[32px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[0_22px_52px_rgba(42,103,103,0.14)]"
-      style={{ backgroundColor: bundle.visual.chatBackgroundColor, backgroundImage: bundle.visual.chatBackgroundImage ? `url(${bundle.visual.chatBackgroundImage})` : undefined }}
-    >
-      <div className="flex h-14 items-center justify-between bg-white/90 px-5 text-sm font-black text-[var(--color-on-surface)]">
-        <span>{bundle.title}</span>
-        <Settings className="h-4 w-4" />
-      </div>
-      <div className="grid min-h-0 content-start gap-4 overflow-hidden p-4">
-        <PreviewMessage visual={bundle.visual} mine={false} text="관리 화면에서 템플릿을 확인합니다." />
-        <PreviewMessage visual={bundle.visual} mine text="Android와 iOS를 여기서 관리해요." />
-        <PreviewMessage visual={bundle.visual} mine={false} text="저장된 색상과 이미지가 반영됩니다." />
-      </div>
-      <div className="grid grid-cols-[36px_minmax(0,1fr)_36px] items-center gap-2 bg-white/90 px-3 py-2">
-        <Plus className="h-5 w-5 justify-self-center text-[var(--color-on-surface-variant)]" />
-        <span className="rounded-full bg-[var(--color-surface-low)] px-4 py-2 text-sm font-semibold text-[var(--color-on-surface-variant)]">관리자 입력</span>
-        <SendHorizontal className="h-5 w-5 justify-self-center text-[var(--color-on-surface-variant)]" />
-      </div>
-    </div>
-  );
-}
-
-function MiniAvatar({ src }: { src?: string }) {
-  return <span className="grid h-6 w-6 place-items-center overflow-hidden rounded-full bg-[var(--color-primary-container)]/55">{src ? <img src={src} alt="" className="h-full w-full object-cover" /> : <UserRound className="h-3.5 w-3.5 text-[var(--color-on-primary-container)]" />}</span>;
-}
-
-function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual; mine: boolean; text: string }) {
-  const bubbleImage = mine ? visual.myBubbleImage : visual.friendBubbleImage;
-  return (
-    <div className={`grid gap-1.5 ${mine ? "justify-items-end" : "grid-cols-[28px_minmax(0,1fr)] items-end"}`}>
-      {!mine ? <MiniAvatar src={visual.profileImage} /> : null}
-      <span
-        className={`max-w-[84%] rounded-[18px] bg-[length:100%_100%] bg-no-repeat px-4 py-3 text-sm font-semibold leading-5 text-[var(--color-on-surface)] ${mine ? "justify-self-end" : ""}`}
-        style={{ backgroundColor: bubbleImage ? "transparent" : mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor, backgroundImage: bubbleImage ? `url(${bubbleImage})` : undefined }}
-      >
-        {text}
-      </span>
     </div>
   );
 }
