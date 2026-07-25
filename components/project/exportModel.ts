@@ -5,6 +5,12 @@ import type { Insets, Markers, StretchPoint } from "@/lib/theme/types";
 
 export type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
 
+export type ExportDownloadResult = {
+  fileName: string;
+  mode: ExportMode;
+  platform: "android" | "ios";
+};
+
 export type AccountState = {
   user: { id: string; email?: string } | null;
   credits: number;

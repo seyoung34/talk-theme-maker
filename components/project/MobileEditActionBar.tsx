@@ -66,7 +66,7 @@ export function MobileEditActionBar({
               tabIndex={hiddenTabIndex}
             >
               <Download size={15} strokeWidth={2.2} aria-hidden="true" />
-              <span>{isExporting ? "내보내는 중" : isPreparingExport ? "준비 중" : "내보내기"}</span>
+              <span>{isExporting ? "다운로드 준비 중" : isPreparingExport ? "준비 중" : "다운로드"}</span>
             </button>
           </div>
         </div>

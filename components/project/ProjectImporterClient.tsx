@@ -326,6 +326,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const {
     accountState,
     exportDialogOpen,
+    exportDownloadResult,
     exportElapsedSeconds,
     exportMode,
     exportName,
@@ -839,6 +840,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         <ExportDialog
           isExporting={isExporting}
           isPreparingExport={isPreparingExport}
+          downloadResult={exportDownloadResult}
           preparationError={exportPreparationError}
           platform={platform}
           exportMode={exportMode}
@@ -963,7 +965,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   onClick={() => void openExportDialog()}
                   disabled={isPreparingExport || isExporting}
                 >
-                  {isExporting ? "내보내는 중.." : isPreparingExport ? "내보내기 준비 중…" : "내보내기"}
+                  {isExporting ? "다운로드 준비 중.." : isPreparingExport ? "다운로드 준비 중…" : "다운로드"}
                 </button>
               </div>
             </header>

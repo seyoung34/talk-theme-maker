@@ -6,7 +6,7 @@ import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAndroidExportStatus, triggerDownload } from "@/components/project/exportClient";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
-import type { AccountState, ExportErrorResponse, ExportMode, ExportVersionResponse } from "@/components/project/exportModel";
+import type { AccountState, ExportDownloadResult, ExportErrorResponse, ExportMode, ExportVersionResponse } from "@/components/project/exportModel";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import type { RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
@@ -55,6 +55,7 @@ export function useProjectExport({
   const [exportPreparationError, setExportPreparationError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportDownloadResult, setExportDownloadResult] = useState<ExportDownloadResult | null>(null);
   const [exportMode, setExportMode] = useState<ExportMode>("apk");
   const [exportName, setExportName] = useState("");
   const [exportVersionName, setExportVersionName] = useState("");
@@ -82,6 +83,7 @@ export function useProjectExport({
     setIsPreparingExport(true);
     setExportPreparationError(null);
     setExportDialogOpen(true);
+    setExportDownloadResult(null);
     setExportName(displayTemplateName);
     setExportMode(platform === "android" ? "apk" : "ktheme");
     setExportProgressStep(0);
@@ -114,6 +116,7 @@ export function useProjectExport({
     setIsPreparingExport(true);
     setExportPreparationError(null);
     setExportDialogOpen(true);
+    setExportDownloadResult(null);
     setExportName(options.name);
     setExportMode(options.exportMode);
     setExportVersionName(options.versionName);
@@ -214,7 +217,7 @@ export function useProjectExport({
         triggerDownload(asyncBlob, outcome.fileName);
         await refreshAccountState();
         await onExportCompleted?.();
-        setExportDialogOpen(false);
+        setExportDownloadResult({ platform, mode: exportMode, fileName: outcome.fileName });
         trackAnalyticsEvent("export_completed", { platform, export_mode: exportMode });
         setNotice({ tone: "success", message: `${queued.exportNumber ? `내보내기 #${queued.exportNumber} · ` : ""}${outcome.fileName} 파일을 생성했습니다.` });
         return;
@@ -236,7 +239,7 @@ export function useProjectExport({
       }));
       const exportNumber = response.headers.get("X-Export-Number");
       await onExportCompleted?.();
-      setExportDialogOpen(false);
+      setExportDownloadResult({ platform, mode: exportMode, fileName });
       trackAnalyticsEvent("export_completed", { platform, export_mode: exportMode });
       setNotice({ tone: "success", message: `${exportNumber ? `내보내기 #${exportNumber} · ` : ""}${fileName} 파일을 생성했습니다.` });
     } catch (error) {
@@ -274,6 +277,7 @@ export function useProjectExport({
   return {
     accountState,
     exportDialogOpen,
+    exportDownloadResult,
     exportElapsedSeconds,
     exportMode,
     exportName,
