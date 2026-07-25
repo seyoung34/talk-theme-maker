@@ -481,6 +481,7 @@ function ImageControls({
         slotLabel={slot.label}
         initialState={selectedUploadEntry?.imageEdit?.state}
         target={imageEditTarget}
+        preserveNinePatchBorder={slot.editableInBubbleEditor && platform === "android"}
         onOpenChange={(open) => {
           setEditDialogOpen(open);
           if (!open) {

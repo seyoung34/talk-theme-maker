@@ -24,6 +24,10 @@ export type ImageEditTarget = {
   label?: string;
 };
 
+export type ImageEditRenderOptions = {
+  preserveNinePatchBorder?: boolean;
+};
+
 export const defaultImageEditState: ImageEditState = {
   version: 1,
   flipX: false,
@@ -38,7 +42,7 @@ export function clampImageScale(value: number) {
   return Math.min(3, Math.max(0.25, value));
 }
 
-export async function renderEditedImageFile(source: File, state: ImageEditState, outputName?: string, target?: ImageEditTarget) {
+export async function renderEditedImageFile(source: File, state: ImageEditState, outputName?: string, target?: ImageEditTarget, options?: ImageEditRenderOptions) {
   const bitmap = await createImageBitmap(source);
   const canvas = document.createElement("canvas");
   canvas.width = getSafeTargetDimension(target?.width) ?? bitmap.width;
@@ -51,22 +55,13 @@ export async function renderEditedImageFile(source: File, state: ImageEditState,
   }
 
   context.clearRect(0, 0, canvas.width, canvas.height);
-  const fittedScale = getFitBaseScale(state.fitMode, bitmap.width, bitmap.height, canvas.width, canvas.height);
-  const scale = fittedScale * clampImageScale(state.scale);
-  const drawWidth = bitmap.width * scale;
-  const drawHeight = bitmap.height * scale;
-  const drawX = (canvas.width - drawWidth) / 2 + state.offsetX;
-  const drawY = (canvas.height - drawHeight) / 2 + state.offsetY;
-
-  context.save();
-  if (state.flipX) {
-    context.translate(canvas.width, 0);
-    context.scale(-1, 1);
-    context.drawImage(bitmap, canvas.width - drawX - drawWidth, drawY, drawWidth, drawHeight);
+  const preserveNinePatchBorder = Boolean(options?.preserveNinePatchBorder && bitmap.width === canvas.width && bitmap.height === canvas.height && bitmap.width >= 3 && bitmap.height >= 3);
+  if (preserveNinePatchBorder) {
+    drawEditedBitmap(context, bitmap, state, { sourceX: 1, sourceY: 1, sourceWidth: bitmap.width - 2, sourceHeight: bitmap.height - 2, outputX: 1, outputY: 1, outputWidth: canvas.width - 2, outputHeight: canvas.height - 2 });
+    drawNinePatchBorder(context, bitmap, state.flipX);
   } else {
-    context.drawImage(bitmap, drawX, drawY, drawWidth, drawHeight);
+    drawEditedBitmap(context, bitmap, state, { sourceX: 0, sourceY: 0, sourceWidth: bitmap.width, sourceHeight: bitmap.height, outputX: 0, outputY: 0, outputWidth: canvas.width, outputHeight: canvas.height });
   }
-  context.restore();
   bitmap.close();
 
   const blob = await new Promise<Blob>((resolve, reject) => {
@@ -80,6 +75,46 @@ export async function renderEditedImageFile(source: File, state: ImageEditState,
   });
 
   return new File([blob], outputName ?? buildEditedImageName(source.name), { type: blob.type || source.type || "image/png" });
+}
+
+function drawEditedBitmap(
+  context: CanvasRenderingContext2D,
+  bitmap: ImageBitmap,
+  state: ImageEditState,
+  frame: { sourceX: number; sourceY: number; sourceWidth: number; sourceHeight: number; outputX: number; outputY: number; outputWidth: number; outputHeight: number },
+) {
+  const fittedScale = getFitBaseScale(state.fitMode, frame.sourceWidth, frame.sourceHeight, frame.outputWidth, frame.outputHeight);
+  const scale = fittedScale * clampImageScale(state.scale);
+  const drawWidth = frame.sourceWidth * scale;
+  const drawHeight = frame.sourceHeight * scale;
+  const drawX = frame.outputX + (frame.outputWidth - drawWidth) / 2 + state.offsetX;
+  const drawY = frame.outputY + (frame.outputHeight - drawHeight) / 2 + state.offsetY;
+
+  context.save();
+  context.beginPath();
+  context.rect(frame.outputX, frame.outputY, frame.outputWidth, frame.outputHeight);
+  context.clip();
+  if (state.flipX) {
+    context.translate(frame.outputX * 2 + frame.outputWidth, 0);
+    context.scale(-1, 1);
+    context.drawImage(bitmap, frame.sourceX, frame.sourceY, frame.sourceWidth, frame.sourceHeight, frame.outputX * 2 + frame.outputWidth - drawX - drawWidth, drawY, drawWidth, drawHeight);
+  } else {
+    context.drawImage(bitmap, frame.sourceX, frame.sourceY, frame.sourceWidth, frame.sourceHeight, drawX, drawY, drawWidth, drawHeight);
+  }
+  context.restore();
+}
+
+function drawNinePatchBorder(context: CanvasRenderingContext2D, bitmap: ImageBitmap, flipX: boolean) {
+  context.save();
+  if (flipX) {
+    context.translate(bitmap.width, 0);
+    context.scale(-1, 1);
+  }
+  context.drawImage(bitmap, 0, 0, bitmap.width, 1, 0, 0, bitmap.width, 1);
+  context.drawImage(bitmap, 0, bitmap.height - 1, bitmap.width, 1, 0, bitmap.height - 1, bitmap.width, 1);
+  context.drawImage(bitmap, 0, 1, 1, bitmap.height - 2, 0, 1, 1, bitmap.height - 2);
+  context.drawImage(bitmap, bitmap.width - 1, 1, 1, bitmap.height - 2, bitmap.width - 1, 1, 1, bitmap.height - 2);
+  context.restore();
 }
 
 function getFitBaseScale(mode: ImageFitMode, sourceWidth: number, sourceHeight: number, targetWidth: number, targetHeight: number) {

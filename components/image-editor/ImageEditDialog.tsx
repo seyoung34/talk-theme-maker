@@ -11,6 +11,7 @@ export function ImageEditDialog({
   slotLabel,
   initialState,
   target,
+  preserveNinePatchBorder = false,
   onOpenChange,
   onApply,
 }: {
@@ -19,6 +20,7 @@ export function ImageEditDialog({
   slotLabel: string;
   initialState?: ImageEditState;
   target?: ImageEditTarget;
+  preserveNinePatchBorder?: boolean;
   onOpenChange: (open: boolean) => void;
   onApply: (file: File, state: ImageEditState, outputSize?: { width: number; height: number }) => void;
 }) {
@@ -84,7 +86,7 @@ export function ImageEditDialog({
     try {
       setIsApplying(true);
       setError(null);
-      const editedFile = await renderEditedImageFile(sourceFile, state, undefined, target);
+      const editedFile = await renderEditedImageFile(sourceFile, state, undefined, target, { preserveNinePatchBorder });
       onApply(editedFile, state, outputSize ? { width: outputSize.width, height: outputSize.height } : undefined);
       onOpenChange(false);
     } catch (applyError) {
