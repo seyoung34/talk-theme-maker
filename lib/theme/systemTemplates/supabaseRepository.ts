@@ -197,6 +197,18 @@ export const systemTemplateRepository: SystemTemplateRepository = {
     if (!data) throw new Error("System template bundle was not updated.");
   },
 
+  async updateTags(bundleId, tags) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("system_template_bundles")
+      .update({ tags })
+      .eq("id", bundleId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("System template bundle tags were not updated.");
+  },
+
   async regeneratePreviewMetadata(id) {
     const supabase = createClient();
     const { data, error } = await supabase

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Plus, RefreshCw, Save, SendHorizontal, Settings, Trash2, UserRound } from "lucide-react";
+import { ArrowRight, Plus, RefreshCw, Save, SendHorizontal, Settings, Trash2, UserRound, X } from "lucide-react";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
@@ -18,6 +18,7 @@ type SystemTemplateBundle = {
   previewTemplate: SystemTemplateSummary;
   status: SystemTemplateStatus;
   visibility: SystemTemplateVisibility;
+  tags: string[];
   visual: TemplatePreviewVisual;
   updatedAt: number;
 };
@@ -158,6 +159,24 @@ export default function AdminSystemTemplateList() {
     }
   };
 
+  const saveTags = async (bundle: SystemTemplateBundle, tags: string[]) => {
+    try {
+      setError(null);
+      await systemTemplateRepository.updateTags(bundle.id, tags);
+      const updatedAt = Date.now();
+      setTemplates((current) => current.map((template) =>
+        (template.bundleId ?? template.id) === bundle.id
+          ? { ...template, tags, updatedAt }
+          : template,
+      ));
+      setNotice("태그를 저장했습니다.");
+    } catch (saveError) {
+      console.error(saveError);
+      setError("태그를 저장하지 못했습니다.");
+      throw saveError;
+    }
+  };
+
   const deleteSelected = async () => {
     if (!deleteTarget) return;
 
@@ -244,6 +263,7 @@ export default function AdminSystemTemplateList() {
           onDelete={(platform) => setDeleteTarget({ bundle: selectedBundle, platform })}
           onDeleteBundle={() => setDeleteTarget({ bundle: selectedBundle })}
           onSavePublication={(status, visibility) => updatePublication(selectedBundle, status, visibility)}
+          onSaveTags={(tags) => saveTags(selectedBundle, tags)}
         />
       ) : null}
 
@@ -407,6 +427,7 @@ function SystemTemplateManageModal({
   onDelete,
   onDeleteBundle,
   onSavePublication,
+  onSaveTags,
 }: {
   bundle: SystemTemplateBundle;
   onClose: () => void;
@@ -415,6 +436,7 @@ function SystemTemplateManageModal({
   onDelete: (platform: ThemePlatform) => void;
   onDeleteBundle: () => void;
   onSavePublication: (status: SystemTemplateStatus, visibility: SystemTemplateVisibility) => Promise<void>;
+  onSaveTags: (tags: string[]) => Promise<void>;
 }) {
   const [status, setStatus] = useState(bundle.status);
   const [visibility, setVisibility] = useState(bundle.visibility);
@@ -423,6 +445,34 @@ function SystemTemplateManageModal({
   const [isSavingPublication, setIsSavingPublication] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const isPublicationDirty = status !== savedPublication.status || visibility !== savedPublication.visibility;
+
+  const [tags, setTags] = useState<string[]>(bundle.tags);
+  const [savedTags, setSavedTags] = useState<string[]>(bundle.tags);
+  const [tagInput, setTagInput] = useState("");
+  const [isSavingTags, setIsSavingTags] = useState(false);
+  const [tagsError, setTagsError] = useState<string | null>(null);
+  const isTagsDirty = tags.length !== savedTags.length || tags.some((tag) => !savedTags.includes(tag));
+
+  const addTag = (raw: string) => {
+    const value = raw.trim();
+    if (!value || tags.includes(value)) return;
+    setTags((current) => [...current, value]);
+    setTagInput("");
+  };
+  const removeTag = (value: string) => setTags((current) => current.filter((tag) => tag !== value));
+
+  const saveTagsChanges = async () => {
+    try {
+      setIsSavingTags(true);
+      setTagsError(null);
+      await onSaveTags(tags);
+      setSavedTags(tags);
+    } catch {
+      setTagsError("태그를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setIsSavingTags(false);
+    }
+  };
 
   const savePublication = async () => {
     try {
@@ -495,6 +545,48 @@ function SystemTemplateManageModal({
                 >
                   <Save className="h-4 w-4" aria-hidden="true" />
                   변경사항 저장
+                </button>
+              </div>
+            </section>
+
+            <section className="grid gap-4 rounded-[22px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] sm:p-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-[var(--color-on-surface-variant)]">Tags</p>
+                <h3 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">태그</h3>
+                <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">‘default’ 태그를 붙인 템플릿이 일반 갤러리 최상단과 ‘기본 템플릿 보기’에 노출됩니다.</p>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {tags.length > 0 ? tags.map((tag) => (
+                  <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-xs font-black text-[var(--color-on-surface)]">
+                    {tag}
+                    <button type="button" aria-label={`${tag} 태그 제거`} className="grid size-4 place-items-center rounded-full text-[var(--color-on-surface-variant)] transition hover:bg-white hover:text-[var(--color-on-surface)]" onClick={() => removeTag(tag)}>
+                      <X className="size-3" aria-hidden="true" />
+                    </button>
+                  </span>
+                )) : <span className="text-xs font-semibold text-[var(--color-on-surface-variant)]">등록된 태그가 없습니다.</span>}
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  value={tagInput}
+                  onChange={(event) => setTagInput(event.currentTarget.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addTag(tagInput); } }}
+                  placeholder="태그 입력 후 Enter (예: default)"
+                  className="h-10 flex-1 rounded-xl border border-[var(--color-outline-variant)] bg-white px-3 text-sm font-semibold outline-none focus:border-[var(--color-info)]"
+                  aria-label="새 태그"
+                />
+                <button type="button" onClick={() => addTag(tagInput)} disabled={!tagInput.trim()} className="inline-flex items-center gap-1 rounded-xl border border-[var(--color-outline-variant)] bg-white px-3 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-surface-low)] disabled:cursor-not-allowed disabled:opacity-40">
+                  <Plus className="size-4" aria-hidden="true" /> 추가
+                </button>
+              </div>
+
+              {tagsError ? <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700" role="alert">{tagsError}</p> : null}
+
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--color-outline-variant)] pt-4">
+                <span className="text-xs font-semibold text-[var(--color-on-surface-variant)]">{isTagsDirty ? "저장하지 않은 태그 변경사항이 있습니다." : "태그가 저장되어 있습니다."}</span>
+                <button type="button" onClick={() => void saveTagsChanges()} disabled={!isTagsDirty || isSavingTags} className="inline-flex items-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-4 py-2.5 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">
+                  <Save className="h-4 w-4" aria-hidden="true" /> {isSavingTags ? "저장 중" : "태그 저장"}
                 </button>
               </div>
             </section>
@@ -720,6 +812,7 @@ function createBundles(templates: SystemTemplateSummary[], uploadPreviewUrls: Si
         previewTemplate,
         status: previewTemplate.status,
         visibility: previewTemplate.visibility,
+        tags: previewTemplate.tags ?? [],
         visual: createSystemTemplatePreviewVisual({
           template: baseTemplate,
           platform: previewTemplate.platform,

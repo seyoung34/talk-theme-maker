@@ -66,6 +66,22 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
     if (!updated) throw new Error("System template bundle was not updated.");
   },
 
+  async updateTags(bundleId, tags) {
+    const records = await withThemeDatabaseStore<SystemTemplateRecord[]>(storeName, "readonly", (store) => store.getAll());
+    const now = Date.now();
+    let updated = false;
+    for (const record of records) {
+      if ((record.bundleId ?? record.id) !== bundleId) continue;
+      await withThemeDatabaseStore(storeName, "readwrite", (store) => store.put({
+        ...record,
+        tags,
+        updatedAt: now,
+      }));
+      updated = true;
+    }
+    if (!updated) throw new Error("System template bundle tags were not updated.");
+  },
+
   async regeneratePreviewMetadata() {
     // 로컬(dev) 저장소는 previewMetadata를 별도 보관하지 않으므로 재계산이 필요 없다.
   },

@@ -8,6 +8,13 @@ export type SystemTemplateStatus = "draft" | "published" | "archived";
 export type SystemTemplateVisibility = "private" | "public";
 export type SystemTemplatePricingType = "free" | "paid" | "credit";
 
+// 유저용 기본 템플릿을 지정하는 태그. 이 태그가 붙은 시스템 템플릿을 갤러리 최상단/기본으로 취급한다.
+export const DEFAULT_SYSTEM_TEMPLATE_TAG = "default";
+
+export function isDefaultSystemTemplate(tags: readonly string[] | null | undefined): boolean {
+  return Boolean(tags?.includes(DEFAULT_SYSTEM_TEMPLATE_TAG));
+}
+
 export function normalizeSystemTemplateVisibility(value: unknown): SystemTemplateVisibility {
   return value === "public" ? "public" : "private";
 }

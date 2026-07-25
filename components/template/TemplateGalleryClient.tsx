@@ -10,6 +10,7 @@ import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
 import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
+import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
 import { deleteUserTemplate, getUserTemplate, listUserTemplates, type UserTemplateRecord, type UserTemplateSummary } from "@/lib/theme/userTemplates";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
@@ -71,7 +72,7 @@ export default function TemplateGalleryClient() {
   const viewedTemplateRef = useRef<string | null>(null);
   const galleryTemplates = useMemo(
     () =>
-      createGalleryTemplates(systemTemplates, systemUploadPreviewUrls).map((item) => ({
+      createGalleryTemplates(systemTemplates, systemUploadPreviewUrls, !isSystemTemplatesLoading).map((item) => ({
         ...item,
         onStart: (platform: ThemePlatform) => {
           if (item.kind === "system") {
@@ -82,12 +83,11 @@ export default function TemplateGalleryClient() {
           }
         },
       })),
-    [systemTemplates, systemUploadPreviewUrls],
+    [systemTemplates, systemUploadPreviewUrls, isSystemTemplatesLoading],
   );
   const selectedGalleryTemplate = galleryTemplates.find((template) => template.id === selectedGalleryTemplateId) ?? null;
   const userPreviewModel = selectedUserTemplateRecord ? createUserTemplatePreviewModel(selectedUserTemplateRecord, userTemplatePreviewUrls, startUserTemplate, handleDeleteUserTemplate) : null;
   const previewModel = selectedGalleryTemplate ? createGalleryTemplatePreviewModel(selectedGalleryTemplate, selectedGalleryTemplate.onStart) : userPreviewModel;
-  const basicGalleryTemplateId = "base:basic";
   const hasSavedTemplates = userTemplates.length > 0;
 
   useEffect(() => {
@@ -387,7 +387,7 @@ export default function TemplateGalleryClient() {
               <button
                 type="button"
                 className="inline-flex items-center gap-1 font-black text-[var(--color-on-surface)] underline-offset-4 hover:underline"
-                onClick={() => setSelectedGalleryTemplateId(basicGalleryTemplateId)}
+                onClick={() => setSelectedGalleryTemplateId((galleryTemplates.find(isDefaultGalleryItem) ?? galleryTemplates[0])?.id ?? null)}
               >
                 기본 템플릿 보기
                 <ArrowRight className="size-4" />
@@ -439,40 +439,53 @@ export default function TemplateGalleryClient() {
   );
 }
 
-function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], uploadPreviewUrls: SignedUrlCache): GalleryTemplateItem[] {
+function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], uploadPreviewUrls: SignedUrlCache, isLoaded: boolean): GalleryTemplateItem[] {
   const basicTemplate = themeTemplates.find((template) => template.id === "basic") ?? themeTemplates[0];
 
-  return [
-    {
-      id: `base:${basicTemplate.id}`,
-      kind: "base",
-      title: basicTemplate.name,
-      description: basicTemplate.description,
-      baseTemplate: basicTemplate,
-      visual: createBaseTemplatePreviewVisual(basicTemplate),
-    },
-    ...groupSystemTemplateRecords(systemTemplates).map((bundle) => {
-      const previewTemplate = bundle.variants.android ?? bundle.variants.ios!;
-      const baseTemplate = themeTemplates.find((item) => item.id === previewTemplate.baseTemplateId) ?? basicTemplate;
-      return {
-        id: `system:${bundle.id}`,
-        kind: "system" as const,
-        title: previewTemplate.title,
-        description: previewTemplate.description,
-        badge: "시스템",
-        baseTemplate,
-        bundleId: bundle.id,
-        variants: bundle.variants,
-        previewTemplate,
-        visual: createSystemTemplatePreviewVisual({
-          template: baseTemplate,
-          platform: previewTemplate.platform,
-          summary: previewTemplate,
-          signedUrls: uploadPreviewUrls,
-        }),
-      };
-    }),
-  ];
+  const baseItem: GalleryTemplateItem = {
+    id: `base:${basicTemplate.id}`,
+    kind: "base",
+    title: basicTemplate.name,
+    description: basicTemplate.description,
+    baseTemplate: basicTemplate,
+    visual: createBaseTemplatePreviewVisual(basicTemplate),
+  };
+
+  const systemItems: GalleryTemplateItem[] = groupSystemTemplateRecords(systemTemplates).map((bundle) => {
+    const previewTemplate = bundle.variants.android ?? bundle.variants.ios!;
+    const baseTemplate = themeTemplates.find((item) => item.id === previewTemplate.baseTemplateId) ?? basicTemplate;
+    return {
+      id: `system:${bundle.id}`,
+      kind: "system" as const,
+      title: previewTemplate.title,
+      description: previewTemplate.description,
+      badge: "시스템",
+      baseTemplate,
+      bundleId: bundle.id,
+      variants: bundle.variants,
+      previewTemplate,
+      visual: createSystemTemplatePreviewVisual({
+        template: baseTemplate,
+        platform: previewTemplate.platform,
+        summary: previewTemplate,
+        signedUrls: uploadPreviewUrls,
+      }),
+    };
+  });
+
+  // 유저용 기본(default 태그) 템플릿을 목록 최상단으로 올린다. 정렬은 안정적이라
+  // 나머지 항목은 기존 순서(최근 수정순)를 유지한다.
+  systemItems.sort((a, b) => Number(isDefaultGalleryItem(b)) - Number(isDefaultGalleryItem(a)));
+
+  // 코드 base 템플릿은 내부 기준값이라 유저에게 노출하지 않는다.
+  // 로딩 중에는 base를 노출하지 않고(스켈레톤 표시), 로딩이 끝난 뒤에도
+  // 시스템 템플릿이 하나도 없을 때만 빈 목록을 막기 위해 base를 폴백으로 노출한다.
+  if (systemItems.length > 0) return systemItems;
+  return isLoaded ? [baseItem] : [];
+}
+
+function isDefaultGalleryItem(item: GalleryTemplateItem): boolean {
+  return item.kind === "system" && isDefaultSystemTemplate(item.previewTemplate.tags);
 }
 
 function createUserTemplatePreviewUrls(record: UserTemplateRecord) {
