@@ -30,24 +30,24 @@ type Subject = {
 const subjects: Subject[] = [
   {
     keyword: "연인",
-    image: "/landing/couple_mockup.png",
+    image: "/landing/couple_mockup.webp",
     glow: "rgba(96, 165, 250, 0.30)",
   },
   {
     keyword: "캐릭터",
-    image: "/landing/character_mockup.png",
+    image: "/landing/character_mockup.webp",
     glow: "rgba(129, 190, 255, 0.30)",
   },
   {
     keyword: "반려동물",
-    image: "/landing/pet_mockup.png",
+    image: "/landing/pet_mockup.webp",
     glow: "rgba(96, 165, 250, 0.28)",
   },
 ];
 
 const showcaseThemes = [
   {
-    src: "/landing/couple_mockup.png",
+    src: "/landing/couple_mockup.webp",
     label: "연인 테마",
     desc: "우리 사진과 하늘 배경으로 채운 채팅방",
     accent: "#ff7aa6",
@@ -56,7 +56,7 @@ const showcaseThemes = [
     raised: false,
   },
   {
-    src: "/landing/character_mockup.png",
+    src: "/landing/character_mockup.webp",
     label: "캐릭터 테마",
     desc: "직접 그린 캐릭터로 완성한 파스텔 무드",
     accent: "#fbbf24",
@@ -65,7 +65,7 @@ const showcaseThemes = [
     raised: true,
   },
   {
-    src: "/landing/pet_mockup.png",
+    src: "/landing/pet_mockup.webp",
     label: "반려동물 테마",
     desc: "우리집 강아지를 프로필과 배경에",
     accent: "#fb923c",
@@ -508,10 +508,13 @@ function ShowcaseSection() {
                 >
                   <img
                     src={theme.src}
+                    srcSet={`${theme.src.replace(".webp", "@464.webp")} 464w, ${theme.src} 712w`}
+                    sizes="(min-width: 768px) 320px, 60vw"
                     alt={`${theme.label} 적용 예시`}
-                    width={808}
-                    height={1602}
+                    width={712}
+                    height={1412}
                     loading="lazy"
+                    decoding="async"
                     className="h-auto w-full drop-shadow-[0_34px_60px_rgba(27,28,25,0.24)]"
                   />
                 </div>
@@ -682,9 +685,15 @@ function HeroMockup({ active }: { active: Subject }) {
         <img
           key={active.image}
           src={active.image}
+          srcSet={`${active.image.replace(".webp", "@464.webp")} 464w, ${active.image} 712w`}
+          // 표시 폭은 모바일 min(56vw, 232px), md 이상 356px이다.
+          sizes="(min-width: 768px) 356px, 56vw"
           alt={`${active.keyword} 테마 적용 예시`}
-          width={808}
-          height={1602}
+          width={712}
+          height={1412}
+          // 첫 화면 LCP 후보다. 늦게 발견되지 않도록 우선순위를 올린다.
+          fetchPriority="high"
+          decoding="async"
           className="h-auto w-full drop-shadow-[0_40px_70px_rgba(27,28,25,0.28)] motion-safe:animate-[hero-swap_620ms_cubic-bezier(0.22,1,0.36,1)]"
         />
       </div>
