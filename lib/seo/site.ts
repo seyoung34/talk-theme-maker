@@ -49,25 +49,27 @@ export const metadataBaseUrl = publicSiteOrigin ? new URL(publicSiteOrigin) : un
  * Search Console·서치어드바이저에 사이트를 등록해야 "어떤 검색어로 몇 번 노출됐는지"를 볼 수 있고
  * sitemap을 직접 제출할 수 있다. 등록의 첫 단계가 소유확인이다.
  *
- * 토큰은 비밀이 아니다(HTML에 그대로 노출된다). 다만 값이 환경마다 다르고 나중에 바뀔 수 있어
- * 코드에 박지 않고 환경변수로 받는다. 값이 없으면 태그 자체를 내보내지 않는다.
+ * **네이버 토큰은 환경변수가 아니라 소스에 둔다.** 빌드 변수로 두면 두 겹의 함정을 지난다.
+ * ① 이 앱은 Cloudflare Worker에서 요청마다 렌더되는데 Workers Builds의 빌드 변수는 런타임
+ * 환경에 없다. `NEXT_PUBLIC_` 접두사가 붙어 빌드 시점에 문자열로 치환돼야만 살아남는다.
+ * ② 접두사를 붙여도 빌드 캐시가 이전 컴파일 결과(값이 `undefined`인)를 재사용한다.
+ * 환경변수 값만 바뀌는 것은 webpack 캐시를 무효화하지 못한다. 실제로 두 번 연속 조용히 실패했다.
  *
- * **`NEXT_PUBLIC_` 접두사와 리터럴 접근이 둘 다 필요하다.** 이 앱은 Cloudflare Worker에서
- * 요청마다 렌더되는데, Workers Builds의 빌드 변수는 런타임 환경에 존재하지 않는다.
- * `NEXT_PUBLIC_`이 붙어야 webpack이 빌드 시점에 값을 문자열로 치환해 넣고, 그래야 런타임에도
- * 살아 있다. 접두사를 빼거나 `process.env[name]`처럼 동적으로 읽으면 치환되지 않아
- * 운영에서 조용히 `undefined`가 된다(실제로 겪었다).
+ * 이 값은 비밀이 아니고(HTML에 그대로 노출된다) 도메인이 바뀌지 않는 한 고정이라, 소스에 두면
+ * 위 경로가 통째로 사라진다. 환경마다 달라야 하는 `NEXT_PUBLIC_SITE_URL`과는 성격이 다르다.
  *
- * 구글은 Cloudflare DNS TXT 레코드로도 확인할 수 있고, 그쪽이 www·http까지 한 번에 덮는
- * 도메인 속성을 만들어 준다. 이 메타 태그는 네이버용과 구글 대체 수단이다.
+ * 구글은 Cloudflare DNS TXT 레코드로 도메인 속성을 확인했다(2026-07-27). 아래 환경변수는
+ * 나중에 URL 접두어 속성이 필요해질 때를 위한 자리로만 남겨 둔다.
  */
+const naverSiteVerificationToken = "e7f694cbb4f4468394e37661ad17dc08e8344596";
+
 function normalizeVerificationToken(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
 }
 
 export const googleSiteVerification = normalizeVerificationToken(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION);
-export const naverSiteVerification = normalizeVerificationToken(process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION);
+export const naverSiteVerification = naverSiteVerificationToken;
 
 /** 값이 하나도 없으면 `undefined`를 돌려 metadata에 빈 `verification` 키가 생기지 않게 한다. */
 export function createVerificationMetadata(): Metadata["verification"] {
