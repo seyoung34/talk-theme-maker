@@ -40,9 +40,13 @@ test.describe("템플릿 선택", () => {
   test("템플릿을 골라 Android 편집기로 들어간다", async ({ page }) => {
     await page.goto("/template");
 
-    // 갤러리 구성은 환경에 따라 달라진다(시스템 템플릿 유무). 첫 카드의 이름을 읽어
-    // 편집기 제목과 대조하는 방식으로 목록 내용에 의존하지 않게 한다.
+    // E2E 서버는 Supabase를 비활성화하므로 공개 시스템 템플릿이 없을 수 있다.
+    // 코드 base 템플릿을 갤러리 상품처럼 대신 노출하지 않는 것도 새 계약이다.
     const firstCard = page.locator('article[role="button"]').first();
+    const emptyState = page.getByText("현재 공개된 시스템 템플릿이 없습니다.");
+    await expect(firstCard.or(emptyState)).toBeVisible();
+    if (await emptyState.isVisible()) return;
+
     await expect(firstCard).toBeVisible();
     const templateName = (await firstCard.locator("h3, strong, span").first().textContent())?.trim();
     expect(templateName).toBeTruthy();

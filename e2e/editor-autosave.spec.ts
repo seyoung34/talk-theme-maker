@@ -87,6 +87,76 @@ test.describe("편집기 자동 저장", () => {
     await waitForEditorReady(page);
     await expect(page.getByRole("button", { name: "이어서 편집" })).toHaveCount(0);
   });
+
+  test("최근 작업은 내 템플릿 최상단에서 계속할 수 있다", async ({ page }) => {
+    await page.goto("/edit");
+    await waitForEditorReady(page);
+    await uploadSlotImage(page, { name: "e2e-recent.png", rgb: [80, 110, 220] });
+    await expectAutosaveSaved(page);
+
+    await page.getByRole("button", { name: "편집 종료" }).click();
+    await page.getByRole("button", { name: "편집 종료하기" }).click();
+    await expect(page).toHaveURL(/\/template$/);
+
+    const recentWorkCard = page.locator('article[role="button"]').filter({ hasText: "최근 작업" });
+    await expect(recentWorkCard).toBeVisible();
+    await expect(recentWorkCard.getByText("자동 저장", { exact: true })).toBeVisible();
+    await recentWorkCard.click();
+
+    await expect(page).toHaveURL(/\/edit$/);
+    await waitForEditorReady(page);
+    await expect(page.getByText("e2e-recent.png").first()).toBeVisible();
+  });
+
+  test("새 템플릿을 열어도 첫 변경 전에는 기존 최근 작업을 유지한다", async ({ page }) => {
+    await page.goto("/edit");
+    await waitForEditorReady(page);
+    await uploadSlotImage(page, { name: "e2e-before-replace.png", rgb: [180, 70, 90] });
+    await expectAutosaveSaved(page);
+
+    await page.getByRole("button", { name: "내 템플릿으로 저장" }).click();
+    await page.getByPlaceholder("템플릿 이름").fill("교체 테스트");
+    await page.getByRole("button", { name: "저장", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "내 템플릿 저장" })).toHaveCount(0);
+
+    await uploadSlotImage(page, { name: "e2e-kept-recent.png", rgb: [40, 170, 120] });
+    await expectAutosaveSaved(page);
+    await page.getByRole("button", { name: "편집 종료" }).click();
+    await page.getByRole("button", { name: "편집 종료하기" }).click();
+
+    await page.locator('article[role="button"]').filter({ hasText: "저장본 미리보기" }).click();
+    await page.getByRole("button", { name: "Android 편집 계속하기" }).click();
+    await expect(page.getByRole("heading", { name: "최근 작업이 남아 있습니다" })).toBeVisible();
+    await page.getByRole("button", { name: "새 템플릿으로 시작" }).click();
+    await waitForEditorReady(page);
+
+    await page.getByRole("button", { name: "편집 종료" }).click();
+    await page.getByRole("button", { name: "편집 종료하기" }).click();
+    await expect(page.locator('article[role="button"]').filter({ hasText: "최근 작업" })).toBeVisible();
+
+    await page.locator('article[role="button"]').filter({ hasText: "저장본 미리보기" }).click();
+    await page.getByRole("button", { name: "Android 편집 계속하기" }).click();
+    await page.getByRole("button", { name: "최근 작업을 내 템플릿으로 저장 후 시작" }).click();
+    await waitForEditorReady(page);
+
+    await page.getByRole("button", { name: "편집 종료" }).click();
+    await page.getByRole("button", { name: "편집 종료하기" }).click();
+    await expect(page.locator('article[role="button"]').filter({ hasText: /^자동저장-\d{4}/ })).toBeVisible();
+    await expect(page.locator('article[role="button"]').filter({ hasText: "최근 작업" })).toHaveCount(0);
+  });
+});
+
+test.describe("단일 편집 탭", () => {
+  test("두 번째 편집 탭을 차단하고 갤러리 복귀만 제공한다", async ({ page, context }) => {
+    await page.goto("/edit");
+    await waitForEditorReady(page);
+
+    const secondPage = await context.newPage();
+    await secondPage.goto("/edit");
+    await expect(secondPage.getByRole("heading", { name: "다른 탭에서 편집 중입니다." })).toBeVisible();
+    await secondPage.getByRole("button", { name: "템플릿 갤러리로 돌아가기" }).click();
+    await expect(secondPage).toHaveURL(/\/template$/);
+  });
 });
 
 /**

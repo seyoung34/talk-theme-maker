@@ -415,6 +415,7 @@ export function readTemplateStartPayload(storageKey: string): ThemeStartPayload 
         systemTemplateBundleId: typeof parsed.systemTemplateBundleId === "string" ? parsed.systemTemplateBundleId : undefined,
         sourceSystemTemplateId: typeof parsed.sourceSystemTemplateId === "string" ? parsed.sourceSystemTemplateId : undefined,
         editMode: parsed.editMode === "admin" || parsed.editMode === "user" ? parsed.editMode : undefined,
+        autosaveAction: parsed.autosaveAction === "resume" || parsed.autosaveAction === "replace" ? parsed.autosaveAction : undefined,
       };
     }
     return null;

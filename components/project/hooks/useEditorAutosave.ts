@@ -28,9 +28,11 @@ type UseEditorAutosaveOptions = {
   draftSignature: string;
   /** 저장 직전에 현재 편집 상태를 읽는다. 저장 시점의 값이어야 하므로 콜백으로 받는다. */
   getSnapshot: () => EditorAutosaveInput;
+  /** 저장 성공 뒤 현재 편집 출처를 세션 기준으로 확정한다. replace 의도가 다음 진입까지 남지 않게 한다. */
+  onSaved?: () => void;
 };
 
-export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot }: UseEditorAutosaveOptions) {
+export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot, onSaved }: UseEditorAutosaveOptions) {
   const [status, setStatus] = useState<AutosaveStatus>("idle");
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -92,6 +94,7 @@ export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot }: Us
           setLastSavedAt(result.record.updatedAt);
           setStatus("saved");
           setMessage(null);
+          onSaved?.();
         } catch (error) {
           console.error(error);
           // 기준선을 갱신하지 않으므로 다음 편집에서 다시 시도한다.
@@ -103,7 +106,7 @@ export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot }: Us
           );
         }
       }),
-    [enqueue],
+    [enqueue, onSaved],
   );
 
   useEffect(() => {

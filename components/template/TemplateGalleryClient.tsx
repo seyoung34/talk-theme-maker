@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Clock3, Eye, Gift, Hash, Info, Menu, SendHorizontal, Plus, Search, Settings, Smile, Trash2, UserPlus, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
@@ -12,9 +12,12 @@ import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplate
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
-import { deleteUserTemplate, getUserTemplate, listUserTemplates, type UserTemplateRecord, type UserTemplateSummary } from "@/lib/theme/userTemplates";
+import { clearAutosaveDraft, describeAutosaveDraft, readAutosaveDraft, type EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
+import { createRecentWorkUserTemplateInput } from "@/lib/theme/project/recentWork";
+import { deleteUserTemplate, getUserTemplate, listUserTemplates, saveUserTemplate, type UserTemplateRecord, type UserTemplateSummary } from "@/lib/theme/userTemplates";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import type { ThemeStartPayload } from "@/lib/theme/templates";
 
 type GalleryTemplateItem =
   | {
@@ -52,6 +55,11 @@ type TemplatePreviewModel = {
   deleteLabel?: string;
 };
 
+type PendingTemplateStart = {
+  payload: ThemeStartPayload;
+  analytics: { templateKey: string; templateSource: "base" | "system" | "user"; platform: ThemePlatform };
+};
+
 export default function TemplateGalleryClient() {
   const router = useRouter();
   const [selectedGalleryTemplateId, setSelectedGalleryTemplateId] = useState<string | null>(null);
@@ -68,27 +76,27 @@ export default function TemplateGalleryClient() {
   const [userTemplateCardVisuals, setUserTemplateCardVisuals] = useState<Record<string, TemplatePreviewVisual>>({});
   const [isUserTemplatePreviewLoading, setIsUserTemplatePreviewLoading] = useState(false);
   const [isUserTemplateInfoOpen, setIsUserTemplateInfoOpen] = useState(false);
+  const [recentWork, setRecentWork] = useState<EditorAutosaveDraft | null>(null);
+  const [recentWorkVisual, setRecentWorkVisual] = useState<TemplatePreviewVisual | null>(null);
+  const [pendingTemplateStart, setPendingTemplateStart] = useState<PendingTemplateStart | null>(null);
+  const [isArchivingRecentWork, setIsArchivingRecentWork] = useState(false);
   const userTemplateCardPreviewUrlsRef = useRef<Record<string, Record<string, string>>>({});
   const viewedTemplateRef = useRef<string | null>(null);
-  const galleryTemplates = useMemo(
-    () =>
-      createGalleryTemplates(systemTemplates, systemUploadPreviewUrls, !isSystemTemplatesLoading).map((item) => ({
-        ...item,
-        onStart: (platform: ThemePlatform) => {
-          if (item.kind === "system") {
-            const variant = item.variants[platform];
-            if (variant) startSystemTemplateWithPlatform(variant, platform);
-          } else {
-            start(item.baseTemplate, platform);
-          }
-        },
-      })),
-    [systemTemplates, systemUploadPreviewUrls, isSystemTemplatesLoading],
-  );
+  const galleryTemplates = createGalleryTemplates(systemTemplates, systemUploadPreviewUrls, !isSystemTemplatesLoading).map((item) => ({
+    ...item,
+    onStart: (platform: ThemePlatform) => {
+      if (item.kind === "system") {
+        const variant = item.variants[platform];
+        if (variant) startSystemTemplateWithPlatform(variant, platform);
+      } else {
+        start(item.baseTemplate, platform);
+      }
+    },
+  }));
   const selectedGalleryTemplate = galleryTemplates.find((template) => template.id === selectedGalleryTemplateId) ?? null;
   const userPreviewModel = selectedUserTemplateRecord ? createUserTemplatePreviewModel(selectedUserTemplateRecord, userTemplatePreviewUrls, startUserTemplate, handleDeleteUserTemplate) : null;
   const previewModel = selectedGalleryTemplate ? createGalleryTemplatePreviewModel(selectedGalleryTemplate, selectedGalleryTemplate.onStart) : userPreviewModel;
-  const hasSavedTemplates = userTemplates.length > 0;
+  const hasPersonalItems = Boolean(recentWork) || userTemplates.length > 0;
 
   useEffect(() => {
     if (selectedGalleryTemplate?.kind !== "system") return;
@@ -108,6 +116,28 @@ export default function TemplateGalleryClient() {
   useEffect(() => {
     return () => {
       revokeNestedObjectUrls(userTemplateCardPreviewUrlsRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    let previewUrls: Record<string, string> = {};
+    void readAutosaveDraft("user")
+      .then((record) => {
+        if (!active || !record) return;
+        const previewRecord = autosaveToUserTemplateRecord(record);
+        previewUrls = createUserTemplatePreviewUrls(previewRecord);
+        const baseTemplate = themeTemplates.find((template) => template.id === previewRecord.templateId) ?? themeTemplates[0];
+        setRecentWork(record);
+        setRecentWorkVisual(createUserTemplatePreviewVisual(previewRecord, baseTemplate, previewUrls));
+      })
+      .catch((error) => {
+        console.error(error);
+        if (active) setNotice("최근 작업을 불러오지 못했습니다.");
+      });
+    return () => {
+      active = false;
+      revokeObjectUrls(previewUrls);
     };
   }, []);
 
@@ -207,16 +237,37 @@ export default function TemplateGalleryClient() {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  const start = (template: ThemeTemplate, platform: ThemePlatform) => {
-    trackAnalyticsEvent("template_started", { template_key: template.id, template_source: "base", platform });
-    localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.id, platform }));
+  const launchTemplateStart = (startRequest: PendingTemplateStart, autosaveAction?: ThemeStartPayload["autosaveAction"]) => {
+    const { analytics, payload } = startRequest;
+    trackAnalyticsEvent("template_started", {
+      template_key: analytics.templateKey,
+      template_source: analytics.templateSource,
+      platform: analytics.platform,
+    });
+    localStorage.setItem(templateStartStorageKey, JSON.stringify({ ...payload, ...(autosaveAction ? { autosaveAction } : {}) }));
     router.push("/edit");
   };
 
+  const requestTemplateStart = (startRequest: PendingTemplateStart) => {
+    if (recentWork) {
+      setPendingTemplateStart(startRequest);
+      return;
+    }
+    launchTemplateStart(startRequest);
+  };
+
+  const start = (template: ThemeTemplate, platform: ThemePlatform) => {
+    requestTemplateStart({
+      payload: { templateId: template.id, platform },
+      analytics: { templateKey: template.id, templateSource: "base", platform },
+    });
+  };
+
   function startUserTemplate(template: UserTemplateSummary) {
-    trackAnalyticsEvent("template_started", { template_key: "user_template", template_source: "user", platform: template.platform });
-    localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.templateId, platform: template.platform, userTemplateId: template.id }));
-    router.push("/edit");
+    requestTemplateStart({
+      payload: { templateId: template.templateId, platform: template.platform, userTemplateId: template.id },
+      analytics: { templateKey: "user_template", templateSource: "user", platform: template.platform },
+    });
   }
 
   const openUserTemplatePreview = async (template: UserTemplateSummary) => {
@@ -245,9 +296,57 @@ export default function TemplateGalleryClient() {
   };
 
   const startSystemTemplateWithPlatform = (template: SystemTemplateSummary, platform: ThemePlatform) => {
-    trackAnalyticsEvent("template_started", { template_key: `system:${template.bundleId ?? template.id}`, template_source: "system", platform });
-    localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: template.baseTemplateId, platform, systemTemplateId: template.id, systemTemplateBundleId: template.bundleId ?? template.id, editMode: "user" }));
-    router.push("/edit");
+    requestTemplateStart({
+      payload: { templateId: template.baseTemplateId, platform, systemTemplateId: template.id, systemTemplateBundleId: template.bundleId ?? template.id, editMode: "user" },
+      analytics: { templateKey: `system:${template.bundleId ?? template.id}`, templateSource: "system", platform },
+    });
+  };
+
+  const continueRecentWork = () => {
+    if (!recentWork) return;
+    launchTemplateStart({
+      payload: {
+        templateId: recentWork.source.templateId,
+        platform: recentWork.source.platform,
+        userTemplateId: recentWork.source.activeUserTemplate?.id,
+        systemTemplateId: recentWork.source.activeSystemTemplate?.id,
+        systemTemplateBundleId: recentWork.source.systemTemplateBundleId ?? recentWork.source.activeSystemTemplate?.bundleId,
+        editMode: "user",
+      },
+      analytics: { templateKey: "recent_work", templateSource: "user", platform: recentWork.source.platform },
+    }, "resume");
+  };
+
+  const startSelectedTemplate = () => {
+    if (!pendingTemplateStart) return;
+    launchTemplateStart(pendingTemplateStart, "replace");
+  };
+
+  const archiveRecentWorkAndStart = async () => {
+    if (!recentWork || !pendingTemplateStart) return;
+    try {
+      setIsArchivingRecentWork(true);
+      setNotice("최근 작업을 내 템플릿으로 저장하는 중입니다.");
+      const hydratedUploads = Object.keys(recentWork.draft.remoteUploadRefs).length
+        ? await systemTemplateRepository.hydrateUploads(recentWork.draft.remoteUploadRefs)
+        : {};
+      const saved = await saveUserTemplate(createRecentWorkUserTemplateInput(recentWork, hydratedUploads));
+      await clearAutosaveDraft("user");
+      setRecentWork(null);
+      setRecentWorkVisual(null);
+      setNotice(`${saved.name} 템플릿으로 저장했습니다.`);
+      launchTemplateStart(pendingTemplateStart);
+    } catch (error) {
+      console.error(error);
+      setNotice("최근 작업을 내 템플릿으로 저장하지 못했습니다. 기존 최근 작업은 유지됩니다.");
+    } finally {
+      setIsArchivingRecentWork(false);
+    }
+  };
+
+  const cancelTemplateStart = () => {
+    setPendingTemplateStart(null);
+    closePreview();
   };
 
   useEffect(() => {
@@ -328,7 +427,7 @@ export default function TemplateGalleryClient() {
           </div>
         ) : null}
 
-        <section className={`grid rounded-[32px] border border-[var(--color-outline-variant)] ${hasSavedTemplates ? "gap-5 bg-white/92 p-5 shadow-[0_18px_48px_rgba(42,103,103,0.08)] md:p-6" : "gap-3 bg-white/70 p-4 md:p-5"}`}>
+        <section className={`grid rounded-[32px] border border-[var(--color-outline-variant)] ${hasPersonalItems ? "gap-5 bg-white/92 p-5 shadow-[0_18px_48px_rgba(42,103,103,0.08)] md:p-6" : "gap-3 bg-white/70 p-4 md:p-5"}`}>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="mt-2 flex items-center gap-1.5">
@@ -346,7 +445,7 @@ export default function TemplateGalleryClient() {
                 편집 상태와 직접 올린 이미지는 이 브라우저에 저장됩니다. 내보내기를 시작하면 파일 생성에 필요한 데이터가 서버로 일시 전송됩니다.
               </p>
             </div>
-            {hasSavedTemplates ? (
+            {hasPersonalItems ? (
               <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-surface-low)] px-3 py-2 text-xs font-bold text-[var(--color-on-surface-variant)]">
                 <Clock3 className="w-4 h-4" />
                 최근 수정순
@@ -354,8 +453,25 @@ export default function TemplateGalleryClient() {
             ) : null}
           </div>
 
-          {hasSavedTemplates ? (
+          {hasPersonalItems ? (
             <div className="grid grid-flow-col auto-cols-[calc(50%-0.25rem)] snap-x snap-mandatory gap-2 overflow-x-auto pb-1 sm:auto-cols-[300px] sm:gap-3">
+              {recentWork ? (
+                <TemplateCard
+                  title="최근 작업"
+                  onOpen={continueRecentWork}
+                  openLabel="최근 작업 계속하기"
+                  className="snap-start border-[#93c5fd] bg-[#eff6ff]"
+                  mobileVisual={recentWorkVisual ? <TemplateVisualPreview visual={recentWorkVisual} size="thumb" /> : <div className="aspect-[16/15] rounded-[12px] bg-[#dbeafe]" />}
+                  desktopVisual={recentWorkVisual ? <TemplateVisualPreview visual={recentWorkVisual} size="card" /> : <div className="aspect-[16/15] rounded-[20px] bg-[#dbeafe]" />}
+                  desktopContent={<RecentWorkDesktopContent record={recentWork} />}
+                  desktopFooter={
+                    <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full bg-[#2563eb] px-4 py-2.5 text-sm font-black text-white">
+                      계속 편집
+                      <ArrowRight className="w-4 h-4" />
+                    </span>
+                  }
+                />
+              ) : null}
               {userTemplates.map((template) => (
                 <TemplateCard
                   key={template.id}
@@ -389,7 +505,7 @@ export default function TemplateGalleryClient() {
                 className="inline-flex items-center gap-1 font-black text-[var(--color-on-surface)] underline-offset-4 hover:underline"
                 onClick={() => setSelectedGalleryTemplateId((galleryTemplates.find(isDefaultGalleryItem) ?? galleryTemplates[0])?.id ?? null)}
               >
-                기본 템플릿 보기
+                템플릿 보기
                 <ArrowRight className="size-4" />
               </button>
             </p>
@@ -419,6 +535,12 @@ export default function TemplateGalleryClient() {
             ))}
             {isSystemTemplatesLoading ? <TemplateGallerySkeletonCards count={5} /> : null}
           </div>
+          {!isSystemTemplatesLoading && galleryTemplates.length === 0 ? (
+            <div className="rounded-[24px] border border-dashed border-[var(--color-outline-variant)] bg-white/70 px-5 py-10 text-center">
+              <p className="text-sm font-black text-[var(--color-on-surface)]">현재 공개된 시스템 템플릿이 없습니다.</p>
+              <p className="mt-2 text-sm font-semibold text-[var(--color-on-surface-variant)]">새 템플릿이 등록되면 이곳에 표시됩니다.</p>
+            </div>
+          ) : null}
           {systemTemplateCursor ? (
             <button type="button" className="mx-auto min-h-11 rounded-full border border-[var(--color-outline-variant)] bg-white px-5 text-sm font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-surface-low)] disabled:opacity-50" onClick={() => void loadMoreSystemTemplates()} disabled={isLoadingMoreTemplates}>
               {isLoadingMoreTemplates ? "불러오는 중" : "템플릿 더 보기"}
@@ -435,21 +557,22 @@ export default function TemplateGalleryClient() {
       ) : null}
       {isUserTemplatePreviewLoading ? <TemplatePreviewLoadingOverlay /> : null}
       {isUserTemplateInfoOpen ? <UserTemplateInfoModal onClose={() => setIsUserTemplateInfoOpen(false)} /> : null}
+      {pendingTemplateStart && recentWork ? (
+        <RecentWorkConflictDialog
+          record={recentWork}
+          isArchiving={isArchivingRecentWork}
+          onContinueRecent={continueRecentWork}
+          onStartSelected={startSelectedTemplate}
+          onArchiveAndStart={() => void archiveRecentWorkAndStart()}
+          onCancel={cancelTemplateStart}
+        />
+      ) : null}
     </main>
   );
 }
 
 function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], uploadPreviewUrls: SignedUrlCache, isLoaded: boolean): GalleryTemplateItem[] {
   const basicTemplate = themeTemplates.find((template) => template.id === "basic") ?? themeTemplates[0];
-
-  const baseItem: GalleryTemplateItem = {
-    id: `base:${basicTemplate.id}`,
-    kind: "base",
-    title: basicTemplate.name,
-    description: basicTemplate.description,
-    baseTemplate: basicTemplate,
-    visual: createBaseTemplatePreviewVisual(basicTemplate),
-  };
 
   const systemItems: GalleryTemplateItem[] = groupSystemTemplateRecords(systemTemplates).map((bundle) => {
     const previewTemplate = bundle.variants.android ?? bundle.variants.ios!;
@@ -477,11 +600,9 @@ function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], upload
   // 나머지 항목은 기존 순서(최근 수정순)를 유지한다.
   systemItems.sort((a, b) => Number(isDefaultGalleryItem(b)) - Number(isDefaultGalleryItem(a)));
 
-  // 코드 base 템플릿은 내부 기준값이라 유저에게 노출하지 않는다.
-  // 로딩 중에는 base를 노출하지 않고(스켈레톤 표시), 로딩이 끝난 뒤에도
-  // 시스템 템플릿이 하나도 없을 때만 빈 목록을 막기 위해 base를 폴백으로 노출한다.
-  if (systemItems.length > 0) return systemItems;
-  return isLoaded ? [baseItem] : [];
+  // 코드 base 템플릿은 시스템 템플릿을 구성하는 내부 기준값일 뿐 갤러리 상품이 아니다.
+  // 공개 시스템 템플릿이 없으면 빈 상태를 보여주며 base를 사용자용 카드로 대체 노출하지 않는다.
+  return isLoaded ? systemItems : [];
 }
 
 function isDefaultGalleryItem(item: GalleryTemplateItem): boolean {
@@ -504,6 +625,28 @@ function revokeObjectUrls(urls: Record<string, string> | undefined) {
 
 function revokeNestedObjectUrls(urls: Record<string, Record<string, string>>) {
   Object.values(urls).forEach(revokeObjectUrls);
+}
+
+function autosaveToUserTemplateRecord(record: EditorAutosaveDraft): UserTemplateRecord {
+  return {
+    id: record.id,
+    name: "최근 작업",
+    templateId: record.source.templateId,
+    platform: record.source.platform,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    colors: record.draft.colors,
+    uploads: record.draft.uploads,
+    candidateSelections: record.draft.candidateSelections,
+    bubbleEdits: {
+      geometry: record.draft.bubbleGeometry,
+      markers: record.draft.bubbleMarkers,
+      insets: record.draft.bubbleInsets,
+      stretch: record.draft.bubbleStretch,
+    },
+    bubbleDesigns: record.draft.bubbleDesigns,
+    bubbleDecorationSources: record.draft.bubbleDecorationSources,
+  };
 }
 
 function createUserTemplatePreviewModel(record: UserTemplateRecord, uploadPreviewUrls: Record<string, string>, onStart: (template: UserTemplateSummary) => void, onDelete: (template: UserTemplateSummary) => void): TemplatePreviewModel {
@@ -677,6 +820,22 @@ function UserTemplateDesktopContent({ template }: { template: UserTemplateSummar
     <div className="min-w-0">
       <strong className="block truncate text-lg font-black text-[var(--color-on-surface)]">{template.name}</strong>
       <p className="mt-1 text-sm leading-6 text-[var(--color-on-surface-variant)]">최근 수정 {formatDate(template.updatedAt)}</p>
+    </div>
+  );
+}
+
+function RecentWorkDesktopContent({ record }: { record: EditorAutosaveDraft }) {
+  const summary = describeAutosaveDraft(record);
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <strong className="truncate text-lg font-black text-[var(--color-on-surface)]">최근 작업</strong>
+        <span className="shrink-0 rounded-full bg-[#dbeafe] px-2.5 py-1 text-[11px] font-black text-[#1d4ed8]">자동 저장</span>
+      </div>
+      <p className="mt-1 truncate text-sm font-semibold text-[var(--color-on-surface-variant)]">{record.source.templateName}</p>
+      <p className="mt-1 text-xs leading-5 text-[var(--color-on-surface-variant)]">
+        최근 수정 {formatDate(record.updatedAt)} · 이미지 {summary.uploadCount} · 색상 {summary.colorCount}
+      </p>
     </div>
   );
 }
@@ -1114,6 +1273,48 @@ function ProfileScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
   );
 }
 
+function RecentWorkConflictDialog({
+  record,
+  isArchiving,
+  onContinueRecent,
+  onStartSelected,
+  onArchiveAndStart,
+  onCancel,
+}: {
+  record: EditorAutosaveDraft;
+  isArchiving: boolean;
+  onContinueRecent: () => void;
+  onStartSelected: () => void;
+  onArchiveAndStart: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-[color:rgba(27,28,25,0.58)] p-4" role="dialog" aria-modal="true" aria-labelledby="recent-work-conflict-title">
+      <section className="w-full max-w-lg rounded-[28px] bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.28)] sm:p-6">
+        <span className="inline-flex rounded-full bg-[#dbeafe] px-3 py-1.5 text-xs font-black text-[#1d4ed8]">자동 저장 · {formatDate(record.updatedAt)}</span>
+        <h2 id="recent-work-conflict-title" className="mt-4 text-xl font-black text-[var(--color-on-surface)]">최근 작업이 남아 있습니다</h2>
+        <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
+          새 템플릿으로 들어가도 바로 삭제하지 않습니다. 새 편집기에서 내용을 처음 변경할 때 최근 작업이 교체됩니다.
+        </p>
+        <div className="mt-5 grid gap-2">
+          <button type="button" className="min-h-12 rounded-xl bg-[#2563eb] px-4 text-sm font-black text-white disabled:opacity-50" onClick={onContinueRecent} disabled={isArchiving}>
+            최근 작업 계속하기
+          </button>
+          <button type="button" className="min-h-12 rounded-xl border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#0f172a] disabled:opacity-50" onClick={onStartSelected} disabled={isArchiving}>
+            새 템플릿으로 시작
+          </button>
+          <button type="button" className="min-h-12 rounded-xl border border-[#cbd5e1] bg-[#f8fafc] px-4 text-sm font-black text-[#0f172a] disabled:opacity-50" onClick={onArchiveAndStart} disabled={isArchiving}>
+            {isArchiving ? "최근 작업 저장 중" : "최근 작업을 내 템플릿으로 저장 후 시작"}
+          </button>
+          <button type="button" className="min-h-11 rounded-xl px-4 text-sm font-black text-[#64748b] disabled:opacity-50" onClick={onCancel} disabled={isArchiving}>
+            취소
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function UserTemplateInfoModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label="내 템플릿 안내" onClick={onClose}>
@@ -1206,40 +1407,6 @@ function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual;
       )}
     </div>
   );
-}
-
-// 내장 템플릿의 사전 생성 카드 썸네일. 에셋이 바뀌면 /dev/bake-thumbnails에서 다시 굽는다.
-const baseTemplateCardPreviewImages: Partial<Record<string, string>> = {
-  basic: "/template-assets/basic/card-preview.webp",
-};
-
-function createBaseTemplatePreviewVisual(template: ThemeTemplate): TemplatePreviewVisual {
-  const slots = getThemeSlots(template.defaults.platform);
-  return {
-    platform: template.defaults.platform,
-    // 내장 템플릿은 시스템 템플릿 저장 경로를 타지 않아 썸네일이 없다.
-    // /dev/bake-thumbnails로 미리 구운 카드 이미지를 사용해 카드에서도 9-slice 결과를 그대로 보여준다.
-    cardPreviewImage: baseTemplateCardPreviewImages[template.id],
-    chatBackgroundColor: template.defaults.chatBackground,
-    mainBackgroundColor: template.defaults.mainBackground,
-    tabBackgroundColor: template.defaults.tabBackground,
-    myBubbleTextColor: template.defaults.mainTitle,
-    friendBubbleTextColor: template.defaults.mainTitle,
-    myBubbleFillColor: template.defaults.myBubble,
-    friendBubbleFillColor: template.defaults.friendBubble,
-    // 편집기 ChatroomPreview와 동일하게 기본 나인패치 말풍선을 캔버스로 그리도록 기본 이미지를 채운다.
-    myBubbleImage: getResolvedAssetUrl(findSlotByRole(slots, "bubble_me_1"), {}, {}, template.id, template),
-    friendBubbleImage: getResolvedAssetUrl(findSlotByRole(slots, "bubble_you_1"), {}, {}, template.id, template),
-    mainHeaderColor: template.defaults.mainHeader,
-    mainHeaderForegroundColor: template.defaults.mainTitle,
-    bodyCellColor: template.defaults.mainBackground,
-    titleColor: template.defaults.mainTitle,
-    descriptionColor: template.defaults.mainBody,
-    sectionTitleColor: template.defaults.mainTitle,
-    bodyCellBorderColor: template.defaults.mainBody,
-    unreadColor: template.accent,
-    tabIcons: buildTabIconUrls((role) => getResolvedAssetUrl(findSlotByRole(slots, role), {}, {}, template.id, template)),
-  };
 }
 
 function groupSystemTemplateRecords(templates: SystemTemplateSummary[]) {

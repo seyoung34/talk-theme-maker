@@ -11,6 +11,10 @@ describe("isExportFailureReason", () => {
   it("허용 목록의 코드만 통과시킨다", () => {
     expect(isExportFailureReason("insufficient_credits")).toBe(true);
     expect(isExportFailureReason("android_build_failed")).toBe(true);
+    expect(isExportFailureReason("build_capacity_reached")).toBe(true);
+    expect(isExportFailureReason("android_sdk_missing")).toBe(true);
+    expect(isExportFailureReason("gradle_timeout")).toBe(true);
+    expect(isExportFailureReason("build_cancelled")).toBe(true);
     expect(isExportFailureReason("made_up_code")).toBe(false);
   });
 
@@ -25,6 +29,8 @@ describe("isExportFailureReason", () => {
 describe("toExportFailureReason", () => {
   it("허용된 서버 reason은 그대로 유지한다", () => {
     expect(toExportFailureReason("enqueue_failed", "unknown")).toBe("enqueue_failed");
+    expect(toExportFailureReason("gradle_timeout", "server_error")).toBe("gradle_timeout");
+    expect(toExportFailureReason("build_cancelled", "invalid_request")).toBe("build_cancelled");
   });
 
   it("허용 목록에 없는 값은 fallback으로 접는다", () => {

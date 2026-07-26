@@ -26,6 +26,10 @@ import { MobileQuickEditPanel } from "@/components/project/MobileQuickEditPanel"
 import { MobileSectionNav } from "@/components/project/MobileSectionNav";
 import { MobileGroupSlotList } from "@/components/project/MobileGroupSlotList";
 import { MobileScaledPreview } from "@/components/project/MobileScaledPreview";
+import {
+  createDefaultSystemTemplateMetadata,
+  getSystemTemplateDialogInitialization,
+} from "@/components/project/systemTemplateMetadata";
 import { useViewportMode } from "@/components/project/hooks/useViewportMode";
 import { useProjectAutoColors } from "@/components/project/hooks/useProjectAutoColors";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
@@ -35,6 +39,7 @@ import { useEditorBootstrap } from "@/components/project/hooks/useEditorBootstra
 import { useTemplatePersistence } from "@/components/project/hooks/useTemplatePersistence";
 import { useThemeDraft } from "@/components/project/hooks/useThemeDraft";
 import { useEditorAutosave, type AutosaveArm } from "@/components/project/hooks/useEditorAutosave";
+import { useSingleEditorTab } from "@/components/project/hooks/useSingleEditorTab";
 import { useUnsavedChangesWarning } from "@/components/project/hooks/useUnsavedChangesWarning";
 import {
   bubbleSlotFromRole,
@@ -79,6 +84,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const router = useRouter();
   const searchParams = useSearchParams();
   const resumeToken = searchParams.get("resume");
+  const editorTabLockStatus = useSingleEditorTab(mode);
   const [templateId, setTemplateId] = useState<ThemeTemplateId>("basic");
   const [initialLoadState, setInitialLoadState] = useState<InitialLoadState>({ status: "idle" });
   const [platform, setPlatform] = useState<ThemePlatform>("android");
@@ -133,6 +139,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const mobileEditCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const analyticsEditorReadyRef = useRef<string | null>(null);
   const analyticsInteractionTimerRef = useRef<number | null>(null);
+  // 자동 저장에서 복원한 폼과 한 번이라도 열었던 폼은 저장된 메타데이터로 다시 초기화하지 않는다.
+  const systemTemplateMetadataInitializedRef = useRef(false);
 
   // 관리자 메타데이터는 초안 바깥의 폼 상태지만 저장 전까지 메모리에만 있으므로 함께 추적한다.
   const systemTemplateMetadata = useMemo(
@@ -178,11 +186,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   }, []);
 
   const answerAutosaveDecision = useCallback((decision: "resume" | "discard") => {
+    if (decision === "resume" && isAdminMode && pendingAutosave?.editor.systemTemplateMetadata) {
+      systemTemplateMetadataInitializedRef.current = true;
+    }
     setPendingAutosave(null);
     const resolve = autosaveDecisionRef.current;
     autosaveDecisionRef.current = null;
     resolve?.(decision);
-  }, []);
+  }, [isAdminMode, pendingAutosave]);
 
   useEffect(() => {
     if (!mobileEditSheetOpen || typeof window === "undefined") return;
@@ -253,6 +264,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const activeTemplate = getThemeTemplate(templateId);
   const displayTemplateName = activeUserTemplate?.name ?? activeSystemTemplate?.title ?? activeTemplate.name;
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
+  const handleAutosaveSaved = useCallback(() => {
+    setNotice((current) => current?.message === "이 템플릿을 변경하면 기존 최근 작업이 새 작업으로 교체됩니다." ? null : current);
+    persistEditorSession(mode, {
+      templateId,
+      platform,
+      userTemplateId: activeUserTemplate?.id,
+      systemTemplateId: activeSystemTemplate?.id,
+      systemTemplateBundleId: systemTemplateBundleId ?? activeSystemTemplate?.bundleId,
+      editMode: mode,
+    });
+  }, [activeSystemTemplate, activeUserTemplate, mode, platform, systemTemplateBundleId, templateId]);
 
   const { status: autosaveStatus, lastSavedAt: autosaveSavedAt, message: autosaveMessage, resetAutosave } = useEditorAutosave({
     arm: autosaveArm,
@@ -274,6 +296,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       editor: { activeSection, activeGroup, selectedSlotId, systemTemplateMetadata: systemTemplateMetadata ?? undefined },
       draft,
     }),
+    onSaved: handleAutosaveSaved,
   });
 
   // 저장 실패·다중 탭 충돌은 조용히 넘기면 사용자가 저장되고 있다고 오해한다.
@@ -469,6 +492,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   }, [resumeExportDialog]);
 
   useEditorBootstrap({
+    enabled: editorTabLockStatus === "acquired",
     hydratePreviewUploads,
     hydrateSystemTemplateUploads,
     mode,
@@ -561,8 +585,24 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       bubbleDecorationSources: {},
     };
     replaceDraft(defaultDraft);
+    const defaultSystemMetadata = isAdminMode
+      ? createDefaultSystemTemplateMetadata(getThemeTemplate("basic").name)
+      : null;
+    if (defaultSystemMetadata) {
+      setSystemTitle(defaultSystemMetadata.title);
+      setSystemDescription(defaultSystemMetadata.description);
+      setSystemTags(defaultSystemMetadata.tags);
+      setSystemStatus(defaultSystemMetadata.status);
+      setSystemVisibility(defaultSystemMetadata.visibility);
+      setSystemPricingType(defaultSystemMetadata.pricingType);
+      setSystemPriceAmount(defaultSystemMetadata.priceAmount);
+      setSystemCreditCost(defaultSystemMetadata.creditCost);
+      systemTemplateMetadataInitializedRef.current = true;
+    } else {
+      systemTemplateMetadataInitializedRef.current = false;
+    }
     // 새 작업이므로 잃을 것이 없다. 상태가 반영되기를 기다리지 않고 이 초안을 바로 기준선으로 삼는다.
-    savedSignatureRef.current = createEditorSignature(defaultDraft, systemTemplateMetadata);
+    savedSignatureRef.current = createEditorSignature(defaultDraft, defaultSystemMetadata);
     setHasUnsavedChanges(false);
     resetAutosave();
     setActiveUserTemplate(null);
@@ -933,15 +973,32 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       return;
     }
 
-    const currentSystemTitle = activeSystemTemplate?.title ?? (systemTitle.trim() || displayTemplateName);
-    setSystemTitle(currentSystemTitle);
-    setSystemDescription(activeSystemTemplate?.description ?? systemDescription);
-    setSystemTags(activeSystemTemplate?.tags.join(", ") ?? systemTags);
-    setSystemStatus(activeSystemTemplate?.status ?? systemStatus);
-    setSystemVisibility(activeSystemTemplate?.visibility ?? systemVisibility);
-    setSystemPricingType(activeSystemTemplate?.pricingType ?? systemPricingType);
-    setSystemPriceAmount(activeSystemTemplate?.priceAmount ? String(activeSystemTemplate.priceAmount) : systemPriceAmount);
-    setSystemCreditCost(activeSystemTemplate?.creditCost ? String(activeSystemTemplate.creditCost) : systemCreditCost);
+    const initialMetadata = getSystemTemplateDialogInitialization({
+      activeSystemTemplate,
+      current: {
+        title: systemTitle,
+        description: systemDescription,
+        tags: systemTags,
+        status: systemStatus,
+        visibility: systemVisibility,
+        pricingType: systemPricingType,
+        priceAmount: systemPriceAmount,
+        creditCost: systemCreditCost,
+      },
+      fallbackTitle: displayTemplateName,
+      initialized: systemTemplateMetadataInitializedRef.current,
+    });
+    if (initialMetadata) {
+      setSystemTitle(initialMetadata.title);
+      setSystemDescription(initialMetadata.description);
+      setSystemTags(initialMetadata.tags);
+      setSystemStatus(initialMetadata.status);
+      setSystemVisibility(initialMetadata.visibility);
+      setSystemPricingType(initialMetadata.pricingType);
+      setSystemPriceAmount(initialMetadata.priceAmount);
+      setSystemCreditCost(initialMetadata.creditCost);
+      systemTemplateMetadataInitializedRef.current = true;
+    }
     setSystemSaveDialogOpen(true);
   };
 
@@ -1050,6 +1107,30 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onBubbleDraftDirtyChange={setMobileBubbleDraftDirty}
     />
   );
+
+  if (editorTabLockStatus === "blocked") {
+    return (
+      <main className="grid min-h-[100dvh] place-items-center bg-[#f8fafc] p-5 text-[#0f172a]">
+        <section className="w-full max-w-md rounded-[28px] border border-[#dbe3ed] bg-white p-6 text-center shadow-[0_24px_72px_rgba(15,23,42,0.12)]">
+          <h1 className="text-xl font-black">다른 탭에서 편집 중입니다.</h1>
+          <p className="mt-3 text-sm font-semibold leading-6 text-[#64748b]">
+            작업 충돌을 막기 위해 편집기는 한 탭에서만 사용할 수 있습니다. 기존 편집 탭을 종료한 뒤 다시 열어 주세요.
+          </p>
+          <button type="button" className="mt-6 min-h-11 w-full rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white" onClick={() => router.push("/template")}>
+            템플릿 갤러리로 돌아가기
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (editorTabLockStatus === "pending") {
+    return (
+      <main className="grid min-h-[100dvh] place-items-center bg-[#f8fafc] p-5 text-[#0f172a]">
+        <p className="text-sm font-bold text-[#64748b]">편집기를 준비하는 중입니다.</p>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">

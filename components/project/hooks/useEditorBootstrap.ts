@@ -16,6 +16,7 @@ import { getThemeSlots, getThemeTemplate, type ThemeTemplateId } from "@/lib/the
 import type { ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 type UseEditorBootstrapOptions = {
+  enabled?: boolean;
   hydratePreviewUploads: (uploadRefs: RemoteSlotUploads, slotIds: string[], onProgress: (completed: number, total: number) => void) => Promise<SlotUploads>;
   hydrateSystemTemplateUploads: (uploadRefs: RemoteSlotUploads) => Promise<SlotUploads>;
   mode: "user" | "admin";
@@ -48,6 +49,7 @@ type UseEditorBootstrapOptions = {
 };
 
 export function useEditorBootstrap({
+  enabled = true,
   hydratePreviewUploads,
   hydrateSystemTemplateUploads,
   mode,
@@ -77,10 +79,12 @@ export function useEditorBootstrap({
   skipDefaultSelectionReset,
 }: UseEditorBootstrapOptions) {
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     const payload = takeTemplateStartPayload(mode);
     // 부트스트랩이 끝나고 자동 저장을 켤 때 넘길 기준선. 이어받은 경우에만 값이 생긴다.
     let autosaveExpectedUpdatedAt: number | null = null;
+    let deferredReplacement = false;
 
     const applyAutosave = (record: EditorAutosaveDraft) => {
       skipDefaultSelectionReset();
@@ -177,16 +181,28 @@ export function useEditorBootstrap({
       });
       if (!active) return;
       if (autosave) {
-        setInitialLoadState(createInitialLoadProgress("이전 편집 내용을 확인하는 중입니다.", 0, 1));
-        const decision = await requestAutosaveDecision(autosave);
-        if (!active) return;
-        if (decision === "resume") {
+        if (payload?.autosaveAction === "resume") {
           applyAutosave(autosave);
           autosaveExpectedUpdatedAt = autosave.updatedAt;
           return;
         }
-        await clearAutosaveDraft(mode).catch((error) => console.error(error));
-        if (!active) return;
+        if (payload?.autosaveAction === "replace") {
+          // 갤러리에서 이미 새 템플릿 시작을 선택했다. 기존 레코드는 첫 실제 변경이 저장될 때
+          // expectedUpdatedAt 조건으로 한 번에 교체하며, 아무것도 바꾸지 않고 나가면 그대로 둔다.
+          autosaveExpectedUpdatedAt = autosave.updatedAt;
+          deferredReplacement = true;
+        } else {
+          setInitialLoadState(createInitialLoadProgress("이전 편집 내용을 확인하는 중입니다.", 0, 1));
+          const decision = await requestAutosaveDecision(autosave);
+          if (!active) return;
+          if (decision === "resume") {
+            applyAutosave(autosave);
+            autosaveExpectedUpdatedAt = autosave.updatedAt;
+            return;
+          }
+          await clearAutosaveDraft(mode).catch((error) => console.error(error));
+          if (!active) return;
+        }
       }
 
       if (!payload) {
@@ -334,11 +350,14 @@ export function useEditorBootstrap({
     void loadStartedTemplate()
       .catch((error) => console.error(error))
       .finally(() => {
+        if (active && deferredReplacement) {
+          setNotice({ tone: "warning", message: "이 템플릿을 변경하면 기존 최근 작업이 새 작업으로 교체됩니다." });
+        }
         if (active) onAutosaveArmed(autosaveExpectedUpdatedAt);
       });
     return () => { active = false; };
   }, [
-    hydratePreviewUploads, hydrateSystemTemplateUploads, mode, onAutosaveArmed, onRecoveryRestored,
+    enabled, hydratePreviewUploads, hydrateSystemTemplateUploads, mode, onAutosaveArmed, onRecoveryRestored,
     requestAutosaveDecision, resumeToken, setActiveGroup, setActiveSection,
     setActiveSystemTemplate, setActiveUserTemplate, setInitialLoadState, setNotice, setPlatform,
     setSelectedSlotId, setSystemCreditCost, setSystemDescription, setSystemPriceAmount, setSystemPricingType,

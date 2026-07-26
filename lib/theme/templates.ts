@@ -63,6 +63,11 @@ export type ThemeStartPayload = {
   systemTemplateBundleId?: string;
   sourceSystemTemplateId?: string;
   editMode?: "user" | "admin";
+  /**
+   * 갤러리에서 최근 작업과 새 템플릿 사이의 결정을 이미 내린 경우에만 사용한다.
+   * resume은 최근 작업을 즉시 복원하고, replace는 첫 실제 편집 전까지 기존 최근 작업을 보존한다.
+   */
+  autosaveAction?: "resume" | "replace";
 };
 
 export type ThemeSlotCandidate = {
