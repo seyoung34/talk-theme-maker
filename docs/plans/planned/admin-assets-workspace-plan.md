@@ -8,7 +8,7 @@
 >
 > 주요 파일: `components/admin/AdminAssetsClient.tsx`, `app/admin/assets/page.tsx`, `lib/theme/adminAssets.ts`, `lib/theme/adminAssetDomain.ts`, `lib/theme/bubbleBuilder/*`, 관련 API와 forward-only Supabase migration.
 >
-> 관련 문서: `docs/plans/planned/admin-assets-workspace-plan-review.md`, `docs/plans/planned/bubble-builder-ux-plan.md`.
+> 관련 문서: `docs/plans/planned/admin-assets-workspace-plan-review.md`, `docs/plans/in-progress/bubble-builder-ux-plan.md`.
 
 ## 1. 목표
 

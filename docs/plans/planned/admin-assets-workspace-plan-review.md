@@ -1,5 +1,8 @@
 # admin/assets 편집 워크스페이스 계획 리뷰
 
+> 상태: 리뷰 근거 보존 완료. 원 계획에 반영되었으며 구현 착수 전이다.
+> 참고: 원 계획 → [admin-assets-workspace-plan.md](admin-assets-workspace-plan.md)
+
 > 리뷰 대상: `docs/plans/planned/admin-assets-workspace-plan.md`
 >
 > 목적: 구현 착수 전에 데이터 정합성, 편집 상태 수명주기, 목록 조회 계약, 검증 범위를 보완한다.

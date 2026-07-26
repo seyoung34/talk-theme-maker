@@ -62,6 +62,9 @@ temp/
 # Local project documents
 docs/
 
+# Local ops scripts (외부 SaaS 콘솔 설정용, 일회성)
+scripts/setup-ga4-definitions.mjs
+
 .vercel
 .env*
 !.env.example
