@@ -890,7 +890,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onPullSheet={() => setMobileSheetSnap("full")}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
       onCopyBubbleToPair={(slot) => void copyBubbleToPair(slot)}
-      onBubbleFlip={flipCurrentBubbleHorizontally}
     />
   );
 

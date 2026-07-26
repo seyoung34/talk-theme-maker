@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useId, useState, type MutableRefObject } from "react";
-import { Edit3, ImageOff, Plus, RefreshCw, Sliders, X } from "lucide-react";
-import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
-import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
+import * as Dialog from "@radix-ui/react-dialog";
+import { ImageOff, Plus, Sliders, X } from "lucide-react";
+import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import {
@@ -62,7 +62,6 @@ type MobileQuickEditPanelProps = {
   onPullSheet: () => void;
   onOpenBubbleBuilder: () => void;
   onCopyBubbleToPair: (slot: ThemeAssetSlot) => void;
-  onBubbleFlip: (slot: ThemeAssetSlot, width: number) => void;
 };
 
 export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
@@ -306,7 +305,6 @@ function ImageControls({
   onOpenBubbleBuilder,
   pairedBubbleSlot,
   onCopyBubbleToPair,
-  onBubbleFlip,
   file,
   selections,
   templateId,
@@ -319,46 +317,27 @@ function ImageControls({
 }) {
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
   const userUploadIds = new Set(getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id)).map((entry) => entry.id));
-  const hasImage = Boolean(file?.file || file?.sourceUrl);
-  const [bubbleEditorOpen, setBubbleEditorOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [preparedEditSourceFile, setPreparedEditSourceFile] = useState<File | null>(null);
-  const [isPreparingEditSource, setIsPreparingEditSource] = useState(false);
-  const [editSourceError, setEditSourceError] = useState<string | null>(null);
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
   const selectedUploadEntry = getSelectedUpload(slot, uploads, selections);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
   const directEditableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;
   const editableSourceUrl = !directEditableSourceFile ? file?.sourceUrl ?? selectedPickerCandidate?.previewUrl ?? selectedCandidate?.previewUrl ?? selectedCandidate?.assetUrl : undefined;
-  const editableSourceFile = preparedEditSourceFile ?? directEditableSourceFile;
-  const canOpenImageEditor = Boolean(directEditableSourceFile || editableSourceUrl);
   const imageEditTarget = selectedUploadEntry?.imageEdit?.target ?? getImageEditTarget(selectedCandidate);
+  const [bubbleDraftDirty, setBubbleDraftDirty] = useState(false);
+  const [pendingCandidate, setPendingCandidate] = useState<SlotCandidate | null>(null);
 
   useEffect(() => {
-    setBubbleEditorOpen(false);
-  }, [slot.id]);
+    setBubbleDraftDirty(false);
+    setPendingCandidate(null);
+  }, [slot.id, selectedCandidate?.id]);
 
-  const canAdjustBubble = Boolean(slot.editableInBubbleEditor && selectedBubbleSlot);
-
-  const openImageEditor = async () => {
-    if (!canOpenImageEditor) return;
-    setEditSourceError(null);
-    if (directEditableSourceFile) {
-      setPreparedEditSourceFile(null);
-      setEditDialogOpen(true);
+  const requestCandidate = (candidate: SlotCandidate) => {
+    if (candidate.inherited || candidate.id === selectedPickerCandidate?.id) return;
+    if (slot.editableInBubbleEditor && bubbleDraftDirty) {
+      setPendingCandidate(candidate);
       return;
     }
-    if (!editableSourceUrl) return;
-    try {
-      setIsPreparingEditSource(true);
-      setPreparedEditSourceFile(await imageUrlToEditableFile(editableSourceUrl, slot.fileName ?? `${slot.id}.png`));
-      setEditDialogOpen(true);
-    } catch (error) {
-      console.error(error);
-      setEditSourceError("현재 이미지를 편집용으로 불러오지 못했습니다. 직접 업로드한 뒤 다시 편집해 주세요.");
-    } finally {
-      setIsPreparingEditSource(false);
-    }
+    applyCandidate(candidate);
   };
 
   return (
@@ -386,7 +365,7 @@ function ImageControls({
                 className={`grid w-full gap-1 rounded-xl border p-1.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${candidate.selected ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
                 onClick={() => {
                   if (candidate.inherited) return;
-                  applyCandidate(candidate);
+                  requestCandidate(candidate);
                 }}
               >
                 <span className="grid aspect-square place-items-center overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f8fafc]">
@@ -428,85 +407,45 @@ function ImageControls({
         <button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-[13px] font-black text-white shadow-sm hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={onOpenBubbleBuilder}>
           <Sliders size={17} aria-hidden="true" />나만의 말풍선 만들기
         </button>
-        <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#d1d5db] bg-white px-4 text-[13px] font-black text-[#334155] transition enabled:hover:border-[#bfdbfe] enabled:hover:bg-[#eff6ff] enabled:hover:text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45" disabled={!canOpenImageEditor || isPreparingEditSource} onClick={() => void openImageEditor()}>
-          {isPreparingEditSource ? <RefreshCw size={16} className="animate-spin" aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
-          {isPreparingEditSource ? "편집 준비 중" : "현재 이미지 편집"}
-        </button>
+        {selectedBubbleSlot ? <MobileBubbleEditor
+          slot={slot}
+          bubbleSlot={selectedBubbleSlot}
+          platform={platform}
+          sourceFile={directEditableSourceFile}
+          sourceUrl={editableSourceUrl}
+          initialImageState={selectedUploadEntry?.imageEdit?.state}
+          target={imageEditTarget}
+          markers={markers}
+          insets={insets}
+          stretch={stretch}
+          onApply={({ editedFile, sourceFile, imageState, target, markers, insets, stretch }) => {
+            if (editedFile) onEditedUpload(slot, editedFile, imageState, sourceFile, target);
+            onMarkersChange(markers);
+            onInsetsChange(insets);
+            onStretchChange(stretch);
+          }}
+          onDirtyChange={setBubbleDraftDirty}
+        /> : null}
         {pairedBubbleSlot ? <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 text-[13px] font-black text-[#1d4ed8] transition hover:bg-[#dbeafe]" onClick={() => onCopyBubbleToPair(slot)}>
           {pairedBubbleSlot.label}에 같은 말풍선 적용
         </button> : null}
-        <details
-          className="group rounded-xl border border-[#dbe3ed] bg-[#f8fafc]"
-          open={bubbleEditorOpen}
-          onToggle={(event) => {
-            const next = event.currentTarget.open;
-            if (next && (!hasImage || !canAdjustBubble)) {
-              event.currentTarget.open = false;
-              setBubbleEditorOpen(false);
-              return;
-            }
-            setBubbleEditorOpen(next);
-            if (next) onPullSheet();
-          }}
-        >
-          <summary
-            className={`flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-[13px] font-bold marker:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] [&::-webkit-details-marker]:hidden ${hasImage && canAdjustBubble ? "text-[#1d4ed8]" : "text-[#94a3b8]"}`}
-            aria-disabled={!hasImage || !canAdjustBubble}
-          >
-            <span>말풍선 편집하기</span>
-            <span className="text-[11px] font-bold text-[#94a3b8] transition group-open:rotate-180" aria-hidden="true">⌄</span>
-          </summary>
-          {bubbleEditorOpen && selectedBubbleSlot ? (
-            <div className="border-t border-[#dbe3ed] p-2">
-          <InlineBubbleAdjuster
-            file={file}
-            slot={selectedBubbleSlot}
-            platform={platform}
-            markers={markers}
-            insets={insets}
-            stretch={stretch}
-            onMarkersChange={onMarkersChange}
-            onInsetsChange={onInsetsChange}
-            onStretchChange={onStretchChange}
-          />
-            </div>
-          ) : null}
-        </details>
-        {editSourceError ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold leading-5 text-[#be123c]" role="alert">{editSourceError}</p> : null}
         </>
       ) : null}
-      <ImageEditDialog
-        open={editDialogOpen}
-        sourceFile={editableSourceFile}
-        slotLabel={slot.label}
-        initialState={selectedUploadEntry?.imageEdit?.state}
-        target={imageEditTarget}
-        preserveNinePatchBorder={slot.editableInBubbleEditor && platform === "android"}
-        onOpenChange={(open) => {
-          setEditDialogOpen(open);
-          if (!open) {
-            setPreparedEditSourceFile(null);
-            setEditSourceError(null);
-          }
-        }}
-        onApply={(editedFile, editState, outputSize) => {
-          if (!editableSourceFile) return;
-          if (slot.editableInBubbleEditor && outputSize && (selectedUploadEntry?.imageEdit?.state.flipX ?? false) !== editState.flipX) {
-            onBubbleFlip(slot, outputSize.width);
-          }
-          onEditedUpload(slot, editedFile, editState, editableSourceFile, imageEditTarget);
-        }}
-      />
+      <Dialog.Root open={Boolean(pendingCandidate)} onOpenChange={(open) => { if (!open) setPendingCandidate(null); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[95] bg-slate-950/40 backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[96] w-[calc(100vw-32px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[24px] border border-[#dbe3ed] bg-white p-5 shadow-[0_24px_72px_rgba(15,23,42,0.24)] outline-none">
+            <Dialog.Title className="text-lg font-black text-[#0f172a]">편집 내용을 버릴까요?</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">적용하지 않은 이미지와 영역 조절은 사라집니다.</Dialog.Description>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <Dialog.Close asChild><button type="button" className="min-h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-black text-[#475569]">계속 편집</button></Dialog.Close>
+              <button type="button" className="min-h-11 rounded-xl bg-[#0f172a] px-3 text-sm font-black text-white" onClick={() => { if (pendingCandidate) applyCandidate(pendingCandidate); setBubbleDraftDirty(false); setPendingCandidate(null); }}>버리고 변경</button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
-}
-
-async function imageUrlToEditableFile(url: string, fallbackName: string) {
-  const response = await fetch(url, { cache: "force-cache" });
-  if (!response.ok) throw new Error(`Image source could not be loaded: ${response.status}`);
-  const blob = await response.blob();
-  const mimeType = blob.type || inferImageMimeType(fallbackName) || "image/png";
-  return new File([blob], ensureImageFileExtension(fallbackName, mimeType), { type: mimeType });
 }
 
 function getImageEditTarget(candidate: ReturnType<typeof getSelectedCandidate>): ImageEditTarget | undefined {
@@ -516,20 +455,6 @@ function getImageEditTarget(candidate: ReturnType<typeof getSelectedCandidate>):
   return { width, height, label: "선택 후보 기준" };
 }
 
-function inferImageMimeType(fileName: string) {
-  const lower = fileName.toLowerCase();
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".webp")) return "image/webp";
-  if (lower.endsWith(".png") || lower.endsWith(".9.png")) return "image/png";
-  return undefined;
-}
-
-function ensureImageFileExtension(fileName: string, mimeType: string) {
-  if (/\.(png|jpe?g|webp)$/i.test(fileName)) return fileName;
-  if (mimeType === "image/jpeg") return `${fileName}.jpg`;
-  if (mimeType === "image/webp") return `${fileName}.webp`;
-  return `${fileName}.png`;
-}
 
 function getBackgroundSourcePair(slot: ThemeAssetSlot, slots: ThemeAssetSlot[]) {
   const imageSlot =
