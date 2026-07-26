@@ -37,6 +37,17 @@ export default function AccountClient() {
         <Star className="pointer-events-none absolute left-[2%] top-10 hidden h-7 w-7 rotate-12 text-[#fee500] lg:block" />
         <Sparkles className="pointer-events-none absolute right-[8%] top-16 hidden h-7 w-7 text-[#fbbf24] lg:block" />
 
+        {/* 이 페이지는 h2 세 개로만 시작해 최상위 제목이 없었다. 제목 탐색으로 화면을 파악할 수 있게 h1을 둔다. */}
+        <header className="mb-6">
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#3d7bd6]">My Page</p>
+          <h1 className="mt-2 font-[var(--font-display)] text-[30px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)] sm:text-[38px]">
+            마이페이지
+          </h1>
+          <p className="mt-2 text-sm font-semibold leading-7 text-[var(--color-on-surface-variant)]">
+            계정 정보와 보유 크레딧, 최근 내보내기 이력을 한곳에서 확인합니다.
+          </p>
+        </header>
+
         {accountError ? (
           <div className="mb-5 flex items-center justify-between gap-3 rounded-[22px] border border-[#f1b7b1] bg-[var(--color-error-container)] px-4 py-3 text-sm font-semibold text-[var(--color-on-error-container)]" role="alert">
             <span className="flex items-center gap-2"><AlertCircle size={17} aria-hidden="true" />{accountError}</span>
