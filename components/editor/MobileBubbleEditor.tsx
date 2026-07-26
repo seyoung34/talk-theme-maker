@@ -46,6 +46,8 @@ export function MobileBubbleEditor({
   const [helpOpen, setHelpOpen] = useState(false);
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [draft, setDraft] = useState<MobileBubbleEditDraft | null>(null);
+  const [activeDragKind, setActiveDragKind] = useState<DragKind | null>(null);
+  const [valueFeedbackKey, setValueFeedbackKey] = useState(0);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ kind: DragKind; startX: number; startY: number; draft: MobileBubbleEditDraft } | null>(null);
 
@@ -115,6 +117,8 @@ export function MobileBubbleEditor({
   useEffect(() => {
     setDraft(initialDraft);
     setHelpOpen(false);
+    setActiveDragKind(null);
+    setValueFeedbackKey(0);
   }, [initialDraft]);
 
   useEffect(() => {
@@ -151,6 +155,7 @@ export function MobileBubbleEditor({
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = { kind, startX: event.clientX, startY: event.clientY, draft };
+    setActiveDragKind(kind);
   };
 
   const updateDrag = (event: PointerEvent<HTMLDivElement>) => {
@@ -164,20 +169,27 @@ export function MobileBubbleEditor({
 
   const endDrag = (event: PointerEvent<HTMLDivElement>) => {
     dragRef.current = null;
+    setActiveDragKind(null);
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* already released */ }
   };
 
-  const reset = () => setDraft(initialDraft);
-  const flip = () => setDraft((current) => {
-    if (!current || !asset) return current;
-    return {
-      ...current,
-      imageState: { ...current.imageState, flipX: !current.imageState.flipX },
-      markers: flipBubbleMarkersHorizontally(current.markers, asset.width),
-      insets: flipBubbleInsetsHorizontally(current.insets),
-      stretch: flipBubbleStretchHorizontally(current.stretch, asset.width),
-    };
-  });
+  const reset = () => {
+    setDraft(initialDraft);
+    setActiveDragKind(null);
+  };
+  const flip = () => {
+    setDraft((current) => {
+      if (!current || !asset) return current;
+      return {
+        ...current,
+        imageState: { ...current.imageState, flipX: !current.imageState.flipX },
+        markers: flipBubbleMarkersHorizontally(current.markers, asset.width),
+        insets: flipBubbleInsetsHorizontally(current.insets),
+        stretch: flipBubbleStretchHorizontally(current.stretch, asset.width),
+      };
+    });
+    setValueFeedbackKey((current) => current + 1);
+  };
   const apply = async () => {
     if (!draft || !preparedFile || !initialDraft || !asset) return;
     setLoading(true);
@@ -197,45 +209,61 @@ export function MobileBubbleEditor({
   if (error && !asset) return <p className="rounded-[22px] border border-[#fecaca] bg-[#fff1f2] px-4 py-4 text-sm font-bold text-[#be123c]">{error}</p>;
   if (!asset || !draft) return <p className="rounded-[22px] border border-dashed border-[#dbe3ed] bg-[#f8fafc] px-4 py-5 text-center text-sm font-semibold text-[#64748b]">편집할 말풍선을 선택하세요.</p>;
 
+  const isDirty = isMobileBubbleEditDirty(draft, initialDraft);
+  const activeValueGroup = getActiveValueGroup(activeDragKind);
+
   return (
     <section className="grid gap-3 rounded-[24px] border border-[#d8e2ef] bg-[linear-gradient(160deg,#f8fbff_0%,#edf5ff_100%)] p-3 shadow-[0_12px_28px_rgba(37,99,235,0.08)]">
-      <div ref={stageRef} className="relative grid min-h-[300px] touch-pan-y place-items-center overflow-hidden rounded-[20px] border border-white bg-[radial-gradient(circle_at_50%_35%,#ffffff_0%,#e7f0fa_76%)]" onPointerMove={updateDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
+      <header className="flex min-h-11 items-center justify-between gap-3 px-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate text-[15px] font-black tracking-[-0.02em] text-[#0f172a]">말풍선 편집</h3>
+          {isDirty ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#fff7ed] px-2 py-1 text-[10px] font-black text-[#c2410c]" role="status"><span className="size-1.5 rounded-full bg-[#f97316]" aria-hidden="true" />미적용</span> : null}
+        </div>
+        <button type="button" title="편집 도움말" className={`grid size-11 shrink-0 place-items-center rounded-xl border transition ${helpOpen ? "border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#d1d5db] bg-white text-[#475569]"}`} aria-label="편집 도움말" aria-expanded={helpOpen} onClick={() => setHelpOpen((current) => !current)}><Info size={18} aria-hidden="true" /></button>
+      </header>
+      {helpOpen ? <p className="rounded-xl bg-white/80 px-3 py-2.5 text-xs font-semibold leading-5 text-[#475569]">{platform === "android" ? "파란 영역의 양끝을 움직여 늘어나는 구간을, 초록 테두리의 핸들을 움직여 글자 영역을 조절하세요." : "초록 테두리의 핸들로 글자 여백을, 파란 점으로 이미지가 늘어나는 기준을 조절하세요."}</p> : null}
+      <div
+        ref={stageRef}
+        className="relative grid min-h-[300px] touch-pan-y place-items-center overflow-hidden rounded-[20px] border border-white"
+        style={{ backgroundColor: "#f8fafc", backgroundImage: "conic-gradient(#e6ebf1 25%, transparent 0 50%, #e6ebf1 0 75%, transparent 0)", backgroundSize: "16px 16px" }}
+        onPointerMove={updateDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+      >
         <div className="relative origin-center" style={artboardStyle}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageUrl} alt="" className="pointer-events-none block size-full select-none" draggable={false} />
           {platform === "android" ? <AndroidOverlay asset={asset} markers={draft.markers} scale={stageScale} onDrag={beginDrag} /> : <IosOverlay asset={asset} insets={draft.insets} stretch={draft.stretch} scale={stageScale} onDrag={beginDrag} />}
-          <button type="button" aria-label="이미지 크기 조절" className="absolute -bottom-4 -right-4 grid size-10 touch-none cursor-nwse-resize place-items-center rounded-full border border-[#bfdbfe] bg-white text-[#2563eb] shadow-[0_8px_20px_rgba(37,99,235,0.22)]" onPointerDown={beginDrag("scale")}><Maximize2 size={17} aria-hidden="true" /></button>
+          <button type="button" aria-label="이미지 크기 조절" className="absolute -bottom-[22px] -right-[22px] grid size-11 touch-none cursor-nwse-resize place-items-center rounded-full border border-[#bfdbfe] bg-white text-[#2563eb] shadow-[0_8px_20px_rgba(37,99,235,0.22)]" onPointerDown={beginDrag("scale")}><Maximize2 size={17} aria-hidden="true" /></button>
         </div>
       </div>
-      <BubbleValueReadout platform={platform} markers={draft.markers} insets={draft.insets} stretch={draft.stretch} />
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          <button type="button" title="좌우 반전" aria-label="좌우 반전" className={`grid size-11 place-items-center rounded-xl border transition ${draft.imageState.flipX ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#d1d5db] bg-white text-[#334155]"}`} onClick={flip}><FlipHorizontal2 size={18} aria-hidden="true" /></button>
-          <button type="button" title="마지막 적용 상태로 되돌리기" aria-label="마지막 적용 상태로 되돌리기" className="grid size-11 place-items-center rounded-xl border border-[#d1d5db] bg-white text-[#475569] transition disabled:opacity-45" disabled={!isMobileBubbleEditDirty(draft, initialDraft)} onClick={reset}><RotateCcw size={18} aria-hidden="true" /></button>
-        </div>
-        <button type="button" title="편집 도움말" className={`grid size-11 place-items-center rounded-xl border transition ${helpOpen ? "border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#d1d5db] bg-white text-[#475569]"}`} aria-label="편집 도움말" aria-expanded={helpOpen} onClick={() => setHelpOpen((current) => !current)}><Info size={18} aria-hidden="true" /></button>
+      <BubbleValueReadout platform={platform} markers={draft.markers} insets={draft.insets} stretch={draft.stretch} activeGroup={activeValueGroup} feedbackKey={valueFeedbackKey} />
+      <div className="flex gap-2">
+        <button type="button" title="좌우 반전" aria-label="좌우 반전" className={`grid size-11 place-items-center rounded-xl border transition ${draft.imageState.flipX ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#d1d5db] bg-white text-[#334155]"}`} onClick={flip}><FlipHorizontal2 size={18} aria-hidden="true" /></button>
+        <button type="button" title="마지막 적용 상태로 되돌리기" aria-label="마지막 적용 상태로 되돌리기" className="grid size-11 place-items-center rounded-xl border border-[#d1d5db] bg-white text-[#475569] transition disabled:opacity-45" disabled={!isDirty} onClick={reset}><RotateCcw size={18} aria-hidden="true" /></button>
       </div>
-      {helpOpen ? <p className="rounded-xl bg-white/80 px-3 py-2.5 text-xs font-semibold leading-5 text-[#475569]">{platform === "android" ? "파란 영역의 양끝을 움직여 늘어나는 구간을, 초록 테두리의 핸들을 움직여 글자 영역을 조절하세요." : "초록 테두리의 핸들로 글자 여백을, 파란 점으로 이미지가 늘어나는 기준을 조절하세요."}</p> : null}
       {error ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold text-[#be123c]" role="alert">{error}</p> : null}
-      <div className="grid grid-cols-2 gap-2"><button type="button" className="min-h-12 rounded-xl border border-[#d1d5db] bg-white px-4 text-sm font-black text-[#475569] disabled:opacity-45" disabled={!isMobileBubbleEditDirty(draft, initialDraft) || loading} onClick={reset}>취소</button><button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white disabled:opacity-45" disabled={!isMobileBubbleEditDirty(draft, initialDraft) || loading} onClick={() => void apply()}>{loading ? <LoaderCircle size={16} className="animate-spin" /> : <Check size={16} />}적용</button></div>
+      <div className="grid grid-cols-2 gap-2"><button type="button" className="min-h-12 rounded-xl border border-[#d1d5db] bg-white px-4 text-sm font-black text-[#475569] disabled:opacity-45" disabled={!isDirty || loading} onClick={reset}>취소</button><button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white disabled:opacity-45" disabled={!isDirty || loading} onClick={() => void apply()}>{loading ? <LoaderCircle size={16} className="animate-spin" /> : <Check size={16} />}적용</button></div>
     </section>
   );
 }
 
 function AndroidOverlay({ asset, markers, scale, onDrag }: { asset: BubbleAsset; markers: Markers; scale: number; onDrag: (kind: DragKind) => (event: PointerEvent<HTMLButtonElement>) => void }) {
-  const handle = "pointer-events-auto absolute z-20 size-7 touch-none -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#2563eb] shadow-[0_2px_8px_rgba(37,99,235,0.35)]";
+  const handle = "pointer-events-auto absolute z-20 grid size-11 touch-none -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb]";
+  const stretchDot = <span className="size-4 rounded-full border-2 border-white bg-[#2563eb] shadow-[0_2px_8px_rgba(37,99,235,0.35)]" aria-hidden="true" />;
+  const contentDot = <span className="size-4 rounded-full border-2 border-white bg-[#10b981] shadow-[0_2px_8px_rgba(16,185,129,0.35)]" aria-hidden="true" />;
   return <div className="pointer-events-none absolute inset-0">
     <span className="absolute inset-y-0 bg-sky-400/25" style={{ left: markers.top.start * scale, width: (markers.top.end - markers.top.start) * scale }} />
     <span className="absolute inset-x-0 bg-sky-400/25" style={{ top: markers.left.start * scale, height: (markers.left.end - markers.left.start) * scale }} />
     <span className="absolute border-2 border-emerald-500/90" style={{ left: markers.bottom.start * scale, top: markers.right.start * scale, width: (markers.bottom.end - markers.bottom.start) * scale, height: (markers.right.end - markers.right.start) * scale }} />
-    <button type="button" aria-label="가로 늘어남 시작 조절" className={handle} style={{ left: markers.top.start * scale, top: 0 }} onPointerDown={onDrag("top-start")} />
-    <button type="button" aria-label="가로 늘어남 끝 조절" className={handle} style={{ left: markers.top.end * scale, top: 0 }} onPointerDown={onDrag("top-end")} />
-    <button type="button" aria-label="세로 늘어남 시작 조절" className={handle} style={{ left: 0, top: markers.left.start * scale }} onPointerDown={onDrag("left-start")} />
-    <button type="button" aria-label="세로 늘어남 끝 조절" className={handle} style={{ left: 0, top: markers.left.end * scale }} onPointerDown={onDrag("left-end")} />
-    <button type="button" aria-label="글자 영역 왼쪽 조절" className={handle} style={{ left: markers.bottom.start * scale, top: asset.height * scale }} onPointerDown={onDrag("content-left")} />
-    <button type="button" aria-label="글자 영역 오른쪽 조절" className={handle} style={{ left: markers.bottom.end * scale, top: asset.height * scale }} onPointerDown={onDrag("content-right")} />
-    <button type="button" aria-label="글자 영역 위 조절" className={handle} style={{ left: asset.width * scale, top: markers.right.start * scale }} onPointerDown={onDrag("content-top")} />
-    <button type="button" aria-label="글자 영역 아래 조절" className={handle} style={{ left: asset.width * scale, top: markers.right.end * scale }} onPointerDown={onDrag("content-bottom")} />
+    <button type="button" aria-label="가로 늘어남 시작 조절" className={handle} style={{ left: markers.top.start * scale, top: 0 }} onPointerDown={onDrag("top-start")}>{stretchDot}</button>
+    <button type="button" aria-label="가로 늘어남 끝 조절" className={handle} style={{ left: markers.top.end * scale, top: 0 }} onPointerDown={onDrag("top-end")}>{stretchDot}</button>
+    <button type="button" aria-label="세로 늘어남 시작 조절" className={handle} style={{ left: 0, top: markers.left.start * scale }} onPointerDown={onDrag("left-start")}>{stretchDot}</button>
+    <button type="button" aria-label="세로 늘어남 끝 조절" className={handle} style={{ left: 0, top: markers.left.end * scale }} onPointerDown={onDrag("left-end")}>{stretchDot}</button>
+    <button type="button" aria-label="글자 영역 왼쪽 조절" className={handle} style={{ left: markers.bottom.start * scale, top: asset.height * scale }} onPointerDown={onDrag("content-left")}>{contentDot}</button>
+    <button type="button" aria-label="글자 영역 오른쪽 조절" className={handle} style={{ left: markers.bottom.end * scale, top: asset.height * scale }} onPointerDown={onDrag("content-right")}>{contentDot}</button>
+    <button type="button" aria-label="글자 영역 위 조절" className={handle} style={{ left: asset.width * scale, top: markers.right.start * scale }} onPointerDown={onDrag("content-top")}>{contentDot}</button>
+    <button type="button" aria-label="글자 영역 아래 조절" className={handle} style={{ left: asset.width * scale, top: markers.right.end * scale }} onPointerDown={onDrag("content-bottom")}>{contentDot}</button>
   </div>;
 }
 
@@ -247,15 +275,16 @@ function IosOverlay({ asset, insets, stretch, scale, onDrag }: { asset: BubbleAs
   const top = insets.top * scale;
   const right = (width - insets.right) * scale;
   const bottom = (height - insets.bottom) * scale;
-  const handle = "pointer-events-auto absolute z-20 size-7 touch-none -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.35)]";
+  const handle = "pointer-events-auto absolute z-20 grid size-11 touch-none -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#10b981]";
+  const dot = <span className="size-4 rounded-full border-2 border-white bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.35)]" aria-hidden="true" />;
   return <div className="pointer-events-none absolute inset-0">
     <span className="absolute border-2 border-emerald-500/90" style={{ left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) }} />
     <span className="absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-sky-500 shadow" style={{ left: stretch.x * scale, top: stretch.y * scale }} />
-    <button type="button" aria-label="글자 영역 왼쪽 조절" className={handle} style={{ left, top: (top + bottom) / 2 }} onPointerDown={onDrag("inset-left")} />
-    <button type="button" aria-label="글자 영역 오른쪽 조절" className={handle} style={{ left: right, top: (top + bottom) / 2 }} onPointerDown={onDrag("inset-right")} />
-    <button type="button" aria-label="글자 영역 위 조절" className={handle} style={{ left: (left + right) / 2, top }} onPointerDown={onDrag("inset-top")} />
-    <button type="button" aria-label="글자 영역 아래 조절" className={handle} style={{ left: (left + right) / 2, top: bottom }} onPointerDown={onDrag("inset-bottom")} />
-    <button type="button" aria-label="늘어나는 기준점 조절" className="pointer-events-auto absolute z-20 grid size-8 touch-none -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white bg-sky-500 shadow" style={{ left: stretch.x * scale, top: stretch.y * scale }} onPointerDown={onDrag("stretch")}><span className="size-2 rounded-full bg-white" /></button>
+    <button type="button" aria-label="글자 영역 왼쪽 조절" className={handle} style={{ left, top: (top + bottom) / 2 }} onPointerDown={onDrag("inset-left")}>{dot}</button>
+    <button type="button" aria-label="글자 영역 오른쪽 조절" className={handle} style={{ left: right, top: (top + bottom) / 2 }} onPointerDown={onDrag("inset-right")}>{dot}</button>
+    <button type="button" aria-label="글자 영역 위 조절" className={handle} style={{ left: (left + right) / 2, top }} onPointerDown={onDrag("inset-top")}>{dot}</button>
+    <button type="button" aria-label="글자 영역 아래 조절" className={handle} style={{ left: (left + right) / 2, top: bottom }} onPointerDown={onDrag("inset-bottom")}>{dot}</button>
+    <button type="button" aria-label="늘어나는 기준점 조절" className="pointer-events-auto absolute z-20 grid size-11 touch-none -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#0ea5e9]" style={{ left: stretch.x * scale, top: stretch.y * scale }} onPointerDown={onDrag("stretch")}><span className="grid size-5 place-items-center rounded-full border-2 border-white bg-sky-500 shadow" aria-hidden="true"><span className="size-1.5 rounded-full bg-white" /></span></button>
   </div>;
 }
 
@@ -290,24 +319,31 @@ function updateDraftForDrag(active: { kind: DragKind; startX: number; startY: nu
   return { ...next, insets: normalizeBubbleInsets(next.insets, source.width, source.height), stretch: clampBubbleStretchPoint(next.stretch, source.width, source.height) };
 }
 
-function BubbleValueReadout({ platform, markers, insets, stretch }: { platform: ThemePlatform; markers: Markers; insets: Insets; stretch: StretchPoint }) {
+function BubbleValueReadout({ platform, markers, insets, stretch, activeGroup, feedbackKey }: { platform: ThemePlatform; markers: Markers; insets: Insets; stretch: StretchPoint; activeGroup: "stretch" | "content" | null; feedbackKey: number }) {
   if (platform === "android") {
     return <div className="grid grid-cols-2 gap-2" aria-label="현재 영역 값">
-      <ValueCard label="늘어나는 구간" values={[`가로 ${markers.top.start}–${markers.top.end}`, `세로 ${markers.left.start}–${markers.left.end}`]} tone="blue" />
-      <ValueCard label="글자 영역" values={[`가로 ${markers.bottom.start}–${markers.bottom.end}`, `세로 ${markers.right.start}–${markers.right.end}`]} tone="green" />
+      <ValueCard key={`stretch-${feedbackKey}`} label="늘어나는 구간" values={[`가로 ${markers.top.start}–${markers.top.end}`, `세로 ${markers.left.start}–${markers.left.end}`]} tone="blue" active={activeGroup === "stretch"} flash={feedbackKey > 0} />
+      <ValueCard key={`content-${feedbackKey}`} label="글자 영역" values={[`가로 ${markers.bottom.start}–${markers.bottom.end}`, `세로 ${markers.right.start}–${markers.right.end}`]} tone="green" active={activeGroup === "content"} flash={feedbackKey > 0} />
     </div>;
   }
   return <div className="grid grid-cols-2 gap-2" aria-label="현재 영역 값">
-    <ValueCard label="늘어나는 기준" values={[`X ${stretch.x}`, `Y ${stretch.y}`]} tone="blue" />
-    <ValueCard label="글자 여백" values={[`왼 ${insets.left} · 오른 ${insets.right}`, `위 ${insets.top} · 아래 ${insets.bottom}`]} tone="green" />
+    <ValueCard key={`stretch-${feedbackKey}`} label="늘어나는 기준" values={[`X ${stretch.x}`, `Y ${stretch.y}`]} tone="blue" active={activeGroup === "stretch"} flash={feedbackKey > 0} />
+    <ValueCard key={`content-${feedbackKey}`} label="글자 여백" values={[`왼 ${insets.left} · 오른 ${insets.right}`, `위 ${insets.top} · 아래 ${insets.bottom}`]} tone="green" active={activeGroup === "content"} flash={feedbackKey > 0} />
   </div>;
 }
 
-function ValueCard({ label, values, tone }: { label: string; values: string[]; tone: "blue" | "green" }) {
+function ValueCard({ label, values, tone, active, flash }: { label: string; values: string[]; tone: "blue" | "green"; active: boolean; flash: boolean }) {
   const colors = tone === "blue" ? "border-[#bfdbfe] bg-[#f8fbff] text-[#1d4ed8]" : "border-[#a7f3d0] bg-[#f4fffa] text-[#047857]";
-  return <div className={`rounded-xl border px-3 py-2 ${colors}`}>
+  const activeStyle = active ? tone === "blue" ? "scale-[1.02] ring-2 ring-[#60a5fa]/40 shadow-[0_6px_16px_rgba(37,99,235,0.12)]" : "scale-[1.02] ring-2 ring-[#34d399]/40 shadow-[0_6px_16px_rgba(16,185,129,0.12)]" : "";
+  return <div className={`rounded-xl border px-3 py-2 transition duration-150 ${colors} ${activeStyle} ${flash ? "motion-safe:animate-[bubble-value-flash_420ms_cubic-bezier(0.22,1,0.36,1)]" : ""}`}>
     <p className="text-[10px] font-black tracking-[-0.01em]">{label}</p>
     <div className="mt-1 grid gap-0.5 font-mono text-[11px] font-bold leading-4 text-[#334155]">{values.map((value) => <span key={value}>{value}</span>)}</div>
   </div>;
+}
+
+function getActiveValueGroup(kind: DragKind | null): "stretch" | "content" | null {
+  if (!kind || kind === "scale") return null;
+  if (kind === "stretch" || kind.startsWith("top-") || kind.startsWith("left-")) return "stretch";
+  return "content";
 }
 function fileToDataUrl(file: File) { return new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("이미지를 읽지 못했습니다.")); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); }); }
