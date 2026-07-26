@@ -6,15 +6,9 @@ import { loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
 import { flipBubbleInsetsHorizontally, flipBubbleMarkersHorizontally, flipBubbleStretchHorizontally } from "@/lib/theme/bubbleEditTransforms";
 import { defaultInsets, defaultStretch } from "@/lib/theme/preview/bubbleCanvas";
 import { defaultImageEditState, renderEditedImageFile, type ImageEditState, type ImageEditTarget } from "@/lib/theme/imageEdit";
+import { clampBubbleStretchPoint, isMobileBubbleEditDirty, normalizeBubbleInsets, normalizeBubbleMarkers, type MobileBubbleEditDraft } from "@/lib/theme/mobileBubbleEdit";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { BubbleAsset, BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
-
-type MobileBubbleEditDraft = {
-  imageState: ImageEditState;
-  markers: Markers;
-  insets: Insets;
-  stretch: StretchPoint;
-};
 
 type DragKind = "image" | "scale" | "top-start" | "top-end" | "left-start" | "left-end" | "content-left" | "content-right" | "content-top" | "content-bottom" | "inset-left" | "inset-right" | "inset-top" | "inset-bottom" | "stretch";
 
@@ -125,7 +119,7 @@ export function MobileBubbleEditor({
 
   useEffect(() => {
     if (!draft || !initialDraft) return;
-    onDirtyChange?.(JSON.stringify(draft) !== JSON.stringify(initialDraft));
+    onDirtyChange?.(isMobileBubbleEditDirty(draft, initialDraft));
   }, [draft, initialDraft, onDirtyChange]);
 
   useEffect(() => {
@@ -215,12 +209,12 @@ export function MobileBubbleEditor({
       </div>
       <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
         <button type="button" className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border px-3 text-[13px] font-black transition ${draft.imageState.flipX ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#d1d5db] bg-white text-[#334155]"}`} onClick={flip}><FlipHorizontal2 size={16} aria-hidden="true" />반전</button>
-        <button type="button" className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#d1d5db] bg-white px-3 text-[13px] font-black text-[#475569] disabled:opacity-45" disabled={JSON.stringify(draft) === JSON.stringify(initialDraft)} onClick={reset}><RotateCcw size={16} aria-hidden="true" />원본</button>
+        <button type="button" className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#d1d5db] bg-white px-3 text-[13px] font-black text-[#475569] disabled:opacity-45" disabled={!isMobileBubbleEditDirty(draft, initialDraft)} onClick={reset}><RotateCcw size={16} aria-hidden="true" />원본</button>
         <button type="button" className={`grid min-h-11 place-items-center rounded-xl border px-3 transition ${helpOpen ? "border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#d1d5db] bg-white text-[#475569]"}`} aria-label="편집 도움말" aria-expanded={helpOpen} onClick={() => setHelpOpen((current) => !current)}><Info size={17} aria-hidden="true" /></button>
       </div>
       {helpOpen ? <p className="rounded-xl bg-white/80 px-3 py-2.5 text-xs font-semibold leading-5 text-[#475569]">{platform === "android" ? "빈 곳을 드래그하면 이미지가 이동합니다. 파란 영역은 늘어나는 구간이고, 초록 테두리는 글자가 들어갈 영역입니다." : "빈 곳을 드래그하면 이미지가 이동합니다. 초록 테두리는 글자 영역이고, 파란 점은 이미지가 늘어나는 기준점입니다."}</p> : null}
       {error ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold text-[#be123c]" role="alert">{error}</p> : null}
-      <div className="grid grid-cols-2 gap-2"><button type="button" className="min-h-12 rounded-xl border border-[#d1d5db] bg-white px-4 text-sm font-black text-[#475569] disabled:opacity-45" disabled={JSON.stringify(draft) === JSON.stringify(initialDraft) || loading} onClick={reset}>취소</button><button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white disabled:opacity-45" disabled={JSON.stringify(draft) === JSON.stringify(initialDraft) || loading} onClick={() => void apply()}>{loading ? <LoaderCircle size={16} className="animate-spin" /> : <Check size={16} />}적용</button></div>
+      <div className="grid grid-cols-2 gap-2"><button type="button" className="min-h-12 rounded-xl border border-[#d1d5db] bg-white px-4 text-sm font-black text-[#475569] disabled:opacity-45" disabled={!isMobileBubbleEditDirty(draft, initialDraft) || loading} onClick={reset}>취소</button><button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white disabled:opacity-45" disabled={!isMobileBubbleEditDirty(draft, initialDraft) || loading} onClick={() => void apply()}>{loading ? <LoaderCircle size={16} className="animate-spin" /> : <Check size={16} />}적용</button></div>
     </section>
   );
 }
@@ -284,7 +278,7 @@ function updateDraftForDrag(active: { kind: DragKind; startX: number; startY: nu
     if (active.kind === "content-right") next.markers.bottom.end += dx;
     if (active.kind === "content-top") next.markers.right.start += dy;
     if (active.kind === "content-bottom") next.markers.right.end += dy;
-    return { ...next, markers: normalizeMarkers(next.markers, width, height) };
+    return { ...next, markers: normalizeBubbleMarkers(next.markers, width, height) };
   }
   const source = asset.name.toLowerCase().endsWith(".9.png") ? asset.innerCanvas : asset.fullCanvas;
   if (active.kind === "inset-left") next.insets.left += dx;
@@ -295,23 +289,6 @@ function updateDraftForDrag(active: { kind: DragKind; startX: number; startY: nu
     next.stretch.x += dx;
     next.stretch.y += dy;
   }
-  return { ...next, insets: normalizeInsets(next.insets, source.width, source.height), stretch: { x: clamp(Math.round(next.stretch.x), 0, source.width - 1), y: clamp(Math.round(next.stretch.y), 0, source.height - 1) } };
+  return { ...next, insets: normalizeBubbleInsets(next.insets, source.width, source.height), stretch: clampBubbleStretchPoint(next.stretch, source.width, source.height) };
 }
-
-function normalizeMarkers(markers: Markers, width: number, height: number): Markers {
-  return { top: normalizeRange(markers.top, width), bottom: normalizeRange(markers.bottom, width), left: normalizeRange(markers.left, height), right: normalizeRange(markers.right, height) };
-}
-function normalizeRange(range: { start: number; end: number }, max: number) {
-  const start = clamp(Math.round(range.start), 1, Math.max(1, max - 2));
-  const end = clamp(Math.round(range.end), start + 1, Math.max(start + 1, max - 1));
-  return { start, end };
-}
-function normalizeInsets(insets: Insets, width: number, height: number): Insets {
-  const left = clamp(Math.round(insets.left), 0, Math.max(0, width - 1));
-  const right = clamp(Math.round(insets.right), 0, Math.max(0, width - left - 1));
-  const top = clamp(Math.round(insets.top), 0, Math.max(0, height - 1));
-  const bottom = clamp(Math.round(insets.bottom), 0, Math.max(0, height - top - 1));
-  return { left, right, top, bottom };
-}
-function clamp(value: number, min: number, max: number) { return Math.max(min, Math.min(max, value)); }
 function fileToDataUrl(file: File) { return new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("이미지를 읽지 못했습니다.")); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); }); }
