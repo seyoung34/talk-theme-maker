@@ -3,6 +3,8 @@ import type { BubbleAsset, BubbleSlot, InvalidPixel, Markers, Range } from "@/li
 const transparent = [0, 0, 0, 0] as const;
 const markerBlack = [0, 0, 0, 255] as const;
 
+export type NinePatchImageSource = HTMLImageElement | ImageBitmap;
+
 // 나인패치 테두리 네 변을 1px 스트립으로 읽은 결과. ImageData가 그대로 들어맞는다.
 export type BorderPixelStrip = { readonly data: Uint8ClampedArray };
 export type BorderPixels = {
@@ -12,21 +14,27 @@ export type BorderPixels = {
   readonly right: BorderPixelStrip;
 };
 
-export async function loadNinePatchFile(file: File, slot: BubbleSlot): Promise<BubbleAsset> {
-  const dataUrl = await readFileAsDataUrl(file);
-  const source = await loadImage(dataUrl);
-  return parseImage(source, file.name, slot, dataUrl);
+// 이미 바이트를 들고 있을 때 쓰는 경로. data URL을 거치면 base64 인코딩 비용과
+// 33% 큰 문자열을 메인 스레드에서 만들게 되는데, createImageBitmap은 그대로 디코딩한다.
+// JS가 받아 온 blob이라 원본이 외부 도메인이어도 캔버스가 오염되지 않는다(getImageData 가능).
+export async function loadNinePatchBlob(blob: Blob, name: string, slot: BubbleSlot): Promise<BubbleAsset> {
+  const bitmap = await createImageBitmap(blob);
+  try {
+    return parseImage(bitmap, name, slot);
+  } finally {
+    bitmap.close();
+  }
 }
 
 export async function loadNinePatchDataUrl(dataUrl: string, name: string, slot: BubbleSlot): Promise<BubbleAsset> {
   const source = await loadImage(dataUrl);
-  return parseImage(source, name, slot, dataUrl);
+  return parseImage(source, name, slot);
 }
 
-export function parseImage(source: HTMLImageElement, name: string, slot: BubbleSlot, dataUrl = source.src): BubbleAsset {
+export function parseImage(source: NinePatchImageSource, name: string, slot: BubbleSlot): BubbleAsset {
   const fullCanvas = document.createElement("canvas");
-  fullCanvas.width = source.naturalWidth;
-  fullCanvas.height = source.naturalHeight;
+  fullCanvas.width = "naturalWidth" in source ? source.naturalWidth : source.width;
+  fullCanvas.height = "naturalHeight" in source ? source.naturalHeight : source.height;
   const ctx = context(fullCanvas);
   ctx.drawImage(source, 0, 0);
 
@@ -54,8 +62,6 @@ export function parseImage(source: HTMLImageElement, name: string, slot: BubbleS
   return {
     slot,
     name,
-    dataUrl,
-    source,
     fullCanvas,
     innerCanvas,
     width: fullCanvas.width,
@@ -298,15 +304,6 @@ function context(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("Canvas 2D context is not available.");
   return ctx;
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
