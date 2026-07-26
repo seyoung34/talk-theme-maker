@@ -404,6 +404,12 @@ function ImageControls({
 
       {slot.editableInBubbleEditor ? (
         <>
+        <button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-[13px] font-black text-white shadow-sm hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={onOpenBubbleBuilder}>
+          <Sliders size={17} aria-hidden="true" />나만의 말풍선 만들기
+        </button>
+        {pairedBubbleSlot ? <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 text-[13px] font-black text-[#1d4ed8] transition hover:bg-[#dbeafe]" onClick={() => onCopyBubbleToPair(slot)}>
+          같은 말풍선 적용
+        </button> : null}
         {selectedBubbleSlot ? <MobileBubbleEditor
           slot={slot}
           bubbleSlot={selectedBubbleSlot}
@@ -423,12 +429,6 @@ function ImageControls({
           }}
           onDirtyChange={(dirty) => { setBubbleDraftDirty(dirty); onBubbleDraftDirtyChange(dirty); }}
         /> : null}
-        <button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-[13px] font-black text-white shadow-sm hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={onOpenBubbleBuilder}>
-          <Sliders size={17} aria-hidden="true" />나만의 말풍선 만들기
-        </button>
-        {pairedBubbleSlot ? <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 text-[13px] font-black text-[#1d4ed8] transition hover:bg-[#dbeafe]" onClick={() => onCopyBubbleToPair(slot)}>
-          {pairedBubbleSlot.label}에 같은 말풍선 적용
-        </button> : null}
         </>
       ) : null}
       <Dialog.Root open={Boolean(pendingCandidate)} onOpenChange={(open) => { if (!open) setPendingCandidate(null); }}>
