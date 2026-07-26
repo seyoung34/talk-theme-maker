@@ -73,19 +73,6 @@ export function themeFileCacheKey(file: ThemeProjectFile) {
   return `${file.path}:${file.size}:${file.file?.lastModified ?? remotePath}`;
 }
 
-export async function dataUrlForThemeFile(file: ThemeProjectFile) {
-  if (file.file) return readFileAsDataUrl(file.file);
-  if (!file.sourceUrl) return "";
-  const response = await fetch(file.sourceUrl);
-  const blob = await response.blob();
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
-
 export function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
