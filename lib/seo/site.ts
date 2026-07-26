@@ -44,6 +44,36 @@ export const siteDescription =
 export const metadataBaseUrl = publicSiteOrigin ? new URL(publicSiteOrigin) : undefined;
 
 /**
+ * 검색엔진 소유확인 토큰.
+ *
+ * Search Console·서치어드바이저에 사이트를 등록해야 "어떤 검색어로 몇 번 노출됐는지"를 볼 수 있고
+ * sitemap을 직접 제출할 수 있다. 등록의 첫 단계가 소유확인이다.
+ *
+ * 토큰은 비밀이 아니다(HTML에 그대로 노출된다). 다만 값이 환경마다 다르고 나중에 바뀔 수 있어
+ * 코드에 박지 않고 환경변수로 받는다. 값이 없으면 태그 자체를 내보내지 않는다.
+ *
+ * 구글은 Cloudflare DNS TXT 레코드로도 확인할 수 있고, 그쪽이 www·http까지 한 번에 덮는
+ * 도메인 속성을 만들어 준다. 이 메타 태그는 네이버용과 구글 대체 수단이다.
+ */
+function readVerificationToken(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value ? value : undefined;
+}
+
+export const googleSiteVerification = readVerificationToken("GOOGLE_SITE_VERIFICATION");
+export const naverSiteVerification = readVerificationToken("NAVER_SITE_VERIFICATION");
+
+/** 값이 하나도 없으면 `undefined`를 돌려 metadata에 빈 `verification` 키가 생기지 않게 한다. */
+export function createVerificationMetadata(): Metadata["verification"] {
+  const other = naverSiteVerification ? { "naver-site-verification": naverSiteVerification } : undefined;
+  if (!googleSiteVerification && !other) return undefined;
+  return {
+    ...(googleSiteVerification ? { google: googleSiteVerification } : {}),
+    ...(other ? { other } : {}),
+  };
+}
+
+/**
  * 색인 대상 공개 페이지. sitemap과 각 페이지 canonical이 같은 목록을 쓴다.
  * 개인화·인증·관리자 화면은 여기 넣지 않고 `createPrivatePageMetadata`로 막는다.
  */

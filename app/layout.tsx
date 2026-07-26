@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
 import SiteFooter from "@/components/layout/SiteFooter";
 import { getAnalyticsBootstrapScript, getAnalyticsMeasurementId } from "@/lib/analytics/ga4";
-import { metadataBaseUrl, siteDescription, siteName, siteTitleDefault } from "@/lib/seo/site";
+import { createVerificationMetadata, metadataBaseUrl, siteDescription, siteName, siteTitleDefault } from "@/lib/seo/site";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   },
   description: siteDescription,
   applicationName: siteName,
+  // Search Console·서치어드바이저 소유확인. 토큰이 없으면 태그를 내보내지 않는다.
+  verification: createVerificationMetadata(),
   // canonical은 페이지마다 지정한다. 루트에 두면 지정하지 않은 하위 페이지가 "/"를 물려받는다.
   openGraph: {
     type: "website",
