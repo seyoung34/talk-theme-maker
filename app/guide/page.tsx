@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
+import { createPublicPageMetadata } from "@/lib/seo/site";
 import GuideClient from "@/components/guide/GuideClient";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { isGuideMode, isGuidePlatform } from "@/lib/guide/content";
 
-export const metadata: Metadata = {
-  title: "Guide | TalkTheme",
+export const metadata: Metadata = createPublicPageMetadata({
+  title: "카카오톡 테마 만드는 방법",
   description: "Android와 iOS 카카오톡 테마의 편집, 내보내기, 적용 방법과 상세 파일 규격을 확인하세요.",
-};
+  path: "/guide",
+});
 
 type GuidePageProps = {
   searchParams: Promise<{ platform?: string; mode?: string }>;

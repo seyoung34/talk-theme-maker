@@ -4,8 +4,9 @@ import { ArrowRight, Compass } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 
 export const metadata: Metadata = {
-  title: "페이지를 찾을 수 없어요 | TalkTheme",
-  // 없는 주소는 검색 결과에 남을 이유가 없다.
+  // 루트 layout의 `%s | TalkTheme` 템플릿이 접미사를 붙인다.
+  title: "페이지를 찾을 수 없어요",
+  // 없는 주소는 검색 결과에 남을 이유가 없다. 다만 링크는 따라가게 둔다.
   robots: { index: false, follow: true },
 };
 

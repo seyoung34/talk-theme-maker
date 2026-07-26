@@ -2,11 +2,33 @@ import type { Metadata } from "next";
 import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
 import SiteFooter from "@/components/layout/SiteFooter";
 import { getAnalyticsBootstrapScript, getAnalyticsMeasurementId } from "@/lib/analytics/ga4";
+import { metadataBaseUrl, siteDescription, siteName, siteTitleDefault } from "@/lib/seo/site";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TalkTheme",
-  description: "카카오톡 테마 이미지 제작과 미리보기를 위한 내부 도구",
+  // 검증된 값이 없으면 undefined로 두어 잘못된 절대 URL이 나가지 않게 한다.
+  metadataBase: metadataBaseUrl,
+  title: {
+    default: siteTitleDefault,
+    // 각 페이지는 접미사 없는 순수 제목만 지정한다. 완성형 제목이 필요하면 `title.absolute`를 쓴다.
+    template: `%s | ${siteName}`,
+  },
+  description: siteDescription,
+  applicationName: siteName,
+  // canonical은 페이지마다 지정한다. 루트에 두면 지정하지 않은 하위 페이지가 "/"를 물려받는다.
+  openGraph: {
+    type: "website",
+    siteName,
+    locale: "ko_KR",
+    title: siteTitleDefault,
+    description: siteDescription,
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteTitleDefault,
+    description: siteDescription,
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
