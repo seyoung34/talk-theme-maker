@@ -1,3 +1,4 @@
+import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import type { AndroidBundleUploadFile, AndroidExportManifestItem } from "@/lib/theme/android/requestShared";
 
 // Vercel/Cloudflare → GCP를 Workload Identity Federation(OIDC)으로 인증하고, 입력 번들을 GCS에 올린 뒤
@@ -6,6 +7,9 @@ import type { AndroidBundleUploadFile, AndroidExportManifestItem } from "@/lib/t
 const GCP_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const defaultCloudflareSubject = "cloudflare-worker-prod";
 const oidcTokenTtlSeconds = 5 * 60;
+// GCS 업로드 동시 실행 수. 내보내기 1건은 보통 70~90개 오브젝트라 직렬로는 왕복 지연만
+// 수십 초가 쌓인다. 런타임 소켓 한도와 메모리를 감안해 8로 제한한다.
+const uploadConcurrency = 8;
 
 type OidcPrivateJwk = JsonWebKey & { kid?: string; d?: string; n?: string; e?: string };
 
@@ -85,10 +89,14 @@ export async function enqueueAndroidBuild(bundle: AndroidBuildBundle) {
     manifest: bundle.manifest,
   });
 
-  await uploadObject(config.inputBucket, `${prefix}/bundle.json`, new TextEncoder().encode(bundleJson), "application/json", accessToken);
-  for (const file of bundle.files) {
-    await uploadObject(config.inputBucket, `${prefix}/files/${file.field}`, file.bytes, "application/octet-stream", accessToken);
-  }
+  // 파일 하나당 왕복이 한 번이라 직렬 업로드는 지연이 파일 수만큼 누적된다.
+  // 빌더는 runBuilderJob 이후에야 입력을 읽으므로 업로드 순서에는 제약이 없다.
+  await Promise.all([
+    uploadObject(config.inputBucket, `${prefix}/bundle.json`, new TextEncoder().encode(bundleJson), "application/json", accessToken),
+    mapWithConcurrency(bundle.files, uploadConcurrency, (file) =>
+      uploadObject(config.inputBucket, `${prefix}/files/${file.field}`, file.bytes, "application/octet-stream", accessToken),
+    ),
+  ]);
 
   await runBuilderJob(config, accessToken, {
     inputUri: `gs://${config.inputBucket}/${prefix}`,
