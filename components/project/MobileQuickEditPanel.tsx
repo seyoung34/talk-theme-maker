@@ -59,9 +59,9 @@ type MobileQuickEditPanelProps = {
   onMarkersChange: (markers: Markers) => void;
   onInsetsChange: (insets: Insets) => void;
   onStretchChange: (stretch: StretchPoint) => void;
-  onPullSheet: () => void;
   onOpenBubbleBuilder: () => void;
   onCopyBubbleToPair: (slot: ThemeAssetSlot) => void;
+  onBubbleDraftDirtyChange: (dirty: boolean) => void;
 };
 
 export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
@@ -301,10 +301,10 @@ function ImageControls({
   onMarkersChange,
   onInsetsChange,
   onStretchChange,
-  onPullSheet,
   onOpenBubbleBuilder,
   pairedBubbleSlot,
   onCopyBubbleToPair,
+  onBubbleDraftDirtyChange,
   file,
   selections,
   templateId,
@@ -424,7 +424,7 @@ function ImageControls({
             onInsetsChange(insets);
             onStretchChange(stretch);
           }}
-          onDirtyChange={setBubbleDraftDirty}
+          onDirtyChange={(dirty) => { setBubbleDraftDirty(dirty); onBubbleDraftDirtyChange(dirty); }}
         /> : null}
         {pairedBubbleSlot ? <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 text-[13px] font-black text-[#1d4ed8] transition hover:bg-[#dbeafe]" onClick={() => onCopyBubbleToPair(slot)}>
           {pairedBubbleSlot.label}에 같은 말풍선 적용

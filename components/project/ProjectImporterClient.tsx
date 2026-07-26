@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
 import { persistEditorSession } from "@/components/project/editorSession";
@@ -97,6 +98,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
   const [mobileSheetLiveHeight, setMobileSheetLiveHeight] = useState<number | null>(null);
+  const [mobileBubbleDraftDirty, setMobileBubbleDraftDirty] = useState(false);
+  const [pendingMobileSlot, setPendingMobileSlot] = useState<ThemeAssetSlot | null>(null);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
   const [systemTemplateBundleId, setSystemTemplateBundleId] = useState<string | null>(null);
@@ -494,6 +497,22 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (slotId) setSelectionPulseKey((current) => current + 1);
   };
 
+  const applyMobileSlotChange = (slot: ThemeAssetSlot) => {
+    setMobileBubbleDraftDirty(false);
+    focusSlot(slot.id);
+    revealSlot(slot);
+    setMobileSheetSnap("full");
+  };
+
+  const requestMobileSlotChange = (slot: ThemeAssetSlot) => {
+    if (slot.id === selectedSlot?.id) return;
+    if (mobileBubbleDraftDirty) {
+      setPendingMobileSlot(slot);
+      return;
+    }
+    applyMobileSlotChange(slot);
+  };
+
   const dropRemoteUploadRef = (slotId: string) => {
     setRemoteUploadRefs((current) => {
       const next = { ...current };
@@ -887,9 +906,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "markers" }); }}
       onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "insets" }); }}
       onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "stretch" }); }}
-      onPullSheet={() => setMobileSheetSnap("full")}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
       onCopyBubbleToPair={(slot) => void copyBubbleToPair(slot)}
+      onBubbleDraftDirtyChange={setMobileBubbleDraftDirty}
     />
   );
 
@@ -897,6 +916,16 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
       {selectedSlot && selectedBubbleSlot && selectedBubbleVariant ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} variant={selectedBubbleVariant} slotLabel={selectedSlot.label} platform={platform} initialSpec={selectedBubbleDesign} initialDecorationFiles={bubbleDecorationSources} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleDesign} /> : null}
       {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
+      <Dialog.Root open={Boolean(pendingMobileSlot)} onOpenChange={(open) => { if (!open) setPendingMobileSlot(null); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[110] bg-slate-950/40 backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[111] w-[calc(100vw-32px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[24px] border border-[#dbe3ed] bg-white p-5 shadow-[0_24px_72px_rgba(15,23,42,0.24)] outline-none">
+            <Dialog.Title className="text-lg font-black text-[#0f172a]">편집 내용을 버릴까요?</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">적용하지 않은 말풍선 편집은 사라집니다.</Dialog.Description>
+            <div className="mt-5 grid grid-cols-2 gap-2"><Dialog.Close asChild><button type="button" className="min-h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-black text-[#475569]">계속 편집</button></Dialog.Close><button type="button" className="min-h-11 rounded-xl bg-[#0f172a] px-3 text-sm font-black text-white" onClick={() => { if (pendingMobileSlot) applyMobileSlotChange(pendingMobileSlot); setPendingMobileSlot(null); }}>버리고 이동</button></div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
       {saveDialogOpen ? (
         <SaveTemplateDialog
           activeUserTemplate={activeUserTemplate}
@@ -1096,11 +1125,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                         adminAssets={adminAssetsWithPreview}
                         contrastWarnings={contrastWarnings}
                         hideSlotPicker={mobileUsesSourceToggle}
-                        onSelectSlot={(slot) => {
-                          focusSlot(slot.id);
-                          revealSlot(slot);
-                          setMobileSheetSnap("half");
-                        }}
+                        onSelectSlot={requestMobileSlotChange}
                       />
                       {selectedSlot ? (
                         <div className="rounded-xl border border-[#e5e7eb] bg-white p-3">{mobileEditPanel}</div>
