@@ -1,5 +1,6 @@
 import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
 import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
+import { toExportFailureReason, type ExportFailureReason } from "@/lib/theme/export/failureReason";
 import type { AndroidExportPayloadOptions, ExportMode, ExportPayloadOptions, IosExportPayloadOptions } from "@/components/project/exportModel";
 
 export async function createExportFormData(options: ExportPayloadOptions) {
@@ -43,7 +44,7 @@ export function getExportNotice(mode: ExportMode) {
 
 export type AsyncAndroidExportOutcome =
   | { status: "completed"; downloadUrl: string; fileName: string }
-  | { status: "failed"; error: string };
+  | { status: "failed"; error: string; reason: ExportFailureReason };
 
 // 4.7: 비동기 Android 내보내기 큐잉 후 완료/실패까지 status 엔드포인트를 폴링한다.
 export async function pollAndroidExportStatus(exportJobId: string, onStage?: (stage: string) => void): Promise<AsyncAndroidExportOutcome> {
@@ -55,7 +56,7 @@ export async function pollAndroidExportStatus(exportJobId: string, onStage?: (st
     const payload = (await response.json().catch(() => null)) as
       | { status: "pending"; stage: string }
       | { status: "completed"; downloadUrl: string; fileName: string }
-      | { status: "failed"; error: string }
+      | { status: "failed"; error: string; reason?: string }
       | { error?: string }
       | null;
 
@@ -65,14 +66,15 @@ export async function pollAndroidExportStatus(exportJobId: string, onStage?: (st
       } else if (payload.status === "completed") {
         return { status: "completed", downloadUrl: payload.downloadUrl, fileName: payload.fileName };
       } else {
-        return { status: "failed", error: payload.error };
+        // 빌더가 만든 코드는 임의 문자열일 수 있으므로 허용 목록을 통과한 값만 분석에 쓴다.
+        return { status: "failed", error: payload.error, reason: toExportFailureReason(payload.reason, "android_build_failed") };
       }
     }
 
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
 
-  return { status: "failed", error: "내보내기 상태 확인 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요." };
+  return { status: "failed", error: "내보내기 상태 확인 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.", reason: "poll_timeout" };
 }
 
 export function getDownloadFileName(contentDisposition: string | null) {

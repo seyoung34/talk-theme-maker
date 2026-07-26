@@ -5,6 +5,7 @@ import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAndroidExportStatus, triggerDownload } from "@/components/project/exportClient";
+import { getExportFailureReasonFromStatus, isNetworkError, toExportFailureReason, type ExportFailureReason } from "@/lib/theme/export/failureReason";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
 import type { AccountState, ExportDownloadResult, ExportErrorResponse, ExportMode, ExportVersionResponse } from "@/components/project/exportModel";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -143,6 +144,9 @@ export function useProjectExport({
     const progressSteps = getExportProgressSteps(exportMode);
     let progressTimer: number | null = null;
     let isCreditBlocked = false;
+    // 실패 사유는 단계가 진행될수록 좁혀 간다. 각 대입은 "여기서 던지면 이 사유"라는 뜻이며,
+    // catch는 마지막으로 확정된 값을 분석에 올린다. 사용자 메시지는 이 값과 별개로 다룬다.
+    let failureReason: ExportFailureReason = "preparation_failed";
 
     try {
       setIsExporting(true);
@@ -179,9 +183,11 @@ export function useProjectExport({
         method: "POST",
         body: formData,
       });
+      failureReason = "unknown";
 
       if (!response.ok) {
         const errorBody = await readJsonResponse<ExportErrorResponse>(response).catch(() => null);
+        failureReason = toExportFailureReason(errorBody?.reason, getExportFailureReasonFromStatus(response.status));
         if (response.status === 401 || errorBody?.reason === "unauthenticated") {
           await onUnauthenticated?.({ exportMode, name: exportName, versionName: exportVersionName });
           return;
@@ -209,14 +215,17 @@ export function useProjectExport({
           progressTimer = null;
         }
         if (outcome.status === "failed") {
+          failureReason = outcome.reason;
           await refreshAccountState();
           throw new Error(outcome.error);
         }
 
         setExportProgressStep(stepLabels.length - 1);
+        failureReason = "download_failed";
         const downloadResponse = await fetch(outcome.downloadUrl);
         if (!downloadResponse.ok) throw new Error("빌드 결과 파일을 내려받지 못했습니다.");
         const asyncBlob = await downloadResponse.blob();
+        failureReason = "unknown";
         triggerDownload(asyncBlob, outcome.fileName);
         await refreshAccountState();
         await onExportCompleted?.();
@@ -247,7 +256,9 @@ export function useProjectExport({
       setNotice({ tone: "success", message: `${exportNumber ? `내보내기 #${exportNumber} · ` : ""}${fileName} 파일을 생성했습니다.` });
     } catch (error) {
       console.error(error);
-      if (!isCreditBlocked) trackAnalyticsEvent("export_failed", { platform, export_mode: exportMode, failure_reason: "export_failed" });
+      // fetch 자체가 실패한 경우(오프라인·중단)는 단계별 사유보다 네트워크 오류가 정확하다.
+      const reason = isNetworkError(error) ? "network_error" : failureReason;
+      if (!isCreditBlocked) trackAnalyticsEvent("export_failed", { platform, export_mode: exportMode, failure_reason: reason });
       setNotice({ tone: "error", message: error instanceof Error ? error.message : `${platform === "android" ? "Android" : "iOS"} 내보내기 중 오류가 발생했습니다.` });
     } finally {
       if (progressTimer) window.clearInterval(progressTimer);

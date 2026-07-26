@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       case "completed":
         return NextResponse.json({ status: "completed", downloadUrl: result.downloadUrl, fileName: result.fileName });
       case "failed":
-        return NextResponse.json({ status: "failed", error: result.error });
+        return NextResponse.json({ status: "failed", error: result.error, reason: result.reason });
     }
   } catch (error) {
     console.error("[android-export] status_check_failed", error);

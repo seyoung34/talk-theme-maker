@@ -1,3 +1,5 @@
+import type { ExportFailureReason } from "@/lib/theme/export/failureReason";
+
 export const analyticsConsentStorageKey = "talktheme:analytics-consent:v1";
 const analyticsConsentCookieName = "talktheme_analytics_consent";
 const acquisitionStorageKey = "talktheme:analytics-acquisition:v1";
@@ -28,7 +30,8 @@ type AnalyticsEventMap = {
   template_save_completed: { save_mode: string; platform: string };
   export_started: { platform: string; export_mode: string };
   export_completed: { platform: string; export_mode: string };
-  export_failed: { platform: string; export_mode: string; failure_reason: string };
+  // failure_reason은 자유 문자열이 아니다. 서버 원문·파일명이 분석 축으로 새지 않도록 허용 목록 타입으로 묶는다.
+  export_failed: { platform: string; export_mode: string; failure_reason: ExportFailureReason };
   export_blocked_insufficient_credits: { platform: string; export_mode: string; credits_remaining: number };
   credit_purchase_viewed: { entry_point: string; provider: string };
   begin_checkout: { currency: string; value: number; provider: string; items: AnalyticsItem[] };

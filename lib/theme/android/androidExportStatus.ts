@@ -13,7 +13,9 @@ export type AndroidExportStatusResult =
   | { kind: "not_found" }
   | { kind: "pending"; stage: string }
   | { kind: "completed"; downloadUrl: string; fileName: string }
-  | { kind: "failed"; error: string };
+  // reason은 사용자 메시지(error)와 별개로 실패 원인을 식별하는 코드다. 클라이언트가 분석 이벤트로
+  // 올릴 때 허용 목록과 대조하므로, 여기서는 빌더가 준 코드를 있는 그대로 전달해도 안전하다.
+  | { kind: "failed"; error: string; reason: string };
 
 type ExportJobRow = {
   id: string;
@@ -22,6 +24,7 @@ type ExportJobRow = {
   stage: string;
   file_name: string | null;
   error: string | null;
+  error_code: string | null;
   created_at: string;
 };
 
@@ -33,7 +36,7 @@ export async function resolveAndroidExportStatus(userId: string, exportJobId: st
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("export_jobs")
-    .select("id,user_id,status,stage,file_name,error,created_at")
+    .select("id,user_id,status,stage,file_name,error,error_code,created_at")
     .eq("id", exportJobId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -42,11 +45,12 @@ export async function resolveAndroidExportStatus(userId: string, exportJobId: st
   if (!row) return { kind: "not_found" };
 
   if (row.status === "succeeded") {
-    if (!row.file_name) return { kind: "failed", error: "내보내기 결과 파일을 찾지 못했습니다." };
+    // 성공으로 정산됐는데 파일명이 없으면 빌드 실패가 아니라 정산 데이터 불일치다.
+    if (!row.file_name) return { kind: "failed", error: "내보내기 결과 파일을 찾지 못했습니다.", reason: "server_error" };
     return { kind: "completed", downloadUrl: await signOutputUrl(exportJobId, row.file_name), fileName: row.file_name };
   }
   if (row.status === "failed") {
-    return { kind: "failed", error: row.error ?? "내보내기 작업에 실패했습니다." };
+    return { kind: "failed", error: row.error ?? "내보내기 작업에 실패했습니다.", reason: row.error_code ?? "android_build_failed" };
   }
 
   // status === "pending": GCS result.json으로 완료/실패 여부를 확인한다.
@@ -58,7 +62,7 @@ export async function resolveAndroidExportStatus(userId: string, exportJobId: st
     if (Date.now() - new Date(row.created_at).getTime() > watchdogStaleMs) {
       // 4.5 워치독: Job이 결과를 남기지 못한 채(크래시·유실) 임계시간을 넘긴 pending을 강제 환불한다.
       await failExportJob({ userId, exportJobId, errorCode: "build_watchdog_timeout", errorMessage: "내보내기 작업이 시간 내에 끝나지 않았습니다.", durationMs: Date.now() - new Date(row.created_at).getTime() }).catch(() => undefined);
-      return { kind: "failed", error: "내보내기 작업이 시간 내에 끝나지 않았습니다." };
+      return { kind: "failed", error: "내보내기 작업이 시간 내에 끝나지 않았습니다.", reason: "build_watchdog_timeout" };
     }
     return { kind: "pending", stage: row.stage };
   }
@@ -73,10 +77,11 @@ export async function resolveAndroidExportStatus(userId: string, exportJobId: st
   }
 
   const errorMessage = "내보내기 작업에 실패했습니다.";
-  await failExportJob({ userId, exportJobId, errorCode: result.errorCode || "android_build_failed", errorMessage, durationMs }).catch((settleError) => {
+  const errorCode = result.errorCode || "android_build_failed";
+  await failExportJob({ userId, exportJobId, errorCode, errorMessage, durationMs }).catch((settleError) => {
     if (!isAlreadySettled(settleError)) throw settleError;
   });
-  return { kind: "failed", error: errorMessage };
+  return { kind: "failed", error: errorMessage, reason: errorCode };
 }
 
 function isAlreadySettled(error: unknown) {
