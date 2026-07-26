@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
-import { Check, FlipHorizontal2, Info, LoaderCircle, Maximize2, RotateCcw } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
+import * as Popover from "@radix-ui/react-popover";
+import { Check, FlipHorizontal2, Info, LoaderCircle, RotateCcw } from "lucide-react";
 import { loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
 import { defaultInsets, defaultStretch } from "@/lib/theme/preview/bubbleCanvas";
 import { defaultImageEditState, renderEditedImageFile, type ImageEditState, type ImageEditTarget } from "@/lib/theme/imageEdit";
@@ -17,7 +18,7 @@ type ArtworkMetrics = {
   offsetY: number;
 };
 
-type DragKind = "scale" | "content-left" | "content-right" | "content-top" | "content-bottom" | "stretch";
+type DragKind = "content-left" | "content-right" | "content-top" | "content-bottom" | "stretch";
 
 export function MobileBubbleEditor({
   slot,
@@ -52,11 +53,9 @@ export function MobileBubbleEditor({
   const [asset, setAsset] = useState<BubbleAsset | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [helpOpen, setHelpOpen] = useState(false);
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [draft, setDraft] = useState<MobileBubbleEditDraft | null>(null);
   const [activeDragKind, setActiveDragKind] = useState<DragKind | null>(null);
-  const [valueFeedbackKey, setValueFeedbackKey] = useState(0);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ kind: DragKind; startX: number; startY: number; draft: MobileBubbleEditDraft } | null>(null);
 
@@ -136,9 +135,7 @@ export function MobileBubbleEditor({
 
   useEffect(() => {
     setDraft(initialDraft);
-    setHelpOpen(false);
     setActiveDragKind(null);
-    setValueFeedbackKey(0);
   }, [initialDraft]);
 
   useEffect(() => {
@@ -146,7 +143,7 @@ export function MobileBubbleEditor({
     onDirtyChange?.(isMobileBubbleEditDirty(draft, initialDraft));
   }, [draft, initialDraft, onDirtyChange]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
     const update = () => setStageSize({ width: stage.clientWidth, height: stage.clientHeight });
@@ -160,7 +157,7 @@ export function MobileBubbleEditor({
   useEffect(() => () => { if (imageUrl) URL.revokeObjectURL(imageUrl); }, [imageUrl]);
 
   const stageScale = asset && stageSize.width && stageSize.height
-    ? Math.min((stageSize.width - 32) / asset.width, (stageSize.height - 32) / asset.height)
+    ? Math.min(2.25, (stageSize.width - 64) / asset.width, (stageSize.height - 64) / asset.height)
     : 1;
   const effectiveScale = stageScale * (draft?.imageState.scale ?? 1);
   const artwork = asset ? getArtworkMetrics(asset, platform) : null;
@@ -185,7 +182,7 @@ export function MobileBubbleEditor({
     const scale = Math.max(effectiveScale, 0.01);
     const dx = (event.clientX - active.startX) / scale;
     const dy = (event.clientY - active.startY) / scale;
-    setDraft(updateDraftForDrag(active, dx, dy, asset, artwork));
+    setDraft(updateDraftForDrag(active, dx, dy, artwork));
   };
 
   const endDrag = (event: PointerEvent<HTMLDivElement>) => {
@@ -207,7 +204,6 @@ export function MobileBubbleEditor({
         geometry: flipBubbleGeometryHorizontally(current.geometry, artwork.width),
       };
     });
-    setValueFeedbackKey((current) => current + 1);
   };
   const apply = async () => {
     if (!draft || !preparedFile || !initialDraft || !asset || !artwork) return;
@@ -230,8 +226,6 @@ export function MobileBubbleEditor({
   if (!asset || !draft) return <p className="rounded-[22px] border border-dashed border-[#dbe3ed] bg-[#f8fafc] px-4 py-5 text-center text-sm font-semibold text-[#64748b]">편집할 말풍선을 선택하세요.</p>;
 
   const isDirty = isMobileBubbleEditDirty(draft, initialDraft);
-  const activeValueGroup = getActiveValueGroup(activeDragKind);
-
   return (
     <section className="grid gap-3 rounded-[24px] border border-[#d8e2ef] bg-[linear-gradient(160deg,#f8fbff_0%,#edf5ff_100%)] p-3 shadow-[0_12px_28px_rgba(37,99,235,0.08)]">
       <header className="flex min-h-11 items-center justify-between gap-3 px-1">
@@ -239,9 +233,20 @@ export function MobileBubbleEditor({
           <h3 className="truncate text-[15px] font-black tracking-[-0.02em] text-[#0f172a]">말풍선 편집</h3>
           {isDirty ? <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#fff7ed] px-2 py-1 text-[10px] font-black text-[#c2410c]" role="status"><span className="size-1.5 rounded-full bg-[#f97316]" aria-hidden="true" />미적용</span> : null}
         </div>
-        <button type="button" title="편집 도움말" className={`grid size-11 shrink-0 place-items-center rounded-xl border transition ${helpOpen ? "border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#d1d5db] bg-white text-[#475569]"}`} aria-label="편집 도움말" aria-expanded={helpOpen} onClick={() => setHelpOpen((current) => !current)}><Info size={18} aria-hidden="true" /></button>
+        <Popover.Root>
+          <Popover.Trigger asChild>
+            <button type="button" title="편집 도움말" className="grid size-11 shrink-0 place-items-center text-[#64748b] transition hover:text-[#2563eb] focus-visible:rounded-lg focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] data-[state=open]:text-[#2563eb]" aria-label="편집 도움말"><Info size={18} aria-hidden="true" /></button>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Content side="bottom" align="end" sideOffset={8} collisionPadding={16} className="radix-popover-content z-[120] w-[min(256px,calc(100vw-32px))] rounded-2xl border border-[#dbeafe] bg-white p-3.5 text-[12px] font-medium leading-[1.55] text-[#475569] shadow-[0_16px_38px_rgba(15,23,42,0.16)] outline-none">
+              <p className="font-black text-[#0f172a]">편집 안내</p>
+              <p className="mt-1.5"><span className="font-bold text-[#0284c7]">파란 교차점</span>은 말풍선이 늘어나는 위치입니다.</p>
+              <p className="mt-1"><span className="font-bold text-[#059669]">초록 테두리</span>는 글자가 들어갈 여백입니다.</p>
+              <Popover.Arrow className="fill-white" width={14} height={7} />
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover.Root>
       </header>
-      {helpOpen ? <p className="rounded-xl bg-white/80 px-3 py-2.5 text-xs font-semibold leading-5 text-[#475569]">파란 교차점을 움직여 이미지가 늘어나는 위치를, 초록 테두리의 핸들을 움직여 글자 여백을 조절하세요.</p> : null}
       <div
         ref={stageRef}
         className="relative grid min-h-[300px] touch-pan-y place-items-center overflow-hidden rounded-[20px] border border-white"
@@ -254,10 +259,9 @@ export function MobileBubbleEditor({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageUrl} alt="" className="pointer-events-none block size-full origin-center select-none" style={{ transform: `scaleX(${draft.imageState.flipX ? -1 : 1})` }} draggable={false} />
           {artwork ? <BubbleGeometryOverlay geometry={draft.geometry} artwork={artwork} scale={stageScale} onDrag={beginDrag} /> : null}
-          <button type="button" aria-label="이미지 크기 조절" className="absolute -bottom-[22px] -right-[22px] grid size-11 touch-none cursor-nwse-resize place-items-center rounded-full border border-[#bfdbfe] bg-white text-[#2563eb] shadow-[0_8px_20px_rgba(37,99,235,0.22)]" onPointerDown={beginDrag("scale")}><Maximize2 size={17} aria-hidden="true" /></button>
         </div>
+        <BubbleValueFeedback geometry={draft.geometry} activeKind={activeDragKind} />
       </div>
-      <BubbleValueReadout geometry={draft.geometry} activeGroup={activeValueGroup} feedbackKey={valueFeedbackKey} />
       <div className="flex gap-2">
         <button type="button" title="좌우 반전" aria-label="좌우 반전" className={`grid size-11 place-items-center rounded-xl border transition ${draft.imageState.flipX ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#d1d5db] bg-white text-[#334155]"}`} onClick={flip}><FlipHorizontal2 size={18} aria-hidden="true" /></button>
         <button type="button" title="마지막 적용 상태로 되돌리기" aria-label="마지막 적용 상태로 되돌리기" className="grid size-11 place-items-center rounded-xl border border-[#d1d5db] bg-white text-[#475569] transition disabled:opacity-45" disabled={!isDirty} onClick={reset}><RotateCcw size={18} aria-hidden="true" /></button>
@@ -300,12 +304,8 @@ function BubbleGeometryOverlay({
   </div>;
 }
 
-function updateDraftForDrag(active: { kind: DragKind; startX: number; startY: number; draft: MobileBubbleEditDraft }, dx: number, dy: number, asset: BubbleAsset, artwork: ArtworkMetrics) {
+function updateDraftForDrag(active: { kind: DragKind; startX: number; startY: number; draft: MobileBubbleEditDraft }, dx: number, dy: number, artwork: ArtworkMetrics) {
   const next = structuredClone(active.draft);
-  if (active.kind === "scale") {
-    next.imageState.scale = Math.min(3, Math.max(0.25, active.draft.imageState.scale + (dx + dy) / Math.max(asset.width, asset.height)));
-    return next;
-  }
   if (active.kind === "stretch") {
     next.geometry.stretch.x += dx;
     next.geometry.stretch.y += dy;
@@ -318,26 +318,18 @@ function updateDraftForDrag(active: { kind: DragKind; startX: number; startY: nu
   return next;
 }
 
-function BubbleValueReadout({ geometry, activeGroup, feedbackKey }: { geometry: BubbleGeometry; activeGroup: "stretch" | "content" | null; feedbackKey: number }) {
-  return <div className="grid grid-cols-2 gap-2" aria-label="현재 영역 값">
-    <ValueCard key={`stretch-${feedbackKey}`} label="늘어나는 위치" values={[`X ${geometry.stretch.x}`, `Y ${geometry.stretch.y}`]} tone="blue" active={activeGroup === "stretch"} flash={feedbackKey > 0} />
-    <ValueCard key={`content-${feedbackKey}`} label="글자 여백" values={[`왼 ${geometry.contentInsets.left} · 오른 ${geometry.contentInsets.right}`, `위 ${geometry.contentInsets.top} · 아래 ${geometry.contentInsets.bottom}`]} tone="green" active={activeGroup === "content"} flash={feedbackKey > 0} />
-  </div>;
-}
-
-function ValueCard({ label, values, tone, active, flash }: { label: string; values: string[]; tone: "blue" | "green"; active: boolean; flash: boolean }) {
-  const colors = tone === "blue" ? "border-[#bfdbfe] bg-[#f8fbff] text-[#1d4ed8]" : "border-[#a7f3d0] bg-[#f4fffa] text-[#047857]";
-  const activeStyle = active ? tone === "blue" ? "scale-[1.02] ring-2 ring-[#60a5fa]/40 shadow-[0_6px_16px_rgba(37,99,235,0.12)]" : "scale-[1.02] ring-2 ring-[#34d399]/40 shadow-[0_6px_16px_rgba(16,185,129,0.12)]" : "";
-  return <div className={`rounded-xl border px-3 py-2 transition duration-150 ${colors} ${activeStyle} ${flash ? "motion-safe:animate-[bubble-value-flash_420ms_cubic-bezier(0.22,1,0.36,1)]" : ""}`}>
-    <p className="text-[10px] font-black tracking-[-0.01em]">{label}</p>
-    <div className="mt-1 grid gap-0.5 font-mono text-[11px] font-bold leading-4 text-[#334155]">{values.map((value) => <span key={value}>{value}</span>)}</div>
-  </div>;
-}
-
-function getActiveValueGroup(kind: DragKind | null): "stretch" | "content" | null {
-  if (!kind || kind === "scale") return null;
-  if (kind === "stretch") return "stretch";
-  return "content";
+function BubbleValueFeedback({ geometry, activeKind }: { geometry: BubbleGeometry; activeKind: DragKind | null }) {
+  if (!activeKind) return null;
+  const value = activeKind === "stretch"
+    ? `늘어나는 위치 X ${geometry.stretch.x} · Y ${geometry.stretch.y}`
+    : activeKind === "content-left"
+      ? `왼쪽 여백 ${geometry.contentInsets.left}`
+      : activeKind === "content-right"
+        ? `오른쪽 여백 ${geometry.contentInsets.right}`
+        : activeKind === "content-top"
+          ? `위 여백 ${geometry.contentInsets.top}`
+          : `아래 여백 ${geometry.contentInsets.bottom}`;
+  return <output className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-full border border-white/80 bg-[#0f172a]/85 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg backdrop-blur" aria-live="polite">{value}</output>;
 }
 function getArtworkMetrics(asset: BubbleAsset, platform: ThemePlatform): ArtworkMetrics {
   const hasMarkerBorder = platform === "android" || asset.name.toLowerCase().endsWith(".9.png");
