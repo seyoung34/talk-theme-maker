@@ -11,6 +11,7 @@
     "check:android-assets": "node scripts/verify-android-bundled-assets.mjs",
     "check:edge-imports": "node scripts/verify-edge-safe-imports.mjs",
     "assets:landing": "node scripts/optimize-landing-images.mjs",
+    "assets:guide": "node scripts/optimize-guide-images.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
