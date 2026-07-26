@@ -149,6 +149,13 @@ export type StretchPoint = {
   y: number;
 };
 
+// 플랫폼과 무관한 말풍선 편집 계약.
+// 모든 좌표는 Android 9-patch의 1px marker 테두리를 제외한 artwork 픽셀 기준이다.
+export type BubbleGeometry = {
+  stretch: StretchPoint;
+  contentInsets: Insets;
+};
+
 export type InvalidPixel = {
   x: number;
   y: number;
