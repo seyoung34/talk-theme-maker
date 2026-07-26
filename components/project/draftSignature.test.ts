@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createThemeDraftSignature } from "@/components/project/draftSignature";
-import { createEmptyThemeDraft, type ThemeDraft } from "@/components/project/hooks/useThemeDraft";
+import { createEmptyThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
 
 function createFile(name: string, size = 3) {
   return new File([new Uint8Array(size)], name, { type: "image/png", lastModified: 1_700_000_000_000 });

@@ -1,5 +1,6 @@
 import { normalizeSystemTemplateVisibility, type RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
+import type { EditorActiveSystemTemplate, EditorActiveUserTemplate, EditorMode } from "@/lib/theme/project/draft";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
@@ -7,22 +8,11 @@ import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleB
 
 const recoveryTtlMs = 7 * 24 * 60 * 60 * 1000;
 
-export type EditorMode = "user" | "admin";
-
-export type RecoveryActiveUserTemplate = { id: string; name: string; createdAt: number };
-export type RecoveryActiveSystemTemplate = {
-  id: string;
-  bundleId: string;
-  title: string;
-  description?: string;
-  tags: string[];
-  status: "draft" | "published" | "archived";
-  visibility: "private" | "public";
-  pricingType: "free" | "paid" | "credit";
-  priceAmount?: number;
-  creditCost?: number;
-  createdAt: number;
-};
+// 편집 컨텍스트 형태는 자동 저장과 공유한다. 레코드·store·수명주기는 서로 분리하되,
+// "무엇을 편집 중인가"를 표현하는 값 타입까지 각자 복제할 이유는 없다.
+export type { EditorMode };
+export type RecoveryActiveUserTemplate = EditorActiveUserTemplate;
+export type RecoveryActiveSystemTemplate = EditorActiveSystemTemplate;
 
 export type RecoveryExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
 export type RecoveryExportOptions = { exportMode: RecoveryExportMode; name: string; versionName: string };

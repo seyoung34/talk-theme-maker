@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyThemeDraft, themeDraftReducer } from "@/components/project/hooks/useThemeDraft";
+import { themeDraftReducer } from "@/components/project/hooks/useThemeDraft";
+import { createEmptyThemeDraft } from "@/lib/theme/project/draft";
 
 describe("themeDraftReducer", () => {
   it("updates one draft field without changing the remaining fields", () => {

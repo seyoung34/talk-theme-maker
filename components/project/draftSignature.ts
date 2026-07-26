@@ -1,4 +1,4 @@
-import type { ThemeDraft } from "@/components/project/hooks/useThemeDraft";
+import type { ThemeDraft } from "@/lib/theme/project/draft";
 
 /**
  * 편집 초안의 내용 서명.

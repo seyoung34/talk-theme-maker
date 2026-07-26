@@ -4,21 +4,9 @@ import { useCallback, useReducer, useRef, type Dispatch, type SetStateAction } f
 import { getMissingRemoteUploadSlotIds, keepCurrentRemoteUploads, mergeSlotUploads } from "@/components/project/projectImporterHelpers";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
 import { systemTemplateRepository, type RemoteSlotUploads } from "@/lib/theme/systemTemplates";
-import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
-import type { BubbleGeometry, Insets, Markers, StretchPoint } from "@/lib/theme/types";
-
-export type ThemeDraft = {
-  uploads: SlotUploads;
-  remoteUploadRefs: RemoteSlotUploads;
-  colors: SlotColors;
-  candidateSelections: SlotCandidateSelections;
-  bubbleGeometry: Partial<Record<string, BubbleGeometry>>;
-  bubbleMarkers: Partial<Record<string, Markers>>;
-  bubbleInsets: Partial<Record<string, Insets>>;
-  bubbleStretch: Partial<Record<string, StretchPoint>>;
-  bubbleDesigns: BubbleDesigns;
-  bubbleDecorationSources: BubbleDecorationSources;
-};
+// 초안의 형태 자체는 지속·내보내기 계약이라 lib/theme/project가 소유한다.
+// 이 파일은 그 형태를 다루는 React 상태 기계만 담당한다.
+import { createEmptyThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
 
 type DraftUpdater<T> = SetStateAction<T>;
 
@@ -34,21 +22,6 @@ export type ThemeDraftAction =
   | { type: "set-bubble-stretch"; updater: DraftUpdater<ThemeDraft["bubbleStretch"]> }
   | { type: "set-bubble-designs"; updater: DraftUpdater<ThemeDraft["bubbleDesigns"]> }
   | { type: "set-bubble-decoration-sources"; updater: DraftUpdater<ThemeDraft["bubbleDecorationSources"]> };
-
-export function createEmptyThemeDraft(): ThemeDraft {
-  return {
-    uploads: {},
-    remoteUploadRefs: {},
-    colors: {},
-    candidateSelections: {},
-    bubbleGeometry: {},
-    bubbleMarkers: {},
-    bubbleInsets: {},
-    bubbleStretch: {},
-    bubbleDesigns: {},
-    bubbleDecorationSources: {},
-  };
-}
 
 export function themeDraftReducer(state: ThemeDraft, action: ThemeDraftAction): ThemeDraft {
   switch (action.type) {

@@ -3,7 +3,7 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { takeTemplateStartPayload } from "@/components/project/editorSession";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice } from "@/components/project/editorTypes";
-import { createEmptyThemeDraft, type ThemeDraft } from "@/components/project/hooks/useThemeDraft";
+import { createEmptyThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
 import type { SlotUploads } from "@/components/project/projectModel";
 import type { RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import { systemTemplateRepository } from "@/lib/theme/systemTemplates";
