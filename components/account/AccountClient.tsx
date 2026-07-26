@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowRight, Coins, Download, ShieldCheck, Sparkles, Star, UserRound } from "lucide-react";
+import { AlertCircle, ArrowRight, Coins, Download, RefreshCw, ShieldCheck, Sparkles, Star, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
-import type { AccountExportDto, AccountMeResponse } from "@/lib/billing/apiTypes";
+import type { AccountExportDto, AccountMeResponse, ExportDownloadLinkResponse } from "@/lib/billing/apiTypes";
+import { getExportDownloadState } from "@/lib/theme/android/outputRetention";
 import { readJsonResponse } from "@/lib/shared/api/http";
 
 export default function AccountClient() {
@@ -95,11 +96,11 @@ export default function AccountClient() {
             <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6 lg:col-start-1 lg:row-start-2" aria-labelledby="export-history-title">
               <div className="mb-5 flex items-center gap-3">
                 <span className="grid size-11 place-items-center rounded-2xl bg-[#eafaf1] text-[#34c98a]"><Download size={20} aria-hidden="true" /></span>
-                <div><h2 id="export-history-title" className="text-base font-extrabold">최근 Export 이력</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">최근 10개의 내보내기 작업입니다.</p></div>
+                <div><h2 id="export-history-title" className="text-base font-extrabold">최근 Export 이력</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">최근 10개의 내보내기 작업입니다. Android 결과 파일은 7일간 보관합니다.</p></div>
               </div>
               {(me?.exports ?? []).length === 0 ? <div className="rounded-[24px] bg-[#f7fbff] px-4 py-8 text-center text-sm font-semibold text-[var(--color-on-surface-variant)]">아직 내보내기 이력이 없습니다.</div> : (
                 <div className="overflow-hidden rounded-[24px] border border-[#e3ecf7] bg-[#fcfdff] divide-y divide-[var(--color-outline-variant)]">
-                  {(me?.exports ?? []).map((item) => <ExportRow key={item.id} item={item} />)}
+                  {(me?.exports ?? []).map((item) => <ExportRow key={item.id} item={item} onRefreshed={() => void refreshMe()} />)}
                 </div>
               )}
             </section>
@@ -109,11 +110,102 @@ export default function AccountClient() {
   );
 }
 
-function ExportRow({ item }: { item: AccountExportDto }) {
+function ExportRow({ item, onRefreshed }: { item: AccountExportDto; onRefreshed: () => void }) {
   const creditLabel = item.status === "failed" ? "차감 없음" : `${item.credit_cost}크레딧`;
   const title = item.export_name || item.file_name || "이름 없는 테마";
   const identifier = item.application_id ?? item.theme_identifier;
-  return <div className="grid gap-2 bg-white/75 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={item.status} /><strong className="text-sm font-extrabold">{item.export_number ? `#${item.export_number} · ` : ""}{title}</strong>{item.status === "pending" && item.stage ? <span className="text-[11px] font-bold text-[var(--color-on-surface-variant)]">{getExportStageLabel(item.stage)}</span> : null}</div><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{getPlatformLabel(item.platform)} · {getExportModeLabel(item.export_mode)}{item.file_name ? ` · ${item.file_name}` : ""}</p>{identifier ? <p className="mt-1 truncate font-mono text-[11px] text-[var(--color-outline)]" title={identifier}>{identifier}</p> : null}</div><div className="flex items-center justify-between gap-4 text-xs font-bold text-[var(--color-on-surface-variant)] sm:block sm:text-right"><span className="sm:block">{creditLabel}</span>{item.duration_ms != null ? <span className="sm:mt-1 sm:block">{formatDuration(item.duration_ms)}</span> : null}<time className="sm:mt-1 sm:block" dateTime={item.created_at}>{new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(item.created_at))}</time></div></div>;
+  return <div className="grid gap-2 bg-white/75 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={item.status} /><strong className="text-sm font-extrabold">{item.export_number ? `#${item.export_number} · ` : ""}{title}</strong>{item.status === "pending" && item.stage ? <span className="text-[11px] font-bold text-[var(--color-on-surface-variant)]">{getExportStageLabel(item.stage)}</span> : null}</div><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{getPlatformLabel(item.platform)} · {getExportModeLabel(item.export_mode)}{item.file_name ? ` · ${item.file_name}` : ""}</p>{identifier ? <p className="mt-1 truncate font-mono text-[11px] text-[var(--color-outline)]" title={identifier}>{identifier}</p> : null}<ExportRowAction item={item} onRefreshed={onRefreshed} /></div><div className="flex items-center justify-between gap-4 text-xs font-bold text-[var(--color-on-surface-variant)] sm:block sm:text-right"><span className="sm:block">{creditLabel}</span>{item.duration_ms != null ? <span className="sm:mt-1 sm:block">{formatDuration(item.duration_ms)}</span> : null}<time className="sm:mt-1 sm:block" dateTime={item.created_at}>{new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(item.created_at))}</time></div></div>;
+}
+
+/**
+ * 내보내기 결과를 다시 받거나, 멈춘 것처럼 보이는 작업의 상태를 확인한다.
+ *
+ * APK 빌드는 최대 12분 폴링인데 그동안 탭이 닫히면 크레딧만 차감된 채 결과를 받을 방법이 없었다.
+ * 결과 파일은 보관 기간 동안 남아 있으므로 여기서 서명 URL을 새로 발급받는다.
+ */
+function ExportRowAction({ item, onRefreshed }: { item: AccountExportDto; onRefreshed: () => void }) {
+  const [isWorking, setIsWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const downloadState = getExportDownloadState({
+    platform: item.platform,
+    status: item.status,
+    completedAt: item.completed_at,
+    createdAt: item.created_at,
+  });
+
+  const download = async () => {
+    if (isWorking) return;
+    setIsWorking(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/export/android/download?jobId=${encodeURIComponent(item.id)}`, { cache: "no-store" });
+      const payload = await readJsonResponse<ExportDownloadLinkResponse>(response);
+      if (!response.ok || !payload.downloadUrl) {
+        setError(payload.error ?? "다운로드 링크를 발급하지 못했습니다.");
+        // 만료처럼 상태가 실제로 바뀐 경우 목록을 새로 읽어 표시를 맞춘다.
+        if (payload.reason === "expired") onRefreshed();
+        return;
+      }
+      window.location.href = payload.downloadUrl;
+    } catch {
+      setError("네트워크 상태를 확인한 뒤 다시 시도해 주세요.");
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const refreshStatus = async () => {
+    if (isWorking) return;
+    setIsWorking(true);
+    setError(null);
+    try {
+      // status 엔드포인트는 조회하면서 멈춘 작업을 정산한다. 오래 진행 중인 작업의 크레딧이 여기서 반환된다.
+      const response = await fetch(`/api/export/android/status?jobId=${encodeURIComponent(item.id)}`, { cache: "no-store" });
+      if (!response.ok) {
+        setError("상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      onRefreshed();
+    } catch {
+      setError("네트워크 상태를 확인한 뒤 다시 시도해 주세요.");
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  if (item.status === "pending" && item.platform === "android") {
+    return (
+      <div className="mt-2">
+        <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[#cfe0ff] bg-white px-3 text-xs font-extrabold text-[#2f6bbf] transition hover:bg-[#f4f9ff] disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]" onClick={() => void refreshStatus()} disabled={isWorking}>
+          <RefreshCw size={14} className={isWorking ? "animate-spin" : undefined} aria-hidden="true" />
+          {isWorking ? "확인 중" : "상태 확인"}
+        </button>
+        {error ? <p className="mt-1.5 text-[11px] font-bold text-[var(--color-error)]" role="alert">{error}</p> : null}
+      </div>
+    );
+  }
+
+  if (downloadState === "available") {
+    return (
+      <div className="mt-2">
+        <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#2f6bbf] px-3.5 text-xs font-extrabold text-white shadow-[0_8px_18px_rgba(47,107,191,0.22)] transition hover:bg-[#2a60ac] disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]" onClick={() => void download()} disabled={isWorking}>
+          <Download size={14} aria-hidden="true" />
+          {isWorking ? "준비 중" : "다시 받기"}
+        </button>
+        {error ? <p className="mt-1.5 text-[11px] font-bold text-[var(--color-error)]" role="alert">{error}</p> : null}
+      </div>
+    );
+  }
+
+  if (downloadState === "expired") {
+    return <p className="mt-2 text-[11px] font-bold text-[var(--color-outline)]">보관 기간이 지나 결과 파일이 삭제됐습니다. 편집 화면에서 다시 내보내 주세요.</p>;
+  }
+
+  if (downloadState === "unsupported") {
+    return <p className="mt-2 text-[11px] font-bold text-[var(--color-outline)]">iOS 결과 파일은 서버에 보관하지 않습니다. 내려받은 파일을 기기에 보관해 주세요.</p>;
+  }
+
+  return null;
 }
 
 function StatusBadge({ status }: { status: string }) {

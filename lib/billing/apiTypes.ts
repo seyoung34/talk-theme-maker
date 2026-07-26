@@ -14,6 +14,15 @@ export type AccountExportDto = {
   error_code?: string | null;
   duration_ms?: number | null;
   created_at: string;
+  /** 결과 파일 보관 기간(만료)을 계산하는 기준. `/api/me`가 이미 조회하고 있다. */
+  completed_at?: string | null;
+};
+
+export type ExportDownloadLinkResponse = {
+  downloadUrl?: string;
+  fileName?: string;
+  error?: string;
+  reason?: string;
 };
 
 export type AccountMeResponse = {

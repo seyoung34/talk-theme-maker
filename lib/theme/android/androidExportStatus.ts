@@ -99,13 +99,60 @@ async function downloadResultJson(config: BuilderConfig, accessToken: string, ex
   return (await response.json()) as ResultJson;
 }
 
+/**
+ * 완료된 내보내기를 나중에 다시 받는 경로.
+ *
+ * 폴링하던 탭이 닫히면 서명 URL은 사라지지만 결과 파일은 보관 기간 동안 버킷에 남아 있다.
+ * 크레딧은 이미 차감된 뒤이므로 사용자가 결과를 받을 방법이 남아 있어야 한다.
+ * 보관 기간이 지난 결과를 성공처럼 보여주면 눌렀을 때 404가 나므로 객체 존재를 먼저 확인한다.
+ */
+export type AndroidExportDownloadResult =
+  | { kind: "not_found" }
+  | { kind: "not_ready" }
+  | { kind: "expired" }
+  | { kind: "ready"; downloadUrl: string; fileName: string };
+
+export async function resolveAndroidExportDownload(userId: string, exportJobId: string): Promise<AndroidExportDownloadResult> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("export_jobs")
+    .select("id,user_id,platform,status,file_name")
+    .eq("id", exportJobId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as Pick<ExportJobRow, "id" | "user_id" | "status" | "file_name"> & { platform: string } | null;
+  // 소유자 조건을 쿼리에 넣었으므로 남의 작업은 여기서 not_found가 된다.
+  if (!row) return { kind: "not_found" };
+  if (row.platform !== "android" || row.status !== "succeeded" || !row.file_name) return { kind: "not_ready" };
+
+  const config = readBuilderConfig();
+  const accessToken = await getBuilderAccessToken(config);
+  const objectPath = `${exportJobId}/${row.file_name}`;
+  if (!(await outputObjectExists(config, accessToken, objectPath))) return { kind: "expired" };
+
+  return { kind: "ready", downloadUrl: await signOutputObject(config, accessToken, objectPath), fileName: row.file_name };
+}
+
+async function outputObjectExists(config: BuilderConfig, accessToken: string, objectPath: string) {
+  const response = await fetch(
+    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(config.outputBucket)}/o/${encodeURIComponent(objectPath)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (response.status === 404) return false;
+  if (!response.ok) throw new Error("gcs_output_lookup_failed");
+  return true;
+}
+
 // 불변식 5: DB에는 오브젝트 경로만 저장하고, 다운로드 때마다 짧은 TTL의 GCS V4 서명 URL을 온디맨드로 새로 발급한다.
 // SA JSON 키 없이 IAM Credentials API의 signBlob으로 서명(WIF impersonation 토큰 재사용).
 async function signOutputUrl(exportJobId: string, fileName: string) {
   const config = readBuilderConfig();
   const accessToken = await getBuilderAccessToken(config);
-  const objectPath = `${exportJobId}/${fileName}`;
+  return signOutputObject(config, accessToken, `${exportJobId}/${fileName}`);
+}
 
+async function signOutputObject(config: BuilderConfig, accessToken: string, objectPath: string) {
   const now = new Date();
   const dateStamp = now.toISOString().slice(0, 10).replaceAll("-", "");
   const timestamp = `${dateStamp}T${now.toISOString().slice(11, 19).replaceAll(":", "")}Z`;
