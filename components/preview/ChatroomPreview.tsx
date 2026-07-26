@@ -184,9 +184,9 @@ export function ChatroomPreview({
         if (!file || !slot) continue;
         const dataUrl = await dataUrlForThemeFile(file);
         const bubbleSlot = role.includes("_me_") ? "me" : "you";
-        const asset = await loadNinePatchDataUrl(dataUrl, file.name, bubbleSlot);
-        const edits = bubbleEdits[role];
-        nextAssets[slot.id] = getAndroidRenderAsset(asset, edits);
+        // 9-slice 편집값(markers/geometry)은 그리는 시점에 drawBubble이 적용한다.
+        // 여기서 적용하면 마커를 드래그할 때마다 원본을 다시 받아 다시 파싱하게 된다.
+        nextAssets[slot.id] = await loadNinePatchDataUrl(dataUrl, file.name, bubbleSlot);
       }
 
       if (!cancelled) setBubbleAssets(nextAssets);
@@ -196,7 +196,7 @@ export function ChatroomPreview({
     return () => {
       cancelled = true;
     };
-  }, [bubbleEdits, bubbleFilesSignature, slotByRole.bubble_me_1?.id, slotByRole.bubble_me_2?.id, slotByRole.bubble_you_1?.id, slotByRole.bubble_you_2?.id]);
+  }, [bubbleFilesSignature, slotByRole.bubble_me_1?.id, slotByRole.bubble_me_2?.id, slotByRole.bubble_you_1?.id, slotByRole.bubble_you_2?.id]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
