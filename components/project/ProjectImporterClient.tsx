@@ -51,8 +51,9 @@ import { getBubblePairRole, getImageColorFallbackRole, getSlotCandidates } from 
 import { flipBubbleInsetsHorizontally, flipBubbleMarkersHorizontally, flipBubbleStretchHorizontally } from "@/lib/theme/bubbleEditTransforms";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
-import { getBubbleDecorationLayers } from "@/lib/theme/bubbleBuilder";
+import { getBubbleDecorationLayers, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder";
 import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDesigns, BubbleFamilyDesignSpec, GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
+import { flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import {
@@ -61,7 +62,7 @@ import {
   type ThemeAssetSlot,
   type ThemeTemplateId,
 } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 type ProjectImporterClientProps = {
   mode?: "user" | "admin";
@@ -85,6 +86,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     hydratePreviewUploads,
     hydrateSystemTemplateUploads,
     replaceDraft,
+    setBubbleGeometry,
     setBubbleInsets,
     setBubbleMarkers,
     setBubbleStretch,
@@ -93,7 +95,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setRemoteUploadRefs,
     setUploads,
   } = useThemeDraft();
-  const { uploads, remoteUploadRefs, colors, candidateSelections, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleDesigns, bubbleDecorationSources } = draft;
+  const { uploads, remoteUploadRefs, colors, candidateSelections, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleDesigns, bubbleDecorationSources } = draft;
   const [candidateOpen, setCandidateOpen] = useState(true);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
@@ -215,7 +217,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           activeGroup,
           selectedSlotId,
         },
-        draft: { uploads, remoteUploadRefs, colors, candidateSelections, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleDesigns, bubbleDecorationSources },
+        draft: { uploads, remoteUploadRefs, colors, candidateSelections, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleDesigns, bubbleDecorationSources },
         exportOptions,
       });
       const returnTo = `/edit?resume=${encodeURIComponent(recovery.resume.token)}`;
@@ -228,7 +230,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       if (!continueWithoutRecovery) return;
       router.push(destination === "login" ? "/login?returnTo=%2Fedit&reason=export" : "/credits?entry=export_block&returnTo=%2Fedit");
     }
-  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, bubbleDecorationSources, bubbleDesigns, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
+  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, bubbleDecorationSources, bubbleDesigns, bubbleGeometry, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
 
   useEffect(() => {
     if (skipDefaultSelectionResetRef.current) {
@@ -246,12 +248,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   );
   const previewBubbleEdits = useMemo(
     () => ({
-      bubble_me_1: slotEditFromRole("bubble_me_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-      bubble_me_2: slotEditFromRole("bubble_me_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-      bubble_you_1: slotEditFromRole("bubble_you_1", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
-      bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleMarkers, bubbleInsets, bubbleStretch),
+      bubble_me_1: slotEditFromRole("bubble_me_1", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch),
+      bubble_me_2: slotEditFromRole("bubble_me_2", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch),
+      bubble_you_1: slotEditFromRole("bubble_you_1", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch),
+      bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch),
     }),
-    [slots, bubbleMarkers, bubbleInsets, bubbleStretch],
+    [slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch],
   );
   const {
     activeImageColorPalette,
@@ -299,6 +301,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const { isSavingSystemTemplate, isSavingTemplate, saveCurrentTemplate, saveSystemTemplate } = useTemplatePersistence({
     activeSystemTemplate,
     activeUserTemplate,
+    bubbleGeometry,
     bubbleInsets,
     bubbleMarkers,
     bubbleStretch,
@@ -351,6 +354,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     submitExport,
   } = useProjectExport({
     activeTemplate,
+    bubbleGeometry,
     bubbleInsets,
     bubbleMarkers,
     bubbleStretch,
@@ -438,6 +442,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       remoteUploadRefs: {},
       colors: {},
       candidateSelections: getInitialSlotCandidateSelections(getThemeSlots("android"), "basic", getThemeTemplate("basic")),
+      bubbleGeometry: {},
       bubbleMarkers: {},
       bubbleInsets: {},
       bubbleStretch: {},
@@ -644,6 +649,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     if (!targetSlot) return;
     const targetHasOverrides = Boolean(
       (uploads[targetSlot.id]?.length ?? 0) ||
+      bubbleGeometry[targetSlot.id] ||
       bubbleMarkers[targetSlot.id] ||
       bubbleInsets[targetSlot.id] ||
       bubbleStretch[targetSlot.id],
@@ -682,6 +688,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       setBubbleMarkers((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
       setBubbleInsets((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
       setBubbleStretch((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
+      setBubbleGeometry((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
       setNotice({ tone: "success", message: `${targetSlot.label}에 같은 말풍선과 편집값을 적용했습니다.` });
       scheduleInteractionEvent("bubble_edit_completed", sourceSlot, { edit_type: "copy_to_pair" });
     } catch (error) {
@@ -690,6 +697,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const flipCurrentBubbleHorizontally = (slot: ThemeAssetSlot, width: number) => {
+    setBubbleGeometry((current) => {
+      const geometry = current[slot.id];
+      const artworkWidth = slot.kind === "ninepatch" ? Math.max(1, width - 2) : width;
+      return geometry ? { ...current, [slot.id]: flipBubbleGeometryHorizontally(geometry, artworkWidth) } : current;
+    });
     setBubbleMarkers((current) => {
       const markers = current[slot.id];
       return markers ? { ...current, [slot.id]: flipBubbleMarkersHorizontally(markers, width) } : current;
@@ -714,6 +726,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     });
     dropRemoteUploadRef(slot.id);
     if (asset.bubbleAdjustment) {
+      setBubbleGeometry((current) => {
+        const next = { ...current };
+        delete next[slot.id];
+        return next;
+      });
       if (asset.bubbleAdjustment.markers) {
         setBubbleMarkers((current) => ({ ...current, [slot.id]: asset.bubbleAdjustment?.markers }));
       }
@@ -743,6 +760,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       uploads: { ...uploads },
       remoteUploadRefs: { ...remoteUploadRefs },
       candidateSelections: { ...candidateSelections },
+      bubbleGeometry: { ...bubbleGeometry },
       bubbleMarkers: { ...bubbleMarkers },
       bubbleInsets: { ...bubbleInsets },
       bubbleStretch: { ...bubbleStretch },
@@ -756,9 +774,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     delete nextDraft.bubbleMarkers[selectedSlot.id];
     delete nextDraft.bubbleInsets[selectedSlot.id];
     delete nextDraft.bubbleStretch[selectedSlot.id];
+    delete nextDraft.bubbleGeometry[selectedSlot.id];
     if (result.asset.markers) nextDraft.bubbleMarkers[selectedSlot.id] = result.asset.markers;
     if (result.asset.insets) nextDraft.bubbleInsets[selectedSlot.id] = result.asset.insets;
     if (result.asset.stretch) nextDraft.bubbleStretch[selectedSlot.id] = result.asset.stretch;
+    const generatedGeometry = getIosBubbleGeometry(getBubbleVariantGeometry(result.spec.design, result.asset.variant));
+    nextDraft.bubbleGeometry[selectedSlot.id] = { stretch: generatedGeometry.stretch, contentInsets: generatedGeometry.insets };
     if (result.spec.design.syncTextColorOnApply) {
       const colorRole = result.spec.side === "me" ? "chat_bubble_me_color" : "chat_bubble_you_color";
       const colorSlot = slots.find((slot) => slot.role === colorRole);
@@ -862,9 +883,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
-      onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "markers" }); }}
-      onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "insets" }); }}
-      onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "stretch" }); }}
+      onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleGeometry((current) => omitBubbleEditValue(current, selectedSlot.id)); setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "markers" }); }}
+      onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleGeometry((current) => omitBubbleEditValue(current, selectedSlot.id)); setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "insets" }); }}
+      onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleGeometry((current) => omitBubbleEditValue(current, selectedSlot.id)); setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "stretch" }); }}
       canAdjustInline={canAdjustInline}
       candidateOpen={candidateOpen}
       onToggleCandidates={() => setCandidateOpen((current) => !current)}
@@ -888,6 +909,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       platform={platform}
       selectedBubbleSlot={selectedBubbleSlot}
       pairedBubbleSlot={selectedBubblePairSlot}
+      geometry={selectedSlot ? bubbleGeometry[selectedSlot.id] : undefined}
       markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
       insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
       stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
@@ -903,9 +925,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
-      onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "markers" }); }}
-      onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "insets" }); }}
-      onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "stretch" }); }}
+      onGeometryChange={(geometry) => { if (!selectedSlot) return; setBubbleGeometry((current) => ({ ...current, [selectedSlot.id]: geometry })); }}
+      onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); }}
+      onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); }}
+      onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "geometry" }); }}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
       onCopyBubbleToPair={(slot) => void copyBubbleToPair(slot)}
       onBubbleDraftDirtyChange={setMobileBubbleDraftDirty}
@@ -1320,6 +1343,7 @@ function getFocusableElements(container: HTMLElement | null) {
 function slotEditFromRole(
   role: ThemeResourceRole,
   slots: ThemeAssetSlot[],
+  bubbleGeometry: Partial<Record<string, BubbleGeometry>>,
   bubbleMarkers: Partial<Record<string, Markers>>,
   bubbleInsets: Partial<Record<string, Insets>>,
   bubbleStretch: Partial<Record<string, StretchPoint>>,
@@ -1328,10 +1352,18 @@ function slotEditFromRole(
   if (!slot) return undefined;
 
   const next = {
+    geometry: bubbleGeometry[slot.id],
     markers: bubbleMarkers[slot.id],
     insets: bubbleInsets[slot.id],
     stretch: bubbleStretch[slot.id],
   };
 
-  return next.markers || next.insets || next.stretch ? next : undefined;
+  return next.geometry || next.markers || next.insets || next.stretch ? next : undefined;
+}
+
+function omitBubbleEditValue<T>(values: Partial<Record<string, T>>, slotId: string) {
+  if (!(slotId in values)) return values;
+  const next = { ...values };
+  delete next[slotId];
+  return next;
 }

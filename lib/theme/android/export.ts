@@ -1,4 +1,5 @@
 import { exportNinePatch, loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
+import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
@@ -97,7 +98,10 @@ async function resolveAndroidSlotSource(
     const sourceDataUrl = selectedUpload ? await readThemeProjectFileAsDataUrl(selectedUpload.file) : await assetUrlToDataUrl(getResolvedAssetUrl(slot, uploads, selections, templateId, template));
     if (!sourceDataUrl) return null;
     const asset = await loadNinePatchDataUrl(sourceDataUrl, slot.fileName ?? `${slot.id}.9.png`, slot.role.includes("_me_") ? "me" : "you");
-    const nextAsset = bubbleEdit?.markers ? { ...asset, markers: bubbleEdit.markers } : asset;
+    const markers = bubbleEdit?.geometry
+      ? bubbleGeometryToAndroidMarkers(bubbleEdit.geometry, asset.innerCanvas.width, asset.innerCanvas.height)
+      : bubbleEdit?.markers;
+    const nextAsset = markers ? { ...asset, markers } : asset;
     return { blob: await canvasToBlob(exportNinePatch(nextAsset), "image/png") };
   }
 

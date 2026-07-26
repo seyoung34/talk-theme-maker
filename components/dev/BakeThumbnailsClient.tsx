@@ -23,7 +23,7 @@ export default function BakeThumbnailsClient() {
           colors: {},
           uploads: {},
           candidateSelections: {},
-          bubbleEdits: { markers: {}, insets: {}, stretch: {}, designs: {} },
+          bubbleEdits: { geometry: {}, markers: {}, insets: {}, stretch: {}, designs: {} },
         },
       });
       if (!blob) throw new Error("썸네일을 만들지 못했습니다.");

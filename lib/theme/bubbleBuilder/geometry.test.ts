@@ -91,8 +91,8 @@ describe("bubble builder geometry", () => {
     const geometry = getBubbleVariantGeometry(baseDesign, "first");
     const markers = getAndroidBubbleMarkers(geometry);
 
-    expect(markers.top).toEqual({ start: geometry.stretch.x + 1, end: geometry.stretch.x + 2 });
-    expect(markers.left).toEqual({ start: geometry.stretch.y + 1, end: geometry.stretch.y + 2 });
+    expect(markers.top).toEqual({ start: geometry.stretch.x + 1, end: geometry.stretch.x + 3 });
+    expect(markers.left).toEqual({ start: geometry.stretch.y + 1, end: geometry.stretch.y + 3 });
     expect(markers.bottom.end).toBeLessThanOrEqual(geometry.canvas.width + 1);
     expect(markers.right.end).toBeLessThanOrEqual(geometry.canvas.height + 1);
   });

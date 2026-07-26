@@ -8,13 +8,14 @@ import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/compone
 import { systemTemplateRepository, type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { saveUserTemplate } from "@/lib/theme/userTemplates";
 import type { ThemeTemplateId } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
 import { validateTemplateName } from "@/lib/theme/templateName";
 
 type UseTemplatePersistenceOptions = {
   activeSystemTemplate: ActiveSystemTemplate | null;
   activeUserTemplate: ActiveUserTemplate | null;
+  bubbleGeometry: Partial<Record<string, BubbleGeometry>>;
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleMarkers: Partial<Record<string, Markers>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;
@@ -71,7 +72,7 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
         uploads,
         colors: options.colors,
         candidateSelections: options.candidateSelections,
-        bubbleEdits: { markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch },
+        bubbleEdits: { geometry: options.bubbleGeometry, markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch },
         bubbleDesigns: options.bubbleDesigns,
         bubbleDecorationSources: options.bubbleDecorationSources,
       });
@@ -125,7 +126,7 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
           colors: options.colors,
           uploads,
           candidateSelections: options.candidateSelections,
-          bubbleEdits: { markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch, designs: options.bubbleDesigns },
+          bubbleEdits: { geometry: options.bubbleGeometry, markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch, designs: options.bubbleDesigns },
         },
       });
       options.setActiveSystemTemplate({

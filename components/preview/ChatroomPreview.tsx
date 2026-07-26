@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getResolvedColor, type BubbleEditState, type SlotCandidateSelections } from "@/components/project/projectModel";
 import { dataUrlForThemeFile, findBestFile } from "@/components/preview/previewResourceUtils";
 import { loadNinePatchDataUrl, mapContentRect, renderNinePatch } from "@/lib/theme/android/ninepatch";
+import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleAsset, BubbleSlot, Insets, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
@@ -185,7 +186,7 @@ export function ChatroomPreview({
         const bubbleSlot = role.includes("_me_") ? "me" : "you";
         const asset = await loadNinePatchDataUrl(dataUrl, file.name, bubbleSlot);
         const edits = bubbleEdits[role];
-        nextAssets[slot.id] = edits?.markers ? { ...asset, markers: edits.markers } : asset;
+        nextAssets[slot.id] = getAndroidRenderAsset(asset, edits);
       }
 
       if (!cancelled) setBubbleAssets(nextAssets);
@@ -596,10 +597,10 @@ function drawBubble(
   if (asset) {
     if (platform === "ios") {
       const source = getIosSourceCanvas(asset);
-      const stretch = normalizeStretchPoint(edit?.stretch ?? defaultStretch[asset.slot], source.width, source.height);
+      const stretch = normalizeStretchPoint(edit?.geometry?.stretch ?? edit?.stretch ?? defaultStretch[asset.slot], source.width, source.height);
       renderCapInset(ctx, asset, stretch, x, y, width, height);
     } else {
-      renderNinePatch(ctx, asset, x, y, width, height);
+      renderNinePatch(ctx, getAndroidRenderAsset(asset, edit), x, y, width, height);
     }
   } else {
     ctx.fillStyle = fill;
@@ -657,9 +658,19 @@ function getPreviewContentRect(asset: BubbleAsset | null, platform: ThemePlatfor
   if (!asset) return { x: x + 28, y: y + 20, width: width - 56, height: height - 40 };
   if (platform === "ios") {
     const source = getIosSourceCanvas(asset);
-    return mapIosContentRect(edit?.insets ?? defaultInsets[asset.slot], source.width, source.height, x, y, width, height);
+    return mapIosContentRect(edit?.geometry?.contentInsets ?? edit?.insets ?? defaultInsets[asset.slot], source.width, source.height, x, y, width, height);
   }
-  return mapContentRect(edit?.markers ? { ...asset, markers: edit.markers } : asset, x, y, width, height);
+  return mapContentRect(getAndroidRenderAsset(asset, edit), x, y, width, height);
+}
+
+function getAndroidRenderAsset(asset: BubbleAsset, edit: BubbleEditState | undefined): BubbleAsset {
+  if (edit?.geometry) {
+    return {
+      ...asset,
+      markers: bubbleGeometryToAndroidMarkers(edit.geometry, asset.innerCanvas.width, asset.innerCanvas.height),
+    };
+  }
+  return edit?.markers ? { ...asset, markers: edit.markers } : asset;
 }
 
 function drawText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, maxHeight: number, color: string) {

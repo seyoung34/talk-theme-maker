@@ -1,6 +1,7 @@
 import type { SlotCandidateSelections, SlotColors, SlotUploadEntry, SlotUploadSource, SlotUploads } from "@/lib/theme/project/state";
 import { normalizeThemeTemplateId, type ThemeTemplateId } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
 import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
 import { assertValidTemplateName } from "@/lib/theme/templateName";
@@ -8,6 +9,7 @@ import { assertValidTemplateName } from "@/lib/theme/templateName";
 const storeName = themeDatabaseStores.userTemplates;
 
 export type UserTemplateBubbleEdits = {
+  geometry: Partial<Record<string, BubbleGeometry>>;
   markers: Partial<Record<string, Markers>>;
   insets: Partial<Record<string, Insets>>;
   stretch: Partial<Record<string, StretchPoint>>;
@@ -82,6 +84,12 @@ function normalizeUserTemplateRecord(record: UserTemplateRecord): UserTemplateRe
   return {
     ...(templateId === record.templateId ? record : { ...record, templateId }),
     uploads: normalizeIndexedDbOnlyUploads(record.uploads),
+    bubbleEdits: {
+      geometry: parseBubbleGeometryMap(record.bubbleEdits?.geometry),
+      markers: record.bubbleEdits?.markers ?? {},
+      insets: record.bubbleEdits?.insets ?? {},
+      stretch: record.bubbleEdits?.stretch ?? {},
+    },
     bubbleDesigns: record.bubbleDesigns ?? {},
     bubbleDecorationSources: normalizeDecorationSources(record.bubbleDecorationSources),
   };

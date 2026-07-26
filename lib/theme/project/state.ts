@@ -1,5 +1,5 @@
 import { normalizeThemeTemplateId, type ThemeAssetSlot, type ThemeSlotCandidate, type ThemeStartPayload, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
-import type { BubbleSlot, Insets, Markers, StretchPoint, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
+import type { BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import type { ImageEditMetadata } from "@/lib/theme/imageEdit";
 
@@ -20,6 +20,7 @@ export type SlotColors = Record<string, string | undefined>;
 export type SlotCandidateSelections = Record<string, string | undefined>;
 
 export type BubbleEditState = {
+  geometry?: BubbleGeometry;
   markers?: Markers;
   insets?: Insets;
   stretch?: StretchPoint;

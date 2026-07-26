@@ -1,7 +1,7 @@
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
 import type { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint } from "@/lib/theme/types";
 
 export type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
 
@@ -40,6 +40,7 @@ export type AndroidExportPayloadOptions = {
   uploads: SlotUploads;
   colors: SlotColors;
   selections: SlotCandidateSelections;
+  bubbleGeometry: Partial<Record<string, BubbleGeometry>>;
   bubbleMarkers: Partial<Record<string, Markers>>;
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;

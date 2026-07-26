@@ -84,7 +84,7 @@ export function useEditorBootstrap({
             setActiveSection(recovery.editor.activeSection);
             setActiveGroup(recovery.editor.activeGroup);
             setSelectedSlotId(recovery.editor.selectedSlotId);
-            replaceDraft({ ...recovery.draft, bubbleDesigns: recovery.draft.bubbleDesigns ?? {}, bubbleDecorationSources: recovery.draft.bubbleDecorationSources ?? {} });
+            replaceDraft({ ...recovery.draft, bubbleGeometry: recovery.draft.bubbleGeometry ?? {}, bubbleDesigns: recovery.draft.bubbleDesigns ?? {}, bubbleDecorationSources: recovery.draft.bubbleDecorationSources ?? {} });
             setActiveUserTemplate(recovery.editor.activeUserTemplate ?? null);
             setActiveSystemTemplate(recovery.editor.activeSystemTemplate ?? null);
             setSystemTemplateBundleId(recovery.editor.systemTemplateBundleId ?? recovery.editor.activeSystemTemplate?.bundleId ?? null);
@@ -157,6 +157,7 @@ export function useEditorBootstrap({
             remoteUploadRefs: savedTemplate.overrides.uploadRefs,
             colors: normalizedOverrides.colors,
             candidateSelections: normalizedOverrides.candidateSelections,
+            bubbleGeometry: savedTemplate.overrides.bubbleEdits.geometry ?? {},
             bubbleMarkers: savedTemplate.overrides.bubbleEdits.markers,
             bubbleInsets: savedTemplate.overrides.bubbleEdits.insets,
             bubbleStretch: savedTemplate.overrides.bubbleEdits.stretch,
@@ -194,6 +195,7 @@ export function useEditorBootstrap({
             remoteUploadRefs: {},
             colors: normalizedOverrides.colors,
             candidateSelections: normalizedOverrides.candidateSelections,
+            bubbleGeometry: converted.bubbleEdits.geometry ?? {},
             bubbleMarkers: converted.bubbleEdits.markers,
             bubbleInsets: converted.bubbleEdits.insets,
             bubbleStretch: converted.bubbleEdits.stretch,
@@ -235,6 +237,7 @@ export function useEditorBootstrap({
           remoteUploadRefs: {},
           colors: normalizedOverrides.colors,
           candidateSelections: normalizedOverrides.candidateSelections,
+          bubbleGeometry: savedTemplate.bubbleEdits.geometry ?? {},
           bubbleMarkers: savedTemplate.bubbleEdits.markers,
           bubbleInsets: savedTemplate.bubbleEdits.insets,
           bubbleStretch: savedTemplate.bubbleEdits.stretch,

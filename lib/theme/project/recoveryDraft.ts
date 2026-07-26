@@ -2,7 +2,7 @@ import { normalizeSystemTemplateVisibility, type RemoteSlotUploads } from "@/lib
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeTemplateId } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
 
 const recoveryTtlMs = 7 * 24 * 60 * 60 * 1000;
@@ -50,6 +50,7 @@ export type EditorRecoveryDraft = {
     remoteUploadRefs: RemoteSlotUploads;
     colors: SlotColors;
     candidateSelections: SlotCandidateSelections;
+    bubbleGeometry?: Partial<Record<string, BubbleGeometry>>;
     bubbleMarkers: Partial<Record<string, Markers>>;
     bubbleInsets: Partial<Record<string, Insets>>;
     bubbleStretch: Partial<Record<string, StretchPoint>>;

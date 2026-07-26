@@ -54,10 +54,11 @@ export async function generateSystemTemplateThumbnail(
   const bubbleEdit = (role: ThemeResourceRole): BubbleEditState | undefined => {
     const slot = slots.find((item) => item.role === role);
     if (!slot) return undefined;
+    const geometry = input.overrides.bubbleEdits.geometry[slot.id];
     const markers = input.overrides.bubbleEdits.markers[slot.id];
     const insets = input.overrides.bubbleEdits.insets[slot.id];
     const stretch = input.overrides.bubbleEdits.stretch[slot.id];
-    return markers || insets || stretch ? { markers, insets, stretch } : undefined;
+    return geometry || markers || insets || stretch ? { geometry, markers, insets, stretch } : undefined;
   };
   const meEdit = bubbleEdit("bubble_me_1");
   const youEdit = bubbleEdit("bubble_you_1");

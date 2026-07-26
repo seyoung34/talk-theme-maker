@@ -554,9 +554,11 @@ function createUserTemplatePreviewVisual(record: UserTemplateRecord, template: T
     tabBackgroundImage: resolveUserTemplateImage(slots, "tab_background_image", record, templateId, template, uploadPreviewUrls),
     myBubbleImage: resolveUserTemplateImage(slots, "bubble_me_1", record, templateId, template, uploadPreviewUrls),
     friendBubbleImage: resolveUserTemplateImage(slots, "bubble_you_1", record, templateId, template, uploadPreviewUrls),
+    myBubbleGeometry: record.bubbleEdits.geometry[findSlotByRole(slots, "bubble_me_1")?.id ?? ""],
     myBubbleStretch: record.bubbleEdits.stretch[findSlotByRole(slots, "bubble_me_1")?.id ?? ""],
     myBubbleInsets: record.bubbleEdits.insets[findSlotByRole(slots, "bubble_me_1")?.id ?? ""],
     myBubbleMarkers: record.bubbleEdits.markers[findSlotByRole(slots, "bubble_me_1")?.id ?? ""],
+    friendBubbleGeometry: record.bubbleEdits.geometry[findSlotByRole(slots, "bubble_you_1")?.id ?? ""],
     friendBubbleStretch: record.bubbleEdits.stretch[findSlotByRole(slots, "bubble_you_1")?.id ?? ""],
     friendBubbleInsets: record.bubbleEdits.insets[findSlotByRole(slots, "bubble_you_1")?.id ?? ""],
     friendBubbleMarkers: record.bubbleEdits.markers[findSlotByRole(slots, "bubble_you_1")?.id ?? ""],
@@ -1060,12 +1062,13 @@ function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
 
 function ChatroomBubble({ visual, mine, text, time }: { visual: TemplatePreviewVisual; mine: boolean; text: string; time: string }) {
   const image = mine ? visual.myBubbleImage : visual.friendBubbleImage;
+  const geometry = mine ? visual.myBubbleGeometry : visual.friendBubbleGeometry;
   const stretch = mine ? visual.myBubbleStretch : visual.friendBubbleStretch;
   const insets = mine ? visual.myBubbleInsets : visual.friendBubbleInsets;
   const markers = mine ? visual.myBubbleMarkers : visual.friendBubbleMarkers;
   const textColor = mine ? visual.myBubbleTextColor : visual.friendBubbleTextColor;
   const fillColor = mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor;
-  const edit = stretch || insets || markers ? { stretch, insets, markers } : undefined;
+  const edit = geometry || stretch || insets || markers ? { geometry, stretch, insets, markers } : undefined;
   return (
     <div className={`flex items-end gap-1.5 ${mine ? "justify-end" : "justify-start"}`}>
       {!mine ? <ScreenAvatar src={visual.profileImage} sizeClass="size-6" /> : null}
@@ -1181,12 +1184,13 @@ function MiniAvatar({ src }: { src?: string }) {
 
 function PreviewMessage({ visual, mine, text }: { visual: TemplatePreviewVisual; mine: boolean; text: string }) {
   const bubbleImage = mine ? visual.myBubbleImage : visual.friendBubbleImage;
+  const geometry = mine ? visual.myBubbleGeometry : visual.friendBubbleGeometry;
   const stretch = mine ? visual.myBubbleStretch : visual.friendBubbleStretch;
   const insets = mine ? visual.myBubbleInsets : visual.friendBubbleInsets;
   const markers = mine ? visual.myBubbleMarkers : visual.friendBubbleMarkers;
   const textColor = mine ? visual.myBubbleTextColor : visual.friendBubbleTextColor;
   const fillColor = mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor;
-  const edit = stretch || insets || markers ? { stretch, insets, markers } : undefined;
+  const edit = geometry || stretch || insets || markers ? { geometry, stretch, insets, markers } : undefined;
   return (
     <div className={`grid gap-1.5 ${mine ? "justify-items-end" : "grid-cols-[28px_minmax(0,1fr)] items-end"}`}>
       {!mine ? <MiniAvatar src={visual.profileImage} /> : null}

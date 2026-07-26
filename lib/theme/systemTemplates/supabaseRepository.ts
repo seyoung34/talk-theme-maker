@@ -6,6 +6,7 @@ import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repos
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
 import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 import { assertValidTemplateName } from "@/lib/theme/templateName";
+import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
 import { getThemeSlots, getThemeTemplate, type ThemeAssetSlot, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -493,6 +494,7 @@ function unwrapBundle(bundle: VariantRow["system_template_bundles"]): BundleRow 
 
 function normalizeBubbleEdits(value: Partial<ThemeEditOverrides["bubbleEdits"]> | null | undefined): ThemeEditOverrides["bubbleEdits"] {
   return {
+    geometry: parseBubbleGeometryMap(value?.geometry),
     markers: value?.markers ?? {},
     insets: value?.insets ?? {},
     stretch: value?.stretch ?? {},
@@ -551,8 +553,9 @@ function resolvePreviewBubbleShape(slots: ThemeAssetSlot[], role: ThemeResourceR
   const stretch = bubbleEdits.stretch[slot.id];
   const insets = bubbleEdits.insets[slot.id];
   const markers = bubbleEdits.markers[slot.id];
-  if (!stretch && !insets && !markers) return undefined;
-  return { stretch, insets, markers };
+  const geometry = bubbleEdits.geometry[slot.id];
+  if (!geometry && !stretch && !insets && !markers) return undefined;
+  return { geometry, stretch, insets, markers };
 }
 
 function resolvePreviewColor(

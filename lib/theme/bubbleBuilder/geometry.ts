@@ -1,4 +1,5 @@
 import type { Insets, Markers } from "@/lib/theme/types";
+import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
 import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDecorationLayer, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
 
 const variantPresets: Record<BubbleBuilderVariant, { width: number; height: number; bodyWidth: number; bodyHeight: number }> = {
@@ -98,14 +99,11 @@ export function getIosBubbleGeometry(geometry: BubbleVariantGeometry): { insets:
 }
 
 export function getAndroidBubbleMarkers(geometry: BubbleVariantGeometry): Markers {
-  const markerX = geometry.stretch.x + 1;
-  const markerY = geometry.stretch.y + 1;
-  return {
-    top: { start: markerX, end: markerX + 1 },
-    left: { start: markerY, end: markerY + 1 },
-    right: { start: geometry.content.y + 1, end: geometry.content.y + geometry.content.height + 1 },
-    bottom: { start: geometry.content.x + 1, end: geometry.content.x + geometry.content.width + 1 },
-  };
+  const ios = getIosBubbleGeometry(geometry);
+  return bubbleGeometryToAndroidMarkers({
+    stretch: ios.stretch,
+    contentInsets: ios.insets,
+  }, geometry.canvas.width, geometry.canvas.height);
 }
 
 export function rectsOverlap(a: BubbleRect, b: BubbleRect) {

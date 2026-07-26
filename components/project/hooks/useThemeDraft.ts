@@ -5,13 +5,14 @@ import { getMissingRemoteUploadSlotIds, keepCurrentRemoteUploads, mergeSlotUploa
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
 import { systemTemplateRepository, type RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
-import type { Insets, Markers, StretchPoint } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint } from "@/lib/theme/types";
 
 export type ThemeDraft = {
   uploads: SlotUploads;
   remoteUploadRefs: RemoteSlotUploads;
   colors: SlotColors;
   candidateSelections: SlotCandidateSelections;
+  bubbleGeometry: Partial<Record<string, BubbleGeometry>>;
   bubbleMarkers: Partial<Record<string, Markers>>;
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;
@@ -27,6 +28,7 @@ export type ThemeDraftAction =
   | { type: "set-remote-upload-refs"; updater: DraftUpdater<RemoteSlotUploads> }
   | { type: "set-colors"; updater: DraftUpdater<SlotColors> }
   | { type: "set-candidate-selections"; updater: DraftUpdater<SlotCandidateSelections> }
+  | { type: "set-bubble-geometry"; updater: DraftUpdater<ThemeDraft["bubbleGeometry"]> }
   | { type: "set-bubble-markers"; updater: DraftUpdater<ThemeDraft["bubbleMarkers"]> }
   | { type: "set-bubble-insets"; updater: DraftUpdater<ThemeDraft["bubbleInsets"]> }
   | { type: "set-bubble-stretch"; updater: DraftUpdater<ThemeDraft["bubbleStretch"]> }
@@ -39,6 +41,7 @@ export function createEmptyThemeDraft(): ThemeDraft {
     remoteUploadRefs: {},
     colors: {},
     candidateSelections: {},
+    bubbleGeometry: {},
     bubbleMarkers: {},
     bubbleInsets: {},
     bubbleStretch: {},
@@ -59,6 +62,8 @@ export function themeDraftReducer(state: ThemeDraft, action: ThemeDraftAction): 
       return { ...state, colors: resolveUpdate(state.colors, action.updater) };
     case "set-candidate-selections":
       return { ...state, candidateSelections: resolveUpdate(state.candidateSelections, action.updater) };
+    case "set-bubble-geometry":
+      return { ...state, bubbleGeometry: resolveUpdate(state.bubbleGeometry, action.updater) };
     case "set-bubble-markers":
       return { ...state, bubbleMarkers: resolveUpdate(state.bubbleMarkers, action.updater) };
     case "set-bubble-insets":
@@ -99,6 +104,9 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
   }, [dispatchDraft]);
   const setCandidateSelections = useCallback<Dispatch<SetStateAction<SlotCandidateSelections>>>((updater) => {
     dispatchDraft({ type: "set-candidate-selections", updater });
+  }, [dispatchDraft]);
+  const setBubbleGeometry = useCallback<Dispatch<SetStateAction<ThemeDraft["bubbleGeometry"]>>>((updater) => {
+    dispatchDraft({ type: "set-bubble-geometry", updater });
   }, [dispatchDraft]);
   const setBubbleMarkers = useCallback<Dispatch<SetStateAction<ThemeDraft["bubbleMarkers"]>>>((updater) => {
     dispatchDraft({ type: "set-bubble-markers", updater });
@@ -152,6 +160,7 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
     hydratePreviewUploads,
     hydrateSystemTemplateUploads,
     replaceDraft,
+    setBubbleGeometry,
     setBubbleInsets,
     setBubbleMarkers,
     setBubbleStretch,

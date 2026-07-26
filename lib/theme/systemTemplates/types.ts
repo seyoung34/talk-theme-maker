@@ -1,7 +1,7 @@
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { BaseTemplateId } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import type { BubbleDesigns } from "@/lib/theme/bubbleBuilder";
 
 export type SystemTemplateStatus = "draft" | "published" | "archived";
@@ -24,6 +24,7 @@ export type ThemeEditOverrides = {
   uploads: SlotUploads;
   candidateSelections: SlotCandidateSelections;
   bubbleEdits: {
+    geometry: Partial<Record<string, BubbleGeometry>>;
     markers: Partial<Record<string, Markers>>;
     insets: Partial<Record<string, Insets>>;
     stretch: Partial<Record<string, StretchPoint>>;
@@ -75,6 +76,7 @@ export type RemoteSlotUploads = Record<string, RemoteUploadEntry[] | undefined>;
 // 말풍선 이미지를 프리뷰에서 9-slice로 그리기 위한 stretch/inset 정보.
 // stretch/insets는 iOS cap-inset(원본 이미지 픽셀 기준), markers는 Android 나인패치 편집값.
 export type BubblePreviewShape = {
+  geometry?: BubbleGeometry;
   stretch?: StretchPoint;
   insets?: Insets;
   markers?: Markers;

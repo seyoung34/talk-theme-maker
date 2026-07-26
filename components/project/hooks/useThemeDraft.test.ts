@@ -26,6 +26,21 @@ describe("themeDraftReducer", () => {
     expect(withRemoteRefs.remoteUploadRefs).toEqual({ slot: [] });
   });
 
+  it("stores shared bubble geometry without changing legacy edit maps", () => {
+    const initial = createEmptyThemeDraft();
+    const geometry = {
+      stretch: { x: 20, y: 12 },
+      contentInsets: { top: 5, right: 6, bottom: 7, left: 8 },
+    };
+
+    const result = themeDraftReducer(initial, { type: "set-bubble-geometry", updater: { bubble: geometry } });
+
+    expect(result.bubbleGeometry).toEqual({ bubble: geometry });
+    expect(result.bubbleMarkers).toBe(initial.bubbleMarkers);
+    expect(result.bubbleInsets).toBe(initial.bubbleInsets);
+    expect(result.bubbleStretch).toBe(initial.bubbleStretch);
+  });
+
   it("replaces the complete draft atomically for bootstrap and reset flows", () => {
     const initial = createEmptyThemeDraft();
     const range = { start: 1, end: 2 };

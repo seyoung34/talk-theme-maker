@@ -8,7 +8,7 @@ import { createExportFormData, getDownloadFileName, getExportNotice, getExportPr
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
 import type { AccountState, ExportDownloadResult, ExportErrorResponse, ExportMode, ExportVersionResponse } from "@/components/project/exportModel";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import type { RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 
 type ProjectNotice = {
@@ -18,6 +18,7 @@ type ProjectNotice = {
 
 type UseProjectExportOptions = {
   activeTemplate: ThemeTemplate;
+  bubbleGeometry: Partial<Record<string, BubbleGeometry>>;
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleMarkers: Partial<Record<string, Markers>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;
@@ -35,6 +36,7 @@ type UseProjectExportOptions = {
 
 export function useProjectExport({
   activeTemplate,
+  bubbleGeometry,
   bubbleInsets,
   bubbleMarkers,
   bubbleStretch,
@@ -166,6 +168,7 @@ export function useProjectExport({
         uploads: hydratedUploads,
         colors,
         selections: candidateSelections,
+        bubbleGeometry,
         bubbleMarkers,
         bubbleInsets,
         bubbleStretch,
@@ -256,6 +259,7 @@ export function useProjectExport({
     accountState?.isAdmin,
     accountState?.user,
     activeTemplate,
+    bubbleGeometry,
     bubbleInsets,
     bubbleMarkers,
     bubbleStretch,

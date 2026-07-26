@@ -15,7 +15,7 @@ describe("mobile bubble edit state", () => {
   });
 
   it("detects changes across image and platform geometry values", () => {
-    const initial = { imageState: defaultImageEditState, markers: { top: { start: 1, end: 4 }, left: { start: 1, end: 4 }, right: { start: 1, end: 4 }, bottom: { start: 1, end: 4 } }, insets: { top: 1, right: 1, bottom: 1, left: 1 }, stretch: { x: 2, y: 2 } };
+    const initial = { imageState: defaultImageEditState, geometry: { contentInsets: { top: 1, right: 1, bottom: 1, left: 1 }, stretch: { x: 2, y: 2 } } };
     expect(isMobileBubbleEditDirty(initial, initial)).toBe(false);
     expect(isMobileBubbleEditDirty({ ...initial, imageState: { ...initial.imageState, scale: 1.2 } }, initial)).toBe(true);
   });

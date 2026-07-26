@@ -1,11 +1,9 @@
 import type { ImageEditState } from "@/lib/theme/imageEdit";
-import type { Insets, Markers, StretchPoint } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint } from "@/lib/theme/types";
 
 export type MobileBubbleEditDraft = {
   imageState: ImageEditState;
-  markers: Markers;
-  insets: Insets;
-  stretch: StretchPoint;
+  geometry: BubbleGeometry;
 };
 
 export function isMobileBubbleEditDirty(draft: MobileBubbleEditDraft | null, initial: MobileBubbleEditDraft | null) {

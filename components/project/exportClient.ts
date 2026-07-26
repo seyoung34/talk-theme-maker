@@ -109,6 +109,7 @@ async function createIosExportFormData({
   uploads,
   colors,
   selections,
+  bubbleGeometry,
   bubbleMarkers,
   bubbleInsets,
   bubbleStretch,
@@ -117,6 +118,7 @@ async function createIosExportFormData({
     slots.map((slot) => [
       slot.id,
       {
+        geometry: bubbleGeometry[slot.id],
         markers: bubbleMarkers[slot.id],
         insets: bubbleInsets[slot.id],
         stretch: bubbleStretch[slot.id],
@@ -169,6 +171,7 @@ async function createAndroidExportFormData({
   uploads,
   colors,
   selections,
+  bubbleGeometry,
   bubbleMarkers,
   bubbleInsets,
   bubbleStretch,
@@ -177,6 +180,7 @@ async function createAndroidExportFormData({
     slots.map((slot) => [
       slot.id,
       {
+        geometry: bubbleGeometry[slot.id],
         markers: bubbleMarkers[slot.id],
         insets: bubbleInsets[slot.id],
         stretch: bubbleStretch[slot.id],

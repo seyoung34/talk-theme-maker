@@ -25,6 +25,7 @@ export function convertSystemTemplateOverridesByRole({
   const colors: ThemeEditOverrides["colors"] = {};
   const uploads: ThemeEditOverrides["uploads"] = {};
   const candidateSelections: ThemeEditOverrides["candidateSelections"] = {};
+  const geometry: ThemeEditOverrides["bubbleEdits"]["geometry"] = {};
   const markers: ThemeEditOverrides["bubbleEdits"]["markers"] = {};
   const insets: ThemeEditOverrides["bubbleEdits"]["insets"] = {};
   const stretch: ThemeEditOverrides["bubbleEdits"]["stretch"] = {};
@@ -66,6 +67,12 @@ export function convertSystemTemplateOverridesByRole({
     candidateSelections[targetSlot.id] = selectedId;
   }
 
+  for (const [sourceSlotId, value] of Object.entries(sourceOverrides.bubbleEdits.geometry ?? {})) {
+    if (!value) continue;
+    const targetSlot = targetSlotForSourceId(sourceSlotId, sourceById, targetByRole);
+    if (targetSlot) geometry[targetSlot.id] = value;
+  }
+
   for (const [sourceSlotId, value] of Object.entries(sourceOverrides.bubbleEdits.markers)) {
     if (!value) continue;
     const targetSlot = targetSlotForSourceId(sourceSlotId, sourceById, targetByRole);
@@ -88,7 +95,7 @@ export function convertSystemTemplateOverridesByRole({
     colors,
     uploads,
     candidateSelections,
-    bubbleEdits: { markers, insets, stretch, designs: sourceOverrides.bubbleEdits.designs ?? {} },
+    bubbleEdits: { geometry, markers, insets, stretch, designs: sourceOverrides.bubbleEdits.designs ?? {} },
   };
 }
 

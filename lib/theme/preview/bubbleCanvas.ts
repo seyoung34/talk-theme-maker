@@ -2,6 +2,7 @@
 // 편집기 프리뷰(ChatroomPreview)와 갤러리 모달이 동일한 9-slice/텍스트영역 계산을 공유해
 // 픽셀 단위로 일치하도록 한다. 모든 계산은 소스 픽셀 공간에서 이뤄지고, 표시 크기는 CSS로 축소한다.
 import { mapContentRect, renderNinePatch, shrinkFixed } from "@/lib/theme/android/ninepatch";
+import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
 import type { BubbleEditState } from "@/lib/theme/project/state";
 import type { BubbleAsset, BubbleSlot, Insets, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -39,10 +40,10 @@ export function drawBubble(
   if (asset) {
     if (platform === "ios") {
       const source = getIosSourceCanvas(asset);
-      const stretch = normalizeStretchPoint(edit?.stretch ?? defaultStretch[asset.slot], source.width, source.height);
+      const stretch = normalizeStretchPoint(edit?.geometry?.stretch ?? edit?.stretch ?? defaultStretch[asset.slot], source.width, source.height);
       renderCapInset(ctx, asset, stretch, x, y, width, height);
     } else {
-      renderNinePatch(ctx, asset, x, y, width, height);
+      renderNinePatch(ctx, getAndroidRenderAsset(asset, edit), x, y, width, height);
     }
   } else {
     ctx.fillStyle = fill;
@@ -100,9 +101,19 @@ export function getPreviewContentRect(asset: BubbleAsset | null, platform: Theme
   if (!asset) return { x: x + 28, y: y + 20, width: width - 56, height: height - 40 };
   if (platform === "ios") {
     const source = getIosSourceCanvas(asset);
-    return mapIosContentRect(edit?.insets ?? defaultInsets[asset.slot], source.width, source.height, x, y, width, height);
+    return mapIosContentRect(edit?.geometry?.contentInsets ?? edit?.insets ?? defaultInsets[asset.slot], source.width, source.height, x, y, width, height);
   }
-  return mapContentRect(edit?.markers ? { ...asset, markers: edit.markers } : asset, x, y, width, height);
+  return mapContentRect(getAndroidRenderAsset(asset, edit), x, y, width, height);
+}
+
+function getAndroidRenderAsset(asset: BubbleAsset, edit: BubbleEditState | undefined): BubbleAsset {
+  if (edit?.geometry) {
+    return {
+      ...asset,
+      markers: bubbleGeometryToAndroidMarkers(edit.geometry, asset.innerCanvas.width, asset.innerCanvas.height),
+    };
+  }
+  return edit?.markers ? { ...asset, markers: edit.markers } : asset;
 }
 
 function drawText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, maxHeight: number, color: string) {

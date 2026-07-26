@@ -2,7 +2,7 @@ import { getResolvedAssetUrl, getResolvedColor } from "@/lib/theme/project/state
 import { getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
 import type { RemoteSlotUploads, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 export type TemplatePreviewVisual = {
   platform: ThemePlatform;
@@ -22,9 +22,11 @@ export type TemplatePreviewVisual = {
   myBubbleImage?: string;
   friendBubbleImage?: string;
   // 말풍선 9-slice 렌더용 stretch/inset (iOS) 및 markers (Android 나인패치). 없으면 렌더러가 기본값 사용.
+  myBubbleGeometry?: BubbleGeometry;
   myBubbleStretch?: StretchPoint;
   myBubbleInsets?: Insets;
   myBubbleMarkers?: Markers;
+  friendBubbleGeometry?: BubbleGeometry;
   friendBubbleStretch?: StretchPoint;
   friendBubbleInsets?: Insets;
   friendBubbleMarkers?: Markers;
@@ -138,9 +140,11 @@ export function createSystemTemplatePreviewVisual({
     tabBackgroundImage: resolveImage(slots, "tab_background_image", summary, templateId, template, signedUrls),
     myBubbleImage: resolveImage(slots, "bubble_me_1", summary, templateId, template, signedUrls),
     friendBubbleImage: resolveImage(slots, "bubble_you_1", summary, templateId, template, signedUrls),
+    myBubbleGeometry: summary.previewMetadata.bubbles?.myBubble?.geometry,
     myBubbleStretch: summary.previewMetadata.bubbles?.myBubble?.stretch,
     myBubbleInsets: summary.previewMetadata.bubbles?.myBubble?.insets,
     myBubbleMarkers: summary.previewMetadata.bubbles?.myBubble?.markers,
+    friendBubbleGeometry: summary.previewMetadata.bubbles?.friendBubble?.geometry,
     friendBubbleStretch: summary.previewMetadata.bubbles?.friendBubble?.stretch,
     friendBubbleInsets: summary.previewMetadata.bubbles?.friendBubble?.insets,
     friendBubbleMarkers: summary.previewMetadata.bubbles?.friendBubble?.markers,

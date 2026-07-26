@@ -25,7 +25,7 @@ import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import { setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
 
 type MobileQuickEditPanelProps = {
@@ -41,6 +41,7 @@ type MobileQuickEditPanelProps = {
   platform: ThemePlatform;
   selectedBubbleSlot: BubbleSlot | null;
   pairedBubbleSlot?: ThemeAssetSlot;
+  geometry?: BubbleGeometry;
   markers?: Markers;
   insets?: Insets;
   stretch?: StretchPoint;
@@ -56,6 +57,7 @@ type MobileQuickEditPanelProps = {
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
   onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
   onApplyAutoColor: () => void;
+  onGeometryChange: (geometry: BubbleGeometry) => void;
   onMarkersChange: (markers: Markers) => void;
   onInsetsChange: (insets: Insets) => void;
   onStretchChange: (stretch: StretchPoint) => void;
@@ -295,9 +297,11 @@ function ImageControls({
   onRemoveUpload,
   platform,
   selectedBubbleSlot,
+  geometry,
   markers,
   insets,
   stretch,
+  onGeometryChange,
   onMarkersChange,
   onInsetsChange,
   onStretchChange,
@@ -418,11 +422,13 @@ function ImageControls({
           sourceUrl={editableSourceUrl}
           initialImageState={selectedUploadEntry?.imageEdit?.state}
           target={imageEditTarget}
+          geometry={geometry}
           markers={markers}
           insets={insets}
           stretch={stretch}
-          onApply={({ editedFile, sourceFile, imageState, target, markers, insets, stretch }) => {
+          onApply={({ editedFile, sourceFile, imageState, target, geometry, markers, insets, stretch }) => {
             if (editedFile) onEditedUpload(slot, editedFile, imageState, sourceFile, target);
+            onGeometryChange(geometry);
             onMarkersChange(markers);
             onInsetsChange(insets);
             onStretchChange(stretch);
