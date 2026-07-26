@@ -38,8 +38,14 @@ export const siteName = "TalkTheme";
 
 export const siteTitleDefault = "TalkTheme — 내 사진으로 만드는 카카오톡 테마";
 
-export const siteDescription =
-  "좋아하는 사진과 최애로 나만의 카카오톡 테마를 만들어 보세요. 템플릿을 고르고 이미지와 색상만 바꾸면 Android APK와 iOS 테마 파일로 바로 내려받을 수 있습니다.";
+/**
+ * 검색결과 스니펫과 공유 카드에 그대로 나가는 문구다.
+ *
+ * 네이버 서치어드바이저가 80자 이내를 권한다. 이전 문구는 그 한도를 넘었고, 뒷문장이
+ * `Android APK`·`iOS 테마 파일` 같은 용어를 써서 일반 사용자에게 와닿지 않았다.
+ * 무엇을 할 수 있는지 한 문장으로만 말한다.
+ */
+export const siteDescription = "좋아하는 사진과 최애로 나만의 카카오톡 테마를 만들어 보세요.";
 
 export const metadataBaseUrl = publicSiteOrigin ? new URL(publicSiteOrigin) : undefined;
 
