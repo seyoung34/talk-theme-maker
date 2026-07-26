@@ -45,6 +45,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "eslint": "^9.39.4",
     "eslint-config-next": "^15.5.20",
+    "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.10.6",
     "postcss": "^8.5.15",
     "supabase": "2.109.1",
