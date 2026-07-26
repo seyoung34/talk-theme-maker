@@ -100,6 +100,30 @@ export function triggerDownload(blob: Blob, fileName: string) {
   URL.revokeObjectURL(href);
 }
 
+type ExportManifestSourceFile = { path: string; blob: Blob } | { path: string; serverAsset: string };
+
+// 스케일 타깃 때문에 같은 이미지가 여러 경로로 나간다(Android 슬롯 89개 중 23개, iOS는 @2x/@3x).
+// 경로마다 파일을 새로 붙이면 동일한 바이트를 중복 업로드하게 되므로, blob이 같으면 field를 공유한다.
+// 서버와 빌더는 manifest 항목별로 경로를 만들되 field 바이트는 한 번만 읽는다.
+function appendExportFilesToFormData(formData: FormData, exportFiles: readonly ExportManifestSourceFile[]) {
+  const fieldByBlob = new Map<Blob, string>();
+
+  return exportFiles.map((file) => {
+    if ("serverAsset" in file) {
+      return { path: file.path, serverAsset: file.serverAsset };
+    }
+
+    const sharedField = fieldByBlob.get(file.blob);
+    if (sharedField) return { field: sharedField, path: file.path };
+
+    const index = fieldByBlob.size;
+    const field = `file-${index}`;
+    fieldByBlob.set(file.blob, field);
+    formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
+    return { field, path: file.path };
+  });
+}
+
 async function createIosExportFormData({
   analysis,
   template,
@@ -142,17 +166,7 @@ async function createIosExportFormData({
   });
 
   const formData = new FormData();
-  let fileIndex = 0;
-  const manifest = exportFiles.map((file) => {
-    if ("serverAsset" in file) {
-      return { path: file.path, serverAsset: file.serverAsset };
-    }
-    const index = fileIndex;
-    fileIndex += 1;
-    const field = `file-${index}`;
-    formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
-    return { field, path: file.path };
-  });
+  const manifest = appendExportFilesToFormData(formData, exportFiles);
 
   formData.append("manifest", JSON.stringify(manifest));
   formData.append("exportName", exportName);
@@ -203,17 +217,7 @@ async function createAndroidExportFormData({
   });
 
   const formData = new FormData();
-  let fileIndex = 0;
-  const manifest = exportFiles.map((file) => {
-    if ("serverAsset" in file) {
-      return { path: file.path, serverAsset: file.serverAsset };
-    }
-    const index = fileIndex;
-    fileIndex += 1;
-    const field = `file-${index}`;
-    formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
-    return { field, path: file.path };
-  });
+  const manifest = appendExportFilesToFormData(formData, exportFiles);
 
   formData.append("manifest", JSON.stringify(manifest));
   formData.append("exportName", exportName);

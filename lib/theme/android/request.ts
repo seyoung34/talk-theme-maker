@@ -18,7 +18,9 @@ export type { AndroidBundleUploadFile, AndroidExportManifestItem };
 
 export async function readAndroidBuildInputFiles(formData: FormData, manifestRaw: string) {
   const manifest = parseManifest(manifestRaw);
-  const fields = new Set<string>();
+  // 같은 바이트를 여러 경로가 공유할 수 있다(스케일 타깃). 한 번만 읽어 참조를 재사용한다.
+  const bytesByField = new Map<string, Uint8Array>();
+  const bytesByServerAsset = new Map<string, Uint8Array>();
   const paths = new Set<string>();
   const files: AndroidBuildInputFile[] = [];
   let inputBytes = 0;
@@ -28,17 +30,27 @@ export async function readAndroidBuildInputFiles(formData: FormData, manifestRaw
     if (paths.has(normalizedPath)) {
       throw new AndroidExportRequestError("duplicate_export_path", "중복된 Android 리소스 경로가 있습니다.");
     }
+    paths.add(normalizedPath);
 
     if ("serverAsset" in item) {
-      const bytes = await readPublicTemplateAsset(item.serverAsset);
-      inputBytes = addInputBytes(inputBytes, bytes.byteLength);
-      paths.add(normalizedPath);
+      const cached = bytesByServerAsset.get(item.serverAsset);
+      const bytes = cached ?? (await readPublicTemplateAsset(item.serverAsset));
+      if (!cached) {
+        inputBytes = addInputBytes(inputBytes, bytes.byteLength);
+        bytesByServerAsset.set(item.serverAsset, bytes);
+      }
       files.push({ path: normalizedPath, bytes });
       continue;
     }
 
-    if (!/^file-\d+$/.test(item.field) || fields.has(item.field)) {
+    if (!/^file-\d+$/.test(item.field)) {
       throw new AndroidExportRequestError("invalid_manifest_field", "내보내기 파일 목록이 올바르지 않습니다.");
+    }
+
+    const cachedBytes = bytesByField.get(item.field);
+    if (cachedBytes) {
+      files.push({ path: normalizedPath, bytes: cachedBytes });
+      continue;
     }
 
     const file = formData.get(item.field);
@@ -50,9 +62,9 @@ export async function readAndroidBuildInputFiles(formData: FormData, manifestRaw
     }
 
     inputBytes = addInputBytes(inputBytes, file.size);
-    fields.add(item.field);
-    paths.add(normalizedPath);
-    files.push({ path: normalizedPath, bytes: new Uint8Array(await file.arrayBuffer()) });
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    bytesByField.set(item.field, bytes);
+    files.push({ path: normalizedPath, bytes });
   }
 
   return { files, inputBytes };
