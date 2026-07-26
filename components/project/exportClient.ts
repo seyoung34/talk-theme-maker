@@ -42,16 +42,18 @@ export function getExportNotice(mode: ExportMode) {
   return "Android APK를 빌드하는 중입니다.";
 }
 
+// 클라이언트 측 상한. 서버 워치독이 최종 방어선이다.
+const exportPollTimeoutMs = 12 * 60 * 1000;
+
 export type AsyncAndroidExportOutcome =
   | { status: "completed"; downloadUrl: string; fileName: string }
   | { status: "failed"; error: string; reason: ExportFailureReason };
 
 // 4.7: 비동기 Android 내보내기 큐잉 후 완료/실패까지 status 엔드포인트를 폴링한다.
 export async function pollAndroidExportStatus(exportJobId: string, onStage?: (stage: string) => void): Promise<AsyncAndroidExportOutcome> {
-  const pollIntervalMs = 3000;
-  const maxPolls = 240; // 3초 * 240 = 12분 클라이언트 측 상한(서버 워치독이 최종 방어)
+  const startedAt = Date.now();
 
-  for (let attempt = 0; attempt < maxPolls; attempt += 1) {
+  while (Date.now() - startedAt < exportPollTimeoutMs) {
     const response = await fetch(`/api/export/android/status?jobId=${encodeURIComponent(exportJobId)}`, { cache: "no-store" });
     const payload = (await response.json().catch(() => null)) as
       | { status: "pending"; stage: string }
@@ -71,10 +73,19 @@ export async function pollAndroidExportStatus(exportJobId: string, onStage?: (st
       }
     }
 
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    await new Promise((resolve) => setTimeout(resolve, getExportPollIntervalMs(Date.now() - startedAt)));
   }
 
   return { status: "failed", error: "내보내기 상태 확인 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.", reason: "poll_timeout" };
+}
+
+// APK 빌드는 보통 수 분이 걸린다. 초반에는 촘촘히 확인해 빠른 실패를 바로 보여 주고,
+// 이후에는 간격을 늘려 조회 1건마다 붙는 인증·DB 비용을 줄인다.
+// 각 조회는 auth 확인과 export_jobs 조회를 동반하므로 고정 3초는 그대로 낭비가 된다.
+export function getExportPollIntervalMs(elapsedMs: number) {
+  if (elapsedMs < 30_000) return 3_000;
+  if (elapsedMs < 120_000) return 5_000;
+  return 10_000;
 }
 
 export function getDownloadFileName(contentDisposition: string | null) {
@@ -105,7 +116,7 @@ type ExportManifestSourceFile = { path: string; blob: Blob } | { path: string; s
 // 스케일 타깃 때문에 같은 이미지가 여러 경로로 나간다(Android 슬롯 89개 중 23개, iOS는 @2x/@3x).
 // 경로마다 파일을 새로 붙이면 동일한 바이트를 중복 업로드하게 되므로, blob이 같으면 field를 공유한다.
 // 서버와 빌더는 manifest 항목별로 경로를 만들되 field 바이트는 한 번만 읽는다.
-function appendExportFilesToFormData(formData: FormData, exportFiles: readonly ExportManifestSourceFile[]) {
+export function appendExportFilesToFormData(formData: FormData, exportFiles: readonly ExportManifestSourceFile[]) {
   const fieldByBlob = new Map<Blob, string>();
 
   return exportFiles.map((file) => {
