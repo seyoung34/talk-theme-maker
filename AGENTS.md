@@ -38,6 +38,7 @@ Choose the smallest useful check set for the files changed; do not run the full 
 - Changes to `lib/theme` pure functions or other unit-tested logic: `npm test` (Vitest). Add/extend a `*.test.ts` beside the changed module when practical.
 - Code quality / catching unused vars and hook-deps issues: `npm run lint` (ESLint flat config; `next/core-web-vitals` + `next/typescript`). Currently reports pre-existing warnings — treat warnings as pre-existing unless the current change adds new ones; keep `error` count at 0.
 - Broad route/config/export packaging changes or release confidence pass: `npm run build`.
+- Editor bootstrap/autosave, `/account` export history, or cross-page navigation changes: `npm run test:e2e` (Playwright). It runs a fresh `next build` with Supabase disabled, so it takes a few minutes and overwrites `.next` — run it only when a change crosses component/API/browser-storage boundaries, and re-run `npm run build` before `npm run start`. See `e2e/AGENTS.md`.
 
 Useful commands:
 
@@ -50,9 +51,10 @@ npx tsc --noEmit
 npm test
 npm run lint
 npm run build
+npm run test:e2e
 ```
 
-Testing/lint setup: Vitest (`vitest.config.ts`, happy-dom env, `@/` alias, setup in `vitest.setup.ts`) with `@testing-library/react`; ESLint 9 flat config (`eslint.config.mjs`). `scripts/**` are Node-only and excluded from lint. All are devDependencies (no bundle/edge impact).
+Testing/lint setup: Vitest (`vitest.config.ts`, happy-dom env, `@/` alias, setup in `vitest.setup.ts`) with `@testing-library/react`; Playwright (`playwright.config.ts`, specs in `e2e/`, `e2e/**` excluded from Vitest); ESLint 9 flat config (`eslint.config.mjs`). `scripts/**` are Node-only and excluded from lint. All are devDependencies (no bundle/edge impact).
 
 Next 15 uses `./.next/types/routes.d.ts` for generated route types in this project; keep `next-env.d.ts` on that path.
 

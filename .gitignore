@@ -6,6 +6,12 @@ out/
 coverage/
 *.tsbuildinfo
 
+# Playwright E2E 실행 아티팩트
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
 # OpenNext / Cloudflare (Cloudflare migration spike)
 .open-next/
 .wrangler/

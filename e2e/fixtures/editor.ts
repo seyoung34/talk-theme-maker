@@ -1,0 +1,61 @@
+import { expect, type Page } from "@playwright/test";
+import { createSolidPng, type Rgb } from "./image";
+
+/** `useEditorAutosave`의 debounce(2.5초)보다 넉넉히 기다린다. */
+export const autosaveSettleTimeoutMs = 20_000;
+
+/** 편집기가 부트스트랩을 마치고 슬롯 편집 패널을 띄울 때까지 기다린다. */
+export async function waitForEditorReady(page: Page) {
+  await expect(page.getByRole("button", { name: "편집 종료" })).toBeVisible();
+  await expect(page.locator('input[type="file"]')).toHaveCount(1);
+}
+
+export async function uploadSlotImage(page: Page, options: { name: string; rgb: Rgb; size?: number }) {
+  const size = options.size ?? 24;
+  await page.locator('input[type="file"]').setInputFiles({
+    name: options.name,
+    mimeType: "image/png",
+    buffer: createSolidPng(size, size, options.rgb),
+  });
+  await expect(page.getByText(options.name).first()).toBeVisible();
+}
+
+export async function expectAutosaveSaved(page: Page) {
+  await expect(page.getByText(/저장됨/)).toBeVisible({ timeout: autosaveSettleTimeoutMs });
+}
+
+/**
+ * 화면에 실제로 그려지고 있는 업로드 이미지를 디코딩해 중앙 픽셀을 읽는다.
+ *
+ * "복원됐다"를 파일명 표시로만 확인하면 메타데이터만 남고 바이트가 사라진 경우를 놓친다.
+ * 미리보기가 쓰는 blob URL을 그대로 다시 읽어 크기·색·바이트 수까지 비교한다.
+ */
+export async function readRenderedUploadImage(page: Page) {
+  const blobUrl = await page.evaluate(() => {
+    for (const element of Array.from(document.querySelectorAll<HTMLElement>("*"))) {
+      const backgroundImage = getComputedStyle(element).backgroundImage;
+      if (!backgroundImage.includes("blob:")) continue;
+      const match = /blob:[^"')]+/.exec(backgroundImage);
+      if (match) return match[0];
+    }
+    return null;
+  });
+  if (!blobUrl) throw new Error("업로드 이미지를 표시하는 blob URL을 찾지 못했습니다.");
+
+  return page.evaluate(async (url) => {
+    const blob = await (await fetch(url)).blob();
+    const bitmap = await createImageBitmap(blob);
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("2d context를 얻지 못했습니다.");
+    context.drawImage(bitmap, 0, 0);
+    const { data } = context.getImageData(Math.floor(bitmap.width / 2), Math.floor(bitmap.height / 2), 1, 1);
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      rgb: [data[0], data[1], data[2]] as [number, number, number],
+      byteLength: blob.size,
+      type: blob.type,
+    };
+  }, blobUrl);
+}

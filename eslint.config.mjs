@@ -9,6 +9,10 @@ const eslintConfig = [
   {
     ignores: [
       ".next/**",
+      // Playwright 실행 아티팩트
+      "test-results/**",
+      "playwright-report/**",
+      "blob-report/**",
       ".open-next/**",
       ".wrangler/**",
       "out/**",

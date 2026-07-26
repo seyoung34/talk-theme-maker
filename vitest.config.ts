@@ -18,6 +18,8 @@ export default defineConfig({
       ".open-next/**",
       ".wrangler/**",
       "android-sample-theme/**",
+      // Playwright 스펙은 `*.spec.ts`라 include 패턴에 걸린다. 러너가 달라 vitest에서는 실행할 수 없다.
+      "e2e/**",
     ],
   },
   resolve: {

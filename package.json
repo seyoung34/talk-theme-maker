@@ -15,6 +15,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
   },
@@ -35,6 +38,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
     "@opennextjs/cloudflare": "^1.20.1",
+    "@playwright/test": "^1.62.0",
     "@tailwindcss/postcss": "^4.3.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
