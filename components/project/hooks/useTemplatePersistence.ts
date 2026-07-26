@@ -26,6 +26,8 @@ type UseTemplatePersistenceOptions = {
   ensureSystemTemplateUploadsHydrated: () => Promise<SlotUploads>;
   isAdminMode: boolean;
   mode: "user" | "admin";
+  /** 저장에 성공한 시점을 알린다. 이탈 경고의 기준선을 갱신하는 데 쓴다. */
+  onTemplateSaved?: () => void;
   platform: ThemePlatform;
   saveMode: "overwrite" | "saveAs";
   saveName: string;
@@ -80,6 +82,7 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
       persistEditorSession(options.mode, { templateId: savedTemplate.templateId, platform: savedTemplate.platform, userTemplateId: savedTemplate.id, editMode: options.mode });
       options.setSaveDialogOpen(false);
       options.setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 이 브라우저에 저장했습니다.` });
+      options.onTemplateSaved?.();
       trackAnalyticsEvent("template_save_completed", { save_mode: options.saveMode, platform: options.platform });
     } catch (error) {
       console.error(error);
@@ -152,6 +155,7 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
       });
       options.setSystemSaveDialogOpen(false);
       options.setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 저장했습니다.` });
+      options.onTemplateSaved?.();
       trackAnalyticsEvent("template_save_completed", { save_mode: "system", platform: options.platform });
     } catch (error) {
       console.error(error);

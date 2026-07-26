@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
+import { createThemeDraftSignature } from "@/components/project/draftSignature";
 import { persistEditorSession } from "@/components/project/editorSession";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice as Notice } from "@/components/project/editorTypes";
 import { ExitConfirmDialog } from "@/components/project/dialogs/ExitConfirmDialog";
@@ -31,6 +32,7 @@ import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { useEditorBootstrap } from "@/components/project/hooks/useEditorBootstrap";
 import { useTemplatePersistence } from "@/components/project/hooks/useTemplatePersistence";
 import { useThemeDraft } from "@/components/project/hooks/useThemeDraft";
+import { useUnsavedChangesWarning } from "@/components/project/hooks/useUnsavedChangesWarning";
 import {
   bubbleSlotFromRole,
   getCompletion,
@@ -127,6 +129,19 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const mobileEditCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const analyticsEditorReadyRef = useRef<string | null>(null);
   const analyticsInteractionTimerRef = useRef<number | null>(null);
+
+  // 저장하지 않은 변경 추적. 부트스트랩이 끝난 시점의 초안을 기준선으로 잡고, 이후 내용이 달라지면
+  // 이탈 경고를 켠다. 저장·내보내기에 성공하면 그 시점을 새 기준선으로 삼는다.
+  const draftSignature = useMemo(() => createThemeDraftSignature(draft), [draft]);
+  const draftSignatureRef = useRef(draftSignature);
+  draftSignatureRef.current = draftSignature;
+  const savedSignatureRef = useRef<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  const markDraftSaved = useCallback(() => {
+    savedSignatureRef.current = draftSignatureRef.current;
+    setHasUnsavedChanges(false);
+  }, []);
 
   useEffect(() => {
     if (!mobileEditSheetOpen || typeof window === "undefined") return;
@@ -312,6 +327,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     ensureSystemTemplateUploadsHydrated,
     isAdminMode,
     mode,
+    onTemplateSaved: markDraftSaved,
     platform,
     saveMode,
     saveName,
@@ -362,7 +378,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     colors,
     displayTemplateName,
     ensureSystemTemplateUploadsHydrated,
-    onExportCompleted: () => clearRecoveryDraft(mode),
+    onExportCompleted: () => {
+      markDraftSaved();
+      return clearRecoveryDraft(mode);
+    },
     onUnauthenticated: (exportOptions) => persistRecoveryThenNavigate("login_required", "login", exportOptions),
     platform,
     setNotice,
@@ -401,6 +420,20 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     skipDefaultSelectionReset,
   });
 
+  // 기준선은 부트스트랩이 끝난 뒤에 잡는다. 템플릿을 불러오는 동안의 초안 변경은 사용자 편집이 아니므로
+  // 경고 대상이 아니다. useEditorBootstrap 뒤에 두어야 같은 커밋에서 복원된 초안을 기준선으로 읽는다.
+  useEffect(() => {
+    if (initialLoadState.status !== "ready") return;
+    if (savedSignatureRef.current === null) {
+      savedSignatureRef.current = draftSignature;
+      return;
+    }
+    setHasUnsavedChanges(draftSignature !== savedSignatureRef.current);
+  }, [draftSignature, initialLoadState.status]);
+
+  // 내보내기 중 이탈하면 크레딧은 차감된 채 결과물을 놓칠 수 있어 변경 여부와 무관하게 경고한다.
+  useUnsavedChangesWarning(hasUnsavedChanges || isExporting);
+
   useEffect(() => {
     if (initialLoadState.status !== "ready" || !selectedSlot) return;
     void hydrateSystemTemplateUploads(remoteUploadRefs, [selectedSlot.id]).catch((error) => console.error(error));
@@ -437,7 +470,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setActiveSection("main");
     setActiveGroup("background");
     setSelectedSlotId(undefined);
-    replaceDraft({
+    const defaultDraft = {
       uploads: {},
       remoteUploadRefs: {},
       colors: {},
@@ -448,7 +481,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       bubbleStretch: {},
       bubbleDesigns: {},
       bubbleDecorationSources: {},
-    });
+    };
+    replaceDraft(defaultDraft);
+    // 새 작업이므로 잃을 것이 없다. 상태가 반영되기를 기다리지 않고 이 초안을 바로 기준선으로 삼는다.
+    savedSignatureRef.current = createThemeDraftSignature(defaultDraft);
+    setHasUnsavedChanges(false);
     setActiveUserTemplate(null);
     setActiveSystemTemplate(null);
     setSystemTemplateBundleId(null);
