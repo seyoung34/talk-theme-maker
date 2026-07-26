@@ -1,5 +1,7 @@
+import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { exportNinePatch, loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
 import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
+import { exportSlotConcurrency } from "@/lib/theme/exportRequest";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
@@ -36,14 +38,20 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
   const androidSlots = slots.filter((slot) => slot.platform === "android");
   const files: AndroidExportFile[] = [];
 
-  for (const slot of androidSlots) {
-    if (slot.kind === "color" || !slot.path) continue;
-    const source = await resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots);
-    if (!source) continue;
+  // 슬롯 해석은 서로 독립이고 대부분 fetch/디코딩 대기 시간이다. 순차로 돌리면
+  // 45개 남짓한 이미지 슬롯의 지연이 그대로 누적되므로 동시 실행 수만 제한해 병렬 처리한다.
+  const imageSlots = androidSlots.filter((slot) => slot.kind !== "color" && Boolean(slot.path));
+  const sources = await mapWithConcurrency(imageSlots, exportSlotConcurrency, (slot) =>
+    resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots),
+  );
+
+  imageSlots.forEach((slot, index) => {
+    const source = sources[index];
+    if (!source) return;
     for (const path of getAndroidSlotExportPaths(slot)) {
       files.push("serverAsset" in source ? { path, serverAsset: source.serverAsset } : { path, blob: source.blob });
     }
-  }
+  });
 
   files.push(
     textBlobFile("src/main/theme/values/colors.xml", buildAndroidColorsXml(template, androidSlots, colors, selections, templateId)),
