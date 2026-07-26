@@ -260,11 +260,11 @@ export function MobileBubbleEditor({
           <img src={imageUrl} alt="" className="pointer-events-none block size-full origin-center select-none" style={{ transform: `scaleX(${draft.imageState.flipX ? -1 : 1})` }} draggable={false} />
           {artwork ? <BubbleGeometryOverlay geometry={draft.geometry} artwork={artwork} scale={stageScale} onDrag={beginDrag} /> : null}
         </div>
+        <div className="absolute left-2 top-2 z-30 grid gap-1 rounded-xl border border-white/85 bg-white/85 p-1 shadow-[0_6px_18px_rgba(15,23,42,0.12)] backdrop-blur-sm">
+          <button type="button" title="좌우 반전" aria-label="좌우 반전" className={`grid size-10 place-items-center rounded-lg transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] ${draft.imageState.flipX ? "bg-[#eff6ff] text-[#1d4ed8] shadow-sm" : "text-[#475569] hover:bg-[#f1f5f9] hover:text-[#1d4ed8]"}`} onClick={flip}><FlipHorizontal2 size={16} aria-hidden="true" /></button>
+          <button type="button" title="마지막 적용 상태로 되돌리기" aria-label="마지막 적용 상태로 되돌리기" className="grid size-10 place-items-center rounded-lg text-[#64748b] transition hover:bg-[#f1f5f9] hover:text-[#334155] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-35" disabled={!isDirty} onClick={reset}><RotateCcw size={16} aria-hidden="true" /></button>
+        </div>
         <BubbleValueFeedback geometry={draft.geometry} activeKind={activeDragKind} />
-      </div>
-      <div className="flex gap-2">
-        <button type="button" title="좌우 반전" aria-label="좌우 반전" className={`grid size-11 place-items-center rounded-xl border transition ${draft.imageState.flipX ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#d1d5db] bg-white text-[#334155]"}`} onClick={flip}><FlipHorizontal2 size={18} aria-hidden="true" /></button>
-        <button type="button" title="마지막 적용 상태로 되돌리기" aria-label="마지막 적용 상태로 되돌리기" className="grid size-11 place-items-center rounded-xl border border-[#d1d5db] bg-white text-[#475569] transition disabled:opacity-45" disabled={!isDirty} onClick={reset}><RotateCcw size={18} aria-hidden="true" /></button>
       </div>
       {error ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold text-[#be123c]" role="alert">{error}</p> : null}
       <div className="grid grid-cols-2 gap-2"><button type="button" className="min-h-12 rounded-xl border border-[#d1d5db] bg-white px-4 text-sm font-black text-[#475569] disabled:opacity-45" disabled={!isDirty || loading} onClick={reset}>취소</button><button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white disabled:opacity-45" disabled={!isDirty || loading} onClick={() => void apply()}>{loading ? <LoaderCircle size={16} className="animate-spin" /> : <Check size={16} />}적용</button></div>
