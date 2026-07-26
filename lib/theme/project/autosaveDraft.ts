@@ -1,5 +1,11 @@
 import { themeDatabaseStores, withThemeDatabaseStore, withThemeDatabaseTransaction } from "@/lib/theme/localDatabase";
-import type { EditorActiveSystemTemplate, EditorActiveUserTemplate, EditorMode, ThemeDraft } from "@/lib/theme/project/draft";
+import type {
+  EditorActiveSystemTemplate,
+  EditorActiveUserTemplate,
+  EditorMode,
+  EditorSystemTemplateMetadata,
+  ThemeDraft,
+} from "@/lib/theme/project/draft";
 import type { ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
@@ -31,6 +37,8 @@ export type EditorAutosaveDraft = {
     activeSection: ThemeSection;
     activeGroup: ThemeSlotGroup;
     selectedSlotId?: string;
+    /** 관리자 모드에서 저장 전 편집 중인 시스템 템플릿 메타데이터. 일반 사용자 편집에는 없다. */
+    systemTemplateMetadata?: EditorSystemTemplateMetadata;
   };
   draft: ThemeDraft;
 };

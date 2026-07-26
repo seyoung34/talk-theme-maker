@@ -104,6 +104,18 @@ export function useEditorBootstrap({
         setSystemPriceAmount(systemTemplate.priceAmount ? String(systemTemplate.priceAmount) : "");
         setSystemCreditCost(systemTemplate.creditCost ? String(systemTemplate.creditCost) : "");
       }
+      // 저장 전 입력값이 남아 있으면 마지막으로 저장된 값보다 우선한다. 복원의 목적이 그쪽이다.
+      const metadata = record.editor.systemTemplateMetadata;
+      if (metadata) {
+        setSystemTitle(metadata.title);
+        setSystemDescription(metadata.description);
+        setSystemTags(metadata.tags);
+        setSystemStatus(metadata.status);
+        setSystemVisibility(metadata.visibility);
+        setSystemPricingType(metadata.pricingType);
+        setSystemPriceAmount(metadata.priceAmount);
+        setSystemCreditCost(metadata.creditCost);
+      }
       // 다음 새로고침에서 자동 저장을 지웠더라도 같은 템플릿으로 돌아오게 한다.
       persistEditorSession(mode, {
         templateId: record.source.templateId,

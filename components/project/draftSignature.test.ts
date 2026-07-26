@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createThemeDraftSignature } from "@/components/project/draftSignature";
-import { createEmptyThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
+import { createEditorSignature, createThemeDraftSignature } from "@/components/project/draftSignature";
+import { createEmptyThemeDraft, type EditorSystemTemplateMetadata, type ThemeDraft } from "@/lib/theme/project/draft";
 
 function createFile(name: string, size = 3) {
   return new File([new Uint8Array(size)], name, { type: "image/png", lastModified: 1_700_000_000_000 });
@@ -77,5 +77,80 @@ describe("createThemeDraftSignature", () => {
 
   it("빈 초안은 안정적인 서명을 만든다", () => {
     expect(createThemeDraftSignature(createEmptyThemeDraft())).toBe(createThemeDraftSignature(createEmptyThemeDraft()));
+  });
+});
+
+describe("원격 에셋 hydration", () => {
+  function withTemplateUpload(draft: ThemeDraft, slotId: string, uploadId: string): ThemeDraft {
+    return {
+      ...draft,
+      uploads: { ...draft.uploads, [slotId]: [{ id: uploadId, file: createFile(`${uploadId}.png`), source: "template" }] },
+    };
+  }
+
+  it("배경에서 채워진 템플릿 에셋은 변경으로 세지 않는다", () => {
+    // 시스템 템플릿은 미리보기용 몇 개만 먼저 받고 나머지를 나중에 채운다.
+    // 이걸 변경으로 보면 사용자가 아무것도 안 했는데 이탈 경고가 뜨고 자동 저장이 돈다.
+    const beforeHydration = createEmptyThemeDraft();
+    const afterHydration = withTemplateUpload(beforeHydration, "slot-a", "remote:1");
+    expect(createThemeDraftSignature(afterHydration)).toBe(createThemeDraftSignature(beforeHydration));
+  });
+
+  it("이미 채워진 슬롯에 에셋이 더 붙어도 변경이 아니다", () => {
+    const first = withTemplateUpload(createEmptyThemeDraft(), "slot-a", "remote:1");
+    const second = withTemplateUpload(first, "slot-b", "remote:2");
+    expect(createThemeDraftSignature(second)).toBe(createThemeDraftSignature(first));
+  });
+
+  it("같은 슬롯에 사용자가 올린 이미지는 여전히 변경으로 잡는다", () => {
+    const hydrated = withTemplateUpload(createEmptyThemeDraft(), "slot-a", "remote:1");
+    const edited = {
+      ...hydrated,
+      uploads: { "slot-a": [...(hydrated.uploads["slot-a"] ?? []), { id: "slot-a:upload:1", file: createFile("mine.png"), source: "user" as const }] },
+    };
+    expect(createThemeDraftSignature(edited)).not.toBe(createThemeDraftSignature(hydrated));
+  });
+
+  it("관리 에셋 선택은 사용자 편집이므로 변경으로 잡는다", () => {
+    const before = createEmptyThemeDraft();
+    const after = { ...before, uploads: { "slot-a": [{ id: "admin-asset-1", file: createFile("admin.png"), source: "admin" as const }] } };
+    expect(createThemeDraftSignature(after)).not.toBe(createThemeDraftSignature(before));
+  });
+
+  it("어떤 원격 에셋을 쓰는지 바뀌면 변경으로 잡는다", () => {
+    const before = createEmptyThemeDraft();
+    const after = { ...before, remoteUploadRefs: { "slot-a": [{ id: "remote:1", fileName: "a.png", mimeType: "image/png", size: 1, storagePath: "p/a.png" }] } };
+    expect(createThemeDraftSignature(after)).not.toBe(createThemeDraftSignature(before));
+  });
+});
+
+describe("createEditorSignature", () => {
+  const metadata: EditorSystemTemplateMetadata = {
+    title: "봄 테마",
+    description: "",
+    tags: "",
+    status: "draft",
+    visibility: "private",
+    pricingType: "free",
+    priceAmount: "",
+    creditCost: "",
+  };
+
+  it("관리자 메타데이터만 바뀌어도 변경으로 잡는다", () => {
+    const draft = createEmptyThemeDraft();
+    expect(createEditorSignature(draft, { ...metadata, title: "여름 테마" })).not.toBe(createEditorSignature(draft, metadata));
+    expect(createEditorSignature(draft, { ...metadata, pricingType: "credit", creditCost: "3" })).not.toBe(createEditorSignature(draft, metadata));
+  });
+
+  it("메타데이터가 없는 일반 사용자 화면에서는 초안만 반영한다", () => {
+    const draft = createEmptyThemeDraft();
+    expect(createEditorSignature(draft, null)).toBe(createEditorSignature(draft, null));
+    expect(createEditorSignature(draft, null)).not.toBe(createEditorSignature(draft, metadata));
+  });
+
+  it("초안 변경도 그대로 반영한다", () => {
+    const before = createEmptyThemeDraft();
+    const after = { ...before, colors: { "slot-a": "#ff0000" } };
+    expect(createEditorSignature(after, metadata)).not.toBe(createEditorSignature(before, metadata));
   });
 });

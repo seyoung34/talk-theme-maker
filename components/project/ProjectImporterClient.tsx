@@ -7,7 +7,7 @@ import { X } from "lucide-react";
 import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
 import { AutosaveResumeDialog } from "@/components/project/dialogs/AutosaveResumeDialog";
 import { AutosaveStatusBadge } from "@/components/project/AutosaveStatusBadge";
-import { createThemeDraftSignature } from "@/components/project/draftSignature";
+import { createEditorSignature } from "@/components/project/draftSignature";
 import { persistEditorSession } from "@/components/project/editorSession";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice as Notice } from "@/components/project/editorTypes";
 import { ExitConfirmDialog } from "@/components/project/dialogs/ExitConfirmDialog";
@@ -134,9 +134,27 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const analyticsEditorReadyRef = useRef<string | null>(null);
   const analyticsInteractionTimerRef = useRef<number | null>(null);
 
-  // 저장하지 않은 변경 추적. 부트스트랩이 끝난 시점의 초안을 기준선으로 잡고, 이후 내용이 달라지면
-  // 이탈 경고를 켠다. 저장·내보내기에 성공하면 그 시점을 새 기준선으로 삼는다.
-  const draftSignature = useMemo(() => createThemeDraftSignature(draft), [draft]);
+  // 관리자 메타데이터는 초안 바깥의 폼 상태지만 저장 전까지 메모리에만 있으므로 함께 추적한다.
+  const systemTemplateMetadata = useMemo(
+    () =>
+      isAdminMode
+        ? {
+            title: systemTitle,
+            description: systemDescription,
+            tags: systemTags,
+            status: systemStatus,
+            visibility: systemVisibility,
+            pricingType: systemPricingType,
+            priceAmount: systemPriceAmount,
+            creditCost: systemCreditCost,
+          }
+        : null,
+    [isAdminMode, systemCreditCost, systemDescription, systemPriceAmount, systemPricingType, systemStatus, systemTags, systemTitle, systemVisibility],
+  );
+
+  // 저장하지 않은 변경 추적. 부트스트랩이 끝난 시점을 기준선으로 잡고, 이후 내용이 달라지면
+  // 이탈 경고를 켠다. 내 템플릿으로 저장하면 그 시점을 새 기준선으로 삼는다.
+  const draftSignature = useMemo(() => createEditorSignature(draft, systemTemplateMetadata), [draft, systemTemplateMetadata]);
   const draftSignatureRef = useRef(draftSignature);
   draftSignatureRef.current = draftSignature;
   const savedSignatureRef = useRef<string | null>(null);
@@ -253,7 +271,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           : undefined,
         systemTemplateBundleId: systemTemplateBundleId ?? undefined,
       },
-      editor: { activeSection, activeGroup, selectedSlotId },
+      editor: { activeSection, activeGroup, selectedSlotId, systemTemplateMetadata: systemTemplateMetadata ?? undefined },
       draft,
     }),
   });
@@ -436,10 +454,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     colors,
     displayTemplateName,
     ensureSystemTemplateUploadsHydrated,
-    onExportCompleted: () => {
-      markDraftSaved();
-      return clearRecoveryDraft(mode);
-    },
+    // 내보내기 결과물(APK·ktheme 등)로는 편집 상태를 되돌릴 수 없다. 사용자가 내 템플릿으로
+    // 저장하지 않았다면 편집 원본은 여전히 저장되지 않은 상태이므로 자동 저장과 이탈 경고를 유지한다.
+    // 복구 draft는 인증·충전 왕복 전용이라 목적을 다했으므로 여기서 정리한다.
+    onExportCompleted: () => clearRecoveryDraft(mode),
     onUnauthenticated: (exportOptions) => persistRecoveryThenNavigate("login_required", "login", exportOptions),
     platform,
     setNotice,
@@ -544,7 +562,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     };
     replaceDraft(defaultDraft);
     // 새 작업이므로 잃을 것이 없다. 상태가 반영되기를 기다리지 않고 이 초안을 바로 기준선으로 삼는다.
-    savedSignatureRef.current = createThemeDraftSignature(defaultDraft);
+    savedSignatureRef.current = createEditorSignature(defaultDraft, systemTemplateMetadata);
     setHasUnsavedChanges(false);
     resetAutosave();
     setActiveUserTemplate(null);

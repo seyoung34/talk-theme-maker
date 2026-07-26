@@ -46,6 +46,23 @@ export function createEmptyThemeDraft(): ThemeDraft {
  * 식별자만 저장하면 복원할 때마다 메타데이터를 다시 조회해야 하고 오프라인에서는 복원이 실패한다.
  * 작업을 잃지 않는 것이 목적이므로 화면에 필요한 값까지 함께 보관한다.
  */
+/**
+ * 관리자가 시스템 템플릿 저장 다이얼로그에서 편집 중인 값.
+ *
+ * `ThemeDraft`와 달리 내보내기 결과에는 영향을 주지 않지만, 저장하기 전까지 메모리에만 있어
+ * 새로고침하면 사라진다. 폼 상태 그대로(가격·크레딧은 문자열) 보관해 입력 중이던 값을 복원한다.
+ */
+export type EditorSystemTemplateMetadata = {
+  title: string;
+  description: string;
+  tags: string;
+  status: SystemTemplateStatus;
+  visibility: SystemTemplateVisibility;
+  pricingType: SystemTemplatePricingType;
+  priceAmount: string;
+  creditCost: string;
+};
+
 export type EditorActiveUserTemplate = { id: string; name: string; createdAt: number };
 
 export type EditorActiveSystemTemplate = {
