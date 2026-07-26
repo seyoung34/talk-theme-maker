@@ -1,6 +1,8 @@
 "use client";
 
 import { ArrowLeft, Download, Save, ShieldCheck } from "lucide-react";
+import { AutosaveStatusBadge } from "@/components/project/AutosaveStatusBadge";
+import type { AutosaveStatus } from "@/components/project/autosaveStatus";
 
 //모바일 헤더
 export function MobileEditActionBar({
@@ -10,6 +12,8 @@ export function MobileEditActionBar({
   isExporting,
   isPreparingExport,
   templateName,
+  autosaveStatus,
+  autosaveSavedAt,
   onBack,
   onSave,
   onExport,
@@ -20,6 +24,8 @@ export function MobileEditActionBar({
   readonly isExporting: boolean;
   readonly isPreparingExport: boolean;
   readonly templateName?: string;
+  readonly autosaveStatus: AutosaveStatus;
+  readonly autosaveSavedAt: number | null;
   readonly onBack: () => void;
   readonly onSave: () => void;
   readonly onExport: () => void;
@@ -43,9 +49,12 @@ export function MobileEditActionBar({
             <ArrowLeft size={18} strokeWidth={2.2} aria-hidden="true" />
           </button>
 
-          {templateName ? (
-            <span className="min-w-0 flex-1 truncate px-1 text-sm font-semibold text-[#0f172a]">{templateName}</span>
-          ) : null}
+          <div className="min-w-0 flex-1 px-1">
+            {templateName ? (
+              <p className="truncate text-sm font-semibold leading-5 text-[#0f172a]">{templateName}</p>
+            ) : null}
+            <AutosaveStatusBadge status={autosaveStatus} savedAt={autosaveSavedAt} className="flex text-[11px] leading-4" />
+          </div>
 
           <div className="flex min-w-0 shrink-0 justify-end gap-1.5">
             <button

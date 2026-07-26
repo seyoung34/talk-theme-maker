@@ -3,6 +3,7 @@ import {
   autosaveDraftId,
   autosaveDraftTtlMs,
   clearAutosaveDraft,
+  describeAutosaveDraft,
   isQuotaExceeded,
   isStaleWrite,
   readAutosaveDraft,
@@ -124,6 +125,40 @@ describe("다중 탭 충돌", () => {
     );
     expect(stale.status).toBe("stale");
     expect((await readAutosaveDraft("user"))?.source.templateName).toBe("최신");
+  });
+});
+
+describe("describeAutosaveDraft", () => {
+  function createRecord(draft: EditorAutosaveDraft["draft"]): EditorAutosaveDraft {
+    return { ...createInput({ draft }), id: autosaveDraftId("user"), version: 1, createdAt: 0, updatedAt: 0, expiresAt: 0 };
+  }
+
+  it("업로드·색상·말풍선 편집 개수를 센다", () => {
+    const draft = createEmptyThemeDraft();
+    draft.uploads = {
+      "slot-a": [
+        { id: "u1", file: new File([], "a.png"), source: "user" },
+        { id: "u2", file: new File([], "b.png"), source: "user" },
+      ],
+      "slot-b": [{ id: "u3", file: new File([], "c.png"), source: "user" }],
+    };
+    draft.colors = { "slot-c": "#fff", "slot-d": undefined };
+    draft.bubbleInsets = { "slot-e": { top: 1, right: 1, bottom: 1, left: 1 } };
+    draft.bubbleStretch = { "slot-e": { x: 1, y: 1 } };
+
+    expect(describeAutosaveDraft(createRecord(draft))).toEqual({ uploadCount: 3, colorCount: 1, bubbleEditCount: 1 });
+  });
+
+  it("같은 슬롯의 여러 말풍선 편집값을 한 번만 센다", () => {
+    const draft = createEmptyThemeDraft();
+    draft.bubbleMarkers = { "slot-a": { top: { start: 0, end: 1 }, left: { start: 0, end: 1 }, right: { start: 0, end: 1 }, bottom: { start: 0, end: 1 } } };
+    draft.bubbleInsets = { "slot-a": { top: 1, right: 1, bottom: 1, left: 1 }, "slot-b": { top: 2, right: 2, bottom: 2, left: 2 } };
+
+    expect(describeAutosaveDraft(createRecord(draft)).bubbleEditCount).toBe(2);
+  });
+
+  it("빈 초안은 모두 0이다", () => {
+    expect(describeAutosaveDraft(createRecord(createEmptyThemeDraft()))).toEqual({ uploadCount: 0, colorCount: 0, bubbleEditCount: 0 });
   });
 });
 

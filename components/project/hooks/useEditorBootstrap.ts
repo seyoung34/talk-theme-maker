@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, type Dispatch, type SetStateAction } from "react";
-import { takeTemplateStartPayload } from "@/components/project/editorSession";
+import { persistEditorSession, takeTemplateStartPayload } from "@/components/project/editorSession";
+import { clearAutosaveDraft, readAutosaveDraft, type EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice } from "@/components/project/editorTypes";
 import { createEmptyThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
 import type { SlotUploads } from "@/components/project/projectModel";
@@ -19,6 +20,10 @@ type UseEditorBootstrapOptions = {
   hydrateSystemTemplateUploads: (uploadRefs: RemoteSlotUploads) => Promise<SlotUploads>;
   mode: "user" | "admin";
   onRecoveryRestored: (options: RecoveryExportOptions) => void;
+  /** 자동 저장 초안이 있을 때 이어할지 사용자에게 묻는다. 답을 받기 전에는 부트스트랩이 진행되지 않는다. */
+  requestAutosaveDecision: (record: EditorAutosaveDraft) => Promise<"resume" | "discard">;
+  /** 시작 상태가 확정된 뒤 자동 저장을 켠다. 확정 전에 저장하면 사용자가 답하기 전에 레코드를 덮어쓴다. */
+  onAutosaveArmed: (expectedUpdatedAt: number | null) => void;
   resumeToken: string | null;
   setActiveGroup: Dispatch<SetStateAction<ThemeSlotGroup>>;
   setActiveSection: Dispatch<SetStateAction<ThemeSection>>;
@@ -47,6 +52,8 @@ export function useEditorBootstrap({
   hydrateSystemTemplateUploads,
   mode,
   onRecoveryRestored,
+  requestAutosaveDecision,
+  onAutosaveArmed,
   resumeToken,
   setActiveGroup,
   setActiveSection,
@@ -72,6 +79,43 @@ export function useEditorBootstrap({
   useEffect(() => {
     let active = true;
     const payload = takeTemplateStartPayload(mode);
+    // 부트스트랩이 끝나고 자동 저장을 켤 때 넘길 기준선. 이어받은 경우에만 값이 생긴다.
+    let autosaveExpectedUpdatedAt: number | null = null;
+
+    const applyAutosave = (record: EditorAutosaveDraft) => {
+      skipDefaultSelectionReset();
+      setTemplateId(record.source.templateId);
+      setPlatform(record.source.platform);
+      setActiveSection(record.editor.activeSection);
+      setActiveGroup(record.editor.activeGroup);
+      setSelectedSlotId(record.editor.selectedSlotId);
+      replaceDraft(record.draft);
+      setActiveUserTemplate(record.source.activeUserTemplate ?? null);
+      setActiveSystemTemplate(record.source.activeSystemTemplate ?? null);
+      setSystemTemplateBundleId(record.source.systemTemplateBundleId ?? record.source.activeSystemTemplate?.bundleId ?? null);
+      const systemTemplate = record.source.activeSystemTemplate;
+      if (systemTemplate) {
+        setSystemTitle(systemTemplate.title);
+        setSystemDescription(systemTemplate.description ?? "");
+        setSystemTags(systemTemplate.tags.join(", "));
+        setSystemStatus(systemTemplate.status);
+        setSystemVisibility(systemTemplate.visibility);
+        setSystemPricingType(systemTemplate.pricingType);
+        setSystemPriceAmount(systemTemplate.priceAmount ? String(systemTemplate.priceAmount) : "");
+        setSystemCreditCost(systemTemplate.creditCost ? String(systemTemplate.creditCost) : "");
+      }
+      // 다음 새로고침에서 자동 저장을 지웠더라도 같은 템플릿으로 돌아오게 한다.
+      persistEditorSession(mode, {
+        templateId: record.source.templateId,
+        platform: record.source.platform,
+        userTemplateId: record.source.activeUserTemplate?.id,
+        systemTemplateId: record.source.activeSystemTemplate?.id,
+        systemTemplateBundleId: record.source.systemTemplateBundleId ?? record.source.activeSystemTemplate?.bundleId,
+        editMode: mode,
+      });
+      setInitialLoadState({ status: "ready" });
+      setNotice({ tone: "success", message: "저장하지 않았던 편집 내용을 복원했어요." });
+    };
 
     const loadStartedTemplate = async () => {
       if (resumeToken) {
@@ -102,6 +146,8 @@ export function useEditorBootstrap({
             setInitialLoadState({ status: "ready" });
             setNotice({ tone: "success", message: "이전 내보내기 준비 작업을 복원했어요. 내용을 확인한 뒤 내보내세요." });
             onRecoveryRestored(recovery.exportOptions);
+            // 복구 draft가 더 최신이므로 남아 있던 자동 저장 레코드는 낡은 상태다. 되살아나지 않게 지운다.
+            await clearAutosaveDraft(mode).catch((clearError) => console.error(clearError));
             return;
           }
         } catch (error) {
@@ -109,6 +155,26 @@ export function useEditorBootstrap({
           if (!active) return;
           setNotice({ tone: "warning", message: "이전 내보내기 준비 작업을 복원하지 못했습니다. 현재 템플릿으로 계속할 수 있습니다." });
         }
+      }
+
+      // 여기까지 왔다면 resumeToken 복구는 적용되지 않았다. 자동 저장 초안이 있으면 사용자에게 먼저 묻는다.
+      // 묻기 전에 템플릿을 불러오면 이어하기를 골랐을 때 그 로딩이 통째로 낭비된다.
+      const autosave = await readAutosaveDraft(mode).catch((error) => {
+        console.error(error);
+        return null;
+      });
+      if (!active) return;
+      if (autosave) {
+        setInitialLoadState(createInitialLoadProgress("이전 편집 내용을 확인하는 중입니다.", 0, 1));
+        const decision = await requestAutosaveDecision(autosave);
+        if (!active) return;
+        if (decision === "resume") {
+          applyAutosave(autosave);
+          autosaveExpectedUpdatedAt = autosave.updatedAt;
+          return;
+        }
+        await clearAutosaveDraft(mode).catch((error) => console.error(error));
+        if (!active) return;
       }
 
       if (!payload) {
@@ -252,10 +318,16 @@ export function useEditorBootstrap({
       }
     };
 
-    void loadStartedTemplate();
+    // 어떤 경로로 끝났든(성공·실패 모두) 시작 상태는 확정됐다. 그 시점의 초안을 기준선으로 자동 저장을 켠다.
+    void loadStartedTemplate()
+      .catch((error) => console.error(error))
+      .finally(() => {
+        if (active) onAutosaveArmed(autosaveExpectedUpdatedAt);
+      });
     return () => { active = false; };
   }, [
-    hydratePreviewUploads, hydrateSystemTemplateUploads, mode, onRecoveryRestored, resumeToken, setActiveGroup, setActiveSection,
+    hydratePreviewUploads, hydrateSystemTemplateUploads, mode, onAutosaveArmed, onRecoveryRestored,
+    requestAutosaveDecision, resumeToken, setActiveGroup, setActiveSection,
     setActiveSystemTemplate, setActiveUserTemplate, setInitialLoadState, setNotice, setPlatform,
     setSelectedSlotId, setSystemCreditCost, setSystemDescription, setSystemPriceAmount, setSystemPricingType,
     setSystemStatus, setSystemTags, setSystemTemplateBundleId, setSystemTitle, setSystemVisibility, setTemplateId,

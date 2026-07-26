@@ -127,6 +127,24 @@ export async function clearAutosaveDraft(mode: EditorMode) {
   );
 }
 
+/**
+ * 이어할지 묻는 화면에서 "무엇이 들어 있는지" 보여주기 위한 요약.
+ * 사용자는 템플릿 이름만으로는 어느 쪽이 자기 작업인지 판단하기 어렵다.
+ */
+export function describeAutosaveDraft(record: EditorAutosaveDraft) {
+  const { draft } = record;
+  const uploadCount = Object.values(draft.uploads).reduce((total, entries) => total + (entries?.length ?? 0), 0);
+  const colorCount = Object.values(draft.colors).filter((value) => Boolean(value)).length;
+  const bubbleEditSlotIds = new Set([
+    ...Object.keys(draft.bubbleGeometry),
+    ...Object.keys(draft.bubbleMarkers),
+    ...Object.keys(draft.bubbleInsets),
+    ...Object.keys(draft.bubbleStretch),
+  ]);
+
+  return { uploadCount, colorCount, bubbleEditCount: bubbleEditSlotIds.size };
+}
+
 export function isStaleWrite(existing: EditorAutosaveDraft | undefined, expectedUpdatedAt: number | null) {
   // 레코드가 없어야 하는데 있으면 다른 탭이 만들었다는 뜻이다.
   if (!existing) return false;

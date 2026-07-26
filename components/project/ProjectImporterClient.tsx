@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
+import { AutosaveResumeDialog } from "@/components/project/dialogs/AutosaveResumeDialog";
+import { AutosaveStatusBadge } from "@/components/project/AutosaveStatusBadge";
 import { createThemeDraftSignature } from "@/components/project/draftSignature";
 import { persistEditorSession } from "@/components/project/editorSession";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice as Notice } from "@/components/project/editorTypes";
@@ -32,6 +34,7 @@ import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { useEditorBootstrap } from "@/components/project/hooks/useEditorBootstrap";
 import { useTemplatePersistence } from "@/components/project/hooks/useTemplatePersistence";
 import { useThemeDraft } from "@/components/project/hooks/useThemeDraft";
+import { useEditorAutosave, type AutosaveArm } from "@/components/project/hooks/useEditorAutosave";
 import { useUnsavedChangesWarning } from "@/components/project/hooks/useUnsavedChangesWarning";
 import {
   bubbleSlotFromRole,
@@ -53,6 +56,7 @@ import { getBubblePairRole, getImageColorFallbackRole, getSlotCandidates } from 
 import { flipBubbleInsetsHorizontally, flipBubbleMarkersHorizontally, flipBubbleStretchHorizontally } from "@/lib/theme/bubbleEditTransforms";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
+import type { EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
 import { getBubbleDecorationLayers, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder";
 import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDesigns, BubbleFamilyDesignSpec, GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 import { flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
@@ -138,9 +142,28 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const savedSignatureRef = useRef<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  const markDraftSaved = useCallback(() => {
-    savedSignatureRef.current = draftSignatureRef.current;
-    setHasUnsavedChanges(false);
+  // 자동 저장은 부트스트랩이 시작 상태를 확정한 뒤에 켠다. 그 전에 쓰면 사용자가 이어할지
+  // 답하기도 전에 기존 레코드를 덮어쓴다.
+  const [autosaveArm, setAutosaveArm] = useState<AutosaveArm>({ state: "pending" });
+  const [pendingAutosave, setPendingAutosave] = useState<EditorAutosaveDraft | null>(null);
+  const autosaveDecisionRef = useRef<((decision: "resume" | "discard") => void) | null>(null);
+
+  const armAutosave = useCallback((expectedUpdatedAt: number | null) => {
+    setAutosaveArm({ state: "armed", expectedUpdatedAt });
+  }, []);
+
+  const requestAutosaveDecision = useCallback((record: EditorAutosaveDraft) => {
+    setPendingAutosave(record);
+    return new Promise<"resume" | "discard">((resolve) => {
+      autosaveDecisionRef.current = resolve;
+    });
+  }, []);
+
+  const answerAutosaveDecision = useCallback((decision: "resume" | "discard") => {
+    setPendingAutosave(null);
+    const resolve = autosaveDecisionRef.current;
+    autosaveDecisionRef.current = null;
+    resolve?.(decision);
   }, []);
 
   useEffect(() => {
@@ -212,6 +235,41 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const activeTemplate = getThemeTemplate(templateId);
   const displayTemplateName = activeUserTemplate?.name ?? activeSystemTemplate?.title ?? activeTemplate.name;
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
+
+  const { status: autosaveStatus, lastSavedAt: autosaveSavedAt, message: autosaveMessage, resetAutosave } = useEditorAutosave({
+    arm: autosaveArm,
+    mode,
+    draftSignature,
+    getSnapshot: () => ({
+      mode,
+      source: {
+        templateId,
+        platform,
+        templateName: displayTemplateName,
+        activeUserTemplate: activeUserTemplate ?? undefined,
+        // 편집기 상태에서는 bundleId가 선택이지만 저장 계약에서는 항상 필요하다.
+        activeSystemTemplate: activeSystemTemplate
+          ? { ...activeSystemTemplate, bundleId: activeSystemTemplate.bundleId ?? activeSystemTemplate.id }
+          : undefined,
+        systemTemplateBundleId: systemTemplateBundleId ?? undefined,
+      },
+      editor: { activeSection, activeGroup, selectedSlotId },
+      draft,
+    }),
+  });
+
+  // 저장 실패·다중 탭 충돌은 조용히 넘기면 사용자가 저장되고 있다고 오해한다.
+  useEffect(() => {
+    if (!autosaveMessage) return;
+    setNotice({ tone: autosaveStatus === "conflict" ? "warning" : "error", message: autosaveMessage });
+  }, [autosaveMessage, autosaveStatus]);
+
+  const markDraftSaved = useCallback(() => {
+    savedSignatureRef.current = draftSignatureRef.current;
+    setHasUnsavedChanges(false);
+    // 작업이 다른 곳에 안전하게 남았으므로 자동 저장 레코드는 더 들고 있을 이유가 없다.
+    resetAutosave();
+  }, [resetAutosave]);
 
   const persistRecoveryThenNavigate = useCallback(async (
     reason: "login_required" | "insufficient_credits",
@@ -396,7 +454,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     hydratePreviewUploads,
     hydrateSystemTemplateUploads,
     mode,
+    onAutosaveArmed: armAutosave,
     onRecoveryRestored: handleRecoveryRestored,
+    requestAutosaveDecision,
     resumeToken,
     setActiveGroup,
     setActiveSection,
@@ -486,6 +546,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     // 새 작업이므로 잃을 것이 없다. 상태가 반영되기를 기다리지 않고 이 초안을 바로 기준선으로 삼는다.
     savedSignatureRef.current = createThemeDraftSignature(defaultDraft);
     setHasUnsavedChanges(false);
+    resetAutosave();
     setActiveUserTemplate(null);
     setActiveSystemTemplate(null);
     setSystemTemplateBundleId(null);
@@ -976,6 +1037,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
       {selectedSlot && selectedBubbleSlot && selectedBubbleVariant ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} variant={selectedBubbleVariant} slotLabel={selectedSlot.label} platform={platform} initialSpec={selectedBubbleDesign} initialDecorationFiles={bubbleDecorationSources} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleDesign} /> : null}
       {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
+      {pendingAutosave ? (
+        <AutosaveResumeDialog
+          record={pendingAutosave}
+          onResume={() => answerAutosaveDecision("resume")}
+          onDiscard={() => answerAutosaveDecision("discard")}
+        />
+      ) : null}
       <Dialog.Root open={Boolean(pendingMobileSlot)} onOpenChange={(open) => { if (!open) setPendingMobileSlot(null); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[110] bg-slate-950/40 backdrop-blur-[2px]" />
@@ -1096,6 +1164,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 <span className="shrink-0 text-xs font-semibold text-[#64748b]">
                   {completion.ready}/{completion.total} 준비
                 </span>
+                <AutosaveStatusBadge status={autosaveStatus} savedAt={autosaveSavedAt} className="hidden shrink-0 md:inline-flex" />
                 <span className={`hidden shrink-0 text-xs font-semibold lg:inline ${analysis.diagnostics.length > 0 ? "text-amber-700" : "text-emerald-700"}`}>
                   {analysis.diagnostics.length > 0 ? `${analysis.diagnostics.length}개 확인 필요` : "문제 없음"}
                 </span>
@@ -1144,6 +1213,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 isExporting={isExporting}
                 isPreparingExport={isPreparingExport}
                 templateName={displayTemplateName}
+                autosaveStatus={autosaveStatus}
+                autosaveSavedAt={autosaveSavedAt}
                 onBack={requestExit}
                 onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
                 onExport={() => void openExportDialog()}
