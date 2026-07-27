@@ -190,7 +190,9 @@ export function ChatroomPreview({
           try {
             // 9-slice 편집값(markers/geometry)은 그리는 시점에 drawBubble이 적용한다.
             // 여기서 적용하면 마커를 드래그할 때마다 원본을 다시 받아 다시 파싱하게 된다.
-            nextAssets[slot.id] = await loadCachedBubbleAsset(themeFileCacheKey(file), async () => {
+            // 파싱 결과에 slot이 담기므로 캐시 키에도 있어야 한다. 같은 파일을 me/you에 함께 쓰면
+            // 파일만으로 키를 만들 때 한쪽 자산이 반대쪽에 그대로 재사용된다.
+            nextAssets[slot.id] = await loadCachedBubbleAsset(`${themeFileCacheKey(file)}:${bubbleSlot}`, async () => {
               const blob = await blobForThemeFile(file);
               if (!blob) throw new Error(`bubble source missing: ${file.path}`);
               return loadNinePatchBlob(blob, file.name, bubbleSlot);

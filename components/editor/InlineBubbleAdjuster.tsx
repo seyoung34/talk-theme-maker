@@ -51,7 +51,8 @@ export default function InlineBubbleAdjuster({
       setLoading(true);
       setError(null);
       try {
-        const nextAsset = await loadCachedBubbleAsset(themeFileCacheKey(file), async () => {
+        // 파싱 결과에 slot이 담기므로 캐시 키에도 있어야 한다(BubbleCanvasPreview와 같은 규칙).
+        const nextAsset = await loadCachedBubbleAsset(`${themeFileCacheKey(file)}:${slot}`, async () => {
           const blob = await blobForThemeFile(file);
           if (!blob) throw new Error(`bubble source missing: ${file.path}`);
           return loadNinePatchBlob(blob, file.name, slot);
