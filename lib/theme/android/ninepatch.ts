@@ -18,6 +18,14 @@ export type BorderPixels = {
 // 33% 큰 문자열을 메인 스레드에서 만들게 되는데, createImageBitmap은 그대로 디코딩한다.
 // JS가 받아 온 blob이라 원본이 외부 도메인이어도 캔버스가 오염되지 않는다(getImageData 가능).
 export async function loadNinePatchBlob(blob: Blob, name: string, slot: BubbleSlot): Promise<BubbleAsset> {
+  // iOS 기본 말풍선은 SVG다. Chrome의 createImageBitmap은 SVG Blob을 안정적으로
+  // 디코딩하지 못하므로, SVG는 <img>를 거쳐 캔버스에 복사한다. parseImage가 캔버스
+  // 사본을 만들기 때문에 object URL은 곧바로 해제해도 된다.
+  if (isSvgImage(blob, name)) {
+    const source = await loadBlobImage(blob);
+    return parseImage(source, name, slot);
+  }
+
   const bitmap = await createImageBitmap(blob);
   try {
     return parseImage(bitmap, name, slot);
@@ -313,4 +321,17 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     img.onerror = () => reject(new Error("Image load failed."));
     img.src = src;
   });
+}
+
+async function loadBlobImage(blob: Blob): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(blob);
+  try {
+    return await loadImage(url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function isSvgImage(blob: Blob, name: string) {
+  return blob.type.toLowerCase().includes("svg") || name.toLowerCase().endsWith(".svg");
 }

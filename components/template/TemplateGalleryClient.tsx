@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Clock3, Eye, Gift, Hash, Info, Menu, SendHorizontal, Plus, Search, Settings, Smile, Trash2, UserPlus, UserRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, Clock3, Eye, Gift, Hash, Info, Menu, SendHorizontal, Plus, Search, Settings, Smile, Trash2, UserPlus, UserRound, X } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import BubbleCanvasPreview from "@/components/preview/BubbleCanvasPreview";
 import TemplateCard from "@/components/template/TemplateCard";
@@ -12,9 +12,8 @@ import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplate
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
-import { clearAutosaveDraft, describeAutosaveDraft, readAutosaveDraft, type EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
-import { createRecentWorkUserTemplateInput } from "@/lib/theme/project/recentWork";
-import { deleteUserTemplate, getUserTemplate, listUserTemplates, saveUserTemplate, type UserTemplateRecord, type UserTemplateSummary } from "@/lib/theme/userTemplates";
+import { describeAutosaveDraft, readAutosaveDraft, type EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
+import { deleteUserTemplate, getUserTemplate, listUserTemplates, type UserTemplateRecord, type UserTemplateSummary } from "@/lib/theme/userTemplates";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 import type { ThemeStartPayload } from "@/lib/theme/templates";
@@ -79,7 +78,6 @@ export default function TemplateGalleryClient() {
   const [recentWork, setRecentWork] = useState<EditorAutosaveDraft | null>(null);
   const [recentWorkVisual, setRecentWorkVisual] = useState<TemplatePreviewVisual | null>(null);
   const [pendingTemplateStart, setPendingTemplateStart] = useState<PendingTemplateStart | null>(null);
-  const [isArchivingRecentWork, setIsArchivingRecentWork] = useState(false);
   const userTemplateCardPreviewUrlsRef = useRef<Record<string, Record<string, string>>>({});
   const viewedTemplateRef = useRef<string | null>(null);
   const galleryTemplates = createGalleryTemplates(systemTemplates, systemUploadPreviewUrls, !isSystemTemplatesLoading).map((item) => ({
@@ -322,28 +320,6 @@ export default function TemplateGalleryClient() {
     launchTemplateStart(pendingTemplateStart, "replace");
   };
 
-  const archiveRecentWorkAndStart = async () => {
-    if (!recentWork || !pendingTemplateStart) return;
-    try {
-      setIsArchivingRecentWork(true);
-      setNotice("최근 작업을 내 템플릿으로 저장하는 중입니다.");
-      const hydratedUploads = Object.keys(recentWork.draft.remoteUploadRefs).length
-        ? await systemTemplateRepository.hydrateUploads(recentWork.draft.remoteUploadRefs)
-        : {};
-      const saved = await saveUserTemplate(createRecentWorkUserTemplateInput(recentWork, hydratedUploads));
-      await clearAutosaveDraft("user");
-      setRecentWork(null);
-      setRecentWorkVisual(null);
-      setNotice(`${saved.name} 템플릿으로 저장했습니다.`);
-      launchTemplateStart(pendingTemplateStart);
-    } catch (error) {
-      console.error(error);
-      setNotice("최근 작업을 내 템플릿으로 저장하지 못했습니다. 기존 최근 작업은 유지됩니다.");
-    } finally {
-      setIsArchivingRecentWork(false);
-    }
-  };
-
   const cancelTemplateStart = () => {
     setPendingTemplateStart(null);
     closePreview();
@@ -560,10 +536,8 @@ export default function TemplateGalleryClient() {
       {pendingTemplateStart && recentWork ? (
         <RecentWorkConflictDialog
           record={recentWork}
-          isArchiving={isArchivingRecentWork}
           onContinueRecent={continueRecentWork}
           onStartSelected={startSelectedTemplate}
-          onArchiveAndStart={() => void archiveRecentWorkAndStart()}
           onCancel={cancelTemplateStart}
         />
       ) : null}
@@ -1275,39 +1249,37 @@ function ProfileScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
 
 function RecentWorkConflictDialog({
   record,
-  isArchiving,
   onContinueRecent,
   onStartSelected,
-  onArchiveAndStart,
   onCancel,
 }: {
   record: EditorAutosaveDraft;
-  isArchiving: boolean;
   onContinueRecent: () => void;
   onStartSelected: () => void;
-  onArchiveAndStart: () => void;
   onCancel: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-[color:rgba(27,28,25,0.58)] p-4" role="dialog" aria-modal="true" aria-labelledby="recent-work-conflict-title">
-      <section className="w-full max-w-lg rounded-[28px] bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.28)] sm:p-6">
+      <section className="relative w-full max-w-lg rounded-[28px] bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.28)] sm:p-6">
+        <button
+          type="button"
+          className="absolute right-4 top-4 grid size-10 place-items-center rounded-full text-[var(--color-on-surface-variant)] transition hover:bg-[#eff6ff] hover:text-[#1d4ed8] active:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] sm:right-5 sm:top-5"
+          onClick={onCancel}
+          aria-label="최근 작업 선택 닫기"
+        >
+          <X size={20} aria-hidden="true" />
+        </button>
         <span className="inline-flex rounded-full bg-[#dbeafe] px-3 py-1.5 text-xs font-black text-[#1d4ed8]">자동 저장 · {formatDate(record.updatedAt)}</span>
-        <h2 id="recent-work-conflict-title" className="mt-4 text-xl font-black text-[var(--color-on-surface)]">최근 작업이 남아 있습니다</h2>
-        <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
-          새 템플릿으로 들어가도 바로 삭제하지 않습니다. 새 편집기에서 내용을 처음 변경할 때 최근 작업이 교체됩니다.
+        <h2 id="recent-work-conflict-title" className="mt-4 pr-10 text-xl font-black text-[var(--color-on-surface)]">최근 작업이 남아 있습니다</h2>
+        <p className="mt-2 pr-4 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
+          선택한 템플릿으로 시작하면, 새 편집기에서 내용을 처음 바꿀 때 최근 작업이 교체됩니다.
         </p>
-        <div className="mt-5 grid gap-2">
-          <button type="button" className="min-h-12 rounded-xl bg-[#2563eb] px-4 text-sm font-black text-white disabled:opacity-50" onClick={onContinueRecent} disabled={isArchiving}>
+        <div className="mt-5 grid grid-cols-2 gap-2.5">
+          <button type="button" className="min-h-14 rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm font-black leading-5 text-[#0f172a] transition hover:border-[#93c5fd] hover:bg-[#eff6ff] hover:text-[#1d4ed8] active:border-[#93c5fd] active:bg-[#dbeafe] active:text-[#1d4ed8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]" onClick={onContinueRecent}>
             최근 작업 계속하기
           </button>
-          <button type="button" className="min-h-12 rounded-xl border border-[#cbd5e1] bg-white px-4 text-sm font-black text-[#0f172a] disabled:opacity-50" onClick={onStartSelected} disabled={isArchiving}>
-            새 템플릿으로 시작
-          </button>
-          <button type="button" className="min-h-12 rounded-xl border border-[#cbd5e1] bg-[#f8fafc] px-4 text-sm font-black text-[#0f172a] disabled:opacity-50" onClick={onArchiveAndStart} disabled={isArchiving}>
-            {isArchiving ? "최근 작업 저장 중" : "최근 작업을 내 템플릿으로 저장 후 시작"}
-          </button>
-          <button type="button" className="min-h-11 rounded-xl px-4 text-sm font-black text-[#64748b] disabled:opacity-50" onClick={onCancel} disabled={isArchiving}>
-            취소
+          <button type="button" className="min-h-14 rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm font-black leading-5 text-[#0f172a] transition hover:border-[#93c5fd] hover:bg-[#eff6ff] hover:text-[#1d4ed8] active:border-[#93c5fd] active:bg-[#dbeafe] active:text-[#1d4ed8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]" onClick={onStartSelected}>
+            선택한 템플릿으로 시작
           </button>
         </div>
       </section>
