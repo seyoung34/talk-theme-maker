@@ -6,6 +6,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
 import { createClient } from "@/lib/supabase/client";
 
+function getUpdatePasswordErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("same") || message.includes("different") || message.includes("unchanged")) {
+    return "새 비밀번호가 이전 비밀번호와 같습니다. 다른 비밀번호를 입력해 주세요.";
+  }
+  if (message.includes("password") && message.includes("characters")) return "비밀번호는 8자 이상 입력해 주세요.";
+  return "비밀번호를 변경하지 못했습니다. 인증번호를 다시 요청해 주세요.";
+}
+
 export default function UpdatePasswordClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,12 +37,14 @@ export default function UpdatePasswordClient() {
     setIsSubmitting(true);
     setError("");
     try {
-      const { error: updateError } = await createClient().auth.updateUser({ password });
+      const supabase = createClient();
+      const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
-      router.replace(returnTo);
+      await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+      router.replace(`/login?returnTo=${encodeURIComponent(returnTo)}&passwordUpdated=1`);
       router.refresh();
-    } catch {
-      setError("비밀번호를 변경하지 못했습니다. 재설정 링크를 다시 요청해 주세요.");
+    } catch (error) {
+      setError(getUpdatePasswordErrorMessage(error));
       setIsSubmitting(false);
     }
   };
@@ -43,7 +54,7 @@ export default function UpdatePasswordClient() {
       <section className="w-full max-w-md rounded-[28px] border border-[#dbe8fb] bg-white p-6 shadow-[0_24px_70px_rgba(47,107,191,0.12)] sm:p-8" aria-labelledby="update-password-title">
         <p className="text-xs font-black uppercase tracking-[0.18em] text-[#3d7bd6]">New password</p>
         <h1 id="update-password-title" className="mt-2 text-3xl font-black">새 비밀번호 설정</h1>
-        <p className="mt-3 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">새로 사용할 비밀번호를 두 번 입력해 주세요.</p>
+        <p className="mt-3 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">이전 비밀번호와 다른 새 비밀번호를 두 번 입력해 주세요. 변경 후에는 새 비밀번호로 다시 로그인합니다.</p>
         <form className="mt-6 grid gap-4" onSubmit={submit} noValidate>
           <label className="grid gap-2 text-sm font-extrabold">새 비밀번호<input className="h-12 rounded-xl border border-[var(--color-outline-variant)] px-3.5 outline-none focus:border-[var(--color-secondary)]" type="password" value={password} onChange={(event) => setPassword(event.currentTarget.value)} minLength={8} autoComplete="new-password" placeholder="8자 이상" disabled={isSubmitting} /></label>
           <label className="grid gap-2 text-sm font-extrabold">새 비밀번호 확인<input className="h-12 rounded-xl border border-[var(--color-outline-variant)] px-3.5 outline-none focus:border-[var(--color-secondary)]" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.currentTarget.value)} minLength={8} autoComplete="new-password" placeholder="비밀번호 다시 입력" disabled={isSubmitting} /></label>

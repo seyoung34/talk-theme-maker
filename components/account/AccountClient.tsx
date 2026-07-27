@@ -2,16 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowRight, Coins, Download, RefreshCw, ShieldCheck, Sparkles, Star, UserRound } from "lucide-react";
+import { AlertCircle, ArrowRight, Coins, Download, LoaderCircle, RefreshCw, ShieldCheck, Sparkles, Star, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import type { AccountExportDto, AccountMeResponse, ExportDownloadLinkResponse } from "@/lib/billing/apiTypes";
 import { getExportDownloadState } from "@/lib/theme/android/outputRetention";
 import { readJsonResponse } from "@/lib/shared/api/http";
+import { createClient } from "@/lib/supabase/client";
 
 export default function AccountClient() {
   const [me, setMe] = useState<AccountMeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [isDeletionOpen, setIsDeletionOpen] = useState(false);
+  const [deletionConfirmation, setDeletionConfirmation] = useState("");
+  const [deletionError, setDeletionError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const refreshMe = useCallback(async () => {
     setAccountError(null);
@@ -28,6 +33,32 @@ export default function AccountClient() {
   }, []);
 
   useEffect(() => { void refreshMe(); }, [refreshMe]);
+
+  const deleteAccount = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isDeleting) return;
+    if (deletionConfirmation !== "탈퇴") {
+      setDeletionError("확인 문구로 '탈퇴'를 정확히 입력해 주세요.");
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeletionError(null);
+    try {
+      const response = await fetch("/api/account", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: deletionConfirmation }),
+      });
+      const payload = await readJsonResponse<{ deleted?: boolean; error?: string }>(response);
+      if (!response.ok || !payload.deleted) throw new Error(payload.error);
+      await createClient().auth.signOut().catch(() => undefined);
+      window.location.assign("/login?accountDeleted=1");
+    } catch (error) {
+      setDeletionError(error instanceof Error && error.message ? error.message : "회원탈퇴를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setIsDeleting(false);
+    }
+  };
 
   const provider = me?.profile?.provider === "kakao" ? "카카오" : "이메일";
 
@@ -47,6 +78,7 @@ export default function AccountClient() {
           <p className="mt-2 text-sm font-semibold leading-7 text-[var(--color-on-surface-variant)]">
             계정 정보와 보유 크레딧, 최근 내보내기 이력을 한곳에서 확인합니다.
           </p>
+          {isLoading ? <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#3d7bd6]" role="status"><LoaderCircle className="animate-spin" size={15} aria-hidden="true" />계정 정보를 불러오는 중입니다.</p> : null}
         </header>
 
         {accountError ? (
@@ -104,6 +136,24 @@ export default function AccountClient() {
                 </div>
               )}
             </section>
+
+            {me?.user ? (
+              <section className="border-t border-[#e3ecf7] pt-5 text-right lg:col-start-1 lg:row-start-3" aria-labelledby="account-deletion-title">
+                {!isDeletionOpen ? (
+                  <p className="text-xs font-semibold text-[var(--color-outline)]"><span id="account-deletion-title">계정을 더 이상 사용하지 않으시나요?</span> <button type="button" className="ml-1 font-bold text-[var(--color-on-surface-variant)] underline underline-offset-2 transition hover:text-[var(--color-error)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-error)]" onClick={() => { setIsDeletionOpen(true); setDeletionError(null); }}>회원탈퇴</button></p>
+                ) : (
+                  <form className="ml-auto grid max-w-md gap-2 rounded-2xl border border-[#f3d4d0] bg-[#fffaf9] p-3 text-left" onSubmit={deleteAccount} noValidate>
+                    <p id="account-deletion-title" className="text-xs font-bold leading-5 text-[var(--color-on-surface-variant)]">계정 정보·남은 크레딧·내보내기 이력은 복구할 수 없습니다. 계속하려면 <strong className="text-[var(--color-error)]">탈퇴</strong>를 입력해 주세요.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <input className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-outline-variant)] bg-white px-3 text-sm font-semibold outline-none focus:border-[var(--color-error)] focus:ring-2 focus:ring-[var(--color-error-container)]" value={deletionConfirmation} onChange={(event) => setDeletionConfirmation(event.currentTarget.value)} autoComplete="off" disabled={isDeleting} aria-label="회원탈퇴 확인 문구" />
+                      <button type="submit" className="h-9 rounded-full bg-[var(--color-error)] px-3.5 text-xs font-extrabold text-white disabled:opacity-50" disabled={isDeleting}>{isDeleting ? "처리 중" : "탈퇴"}</button>
+                    </div>
+                    {deletionError ? <p className="rounded-xl bg-[var(--color-error-container)] px-3.5 py-3 text-sm font-semibold text-[var(--color-on-error-container)]" role="alert">{deletionError}</p> : null}
+                    <button type="button" className="justify-self-end text-xs font-bold text-[var(--color-on-surface-variant)] underline underline-offset-2" onClick={() => { setIsDeletionOpen(false); setDeletionConfirmation(""); setDeletionError(null); }} disabled={isDeleting}>취소</button>
+                  </form>
+                )}
+              </section>
+            ) : null}
         </div>
       </div>
     </main>

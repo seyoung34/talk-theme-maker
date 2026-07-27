@@ -21,6 +21,7 @@ function getAuthErrorMessage(error: unknown) {
   if (message.includes("email not confirmed")) return "이메일 인증을 완료한 뒤 로그인해 주세요.";
   if (message.includes("user already registered") || message.includes("already been registered")) return "이미 가입된 이메일입니다. 로그인해 주세요.";
   if (message.includes("password") && message.includes("characters")) return "비밀번호는 8자 이상 입력해 주세요.";
+  if (message.includes("otp") || message.includes("token") || message.includes("expired")) return "인증번호가 만료됐거나 올바르지 않습니다. 새 인증번호를 요청해 주세요.";
   if (message.includes("rate limit") || message.includes("too many")) return "요청이 많습니다. 잠시 후 다시 시도해 주세요.";
   if (message.includes("network") || message.includes("fetch")) return "네트워크 연결을 확인하고 다시 시도해 주세요.";
   return "인증을 완료하지 못했습니다. 입력 내용을 확인하고 다시 시도해 주세요.";
@@ -32,6 +33,8 @@ export default function LoginClient() {
   const returnTo = getSafeReturnTarget(searchParams.get("returnTo"));
   const reason = searchParams.get("reason");
   const authError = searchParams.get("authError");
+  const accountDeleted = searchParams.get("accountDeleted") === "1";
+  const passwordUpdated = searchParams.get("passwordUpdated") === "1";
   const [mode, setMode] = useState<AuthMode>("signin");
   const [stage, setStage] = useState<AuthStage>("form");
   const [email, setEmail] = useState("");
@@ -42,9 +45,10 @@ export default function LoginClient() {
   const [hasAcceptedPrivacy, setHasAcceptedPrivacy] = useState(false);
   const [hasConfirmedMinimumAge, setHasConfirmedMinimumAge] = useState(false);
   const [emailSignupOpen, setEmailSignupOpen] = useState(false);
-  const [message, setMessage] = useState<Message>(() => authError ? { tone: "error", text: authError } : null);
+  const [message, setMessage] = useState<Message>(() => authError ? { tone: "error", text: authError } : accountDeleted ? { tone: "success", text: "회원탈퇴가 완료되었습니다." } : passwordUpdated ? { tone: "success", text: "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요." } : null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [verificationCode, setVerificationCode] = useState("");
   const hasAcceptedRequiredPolicies = hasAcceptedTerms && hasAcceptedPrivacy;
   const hasAcceptedSignupRequirements = hasAcceptedRequiredPolicies && hasConfirmedMinimumAge;
 
@@ -78,6 +82,8 @@ export default function LoginClient() {
     setShowPassword(false);
     setEmailSignupOpen(false);
     setStage("form");
+    setVerificationCode("");
+    setResendCooldown(0);
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -107,11 +113,7 @@ export default function LoginClient() {
       const supabase = createClient();
       const result = mode === "signin"
         ? await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
-        : await supabase.auth.signUp({
-          email: normalizedEmail,
-          password,
-          options: { emailRedirectTo: getAuthCallbackUrl("email_signup") },
-        });
+        : await supabase.auth.signUp({ email: normalizedEmail, password });
       if (result.error) throw result.error;
       if (mode === "signup" && result.data.session) {
         await recordCurrentPolicyConsents(supabase, "email_signup");
@@ -140,11 +142,39 @@ export default function LoginClient() {
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: email.trim().toLowerCase(),
-        options: { emailRedirectTo: getAuthCallbackUrl("email_signup") },
       });
       if (error) throw error;
       setResendCooldown(60);
       setMessage({ tone: "success", text: "인증 메일을 다시 보냈습니다." });
+    } catch (error) {
+      setMessage({ tone: "error", text: getAuthErrorMessage(error) });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const verifySignupEmail = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSubmitting) return;
+    const token = verificationCode.trim();
+    if (!/^\d{8}$/.test(token)) {
+      setMessage({ tone: "error", text: "메일로 받은 8자리 인증번호를 입력해 주세요." });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setMessage(null);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token,
+        type: "email",
+      });
+      if (error) throw error;
+      await recordCurrentPolicyConsents(supabase, "email_signup").catch(() => undefined);
+      router.replace(returnTo);
+      router.refresh();
     } catch (error) {
       setMessage({ tone: "error", text: getAuthErrorMessage(error) });
     } finally {
@@ -251,18 +281,28 @@ export default function LoginClient() {
               <div>
                 <h2 className="text-xl font-black text-[var(--color-on-surface)]">인증 메일을 확인해 주세요</h2>
                 <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
-                  <strong className="text-[var(--color-on-surface)]">{email.trim().toLowerCase()}</strong>로 인증 링크를 보냈습니다. 링크를 누르면 회원가입이 완료됩니다.
+                  <strong className="text-[var(--color-on-surface)]">{email.trim().toLowerCase()}</strong>로 8자리 인증번호를 보냈습니다. 아래에 입력하면 회원가입이 완료됩니다.
                 </p>
+                <p className="mt-2 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">이미 가입한 이메일이라면 <button type="button" className="font-extrabold text-[#2f6bbf] underline underline-offset-2" onClick={() => changeMode("signin")} disabled={isSubmitting}>로그인</button>하거나 비밀번호를 재설정해 주세요.</p>
               </div>
+              <form className="grid gap-3" onSubmit={verifySignupEmail} noValidate>
+                <label className="grid gap-2 text-left text-sm font-extrabold text-[var(--color-on-surface)]">
+                  인증번호
+                  <input className="h-12 rounded-xl border border-[var(--color-outline-variant)] bg-white px-3.5 text-center text-lg font-black tracking-[0.25em] outline-none transition placeholder:tracking-normal placeholder:text-[var(--color-outline)] focus:border-[var(--color-secondary)] focus:ring-3 focus:ring-[var(--color-secondary-container)] disabled:bg-[var(--color-surface-low)]" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{8}" maxLength={8} value={verificationCode} onChange={(event) => setVerificationCode(event.currentTarget.value.replace(/\D/g, ""))} placeholder="12345678" disabled={isSubmitting} aria-invalid={message?.tone === "error"} />
+                </label>
+                <button type="submit" className="min-h-11 rounded-full bg-[var(--color-secondary)] px-4 text-sm font-extrabold text-white disabled:opacity-50" disabled={isSubmitting}>
+                  {isSubmitting ? "확인 중" : "인증번호 확인"}
+                </button>
+              </form>
               {message ? (
                 <div className={`rounded-xl border px-3.5 py-3 text-sm font-semibold ${message.tone === "error" ? "border-[#f1b7b1] bg-[var(--color-error-container)] text-[var(--color-on-error-container)]" : "border-[#9ed5c1] bg-[#e4f6ee] text-[#155d45]"}`} role={message.tone === "error" ? "alert" : "status"}>
                   {message.text}
                 </div>
               ) : null}
               <button type="button" className="min-h-11 rounded-full border border-[#cfe0ff] bg-white px-4 text-sm font-extrabold text-[#2f6bbf] disabled:opacity-50" onClick={() => void resendSignupEmail()} disabled={isSubmitting || resendCooldown > 0}>
-                {isSubmitting ? "전송 중" : resendCooldown > 0 ? `${resendCooldown}초 후 다시 보내기` : "인증 메일 다시 보내기"}
+                {isSubmitting ? "전송 중" : resendCooldown > 0 ? `${resendCooldown}초 후 다시 보내기` : "인증번호 다시 보내기"}
               </button>
-              <button type="button" className="text-sm font-bold text-[var(--color-on-surface-variant)] underline underline-offset-4" onClick={() => { setStage("form"); setMessage(null); }} disabled={isSubmitting}>
+              <button type="button" className="text-sm font-bold text-[var(--color-on-surface-variant)] underline underline-offset-4" onClick={() => { setStage("form"); setVerificationCode(""); setMessage(null); }} disabled={isSubmitting}>
                 이메일 주소 수정
               </button>
             </div>
@@ -385,7 +425,7 @@ function SignupEmailForm({
       </label>
       {message ? <AuthMessage message={message} /> : null}
       <button className="flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-secondary)] px-5 py-3 text-sm font-extrabold text-white shadow-[0_18px_34px_rgba(47,107,191,0.22)] transition hover:-translate-y-0.5 hover:bg-[#3d7bd6] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" type="submit" disabled={isSubmitting}>
-        {isSubmitting ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />처리 중</> : <>이메일 가입 완료<ArrowRight size={17} aria-hidden="true" /></>}
+        {isSubmitting ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />처리 중</> : <>인증번호 보내기<ArrowRight size={17} aria-hidden="true" /></>}
       </button>
     </form>
   );
