@@ -23,7 +23,7 @@ export class AndroidExportRequestError extends Error {
 
 export async function readAndroidBundleUpload(formData: FormData, manifestRaw: string) {
   const manifest = parseManifest(manifestRaw);
-  const fields = new Set<string>();
+  const bytesByField = new Map<string, Uint8Array>();
   const paths = new Set<string>();
   const files: AndroidBundleUploadFile[] = [];
   let inputBytes = 0;
@@ -43,8 +43,12 @@ export async function readAndroidBundleUpload(formData: FormData, manifestRaw: s
     if (!/^file-\d+$/.test(item.field)) {
       throw new AndroidExportRequestError("invalid_manifest_field", "내보내기 파일 목록이 올바르지 않습니다.");
     }
-    // 같은 이미지가 여러 경로로 나갈 때 클라이언트는 field를 공유한다. 바이트는 한 번만 읽는다.
-    if (fields.has(item.field)) continue;
+    // 바이트는 한 번만 읽되, 빌더가 실제로 쓰는 각 출력 경로의 크기를 제한에 반영한다.
+    const cachedBytes = bytesByField.get(item.field);
+    if (cachedBytes) {
+      inputBytes = addInputBytes(inputBytes, cachedBytes.byteLength);
+      continue;
+    }
 
     const file = formData.get(item.field);
     if (!(file instanceof File)) {
@@ -55,8 +59,9 @@ export async function readAndroidBundleUpload(formData: FormData, manifestRaw: s
     }
 
     inputBytes = addInputBytes(inputBytes, file.size);
-    fields.add(item.field);
-    files.push({ field: item.field, bytes: new Uint8Array(await file.arrayBuffer()) });
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    bytesByField.set(item.field, bytes);
+    files.push({ field: item.field, bytes });
   }
 
   return { manifest, files, inputBytes };

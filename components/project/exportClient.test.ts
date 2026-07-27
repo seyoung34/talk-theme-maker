@@ -32,6 +32,27 @@ describe("appendExportFilesToFormData", () => {
     expect(manifest).toEqual([{ path: "src/main/theme/drawable-xxhdpi/a.png", serverAsset: "/template-assets/basic/android/a.png" }]);
     expect([...formData.keys()]).toEqual([]);
   });
+
+  it("field 공유를 끄면 같은 blob도 경로마다 고유한 field로 추가한다", () => {
+    const shared = new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" });
+    const formData = new FormData();
+
+    const manifest = appendExportFilesToFormData(
+      formData,
+      [
+        { path: "Images/a@2x.png", blob: shared },
+        { path: "Images/a@3x.png", blob: shared },
+      ],
+      { shareBlobFields: false },
+    );
+
+    expect(manifest).toEqual([
+      { field: "file-0", path: "Images/a@2x.png" },
+      { field: "file-1", path: "Images/a@3x.png" },
+    ]);
+    expect(formData.getAll("file-0")).toHaveLength(1);
+    expect(formData.getAll("file-1")).toHaveLength(1);
+  });
 });
 
 describe("getExportPollIntervalMs", () => {

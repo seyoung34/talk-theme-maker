@@ -27,8 +27,8 @@ describe("readAndroidBuildInputFiles", () => {
 
     expect(result.files.map((file) => file.path)).toEqual([drawablePath("xxhdpi"), drawablePath("sw600dp")]);
     expect(result.files[0].bytes).toBe(result.files[1].bytes);
-    // 실제로 올라온 바이트는 한 번만 집계한다.
-    expect(result.inputBytes).toBe(bytes.byteLength);
+    // 바이트는 재사용하지만 실제 출력 경로마다 확장되는 크기를 집계한다.
+    expect(result.inputBytes).toBe(bytes.byteLength * 2);
   });
 
   it("중복된 내보내기 경로는 거부한다", async () => {
@@ -48,6 +48,23 @@ describe("readAndroidBuildInputFiles", () => {
 
     await expect(readAndroidBuildInputFiles(formData, manifestRaw)).rejects.toBeInstanceOf(AndroidExportRequestError);
   });
+
+  it("공유 field가 확장된 전체 크기 제한을 넘으면 거부한다", async () => {
+    const bytes = new Uint8Array(20 * 1024 * 1024);
+    const { formData, manifestRaw } = createFormData(
+      [
+        { field: "file-0", path: drawablePath("xhdpi") },
+        { field: "file-0", path: drawablePath("xxhdpi") },
+        { field: "file-0", path: drawablePath("xxxhdpi") },
+      ],
+      { "file-0": bytes },
+    );
+
+    await expect(readAndroidBuildInputFiles(formData, manifestRaw)).rejects.toMatchObject({
+      code: "export_payload_too_large",
+      status: 413,
+    });
+  });
 });
 
 describe("readAndroidBundleUpload", () => {
@@ -65,6 +82,23 @@ describe("readAndroidBundleUpload", () => {
 
     expect(result.files.map((file) => file.field)).toEqual(["file-0", "file-1"]);
     expect(result.manifest).toHaveLength(3);
-    expect(result.inputBytes).toBe(5);
+    expect(result.inputBytes).toBe(7);
+  });
+
+  it("공유 field가 확장된 전체 크기 제한을 넘으면 거부한다", async () => {
+    const bytes = new Uint8Array(20 * 1024 * 1024);
+    const { formData, manifestRaw } = createFormData(
+      [
+        { field: "file-0", path: drawablePath("xhdpi") },
+        { field: "file-0", path: drawablePath("xxhdpi") },
+        { field: "file-0", path: drawablePath("xxxhdpi") },
+      ],
+      { "file-0": bytes },
+    );
+
+    await expect(readAndroidBundleUpload(formData, manifestRaw)).rejects.toMatchObject({
+      code: "export_payload_too_large",
+      status: 413,
+    });
   });
 });

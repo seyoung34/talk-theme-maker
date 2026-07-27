@@ -35,10 +35,8 @@ export async function readAndroidBuildInputFiles(formData: FormData, manifestRaw
     if ("serverAsset" in item) {
       const cached = bytesByServerAsset.get(item.serverAsset);
       const bytes = cached ?? (await readPublicTemplateAsset(item.serverAsset));
-      if (!cached) {
-        inputBytes = addInputBytes(inputBytes, bytes.byteLength);
-        bytesByServerAsset.set(item.serverAsset, bytes);
-      }
+      inputBytes = addInputBytes(inputBytes, bytes.byteLength);
+      if (!cached) bytesByServerAsset.set(item.serverAsset, bytes);
       files.push({ path: normalizedPath, bytes });
       continue;
     }
@@ -49,6 +47,7 @@ export async function readAndroidBuildInputFiles(formData: FormData, manifestRaw
 
     const cachedBytes = bytesByField.get(item.field);
     if (cachedBytes) {
+      inputBytes = addInputBytes(inputBytes, cachedBytes.byteLength);
       files.push({ path: normalizedPath, bytes: cachedBytes });
       continue;
     }
