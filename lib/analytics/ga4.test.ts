@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   analyticsConsentStorageKey,
+  analyticsInternalStorageKey,
   getAcquisitionContext,
   getAnalyticsBootstrapScript,
+  isInternalTraffic,
+  markInternalTraffic,
   saveAnalyticsConsent,
   trackAnalyticsEvent,
   trackPurchaseOnce,
@@ -15,6 +18,11 @@ describe("GA4 analytics", () => {
     vi.stubEnv("NEXT_PUBLIC_GA_MEASUREMENT_ID", "G-TEST123");
     window.localStorage.clear();
     window.sessionStorage.clear();
+    // 동의·내부 트래픽 플래그는 쿠키에도 남는다. 지우지 않으면 앞 테스트가 뒤 테스트에 샌다.
+    for (const entry of document.cookie.split(";")) {
+      const name = entry.split("=")[0]?.trim();
+      if (name) document.cookie = `${name}=; Path=/; Max-Age=0`;
+    }
     window.history.replaceState({}, "", "/template");
     window.gtag = gtag;
     gtag.mockClear();
@@ -60,6 +68,30 @@ describe("GA4 analytics", () => {
       utm_campaign: "instagram_personal_launch",
     }));
     expect(getAcquisitionContext("/template")).not.toHaveProperty("utm_content");
+  });
+
+  it("tags events from a device marked as internal traffic", () => {
+    window.localStorage.setItem(analyticsConsentStorageKey, "granted");
+    markInternalTraffic();
+
+    trackAnalyticsEvent("page_view", { page_path: "/template" });
+
+    expect(gtag).toHaveBeenCalledWith("event", "page_view", expect.objectContaining({ traffic_type: "internal" }));
+  });
+
+  it("leaves normal visitor events untagged", () => {
+    window.localStorage.setItem(analyticsConsentStorageKey, "granted");
+
+    trackAnalyticsEvent("page_view", { page_path: "/template" });
+
+    expect(gtag).toHaveBeenCalledWith("event", "page_view", expect.not.objectContaining({ traffic_type: expect.anything() }));
+  });
+
+  it("keeps the internal mark when localStorage is unavailable, via the cookie fallback", () => {
+    markInternalTraffic();
+    window.localStorage.removeItem(analyticsInternalStorageKey);
+
+    expect(isInternalTraffic()).toBe(true);
   });
 
   it("sends a purchase transaction only once per tab", () => {

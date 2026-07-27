@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
 import { CircleUserRound, LayoutDashboard, LoaderCircle, LogIn, LogOut, UserRound, X } from "lucide-react";
+import { markInternalTraffic } from "@/lib/analytics/ga4";
 import type { SessionResponse } from "@/lib/billing/apiTypes";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createClient } from "@/lib/supabase/client";
@@ -28,7 +29,11 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
         return readJsonResponse<SessionResponse>(response);
       })
       .then((payload) => {
-        if (active) setSession(payload);
+        if (!active) return;
+        setSession(payload);
+        // 관리자로 확인된 기기는 이후 방문부터 내부 트래픽으로 표시한다(차단이 아니라 표시).
+        // 로그아웃해도 유지되므로 노트북·폰에서 한 번씩 로그인하면 그 뒤로는 자동이다.
+        if (payload.isAdmin) markInternalTraffic();
       })
       .catch(() => {
         if (active) setSession({ user: null, isAdmin: false });

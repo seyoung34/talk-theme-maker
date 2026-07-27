@@ -2,6 +2,8 @@ import type { ExportFailureReason } from "@/lib/theme/export/failureReason";
 
 export const analyticsConsentStorageKey = "talktheme:analytics-consent:v1";
 const analyticsConsentCookieName = "talktheme_analytics_consent";
+export const analyticsInternalStorageKey = "talktheme:analytics-internal:v1";
+const analyticsInternalCookieName = "talktheme_analytics_internal";
 const acquisitionStorageKey = "talktheme:analytics-acquisition:v1";
 const funnelContextStorageKey = "talktheme:analytics-funnel-context:v1";
 const allowedUtmValues = {
@@ -69,6 +71,49 @@ export function saveAnalyticsConsent(consent: AnalyticsConsent) {
   document.cookie = `${analyticsConsentCookieName}=${consent}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
 }
 
+/**
+ * 운영자 본인의 트래픽을 지표에서 골라낼 수 있게 표시한다.
+ *
+ * 차단이 아니라 **표시**다. 이벤트는 그대로 수집되고 `traffic_type: "internal"`이 붙어서 나가며,
+ * GA4의 데이터 필터(내부 트래픽)로 리포트에서 걸러낸다. 차단해 버리면 나중에 "내 트래픽도 같이
+ * 보고 싶다"가 됐을 때 그 기간 데이터가 아예 없다. 표시해 두면 필터만 끄면 된다.
+ *
+ * **표시는 계정이 아니라 기기에 남긴다.** `page_view`는 페이지가 뜨자마자 나가는데 관리자 여부는
+ * `/api/session` 응답이 와야 알 수 있어서, 매 방문마다 로그인 확인을 기다리면 첫 이벤트를 놓친다.
+ * 관리자로 확인된 시점에 이 기기를 한 번 표시해 두면 이후 방문은 로그아웃 상태여도 계속 붙는다.
+ * 놓치는 건 각 기기에서 관리자로 처음 로그인하기 이전의 이벤트뿐이고, 그것도 한 번뿐이다.
+ *
+ * 동의 플래그와 같은 이유로 localStorage와 1년짜리 자사 쿠키에 이중으로 쓴다.
+ * 프라이버시 확장 프로그램이 localStorage를 막는 경우가 있다.
+ */
+export function isInternalTraffic() {
+  if (typeof window === "undefined") return false;
+  return (readStoredInternalTraffic() ?? readInternalTrafficCookie()) === "1";
+}
+
+export function markInternalTraffic() {
+  if (typeof window === "undefined" || isInternalTraffic()) return;
+  try {
+    window.localStorage.setItem(analyticsInternalStorageKey, "1");
+  } catch {
+    // Privacy extensions can block localStorage. The first-party cookie below is the fallback.
+  }
+  document.cookie = `${analyticsInternalCookieName}=1; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
+}
+
+function readStoredInternalTraffic() {
+  try {
+    return window.localStorage.getItem(analyticsInternalStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+function readInternalTrafficCookie() {
+  const prefix = `${analyticsInternalCookieName}=`;
+  return document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith(prefix))?.slice(prefix.length) ?? null;
+}
+
 export function getKnownCampaignKey(value: string | null) {
   return value && knownCampaignKeys.has(value) ? value : null;
 }
@@ -90,7 +135,15 @@ export function trackAnalyticsEvent<Name extends AnalyticsEventName>(name: Name,
   }
   const context = name === "page_view" ? {} : readFunnelContext() ?? {};
   const acquisition = name === "page_view" ? {} : getAcquisitionContext(window.location.pathname);
-  window.gtag?.("event", name, { ...acquisition, ...context, ...params, page_location: `${window.location.origin}${window.location.pathname}` });
+  // GA4 데이터 필터가 읽는 파라미터 이름이다. params 뒤에 둬서 이벤트 쪽에서 덮어쓸 수 없게 한다.
+  const trafficType = isInternalTraffic() ? { traffic_type: "internal" } : {};
+  window.gtag?.("event", name, {
+    ...acquisition,
+    ...context,
+    ...params,
+    ...trafficType,
+    page_location: `${window.location.origin}${window.location.pathname}`,
+  });
 }
 
 export function getAcquisitionContext(pathname: string): AcquisitionContext {
