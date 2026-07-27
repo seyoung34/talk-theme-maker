@@ -1,6 +1,11 @@
 import { readJsonResponse } from "@/lib/shared/api/http";
+import { mapWithConcurrency } from "@/lib/shared/concurrency";
 
 export const themeAssetsBucketName = "theme-assets";
+// 서버 라우트의 maxSignedUrlPaths(50)와 맞춘다.
+const signedUrlBatchSize = 50;
+const signedUrlBatchConcurrency = 4;
+const signedUrlRequestConcurrency = 6;
 
 const signedUrlCacheKey = "kakaotalk-theme-maker:signed-url-cache:v1";
 const signedUrlTtlMs = 9 * 60 * 1000;
@@ -30,26 +35,16 @@ export async function getThemeAssetSignedUrls(storagePaths: string[]) {
   }
   if (!missing.length) return result;
 
-  for (let index = 0; index < missing.length; index += 50) {
-    const paths = missing.slice(index, index + 50);
-    const response = await fetch("/api/theme-assets/signed-urls", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paths }),
-    });
-    const payload = await readJsonResponse<{ signedUrls?: Record<string, string>; error?: string }>(response);
-    if (response.status === 404) {
-      const fallbackUrls = await getThemeAssetSignedUrlsIndividually(paths);
-      for (const [path, signedUrl] of Object.entries(fallbackUrls)) {
-        setCachedSignedUrl(path, signedUrl);
-        result[path] = signedUrl;
-      }
-      continue;
-    }
-    if (!response.ok || !payload.signedUrls) {
-      throw new Error(payload.error ?? "Theme asset URL could not be created.");
-    }
-    for (const [path, signedUrl] of Object.entries(payload.signedUrls)) {
+  // 템플릿 하나가 수십 개 에셋을 참조한다. 배치를 순차로 돌리면 편집기 부트스트랩에
+  // 왕복 지연이 그대로 쌓이므로 배치들을 병렬로 요청한다.
+  const batches: string[][] = [];
+  for (let index = 0; index < missing.length; index += signedUrlBatchSize) {
+    batches.push(missing.slice(index, index + signedUrlBatchSize));
+  }
+
+  const batchResults = await mapWithConcurrency(batches, signedUrlBatchConcurrency, requestSignedUrlBatch);
+  for (const batch of batchResults) {
+    for (const [path, signedUrl] of Object.entries(batch)) {
       setCachedSignedUrl(path, signedUrl);
       result[path] = signedUrl;
     }
@@ -57,9 +52,24 @@ export async function getThemeAssetSignedUrls(storagePaths: string[]) {
   return result;
 }
 
+async function requestSignedUrlBatch(paths: string[]) {
+  const response = await fetch("/api/theme-assets/signed-urls", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths }),
+  });
+  const payload = await readJsonResponse<{ signedUrls?: Record<string, string>; error?: string }>(response);
+  // 배치 엔드포인트가 배포되지 않은 환경에서는 단건 엔드포인트로 되돌아간다.
+  if (response.status === 404) return getThemeAssetSignedUrlsIndividually(paths);
+  if (!response.ok || !payload.signedUrls) {
+    throw new Error(payload.error ?? "Theme asset URL could not be created.");
+  }
+  return payload.signedUrls;
+}
+
 async function getThemeAssetSignedUrlsIndividually(storagePaths: string[]) {
   const signedUrls: Record<string, string> = {};
-  for (const path of storagePaths) {
+  const responses = await mapWithConcurrency(storagePaths, signedUrlRequestConcurrency, async (path) => {
     const response = await fetch("/api/theme-assets/signed-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -69,8 +79,10 @@ async function getThemeAssetSignedUrlsIndividually(storagePaths: string[]) {
     if (!response.ok || !payload.signedUrl) {
       throw new Error(payload.error ?? `Theme asset URL could not be created: ${path}`);
     }
-    signedUrls[path] = payload.signedUrl;
-  }
+    return { path, signedUrl: payload.signedUrl };
+  });
+
+  for (const { path, signedUrl } of responses) signedUrls[path] = signedUrl;
   return signedUrls;
 }
 

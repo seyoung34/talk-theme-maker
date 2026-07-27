@@ -3,8 +3,9 @@
 import { ArrowLeft, SendHorizontal, Menu, Phone, Plus, Search, Smile } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getResolvedColor, type BubbleEditState, type SlotCandidateSelections } from "@/components/project/projectModel";
-import { dataUrlForThemeFile, findBestFile } from "@/components/preview/previewResourceUtils";
-import { loadNinePatchDataUrl, mapContentRect, renderNinePatch } from "@/lib/theme/android/ninepatch";
+import { blobForThemeFile, findBestFile, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
+import { loadNinePatchBlob, mapContentRect, renderNinePatch } from "@/lib/theme/android/ninepatch";
+import { loadCachedBubbleAsset } from "@/lib/theme/preview/bubbleAssetCache";
 import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -178,16 +179,28 @@ export function ChatroomPreview({
 
     async function load() {
       const nextAssets: Record<string, BubbleAsset | undefined> = {};
-      for (const role of ["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"] as const) {
-        const file = selectedFiles[role];
-        const slot = slotByRole[role];
-        if (!file || !slot) continue;
-        const dataUrl = await dataUrlForThemeFile(file);
-        const bubbleSlot = role.includes("_me_") ? "me" : "you";
-        const asset = await loadNinePatchDataUrl(dataUrl, file.name, bubbleSlot);
-        const edits = bubbleEdits[role];
-        nextAssets[slot.id] = getAndroidRenderAsset(asset, edits);
-      }
+      const roles = ["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"] as const;
+
+      await Promise.all(
+        roles.map(async (role) => {
+          const file = selectedFiles[role];
+          const slot = slotByRole[role];
+          if (!file || !slot) return;
+          const bubbleSlot = role.includes("_me_") ? "me" : "you";
+          try {
+            // 9-slice 편집값(markers/geometry)은 그리는 시점에 drawBubble이 적용한다.
+            // 여기서 적용하면 마커를 드래그할 때마다 원본을 다시 받아 다시 파싱하게 된다.
+            nextAssets[slot.id] = await loadCachedBubbleAsset(themeFileCacheKey(file), async () => {
+              const blob = await blobForThemeFile(file);
+              if (!blob) throw new Error(`bubble source missing: ${file.path}`);
+              return loadNinePatchBlob(blob, file.name, bubbleSlot);
+            });
+          } catch (error) {
+            // 한 슬롯이 실패해도 나머지 말풍선과 배경은 그대로 보여 준다.
+            console.error(error);
+          }
+        }),
+      );
 
       if (!cancelled) setBubbleAssets(nextAssets);
     }
@@ -196,7 +209,7 @@ export function ChatroomPreview({
     return () => {
       cancelled = true;
     };
-  }, [bubbleEdits, bubbleFilesSignature, slotByRole.bubble_me_1?.id, slotByRole.bubble_me_2?.id, slotByRole.bubble_you_1?.id, slotByRole.bubble_you_2?.id]);
+  }, [bubbleFilesSignature, slotByRole.bubble_me_1?.id, slotByRole.bubble_me_2?.id, slotByRole.bubble_you_1?.id, slotByRole.bubble_you_2?.id]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

@@ -3,27 +3,46 @@ import type { BubbleAsset, BubbleSlot, InvalidPixel, Markers, Range } from "@/li
 const transparent = [0, 0, 0, 0] as const;
 const markerBlack = [0, 0, 0, 255] as const;
 
-export async function loadNinePatchFile(file: File, slot: BubbleSlot): Promise<BubbleAsset> {
-  const dataUrl = await readFileAsDataUrl(file);
-  const source = await loadImage(dataUrl);
-  return parseImage(source, file.name, slot, dataUrl);
+export type NinePatchImageSource = HTMLImageElement | ImageBitmap;
+
+// 나인패치 테두리 네 변을 1px 스트립으로 읽은 결과. ImageData가 그대로 들어맞는다.
+export type BorderPixelStrip = { readonly data: Uint8ClampedArray };
+export type BorderPixels = {
+  readonly top: BorderPixelStrip;
+  readonly bottom: BorderPixelStrip;
+  readonly left: BorderPixelStrip;
+  readonly right: BorderPixelStrip;
+};
+
+// 이미 바이트를 들고 있을 때 쓰는 경로. data URL을 거치면 base64 인코딩 비용과
+// 33% 큰 문자열을 메인 스레드에서 만들게 되는데, createImageBitmap은 그대로 디코딩한다.
+// JS가 받아 온 blob이라 원본이 외부 도메인이어도 캔버스가 오염되지 않는다(getImageData 가능).
+export async function loadNinePatchBlob(blob: Blob, name: string, slot: BubbleSlot): Promise<BubbleAsset> {
+  const bitmap = await createImageBitmap(blob);
+  try {
+    return parseImage(bitmap, name, slot);
+  } finally {
+    bitmap.close();
+  }
 }
 
 export async function loadNinePatchDataUrl(dataUrl: string, name: string, slot: BubbleSlot): Promise<BubbleAsset> {
   const source = await loadImage(dataUrl);
-  return parseImage(source, name, slot, dataUrl);
+  return parseImage(source, name, slot);
 }
 
-export function parseImage(source: HTMLImageElement, name: string, slot: BubbleSlot, dataUrl = source.src): BubbleAsset {
+export function parseImage(source: NinePatchImageSource, name: string, slot: BubbleSlot): BubbleAsset {
   const fullCanvas = document.createElement("canvas");
-  fullCanvas.width = source.naturalWidth;
-  fullCanvas.height = source.naturalHeight;
+  fullCanvas.width = "naturalWidth" in source ? source.naturalWidth : source.width;
+  fullCanvas.height = "naturalHeight" in source ? source.naturalHeight : source.height;
   const ctx = context(fullCanvas);
   ctx.drawImage(source, 0, 0);
 
-  const imageData = ctx.getImageData(0, 0, fullCanvas.width, fullCanvas.height);
-  const invalidPixels = collectInvalidBorderPixels(imageData);
-  const markers = parseMarkers(imageData);
+  // 마커와 유효성 검사는 테두리 1px만 본다. 이미지 전체를 getImageData로 가져오면
+  // 픽셀 수만큼 복사 비용을 내므로 네 변만 따로 읽는다.
+  const border = readBorderPixels(ctx, fullCanvas.width, fullCanvas.height);
+  const invalidPixels = collectInvalidBorderPixels(border, fullCanvas.width, fullCanvas.height);
+  const markers = parseMarkers(border, fullCanvas.width, fullCanvas.height);
 
   const innerCanvas = document.createElement("canvas");
   innerCanvas.width = Math.max(1, fullCanvas.width - 2);
@@ -43,8 +62,6 @@ export function parseImage(source: HTMLImageElement, name: string, slot: BubbleS
   return {
     slot,
     name,
-    dataUrl,
-    source,
     fullCanvas,
     innerCanvas,
     width: fullCanvas.width,
@@ -204,15 +221,13 @@ export function downloadNinePatch(asset: BubbleAsset, fileName: string) {
   }, "image/png");
 }
 
-function parseMarkers(imageData: ImageData): Markers {
-  const width = imageData.width;
-  const height = imageData.height;
+export function parseMarkers(border: BorderPixels, width: number, height: number): Markers {
   const defaults = defaultMarkers(width, height);
   return {
-    top: firstRange(width, (x) => isMarker(pixel(imageData, x, 0))) ?? defaults.top,
-    left: firstRange(height, (y) => isMarker(pixel(imageData, 0, y))) ?? defaults.left,
-    right: firstRange(height, (y) => isMarker(pixel(imageData, width - 1, y))) ?? defaults.right,
-    bottom: firstRange(width, (x) => isMarker(pixel(imageData, x, height - 1))) ?? defaults.bottom,
+    top: firstRange(width, (x) => isMarker(stripPixel(border.top, x))) ?? defaults.top,
+    left: firstRange(height, (y) => isMarker(stripPixel(border.left, y))) ?? defaults.left,
+    right: firstRange(height, (y) => isMarker(stripPixel(border.right, y))) ?? defaults.right,
+    bottom: firstRange(width, (x) => isMarker(stripPixel(border.bottom, x))) ?? defaults.bottom,
   };
 }
 
@@ -229,32 +244,36 @@ function firstRange(length: number, predicate: (index: number) => boolean): Rang
   return null;
 }
 
-function collectInvalidBorderPixels(imageData: ImageData): InvalidPixel[] {
+export function collectInvalidBorderPixels(border: BorderPixels, width: number, height: number): InvalidPixel[] {
   const invalid: InvalidPixel[] = [];
-  const { width, height } = imageData;
-  const check = (x: number, y: number) => {
-    const rgba = pixel(imageData, x, y);
+  const check = (strip: BorderPixelStrip, index: number, x: number, y: number) => {
+    const rgba = stripPixel(strip, index);
     if (!isMarker(rgba) && !isTransparent(rgba)) invalid.push({ x, y, rgba });
   };
   for (let x = 0; x < width; x += 1) {
-    check(x, 0);
-    check(x, height - 1);
+    check(border.top, x, x, 0);
+    check(border.bottom, x, x, height - 1);
   }
   for (let y = 1; y < height - 1; y += 1) {
-    check(0, y);
-    check(width - 1, y);
+    check(border.left, y, 0, y);
+    check(border.right, y, width - 1, y);
   }
   return invalid;
 }
 
-function pixel(imageData: ImageData, x: number, y: number): [number, number, number, number] {
-  const offset = (y * imageData.width + x) * 4;
-  return [
-    imageData.data[offset],
-    imageData.data[offset + 1],
-    imageData.data[offset + 2],
-    imageData.data[offset + 3],
-  ];
+// 한 줄짜리 스트립이므로 인덱스가 곧 픽셀 순서다(가로 변은 x, 세로 변은 y).
+function stripPixel(strip: BorderPixelStrip, index: number): [number, number, number, number] {
+  const offset = index * 4;
+  return [strip.data[offset], strip.data[offset + 1], strip.data[offset + 2], strip.data[offset + 3]];
+}
+
+function readBorderPixels(ctx: CanvasRenderingContext2D, width: number, height: number): BorderPixels {
+  return {
+    top: ctx.getImageData(0, 0, width, 1),
+    bottom: ctx.getImageData(0, height - 1, width, 1),
+    left: ctx.getImageData(0, 0, 1, height),
+    right: ctx.getImageData(width - 1, 0, 1, height),
+  };
 }
 
 function isMarker(rgba: readonly number[]) {
@@ -285,15 +304,6 @@ function context(canvas: HTMLCanvasElement) {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("Canvas 2D context is not available.");
   return ctx;
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

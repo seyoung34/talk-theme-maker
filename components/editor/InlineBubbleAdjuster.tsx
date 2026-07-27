@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { dataUrlForThemeFile } from "@/components/preview/previewResourceUtils";
-import { loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
+import { blobForThemeFile, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
+import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
+import { loadCachedBubbleAsset } from "@/lib/theme/preview/bubbleAssetCache";
 import { defaultInsets as bubbleDefaultInsets, defaultStretch as bubbleDefaultStretch } from "@/lib/theme/preview/bubbleCanvas";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { BubbleAsset, BubbleSlot, Insets, Markers, Range, StretchPoint, ThemePlatform } from "@/lib/theme/types";
@@ -50,8 +51,11 @@ export default function InlineBubbleAdjuster({
       setLoading(true);
       setError(null);
       try {
-        const dataUrl = await dataUrlForThemeFile(file);
-        const nextAsset = await loadNinePatchDataUrl(dataUrl, file.name, slot);
+        const nextAsset = await loadCachedBubbleAsset(themeFileCacheKey(file), async () => {
+          const blob = await blobForThemeFile(file);
+          if (!blob) throw new Error(`bubble source missing: ${file.path}`);
+          return loadNinePatchBlob(blob, file.name, slot);
+        });
         if (cancelled) return;
         setAsset(nextAsset);
       } catch {

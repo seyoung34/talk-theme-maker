@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
+import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
+import { loadCachedBubbleAsset } from "@/lib/theme/preview/bubbleAssetCache";
 import { drawBubble, getAutoBubbleSize } from "@/lib/theme/preview/bubbleCanvas";
 import type { BubbleEditState } from "@/lib/theme/project/state";
 import type { BubbleAsset, BubbleSlot, ThemePlatform } from "@/lib/theme/types";
@@ -36,10 +37,15 @@ export default function BubbleCanvasPreview({
     let active = true;
     (async () => {
       try {
-        const dataUrl = await fetchAsDataUrl(imageUrl);
         // 편집기와 동일한 소스 캔버스(innerCanvas/fullCanvas)를 고르도록 원본 URL의 .9.png 여부를 이름에 보존한다.
-        const isNinePatch = imageUrl.split("?")[0].toLowerCase().endsWith(".9.png");
-        const loaded = await loadNinePatchDataUrl(dataUrl, `${slot}-bubble${isNinePatch ? ".9" : ""}.png`, slot);
+        const sourcePath = imageUrl.split("?")[0];
+        const isNinePatch = sourcePath.toLowerCase().endsWith(".9.png");
+        // 서명 URL은 재발급될 때마다 쿼리가 바뀌므로 경로만 캐시 키로 쓴다.
+        const loaded = await loadCachedBubbleAsset(`${sourcePath}:${slot}`, async () => {
+          const response = await fetch(imageUrl);
+          if (!response.ok) throw new Error(`bubble image fetch failed: ${sourcePath}`);
+          return loadNinePatchBlob(await response.blob(), `${slot}-bubble${isNinePatch ? ".9" : ""}.png`, slot);
+        });
         if (active) setAsset(loaded);
       } catch {
         if (active) setAsset(null);
@@ -65,15 +71,4 @@ export default function BubbleCanvasPreview({
   }, [asset, platform, edit, text, textColor, fillColor, scale]);
 
   return <canvas ref={canvasRef} className={className} />;
-}
-
-async function fetchAsDataUrl(url: string): Promise<string> {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
 }

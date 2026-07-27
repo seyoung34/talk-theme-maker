@@ -155,6 +155,8 @@ async function readInputFiles(bundle: LocalBundle, source: BuildSource, assetsRo
   const manifest = bundle.manifest ?? [];
   const files: AndroidBuildInputFile[] = [];
   const paths = new Set<string>();
+  // 하나의 입력 파일을 여러 경로가 공유할 수 있다(스케일 타깃). 소스당 한 번만 읽는다.
+  const bytesBySource = new Map<string, Uint8Array>();
 
   for (const item of manifest) {
     const normalizedPath = normalizeExportPath(item.path);
@@ -162,12 +164,18 @@ async function readInputFiles(bundle: LocalBundle, source: BuildSource, assetsRo
     paths.add(normalizedPath);
 
     if ("serverAsset" in item) {
-      files.push({ path: normalizedPath, bytes: new Uint8Array(await readFile(resolveTemplateAssetPath(assetsRoot, item.serverAsset))) });
+      const cacheKey = `asset:${item.serverAsset}`;
+      const bytes = bytesBySource.get(cacheKey) ?? new Uint8Array(await readFile(resolveTemplateAssetPath(assetsRoot, item.serverAsset)));
+      bytesBySource.set(cacheKey, bytes);
+      files.push({ path: normalizedPath, bytes });
       continue;
     }
 
+    const cacheKey = `field:${item.field}`;
     const bytes =
-      source.mode === "gcs" ? await downloadBytes(resolveGcsInputFile(source, item.field)) : new Uint8Array(await readFile(resolveInputFilePath(source.inputDir, item.field)));
+      bytesBySource.get(cacheKey) ??
+      (source.mode === "gcs" ? await downloadBytes(resolveGcsInputFile(source, item.field)) : new Uint8Array(await readFile(resolveInputFilePath(source.inputDir, item.field))));
+    bytesBySource.set(cacheKey, bytes);
     files.push({ path: normalizedPath, bytes });
   }
 

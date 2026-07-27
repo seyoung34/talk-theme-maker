@@ -1,3 +1,5 @@
+import { mapWithConcurrency } from "@/lib/shared/concurrency";
+import { exportSlotConcurrency } from "@/lib/theme/exportRequest";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -87,13 +89,20 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   const imageMap: IosImageMap = {};
   const sourceScaleBySlotId: Record<string, number> = {};
 
-  for (const slot of iosSlots) {
-    if (slot.kind === "color" || !slot.path) continue;
+  // 슬롯 해석과 배율 리사이즈는 서로 독립이다. 순차 처리는 fetch 왕복과 디코딩이
+  // 슬롯 수만큼 누적되므로 동시 실행 수만 제한해 병렬로 처리한다.
+  const imageSlots = iosSlots.filter((slot): slot is ThemeAssetSlot & { path: string } => slot.kind !== "color" && Boolean(slot.path));
+  const resolved = await mapWithConcurrency(imageSlots, exportSlotConcurrency, async (slot) => {
     const source = await resolveIosSlotSource(slot, uploads, selections, templateId, template, iosSlots);
-    if (!source) continue;
-    sourceScaleBySlotId[slot.id] = source.sourceScale;
-    files.push(...(await createIosImageExportFiles(slot, source)));
-    imageMap[slot.role] = slot.fileName ?? slot.path.split("/").at(-1) ?? "";
+    if (!source) return null;
+    return { slot, source, exportFiles: await createIosImageExportFiles(slot, source) };
+  });
+
+  for (const entry of resolved) {
+    if (!entry) continue;
+    sourceScaleBySlotId[entry.slot.id] = entry.source.sourceScale;
+    files.push(...entry.exportFiles);
+    imageMap[entry.slot.role] = entry.slot.fileName ?? entry.slot.path.split("/").at(-1) ?? "";
   }
 
   files.push(

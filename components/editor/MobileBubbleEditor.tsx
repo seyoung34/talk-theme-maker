@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { Check, FlipHorizontal2, Info, LoaderCircle, RotateCcw } from "lucide-react";
-import { loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
+import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { defaultInsets, defaultStretch } from "@/lib/theme/preview/bubbleCanvas";
 import { defaultImageEditState, renderEditedImageFile, type ImageEditState, type ImageEditTarget } from "@/lib/theme/imageEdit";
 import { isMobileBubbleEditDirty, type MobileBubbleEditDraft } from "@/lib/theme/mobileBubbleEdit";
@@ -97,8 +97,7 @@ export function MobileBubbleEditor({
       setLoading(true);
       setError(null);
       try {
-        const dataUrl = await fileToDataUrl(preparedFile);
-        const nextAsset = await loadNinePatchDataUrl(dataUrl, preparedFile.name, bubbleSlot);
+        const nextAsset = await loadNinePatchBlob(preparedFile, preparedFile.name, bubbleSlot);
         if (!cancelled) setAsset(nextAsset);
       } catch {
         if (!cancelled) setError("말풍선 이미지를 준비하지 못했습니다.");
@@ -341,4 +340,3 @@ function getArtworkMetrics(asset: BubbleAsset, platform: ThemePlatform): Artwork
     offsetY: hasMarkerBorder ? 1 : 0,
   };
 }
-function fileToDataUrl(file: File) { return new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("이미지를 읽지 못했습니다.")); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); }); }

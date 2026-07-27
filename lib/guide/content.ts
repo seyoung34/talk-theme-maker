@@ -67,7 +67,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       {
         title: "마음에 드는 템플릿 고르기",
         caption: "연인·캐릭터·반려동물처럼 원하는 분위기를 골라요. 처음부터 만들지 않아도 돼요.",
-        media: { type: "image", src: "/guide/android/01-template-gallery.png" },
+        media: { type: "image", src: "/guide/android/01-template-gallery.webp" },
         annotations: [
           { kind: "highlight", x: 0.175, y: 0.4, w: 0.205, h: 0.52, label: "원하는 템플릿을 눌러 시작" },
         ],
@@ -75,7 +75,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       {
         title: "배경을 내 사진으로 바꾸기",
         caption: "‘추천 에셋’에서 배경을 고르거나 내 사진을 올리면 오른쪽 미리보기에 바로 보여요.",
-        media: { type: "image", src: "/guide/android/02-edit-background.png" },
+        media: { type: "image", src: "/guide/android/02-edit-background.webp" },
         annotations: [
           { kind: "highlight", x: 0.355, y: 0.135, w: 0.09, h: 0.055, label: "추천 에셋에서 고르기" },
           { kind: "pin", x: 0.9, y: 0.32, label: "미리보기에 바로 반영" },
@@ -84,7 +84,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       {
         title: "말풍선까지 내 취향으로",
         caption: "내 말풍선·상대 말풍선을 바꿔요. 미리보기로 실제 채팅 화면을 보며 조정할 수 있어요.",
-        media: { type: "image", src: "/guide/android/03-edit-bubble.png" },
+        media: { type: "image", src: "/guide/android/03-edit-bubble.webp" },
         annotations: [
           { kind: "highlight", x: 0.355, y: 0.14, w: 0.09, h: 0.055, label: "말풍선 이미지 고르기" },
           { kind: "pin", x: 0.9, y: 0.27, label: "채팅방 미리보기" },
@@ -93,7 +93,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       {
         title: "APK 파일로 내려받기",
         caption: "‘내보내기’를 눌러 이름과 버전을 확인하고 Android APK를 만들어요.",
-        media: { type: "image", src: "/guide/android/04-export.png" },
+        media: { type: "image", src: "/guide/android/04-export.webp" },
         annotations: [
           { kind: "highlight", x: 0.5, y: 0.49, w: 0.19, h: 0.1, label: "Android APK 선택" },
           { kind: "highlight", x: 0.588, y: 0.735, w: 0.088, h: 0.06, label: "APK 내보내기" },

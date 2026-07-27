@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { createTtlCache } from "@/lib/shared/ttlCache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAssetPlatformVariant, type AdminAssetCandidate, type AdminAssetKind, type AdminAssetTarget } from "@/lib/theme/adminAssets";
 
@@ -7,6 +8,7 @@ const bucketName = "theme-assets";
 const allowedPlatforms = new Set(["android", "ios"]);
 const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode"]);
 const maxSourceRows = 200;
+const recommendedPageCacheTtlSeconds = 30;
 
 type RecommendedResponseItem = AdminAssetCandidate & {
   readonly target: AdminAssetTarget;
@@ -26,6 +28,13 @@ type Cursor = {
   readonly id: string;
 };
 
+type RecommendedPagePayload = {
+  readonly items: readonly RecommendedResponseItem[];
+  readonly nextCursor?: string;
+};
+
+const recommendedPageCache = createTtlCache<RecommendedPagePayload>({ ttlMs: recommendedPageCacheTtlSeconds * 1000, maxEntries: 128 });
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
@@ -34,11 +43,18 @@ export async function GET(request: NextRequest) {
     const assetKind = request.nextUrl.searchParams.get("assetKind");
     const slotRole = request.nextUrl.searchParams.get("slotRole") || undefined;
     const limit = Math.min(50, Math.max(1, Number(request.nextUrl.searchParams.get("limit")) || 24));
-    const cursor = decodeCursor(request.nextUrl.searchParams.get("cursor"));
+    const cursorParam = request.nextUrl.searchParams.get("cursor");
+    const cursor = decodeCursor(cursorParam);
 
     if (!isAllowedPlatform(platform) || !isAllowedAssetKind(assetKind)) {
       return NextResponse.json({ error: "Valid platform and assetKind are required." }, { status: 400 });
     }
+
+    // 편집기에서 슬롯을 고를 때마다 호출되는 경로다. 응답은 사용자와 무관하게
+    // enabled 에셋만 담으므로 짧게 재사용해 슬롯 클릭마다 200행 조인을 다시 읽지 않게 한다.
+    const cacheKey = [platform, assetKind, slotRole ?? "", limit, cursor ? cursorParam : ""].join("|");
+    const cached = recommendedPageCache.get(cacheKey);
+    if (cached) return jsonRecommendedPage(cached);
 
     const admin = createAdminClient();
     const { data, error } = await admin
@@ -92,15 +108,21 @@ export async function GET(request: NextRequest) {
       matchRank: item.matchRank,
     }));
     const last = page.at(-1);
+    const payload: RecommendedPagePayload = { items, nextCursor: hasMore && last ? encodeCursor(last) : undefined };
 
-    return NextResponse.json({
-      items,
-      nextCursor: hasMore && last ? encodeCursor(last) : undefined,
-    });
+    recommendedPageCache.set(cacheKey, payload);
+    return jsonRecommendedPage(payload);
   } catch (error) {
     console.error("Recommended asset listing failed", JSON.stringify(serializeError(error)));
     return NextResponse.json({ error: "Failed to load recommended assets." }, { status: 500 });
   }
+}
+
+// 서명 URL TTL(10분)보다 훨씬 짧게 잡아, 캐시된 응답의 URL이 만료된 채 나가지 않게 한다.
+function jsonRecommendedPage(payload: RecommendedPagePayload) {
+  return NextResponse.json(payload, {
+    headers: { "Cache-Control": `private, max-age=${recommendedPageCacheTtlSeconds}` },
+  });
 }
 
 function matchingTargets(asset: ReturnType<typeof mapCanonicalAdminAssetRow>, platform: "android" | "ios", slotRole: string | undefined, assetKind: AdminAssetKind): readonly RankedAsset[] {

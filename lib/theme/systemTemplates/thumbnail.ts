@@ -1,5 +1,5 @@
 import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
-import { loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
+import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { drawBubble, getAutoBubbleSize } from "@/lib/theme/preview/bubbleCanvas";
 import type { BubbleEditState } from "@/lib/theme/project/state";
 import type { SystemTemplateSaveInput } from "@/lib/theme/systemTemplates/types";
@@ -140,18 +140,9 @@ export async function generateSystemTemplateThumbnail(
 async function loadBubbleAsset(source: string, fileName: string, slot: BubbleSlot) {
   const response = await fetch(source);
   if (!response.ok) throw new Error("Thumbnail bubble image load failed.");
-  const dataUrl = await blobToDataUrl(await response.blob());
   const isNinePatch = fileName.toLowerCase().endsWith(".9.png");
-  return await loadNinePatchDataUrl(dataUrl, `${slot}-bubble${isNinePatch ? ".9" : ""}.png`, slot);
-}
-
-function blobToDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+  // blob을 그대로 디코딩한다. JS가 받아 온 바이트라 서명 URL이어도 캔버스가 오염되지 않는다.
+  return await loadNinePatchBlob(await response.blob(), `${slot}-bubble${isNinePatch ? ".9" : ""}.png`, slot);
 }
 
 function loadImage(src: string) {

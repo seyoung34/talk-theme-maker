@@ -1,8 +1,10 @@
-import { exportNinePatch, loadNinePatchDataUrl } from "@/lib/theme/android/ninepatch";
+import { mapWithConcurrency } from "@/lib/shared/concurrency";
+import { exportNinePatch, loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
+import { exportSlotConcurrency } from "@/lib/theme/exportRequest";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
-import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
+import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 
 type AndroidExportOptions = {
@@ -36,14 +38,20 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
   const androidSlots = slots.filter((slot) => slot.platform === "android");
   const files: AndroidExportFile[] = [];
 
-  for (const slot of androidSlots) {
-    if (slot.kind === "color" || !slot.path) continue;
-    const source = await resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots);
-    if (!source) continue;
+  // 슬롯 해석은 서로 독립이고 대부분 fetch/디코딩 대기 시간이다. 순차로 돌리면
+  // 45개 남짓한 이미지 슬롯의 지연이 그대로 누적되므로 동시 실행 수만 제한해 병렬 처리한다.
+  const imageSlots = androidSlots.filter((slot) => slot.kind !== "color" && Boolean(slot.path));
+  const sources = await mapWithConcurrency(imageSlots, exportSlotConcurrency, (slot) =>
+    resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots),
+  );
+
+  imageSlots.forEach((slot, index) => {
+    const source = sources[index];
+    if (!source) return;
     for (const path of getAndroidSlotExportPaths(slot)) {
       files.push("serverAsset" in source ? { path, serverAsset: source.serverAsset } : { path, blob: source.blob });
     }
-  }
+  });
 
   files.push(
     textBlobFile("src/main/theme/values/colors.xml", buildAndroidColorsXml(template, androidSlots, colors, selections, templateId)),
@@ -95,9 +103,10 @@ async function resolveAndroidSlotSource(
 
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   if (slot.kind === "ninepatch") {
-    const sourceDataUrl = selectedUpload ? await readThemeProjectFileAsDataUrl(selectedUpload.file) : await assetUrlToDataUrl(getResolvedAssetUrl(slot, uploads, selections, templateId, template));
-    if (!sourceDataUrl) return null;
-    const asset = await loadNinePatchDataUrl(sourceDataUrl, slot.fileName ?? `${slot.id}.9.png`, slot.role.includes("_me_") ? "me" : "you");
+    // 바이트를 data URL로 바꿔 돌리면 base64 인코딩 비용만 더한다. blob 그대로 디코딩한다.
+    const sourceBlob = selectedUpload?.file ?? (await assetUrlToBlob(getResolvedAssetUrl(slot, uploads, selections, templateId, template)));
+    if (!sourceBlob) return null;
+    const asset = await loadNinePatchBlob(sourceBlob, slot.fileName ?? `${slot.id}.9.png`, slot.role.includes("_me_") ? "me" : "you");
     const markers = bubbleEdit?.geometry
       ? bubbleGeometryToAndroidMarkers(bubbleEdit.geometry, asset.innerCanvas.width, asset.innerCanvas.height)
       : bubbleEdit?.markers;
@@ -330,19 +339,9 @@ async function fetchAssetBlob(assetUrl: string) {
   return response.blob();
 }
 
-async function assetUrlToDataUrl(assetUrl?: string) {
+async function assetUrlToBlob(assetUrl?: string) {
   if (!assetUrl) return null;
-  const blob = await fetchAssetBlob(assetUrl);
-  return readBlobAsDataUrl(blob);
-}
-
-function readBlobAsDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+  return fetchAssetBlob(assetUrl);
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement, type: string) {
@@ -394,9 +393,4 @@ function textBlobFile(path: string, text: string): AndroidExportFile {
     path,
     blob: new Blob([text], { type: "text/plain;charset=utf-8" }),
   };
-}
-
-function readThemeProjectFileAsDataUrl(file: ThemeProjectFile["file"]) {
-  if (!file) return Promise.resolve("");
-  return readBlobAsDataUrl(file);
 }

@@ -57,17 +57,20 @@ async function stripNinePatchUrl(dataUrlOrUrl: string) {
   return canvas.toDataURL("image/png");
 }
 
-export async function dataUrlForThemeFile(file: ThemeProjectFile) {
-  if (file.file) return readFileAsDataUrl(file.file);
-  if (!file.sourceUrl) return "";
+// 나인패치 파싱은 바이트만 있으면 된다. data URL로 바꾸면 base64 인코딩 비용과
+// 33% 큰 문자열이 따라붙는데, 여기서 받은 blob은 그대로 createImageBitmap에 넘길 수 있다.
+export async function blobForThemeFile(file: ThemeProjectFile): Promise<Blob | null> {
+  if (file.file) return file.file;
+  if (!file.sourceUrl) return null;
   const response = await fetch(file.sourceUrl);
-  const blob = await response.blob();
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+  if (!response.ok) return null;
+  return response.blob();
+}
+
+// 파싱 결과 캐시용 키. 서명 URL은 재발급될 때마다 쿼리가 바뀌므로 경로만 본다.
+export function themeFileCacheKey(file: ThemeProjectFile) {
+  const remotePath = file.sourceUrl ? file.sourceUrl.split("?")[0] : "";
+  return `${file.path}:${file.size}:${file.file?.lastModified ?? remotePath}`;
 }
 
 export function readFileAsDataUrl(file: File): Promise<string> {

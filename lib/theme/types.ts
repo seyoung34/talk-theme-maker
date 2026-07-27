@@ -165,8 +165,6 @@ export type InvalidPixel = {
 export type BubbleAsset = {
   slot: BubbleSlot;
   name: string;
-  dataUrl: string;
-  source: HTMLImageElement;
   fullCanvas: HTMLCanvasElement;
   innerCanvas: HTMLCanvasElement;
   width: number;
