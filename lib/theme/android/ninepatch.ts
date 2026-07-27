@@ -19,8 +19,9 @@ export type BorderPixels = {
 // JS가 받아 온 blob이라 원본이 외부 도메인이어도 캔버스가 오염되지 않는다(getImageData 가능).
 export async function loadNinePatchBlob(blob: Blob, name: string, slot: BubbleSlot): Promise<BubbleAsset> {
   // iOS 기본 말풍선은 SVG다. Chrome의 createImageBitmap은 SVG Blob을 안정적으로
-  // 디코딩하지 못하므로, SVG는 <img>를 거쳐 캔버스에 복사한다. parseImage가 캔버스
-  // 사본을 만들기 때문에 object URL은 곧바로 해제해도 된다.
+  // 디코딩하지 못하므로, SVG는 <img>를 거쳐 캔버스에 복사한다. 이때 blob: URL을
+  // 쓰고 바로 해제하면 새로고침 직후 병렬 미리보기 로딩에서 브라우저가 아직 원본을
+  // 읽는 중일 수 있다. data URL은 해당 수명 경합이 없어 복원된 작업에서도 안전하다.
   if (isSvgImage(blob, name)) {
     const source = await loadBlobImage(blob);
     return parseImage(source, name, slot);
@@ -324,12 +325,16 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 async function loadBlobImage(blob: Blob): Promise<HTMLImageElement> {
-  const url = URL.createObjectURL(blob);
-  try {
-    return await loadImage(url);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  return loadImage(await blobToDataUrl(blob));
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("Image source could not be read."));
+    reader.readAsDataURL(blob);
+  });
 }
 
 function isSvgImage(blob: Blob, name: string) {

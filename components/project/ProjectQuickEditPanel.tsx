@@ -3,7 +3,7 @@
 import { useEffect, useId, useState, type DragEvent, type MutableRefObject } from "react";
 import { Edit3, ImageOff, Info, Link2, RefreshCw, X } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
-import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
+import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
@@ -14,7 +14,7 @@ import type { ImageColorPalette } from "@/lib/theme/colorPalette";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import { normalizeThemeColor, readableThemeForeground, setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
 
 export function ProjectQuickEditPanel({
@@ -32,6 +32,7 @@ export function ProjectQuickEditPanel({
   platform,
   selectedBubbleSlot,
   pairedBubbleSlot,
+  geometry,
   markers,
   insets,
   stretch,
@@ -52,15 +53,14 @@ export function ProjectQuickEditPanel({
   onSelectCandidate,
   onSelectAdminAsset,
   onLoadMoreAdminAssets,
+  onGeometryChange,
   onMarkersChange,
   onInsetsChange,
   onStretchChange,
-  canAdjustInline,
   candidateOpen,
   onToggleCandidates,
   onOpenBubbleBuilder,
   onCopyBubbleToPair,
-  onBubbleFlip,
 }: {
   slot?: ThemeAssetSlot;
   slots: ThemeAssetSlot[];
@@ -76,6 +76,7 @@ export function ProjectQuickEditPanel({
   platform: ThemePlatform;
   selectedBubbleSlot: BubbleSlot | null;
   pairedBubbleSlot?: ThemeAssetSlot;
+  geometry?: BubbleGeometry;
   markers?: Markers;
   insets?: Insets;
   stretch?: StretchPoint;
@@ -96,15 +97,14 @@ export function ProjectQuickEditPanel({
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
   onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
   onLoadMoreAdminAssets: () => void;
+  onGeometryChange: (geometry: BubbleGeometry) => void;
   onMarkersChange: (markers: Markers) => void;
   onInsetsChange: (insets: Insets) => void;
   onStretchChange: (stretch: StretchPoint) => void;
-  canAdjustInline: boolean;
   candidateOpen: boolean;
   onToggleCandidates: () => void;
   onOpenBubbleBuilder: () => void;
   onCopyBubbleToPair: (slot: ThemeAssetSlot) => void;
-  onBubbleFlip: (slot: ThemeAssetSlot, width: number) => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
   const [pasteFeedback, setPasteFeedback] = useState(false);
@@ -292,18 +292,6 @@ export function ProjectQuickEditPanel({
                   {isPreparingEditSource && !slot.editableInBubbleEditor ? <RefreshCw className="animate-spin" size={16} aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
                   {slot.editableInBubbleEditor ? "나만의 말풍선 만들기" : isPreparingEditSource ? "편집 준비 중" : "이미지 편집"}
                 </button>
-                {slot.editableInBubbleEditor ? (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-lg border border-[#d1d5db] bg-white px-4 py-3 text-sm font-semibold text-[#374151] transition enabled:hover:border-[#bfdbfe] enabled:hover:bg-[#eff6ff] enabled:hover:text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45"
-                    disabled={!canOpenImageEditor || isPreparingEditSource}
-                    onClick={() => void openImageEditor()}
-                    title="현재 슬롯의 이미지에 좌우 반전 등 편집을 적용합니다."
-                  >
-                    {isPreparingEditSource ? <RefreshCw className="animate-spin" size={16} aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
-                    {isPreparingEditSource ? "편집 준비 중" : "현재 이미지 편집"}
-                  </button>
-                ) : null}
                 {slot.editableInBubbleEditor && pairedBubbleSlot ? (
                   <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-sm font-semibold text-[#1d4ed8] transition hover:bg-[#dbeafe]" onClick={() => onCopyBubbleToPair(slot)}>
                     <Link2 size={16} aria-hidden="true" />{pairedBubbleSlot.label}에 같은 말풍선 적용
@@ -313,27 +301,36 @@ export function ProjectQuickEditPanel({
               {editSourceError ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold leading-5 text-[#be123c]" role="alert">{editSourceError}</p> : null}
             </div>
 
-            {canAdjustInline && selectedBubbleSlot ? (
-              <InlineBubbleAdjuster
-                file={file}
-                slot={selectedBubbleSlot}
+            {slot.editableInBubbleEditor && selectedBubbleSlot ? (
+              <MobileBubbleEditor
+                slot={slot}
+                bubbleSlot={selectedBubbleSlot}
                 platform={platform}
+                sourceFile={directEditableSourceFile}
+                sourceUrl={editableSourceUrl}
+                initialImageState={selectedUploadEntry?.imageEdit?.state}
+                target={imageEditTarget}
+                geometry={geometry}
                 markers={markers}
                 insets={insets}
                 stretch={stretch}
-                onMarkersChange={onMarkersChange}
-                onInsetsChange={onInsetsChange}
-                onStretchChange={onStretchChange}
+                onApply={({ editedFile, sourceFile, imageState, target, geometry: nextGeometry, markers: nextMarkers, insets: nextInsets, stretch: nextStretch }) => {
+                  if (editedFile) onEditedUpload(slot, editedFile, imageState, sourceFile, target);
+                  onMarkersChange(nextMarkers);
+                  onInsetsChange(nextInsets);
+                  onStretchChange(nextStretch);
+                  onGeometryChange(nextGeometry);
+                }}
               />
             ) : null}
 
-            <ImageEditDialog
+            {!slot.editableInBubbleEditor ? <ImageEditDialog
               open={editDialogOpen}
               sourceFile={editableSourceFile}
               slotLabel={slot.label}
               initialState={selectedUploadEntry?.imageEdit?.state}
               target={imageEditTarget}
-              preserveNinePatchBorder={slot.editableInBubbleEditor && platform === "android"}
+              preserveNinePatchBorder={platform === "android"}
               onOpenChange={(open) => {
                 setEditDialogOpen(open);
                 if (!open) {
@@ -341,14 +338,11 @@ export function ProjectQuickEditPanel({
                   setEditSourceError(null);
                 }
               }}
-              onApply={(editedFile, editState, outputSize) => {
+              onApply={(editedFile, editState) => {
                 if (!editableSourceFile) return;
-                if (slot.editableInBubbleEditor && outputSize && (selectedUploadEntry?.imageEdit?.state.flipX ?? false) !== editState.flipX) {
-                  onBubbleFlip(slot, outputSize.width);
-                }
                 onEditedUpload(slot, editedFile, editState, editableSourceFile, imageEditTarget);
               }}
-            />
+            /> : null}
           </>
         )}
       </section>

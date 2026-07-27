@@ -58,13 +58,11 @@ import {
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getBubblePairRole, getImageColorFallbackRole, getSlotCandidates } from "@/lib/theme/project/state";
-import { flipBubbleInsetsHorizontally, flipBubbleMarkersHorizontally, flipBubbleStretchHorizontally } from "@/lib/theme/bubbleEditTransforms";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 import type { EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
 import { getBubbleDecorationLayers, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder";
 import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDesigns, BubbleFamilyDesignSpec, GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
-import { flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import {
@@ -77,6 +75,11 @@ import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, Them
 
 type ProjectImporterClientProps = {
   mode?: "user" | "admin";
+};
+
+type PendingBubbleCopy = {
+  sourceSlot: ThemeAssetSlot;
+  targetSlot: ThemeAssetSlot;
 };
 
 export default function ProjectImporterClient({ mode = "user" }: ProjectImporterClientProps) {
@@ -114,6 +117,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [mobileSheetLiveHeight, setMobileSheetLiveHeight] = useState<number | null>(null);
   const [mobileBubbleDraftDirty, setMobileBubbleDraftDirty] = useState(false);
   const [pendingMobileSlot, setPendingMobileSlot] = useState<ThemeAssetSlot | null>(null);
+  const [pendingBubbleCopy, setPendingBubbleCopy] = useState<PendingBubbleCopy | null>(null);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
   const [systemTemplateBundleId, setSystemTemplateBundleId] = useState<string | null>(null);
@@ -400,7 +404,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const selectedBubblePairSlot = selectedSlot ? slots.find((slot) => slot.role === getBubblePairRole(selectedSlot.role)) : undefined;
   const selectedBubbleVariant = selectedSlot ? bubbleVariantFromRole(selectedSlot.role) : null;
   const selectedBubbleDesign = selectedSlot && selectedBubbleSlot ? getBubbleDesign(bubbleDesigns, selectedSlot.role, selectedBubbleSlot) : undefined;
-  const canAdjustInline = Boolean(selectedSlot?.editableInBubbleEditor && selectedFile && selectedBubbleSlot);
   const completion = getCompletion(slots, uploads, colors, candidateSelections, templateId, activeTemplate);
   const {
     adminAssetCursor,
@@ -800,17 +803,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     trackAnalyticsEvent("candidate_selected", { slot_role: slot.role, section: slot.section, asset_source: assetSource });
   };
 
-  const copyBubbleToPair = async (sourceSlot: ThemeAssetSlot) => {
-    const targetSlot = slots.find((slot) => slot.role === getBubblePairRole(sourceSlot.role));
-    if (!targetSlot) return;
-    const targetHasOverrides = Boolean(
-      (uploads[targetSlot.id]?.length ?? 0) ||
-      bubbleGeometry[targetSlot.id] ||
-      bubbleMarkers[targetSlot.id] ||
-      bubbleInsets[targetSlot.id] ||
-      bubbleStretch[targetSlot.id],
-    );
-    if (targetHasOverrides && !window.confirm(`${targetSlot.label}에 설정한 후보와 말풍선 편집값을 덮어쓸까요?`)) return;
+  const copyBubbleToPair = async (sourceSlot: ThemeAssetSlot, targetSlot: ThemeAssetSlot) => {
 
     const sourceUpload = getSelectedUpload(sourceSlot, uploads, candidateSelections);
     const sourceCandidate = getSelectedCandidate(sourceSlot, candidateSelections, templateId, activeTemplate);
@@ -852,25 +845,21 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
   };
 
-  const flipCurrentBubbleHorizontally = (slot: ThemeAssetSlot, width: number) => {
-    setBubbleGeometry((current) => {
-      const geometry = current[slot.id];
-      const artworkWidth = slot.kind === "ninepatch" ? Math.max(1, width - 2) : width;
-      return geometry ? { ...current, [slot.id]: flipBubbleGeometryHorizontally(geometry, artworkWidth) } : current;
-    });
-    setBubbleMarkers((current) => {
-      const markers = current[slot.id];
-      return markers ? { ...current, [slot.id]: flipBubbleMarkersHorizontally(markers, width) } : current;
-    });
-    setBubbleInsets((current) => {
-      const insets = current[slot.id];
-      return insets ? { ...current, [slot.id]: flipBubbleInsetsHorizontally(insets) } : current;
-    });
-    setBubbleStretch((current) => {
-      const stretch = current[slot.id];
-      return stretch ? { ...current, [slot.id]: flipBubbleStretchHorizontally(stretch, width) } : current;
-    });
-    scheduleInteractionEvent("bubble_edit_completed", slot, { edit_type: "flip_horizontal" });
+  const requestBubbleCopyToPair = (sourceSlot: ThemeAssetSlot) => {
+    const targetSlot = slots.find((slot) => slot.role === getBubblePairRole(sourceSlot.role));
+    if (!targetSlot) return;
+    const targetHasOverrides = Boolean(
+      (uploads[targetSlot.id]?.length ?? 0) ||
+      bubbleGeometry[targetSlot.id] ||
+      bubbleMarkers[targetSlot.id] ||
+      bubbleInsets[targetSlot.id] ||
+      bubbleStretch[targetSlot.id],
+    );
+    if (targetHasOverrides) {
+      setPendingBubbleCopy({ sourceSlot, targetSlot });
+      return;
+    }
+    void copyBubbleToPair(sourceSlot, targetSlot);
   };
 
   const selectAdminAsset = async (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => {
@@ -1036,6 +1025,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       platform={platform}
       selectedBubbleSlot={selectedBubbleSlot}
       pairedBubbleSlot={selectedBubblePairSlot}
+      geometry={selectedSlot ? bubbleGeometry[selectedSlot.id] : undefined}
       markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
       insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
       stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
@@ -1056,15 +1046,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
+      onGeometryChange={(geometry) => { if (!selectedSlot) return; setBubbleGeometry((current) => ({ ...current, [selectedSlot.id]: geometry })); }}
       onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleGeometry((current) => omitBubbleEditValue(current, selectedSlot.id)); setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "markers" }); }}
       onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleGeometry((current) => omitBubbleEditValue(current, selectedSlot.id)); setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "insets" }); }}
       onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleGeometry((current) => omitBubbleEditValue(current, selectedSlot.id)); setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "stretch" }); }}
-      canAdjustInline={canAdjustInline}
       candidateOpen={candidateOpen}
       onToggleCandidates={() => setCandidateOpen((current) => !current)}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
-      onCopyBubbleToPair={(slot) => void copyBubbleToPair(slot)}
-      onBubbleFlip={flipCurrentBubbleHorizontally}
+      onCopyBubbleToPair={requestBubbleCopyToPair}
     />
   );
 
@@ -1103,7 +1092,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); }}
       onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "geometry" }); }}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
-      onCopyBubbleToPair={(slot) => void copyBubbleToPair(slot)}
+      onCopyBubbleToPair={requestBubbleCopyToPair}
       onBubbleDraftDirtyChange={setMobileBubbleDraftDirty}
     />
   );
@@ -1150,6 +1139,21 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             <Dialog.Title className="text-lg font-black text-[#0f172a]">편집 내용을 버릴까요?</Dialog.Title>
             <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">적용하지 않은 말풍선 편집은 사라집니다.</Dialog.Description>
             <div className="mt-5 grid grid-cols-2 gap-2"><Dialog.Close asChild><button type="button" className="min-h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-black text-[#475569]">계속 편집</button></Dialog.Close><button type="button" className="min-h-11 rounded-xl bg-[#0f172a] px-3 text-sm font-black text-white" onClick={() => { if (pendingMobileSlot) applyMobileSlotChange(pendingMobileSlot); setPendingMobileSlot(null); }}>버리고 이동</button></div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+      <Dialog.Root open={Boolean(pendingBubbleCopy)} onOpenChange={(open) => { if (!open) setPendingBubbleCopy(null); }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[110] bg-slate-950/40 backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[111] w-[calc(100vw-32px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[24px] border border-[#dbe3ed] bg-white p-5 shadow-[0_24px_72px_rgba(15,23,42,0.24)] outline-none">
+            <Dialog.Title className="text-lg font-black text-[#0f172a]">말풍선 설정을 덮어쓸까요?</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">
+              {pendingBubbleCopy ? <><strong className="font-black text-[#334155]">{pendingBubbleCopy.targetSlot.label}</strong>에 선택한 말풍선 이미지와 조절값을 적용합니다. 기존 설정은 바뀝니다.</> : null}
+            </Dialog.Description>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <Dialog.Close asChild><button type="button" className="min-h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-black text-[#475569] transition hover:bg-[#f8fafc]">취소</button></Dialog.Close>
+              <button type="button" className="min-h-11 rounded-xl bg-[#0f172a] px-3 text-sm font-black text-white transition hover:bg-[#1e293b]" onClick={() => { if (!pendingBubbleCopy) return; const copy = pendingBubbleCopy; setPendingBubbleCopy(null); void copyBubbleToPair(copy.sourceSlot, copy.targetSlot); }}>적용하기</button>
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

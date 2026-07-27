@@ -82,6 +82,7 @@ export function useEditorBootstrap({
     if (!enabled) return;
     let active = true;
     const payload = takeTemplateStartPayload(mode);
+    const resumedAfterReload = isPageReload();
     // 부트스트랩이 끝나고 자동 저장을 켤 때 넘길 기준선. 이어받은 경우에만 값이 생긴다.
     let autosaveExpectedUpdatedAt: number | null = null;
     let deferredReplacement = false;
@@ -181,7 +182,10 @@ export function useEditorBootstrap({
       });
       if (!active) return;
       if (autosave) {
-        if (payload?.autosaveAction === "resume") {
+        // 편집 중 새로고침은 같은 작업을 계속하려는 의도가 명확하다. 이 경우에는
+        // "새로 시작" 선택지를 보여 주지 않고 마지막 자동 저장 상태를 바로 복원한다.
+        // 반면 새 탭·직접 /edit 진입은 의도를 알 수 없으므로 기존 확인 모달을 유지한다.
+        if (payload?.autosaveAction === "resume" || resumedAfterReload) {
           applyAutosave(autosave);
           autosaveExpectedUpdatedAt = autosave.updatedAt;
           return;
@@ -364,6 +368,12 @@ export function useEditorBootstrap({
     setSystemStatus, setSystemTags, setSystemTemplateBundleId, setSystemTitle, setSystemVisibility, setTemplateId,
     replaceDraft, skipDefaultSelectionReset,
   ]);
+}
+
+function isPageReload() {
+  if (typeof performance === "undefined") return false;
+  const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+  return navigation?.type === "reload";
 }
 
 function createInitialLoadProgress(message: string, current: number, total: number, detail?: string): InitialLoadState {
