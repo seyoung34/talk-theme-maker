@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useId, useState, type MutableRefObject } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
-import { ImageOff, Plus, Sliders, X } from "lucide-react";
+import { ImageOff, Maximize2, Plus, Sliders, X } from "lucide-react";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
+import { getCandidateLayoutKind } from "@/components/project/candidateLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import {
@@ -13,11 +13,11 @@ import {
   getSelectedCandidate,
   getSelectedUpload,
   getSlotUploadEntries,
-  slotStatusLabel,
   type SlotCandidate,
   type SlotCandidateSelections,
   type SlotColors,
   type SlotUploads,
+  type BubbleEditState,
 } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
@@ -63,7 +63,9 @@ type MobileQuickEditPanelProps = {
   onStretchChange: (stretch: StretchPoint) => void;
   onOpenBubbleBuilder: () => void;
   onCopyBubbleToPair: (slot: ThemeAssetSlot) => void;
-  onBubbleDraftDirtyChange: (dirty: boolean) => void;
+  onBubblePreviewChange?: (edit: BubbleEditState) => void;
+  candidateGridExpanded?: boolean;
+  onExpandCandidates?: () => void;
 };
 
 export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
@@ -74,14 +76,8 @@ export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
     return <p className="px-1 py-6 text-center text-[13px] font-medium text-[#94a3b8]">편집할 슬롯을 선택하세요.</p>;
   }
 
-  const status = slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots);
   const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets, uploadPreviewUrls);
   const backgroundSourcePair = getBackgroundSourcePair(slot, slots);
-  const displayStatus = backgroundSourcePair
-    ? selections[backgroundSourcePair.imageSlot.id] === disabledImageCandidateId
-      ? `색상 사용 중 · ${backgroundSourcePair.colorSlot.label}`
-      : `이미지 우선 적용 중 · ${backgroundSourcePair.imageSlot.label}`
-    : status;
 
   const applyCandidate = (candidate: SlotCandidate) => {
     if (slot.kind === "color" && candidate.source === "palette" && candidate.colorValue) {
@@ -100,11 +96,22 @@ export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <strong className="block truncate text-[14px] font-bold text-[#0f172a]">{slot.label}</strong>
-          <span className="mt-0.5 block truncate text-[12px] font-medium text-[#64748b]">{displayStatus}</span>
         </div>
-        {props.contrastWarning ? (
-          <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">대비 확인</span>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-1">
+          {slot.kind !== "color" && !props.candidateGridExpanded && props.onExpandCandidates ? (
+            <button
+              type="button"
+              className="inline-flex min-h-8 items-center gap-1 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2.5 text-[11px] font-bold text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+              onClick={props.onExpandCandidates}
+            >
+              <Maximize2 size={13} aria-hidden="true" />
+              펼쳐 보기
+            </button>
+          ) : null}
+          {props.contrastWarning ? (
+            <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">대비 확인</span>
+          ) : null}
+        </div>
       </div>
 
       {slot.kind === "color" ? (
@@ -206,11 +213,14 @@ function ColorControls({
   canApplyAutoColor,
   onColorChange,
   onApplyAutoColor,
+  candidateGridExpanded = false,
 }: MobileQuickEditPanelProps & { slot: ThemeAssetSlot; candidates: SlotCandidate[] }) {
   const value = colors[slot.id] ?? getSelectedCandidate(slot, selections, templateId, template)?.colorValue ?? getDefaultColor(slot, templateId, template);
   const hex = themeColorRgbHex(value);
   const alpha = themeColorAlphaPercent(value);
-  const swatchCandidates = candidates.filter((candidate) => candidate.colorValue);
+  const swatchCandidates = candidates
+    .filter((candidate) => candidate.colorValue)
+    .sort((left, right) => Number(right.source === "default") - Number(left.source === "default"));
   const colorInputId = useId();
 
   return (
@@ -254,7 +264,7 @@ function ColorControls({
       </div>
 
       {swatchCandidates.length > 0 ? (
-        <div className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className={candidateGridExpanded ? "grid grid-cols-6 gap-2 min-[430px]:grid-cols-8" : "flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}>
           {swatchCandidates.map((candidate) => (
             <button
               key={candidate.id}
@@ -308,11 +318,12 @@ function ImageControls({
   onOpenBubbleBuilder,
   pairedBubbleSlot,
   onCopyBubbleToPair,
-  onBubbleDraftDirtyChange,
+  onBubblePreviewChange,
   file,
   selections,
   templateId,
   template,
+  candidateGridExpanded = false,
 }: MobileQuickEditPanelProps & {
   slot: ThemeAssetSlot;
   candidates: SlotCandidate[];
@@ -327,41 +338,36 @@ function ImageControls({
   const directEditableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;
   const editableSourceUrl = !directEditableSourceFile ? file?.sourceUrl ?? selectedPickerCandidate?.previewUrl ?? selectedCandidate?.previewUrl ?? selectedCandidate?.assetUrl : undefined;
   const imageEditTarget = selectedUploadEntry?.imageEdit?.target ?? getImageEditTarget(selectedCandidate);
-  const [bubbleDraftDirty, setBubbleDraftDirty] = useState(false);
-  const [pendingCandidate, setPendingCandidate] = useState<SlotCandidate | null>(null);
-
-  useEffect(() => {
-    setBubbleDraftDirty(false);
-    setPendingCandidate(null);
-  }, [slot.id, selectedCandidate?.id]);
-
+  const layoutKind = getCandidateLayoutKind(slot);
+  const expandedCollectionClassName = layoutKind === "wallpaper"
+    ? "grid grid-cols-3 gap-2 min-[430px]:grid-cols-4"
+    : "grid grid-cols-4 gap-2 min-[430px]:grid-cols-5";
+  const compactCardClassName = layoutKind === "wallpaper" ? "w-[68px] shrink-0" : "w-[84px] shrink-0";
+  const previewAspectClassName = layoutKind === "wallpaper" ? "aspect-[1/2]" : "aspect-square";
+  const orderedCandidates = [...candidates].sort((left, right) => Number(right.source === "default") - Number(left.source === "default"));
   const requestCandidate = (candidate: SlotCandidate) => {
     if (candidate.inherited || candidate.id === selectedPickerCandidate?.id) return;
-    if (slot.editableInBubbleEditor && bubbleDraftDirty) {
-      setPendingCandidate(candidate);
-      return;
-    }
     applyCandidate(candidate);
   };
 
   return (
     <div className="grid gap-3">
-      <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className={candidateGridExpanded ? expandedCollectionClassName : "flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}>
         <button
           type="button"
-          className="grid w-[76px] shrink-0 place-items-center gap-1 rounded-xl border border-dashed border-[#bfdbfe] bg-[#eff6ff] p-1.5 text-center text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+          className={`grid min-w-0 place-items-center gap-1 rounded-xl border border-dashed border-[#bfdbfe] bg-[#eff6ff] p-1.5 text-center text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${candidateGridExpanded ? "" : compactCardClassName}`}
           onClick={() => fileInputRefs.current[slot.id]?.click()}
         >
-          <span className="grid aspect-square w-full place-items-center rounded-lg border border-[#bfdbfe] bg-white">
+          <span className={`grid w-full place-items-center rounded-lg bg-white/80 ${previewAspectClassName}`}>
             <Plus size={20} strokeWidth={2.4} aria-hidden="true" />
           </span>
           <span className="truncate text-[10px] font-bold">업로드</span>
         </button>
-        {candidates.map((candidate) => {
+        {orderedCandidates.map((candidate) => {
           const preview = candidate.previewUrl ?? (candidate.id.startsWith(slot.id) ? uploadPreviewUrls[candidate.id] : undefined);
           const removable = candidate.source === "upload" && userUploadIds.has(candidate.id);
           return (
-            <div key={candidate.id} className="relative w-[76px] shrink-0">
+            <div key={candidate.id} className={`relative min-w-0 ${candidateGridExpanded ? "" : compactCardClassName}`}>
               <button
                 type="button"
                 aria-pressed={candidate.selected}
@@ -372,9 +378,9 @@ function ImageControls({
                   requestCandidate(candidate);
                 }}
               >
-                <span className="grid aspect-square place-items-center overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f8fafc]">
+                <span className={`grid place-items-center overflow-hidden rounded-lg bg-[#f8fafc] ${previewAspectClassName}`}>
                   {preview ? (
-                    <span className="block w-full h-full bg-white bg-center bg-no-repeat bg-contain" style={{ backgroundImage: `url(${preview})` }} />
+                    <span className={`block h-full w-full bg-center bg-no-repeat ${layoutKind === "wallpaper" ? "bg-cover" : "bg-contain"}`} style={{ backgroundImage: `url(${preview})` }} />
                   ) : (
                     <ImageOff size={16} className="text-[#94a3b8]" aria-hidden="true" />
                   )}
@@ -433,23 +439,10 @@ function ImageControls({
             onInsetsChange(insets);
             onStretchChange(stretch);
           }}
-          onDirtyChange={(dirty) => { setBubbleDraftDirty(dirty); onBubbleDraftDirtyChange(dirty); }}
+          onPreviewChange={onBubblePreviewChange}
         /> : null}
         </>
       ) : null}
-      <Dialog.Root open={Boolean(pendingCandidate)} onOpenChange={(open) => { if (!open) setPendingCandidate(null); }}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[95] bg-slate-950/40 backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[96] w-[calc(100vw-32px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[24px] border border-[#dbe3ed] bg-white p-5 shadow-[0_24px_72px_rgba(15,23,42,0.24)] outline-none">
-            <Dialog.Title className="text-lg font-black text-[#0f172a]">편집 내용을 버릴까요?</Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">적용하지 않은 이미지와 영역 조절은 사라집니다.</Dialog.Description>
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              <Dialog.Close asChild><button type="button" className="min-h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-black text-[#475569]">계속 편집</button></Dialog.Close>
-              <button type="button" className="min-h-11 rounded-xl bg-[#0f172a] px-3 text-sm font-black text-white" onClick={() => { if (pendingCandidate) applyCandidate(pendingCandidate); setBubbleDraftDirty(false); setPendingCandidate(null); }}>버리고 변경</button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
     </div>
   );
 }

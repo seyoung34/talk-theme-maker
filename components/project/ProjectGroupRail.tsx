@@ -96,7 +96,7 @@ export function ProjectGroupRail({
             key={slot.id}
             slot={slot}
             selected={selectedSlotId === slot.id}
-            status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)}
+            status={getSlotDisplayStatus(slot, uploads, colors, selections, templateId, template, slots)}
             thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, slots, uploadPreviewUrls)}
             warning={contrastWarnings[slot.id]}
             onSelect={() => onSelectSlot(slot)}
@@ -115,13 +115,29 @@ export function ProjectGroupRail({
               <span className="rounded-full bg-[#e2e8f0] px-1.5 py-0.5 text-[10px] text-[#334155]">{modifiedAdvancedCount}/{advancedSlots.length}</span>
               <ChevronDown size={14} className={`transition-transform ${advancedOpen ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
-            {advancedOpen ? advancedSlots.map((slot) => <SlotRailItem key={slot.id} slot={slot} selected={selectedSlotId === slot.id} status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)} thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, slots, uploadPreviewUrls)} warning={contrastWarnings[slot.id]} onSelect={() => onSelectSlot(slot)} />) : null}
+            {advancedOpen ? advancedSlots.map((slot) => <SlotRailItem key={slot.id} slot={slot} selected={selectedSlotId === slot.id} status={getSlotDisplayStatus(slot, uploads, colors, selections, templateId, template, slots)} thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, slots, uploadPreviewUrls)} warning={contrastWarnings[slot.id]} onSelect={() => onSelectSlot(slot)} />) : null}
           </div>
         ) : null}
       </div>
       </aside>
     </Tooltip.Provider>
   );
+}
+
+function getSlotDisplayStatus(
+  slot: ThemeAssetSlot,
+  uploads: SlotUploads,
+  colors: SlotColors,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  allSlots: ThemeAssetSlot[],
+) {
+  if (slot.kind === "color") return slotStatusLabel(slot, uploads, colors, selections, templateId, template, allSlots);
+  if (isImageSlotDisabled(slot, selections)) return "이미지 사용 안 함";
+  const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
+  if (inheritedSource) return "기본 이미지와 연결됨";
+  return getSelectedUpload(slot, uploads, selections) ? "내 업로드" : "기본 이미지";
 }
 
 function SlotRailItem({ slot, selected, status, thumbnailUrl, warning, onSelect }: { slot: ThemeAssetSlot; selected: boolean; status: string; thumbnailUrl?: string; warning?: SlotContrastWarning; onSelect: () => void }) {

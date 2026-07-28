@@ -145,11 +145,10 @@ function SlotPreviewChip({ slot, status }: { slot: ThemeAssetSlot; status: strin
   return (
     <span className="flex items-center flex-1 min-w-0 gap-2">
       <span className="grid size-6 shrink-0 place-items-center overflow-hidden rounded-md border border-black/10 bg-[#f8fafc]" aria-hidden="true">
-        {colorPreview ? <span className="block w-full h-full" style={{ backgroundColor: colorPreview }} /> : <ImageOff size={11} className="text-[#94a3b8]" />}
+        {colorPreview ? <span className="block h-full w-full" style={{ backgroundColor: colorPreview }} /> : <ImageOff size={11} className="text-[#94a3b8]" />}
       </span>
       <span className="flex-1 min-w-0">
         <span className="block truncate text-[13px] font-bold text-[#111827]">{slot.label}</span>
-        <span className="block truncate text-[10.5px] font-medium text-[#6b7280]">{status}</span>
       </span>
     </span>
   );

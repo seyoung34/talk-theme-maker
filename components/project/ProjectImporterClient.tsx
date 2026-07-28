@@ -111,12 +111,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setUploads,
   } = useThemeDraft();
   const { uploads, remoteUploadRefs, colors, candidateSelections, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleDesigns, bubbleDecorationSources } = draft;
-  const [candidateOpen, setCandidateOpen] = useState(true);
+  const [candidateOpen, setCandidateOpen] = useState(false);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
   const [mobileSheetLiveHeight, setMobileSheetLiveHeight] = useState<number | null>(null);
-  const [mobileBubbleDraftDirty, setMobileBubbleDraftDirty] = useState(false);
-  const [pendingMobileSlot, setPendingMobileSlot] = useState<ThemeAssetSlot | null>(null);
+  const [liveBubblePreview, setLiveBubblePreview] = useState<{ role: ThemeResourceRole; edit: BubbleEditState } | null>(null);
   const [pendingBubbleCopy, setPendingBubbleCopy] = useState<PendingBubbleCopy | null>(null);
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
@@ -373,6 +372,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }),
     [slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch],
   );
+  const renderedPreviewBubbleEdits = useMemo(
+    () => liveBubblePreview ? { ...previewBubbleEdits, [liveBubblePreview.role]: liveBubblePreview.edit } : previewBubbleEdits,
+    [liveBubblePreview, previewBubbleEdits],
+  );
   const {
     activeImageColorPalette,
     contrastWarnings,
@@ -399,6 +402,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const visibleSlots = useMemo(() => slots.filter((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, activeGroup)), [activeGroup, activeSection, slots]);
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? visibleSlots[0] ?? slots[0];
+
+  useEffect(() => {
+    setCandidateOpen(false);
+  }, [selectedSlot?.id]);
+
   const selectedFile = getSlotFile(selectedSlot, analysis.files);
   const selectedBubbleSlot = selectedSlot ? bubbleSlotFromRole(selectedSlot.role) : null;
   const selectedBubblePairSlot = selectedSlot ? slots.find((slot) => slot.role === getBubblePairRole(selectedSlot.role)) : undefined;
@@ -662,7 +670,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const applyMobileSlotChange = (slot: ThemeAssetSlot) => {
-    setMobileBubbleDraftDirty(false);
     focusSlot(slot.id);
     revealSlot(slot);
     setMobileSheetSnap("full");
@@ -670,10 +677,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const requestMobileSlotChange = (slot: ThemeAssetSlot) => {
     if (slot.id === selectedSlot?.id) return;
-    if (mobileBubbleDraftDirty) {
-      setPendingMobileSlot(slot);
-      return;
-    }
     applyMobileSlotChange(slot);
   };
 
@@ -727,19 +730,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     focusSlot(slot.id);
     revealSlot(slot);
     trackAnalyticsEvent("slot_upload_completed", { slot_role: slot.role, section: slot.section, asset_source: "user" });
-  };
-
-  const clearSlot = (slot: ThemeAssetSlot) => {
-    setUploads((current) => {
-      const next = { ...current };
-      delete next[slot.id];
-      return next;
-    });
-    dropRemoteUploadRef(slot.id);
-    setCandidateSelections((current) => ({
-      ...current,
-      [slot.id]: getDefaultSlotCandidateId(slot, templateId, activeTemplate),
-    }));
   };
 
   const removeUploadedSlotCandidate = (slot: ThemeAssetSlot, uploadId: string) => {
@@ -999,7 +989,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     slots,
     colors,
     selections: candidateSelections,
-    bubbleEdits: previewBubbleEdits,
+    bubbleEdits: renderedPreviewBubbleEdits,
     selectedSlotId: selectedSlot?.id,
     selectionPulseKey,
     onSelectSlot: selectPreviewSlot,
@@ -1031,8 +1021,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
       fileInputRefs={fileInputRefs}
       onUpload={uploadSlot}
+      onRemoveUpload={removeUploadedSlotCandidate}
       onEditedUpload={uploadEditedSlot}
-      onClear={clearSlot}
       onColorChange={changeColor}
       imageColorPalette={activeImageColorPalette}
       imageColorPaletteError={imageColorPaletteError}
@@ -1046,7 +1036,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
-      onGeometryChange={(geometry) => { if (!selectedSlot) return; setBubbleGeometry((current) => ({ ...current, [selectedSlot.id]: geometry })); }}
+      onGeometryChange={(geometry) => { if (!selectedSlot) return; setBubbleGeometry((current) => ({ ...current, [selectedSlot.id]: geometry })); setLiveBubblePreview(null); }}
       onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleGeometry((current) => omitBubbleEditValue(current, selectedSlot.id)); setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "markers" }); }}
       onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleGeometry((current) => omitBubbleEditValue(current, selectedSlot.id)); setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "insets" }); }}
       onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleGeometry((current) => omitBubbleEditValue(current, selectedSlot.id)); setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "stretch" }); }}
@@ -1054,6 +1044,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onToggleCandidates={() => setCandidateOpen((current) => !current)}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
       onCopyBubbleToPair={requestBubbleCopyToPair}
+      onBubblePreviewChange={(edit) => { if (selectedSlot) setLiveBubblePreview({ role: selectedSlot.role, edit }); }}
     />
   );
 
@@ -1087,13 +1078,15 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
-      onGeometryChange={(geometry) => { if (!selectedSlot) return; setBubbleGeometry((current) => ({ ...current, [selectedSlot.id]: geometry })); }}
+      onGeometryChange={(geometry) => { if (!selectedSlot) return; setBubbleGeometry((current) => ({ ...current, [selectedSlot.id]: geometry })); setLiveBubblePreview(null); }}
       onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); }}
       onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); }}
       onStretchChange={(stretch) => { if (!selectedSlot) return; setBubbleStretch((current) => ({ ...current, [selectedSlot.id]: stretch })); scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "geometry" }); }}
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
       onCopyBubbleToPair={requestBubbleCopyToPair}
-      onBubbleDraftDirtyChange={setMobileBubbleDraftDirty}
+      onBubblePreviewChange={(edit) => { if (selectedSlot) setLiveBubblePreview({ role: selectedSlot.role, edit }); }}
+      candidateGridExpanded={mobileSheetSnap === "full"}
+      onExpandCandidates={() => setMobileSheetSnap("full")}
     />
   );
 
@@ -1132,16 +1125,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onDiscard={() => answerAutosaveDecision("discard")}
         />
       ) : null}
-      <Dialog.Root open={Boolean(pendingMobileSlot)} onOpenChange={(open) => { if (!open) setPendingMobileSlot(null); }}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[110] bg-slate-950/40 backdrop-blur-[2px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[111] w-[calc(100vw-32px)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-[24px] border border-[#dbe3ed] bg-white p-5 shadow-[0_24px_72px_rgba(15,23,42,0.24)] outline-none">
-            <Dialog.Title className="text-lg font-black text-[#0f172a]">편집 내용을 버릴까요?</Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-[#64748b]">적용하지 않은 말풍선 편집은 사라집니다.</Dialog.Description>
-            <div className="mt-5 grid grid-cols-2 gap-2"><Dialog.Close asChild><button type="button" className="min-h-11 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-black text-[#475569]">계속 편집</button></Dialog.Close><button type="button" className="min-h-11 rounded-xl bg-[#0f172a] px-3 text-sm font-black text-white" onClick={() => { if (pendingMobileSlot) applyMobileSlotChange(pendingMobileSlot); setPendingMobileSlot(null); }}>버리고 이동</button></div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
       <Dialog.Root open={Boolean(pendingBubbleCopy)} onOpenChange={(open) => { if (!open) setPendingBubbleCopy(null); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[110] bg-slate-950/40 backdrop-blur-[2px]" />
@@ -1469,7 +1452,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 slots={slots}
                 colors={colors}
                 selections={candidateSelections}
-                bubbleEdits={previewBubbleEdits}
+                bubbleEdits={renderedPreviewBubbleEdits}
                 selectedSlotId={selectedSlot?.id}
                 selectionPulseKey={selectionPulseKey}
                 className="order-2 min-h-[420px] lg:order-none lg:min-h-0"

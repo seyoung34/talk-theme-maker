@@ -185,7 +185,10 @@ export function useEditorBootstrap({
         // 편집 중 새로고침은 같은 작업을 계속하려는 의도가 명확하다. 이 경우에는
         // "새로 시작" 선택지를 보여 주지 않고 마지막 자동 저장 상태를 바로 복원한다.
         // 반면 새 탭·직접 /edit 진입은 의도를 알 수 없으므로 기존 확인 모달을 유지한다.
-        if (payload?.autosaveAction === "resume" || resumedAfterReload) {
+        // App Router의 페이지 이동은 문서를 새로 열지 않는다. 따라서 이전에 새로고침했던
+        // navigation entry가 /template → /edit 이동 뒤에도 "reload"로 남아 있을 수 있다.
+        // 새 템플릿을 명시적으로 고른 payload가 있으면 그 선택이 항상 자동 저장보다 우선한다.
+        if (payload?.autosaveAction === "resume" || (!payload && resumedAfterReload)) {
           applyAutosave(autosave);
           autosaveExpectedUpdatedAt = autosave.updatedAt;
           return;

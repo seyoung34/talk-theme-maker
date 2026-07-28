@@ -5,9 +5,10 @@ import { Edit3, ImageOff, Info, Link2, RefreshCw, X } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
+import { getCandidateLayoutKind, type CandidateLayoutKind } from "@/components/project/candidateLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
-import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, getSlotUploadEntries, slotStatusLabel, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
@@ -38,8 +39,8 @@ export function ProjectQuickEditPanel({
   stretch,
   fileInputRefs,
   onUpload,
+  onRemoveUpload,
   onEditedUpload,
-  onClear,
   onColorChange,
   imageColorPalette,
   imageColorPaletteError,
@@ -61,6 +62,7 @@ export function ProjectQuickEditPanel({
   onToggleCandidates,
   onOpenBubbleBuilder,
   onCopyBubbleToPair,
+  onBubblePreviewChange,
 }: {
   slot?: ThemeAssetSlot;
   slots: ThemeAssetSlot[];
@@ -82,8 +84,8 @@ export function ProjectQuickEditPanel({
   stretch?: StretchPoint;
   fileInputRefs: MutableRefObject<Record<string, HTMLInputElement | null>>;
   onUpload: (slot: ThemeAssetSlot, files: FileList | readonly File[] | null) => void;
+  onRemoveUpload: (slot: ThemeAssetSlot, uploadId: string) => void;
   onEditedUpload: (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => void;
-  onClear: (slot: ThemeAssetSlot) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
   imageColorPalette: ImageColorPalette | null;
   imageColorPaletteError: string | null;
@@ -105,6 +107,7 @@ export function ProjectQuickEditPanel({
   onToggleCandidates: () => void;
   onOpenBubbleBuilder: () => void;
   onCopyBubbleToPair: (slot: ThemeAssetSlot) => void;
+  onBubblePreviewChange?: (edit: BubbleEditState) => void;
 }) {
   const [dragActive, setDragActive] = useState(false);
   const [pasteFeedback, setPasteFeedback] = useState(false);
@@ -144,21 +147,11 @@ export function ProjectQuickEditPanel({
 
   if (!slot) return null;
 
-  const hasImage = Boolean(file?.file || file?.sourceUrl);
-  const status = slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots);
   const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets, uploadPreviewUrls);
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
   const selectedUploadEntry = getSelectedUpload(slot, uploads, selections);
   const imageEditTarget = selectedUploadEntry?.imageEdit?.target ?? getImageEditTarget(selectedCandidate);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
-  const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
-  const uploadEntries = getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id));
-  const displayStatus =
-    selectedPickerCandidate?.source === "admin"
-      ? `추천 에셋 · ${selectedPickerCandidate.title}`
-      : selectedPickerCandidate?.source === "template"
-        ? `템플릿 에셋 · ${selectedPickerCandidate.status}`
-        : status;
   const directEditableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;
   const editableSourceUrl = !directEditableSourceFile ? getEditableSourceUrl(file, selectedPickerCandidate, selectedCandidate) : undefined;
   const editableSourceFile = preparedEditSourceFile ?? directEditableSourceFile;
@@ -220,16 +213,10 @@ export function ProjectQuickEditPanel({
         hasMoreAdminAssets={hasMoreAdminAssets}
         isLoadingAdminAssets={isLoadingAdminAssets}
         onLoadMoreAdminAssets={onLoadMoreAdminAssets}
+        onRemoveUpload={(uploadId) => onRemoveUpload(slot, uploadId)}
       />
 
       <section className="grid min-h-0 content-start gap-4 rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
-        <div className="grid gap-3 lg:grid-cols-2">
-          {slot.kind !== "color" ? <DetailRow label="파일명" value={slot.fileName ?? "-"} /> : null}
-          {slot.cssSelector && slot.cssProperty ? <DetailRow label="CSS 위치" value={formatCssReference(slot.cssSelector, slot.cssProperty)} technical /> : null}
-          {slot.platform === "android" && slot.kind === "color" ? <DetailRow label="설정 키" value={slot.colorKey ?? "-"} technical /> : null}
-          <DetailRow label="상태" value={displayStatus} />
-        </div>
-
         {slot.kind === "color" ? (
           <ColorEditor slot={slot} value={colors[slot.id] ?? selectedCandidate?.colorValue ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} />
         ) : (
@@ -262,25 +249,17 @@ export function ProjectQuickEditPanel({
               onDrop={handleDrop}
             >
               <div>
-                <p className="text-sm font-semibold text-[#0f172a]">직접 업로드</p>
-                <p className="mt-1 text-[12px] font-medium text-[#6b7280]">파일을 끌어다 놓거나 선택하세요. 클립보드 이미지는 Ctrl+V 또는 ⌘V로 붙여넣을 수 있습니다.</p>
+                <p className="text-sm font-semibold text-[#0f172a]">내 이미지로 바꾸기</p>
+                <p className="mt-1 text-[12px] font-medium text-[#6b7280]">이미지를 끌어다 놓거나 선택하세요. 붙여넣기도 할 수 있어요.</p>
                 <p className="mt-2 rounded-xl border border-[#dbeafe] bg-white/80 px-3 py-2 text-[11px] font-bold leading-5 text-[#475569]">
-                  개인 이미지는 일반 사용자 템플릿 저장 시 이 브라우저의 IndexedDB에만 보관됩니다. 시스템 템플릿 저장은 관리자 전용입니다.
+                  올린 이미지는 이 브라우저의 내 템플릿에 저장돼요.
                 </p>
                 <p className="sr-only" role="status" aria-live="polite">{pasteFeedback ? "클립보드 이미지를 추가했습니다." : ""}</p>
               </div>
 
               <div className="flex flex-wrap gap-3">
                 <button type="button" className="rounded-lg bg-[#0f172a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1e293b]" onClick={() => fileInputRefs.current[slot.id]?.click()}>
-                  이미지 선택
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-[#d1d5db] bg-white px-4 py-3 text-sm font-semibold text-[#374151] transition enabled:hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-45"
-                  disabled={uploadEntries.length === 0}
-                  onClick={() => onClear(slot)}
-                >
-                  직접 업로드 비우기
+                  이미지 바꾸기
                 </button>
                 <button
                   type="button"
@@ -321,6 +300,7 @@ export function ProjectQuickEditPanel({
                   onStretchChange(nextStretch);
                   onGeometryChange(nextGeometry);
                 }}
+                onPreviewChange={onBubblePreviewChange}
               />
             ) : null}
 
@@ -396,6 +376,7 @@ function CandidatePicker({
   isOpen,
   onToggle,
   onApplyCandidate,
+  onRemoveUpload,
   hasMoreAdminAssets,
   isLoadingAdminAssets,
   onLoadMoreAdminAssets,
@@ -406,21 +387,41 @@ function CandidatePicker({
   isOpen: boolean;
   onToggle: () => void;
   onApplyCandidate: (candidate: SlotCandidate) => void;
+  onRemoveUpload: (uploadId: string) => void;
   hasMoreAdminAssets: boolean;
   isLoadingAdminAssets: boolean;
   onLoadMoreAdminAssets: () => void;
 }) {
   type CandidateGroup = { key: SlotCandidate["source"]; label: string; items: SlotCandidate[]; persistent?: boolean };
+  const defaultCandidates = candidates.filter((candidate) => candidate.source === "default");
+  const preferredSource = selectedCandidate?.source === "default"
+    ? slot.kind === "color" ? "palette" : "admin"
+    : selectedCandidate?.source;
   const groups: CandidateGroup[] = [
-    { key: "default" as const, label: "기본값", items: candidates.filter((candidate) => candidate.source === "default"), persistent: true },
-    { key: "admin" as const, label: "추천 에셋", items: candidates.filter((candidate) => candidate.source === "admin"), persistent: slot.kind !== "color" },
-    { key: "palette" as const, label: "팔레트", items: candidates.filter((candidate) => candidate.source === "palette") },
+    {
+      key: "admin" as const,
+      label: "추천 에셋",
+      items: [
+        ...(slot.kind === "color" ? [] : defaultCandidates),
+        ...candidates.filter((candidate) => candidate.source === "admin"),
+      ],
+      persistent: slot.kind !== "color",
+    },
+    {
+      key: "palette" as const,
+      label: "팔레트",
+      items: [
+        ...(slot.kind === "color" ? defaultCandidates : []),
+        ...candidates.filter((candidate) => candidate.source === "palette"),
+      ],
+      persistent: slot.kind === "color",
+    },
     { key: "template" as const, label: "템플릿 에셋", items: candidates.filter((candidate) => candidate.source === "template") },
     { key: "upload" as const, label: "내 업로드", items: candidates.filter((candidate) => candidate.source === "upload") },
     { key: "creator" as const, label: "제작자 후보", items: candidates.filter((candidate) => candidate.source === "creator") },
   ].filter((group) => group.persistent || group.items.length > 0);
 
-  const preferredTab = slot.kind === "color" ? groups[0]?.key : (selectedCandidate?.source ?? groups[0]?.key);
+  const preferredTab = preferredSource ?? groups[0]?.key;
   const [activeTab, setActiveTab] = useState<CandidateGroup["key"] | undefined>(preferredTab);
 
   useEffect(() => {
@@ -430,52 +431,73 @@ function CandidatePicker({
   }, [activeTab, groups, preferredTab]);
 
   useEffect(() => {
-    setActiveTab(slot.kind === "color" ? groups[0]?.key : (selectedCandidate?.source ?? groups[0]?.key));
+    setActiveTab(preferredTab);
   }, [slot.id]);
 
   const activeGroup = groups.find((group) => group.key === activeTab) ?? groups[0];
+  const layoutKind = getCandidateLayoutKind(slot);
+  const compactCapacity = layoutKind === "wallpaper" ? 6 : layoutKind === "color" ? 8 : 4;
+  const canToggle = isOpen || activeGroup.items.length > compactCapacity || (activeGroup.key === "admin" && hasMoreAdminAssets);
+  const collectionClassName = isOpen
+    ? layoutKind === "wallpaper"
+      ? "grid grid-cols-4 gap-3 xl:grid-cols-6"
+      : layoutKind === "color"
+        ? "grid grid-cols-5 gap-2 xl:grid-cols-7"
+        : "grid grid-cols-4 gap-3 xl:grid-cols-5"
+    : "flex gap-3 overflow-x-auto pb-2 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]";
 
   return (
     <section className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-white px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <div>
-          <h2 className="mt-0.5 inline text-base font-semibold text-[#0f172a]">{slot.label}</h2>
-          <div className="flex flex-wrap items-center inline gap-2 ml-6">
-            {groups.map((group) => (
-              <button
-                key={group.key}
-                type="button"
-                className={`inline-flex h-9 items-center gap-2 rounded-full border px-3.5 mr-2 text-[12px] font-semibold transition ${activeGroup.key === group.key ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#e5e7eb] bg-[#f8fafc] text-[#475569] hover:bg-white"
-                  }`}
-                onClick={() => setActiveTab(group.key)}
-              >
-                <span>{group.label}</span>
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${activeGroup.key === group.key ? "bg-white text-[#1d4ed8]" : "bg-white text-[#64748b]"}`}>{group.items.length}</span>
-              </button>
-            ))}
-          </div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <h2 className="mr-2 text-base font-semibold text-[#0f172a]">{slot.label}</h2>
+          {groups.map((group) => (
+            <button
+              key={group.key}
+              type="button"
+              className={`inline-flex h-9 items-center rounded-full border px-3.5 text-[12px] font-semibold transition ${activeGroup.key === group.key ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#e5e7eb] bg-[#f8fafc] text-[#475569] hover:bg-white"
+                }`}
+              onClick={() => setActiveTab(group.key)}
+            >
+              <span>{group.label}</span>
+            </button>
+          ))}
         </div>
 
-        <button
-          type="button"
-          className="grid h-9 w-9 place-items-center rounded-lg border border-[#e5e7eb] bg-[#f8fafc] text-sm font-bold text-[#475569]"
-          onClick={onToggle}
-          aria-label={isOpen ? "후보 접기" : "후보 펼치기"}
-        >
-          {isOpen ? "−" : "+"}
-        </button>
+        {canToggle ? (
+          <button
+            type="button"
+            className="min-h-9 shrink-0 rounded-lg px-2 text-[12px] font-semibold text-[#2563eb] transition hover:bg-[#eff6ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+            onClick={onToggle}
+            aria-expanded={isOpen}
+          >
+            {isOpen ? "간단히 보기" : "전체 보기"}
+          </button>
+        ) : null}
       </div>
 
-      {isOpen && activeGroup ? (
-        <div className="grid gap-3">
-          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-2 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
+      {activeGroup ? (
+        <div className="mt-4 grid gap-3">
+          <div className={collectionClassName}>
             {activeGroup.items.length > 0 ? activeGroup.items.map((candidate) => (
-              <CandidateCard key={candidate.id} candidate={candidate} onApply={onApplyCandidate} />
+              <CandidateCard
+                key={candidate.id}
+                candidate={candidate}
+                layoutKind={layoutKind}
+                compact={!isOpen}
+                onApply={onApplyCandidate}
+                onRemove={candidate.source === "upload" ? onRemoveUpload : undefined}
+              />
             )) : activeGroup.key === "admin" ? (
-              <AdminAssetPlaceholderCard isLoading={isLoadingAdminAssets} />
+              <AdminAssetPlaceholderCard isLoading={isLoadingAdminAssets} layoutKind={layoutKind} compact={!isOpen} />
             ) : null}
             {activeGroup.key === "admin" && hasMoreAdminAssets ? (
-              <button type="button" className="flex h-[104px] w-32 shrink-0 items-center justify-center rounded-xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-3 text-center text-xs font-semibold text-[#475569] disabled:opacity-50" onClick={onLoadMoreAdminAssets} disabled={isLoadingAdminAssets}>
+              <button
+                type="button"
+                className={`flex items-center justify-center rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-3 text-center text-xs font-semibold text-[#475569] transition hover:border-[#93c5fd] hover:bg-[#eff6ff] disabled:opacity-50 ${isOpen ? "min-h-28" : getCompactCandidateWidth(layoutKind)}`}
+                onClick={onLoadMoreAdminAssets}
+                disabled={isLoadingAdminAssets}
+              >
                 {isLoadingAdminAssets ? "불러오는 중" : "더 보기"}
               </button>
             ) : null}
@@ -486,69 +508,89 @@ function CandidatePicker({
   );
 }
 
-function CandidateCard({ candidate, onApply }: { candidate: SlotCandidate; onApply: (candidate: SlotCandidate) => void }) {
+function CandidateCard({
+  candidate,
+  layoutKind,
+  compact,
+  onApply,
+  onRemove,
+}: {
+  candidate: SlotCandidate;
+  layoutKind: CandidateLayoutKind;
+  compact: boolean;
+  onApply: (candidate: SlotCandidate) => void;
+  onRemove?: (uploadId: string) => void;
+}) {
   return (
-    <button
-      type="button"
-      aria-disabled={candidate.inherited}
-      className={`flex h-[104px] w-40 shrink-0 flex-col justify-between rounded-xl border px-3 py-3 text-left transition ${candidate.selected
-        ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]"
-        : candidate.active
-          ? "border-[#cbd5e1] bg-white"
-          : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1]"
-        } ${candidate.inherited ? "cursor-default" : ""}`}
-      onClick={() => {
-        if (candidate.inherited) return;
-        onApply(candidate);
-      }}
-    >
-      <div className="flex items-start gap-2">
-        <CandidateSwatch candidate={candidate} />
-        <div className="min-w-0">
-          <span className="block truncate text-[12px] font-semibold text-[#111827]">{candidate.title}</span>
-          <span className="mt-1 block text-[10px] font-medium text-[#64748b]">{groupSourceLabel(candidate.source)}</span>
-        </div>
-      </div>
-      <div className="grid gap-1">
-        {candidate.inherited ? (
-          <span className="text-[10px] font-semibold text-[#2563eb]">연동중 · 기본과 동일</span>
-        ) : candidate.selected ? (
-          <span className="text-[10px] font-semibold text-[#2563eb]">사용 중</span>
-        ) : null}
-        <span className="line-clamp-2 text-[11px] font-medium leading-[1.3] text-[#6b7280]">{candidate.status}</span>
-      </div>
-    </button>
+    <div className={`relative min-w-0 ${compact ? getCompactCandidateWidth(layoutKind) : ""}`}>
+      <button
+        type="button"
+        aria-pressed={candidate.selected}
+        aria-disabled={candidate.inherited}
+        className={`grid w-full gap-2 rounded-2xl border text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${layoutKind === "color" ? "p-1.5" : "p-2"} ${candidate.selected
+          ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]"
+          : candidate.active
+            ? "border-[#cbd5e1] bg-white"
+            : "border-[#e5e7eb] bg-white hover:border-[#93c5fd] hover:bg-[#f8fbff]"
+          } ${candidate.inherited ? "cursor-default" : ""}`}
+        onClick={() => {
+          if (candidate.inherited) return;
+          onApply(candidate);
+        }}
+      >
+        <CandidatePreview candidate={candidate} layoutKind={layoutKind} />
+        <span
+          className={`truncate text-center font-semibold text-[#111827] ${layoutKind === "color" ? "font-mono text-[9px] tracking-tight" : "px-1 text-[12px]"}`}
+          title={candidate.title}
+        >
+          {candidate.title}
+        </span>
+      </button>
+      {onRemove ? (
+        <button
+          type="button"
+          aria-label={`${candidate.title} 삭제`}
+          className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-[#475569] text-white shadow-sm ring-2 ring-white transition hover:bg-[#1e293b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+          onClick={() => onRemove(candidate.id)}
+        >
+          <X size={14} strokeWidth={2.5} aria-hidden="true" />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
-function AdminAssetPlaceholderCard({ isLoading }: { isLoading: boolean }) {
+function AdminAssetPlaceholderCard({ isLoading, layoutKind, compact }: { isLoading: boolean; layoutKind: CandidateLayoutKind; compact: boolean }) {
   return (
-    <div className="flex h-[104px] w-40 shrink-0 flex-col justify-between rounded-xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-3 py-3 text-left">
-      <div className="flex items-start gap-2">
-        <span className={`h-8 w-8 shrink-0 rounded-md border border-[#dbe3ed] bg-white ${isLoading ? "animate-pulse" : ""}`} aria-hidden="true" />
-        <div className="min-w-0">
-          <span className="block truncate text-[12px] font-semibold text-[#111827]">추천 에셋</span>
-          <span className="mt-1 block text-[10px] font-medium text-[#64748b]">관리 후보</span>
-        </div>
-      </div>
-      <span className="line-clamp-2 text-[11px] font-medium leading-[1.3] text-[#6b7280]">
+    <div className={`flex min-h-28 flex-col justify-center rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-center ${compact ? getCompactCandidateWidth(layoutKind) : ""}`}>
+      <span className={`mx-auto mb-3 block size-12 rounded-xl border border-[#dbe3ed] bg-white ${isLoading ? "animate-pulse" : ""}`} aria-hidden="true" />
+      <span className="text-[12px] font-semibold text-[#111827]">추천 에셋</span>
+      <span className="mt-1 line-clamp-2 text-[11px] font-medium leading-[1.3] text-[#6b7280]">
         {isLoading ? "추천 에셋을 불러오는 중입니다." : "이 슬롯에 표시할 추천 에셋이 없습니다."}
       </span>
     </div>
   );
 }
 
-function CandidateSwatch({ candidate }: { candidate: SlotCandidate }) {
+function CandidatePreview({ candidate, layoutKind }: { candidate: SlotCandidate; layoutKind: CandidateLayoutKind }) {
+  const aspectClassName = layoutKind === "wallpaper" ? "aspect-[1/2]" : "aspect-square";
+
   if (candidate.id === disabledImageCandidateId) {
-    return <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-dashed border-[#cbd5e1] bg-[#f8fafc] text-[#64748b]"><ImageOff size={15} aria-hidden="true" /></span>;
+    return <span className={`grid w-full place-items-center overflow-hidden rounded-xl bg-[#f1f5f9] text-[#64748b] ${aspectClassName}`}><ImageOff size={24} aria-hidden="true" /></span>;
   }
   if (candidate.colorValue) {
-    return <ColorSwatch value={candidate.colorValue} className="h-8 w-8 shrink-0 rounded-md" />;
+    return <ColorSwatch value={candidate.colorValue} className={`w-full rounded-xl ${aspectClassName}`} />;
   }
   if (candidate.previewUrl) {
-    return <span className="h-8 w-8 shrink-0 rounded-md border border-[#d1d5db] bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${candidate.previewUrl})` }} />;
+    return <span className={`w-full overflow-hidden rounded-xl bg-[#f8fafc] bg-center bg-no-repeat ${layoutKind === "wallpaper" ? "bg-cover" : "bg-contain"} ${aspectClassName}`} style={{ backgroundImage: `url(${candidate.previewUrl})` }} />;
   }
-  return <span className="h-8 w-8 shrink-0 rounded-md border border-[#d1d5db] bg-[#e5e7eb]" />;
+  return <span className={`w-full overflow-hidden rounded-xl bg-[#e5e7eb] ${aspectClassName}`} />;
+}
+
+function getCompactCandidateWidth(layoutKind: CandidateLayoutKind) {
+  if (layoutKind === "wallpaper") return "w-[88px] shrink-0";
+  if (layoutKind === "color") return "w-[92px] shrink-0";
+  return "w-[124px] shrink-0";
 }
 
 function ColorEditor({
@@ -751,26 +793,4 @@ function BellPreviewIcon() {
 
 function isTextColorSlot(slot: ThemeAssetSlot) {
   return ["main_header_foreground_color", "main_title_color", "main_description_color", "tab_paragraph_color", "chat_bubble_me_color", "chat_bubble_you_color", "chat_input_text_color", "direct_share_text_color", "notification_text_color"].includes(slot.role);
-}
-
-function DetailRow({ label, value, technical = false }: { label: string; value: string; technical?: boolean }) {
-  return (
-    <div className="rounded-lg border border-[#e5e7eb] bg-[#f8fafc] px-4 py-3">
-      <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#94a3b8]">{label}</span>
-      <strong className={`mt-1 block break-all text-sm text-[#111827] ${technical ? "font-mono font-medium" : "font-semibold"}`}>{value}</strong>
-    </div>
-  );
-}
-
-function formatCssReference(selector: string | string[], property: string) {
-  return `${Array.isArray(selector) ? selector.join(" / ") : selector} · ${property}`;
-}
-
-function groupSourceLabel(source: SlotCandidate["source"]) {
-  if (source === "admin") return "관리 후보";
-  if (source === "template") return "템플릿";
-  if (source === "palette") return "팔레트";
-  if (source === "default") return "기본";
-  if (source === "upload") return "업로드";
-  return "후보";
 }
