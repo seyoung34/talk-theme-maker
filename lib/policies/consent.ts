@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const currentPolicyVersions = {
-  terms: "2026-07-14",
-  privacy: "2026-07-14",
+  terms: "2026-07-30",
+  privacy: "2026-07-30",
 } as const;
 export const minimumAgeConfirmationVersion = "2026-07-14";
 

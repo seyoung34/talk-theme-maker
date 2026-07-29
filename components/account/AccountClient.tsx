@@ -9,6 +9,7 @@ import { getExportDownloadState } from "@/lib/theme/android/outputRetention";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createClient } from "@/lib/supabase/client";
 import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
+import { deleteLocalUserThemeData } from "@/lib/theme/project/deleteLocalUserData";
 
 export default function AccountClient() {
   const [me, setMe] = useState<AccountMeResponse | null>(null);
@@ -53,6 +54,9 @@ export default function AccountClient() {
       });
       const payload = await readJsonResponse<{ deleted?: boolean; error?: string }>(response);
       if (!response.ok || !payload.deleted) throw new Error(payload.error);
+      await deleteLocalUserThemeData().catch((error) => {
+        console.error("Failed to clear local user theme data after account deletion", error);
+      });
       await createClient().auth.signOut().catch(() => undefined);
       window.location.assign("/login?accountDeleted=1");
     } catch (error) {
@@ -152,7 +156,9 @@ export default function AccountClient() {
                   <p className="text-xs font-semibold text-[var(--color-outline)]"><span id="account-deletion-title">계정을 더 이상 사용하지 않으시나요?</span> <button type="button" className="ml-1 font-bold text-[var(--color-on-surface-variant)] underline underline-offset-2 transition hover:text-[var(--color-error)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-error)]" onClick={() => { setIsDeletionOpen(true); setDeletionError(null); }}>회원탈퇴</button></p>
                 ) : (
                   <form className="ml-auto grid max-w-md gap-2 rounded-2xl border border-[#f3d4d0] bg-[#fffaf9] p-3 text-left" onSubmit={deleteAccount} noValidate>
-                    <p id="account-deletion-title" className="text-xs font-bold leading-5 text-[var(--color-on-surface-variant)]">계정 정보·남은 크레딧·내보내기 이력은 복구할 수 없습니다. 계속하려면 <strong className="text-[var(--color-error)]">탈퇴</strong>를 입력해 주세요.</p>
+                    <p id="account-deletion-title" className="text-xs font-bold leading-5 text-[var(--color-on-surface-variant)]">
+                      계정 정보·업로드 이미지·브라우저 프로젝트·내보내기 이력과 남은 크레딧은 모두 삭제되며 복구할 수 없습니다. 관계 법령에 따라 결제·환불 기록의 최소 항목은 일반 회원정보와 분리해 일정 기간 보관합니다. 계속하려면 <strong className="text-[var(--color-error)]">탈퇴</strong>를 입력해 주세요.
+                    </p>
                     <div className="flex flex-wrap gap-2">
                       <input className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-outline-variant)] bg-white px-3 text-sm font-semibold outline-none focus:border-[var(--color-error)] focus:ring-2 focus:ring-[var(--color-error-container)]" value={deletionConfirmation} onChange={(event) => setDeletionConfirmation(event.currentTarget.value)} autoComplete="off" disabled={isDeleting} aria-label="회원탈퇴 확인 문구" />
                       <button type="submit" className="h-9 rounded-full bg-[var(--color-error)] px-3.5 text-xs font-extrabold text-white disabled:opacity-50" disabled={isDeleting}>{isDeleting ? "처리 중" : "탈퇴"}</button>
