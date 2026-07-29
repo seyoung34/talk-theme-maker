@@ -2,6 +2,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "main": ".open-next/worker.js",
   "name": "talk-theme-maker",
+  "workers_dev": false,
+  "preview_urls": false,
   "compatibility_date": "2026-07-07",
   "compatibility_flags": [
     "nodejs_compat",
