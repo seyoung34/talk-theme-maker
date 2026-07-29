@@ -25,6 +25,7 @@ type UseEditorBootstrapOptions = {
   requestAutosaveDecision: (record: EditorAutosaveDraft) => Promise<"resume" | "discard">;
   /** 시작 상태가 확정된 뒤 자동 저장을 켠다. 확정 전에 저장하면 사용자가 답하기 전에 레코드를 덮어쓴다. */
   onAutosaveArmed: (expectedUpdatedAt: number | null) => void;
+  onAutosaveRestored: () => void;
   resumeToken: string | null;
   setActiveGroup: Dispatch<SetStateAction<ThemeSlotGroup>>;
   setActiveSection: Dispatch<SetStateAction<ThemeSection>>;
@@ -56,6 +57,7 @@ export function useEditorBootstrap({
   onRecoveryRestored,
   requestAutosaveDecision,
   onAutosaveArmed,
+  onAutosaveRestored,
   resumeToken,
   setActiveGroup,
   setActiveSection,
@@ -132,6 +134,7 @@ export function useEditorBootstrap({
       });
       setInitialLoadState({ status: "ready" });
       setNotice({ tone: "success", message: "저장하지 않았던 편집 내용을 복원했어요." });
+      onAutosaveRestored();
     };
 
     const loadStartedTemplate = async () => {
@@ -364,7 +367,7 @@ export function useEditorBootstrap({
       });
     return () => { active = false; };
   }, [
-    enabled, hydratePreviewUploads, hydrateSystemTemplateUploads, mode, onAutosaveArmed, onRecoveryRestored,
+    enabled, hydratePreviewUploads, hydrateSystemTemplateUploads, mode, onAutosaveArmed, onAutosaveRestored, onRecoveryRestored,
     requestAutosaveDecision, resumeToken, setActiveGroup, setActiveSection,
     setActiveSystemTemplate, setActiveUserTemplate, setInitialLoadState, setNotice, setPlatform,
     setSelectedSlotId, setSystemCreditCost, setSystemDescription, setSystemPriceAmount, setSystemPricingType,

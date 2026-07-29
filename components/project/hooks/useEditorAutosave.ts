@@ -9,6 +9,7 @@ import {
   type EditorAutosaveInput,
 } from "@/lib/theme/project/autosaveDraft";
 import type { EditorMode } from "@/lib/theme/project/draft";
+import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 
 /** 편집을 멈춘 뒤 이 시간이 지나면 저장한다. 타이핑·드래그 중에 매번 쓰지 않기 위한 값이다. */
 export const autosaveDebounceMs = 2500;
@@ -94,6 +95,7 @@ export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot, onSa
           setLastSavedAt(result.record.updatedAt);
           setStatus("saved");
           setMessage(null);
+          trackAnalyticsEvent("autosave_completed", { mode });
           onSaved?.();
         } catch (error) {
           console.error(error);
@@ -104,9 +106,10 @@ export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot, onSa
               ? "브라우저 저장 공간이 부족해 자동 저장하지 못했습니다. 큰 이미지를 줄이거나 지금 내보내 주세요."
               : "자동 저장에 실패했습니다. 브라우저 저장소 권한을 확인해 주세요.",
           );
+          trackAnalyticsEvent("autosave_failed", { reason: error instanceof AutosaveQuotaExceededError ? "quota" : "storage" });
         }
       }),
-    [enqueue, onSaved],
+    [enqueue, mode, onSaved],
   );
 
   useEffect(() => {

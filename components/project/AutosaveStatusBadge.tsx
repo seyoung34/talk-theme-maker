@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Check, LoaderCircle, Users } from "lucide-react";
 import { getAutosaveStatusLabel, type AutosaveStatus } from "@/components/project/autosaveStatus";
+import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 
 const toneClassName: Record<Exclude<AutosaveStatus, "idle">, string> = {
   saving: "text-[#64748b]",
@@ -45,6 +46,7 @@ export function AutosaveStatusBadge({
       className={`items-center gap-1 text-xs font-semibold ${toneClassName[status]} ${className}`}
       role="status"
       aria-live="polite"
+      title={status === "saved" ? persistenceNotice.browserDetailed : undefined}
     >
       <Icon size={13} className={status === "saving" ? "animate-spin" : undefined} aria-hidden="true" />
       {label}

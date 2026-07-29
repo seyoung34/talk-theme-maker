@@ -74,7 +74,6 @@ html {
 }
 
 body {
-  min-width: 360px;
   background: var(--color-background);
   color: var(--color-on-background);
   font-family: var(--font-body);

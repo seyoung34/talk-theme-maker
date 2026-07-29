@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
 import { AlertTriangle, Apple, Check, CircleAlert, FileText, Images, MapPin, Smartphone } from "lucide-react";
 import { guideContent, type EasyStep, type GuideMode, type GuidePlatform, type GuideSection } from "@/lib/guide/content";
+import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 
 type GuideClientProps = {
   initialPlatform: GuidePlatform;
@@ -18,6 +19,9 @@ export default function GuideClient({ initialPlatform, initialMode = "easy" }: G
 
   useEffect(() => setPlatform(initialPlatform), [initialPlatform]);
   useEffect(() => setMode(initialMode), [initialMode]);
+  useEffect(() => {
+    trackAnalyticsEvent("install_guide_viewed", { platform });
+  }, [platform]);
 
   const pushRoute = (nextPlatform: GuidePlatform, nextMode: GuideMode) => {
     router.push(`/guide?platform=${nextPlatform}&mode=${nextMode}`, { scroll: false });

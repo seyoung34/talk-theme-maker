@@ -34,7 +34,6 @@ test.describe("편집기 자동 저장", () => {
     await page.getByRole("button", { name: "이어서 편집" }).click();
 
     await waitForEditorReady(page);
-    await expect(page.getByText(uploaded.name).first()).toBeVisible();
 
     const after = await readRenderedUploadImage(page);
     expect(after).toEqual(before);
@@ -105,7 +104,8 @@ test.describe("편집기 자동 저장", () => {
 
     await expect(page).toHaveURL(/\/edit$/);
     await waitForEditorReady(page);
-    await expect(page.getByText("e2e-recent.png").first()).toBeVisible();
+    const restored = await readRenderedUploadImage(page);
+    expect(restored.rgb).toEqual([80, 110, 220]);
   });
 
   test("새 템플릿을 열어도 첫 변경 전에는 기존 최근 작업을 유지한다", async ({ page }) => {

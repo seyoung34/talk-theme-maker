@@ -8,6 +8,8 @@ import SiteHeader from "@/components/layout/SiteHeader";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
 import { addPolicyConsentToCallbackUrl, recordCurrentPolicyConsents } from "@/lib/policies/consent";
 import { createClient } from "@/lib/supabase/client";
+import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
+import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 
 type AuthMode = "signin" | "signup";
 type Message = { tone: "error" | "success"; text: string } | null;
@@ -58,6 +60,10 @@ export default function LoginClient() {
     return () => window.clearInterval(timer);
   }, [resendCooldown]);
 
+  useEffect(() => {
+    trackAnalyticsEvent("auth_prompt_viewed", { reason: reason === "export" ? "export" : "general", mode });
+  }, [mode, reason]);
+
   const context = useMemo(() => {
     if (reason === "export" && mode === "signin") {
       return {
@@ -68,7 +74,7 @@ export default function LoginClient() {
     }
     return {
       title: mode === "signin" ? "계정에 로그인" : "새 계정 만들기",
-      description: mode === "signin" ? "크레딧과 내보내기 이력을 안전하게 관리하세요." : "계정을 만들고 테마 저장, 크레딧 충전과 내보내기를 시작하세요.",
+      description: mode === "signin" ? `${persistenceNotice.accountDetailed} 편집 프로젝트는 ${persistenceNotice.browserShort}됩니다.` : `${persistenceNotice.accountDetailed} 편집 프로젝트는 ${persistenceNotice.browserShort}되며 다른 기기로 자동 동기화되지 않습니다.`,
       destination: returnTo === "/account" ? "인증을 마치면 내 계정으로 이동합니다." : "인증을 마치면 이전 화면으로 돌아갑니다.",
     };
   }, [mode, reason, returnTo]);
@@ -109,6 +115,7 @@ export default function LoginClient() {
 
     setIsSubmitting(true);
     setMessage(null);
+    trackAnalyticsEvent(mode === "signup" ? "signup_started" : "login_started", { provider: "email" });
     try {
       const supabase = createClient();
       const result = mode === "signin"
@@ -124,9 +131,11 @@ export default function LoginClient() {
         setMessage(null);
         return;
       }
+      trackAnalyticsEvent(mode === "signup" ? "signup_completed" : "login_completed", { provider: "email" });
       router.replace(returnTo);
       router.refresh();
     } catch (error) {
+      trackAnalyticsEvent(mode === "signup" ? "signup_failed" : "login_failed", { provider: "email", reason: "auth_error" });
       setMessage({ tone: "error", text: getAuthErrorMessage(error) });
     } finally {
       setIsSubmitting(false);
@@ -173,6 +182,7 @@ export default function LoginClient() {
       });
       if (error) throw error;
       await recordCurrentPolicyConsents(supabase, "email_signup").catch(() => undefined);
+      trackAnalyticsEvent("signup_completed", { provider: "email" });
       router.replace(returnTo);
       router.refresh();
     } catch (error) {
@@ -195,6 +205,7 @@ export default function LoginClient() {
     }
     setMessage(null);
     setIsSubmitting(true);
+    trackAnalyticsEvent(mode === "signup" ? "signup_started" : "login_started", { provider: "kakao" });
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
@@ -203,6 +214,7 @@ export default function LoginClient() {
       });
       if (error) throw error;
     } catch (error) {
+      trackAnalyticsEvent(mode === "signup" ? "signup_failed" : "login_failed", { provider: "kakao", reason: "auth_error" });
       setMessage({ tone: "error", text: getAuthErrorMessage(error) });
       setIsSubmitting(false);
     }

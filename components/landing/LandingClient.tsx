@@ -18,6 +18,7 @@ import {
   Star,
 } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
+import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 
 type Subject = {
   keyword: string;
@@ -164,20 +165,43 @@ function useReveal<T extends HTMLElement>(): [React.RefObject<T | null>, boolean
 
 export default function LandingClient() {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [paused, setPaused] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [heroStage, setHeroStage] = useState<"opening" | "leaving" | "content">("opening");
   const active = subjects[activeIndex];
 
   useEffect(() => {
-    if (paused) return;
+    if (prefersReducedMotion) return;
     const timer = window.setInterval(() => {
       setActiveIndex((current) => (current + 1) % subjects.length);
     }, 3600);
 
     return () => window.clearInterval(timer);
-  }, [paused]);
+  }, [prefersReducedMotion]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setPrefersReducedMotion(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setHeroStage("content");
+      return;
+    }
+
+    const leaveTimer = window.setTimeout(() => setHeroStage("leaving"), 900);
+    const contentTimer = window.setTimeout(() => setHeroStage("content"), 1220);
+    return () => {
+      window.clearTimeout(leaveTimer);
+      window.clearTimeout(contentTimer);
+    };
+  }, [prefersReducedMotion]);
 
   return (
-    <main className="relative min-h-screen overflow-x-clip bg-[linear-gradient(180deg,#e8f1ff_0%,#f4f9ff_16%,#ffffff_40%,#f7fbff_66%,#e9f2ff_100%)] text-[var(--color-on-background)]">
+    <main className="relative min-h-screen overflow-x-hidden bg-[linear-gradient(180deg,#e8f1ff_0%,#f4f9ff_16%,#ffffff_40%,#f7fbff_66%,#e9f2ff_100%)] text-[var(--color-on-background)]">
       {/* 페이지 전체를 덮는 단일 배경 레이어 — 섹션 경계에 걸리지 않아 구분선이 생기지 않는다 */}
       {/* <div aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute left-[-8rem] top-[2%] h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle,rgba(147,197,253,0.42),transparent_68%)] blur-3xl outline outline-red-500" />
@@ -197,66 +221,69 @@ export default function LandingClient() {
         <Heart className="pointer-events-none absolute bottom-[16%] left-[44%] -z-0 hidden h-7 w-7 rotate-6 fill-[#ffd6df] text-[#ffb3c2] lg:block" />
         <Star className="pointer-events-none absolute right-[46%] top-[10%] -z-0 hidden h-6 w-6 fill-[#fee500] text-[#fee500] lg:block" />
 
-        <div className="mx-auto grid max-w-7xl items-center gap-6 px-5 py-8 md:gap-8 md:px-8 md:py-12 lg:min-h-[calc(100svh-73px)] lg:grid-cols-[minmax(0,0.94fr)_minmax(420px,1.06fr)] lg:py-14">
-          {/* 좁은 화면에서는 헤드라인을 가운데로 모으고, CTA는 목업 아래로 내린다 */}
-          <div className="relative z-10 max-w-3xl text-center lg:text-left">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-1.5 text-[12px] font-black text-[#3d7bd6] shadow-sm backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
-              세상에 하나뿐인 카카오톡 테마
-            </span>
+        {heroStage === "content" ? (
+          <div className="mx-auto grid w-full max-w-7xl items-center gap-6 px-5 py-8 md:gap-8 md:px-8 md:py-12 lg:min-h-[calc(100svh-73px)] lg:grid-cols-[minmax(0,0.94fr)_minmax(420px,1.06fr)] lg:py-14">
+            <div className="relative z-10 max-w-3xl text-center motion-safe:animate-[hero-title-in_620ms_cubic-bezier(0.22,1,0.36,1)_both] lg:text-left">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-1.5 text-[12px] font-black text-[#3d7bd6] shadow-sm backdrop-blur">
+                <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
+                세상에 하나뿐인 카카오톡 테마
+              </span>
 
-            <h1 className="mt-4 text-[34px] font-black leading-[1.14] text-[var(--color-on-background)] sm:mt-5 sm:text-[58px] lg:text-[74px]">
-              <span className="block">내가 좋아하는</span>
-              <span className="block mt-1">
-                <span className="relative inline-block align-baseline">
-                  <span
-                    aria-hidden="true"
-                    className="absolute inset-x-[-0.14em] bottom-[0.08em] z-0 h-[0.42em] -rotate-2 rounded-[0.32em] bg-[rgba(254,229,0,0.62)]"
-                    style={{ transformOrigin: "left center" }}
-                  />
-                  <span
-                    key={active.keyword}
-                    className="relative text-[#2f6bbf] motion-safe:animate-[word-pop_520ms_cubic-bezier(0.34,1.56,0.64,1)]"
-                  >
-                    {active.keyword}
+              <h1 className="mt-4 text-[34px] font-black leading-[1.14] text-[var(--color-on-background)] sm:mt-5 sm:text-[58px] lg:text-[74px]">
+                <span className="block">내가 좋아하는</span>
+                <span className="block mt-1">
+                  <span className="relative inline-block align-baseline">
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-[-0.14em] bottom-[0.08em] z-0 h-[0.42em] -rotate-2 rounded-[0.32em] bg-[rgba(254,229,0,0.62)]"
+                      style={{ transformOrigin: "left center" }}
+                    />
+                    <span
+                      key={active.keyword}
+                      className="relative text-[#2f6bbf] motion-safe:animate-[word-pop_520ms_cubic-bezier(0.34,1.56,0.64,1)]"
+                    >
+                      {active.keyword}
+                    </span>
                   </span>
+                  으로
                 </span>
-                으로
-              </span>
-              {/* 자동 줄바꿈에 맡기면 끊기는 위치가 화면 폭마다 달라져 "카카오톡 테마를 / 만들어보세요"로 고정한다 */}
-              <span className="block mt-1">
-                카카오톡 테마를
-                <br />
-                만들어보세요
-              </span>
-            </h1>
+                {/* 자동 줄바꿈에 맡기면 끊기는 위치가 화면 폭마다 달라져 "카카오톡 테마를 / 만들어보세요"로 고정한다 */}
+                <span className="block mt-1">
+                  카카오톡 테마를
+                  <br />
+                  만들어보세요
+                </span>
+              </h1>
 
-            <p className="mt-4 max-w-xl text-pretty text-[15px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-6 sm:text-[19px] sm:leading-8">
-              똑같은 카톡은 재미없으니까. 내 사진과 최애로 나만의 테마를 만들고,
-              기억에 남는 선물로 보내거나 웃긴 테마를 만들어 친구들과 함께 놀아보세요.
-            </p>
-
-            {/* 넓은 화면에서는 텍스트 컬럼 안에 그대로 둔다 */}
-            <div className="hidden lg:block">
-              <div className="mt-8">
-                <HeroActions />
-              </div>
-              <div className="mt-6">
+              <div className="mt-8 hidden gap-5 motion-safe:animate-[hero-cta-in_520ms_cubic-bezier(0.22,1,0.36,1)_360ms_both] lg:grid">
+                <HeroActions viewportGroup="desktop" />
                 <HeroBadges />
               </div>
             </div>
-          </div>
 
-          <HeroMockup active={active} />
+            <div className="motion-safe:animate-[hero-mockup-in_700ms_cubic-bezier(0.22,1,0.36,1)_140ms_both]">
+              <HeroMockup active={active} />
+            </div>
 
-          {/* 좁은 화면 전용: 목업 아래에 CTA와 뱃지를 둔다 */}
-          <div className="lg:hidden">
-            <HeroActions />
-            <div className="mt-5">
+            <div className="grid gap-5 text-center motion-safe:animate-[hero-cta-in_520ms_cubic-bezier(0.22,1,0.36,1)_360ms_both] lg:hidden">
+              <div className="w-full max-w-xl">
+                <HeroActions viewportGroup="mobile" />
+              </div>
               <HeroBadges />
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="mx-auto flex min-h-[calc(100svh-73px)] max-w-4xl items-center justify-center px-5 py-8 text-center md:px-8">
+            <p
+              data-testid="hero-opening"
+              aria-hidden="true"
+              className={`text-[30px] font-black leading-[1.25] tracking-[-0.045em] text-[#2f6bbf] sm:text-[52px] lg:text-[68px] ${heroStage === "leaving" ? "motion-safe:animate-[hero-opening-out_320ms_cubic-bezier(0.55,0,1,0.45)_both]" : "motion-safe:animate-[hero-opening-in_560ms_cubic-bezier(0.22,1,0.36,1)_both]"}`}
+            >
+              <span className="block">세상에 하나뿐인</span>
+              <span className="mt-1 block">나만의 카톡 테마</span>
+            </p>
+          </div>
+        )}
       </section>
 
       {/* ===================== USE CASES ===================== */}
@@ -343,6 +370,56 @@ export default function LandingClient() {
           100% {
             opacity: 1;
             transform: none;
+          }
+        }
+        @keyframes hero-opening-in {
+          0% {
+            opacity: 0;
+            transform: translateY(0.4em);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes hero-opening-out {
+          0% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-0.32em);
+          }
+        }
+        @keyframes hero-title-in {
+          0% {
+            opacity: 0;
+            transform: translateY(18px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes hero-mockup-in {
+          0% {
+            opacity: 0;
+            transform: translateY(28px) scale(0.97);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+        @keyframes hero-cta-in {
+          0% {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
         @keyframes letter-bounce {
@@ -628,18 +705,19 @@ function FlowSection() {
 }
 
 // "만드는 법 보기"가 왼쪽, "내 테마 만들기"가 오른쪽.
-function HeroActions() {
+function HeroActions({ viewportGroup }: { viewportGroup: "mobile" | "desktop" }) {
   return (
-    <div className="flex flex-row gap-2.5 sm:gap-3 lg:justify-start">
+    <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:flex lg:justify-start">
       <Link
         href="/guide"
-        className="inline-flex flex-1 items-center justify-center rounded-full border border-[#cfe0ff] bg-white/85 px-4 py-3.5 text-[15px] font-black text-[#2f6bbf] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus:ring-4 focus:ring-[#dcebff] lg:flex-none lg:px-6 lg:py-4 lg:text-base"
+        className="inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-full border border-[#cfe0ff] bg-white/85 px-2 py-3.5 text-[14px] font-black text-[#2f6bbf] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus:ring-4 focus:ring-[#dcebff] sm:px-4 sm:text-[15px] lg:flex-none lg:px-6 lg:py-4 lg:text-base"
       >
         만드는 법 보기
       </Link>
       <Link
         href="/template"
-        className="group inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-[#fee500] px-4 py-3.5 text-[15px] font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] lg:flex-none lg:px-6 lg:py-4 lg:text-base"
+        onClick={() => trackAnalyticsEvent("landing_primary_cta_clicked", { viewport_group: viewportGroup, destination: "template" })}
+        className="group inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[#fee500] px-2 py-3.5 text-[14px] font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:gap-2 sm:px-4 sm:text-[15px] lg:flex-none lg:px-6 lg:py-4 lg:text-base"
       >
         내 테마 만들기
         <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -683,6 +761,7 @@ function HeroMockup({ active }: { active: Subject }) {
         style={{ ["--float-base" as string]: "rotate(0deg)" }}
       >
         <img
+          data-testid="hero-mockup"
           key={active.image}
           src={active.image}
           srcSet={`${active.image.replace(".webp", "@464.webp")} 464w, ${active.image} 712w`}

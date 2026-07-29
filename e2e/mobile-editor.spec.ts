@@ -39,21 +39,66 @@ test.describe("모바일 편집기", () => {
       buffer: createSolidPng(16, 16, [90, 200, 140]),
     });
 
-    // 모바일 패널은 파일명을 접고 상태와 썸네일만 보여 준다. 자동 저장까지 이어지는지가 요점이다.
-    await expect(page.getByText("이미지 우선 적용 중 · 메인 배경 이미지")).toBeVisible();
-    await expect(page.getByRole("button", { name: "업로드 이미지", exact: true })).toBeVisible();
+    // 모바일 패널은 파일명을 노출하지 않는다. 선택 상태와 삭제 동작이 나타난 뒤 자동 저장까지 확인한다.
+    await expect(page.getByRole("button", { name: "업로드 이미지", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "업로드 이미지 삭제" })).toBeVisible();
     await expectAutosaveSaved(page);
   });
 
-  test("랜딩 첫 화면이 가로 스크롤을 만들지 않는다", async ({ page }) => {
-    // UX-010: 320~412px에서 랜딩이 가로로 삐져나오면 첫인상에서 바로 신뢰를 잃는다.
-    await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  test("랜딩이 320~412px에서 가로 스크롤 없이 CTA를 온전히 보여준다", async ({ page }) => {
+    // UX-010: 기기별 최소 폭에서 문서 폭·CTA 경계를 함께 확인한다.
+    for (const viewport of [320, 360, 390, 412]) {
+      await page.setViewportSize({ width: viewport, height: 844 });
+      await page.goto("/");
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-    const overflow = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-    }));
-    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
+      const overflow = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
+
+      const cta = page.getByRole("link", { name: "내 테마 만들기" }).first();
+      const box = await cta.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport);
+    }
+  });
+
+  test("랜딩은 오프닝 뒤에 타이틀, 목업, CTA 순서로 보여 준다", async ({ page }) => {
+    await page.goto("/");
+    const opening = page.getByTestId("hero-opening");
+    await expect(opening).toBeVisible();
+
+    const title = page.getByRole("heading", { level: 1 });
+    await expect(title).toBeVisible();
+    await expect(opening).toHaveCount(0);
+
+    const mockup = page.getByTestId("hero-mockup");
+    const cta = page.getByRole("link", { name: "내 테마 만들기" }).first();
+    await expect(cta).toBeVisible();
+    await expect(mockup).toBeVisible();
+
+    const [titleBox, mockupBox, ctaBox] = await Promise.all([
+      title.boundingBox(),
+      mockup.boundingBox(),
+      cta.boundingBox(),
+    ]);
+    expect(titleBox).not.toBeNull();
+    expect(mockupBox).not.toBeNull();
+    expect(ctaBox).not.toBeNull();
+    expect(mockupBox!.y).toBeGreaterThan(titleBox!.y);
+    expect(ctaBox!.y).toBeGreaterThanOrEqual(mockupBox!.y + mockupBox!.height);
+  });
+
+  test("모션 감소 설정에서는 랜딩 최종 상태를 바로 보여 준다", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+
+    await expect(page.getByTestId("hero-opening")).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByTestId("hero-mockup")).toBeVisible();
+    await expect(page.getByRole("link", { name: "내 테마 만들기" }).first()).toBeVisible();
   });
 });

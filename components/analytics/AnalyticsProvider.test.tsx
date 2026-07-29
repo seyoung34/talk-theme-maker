@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
-import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
+import AnalyticsProvider, { landingConsentDelayMs } from "@/components/analytics/AnalyticsProvider";
 import { analyticsConsentStorageKey } from "@/lib/analytics/ga4";
 
 let pathname = "/template";
@@ -21,7 +21,23 @@ describe("AnalyticsProvider", () => {
     pathname = "/template";
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  it("delays the consent prompt until the landing opening has cleared", async () => {
+    pathname = "/";
+    vi.useFakeTimers();
+    render(createElement(AnalyticsProvider));
+
+    expect(screen.queryByRole("dialog", { name: "분석 쿠키 동의" })).toBeNull();
+    await act(async () => vi.advanceTimersByTime(landingConsentDelayMs - 1));
+    expect(screen.queryByRole("dialog", { name: "분석 쿠키 동의" })).toBeNull();
+
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(screen.getByRole("dialog", { name: "분석 쿠키 동의" })).toBeInTheDocument();
+  });
 
   it("accepts consent and sends the current page view once", async () => {
     render(createElement(AnalyticsProvider));

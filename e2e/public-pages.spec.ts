@@ -16,6 +16,22 @@ test.describe("공개 페이지", () => {
     await expect(page.getByRole("heading", { level: 1, name: /원하는 템플릿을 골라/ })).toBeVisible();
   });
 
+  test("데스크톱 랜딩 CTA가 첫 화면의 메인 텍스트 아래에 보인다", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+
+    const title = page.getByRole("heading", { level: 1 });
+    const cta = page.getByRole("link", { name: "내 테마 만들기" }).first();
+    await expect(title).toBeVisible();
+    await expect(cta).toBeVisible();
+
+    const [titleBox, ctaBox] = await Promise.all([title.boundingBox(), cta.boundingBox()]);
+    expect(titleBox).not.toBeNull();
+    expect(ctaBox).not.toBeNull();
+    expect(ctaBox!.y).toBeGreaterThanOrEqual(titleBox!.y + titleBox!.height);
+    expect(ctaBox!.y + ctaBox!.height).toBeLessThanOrEqual(900);
+  });
+
   test("가이드와 정책 페이지가 열린다", async ({ page }) => {
     await page.goto("/guide");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();

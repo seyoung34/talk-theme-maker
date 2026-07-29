@@ -2,6 +2,8 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
+import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
+import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { Archive, Download, LoaderCircle, Package, ShieldCheck, X } from "lucide-react";
 import { getExportNotice, getExportProgressSteps } from "@/components/project/exportClient";
 import type { AccountState, ExportDownloadResult, ExportMode } from "@/components/project/exportModel";
@@ -49,7 +51,7 @@ export function ExportDialog({
                 </>}
               </div>
               <div className="mt-4 grid gap-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="font-semibold text-[#475569]">비용 <strong className="ml-1 text-[#0f172a]">1크레딧</strong></span><span className="font-semibold text-[#475569]">보유 <strong className={`ml-1 ${hasCredits ? "text-emerald-700" : "text-rose-700"}`}>{isAccountLoading ? "확인 중" : `${credits}크레딧`}</strong></span></div></div>
-              <p className="mt-3 text-xs font-medium leading-5 text-[#64748b]">편집과 ‘내 템플릿’ 저장은 현재 브라우저에서 처리됩니다. 다운로드를 시작하면 결과물 생성을 위해 필요한 이미지와 설정이 서버로 일시 전송됩니다. <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2563eb] underline underline-offset-2">자세히 보기</Link></p>
+              <p className="mt-3 text-xs font-medium leading-5 text-[#64748b]">{persistenceNotice.browserDetailed} {persistenceNotice.exportTemporary} <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2563eb] underline underline-offset-2">자세히 보기</Link></p>
             </>}
           </div>
           <div className="flex items-center justify-end gap-2 border-t border-[#e2e8f0] bg-white px-5 py-4"><button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={isExporting}>{downloadResult ? "닫기" : "취소"}</button>{preparationError ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white" onClick={onRetryPreparation}>다시 시도</button> : !isPreparingExport && !downloadResult ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit} disabled={isExporting || isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}>{isExporting ? "다운로드 준비 중…" : ctaLabel}</button> : null}</div>
@@ -78,7 +80,10 @@ function DownloadComplete({ result }: { result: ExportDownloadResult }) {
     <span className="mx-auto grid size-12 place-items-center rounded-full bg-[#ecfdf5] text-[#059669]"><Download size={22} aria-hidden="true" /></span>
     <div><p className="text-base font-bold text-[#0f172a]">파일 다운로드를 시작했습니다</p><p className="mt-2 max-w-md break-all text-sm font-medium text-[#64748b]">{result.fileName}</p></div>
     <ol className="grid gap-2 rounded-xl border border-[#dbeafe] bg-[#f8fbff] p-4 text-left text-sm font-medium leading-6 text-[#334155]">{steps.map((step, index) => <li key={step} className="flex gap-2"><span className="grid size-5 shrink-0 place-items-center rounded-full bg-[#2563eb] text-[11px] font-bold text-white">{index + 1}</span><span>{step}</span></li>)}</ol>
-    <Link href={`/guide?platform=${result.platform}`} className="text-sm font-semibold text-[#2563eb] underline underline-offset-2">적용 방법 자세히 보기</Link>
+    <div className="grid gap-2 sm:grid-cols-2">
+      <button type="button" className="min-h-11 rounded-xl bg-[#ecfdf5] px-3 text-sm font-bold text-[#047857]" onClick={() => trackAnalyticsEvent("install_confirmed", { platform: result.platform })}>설치·적용 완료</button>
+      <Link href={`/guide?platform=${result.platform}`} onClick={() => trackAnalyticsEvent("install_help_requested", { platform: result.platform })} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#bfdbfe] px-3 text-sm font-semibold text-[#2563eb]">적용 방법 자세히 보기</Link>
+    </div>
   </div>;
 }
 

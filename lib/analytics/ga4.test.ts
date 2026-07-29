@@ -70,6 +70,16 @@ describe("GA4 analytics", () => {
     expect(getAcquisitionContext("/template")).not.toHaveProperty("utm_content");
   });
 
+  it("keeps expanded UTM values on the allowlist and drops arbitrary values", () => {
+    saveAnalyticsConsent("granted");
+    window.history.replaceState({}, "", "/?utm_source=naver&utm_medium=search&utm_campaign=naver_search");
+    expect(getAcquisitionContext("/")).toEqual(expect.objectContaining({ utm_source: "naver", utm_medium: "search", utm_campaign: "naver_search" }));
+
+    window.sessionStorage.clear();
+    window.history.replaceState({}, "", "/?utm_source=untrusted&utm_medium=anything&utm_campaign=free-text");
+    expect(getAcquisitionContext("/")).not.toEqual(expect.objectContaining({ utm_source: expect.anything(), utm_medium: expect.anything(), utm_campaign: expect.anything() }));
+  });
+
   it("tags events from a device marked as internal traffic", () => {
     window.localStorage.setItem(analyticsConsentStorageKey, "granted");
     markInternalTraffic();

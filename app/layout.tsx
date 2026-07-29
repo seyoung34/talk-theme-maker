@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import AnalyticsProvider from "@/components/analytics/AnalyticsProvider";
 import SiteFooter from "@/components/layout/SiteFooter";
 import { getAnalyticsBootstrapScript, getAnalyticsMeasurementId } from "@/lib/analytics/ga4";
@@ -31,6 +31,12 @@ export const metadata: Metadata = {
     title: siteTitleDefault,
     description: siteDescription,
   },
+};
+
+// 모바일 브라우저가 데스크톱 레이아웃 폭(약 980px)으로 축소 렌더링하지 않도록 명시한다.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

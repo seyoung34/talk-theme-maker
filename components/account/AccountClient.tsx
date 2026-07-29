@@ -8,6 +8,7 @@ import type { AccountExportDto, AccountMeResponse, ExportDownloadLinkResponse } 
 import { getExportDownloadState } from "@/lib/theme/android/outputRetention";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createClient } from "@/lib/supabase/client";
+import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 
 export default function AccountClient() {
   const [me, setMe] = useState<AccountMeResponse | null>(null);
@@ -76,7 +77,7 @@ export default function AccountClient() {
             마이페이지
           </h1>
           <p className="mt-2 text-sm font-semibold leading-7 text-[var(--color-on-surface-variant)]">
-            계정 정보와 보유 크레딧, 최근 내보내기 이력을 한곳에서 확인합니다.
+            계정 정보와 보유 크레딧, 최근 내보내기 이력을 한곳에서 확인합니다. 편집 프로젝트는 계정이 아니라 현재 브라우저에 저장됩니다.
           </p>
           {isLoading ? <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#3d7bd6]" role="status"><LoaderCircle className="animate-spin" size={15} aria-hidden="true" />계정 정보를 불러오는 중입니다.</p> : null}
         </header>
@@ -109,6 +110,14 @@ export default function AccountClient() {
               )}
             </section>
 
+            <section className="rounded-[28px] border border-[#dbe8fb] bg-[#f7fbff] p-5 sm:p-6 lg:col-start-1 lg:row-start-2" aria-labelledby="storage-scope-title">
+              <h2 id="storage-scope-title" className="text-base font-extrabold">보관 범위</h2>
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                <div className="rounded-[20px] border border-[#e3ecf7] bg-white p-4"><dt className="text-xs font-black text-[#3d7bd6]">계정에 보관</dt><dd className="mt-1 font-semibold leading-6 text-[var(--color-on-surface-variant)]">{persistenceNotice.accountDetailed}</dd></div>
+                <div className="rounded-[20px] border border-[#e3ecf7] bg-white p-4"><dt className="text-xs font-black text-[#3d7bd6]">이 브라우저에 보관</dt><dd className="mt-1 font-semibold leading-6 text-[var(--color-on-surface-variant)]">{persistenceNotice.browserDetailed} {persistenceNotice.browserRisk}</dd></div>
+              </dl>
+            </section>
+
           <aside className="grid content-start gap-4 lg:col-start-2 lg:row-start-1">
             <section className="overflow-hidden rounded-[30px] border border-[#dbe8fb] bg-white/88 shadow-[0_24px_68px_rgba(47,107,191,0.1)] backdrop-blur" aria-labelledby="credit-balance-title">
               <div className="bg-[linear-gradient(180deg,#f7fbff_0%,#eef5ff_100%)] p-5 sm:p-6">
@@ -125,7 +134,7 @@ export default function AccountClient() {
             </section>
           </aside>
 
-            <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6 lg:col-start-1 lg:row-start-2" aria-labelledby="export-history-title">
+            <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6 lg:col-start-1 lg:row-start-3" aria-labelledby="export-history-title">
               <div className="mb-5 flex items-center gap-3">
                 <span className="grid size-11 place-items-center rounded-2xl bg-[#eafaf1] text-[#34c98a]"><Download size={20} aria-hidden="true" /></span>
                 <div><h2 id="export-history-title" className="text-base font-extrabold">최근 Export 이력</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">최근 10개의 내보내기 작업입니다. Android 결과 파일은 7일간 보관합니다.</p></div>
@@ -138,7 +147,7 @@ export default function AccountClient() {
             </section>
 
             {me?.user ? (
-              <section className="border-t border-[#e3ecf7] pt-5 text-right lg:col-start-1 lg:row-start-3" aria-labelledby="account-deletion-title">
+              <section className="border-t border-[#e3ecf7] pt-5 text-right lg:col-start-1 lg:row-start-4" aria-labelledby="account-deletion-title">
                 {!isDeletionOpen ? (
                   <p className="text-xs font-semibold text-[var(--color-outline)]"><span id="account-deletion-title">계정을 더 이상 사용하지 않으시나요?</span> <button type="button" className="ml-1 font-bold text-[var(--color-on-surface-variant)] underline underline-offset-2 transition hover:text-[var(--color-error)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-error)]" onClick={() => { setIsDeletionOpen(true); setDeletionError(null); }}>회원탈퇴</button></p>
                 ) : (

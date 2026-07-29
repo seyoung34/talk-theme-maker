@@ -142,6 +142,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const mobileEditCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const analyticsEditorReadyRef = useRef<string | null>(null);
   const analyticsInteractionTimerRef = useRef<number | null>(null);
+  const firstValueReachedRef = useRef(false);
   // 자동 저장에서 복원한 폼과 한 번이라도 열었던 폼은 저장된 메타데이터로 다시 초기화하지 않는다.
   const systemTemplateMetadataInitializedRef = useRef(false);
 
@@ -501,6 +502,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const handleRecoveryRestored = useCallback((exportOptions: RecoveryExportOptions) => {
     void resumeExportDialog(exportOptions);
   }, [resumeExportDialog]);
+  const handleAutosaveRestored = useCallback(() => {
+    trackAnalyticsEvent("autosave_recovered", { mode });
+  }, [mode]);
 
   useEditorBootstrap({
     enabled: editorTabLockStatus === "acquired",
@@ -508,6 +512,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     hydrateSystemTemplateUploads,
     mode,
     onAutosaveArmed: armAutosave,
+    onAutosaveRestored: handleAutosaveRestored,
     onRecoveryRestored: handleRecoveryRestored,
     requestAutosaveDecision,
     resumeToken,
@@ -572,6 +577,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       trackAnalyticsEvent(name, { slot_role: slot.role, section: slot.section, ...extra });
       analyticsInteractionTimerRef.current = null;
     }, 500);
+  }, []);
+
+  const trackFirstValueReached = useCallback((action: "upload" | "candidate" | "color") => {
+    if (firstValueReachedRef.current) return;
+    firstValueReachedRef.current = true;
+    trackAnalyticsEvent("first_value_reached", { action });
   }, []);
 
   const startDefaultTemplate = () => {
@@ -702,6 +713,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     focusSlot(slot.id);
     revealSlot(slot);
     trackAnalyticsEvent("slot_upload_completed", { slot_role: slot.role, section: slot.section, asset_source: "user" });
+    trackFirstValueReached("upload");
   };
 
   const uploadEditedSlot = (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => {
@@ -730,6 +742,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     focusSlot(slot.id);
     revealSlot(slot);
     trackAnalyticsEvent("slot_upload_completed", { slot_role: slot.role, section: slot.section, asset_source: "user" });
+    trackFirstValueReached("upload");
   };
 
   const removeUploadedSlotCandidate = (slot: ThemeAssetSlot, uploadId: string) => {
@@ -760,6 +773,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
     setSelectedSlotId(slot.id);
     scheduleInteractionEvent("color_changed", slot);
+    trackFirstValueReached("color");
   };
 
   const applyAutoColor = (slot: ThemeAssetSlot) => {
@@ -769,6 +783,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setColors((current) => ({ ...current, [slot.id]: color }));
     setCandidateSelections((current) => ({ ...current, [slot.id]: autoMainPaletteCandidateId }));
     scheduleInteractionEvent("color_changed", slot, { asset_source: "auto" });
+    trackFirstValueReached("color");
   };
 
   const applyAutoColorToAll = () => {
@@ -781,6 +796,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const selectCandidate = (slot: ThemeAssetSlot, candidateId: string) => {
     setCandidateSelections((current) => ({ ...current, [slot.id]: candidateId }));
     focusSlot(slot.id);
+    trackFirstValueReached("candidate");
 
     if (slot.kind === "color") {
       setColors((current) => {

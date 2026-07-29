@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { Cookie } from "lucide-react";
 import { getAcquisitionContext, getAnalyticsConsent, getAnalyticsMeasurementId, saveAnalyticsConsent, trackAnalyticsEvent, updateAnalyticsConsent, type AnalyticsConsent } from "@/lib/analytics/ga4";
 
+export const landingConsentDelayMs = 3000;
+
 function AnalyticsPageTracker({ consent }: { consent: AnalyticsConsent | null }) {
   const pathname = usePathname();
 
@@ -24,12 +26,24 @@ export default function AnalyticsProvider() {
   const pathname = usePathname();
   const [consent, setConsent] = useState<AnalyticsConsent | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isConsentPromptReady, setIsConsentPromptReady] = useState(pathname !== "/");
   const shouldShowConsentUi = pathname !== "/edit";
 
   useEffect(() => {
     const initialConsent = getAnalyticsConsent();
     setConsent(initialConsent);
   }, []);
+
+  useEffect(() => {
+    if (pathname !== "/") {
+      setIsConsentPromptReady(true);
+      return;
+    }
+
+    setIsConsentPromptReady(false);
+    const timer = window.setTimeout(() => setIsConsentPromptReady(true), landingConsentDelayMs);
+    return () => window.clearTimeout(timer);
+  }, [pathname]);
 
   const chooseConsent = (nextConsent: AnalyticsConsent) => {
     saveAnalyticsConsent(nextConsent);
@@ -43,7 +57,7 @@ export default function AnalyticsProvider() {
   return (
     <>
       <AnalyticsPageTracker consent={consent} />
-      {shouldShowConsentUi && consent === null ? (
+      {shouldShowConsentUi && isConsentPromptReady && consent === null ? (
         <aside className="fixed inset-x-4 bottom-4 z-[200] mx-auto max-w-xl rounded-2xl border border-slate-200 bg-white p-4 shadow-xl sm:flex sm:items-center sm:gap-4" role="dialog" aria-label="분석 쿠키 동의">
           <p className="text-sm font-medium leading-5 text-slate-700">서비스 이용 흐름을 분석하기 위해 분석 쿠키를 사용합니다. 동의 전에는 분석 쿠키와 사용자 행동 이벤트를 수집하지 않습니다. <Link href="/privacy" className="font-semibold underline underline-offset-2">개인정보 처리방침</Link></p>
           <div className="mt-3 flex shrink-0 gap-2 sm:mt-0">

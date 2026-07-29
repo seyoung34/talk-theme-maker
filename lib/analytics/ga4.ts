@@ -7,11 +7,11 @@ const analyticsInternalCookieName = "talktheme_analytics_internal";
 const acquisitionStorageKey = "talktheme:analytics-acquisition:v1";
 const funnelContextStorageKey = "talktheme:analytics-funnel-context:v1";
 const allowedUtmValues = {
-  utm_source: new Set(["instagram"]),
-  utm_medium: new Set(["social"]),
-  utm_campaign: new Set(["instagram_personal_launch"]),
+  utm_source: new Set(["instagram", "naver", "google", "tiktok", "youtube", "x", "community"]),
+  utm_medium: new Set(["social", "search", "video", "community"]),
+  utm_campaign: new Set(["instagram_personal_launch", "naver_search", "google_search", "tiktok_launch", "youtube_launch", "x_launch", "community_launch"]),
 };
-const knownCampaignKeys = new Set(["instagram_personal_launch"]);
+const knownCampaignKeys = new Set(["instagram_personal_launch", "naver_search", "google_search", "tiktok_launch", "youtube_launch", "x_launch", "community_launch"]);
 
 export type AnalyticsConsent = "granted" | "denied";
 type AnalyticsPrimitive = string | number | boolean;
@@ -22,6 +22,21 @@ type FunnelContext = Partial<Record<"template_key" | "template_source" | "platfo
 
 type AnalyticsEventMap = {
   page_view: { page_path: string } & AcquisitionContext;
+  landing_primary_cta_clicked: { viewport_group: "mobile" | "desktop"; destination: "template" };
+  auth_prompt_viewed: { reason: "export" | "general"; mode: "signin" | "signup" };
+  signup_started: { provider: "email" | "kakao" };
+  signup_completed: { provider: "email" | "kakao" };
+  signup_failed: { provider: "email" | "kakao"; reason: "auth_error" };
+  login_started: { provider: "email" | "kakao" };
+  login_completed: { provider: "email" | "kakao" };
+  login_failed: { provider: "email" | "kakao"; reason: "auth_error" };
+  first_value_reached: { action: "upload" | "candidate" | "color" };
+  autosave_completed: { mode: string };
+  autosave_failed: { reason: "quota" | "storage" | "conflict" };
+  autosave_recovered: { mode: string };
+  install_guide_viewed: { platform: string };
+  install_confirmed: { platform: string };
+  install_help_requested: { platform: string };
   template_viewed: { template_key: string; template_source: string; platform?: string };
   template_started: { template_key: string; template_source: string; platform: string };
   editor_ready: { template_key: string; template_source: string; platform: string };
