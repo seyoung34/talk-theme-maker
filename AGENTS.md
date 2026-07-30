@@ -29,14 +29,18 @@
 ## Verification Budget
 
 Choose the smallest useful check set for the files changed; do not run the full suite by default.
+CI (`.github/workflows/ci.yml`) runs the full set on every PR, so local runs stay scoped to what you touched.
 
 - Docs, comments, or AGENTS-only changes: no build required.
 - Korean UI text changes: re-read touched lines as UTF-8 and run `npm run check:text`.
 - Slot metadata or iOS export mapping changes: `npm run check:ios-slots`.
 - Android color slot/export mapping changes: `npm run check:android-colors`.
+- Android sample asset/removal-list changes: `npm run check:android-assets`. The removal list lives in `removeBundledOptionalDrawables()` in `lib/theme/android/buildCore.ts`; the script parses it by name, so moving or renaming that function breaks the check.
+- iOS package validation or ZIP writer changes: `npm run check:ios-export`.
+- `adminAssetDomain.ts` / `adminAssets.ts` contract changes: `npm run check:admin-asset-domain`.
 - TypeScript logic/API changes: `npx tsc --noEmit`.
 - Changes to `lib/theme` pure functions or other unit-tested logic: `npm test` (Vitest). Add/extend a `*.test.ts` beside the changed module when practical.
-- Code quality / catching unused vars and hook-deps issues: `npm run lint` (ESLint flat config; `next/core-web-vitals` + `next/typescript`). Currently reports pre-existing warnings — treat warnings as pre-existing unless the current change adds new ones; keep `error` count at 0.
+- Code quality / catching unused vars and hook-deps issues: `npm run lint` (ESLint flat config; `next/core-web-vitals` + `next/typescript`). CI gates on `--max-warnings 42`, the count when CI was introduced: `error` must stay 0 and warnings must not grow. Lower the baseline in `ci.yml` as warnings get cleaned up; never raise it.
 - Broad route/config/export packaging changes or release confidence pass: `npm run build`.
 - Editor bootstrap/autosave, `/account` export history, or cross-page navigation changes: `npm run test:e2e` (Playwright). It runs a fresh `next build` with Supabase disabled, so it takes a few minutes and overwrites `.next` — run it only when a change crosses component/API/browser-storage boundaries, and re-run `npm run build` before `npm run start`. See `e2e/AGENTS.md`.
 
@@ -47,6 +51,7 @@ npm run dev -- --host 127.0.0.1
 npm run check:text
 npm run check:ios-slots
 npm run check:android-colors
+npm run check:all      # all 7 contract checks, same set CI runs
 npx tsc --noEmit
 npm test
 npm run lint

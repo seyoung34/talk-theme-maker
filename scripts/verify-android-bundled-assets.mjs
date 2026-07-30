@@ -4,15 +4,15 @@ import path from "node:path";
 const root = process.cwd();
 const sampleRoot = path.join(root, "android-sample-theme", "apeach-26.1.0-source");
 const manifestPath = path.join(root, "lib", "theme", "manifest", "android.slots.json");
-const apkPath = path.join(root, "lib", "theme", "android", "apk.ts");
+const buildCorePath = path.join(root, "lib", "theme", "android", "buildCore.ts");
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-const apkSource = fs.readFileSync(apkPath, "utf8");
+const buildCoreSource = fs.readFileSync(buildCorePath, "utf8");
 
 // Every raster asset the sample project bundles under src/main/theme/drawable-* and
 // src/main/res/mipmap-* must be either (a) targeted by a slot's export path/scaleTargets,
 // so an override always replaces it, or (b) explicitly stripped in
-// removeBundledOptionalDrawables() in apk.ts so it never ships. This keeps the apeach
+// removeBundledOptionalDrawables() in buildCore.ts so it never ships. This keeps the apeach
 // sample's branded artwork from leaking into exported themes when a user leaves a slot
 // on its default ("사용 안 함" or untouched) state.
 const trackedDirPrefixes = ["src/main/theme/drawable", "src/main/res/mipmap"];
@@ -24,8 +24,8 @@ for (const slot of manifest) {
   for (const target of slot.export?.android?.scaleTargets ?? []) coveredPaths.add(target);
 }
 
-const removalListMatch = apkSource.match(/async function removeBundledOptionalDrawables[\s\S]*?const bundledPaths = \[([\s\S]*?)\];/);
-if (!removalListMatch) throw new Error("Could not find removeBundledOptionalDrawables' bundledPaths list in apk.ts.");
+const removalListMatch = buildCoreSource.match(/async function removeBundledOptionalDrawables[\s\S]*?const bundledPaths = \[([\s\S]*?)\];/);
+if (!removalListMatch) throw new Error("Could not find removeBundledOptionalDrawables' bundledPaths list in buildCore.ts.");
 const removedPaths = [...removalListMatch[1].matchAll(/"([^"]+)"/g)].map((match) => match[1]);
 for (const removedPath of removedPaths) coveredPaths.add(removedPath);
 
@@ -43,7 +43,7 @@ if (uncovered.length) {
       `${uncovered.length}개의 샘플 프로젝트 이미지가 슬롯/제거 목록 어느 쪽에도 커버되지 않습니다.`,
       "사용자가 해당 슬롯을 건드리지 않으면 apeach 원본이 그대로 내보내집니다:",
       ...uncovered.map((relativePath) => ` - ${relativePath}`),
-      "android.slots.json에 슬롯/scaleTargets를 추가하거나, apk.ts의 removeBundledOptionalDrawables에 경로를 추가하세요.",
+      "android.slots.json에 슬롯/scaleTargets를 추가하거나, buildCore.ts의 removeBundledOptionalDrawables에 경로를 추가하세요.",
     ].join("\n"),
   );
 }
