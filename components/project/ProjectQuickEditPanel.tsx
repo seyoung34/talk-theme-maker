@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useId, useState, type DragEvent, type MutableRefObject } from "react";
-import { Edit3, ImageOff, Info, Link2, RefreshCw, X } from "lucide-react";
+import { Edit3, ImageOff, Info, Link2, LoaderCircle, RefreshCw, X } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
-import { getCandidateLayoutKind, type CandidateLayoutKind } from "@/components/project/candidateLayout";
+import { getCandidateCardWidthClass, getCandidateLayoutKind, type CandidateLayoutKind } from "@/components/project/candidateLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
@@ -439,11 +439,7 @@ function CandidatePicker({
   const compactCapacity = layoutKind === "wallpaper" ? 6 : layoutKind === "color" ? 8 : 4;
   const canToggle = isOpen || activeGroup.items.length > compactCapacity || (activeGroup.key === "admin" && hasMoreAdminAssets);
   const collectionClassName = isOpen
-    ? layoutKind === "wallpaper"
-      ? "grid grid-cols-4 gap-3 xl:grid-cols-6"
-      : layoutKind === "color"
-        ? "grid grid-cols-5 gap-2 xl:grid-cols-7"
-        : "grid grid-cols-4 gap-3 xl:grid-cols-5"
+    ? "flex flex-wrap gap-3"
     : "flex gap-3 overflow-x-auto pb-2 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]";
 
   return (
@@ -460,6 +456,9 @@ function CandidatePicker({
               onClick={() => setActiveTab(group.key)}
             >
               <span>{group.label}</span>
+              {group.key === "admin" && isLoadingAdminAssets ? (
+                <LoaderCircle className="ml-1.5 size-3.5 motion-safe:animate-spin" aria-hidden="true" />
+              ) : null}
             </button>
           ))}
         </div>
@@ -478,30 +477,45 @@ function CandidatePicker({
 
       {activeGroup ? (
         <div className="mt-4 grid gap-3">
-          <div className={collectionClassName}>
+          <div
+            className={collectionClassName}
+            aria-busy={activeGroup.key === "admin" && isLoadingAdminAssets}
+          >
             {activeGroup.items.length > 0 ? activeGroup.items.map((candidate) => (
               <CandidateCard
                 key={candidate.id}
                 candidate={candidate}
                 layoutKind={layoutKind}
-                compact={!isOpen}
                 onApply={onApplyCandidate}
                 onRemove={candidate.source === "upload" ? onRemoveUpload : undefined}
               />
-            )) : activeGroup.key === "admin" ? (
-              <AdminAssetPlaceholderCard isLoading={isLoadingAdminAssets} layoutKind={layoutKind} compact={!isOpen} />
+            )) : activeGroup.key === "admin" && !isLoadingAdminAssets ? (
+              <AdminAssetPlaceholderCard layoutKind={layoutKind} />
             ) : null}
+            {activeGroup.key === "admin" && isLoadingAdminAssets
+              ? Array.from({ length: isOpen ? 8 : 5 }, (_, index) => (
+                <CandidateSkeletonCard key={`admin-asset-skeleton-${index}`} layoutKind={layoutKind} />
+              ))
+              : null}
             {activeGroup.key === "admin" && hasMoreAdminAssets ? (
               <button
                 type="button"
-                className={`flex items-center justify-center rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-3 text-center text-xs font-semibold text-[#475569] transition hover:border-[#93c5fd] hover:bg-[#eff6ff] disabled:opacity-50 ${isOpen ? "min-h-28" : getCompactCandidateWidth(layoutKind)}`}
+                className={`flex min-h-24 items-center justify-center rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-3 text-center text-xs font-semibold text-[#475569] transition hover:border-[#93c5fd] hover:bg-[#eff6ff] disabled:opacity-50 ${getCandidateCardWidthClass(layoutKind)}`}
                 onClick={onLoadMoreAdminAssets}
                 disabled={isLoadingAdminAssets}
               >
-                {isLoadingAdminAssets ? "불러오는 중" : "더 보기"}
+                {isLoadingAdminAssets ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <LoaderCircle className="size-3.5 motion-safe:animate-spin" aria-hidden="true" />
+                    불러오는 중
+                  </span>
+                ) : "더 보기"}
               </button>
             ) : null}
           </div>
+          {activeGroup.key === "admin" && isLoadingAdminAssets ? (
+            <p className="sr-only" role="status">추천 에셋을 불러오는 중입니다.</p>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -511,18 +525,16 @@ function CandidatePicker({
 function CandidateCard({
   candidate,
   layoutKind,
-  compact,
   onApply,
   onRemove,
 }: {
   candidate: SlotCandidate;
   layoutKind: CandidateLayoutKind;
-  compact: boolean;
   onApply: (candidate: SlotCandidate) => void;
   onRemove?: (uploadId: string) => void;
 }) {
   return (
-    <div className={`relative min-w-0 ${compact ? getCompactCandidateWidth(layoutKind) : ""}`}>
+    <div className={`relative min-w-0 ${getCandidateCardWidthClass(layoutKind)}`}>
       <button
         type="button"
         aria-pressed={candidate.selected}
@@ -560,13 +572,27 @@ function CandidateCard({
   );
 }
 
-function AdminAssetPlaceholderCard({ isLoading, layoutKind, compact }: { isLoading: boolean; layoutKind: CandidateLayoutKind; compact: boolean }) {
+function CandidateSkeletonCard({ layoutKind }: { layoutKind: CandidateLayoutKind }) {
+  const aspectClassName = layoutKind === "wallpaper" ? "aspect-[1/2]" : "aspect-square";
+
   return (
-    <div className={`flex min-h-28 flex-col justify-center rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-center ${compact ? getCompactCandidateWidth(layoutKind) : ""}`}>
-      <span className={`mx-auto mb-3 block size-12 rounded-xl border border-[#dbe3ed] bg-white ${isLoading ? "animate-pulse" : ""}`} aria-hidden="true" />
+    <div
+      className={`grid gap-2 rounded-2xl border border-[#e5e7eb] bg-white p-2 ${getCandidateCardWidthClass(layoutKind)}`}
+      aria-hidden="true"
+    >
+      <span className={`w-full rounded-xl bg-gradient-to-r from-[#f1f5f9] via-white to-[#f1f5f9] bg-[length:200%_100%] motion-safe:animate-pulse ${aspectClassName}`} />
+      <span className="mx-auto h-3 w-3/4 rounded-full bg-[#e2e8f0] motion-safe:animate-pulse" />
+    </div>
+  );
+}
+
+function AdminAssetPlaceholderCard({ layoutKind }: { layoutKind: CandidateLayoutKind }) {
+  return (
+    <div className={`flex min-h-28 flex-col justify-center rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] px-3 py-3 text-center ${getCandidateCardWidthClass(layoutKind)}`}>
+      <span className="mx-auto mb-3 block size-10 rounded-xl border border-[#dbe3ed] bg-white" aria-hidden="true" />
       <span className="text-[12px] font-semibold text-[#111827]">추천 에셋</span>
       <span className="mt-1 line-clamp-2 text-[11px] font-medium leading-[1.3] text-[#6b7280]">
-        {isLoading ? "추천 에셋을 불러오는 중입니다." : "이 슬롯에 표시할 추천 에셋이 없습니다."}
+        이 슬롯에 표시할 추천 에셋이 없습니다.
       </span>
     </div>
   );
@@ -585,12 +611,6 @@ function CandidatePreview({ candidate, layoutKind }: { candidate: SlotCandidate;
     return <span className={`w-full overflow-hidden rounded-xl bg-[#f8fafc] bg-center bg-no-repeat ${layoutKind === "wallpaper" ? "bg-cover" : "bg-contain"} ${aspectClassName}`} style={{ backgroundImage: `url(${candidate.previewUrl})` }} />;
   }
   return <span className={`w-full overflow-hidden rounded-xl bg-[#e5e7eb] ${aspectClassName}`} />;
-}
-
-function getCompactCandidateWidth(layoutKind: CandidateLayoutKind) {
-  if (layoutKind === "wallpaper") return "w-[88px] shrink-0";
-  if (layoutKind === "color") return "w-[92px] shrink-0";
-  return "w-[124px] shrink-0";
 }
 
 function ColorEditor({

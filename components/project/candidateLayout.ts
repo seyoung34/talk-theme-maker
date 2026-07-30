@@ -16,3 +16,9 @@ export function getCandidateLayoutKind(slot: ThemeAssetSlot): CandidateLayoutKin
   if (width && height && width / height <= 0.75) return "wallpaper";
   return "image";
 }
+
+export function getCandidateCardWidthClass(layoutKind: CandidateLayoutKind) {
+  if (layoutKind === "wallpaper") return "w-[88px] shrink-0";
+  if (layoutKind === "color") return "w-[92px] shrink-0";
+  return "w-[96px] shrink-0";
+}

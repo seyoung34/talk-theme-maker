@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getCandidateLayoutKind } from "@/components/project/candidateLayout";
+import { getCandidateCardWidthClass, getCandidateLayoutKind } from "@/components/project/candidateLayout";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 
 function makeSlot(overrides: Partial<ThemeAssetSlot>): ThemeAssetSlot {
@@ -38,5 +38,13 @@ describe("getCandidateLayoutKind", () => {
       role: "tab_background_image",
       constraints: { recommendedSize: { width: 1442, height: 214 } },
     }))).toBe("image");
+  });
+});
+
+describe("getCandidateCardWidthClass", () => {
+  it("보기 모드와 무관하게 사용할 고정 카드 폭을 제공한다", () => {
+    expect(getCandidateCardWidthClass("wallpaper")).toBe("w-[88px] shrink-0");
+    expect(getCandidateCardWidthClass("color")).toBe("w-[92px] shrink-0");
+    expect(getCandidateCardWidthClass("image")).toBe("w-[96px] shrink-0");
   });
 });

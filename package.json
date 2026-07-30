@@ -10,6 +10,8 @@
     "check:android-colors": "node scripts/verify-android-color-slots.mjs",
     "check:android-assets": "node scripts/verify-android-bundled-assets.mjs",
     "check:edge-imports": "node scripts/verify-edge-safe-imports.mjs",
+    "docs:backup": "node scripts/backup-private-docs.mjs --commit --push",
+    "docs:backup:dry-run": "node scripts/backup-private-docs.mjs --dry-run",
     "assets:landing": "node scripts/optimize-landing-images.mjs",
     "assets:guide": "node scripts/optimize-guide-images.mjs",
     "build": "next build",
