@@ -58,7 +58,10 @@ export const groupLabels: Record<ThemeSlotGroup, string> = {
   pattern: "패턴",
 };
 
-const groupOrder: ThemeSlotGroup[] = ["background", "header", "list", "bar", "icons", "elements", "bubbles", "input", "text", "keypad", "pattern", "icon", "profiles", "launcher"];
+// 편집기의 그룹 탭 순서를 정하는 유일한 기준. 슬롯 매니페스트의 나열 순서는 쓰지 않는다.
+// 공통 리소스에서는 프로필이 대표 아이콘보다 앞이다. 프로필은 채팅·친구 화면에 바로 보여
+// 먼저 손대게 되고, 대표 아이콘은 테마 목록에서만 보여 나중에 챙기는 리소스다.
+const groupOrder: ThemeSlotGroup[] = ["background", "header", "list", "bar", "icons", "elements", "bubbles", "input", "text", "keypad", "pattern", "profiles", "icon", "launcher"];
 
 export {
   bubbleSlotFromRole,

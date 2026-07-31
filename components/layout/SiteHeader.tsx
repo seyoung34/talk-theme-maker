@@ -13,6 +13,22 @@ import { createClient } from "@/lib/supabase/client";
 
 type SiteHeaderProps = { currentPath?: string };
 
+/**
+ * 텍스트 메뉴의 활성 표시.
+ *
+ * 채운 알약은 브랜드 색 면적이 커서 헤더에서 버튼처럼 읽힌다. 밑줄은 현재 위치만
+ * 가리키고 나머지 배치를 흔들지 않는다. 밑줄은 border가 아니라 항상 자리를 차지하는
+ * 가상 요소로 그려서, 활성/비활성 사이에 글자가 위아래로 밀리지 않게 한다.
+ */
+function navLinkClassName(active: boolean) {
+  return [
+    "relative inline-flex min-h-10 items-center rounded px-1.5 py-2 text-[10.5px] font-black transition",
+    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm",
+    "after:absolute after:inset-x-1.5 after:bottom-1 after:h-[2.5px] after:rounded-full after:transition sm:after:inset-x-4",
+    active ? "text-[#2f6bbf] after:bg-[#2f6bbf]" : "text-[#3d7bd6] after:bg-transparent hover:text-[#2f6bbf] hover:after:bg-[#cfe0ff]",
+  ].join(" ");
+}
+
 export default function SiteHeader({ currentPath }: SiteHeaderProps) {
   const router = useRouter();
   const [session, setSession] = useState<SessionResponse | null>(null);
@@ -77,11 +93,11 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
           </Link>
 
           <nav className="flex shrink-0 items-center gap-0.5 sm:gap-2" aria-label="주요 메뉴">
-            <Link href="/template" aria-current={currentPath === "/template" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-1.5 py-2 text-[10.5px] font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/template" ? "bg-[#2f6bbf] text-white shadow-[0_10px_22px_rgba(47,107,191,0.24)]" : "text-[#3d7bd6] hover:bg-white"}`}>
+            <Link href="/template" aria-current={currentPath === "/template" ? "page" : undefined} className={navLinkClassName(currentPath === "/template")}>
               테마 만들기
             </Link>
 
-            <Link href="/guide" aria-label="가이드 문서" aria-current={currentPath === "/guide" ? "page" : undefined} className={`inline-flex min-h-10 items-center rounded-full px-1.5 py-2 text-[10.5px] font-black transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] sm:px-4 sm:text-sm ${currentPath === "/guide" ? "bg-[#2f6bbf] text-white shadow-[0_10px_22px_rgba(47,107,191,0.24)]" : "text-[#3d7bd6] hover:bg-white"}`}>
+            <Link href="/guide" aria-label="가이드 문서" aria-current={currentPath === "/guide" ? "page" : undefined} className={navLinkClassName(currentPath === "/guide")}>
               <span className="sm:hidden">가이드</span><span className="hidden sm:inline">가이드 문서</span>
             </Link>
 

@@ -132,7 +132,9 @@ const sharedSections: ThemeSectionDefinition[] = [
   { id: "more", label: "더보기", groups: ["background", "header", "elements"] },
   { id: "chatroom", label: "채팅방", groups: ["background", "bubbles", "input"] },
   { id: "passcode", label: "잠금화면", groups: ["background", "text", "keypad", "pattern"] },
-  { id: "common", label: "공통 리소스", groups: ["icon", "profiles", "launcher"] },
+  // 편집기가 실제로 쓰는 그룹 순서는 projectModel.ts의 groupOrder다. 여기 나열은 섹션이
+  // 어떤 그룹을 담는지에 대한 설명이므로 순서를 그쪽과 어긋나지 않게 유지한다.
+  { id: "common", label: "공통 리소스", groups: ["profiles", "icon", "launcher"] },
 ];
 
 export const themeTemplates: ThemeTemplate[] = [

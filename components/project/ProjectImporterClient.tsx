@@ -1122,7 +1122,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onCopyBubbleToPair={requestBubbleCopyToPair}
       onBubblePreviewChange={(edit) => { if (selectedSlot) setLiveBubblePreview({ role: selectedSlot.role, edit }); }}
       candidateGridExpanded={mobileSheetSnap === "full"}
-      onExpandCandidates={() => setMobileSheetSnap("full")}
+      onToggleCandidateGrid={() => setMobileSheetSnap((current) => (current === "full" ? "half" : "full"))}
     />
   );
 

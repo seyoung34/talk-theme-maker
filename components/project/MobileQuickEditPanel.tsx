@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState, type MutableRefObject } from "react";
-import { ImageOff, Maximize2, Plus, Sliders, X } from "lucide-react";
+import { ImageOff, Maximize2, Minimize2, Plus, Sliders, X } from "lucide-react";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import { getCandidateLayoutKind } from "@/components/project/candidateLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
@@ -65,7 +65,7 @@ type MobileQuickEditPanelProps = {
   onCopyBubbleToPair: (slot: ThemeAssetSlot) => void;
   onBubblePreviewChange?: (edit: BubbleEditState) => void;
   candidateGridExpanded?: boolean;
-  onExpandCandidates?: () => void;
+  onToggleCandidateGrid?: () => void;
 };
 
 export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
@@ -98,14 +98,17 @@ export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
           <strong className="block truncate text-[14px] font-bold text-[#0f172a]">{slot.label}</strong>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {slot.kind !== "color" && !props.candidateGridExpanded && props.onExpandCandidates ? (
+          {/* 펼친 뒤에도 계속 보여야 접을 수 있다. 예전에는 펼침 상태에서 버튼이 사라져 돌아갈 길이 없었다. */}
+          {slot.kind !== "color" && props.onToggleCandidateGrid ? (
             <button
               type="button"
-              className="inline-flex min-h-8 items-center gap-1 rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2.5 text-[11px] font-bold text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
-              onClick={props.onExpandCandidates}
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+              onClick={props.onToggleCandidateGrid}
+              aria-expanded={Boolean(props.candidateGridExpanded)}
+              aria-label={props.candidateGridExpanded ? "후보 간단히 보기" : "후보 펼쳐 보기"}
+              title={props.candidateGridExpanded ? "간단히 보기" : "펼쳐 보기"}
             >
-              <Maximize2 size={13} aria-hidden="true" />
-              펼쳐 보기
+              {props.candidateGridExpanded ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
             </button>
           ) : null}
           {props.contrastWarning ? (
