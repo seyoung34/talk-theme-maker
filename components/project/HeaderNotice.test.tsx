@@ -52,6 +52,25 @@ describe("HeaderNotice", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
+  // 자동 저장 실패는 놓치면 편집 내용을 잃는다. 자리를 비운 사이 사라지면 안 된다.
+  it("persistent 알림은 스스로 사라지지 않는다", () => {
+    const onDismiss = vi.fn();
+    render(<HeaderNotice notice={{ tone: "error", message: "자동 저장에 실패했습니다.", persistent: true }} onDismiss={onDismiss} />);
+
+    act(() => void vi.advanceTimersByTime(noticeAutoDismissMs * 20));
+
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("persistent 알림도 닫기 버튼으로는 닫힌다", () => {
+    const onDismiss = vi.fn();
+    const { getByLabelText } = render(<HeaderNotice notice={{ tone: "error", message: "자동 저장에 실패했습니다.", persistent: true }} onDismiss={onDismiss} />);
+
+    act(() => getByLabelText("알림 닫기").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
   it("닫기 버튼은 즉시 닫는다", () => {
     const onDismiss = vi.fn();
     const { getByLabelText } = render(<HeaderNotice notice={notice} onDismiss={onDismiss} />);

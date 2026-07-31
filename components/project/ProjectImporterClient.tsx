@@ -138,6 +138,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [bubbleBuilderOpen, setBubbleBuilderOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const dismissNotice = useCallback(() => setNotice(null), []);
+  const autosaveNoticeRef = useRef<Notice | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
   const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
@@ -307,10 +308,23 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   });
 
   // 저장 실패·다중 탭 충돌은 조용히 넘기면 사용자가 저장되고 있다고 오해한다.
+  // 성공 알림과 같이 2.5초 만에 사라지면 자리를 비운 사이에 놓치므로 직접 닫을 때까지 남긴다.
   useEffect(() => {
     if (!autosaveMessage) return;
-    setNotice({ tone: autosaveStatus === "conflict" ? "warning" : "error", message: autosaveMessage });
+    const notice: Notice = { tone: autosaveStatus === "conflict" ? "warning" : "error", message: autosaveMessage, persistent: true };
+    autosaveNoticeRef.current = notice;
+    setNotice(notice);
   }, [autosaveMessage, autosaveStatus]);
+
+  // 다시 저장에 성공하면 걷는다. 스스로 사라지지 않으므로 띄운 쪽이 지워야 한다.
+  // 다른 알림이 이미 덮었으면 건드리지 않도록 객체 동일성으로 확인한다.
+  // conflict는 새로고침 전까지 저장이 멈춘 상태라 여기서 해제되지 않는다.
+  useEffect(() => {
+    if (autosaveStatus !== "saved" || !autosaveNoticeRef.current) return;
+    const restored = autosaveNoticeRef.current;
+    autosaveNoticeRef.current = null;
+    setNotice((current) => (current === restored ? null : current));
+  }, [autosaveStatus]);
 
   const markDraftSaved = useCallback(() => {
     savedSignatureRef.current = draftSignatureRef.current;

@@ -21,6 +21,7 @@ export function HeaderNotice({ notice, onDismiss }: { notice: ProjectNotice; onD
   }, [onDismiss]);
 
   useEffect(() => {
+    if (notice.persistent) return;
     const timeout = window.setTimeout(() => dismissRef.current(), noticeAutoDismissMs);
     return () => window.clearTimeout(timeout);
   }, [notice]);
