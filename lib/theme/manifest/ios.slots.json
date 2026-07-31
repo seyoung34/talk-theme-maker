@@ -78,24 +78,6 @@
     "cssProperty": "-ios-text-color"
   },
   {
-    "id": "ios-main-description-color",
-    "platform": "ios",
-    "role": "main_description_color",
-    "section": "main",
-    "group": "list",
-    "screen": "friends",
-    "kind": "color",
-    "label": "상태 메시지 색상",
-    "required": true,
-    "note": "친구 목록의 상태 메시지와 보조 정보에 적용되는 색상입니다. 이름보다 약하게 보이면서도 읽을 수 있어야 합니다.",
-    "defaultColor": {
-      "basic": "#4d5660"
-    },
-    "autoColorRecipe": "foreground-muted",
-    "cssSelector": "MainViewStyle-Primary",
-    "cssProperty": "-ios-description-text-color"
-  },
-  {
     "id": "ios-main-highlighted-text-color",
     "platform": "ios",
     "role": "main_title_pressed_color",
@@ -113,6 +95,24 @@
     "autoColorRecipe": "foreground-pressed",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-highlighted-text-color"
+  },
+  {
+    "id": "ios-main-description-color",
+    "platform": "ios",
+    "role": "main_description_color",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "상태 메시지 색상",
+    "required": true,
+    "note": "친구 목록의 상태 메시지와 보조 정보에 적용되는 색상입니다. 이름보다 약하게 보이면서도 읽을 수 있어야 합니다.",
+    "defaultColor": {
+      "basic": "#4d5660"
+    },
+    "autoColorRecipe": "foreground-muted",
+    "cssSelector": "MainViewStyle-Primary",
+    "cssProperty": "-ios-description-text-color"
   },
   {
     "id": "ios-tab-paragraph-color",

@@ -205,6 +205,23 @@
     }
   },
   {
+    "id": "android-main-section-title-color",
+    "platform": "android",
+    "role": "main_section_title_color",
+    "autoColorRecipe": "foreground-background",
+    "section": "main",
+    "group": "list",
+    "screen": "friends",
+    "kind": "color",
+    "label": "섹션 제목 색상",
+    "required": false,
+    "note": "섹션 제목과 그룹 라벨 색상",
+    "colorKey": "theme_section_title_color",
+    "defaultColor": {
+      "basic": "#111111"
+    }
+  },
+  {
     "id": "android-main-body-cell-color",
     "platform": "android",
     "role": "main_body_cell_color",
@@ -262,23 +279,6 @@
     "colorKey": "theme_body_cell_border_color",
     "defaultColor": {
       "basic": "#33111111"
-    }
-  },
-  {
-    "id": "android-main-section-title-color",
-    "platform": "android",
-    "role": "main_section_title_color",
-    "autoColorRecipe": "foreground-background",
-    "section": "main",
-    "group": "list",
-    "screen": "friends",
-    "kind": "color",
-    "label": "섹션 제목 색상",
-    "required": false,
-    "note": "섹션 제목과 그룹 라벨 색상",
-    "colorKey": "theme_section_title_color",
-    "defaultColor": {
-      "basic": "#111111"
     }
   },
   {
@@ -1205,6 +1205,25 @@
     }
   },
   {
+    "id": "android-passcode-color",
+    "platform": "android",
+    "role": "passcode_color",
+    "section": "passcode",
+    "group": "text",
+    "visibleInGroups": [
+      "pattern"
+    ],
+    "screen": "passcode",
+    "kind": "color",
+    "label": "잠금화면 텍스트",
+    "required": true,
+    "note": "theme_passcode_color 값",
+    "colorKey": "theme_passcode_color",
+    "defaultColor": {
+      "basic": "#664242"
+    }
+  },
+  {
     "id": "android-passcode-indicator-1",
     "platform": "android",
     "role": "passcode_indicator_1",
@@ -1317,58 +1336,6 @@
     "note": "네 번째 암호 입력 완료 표시 이미지"
   },
   {
-    "id": "android-passcode-color",
-    "platform": "android",
-    "role": "passcode_color",
-    "section": "passcode",
-    "group": "text",
-    "visibleInGroups": [
-      "pattern"
-    ],
-    "screen": "passcode",
-    "kind": "color",
-    "label": "잠금화면 텍스트",
-    "required": true,
-    "note": "theme_passcode_color 값",
-    "colorKey": "theme_passcode_color",
-    "defaultColor": {
-      "basic": "#664242"
-    }
-  },
-  {
-    "id": "android-passcode-keypad-color",
-    "platform": "android",
-    "role": "passcode_keypad_color",
-    "section": "passcode",
-    "group": "keypad",
-    "screen": "passcode",
-    "kind": "color",
-    "label": "키패드 숫자",
-    "required": true,
-    "note": "theme_passcode_keypad_color 값",
-    "colorKey": "theme_passcode_keypad_color",
-    "defaultColor": {
-      "basic": "#664242"
-    }
-  },
-  {
-    "id": "android-passcode-keypad-pressed-color",
-    "platform": "android",
-    "role": "passcode_keypad_pressed_color",
-    "section": "passcode",
-    "group": "keypad",
-    "screen": "passcode",
-    "kind": "color",
-    "label": "키패드 숫자 pressed",
-    "required": true,
-    "note": "theme_passcode_keypad_pressed_color 값",
-    "optionLevel": "advanced",
-    "colorKey": "theme_passcode_keypad_pressed_color",
-    "defaultColor": {
-      "basic": "#CCB8B8"
-    }
-  },
-  {
     "id": "android-passcode-keypad-background-color",
     "platform": "android",
     "role": "passcode_keypad_background_color",
@@ -1402,6 +1369,39 @@
     "colorKey": "theme_passcode_keypad_pressed_background_color",
     "defaultColor": {
       "basic": "#99FFDEDE"
+    }
+  },
+  {
+    "id": "android-passcode-keypad-color",
+    "platform": "android",
+    "role": "passcode_keypad_color",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "키패드 숫자",
+    "required": true,
+    "note": "theme_passcode_keypad_color 값",
+    "colorKey": "theme_passcode_keypad_color",
+    "defaultColor": {
+      "basic": "#664242"
+    }
+  },
+  {
+    "id": "android-passcode-keypad-pressed-color",
+    "platform": "android",
+    "role": "passcode_keypad_pressed_color",
+    "section": "passcode",
+    "group": "keypad",
+    "screen": "passcode",
+    "kind": "color",
+    "label": "키패드 숫자 pressed",
+    "required": true,
+    "note": "theme_passcode_keypad_pressed_color 값",
+    "optionLevel": "advanced",
+    "colorKey": "theme_passcode_keypad_pressed_color",
+    "defaultColor": {
+      "basic": "#CCB8B8"
     }
   },
   {
