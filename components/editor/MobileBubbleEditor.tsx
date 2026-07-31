@@ -4,10 +4,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperti
 import * as Popover from "@radix-ui/react-popover";
 import { FlipHorizontal2, Info, LoaderCircle, Minus, Plus, RotateCcw } from "lucide-react";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
-import { defaultInsets, defaultStretch } from "@/lib/theme/preview/bubbleCanvas";
 import { defaultImageEditState, renderEditedImageFile, type ImageEditState, type ImageEditTarget } from "@/lib/theme/imageEdit";
 import { isMobileBubbleEditDirty, type MobileBubbleEditDraft } from "@/lib/theme/mobileBubbleEdit";
-import { bubbleGeometryToLegacyEdit, flipBubbleGeometryHorizontally, normalizeBubbleGeometry, resolveBubbleGeometry } from "@/lib/theme/bubbleGeometry";
+import { bubbleGeometryToLegacyEdit, centeredBubbleGeometry, flipBubbleGeometryHorizontally, normalizeBubbleGeometry, resolveBubbleGeometry } from "@/lib/theme/bubbleGeometry";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { BubbleAsset, BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -123,6 +122,8 @@ export function MobileBubbleEditor({
     if (!asset) return null;
     const imageState = initialImageState ?? defaultImageEditState;
     const source = getArtworkMetrics(asset, platform);
+    // 저장된 편집값이 없으면 이미지 크기에 맞춘 가운데 값에서 시작한다.
+    const centered = centeredBubbleGeometry(source.width, source.height);
     const resolved = resolveBubbleGeometry({
       platform,
       geometry,
@@ -130,8 +131,8 @@ export function MobileBubbleEditor({
       insets,
       stretch,
       fallbackMarkers: asset.markers,
-      fallbackInsets: defaultInsets[bubbleSlot],
-      fallbackStretch: defaultStretch[bubbleSlot],
+      fallbackInsets: centered.contentInsets,
+      fallbackStretch: centered.stretch,
       width: source.width,
       height: source.height,
     });
@@ -140,7 +141,7 @@ export function MobileBubbleEditor({
       imageState,
       geometry: imageState.flipX && !hasPersistedGeometry ? flipBubbleGeometryHorizontally(resolved, source.width) : resolved,
     };
-  }, [asset, bubbleSlot, geometry, initialImageState, insets, markers, platform, stretch]);
+  }, [asset, geometry, initialImageState, insets, markers, platform, stretch]);
   const originalDraftSource = asset && preparedFile ? `${slot.id}:${preparedFile.name}:${preparedFile.size}:${preparedFile.lastModified}:${asset.width}:${asset.height}` : null;
 
   useEffect(() => {

@@ -17,9 +17,9 @@ export async function uploadSlotImage(page: Page, options: { name: string; rgb: 
     mimeType: "image/png",
     buffer: createSolidPng(size, size, options.rgb),
   });
-  // 파일명은 현재 편집 UI가 노출하지 않는다. 업로드 상태 전환을 기다리고, 각 시나리오가
-  // 미리보기 blob 바이트와 IndexedDB 복원 결과를 검증한다.
-  await expect(page.getByRole("button", { name: "이미지 바꾸기" })).toBeVisible();
+  // 파일명은 현재 편집 UI가 노출하지 않는다. "내 업로드"는 업로드 후보가 생겼을 때만 나타나므로
+  // 업로드 상태 전환 신호로 쓴다. 각 시나리오가 미리보기 blob 바이트와 IndexedDB 복원 결과를 검증한다.
+  await expect(page.getByText("내 업로드").first()).toBeVisible();
 }
 
 export async function expectAutosaveSaved(page: Page) {

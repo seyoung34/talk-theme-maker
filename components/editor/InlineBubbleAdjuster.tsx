@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { blobForThemeFile, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { loadCachedBubbleAsset } from "@/lib/theme/preview/bubbleAssetCache";
-import { defaultInsets as bubbleDefaultInsets, defaultStretch as bubbleDefaultStretch } from "@/lib/theme/preview/bubbleCanvas";
+import { centeredBubbleGeometry } from "@/lib/theme/bubbleGeometry";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { BubbleAsset, BubbleSlot, Insets, Markers, Range, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -78,6 +78,12 @@ export default function InlineBubbleAdjuster({
     if (!asset) return null;
     return markers ? { ...asset, markers } : asset;
   }, [asset, markers]);
+  // 저장된 inset/stretch가 없으면 이미지 크기에 맞춘 가운데 값에서 시작한다.
+  const centeredDefaults = useMemo(() => {
+    if (!displayAsset) return null;
+    const source = getIosSourceCanvas(displayAsset);
+    return centeredBubbleGeometry(source.width, source.height);
+  }, [displayAsset]);
   const surfaceClassName = tone === "blue"
     ? "border border-blue-100 bg-white text-slate-500"
     : "border border-[#d7ddd8] bg-[#f6f7f5] text-[#5d6670]";
@@ -90,7 +96,7 @@ export default function InlineBubbleAdjuster({
     return <div className="rounded-[22px] border border-[#f1c9cb] bg-[#fff5f5] px-4 py-5 text-sm font-bold text-[#a33a41]">{error}</div>;
   }
 
-  if (!displayAsset) {
+  if (!displayAsset || !centeredDefaults) {
     return <div className={`rounded-[22px] px-4 py-5 text-sm font-bold ${surfaceClassName}`}>이미지를 업로드하거나 기본 말풍선이 있는 슬롯을 선택하세요.</div>;
   }
 
@@ -108,8 +114,8 @@ export default function InlineBubbleAdjuster({
       ) : (
         <InsetEditor
           asset={displayAsset}
-          insets={insets ?? bubbleDefaultInsets[slot]}
-          stretch={stretch ?? bubbleDefaultStretch[slot]}
+          insets={insets ?? centeredDefaults.contentInsets}
+          stretch={stretch ?? centeredDefaults.stretch}
           onChange={onInsetsChange}
           onStretchChange={onStretchChange}
         />

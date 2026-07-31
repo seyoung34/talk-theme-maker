@@ -4,10 +4,39 @@ import {
   androidStretchSpan,
   bubbleGeometryToAndroidMarkers,
   bubbleGeometryToLegacyEdit,
+  centeredBubbleGeometry,
   flipBubbleGeometryHorizontally,
   parseBubbleGeometry,
   parseBubbleGeometryMap,
 } from "@/lib/theme/bubbleGeometry";
+
+describe("centeredBubbleGeometry", () => {
+  it("이미지 크기와 무관하게 stretch 점을 가운데에 둔다", () => {
+    expect(centeredBubbleGeometry(200, 100).stretch).toEqual({ x: 100, y: 50 });
+    expect(centeredBubbleGeometry(900, 400).stretch).toEqual({ x: 450, y: 200 });
+    expect(centeredBubbleGeometry(64, 48).stretch).toEqual({ x: 32, y: 24 });
+  });
+
+  it("가운데 50% 영역을 텍스트 상자로 잡는다", () => {
+    const { contentInsets } = centeredBubbleGeometry(200, 100);
+    expect(contentInsets).toEqual({ top: 25, right: 50, bottom: 25, left: 50 });
+    // 남는 콘텐츠 영역이 이미지의 가운데 절반이어야 한다.
+    expect(200 - contentInsets.left - contentInsets.right).toBe(100);
+    expect(100 - contentInsets.top - contentInsets.bottom).toBe(50);
+  });
+
+  it("작은 이미지에서도 상자가 무너지지 않는다", () => {
+    const { contentInsets } = centeredBubbleGeometry(8, 6);
+    expect(8 - contentInsets.left - contentInsets.right).toBeGreaterThan(0);
+    expect(6 - contentInsets.top - contentInsets.bottom).toBeGreaterThan(0);
+  });
+
+  it("큰 이미지에서 stretch 점이 구석으로 몰리지 않는다", () => {
+    const { stretch } = centeredBubbleGeometry(1200, 800);
+    expect(stretch.x / 1200).toBeCloseTo(0.5, 2);
+    expect(stretch.y / 800).toBeCloseTo(0.5, 2);
+  });
+});
 
 describe("platform-neutral bubble geometry", () => {
   const geometry = {

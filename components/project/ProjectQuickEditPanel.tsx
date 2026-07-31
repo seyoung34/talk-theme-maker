@@ -233,7 +233,16 @@ export function ProjectQuickEditPanel({
             />
 
             <div
-              className={`grid gap-4 rounded-xl border-2 border-dashed p-4 transition ${dragActive || pasteFeedback ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#d7dee8] bg-[#f8fafc]"}`}
+              role="button"
+              tabIndex={0}
+              aria-label="이미지 추가"
+              className={`grid cursor-pointer gap-4 rounded-xl border-2 border-dashed p-4 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#60a5fa] ${dragActive || pasteFeedback ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#d7dee8] bg-[#f8fafc] hover:border-[#93c5fd] hover:bg-[#f5f9ff]"}`}
+              onClick={() => fileInputRefs.current[slot.id]?.click()}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                fileInputRefs.current[slot.id]?.click();
+              }}
               onDragEnter={(event) => {
                 event.preventDefault();
                 setDragActive(true);
@@ -251,29 +260,38 @@ export function ProjectQuickEditPanel({
             >
               <div>
                 <p className="text-sm font-semibold text-[#0f172a]">내 이미지로 바꾸기</p>
-                <p className="mt-1 text-[12px] font-medium text-[#6b7280]">이미지를 끌어다 놓거나 선택하세요. 붙여넣기도 할 수 있어요.</p>
+                <p className="mt-1 text-[12px] font-medium text-[#6b7280]">이미지를 끌어다 놓거나 이 영역을 클릭해 선택하세요. 붙여넣기도 할 수 있어요.</p>
                 <p className="mt-2 rounded-xl border border-[#dbeafe] bg-white/80 px-3 py-2 text-[11px] font-bold leading-5 text-[#475569]">
                   올린 이미지는 이 브라우저의 내 템플릿에 저장돼요.
                 </p>
                 <p className="sr-only" role="status" aria-live="polite">{pasteFeedback ? "클립보드 이미지를 추가했습니다." : ""}</p>
               </div>
 
+              {/* 드롭존 전체가 파일 선택 버튼이므로, 안쪽 버튼은 클릭 전파를 막아야 선택창이 같이 열리지 않는다. */}
               <div className="flex flex-wrap gap-3">
-                <button type="button" className="rounded-lg bg-[#0f172a] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1e293b]" onClick={() => fileInputRefs.current[slot.id]?.click()}>
-                  이미지 바꾸기
-                </button>
                 <button
                   type="button"
                   className="inline-flex items-center gap-2 rounded-lg border border-[#d1d5db] bg-white px-4 py-3 text-sm font-semibold text-[#374151] transition enabled:hover:border-[#bfdbfe] enabled:hover:bg-[#eff6ff] enabled:hover:text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45"
                   disabled={!slot.editableInBubbleEditor && (!canOpenImageEditor || isPreparingEditSource)}
-                  onClick={() => slot.editableInBubbleEditor ? onOpenBubbleBuilder() : void openImageEditor()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (slot.editableInBubbleEditor) onOpenBubbleBuilder();
+                    else void openImageEditor();
+                  }}
                   title={slot.editableInBubbleEditor ? "모양과 색을 골라 말풍선 한 세트를 만듭니다." : canOpenImageEditor ? "현재 이미지를 복사해 비파괴 편집합니다." : "이미지가 있는 슬롯에서 사용할 수 있습니다."}
                 >
                   {isPreparingEditSource && !slot.editableInBubbleEditor ? <RefreshCw className="animate-spin" size={16} aria-hidden="true" /> : <Edit3 size={16} aria-hidden="true" />}
                   {slot.editableInBubbleEditor ? "나만의 말풍선 만들기" : isPreparingEditSource ? "편집 준비 중" : "이미지 편집"}
                 </button>
                 {slot.editableInBubbleEditor && pairedBubbleSlot ? (
-                  <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-sm font-semibold text-[#1d4ed8] transition hover:bg-[#dbeafe]" onClick={() => onCopyBubbleToPair(slot)}>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-sm font-semibold text-[#1d4ed8] transition hover:bg-[#dbeafe]"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCopyBubbleToPair(slot);
+                    }}
+                  >
                     <Link2 size={16} aria-hidden="true" />{pairedBubbleSlot.label}에 같은 말풍선 적용
                   </button>
                 ) : null}

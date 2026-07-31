@@ -2,6 +2,33 @@ import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } fro
 
 export const androidStretchSpan = 2;
 
+// 편집 시작값의 콘텐츠 여백 비율. 이미지 크기와 무관하게 가운데 50% 영역이 텍스트 상자가 된다.
+const centeredContentInsetRatio = 0.25;
+
+/**
+ * 저장된 편집값이 없을 때 쓸 시작 geometry.
+ *
+ * 고정 픽셀 기본값은 특정 크기의 기본 에셋에 맞춰 만든 값이라, 사용자가 올린 이미지
+ * 크기가 다르면 텍스트 상자와 stretch 선이 구석으로 몰린다(작은 이미지에서는 상자가
+ * 1px로 붕괴하고, 큰 이미지에서는 stretch 선이 좌상단에 붙는다). 비율로 계산해
+ * 어떤 크기의 이미지에서도 가운데에서 시작하도록 한다.
+ */
+export function centeredBubbleGeometry(width: number, height: number): BubbleGeometry {
+  return normalizeBubbleGeometry(
+    {
+      stretch: { x: Math.round(width / 2), y: Math.round(height / 2) },
+      contentInsets: {
+        top: Math.round(height * centeredContentInsetRatio),
+        right: Math.round(width * centeredContentInsetRatio),
+        bottom: Math.round(height * centeredContentInsetRatio),
+        left: Math.round(width * centeredContentInsetRatio),
+      },
+    },
+    width,
+    height,
+  );
+}
+
 export function normalizeBubbleGeometry(geometry: BubbleGeometry, width: number, height: number): BubbleGeometry {
   return {
     stretch: normalizeStretchPoint(geometry.stretch, width, height),
