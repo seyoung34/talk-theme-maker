@@ -8,7 +8,7 @@ import type { ThemeSlotGroup } from "@/lib/theme/types";
 import { disabledImageCandidateId, groupLabels, slotStatusLabel, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import { getInheritedSourceSlot, getResolvedAssetUrl, getSelectedUpload, isImageSlotDisabled } from "@/lib/theme/project/state";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
-import { normalizeThemeColor, themeColorToCss } from "@/lib/theme/color";
+import { getStatusColorPreview } from "@/components/project/projectImporterHelpers";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 
@@ -181,11 +181,6 @@ function SlotRailItem({ slot, selected, status, thumbnailUrl, warning, onSelect 
       </Tooltip.Root>
     </div>
   );
-}
-
-function getStatusColorPreview(status: string) {
-  const color = status.match(/#[0-9a-f]{8}|#[0-9a-f]{6}/i)?.[0];
-  return color && normalizeThemeColor(color) ? themeColorToCss(color) : null;
 }
 
 function getSlotHelpText(slot: ThemeAssetSlot) {

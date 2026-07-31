@@ -21,8 +21,8 @@ import {
 } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { getBackgroundSourcePair, getImageEditTarget } from "@/components/project/projectImporterHelpers";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
-import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
@@ -447,23 +447,3 @@ function ImageControls({
   );
 }
 
-function getImageEditTarget(candidate: ReturnType<typeof getSelectedCandidate>): ImageEditTarget | undefined {
-  const width = candidate?.metadata?.width;
-  const height = candidate?.metadata?.height;
-  if (!Number.isFinite(width) || !Number.isFinite(height) || !width || !height) return undefined;
-  return { width, height, label: "선택 후보 기준" };
-}
-
-
-function getBackgroundSourcePair(slot: ThemeAssetSlot, slots: ThemeAssetSlot[]) {
-  const imageSlot =
-    slot.kind === "color"
-      ? slots.find((candidate) => candidate.kind !== "color" && getImageColorFallbackRole(candidate.role) === slot.role)
-      : getImageColorFallbackRole(slot.role)
-        ? slot
-        : undefined;
-  if (!imageSlot) return null;
-  const colorRole = getImageColorFallbackRole(imageSlot.role);
-  const colorSlot = slots.find((candidate) => candidate.kind === "color" && candidate.role === colorRole);
-  return colorSlot ? { imageSlot, colorSlot } : null;
-}

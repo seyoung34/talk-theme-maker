@@ -5,7 +5,7 @@ import { AlertTriangle, ChevronDown, ImageOff, Info } from "lucide-react";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeSlotGroup } from "@/lib/theme/types";
 import { buildSlotCandidates, groupLabels, slotStatusLabel, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
-import { normalizeThemeColor, themeColorToCss } from "@/lib/theme/color";
+import { getStatusColorPreview } from "@/components/project/projectImporterHelpers";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 
@@ -220,11 +220,6 @@ function MobileSlotOption({ slot, selected, status, appliedTitle, warning, onSel
       ) : null}
     </div>
   );
-}
-
-function getStatusColorPreview(status: string) {
-  const color = status.match(/#[0-9a-f]{8}|#[0-9a-f]{6}/i)?.[0];
-  return color && normalizeThemeColor(color) ? themeColorToCss(color) : null;
 }
 
 function getAppliedCandidateTitle(

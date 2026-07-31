@@ -15,7 +15,7 @@ import { ExportDialog } from "@/components/project/dialogs/ExportDialog";
 import { InitialTemplateErrorPanel, InitialTemplateLoadingPanel } from "@/components/project/dialogs/InitialTemplatePanels";
 import { SaveTemplateDialog } from "@/components/project/dialogs/SaveTemplateDialog";
 import { SystemTemplateSaveDialog } from "@/components/project/dialogs/SystemTemplateSaveDialog";
-import { getDefaultSlotCandidateId } from "@/components/project/projectImporterHelpers";
+import { getBackgroundSourcePair, getDefaultSlotCandidateId } from "@/components/project/projectImporterHelpers";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { MobileEditActionBar } from "@/components/project/MobileEditActionBar";
 import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
@@ -57,7 +57,7 @@ import {
 } from "@/components/project/projectModel";
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
-import { getBubblePairRole, getImageColorFallbackRole, getSlotCandidates } from "@/lib/theme/project/state";
+import { getBubblePairRole, getSlotCandidates } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 import type { EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
@@ -1505,19 +1505,6 @@ function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => 
       </button>
     </div>
   );
-}
-
-function getBackgroundSourcePair(slot: ThemeAssetSlot, slots: ThemeAssetSlot[]) {
-  const imageSlot =
-    slot.kind === "color"
-      ? slots.find((candidate) => candidate.kind !== "color" && getImageColorFallbackRole(candidate.role) === slot.role)
-      : getImageColorFallbackRole(slot.role)
-        ? slot
-        : undefined;
-  if (!imageSlot) return null;
-  const colorRole = getImageColorFallbackRole(imageSlot.role);
-  const colorSlot = slots.find((candidate) => candidate.kind === "color" && candidate.role === colorRole);
-  return colorSlot ? { imageSlot, colorSlot } : null;
 }
 
 function copyBubbleEditValue<T extends object>(current: Partial<Record<string, T>>, sourceSlotId: string, targetSlotId: string) {

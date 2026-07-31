@@ -12,6 +12,7 @@ import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSele
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
+import { getImageEditTarget } from "@/components/project/projectImporterHelpers";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -356,17 +357,6 @@ function ensureImageFileExtension(fileName: string, mimeType: string) {
   if (mimeType === "image/jpeg") return `${fileName}.jpg`;
   if (mimeType === "image/webp") return `${fileName}.webp`;
   return `${fileName}.png`;
-}
-
-function getImageEditTarget(candidate: ReturnType<typeof getSelectedCandidate>): ImageEditTarget | undefined {
-  const width = candidate?.metadata?.width;
-  const height = candidate?.metadata?.height;
-  if (!Number.isFinite(width) || !Number.isFinite(height) || !width || !height) return undefined;
-  return {
-    width,
-    height,
-    label: "선택 후보 기준",
-  };
 }
 
 function CandidatePicker({
