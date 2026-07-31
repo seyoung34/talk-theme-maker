@@ -10,6 +10,13 @@ import { createEmptyThemeDraft, type ThemeDraft } from "@/lib/theme/project/draf
 
 type DraftUpdater<T> = SetStateAction<T>;
 
+function omitSlotValue<T>(values: Partial<Record<string, T>>, slotId: string) {
+  if (!(slotId in values)) return values;
+  const next = { ...values };
+  delete next[slotId];
+  return next;
+}
+
 export type ThemeDraftAction =
   | { type: "replace"; draft: ThemeDraft }
   | { type: "set-uploads"; updater: DraftUpdater<SlotUploads> }
@@ -93,6 +100,19 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
   const setBubbleDesigns = useCallback<Dispatch<SetStateAction<ThemeDraft["bubbleDesigns"]>>>((updater) => {
     dispatchDraft({ type: "set-bubble-designs", updater });
   }, [dispatchDraft]);
+  /**
+   * 슬롯의 말풍선 편집값을 모두 버린다.
+   *
+   * geometry/markers/insets/stretch는 그 슬롯에 있던 그림의 픽셀 좌표다. 새 이미지를
+   * 올리면 좌표가 가리키던 대상이 사라지므로, 남겨두면 편집창이 엉뚱한 위치를 복원한다.
+   * 값을 비워야 이미지 크기에 맞춘 가운데 기본값이 다시 계산된다.
+   */
+  const clearBubbleEdits = useCallback((slotId: string) => {
+    setBubbleGeometry((current) => omitSlotValue(current, slotId));
+    setBubbleMarkers((current) => omitSlotValue(current, slotId));
+    setBubbleInsets((current) => omitSlotValue(current, slotId));
+    setBubbleStretch((current) => omitSlotValue(current, slotId));
+  }, [setBubbleGeometry, setBubbleInsets, setBubbleMarkers, setBubbleStretch]);
   const setBubbleDecorationSources = useCallback<Dispatch<SetStateAction<ThemeDraft["bubbleDecorationSources"]>>>((updater) => {
     dispatchDraft({ type: "set-bubble-decoration-sources", updater });
   }, [dispatchDraft]);
@@ -128,6 +148,7 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
   }, []);
 
   return {
+    clearBubbleEdits,
     draft,
     ensureSystemTemplateUploadsHydrated,
     hydratePreviewUploads,

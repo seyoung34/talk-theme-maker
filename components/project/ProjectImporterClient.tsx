@@ -96,6 +96,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [selectedSlotId, setSelectedSlotId] = useState<string | undefined>();
   const [selectionPulseKey, setSelectionPulseKey] = useState(0);
   const {
+    clearBubbleEdits,
     draft,
     ensureSystemTemplateUploadsHydrated,
     hydratePreviewUploads,
@@ -709,6 +710,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       [slot.id]: [...(current[slot.id] ?? []), { id: uploadId, file, source: "user" as const }],
     }));
     dropRemoteUploadRef(slot.id);
+    // 말풍선 편집값은 이전 이미지의 픽셀 좌표라 새 그림에는 의미가 없다. 지우지 않으면
+    // 편집창이 저장값을 그대로 복원해서 텍스트 상자와 stretch 선이 엉뚱한 곳에 놓인다.
+    clearBubbleEdits(slot.id);
     setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
     focusSlot(slot.id);
     revealSlot(slot);
