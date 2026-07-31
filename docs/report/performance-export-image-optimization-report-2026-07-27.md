@@ -1,3 +1,12 @@
+---
+id: performance-export-image-optimization-report-2026-07-27
+title: 편집기·에셋·내보내기 성능 개선 보고서
+kind: report
+lifecycle: snapshot
+created: 2026-07-27
+updated: 2026-07-27
+---
+
 # 편집기·에셋·내보내기 성능 개선 보고서
 
 - 작성일: 2026-07-27

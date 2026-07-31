@@ -1,3 +1,13 @@
+---
+id: admin-assets-workspace-plan-review
+title: admin/assets 편집 워크스페이스 계획 리뷰
+kind: plan
+lifecycle: living
+horizon: next
+created: 2026-07-26
+updated: 2026-07-26
+---
+
 # admin/assets 편집 워크스페이스 계획 리뷰
 
 > 상태: 리뷰 근거 보존 완료. 원 계획에 반영되었으며 구현 착수 전이다.

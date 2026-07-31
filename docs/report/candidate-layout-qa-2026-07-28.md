@@ -1,3 +1,12 @@
+---
+id: candidate-layout-qa-2026-07-28
+title: 후보 레이아웃 QA 보고서
+kind: report
+lifecycle: snapshot
+created: 2026-07-28
+updated: 2026-07-28
+---
+
 # 후보 레이아웃 QA 보고서
 
 작성일: 2026-07-28

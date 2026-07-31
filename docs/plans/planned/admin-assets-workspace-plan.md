@@ -1,3 +1,13 @@
+---
+id: admin-assets-workspace-plan
+title: admin/assets 편집 워크스페이스 재설계 계획
+kind: plan
+lifecycle: living
+horizon: next
+created: 2026-07-26
+updated: 2026-07-26
+---
+
 # admin/assets 편집 워크스페이스 재설계 계획
 
 > 상태: 리뷰 반영·계획 개정 완료(2026-07-25). 구현 착수 전.
