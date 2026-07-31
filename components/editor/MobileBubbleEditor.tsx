@@ -5,6 +5,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { FlipHorizontal2, Info, LoaderCircle, Minus, Plus, RotateCcw } from "lucide-react";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { defaultImageEditState, renderEditedImageFile, type ImageEditState, type ImageEditTarget } from "@/lib/theme/imageEdit";
+import { bubbleEditorHelpHint, hasSeenHint, markHintSeen } from "@/lib/shared/hintStorage";
 import { isMobileBubbleEditDirty, type MobileBubbleEditDraft } from "@/lib/theme/mobileBubbleEdit";
 import { bubbleGeometryToLegacyEdit, centeredBubbleGeometry, flipBubbleGeometryHorizontally, normalizeBubbleGeometry, resolveBubbleGeometry } from "@/lib/theme/bubbleGeometry";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
@@ -57,6 +58,7 @@ export function MobileBubbleEditor({
   const [draft, setDraft] = useState<MobileBubbleEditDraft | null>(null);
   const [activeDragKind, setActiveDragKind] = useState<DragKind | null>(null);
   const [viewerZoom, setViewerZoom] = useState(1);
+  const [helpOpen, setHelpOpen] = useState(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ kind: DragKind; startX: number; startY: number; draft: MobileBubbleEditDraft } | null>(null);
   const draftRef = useRef<MobileBubbleEditDraft | null>(null);
@@ -161,6 +163,13 @@ export function MobileBubbleEditor({
   useEffect(() => {
     setViewerZoom(1);
   }, [preparedFile, slot.id]);
+
+  // 마운트 이후에 읽는다. 렌더 중 localStorage를 보면 서버 출력과 어긋나 hydration이 깨진다.
+  useEffect(() => {
+    if (hasSeenHint(bubbleEditorHelpHint)) return;
+    markHintSeen(bubbleEditorHelpHint);
+    setHelpOpen(true);
+  }, []);
 
   const artwork = asset ? getArtworkMetrics(asset, platform) : null;
 
@@ -287,8 +296,8 @@ export function MobileBubbleEditor({
       <header className="flex min-h-11 items-center justify-between gap-2 px-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <h3 className="truncate text-[15px] font-black tracking-[-0.02em] text-[#0f172a]">말풍선 편집</h3>
-          {/* 교차점·테두리의 의미를 모르고 지나치기 쉬워 처음부터 펼쳐 둔다. */}
-          <Popover.Root defaultOpen>
+          {/* 교차점·테두리의 의미를 모르고 지나치기 쉬워 이 브라우저에서 처음 한 번만 펼쳐 둔다. */}
+          <Popover.Root open={helpOpen} onOpenChange={setHelpOpen}>
             <Popover.Trigger asChild>
               <button type="button" title="편집 도움말" className="grid size-8 shrink-0 place-items-center rounded-lg text-[#64748b] transition hover:text-[#2563eb] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] data-[state=open]:text-[#2563eb]" aria-label="편집 도움말"><Info size={17} aria-hidden="true" /></button>
             </Popover.Trigger>
