@@ -287,12 +287,14 @@ export function MobileBubbleEditor({
       <header className="flex min-h-11 items-center justify-between gap-2 px-1">
         <div className="flex min-w-0 items-center gap-1.5">
           <h3 className="truncate text-[15px] font-black tracking-[-0.02em] text-[#0f172a]">말풍선 편집</h3>
-          <Popover.Root>
+          {/* 교차점·테두리의 의미를 모르고 지나치기 쉬워 처음부터 펼쳐 둔다. */}
+          <Popover.Root defaultOpen>
             <Popover.Trigger asChild>
               <button type="button" title="편집 도움말" className="grid size-8 shrink-0 place-items-center rounded-lg text-[#64748b] transition hover:text-[#2563eb] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] data-[state=open]:text-[#2563eb]" aria-label="편집 도움말"><Info size={17} aria-hidden="true" /></button>
             </Popover.Trigger>
             <Popover.Portal>
-              <Popover.Content side="bottom" align="start" sideOffset={8} collisionPadding={16} className="radix-popover-content z-[120] w-[min(256px,calc(100vw-32px))] rounded-2xl border border-[#dbeafe] bg-white p-3.5 text-[12px] font-medium leading-[1.55] text-[#475569] shadow-[0_16px_38px_rgba(15,23,42,0.16)] outline-none">
+              {/* 자동으로 열리는 만큼 포커스는 옮기지 않는다. 슬롯을 고른 직후 포커스가 도움말로 튀면 안 된다. */}
+              <Popover.Content onOpenAutoFocus={(event) => event.preventDefault()} side="bottom" align="start" sideOffset={8} collisionPadding={16} className="radix-popover-content z-[120] w-[min(256px,calc(100vw-32px))] rounded-2xl border border-[#dbeafe] bg-white p-3.5 text-[12px] font-medium leading-[1.55] text-[#475569] shadow-[0_16px_38px_rgba(15,23,42,0.16)] outline-none">
                 <p className="font-black text-[#0f172a]">편집 안내</p>
                 <p className="mt-1.5"><span className="font-bold text-[#0284c7]">파란 교차점</span>은 말풍선이 늘어나는 위치입니다.</p>
                 <p className="mt-1"><span className="font-bold text-[#059669]">초록 테두리</span>는 글자가 들어갈 여백입니다.</p>
