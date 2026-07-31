@@ -15,6 +15,7 @@ import { ExportDialog } from "@/components/project/dialogs/ExportDialog";
 import { InitialTemplateErrorPanel, InitialTemplateLoadingPanel } from "@/components/project/dialogs/InitialTemplatePanels";
 import { SaveTemplateDialog } from "@/components/project/dialogs/SaveTemplateDialog";
 import { SystemTemplateSaveDialog } from "@/components/project/dialogs/SystemTemplateSaveDialog";
+import { HeaderNotice } from "@/components/project/HeaderNotice";
 import { getBackgroundSourcePair, getDefaultSlotCandidateId } from "@/components/project/projectImporterHelpers";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { MobileEditActionBar } from "@/components/project/MobileEditActionBar";
@@ -136,6 +137,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
   const [bubbleBuilderOpen, setBubbleBuilderOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const dismissNotice = useCallback(() => setNotice(null), []);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
   const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
@@ -1137,7 +1139,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   return (
     <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
       {selectedSlot && selectedBubbleSlot && selectedBubbleVariant ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} variant={selectedBubbleVariant} slotLabel={selectedSlot.label} platform={platform} initialSpec={selectedBubbleDesign} initialDecorationFiles={bubbleDecorationSources} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleDesign} /> : null}
-      {notice ? <HeaderNotice notice={notice} onDismiss={() => setNotice(null)} /> : null}
+      {notice ? <HeaderNotice notice={notice} onDismiss={dismissNotice} /> : null}
       {pendingAutosave ? (
         <AutosaveResumeDialog
           record={pendingAutosave}
@@ -1486,30 +1488,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   );
 }
 
-function HeaderNotice({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {
-  useEffect(() => {
-    const timeout = window.setTimeout(onDismiss, 2500);
-    return () => window.clearTimeout(timeout);
-  }, [notice.message, notice.tone, onDismiss]);
-
-  const noticeToneClass =
-    notice.tone === "success"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-      : notice.tone === "warning"
-        ? "border-amber-200 bg-amber-50 text-amber-800"
-        : notice.tone === "error"
-          ? "border-rose-200 bg-rose-50 text-rose-800"
-          : "border-sky-200 bg-sky-50 text-sky-800";
-
-  return (
-    <div className={`pointer-events-auto fixed left-1/2 top-4 z-[90] flex w-[min(92vw,460px)] -translate-x-1/2 items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur-sm ${noticeToneClass}`}>
-      <span className="truncate">{notice.message}</span>
-      <button type="button" className="shrink-0 text-current/70 hover:text-current" onClick={onDismiss} aria-label="알림 닫기">
-        닫기
-      </button>
-    </div>
-  );
-}
 
 function copyBubbleEditValue<T extends object>(current: Partial<Record<string, T>>, sourceSlotId: string, targetSlotId: string) {
   const next = { ...current };
