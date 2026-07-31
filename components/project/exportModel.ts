@@ -18,11 +18,6 @@ export type AccountState = {
   error?: string;
 };
 
-export type ExportVersionResponse = {
-  versionName?: string;
-  error?: string;
-};
-
 export type ExportErrorResponse = {
   error?: string;
   reason?: string;
@@ -34,7 +29,6 @@ export type AndroidExportPayloadOptions = {
   template: ThemeTemplate;
   templateId: ThemeTemplateId;
   exportName: string;
-  versionName: string;
   mode: "project" | "apk" | "apk-zip";
   slots: ThemeAssetSlot[];
   uploads: SlotUploads;

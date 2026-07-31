@@ -1,5 +1,5 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
-import { exportSlotConcurrency } from "@/lib/theme/exportRequest";
+import { exportSlotConcurrency, themeVersionName } from "@/lib/theme/exportRequest";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -10,7 +10,6 @@ type IosExportOptions = {
   template: ThemeTemplate;
   templateId: ThemeTemplateId;
   exportName?: string;
-  versionName?: string;
   slots: ThemeAssetSlot[];
   uploads: SlotUploads;
   colors: SlotColors;
@@ -83,7 +82,7 @@ const iosScaleTargetsByRole: Partial<Record<ThemeResourceRole, number[]>> = {
 };
 
 export async function buildIosThemeExportFiles(options: IosExportOptions): Promise<IosExportFile[]> {
-  const { analysis, template, templateId, exportName, versionName, slots, uploads, selections } = options;
+  const { analysis, template, templateId, exportName, slots, uploads, selections } = options;
   const iosSlots = slots.filter((slot) => slot.platform === "ios");
   const files: IosExportFile[] = [];
   const imageMap: IosImageMap = {};
@@ -112,7 +111,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
         template,
         templateId,
         exportName: exportName ?? template.name,
-        versionName: versionName ?? "1.0.0",
+        versionName: themeVersionName,
         slots: iosSlots,
         colors: options.colors,
         selections,

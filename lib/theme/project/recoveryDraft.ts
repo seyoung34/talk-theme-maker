@@ -15,7 +15,8 @@ export type RecoveryActiveUserTemplate = EditorActiveUserTemplate;
 export type RecoveryActiveSystemTemplate = EditorActiveSystemTemplate;
 
 export type RecoveryExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
-export type RecoveryExportOptions = { exportMode: RecoveryExportMode; name: string; versionName: string };
+// 예전 초안에는 versionName이 함께 저장돼 있으나 더 이상 읽지 않는다. 남아 있어도 무시된다.
+export type RecoveryExportOptions = { exportMode: RecoveryExportMode; name: string };
 
 export type EditorRecoveryDraft = {
   id: `editor-recovery:${EditorMode}`;

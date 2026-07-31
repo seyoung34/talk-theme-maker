@@ -55,7 +55,7 @@ export async function buildAndroidApk(
 
     return {
       apkBytes: await readFile(/* turbopackIgnore: true */ apkPath),
-      fileName: `${buildExportBaseName(apkBaseName, options.versionName)}.apk`,
+      fileName: `${buildExportBaseName(apkBaseName)}.apk`,
     };
   } finally {
     await prepared.cleanup();
@@ -182,10 +182,10 @@ export async function findLatestApk(root: string): Promise<string | null> {
   }
 }
 
-export function buildExportBaseName(name: string, versionName?: string) {
-  const safeName = sanitizeFileNamePart(name, "kakaotalk-theme");
-  const safeVersion = sanitizeFileNamePart(versionName ?? "1.0.0", "1.0.0");
-  return `${safeName}_${safeVersion}`;
+// 버전은 사용자가 정하지 않으므로 파일명에 넣지 않는다. 어차피 모든 파일이 같은 값이라
+// 구분에 도움이 되지 않고 이름만 길어졌다.
+export function buildExportBaseName(name: string) {
+  return sanitizeFileNamePart(name, "kakaotalk-theme");
 }
 
 function shouldCopySampleEntry(source: string) {

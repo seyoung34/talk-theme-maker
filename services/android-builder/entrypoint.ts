@@ -119,7 +119,7 @@ async function buildApk(files: AndroidBuildInputFile[], options: BundleOptions):
     const apkPath = await findLatestApk(path.join(prepared.projectRoot, "build", "outputs", "apk"));
     if (!apkPath) throw new Error("APK output was not found.");
 
-    const outputFileName = `${buildExportBaseName(options.exportName, options.versionName)}.apk`;
+    const outputFileName = `${buildExportBaseName(options.exportName)}.apk`;
     const apk = await readFile(apkPath);
     return { outputFileName, apkBytes: new Uint8Array(apk) };
   } finally {

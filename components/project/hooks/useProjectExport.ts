@@ -7,7 +7,7 @@ import { readJsonResponse } from "@/lib/shared/api/http";
 import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAndroidExportStatus, triggerDownload } from "@/components/project/exportClient";
 import { getExportFailureReasonFromStatus, isNetworkError, toExportFailureReason, type ExportFailureReason } from "@/lib/theme/export/failureReason";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
-import type { AccountState, ExportDownloadResult, ExportErrorResponse, ExportMode, ExportVersionResponse } from "@/components/project/exportModel";
+import type { AccountState, ExportDownloadResult, ExportErrorResponse, ExportMode } from "@/components/project/exportModel";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import type { RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
@@ -61,7 +61,6 @@ export function useProjectExport({
   const [exportDownloadResult, setExportDownloadResult] = useState<ExportDownloadResult | null>(null);
   const [exportMode, setExportMode] = useState<ExportMode>("apk");
   const [exportName, setExportName] = useState("");
-  const [exportVersionName, setExportVersionName] = useState("");
   const [exportProgressStep, setExportProgressStep] = useState(0);
   const [exportElapsedSeconds, setExportElapsedSeconds] = useState(0);
   const [accountState, setAccountState] = useState<AccountState | null>(null);
@@ -93,14 +92,6 @@ export function useProjectExport({
     setExportElapsedSeconds(0);
 
     try {
-      if (!exportVersionName) {
-        const response = await fetch(platform === "android" ? "/api/export/android" : "/api/export/ios");
-        const payload = await readJsonResponse<ExportVersionResponse>(response);
-        if (!response.ok) {
-          throw new Error(payload.error ?? `${platform === "android" ? "Android" : "iOS"} 내보내기 설정을 불러오지 못했습니다.`);
-        }
-        setExportVersionName(payload.versionName ?? "1.0.0");
-      }
       await refreshAccountState();
     } catch (error) {
       console.error(error);
@@ -111,7 +102,7 @@ export function useProjectExport({
       exportPreparingRef.current = false;
       setIsPreparingExport(false);
     }
-  }, [displayTemplateName, exportVersionName, platform, refreshAccountState, setNotice]);
+  }, [displayTemplateName, platform, refreshAccountState, setNotice]);
 
   const resumeExportDialog = useCallback(async (options: RecoveryExportOptions) => {
     if (exportPreparingRef.current) return;
@@ -122,7 +113,6 @@ export function useProjectExport({
     setExportDownloadResult(null);
     setExportName(options.name);
     setExportMode(options.exportMode);
-    setExportVersionName(options.versionName);
     setExportProgressStep(0);
     setExportElapsedSeconds(0);
     try {
@@ -166,7 +156,6 @@ export function useProjectExport({
         template: activeTemplate,
         templateId,
         exportName,
-        versionName: exportVersionName,
         mode: exportMode,
         slots,
         uploads: hydratedUploads,
@@ -189,7 +178,7 @@ export function useProjectExport({
         const errorBody = await readJsonResponse<ExportErrorResponse>(response).catch(() => null);
         failureReason = toExportFailureReason(errorBody?.reason, getExportFailureReasonFromStatus(response.status));
         if (response.status === 401 || errorBody?.reason === "unauthenticated") {
-          await onUnauthenticated?.({ exportMode, name: exportName, versionName: exportVersionName });
+          await onUnauthenticated?.({ exportMode, name: exportName });
           return;
         }
         if (response.status === 402 || errorBody?.reason === "insufficient_credits") {
@@ -279,7 +268,6 @@ export function useProjectExport({
     ensureSystemTemplateUploadsHydrated,
     exportMode,
     exportName,
-    exportVersionName,
     platform,
     refreshAccountState,
     onExportCompleted,
@@ -297,7 +285,6 @@ export function useProjectExport({
     exportMode,
     exportName,
     exportProgressStep,
-    exportVersionName,
     isAccountLoading,
     isExporting,
     isPreparingExport,
@@ -308,7 +295,6 @@ export function useProjectExport({
     setExportDialogOpen,
     setExportMode,
     setExportName,
-    setExportVersionName,
     submitExport,
   };
 }

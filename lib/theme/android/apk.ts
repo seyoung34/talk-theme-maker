@@ -44,7 +44,7 @@ export async function exportAndroidProjectZip(files: AndroidBuildInputFile[], pr
     const zipBytes = await zipProjectDirectory(prepared.projectRoot);
     return {
       zipBytes,
-      fileName: `${buildExportBaseName(projectBaseName, options.versionName)}.zip`,
+      fileName: `${buildExportBaseName(projectBaseName)}.zip`,
     };
   } finally {
     await prepared.cleanup();
@@ -57,7 +57,7 @@ export async function exportAndroidApkZip(files: AndroidBuildInputFile[], apkBas
   const zipBlob = createStoredZip([{ path: fileName, bytes: apkBytes }]);
   return {
     zipBytes: new Uint8Array(await zipBlob.arrayBuffer()),
-    fileName: `${buildExportBaseName(apkBaseName, options.versionName)}.zip`,
+    fileName: `${buildExportBaseName(apkBaseName)}.zip`,
   };
 }
 

@@ -10,19 +10,18 @@ import type { AccountState, ExportDownloadResult, ExportMode } from "@/component
 import type { ThemePlatform } from "@/lib/theme/types";
 
 export function ExportDialog({
-  isExporting, isPreparingExport, preparationError, downloadResult, platform, exportMode, exportName, exportVersionName, progressStep,
-  elapsedSeconds, accountState, isAccountLoading, onClose, onModeChange, onNameChange, onVersionNameChange,
+  isExporting, isPreparingExport, preparationError, downloadResult, platform, exportMode, exportName, progressStep,
+  elapsedSeconds, accountState, isAccountLoading, onClose, onModeChange, onNameChange,
   onLogin, onBuyCredits, onRetryPreparation, onSubmit,
 }: {
   isExporting: boolean; isPreparingExport: boolean; preparationError: string | null; downloadResult: ExportDownloadResult | null; platform: ThemePlatform; exportMode: ExportMode;
-  exportName: string; exportVersionName: string; progressStep: number; elapsedSeconds: number; accountState: AccountState | null;
+  exportName: string; progressStep: number; elapsedSeconds: number; accountState: AccountState | null;
   isAccountLoading: boolean; onClose: () => void; onModeChange: (mode: ExportMode) => void; onNameChange: (value: string) => void;
-  onVersionNameChange: (value: string) => void; onLogin: () => void; onBuyCredits: () => void; onRetryPreparation: () => void; onSubmit: () => void;
+  onLogin: () => void; onBuyCredits: () => void; onRetryPreparation: () => void; onSubmit: () => void;
 }) {
   const steps = getExportProgressSteps(exportMode);
   const exportNameError = platform === "ios" && (exportName.trim().length === 0 || exportName.trim().length > 80) ? "테마 이름은 1~80자로 입력해 주세요." : null;
-  const versionNameError = platform === "ios" && !/^[0-9A-Za-z][0-9A-Za-z._-]{0,31}$/.test(exportVersionName.trim()) ? "영문, 숫자, 점, 밑줄, 하이픈으로 32자 이하로 입력해 주세요." : null;
-  const canSubmit = exportName.trim().length > 0 && exportVersionName.trim().length > 0 && !exportNameError && !versionNameError;
+  const canSubmit = exportName.trim().length > 0 && !exportNameError;
   const isLoggedIn = Boolean(accountState?.user);
   const credits = accountState?.credits ?? 0;
   const hasCredits = credits >= 1;
@@ -41,7 +40,6 @@ export function ExportDialog({
             {isExporting ? <div className="grid gap-5 py-4 text-center min-h-56 place-content-center" role="status" aria-live="polite"><span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><Download className="animate-pulse" size={22} aria-hidden="true" /></span><div><p className="text-base font-bold text-[#0f172a]">{getExportNotice(exportMode)}</p><p className="mt-2 text-sm font-medium text-[#64748b]">{steps[Math.min(progressStep, steps.length - 1)]} · {formatElapsedTime(elapsedSeconds)}</p></div><div className="mx-auto h-2 w-56 max-w-full overflow-hidden rounded-full bg-[#e2e8f0]"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#2563eb]" /></div><p className="text-xs font-medium text-[#64748b]">완료될 때까지 이 창을 유지해 주세요.</p></div> : downloadResult ? <DownloadComplete result={downloadResult} /> : isPreparingExport ? <div className="grid min-h-56 place-content-center gap-4 py-4 text-center" role="status" aria-live="polite"><span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><LoaderCircle className="animate-spin" size={22} aria-hidden="true" /></span><div><p className="text-base font-bold text-[#0f172a]">다운로드 정보를 준비하는 중입니다</p><p className="mt-2 text-sm font-medium text-[#64748b]">버전 정보를 불러오고 계정 상태를 확인하고 있습니다.</p></div></div> : preparationError ? <div className="grid min-h-56 place-content-center gap-3 py-4 text-center" role="alert"><span className="mx-auto grid size-12 place-items-center rounded-full bg-[#fef2f2] text-[#dc2626]"><X size={22} aria-hidden="true" /></span><div><p className="text-base font-bold text-[#0f172a]">다운로드 정보를 준비하지 못했습니다</p><p className="mt-2 max-w-md text-sm font-medium leading-6 text-[#64748b]">{preparationError}</p></div></div> : <>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label={platform === "android" ? "앱 이름" : "테마 이름"} value={exportName} disabled={isExporting} error={exportNameError} onChange={onNameChange} />
-                <Field label={platform === "android" ? "앱 버전" : "테마 버전"} value={exportVersionName} disabled={isExporting} error={versionNameError} onChange={onVersionNameChange} />
                 <div className="flex items-start gap-3 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 text-[#1e3a8a] sm:col-span-2"><ShieldCheck className="mt-0.5 shrink-0" size={17} aria-hidden="true" /><div>{platform === "android" ? <><p className="text-sm font-bold">고유 앱 ID 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 applicationId를 서버에서 생성합니다.</p></> : <><p className="text-sm font-bold">고유 테마 identifier 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 identifier를 서버에서 생성하고 CSS에 적용합니다.</p></>}</div></div>
               </div>
               <div className="grid gap-2 mt-4 sm:grid-cols-2" role="radiogroup" aria-label="출력 형식">

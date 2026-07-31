@@ -145,7 +145,6 @@ async function createIosExportFormData({
   template,
   templateId,
   exportName,
-  versionName,
   mode,
   slots,
   uploads,
@@ -173,7 +172,6 @@ async function createIosExportFormData({
     template,
     templateId,
     exportName,
-    versionName,
     slots,
     uploads,
     colors,
@@ -186,7 +184,6 @@ async function createIosExportFormData({
 
   formData.append("manifest", JSON.stringify(manifest));
   formData.append("exportName", exportName);
-  formData.append("versionName", versionName);
   formData.append("mode", mode);
 
   return formData;
@@ -197,7 +194,6 @@ async function createAndroidExportFormData({
   template,
   templateId,
   exportName,
-  versionName,
   mode,
   slots,
   uploads,
@@ -237,7 +233,6 @@ async function createAndroidExportFormData({
 
   formData.append("manifest", JSON.stringify(manifest));
   formData.append("exportName", exportName);
-  formData.append("versionName", versionName);
   formData.append("mode", mode);
 
   return formData;

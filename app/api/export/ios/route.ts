@@ -11,16 +11,18 @@ import {
 } from "@/lib/billing/credits";
 import { createStoredZipBytes } from "@/lib/theme/project/zip";
 import { buildDownloadContentDisposition, elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
-import { applyServerThemeIdentifier, IosExportRequestError, normalizeIosPath, validateExportName, validateIosPackage, validateVersionName } from "@/lib/theme/ios/packageValidation";
-import { getExportRequestTooLargePayload, isExportRequestTooLarge, maxExportRequestBytes } from "@/lib/theme/exportRequest";
+import { applyServerThemeIdentifier, IosExportRequestError, normalizeIosPath, validateExportName, validateIosPackage } from "@/lib/theme/ios/packageValidation";
+import { getExportRequestTooLargePayload, isExportRequestTooLarge, maxExportRequestBytes, themeVersionName } from "@/lib/theme/exportRequest";
 
 type UploadManifestItem = { field: string; path: string };
 type ServerAssetManifestItem = { path: string; serverAsset: string };
 type IosManifestItem = UploadManifestItem | ServerAssetManifestItem;
 type ExportMode = "theme-zip" | "ktheme";
 
+// 편집기는 더 이상 이 값을 읽지 않는다(버전 입력을 없앴다). 배포 교체 중 남아 있는 예전
+// 번들이 이 엔드포인트를 부르므로 응답 형태를 유지한다.
 export async function GET() {
-  return NextResponse.json({ versionName: "1.0.0" });
+  return NextResponse.json({ versionName: themeVersionName });
 }
 
 export async function POST(request: Request) {
@@ -44,9 +46,7 @@ export async function POST(request: Request) {
     if (modeRaw !== null && !isExportMode(modeRaw)) throw new IosExportRequestError("invalid_export_mode", "지원하지 않는 iOS 출력 형식입니다.");
     const mode: ExportMode = modeRaw ?? "ktheme";
     const exportNameRaw = formData.get("exportName");
-    const versionNameRaw = formData.get("versionName");
     const exportName = validateExportName(exportNameRaw);
-    const versionName = validateVersionName(versionNameRaw);
     const { entries: requestedEntries, inputBytes } = await readIosEntries(formData, manifestRaw, request.url);
 
     const reservation = await reserveCreditForExport({
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
     await updateExportJobStage({ userId, exportJobId, stage: "packaging" });
 
     const bytes = createStoredZipBytes(entries);
-    const fileName = `${buildExportBaseName(exportName, versionName)}.${mode === "ktheme" ? "ktheme" : "zip"}`;
+    const fileName = `${buildExportBaseName(exportName)}.${mode === "ktheme" ? "ktheme" : "zip"}`;
     const durationMs = elapsedMs(startedAt);
     const response = new NextResponse(bytes, {
       status: 200,
@@ -210,8 +210,8 @@ function classifyFailure(error: unknown) {
   return { code: "ios_export_failed", message: "iOS 내보내기에 실패했습니다. 잠시 후 다시 시도해 주세요.", status: 500 };
 }
 
-function buildExportBaseName(name: string, versionName: string) {
-  return `${sanitizeFileName(name) || "kakaotalk-theme"}_${sanitizeFileName(versionName) || "1.0.0"}`;
+function buildExportBaseName(name: string) {
+  return sanitizeFileName(name) || "kakaotalk-theme";
 }
 
 function sanitizeFileName(value: string) {

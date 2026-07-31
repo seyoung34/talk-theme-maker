@@ -484,7 +484,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     exportMode,
     exportName,
     exportProgressStep,
-    exportVersionName,
     isAccountLoading,
     isExporting,
     isPreparingExport,
@@ -494,7 +493,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setExportDialogOpen,
     setExportMode,
     setExportName,
-    setExportVersionName,
     submitExport,
   } = useProjectExport({
     activeTemplate,
@@ -1199,7 +1197,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           platform={platform}
           exportMode={exportMode}
           exportName={exportName}
-          exportVersionName={exportVersionName}
           progressStep={exportProgressStep}
           elapsedSeconds={exportElapsedSeconds}
           accountState={accountState}
@@ -1213,11 +1210,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onNameChange={(value) => {
             setExportName(value);
           }}
-          onVersionNameChange={setExportVersionName}
-          onLogin={() => void persistRecoveryThenNavigate("login_required", "login", { exportMode, name: exportName, versionName: exportVersionName })}
+          onLogin={() => void persistRecoveryThenNavigate("login_required", "login", { exportMode, name: exportName })}
           onBuyCredits={() => {
             trackAnalyticsEvent("export_blocked_insufficient_credits", { platform, export_mode: exportMode, credits_remaining: accountState?.credits ?? 0 });
-            void persistRecoveryThenNavigate("insufficient_credits", "credits", { exportMode, name: exportName, versionName: exportVersionName });
+            void persistRecoveryThenNavigate("insufficient_credits", "credits", { exportMode, name: exportName });
           }}
           onRetryPreparation={() => void openExportDialog()}
           onSubmit={() => void submitExport()}
