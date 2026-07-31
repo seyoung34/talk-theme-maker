@@ -1,4 +1,4 @@
-import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
+import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload } from "@/lib/theme/project/state";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { drawBubble, getAutoBubbleSize } from "@/lib/theme/preview/bubbleCanvas";
 import type { BubbleEditState } from "@/lib/theme/project/state";
@@ -73,7 +73,7 @@ export async function generateSystemTemplateThumbnail(
     if (!slot) return { source: undefined, selectedUploadName: undefined };
     const overrideUrl = imageUrlByRole?.[role];
     const selectedUpload = overrideUrl ? undefined : getSelectedUpload(slot, uploads, selections);
-    const source = overrideUrl ?? (selectedUpload ? URL.createObjectURL(selectedUpload.file) : getResolvedAssetUrl(slot, uploads, selections, input.baseTemplateId, template));
+    const source = overrideUrl ?? (selectedUpload ? URL.createObjectURL(selectedUpload.file) : getSelectedCandidate(slot, selections, input.baseTemplateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, uploads, selections, input.baseTemplateId, template));
     if (selectedUpload && source) objectUrls.push(source);
     return { source, selectedUploadName: selectedUpload?.file.name };
   };

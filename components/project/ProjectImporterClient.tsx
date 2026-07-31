@@ -85,6 +85,7 @@ type PendingBubbleCopy = {
 
 export default function ProjectImporterClient({ mode = "user" }: ProjectImporterClientProps) {
   const isAdminMode = mode === "admin";
+  const exitDestination = isAdminMode ? "/admin" : "/template";
   const router = useRouter();
   const searchParams = useSearchParams();
   const resumeToken = searchParams.get("resume");
@@ -266,7 +267,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const cancelExit = () => setExitConfirmOpen(false);
   const confirmExit = () => {
     setExitConfirmOpen(false);
-    router.push("/template");
+    router.push(exitDestination);
   };
 
   const activeTemplate = getThemeTemplate(templateId);
@@ -812,6 +813,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const selectCandidate = (slot: ThemeAssetSlot, candidateId: string) => {
+    const candidateChanged = candidateSelections[slot.id] !== candidateId;
     setCandidateSelections((current) => ({ ...current, [slot.id]: candidateId }));
     focusSlot(slot.id);
     trackFirstValueReached("candidate");
@@ -822,6 +824,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         delete next[slot.id];
         return next;
       });
+    } else if (candidateChanged) {
+      // geometry/markers/inset/stretch는 이미지 픽셀 좌표다. 다른 후보를 고르면
+      // 이전 이미지의 좌표를 새 이미지에 재사용하지 않고 기본 marker에서 다시 시작한다.
+      clearBubbleEdits(slot.id);
+      setLiveBubblePreview(null);
     }
     const assetSource = candidateId.startsWith(`${slot.id}:`) ? "user" : adminAssetsWithPreview.some((asset) => asset.id === candidateId) ? "admin" : "template";
     trackAnalyticsEvent("candidate_selected", { slot_role: slot.role, section: slot.section, asset_source: assetSource });
@@ -1132,8 +1139,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           <p className="mt-3 text-sm font-semibold leading-6 text-[#64748b]">
             작업 충돌을 막기 위해 편집기는 한 탭에서만 사용할 수 있습니다. 기존 편집 탭을 종료한 뒤 다시 열어 주세요.
           </p>
-          <button type="button" className="mt-6 min-h-11 w-full rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white" onClick={() => router.push("/template")}>
-            템플릿 갤러리로 돌아가기
+          <button type="button" className="mt-6 min-h-11 w-full rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white" onClick={() => router.push(exitDestination)}>
+            {isAdminMode ? "관리자 페이지로 돌아가기" : "템플릿 갤러리로 돌아가기"}
           </button>
         </section>
       </main>

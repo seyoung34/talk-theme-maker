@@ -120,6 +120,11 @@ export type ThemeAssetSlot = {
   cssProperty?: string;
   defaultColor?: Partial<Record<ThemeTemplateId, string>>;
   defaultAssetUrls?: Partial<Record<ThemeTemplateId, string>>;
+  /**
+   * Candidate 카드와 편집기/갤러리 프리뷰에만 사용하는 기본 이미지입니다.
+   * 실제 선택·내보내기 원본은 defaultAssetUrls를 계속 사용합니다.
+   */
+  defaultPreviewAssetUrls?: Partial<Record<ThemeTemplateId, string>>;
   candidates?: Partial<Record<ThemeTemplateId, ThemeSlotCandidate[]>>;
   export?: Partial<Record<ThemePlatform, ThemeExportMapping>>;
 };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { defaultInsets, getIosSourceCanvas, getPreviewContentRect, stretchPointToInsets } from "@/lib/theme/preview/bubbleCanvas";
+import { getIosSourceCanvas, getPreviewContentRect, stretchPointToInsets } from "@/lib/theme/preview/bubbleCanvas";
+import { centeredBubbleGeometry } from "@/lib/theme/bubbleGeometry";
 import type { BubbleAsset, BubbleSlot } from "@/lib/theme/types";
 
 // getPreviewContentRect는 ctx 없이 순수 기하 계산만 하므로 캔버스 없이 검증할 수 있다.
@@ -54,9 +55,9 @@ describe("getPreviewContentRect", () => {
     expect(getPreviewContentRect(null, "ios", undefined, 10, 20, 200, 120)).toEqual({ x: 38, y: 40, width: 144, height: 80 });
   });
 
-  it("iOS는 편집값이 없으면 슬롯 기본 inset을 쓴다", () => {
+  it("iOS는 편집값이 없으면 이미지 크기에 맞춘 가운데 기본 inset을 쓴다", () => {
     const asset = bubbleAsset("bubble.png", "me", 300, 200);
-    const { top, right, bottom, left } = defaultInsets.me;
+    const { top, right, bottom, left } = centeredBubbleGeometry(300, 200).contentInsets;
 
     const rect = getPreviewContentRect(asset, "ios", undefined, 0, 0, 400, 300);
 

@@ -24,12 +24,12 @@ export async function loadNinePatchBlob(blob: Blob, name: string, slot: BubbleSl
   // 읽는 중일 수 있다. data URL은 해당 수명 경합이 없어 복원된 작업에서도 안전하다.
   if (isSvgImage(blob, name)) {
     const source = await loadBlobImage(blob);
-    return parseImage(source, name, slot);
+    return isNinePatchName(name) ? parseImage(source, name, slot) : parsePlainImage(source, name, slot);
   }
 
   const bitmap = await createImageBitmap(blob);
   try {
-    return parseImage(bitmap, name, slot);
+    return isNinePatchName(name) ? parseImage(bitmap, name, slot) : parsePlainImage(bitmap, name, slot);
   } finally {
     bitmap.close();
   }
@@ -37,15 +37,28 @@ export async function loadNinePatchBlob(blob: Blob, name: string, slot: BubbleSl
 
 export async function loadNinePatchDataUrl(dataUrl: string, name: string, slot: BubbleSlot): Promise<BubbleAsset> {
   const source = await loadImage(dataUrl);
-  return parseImage(source, name, slot);
+  return isNinePatchName(name) ? parseImage(source, name, slot) : parsePlainImage(source, name, slot);
+}
+
+/** 9-patch marker가 없는 일반 PNG/SVG를 프리뷰용 BubbleAsset으로 읽습니다. */
+export function parsePlainImage(source: NinePatchImageSource, name: string, slot: BubbleSlot): BubbleAsset {
+  const fullCanvas = createCanvasFromSource(source);
+  const markers = defaultMarkers(fullCanvas.width, fullCanvas.height);
+  return {
+    slot,
+    name,
+    fullCanvas,
+    innerCanvas: fullCanvas,
+    width: fullCanvas.width,
+    height: fullCanvas.height,
+    markers: offsetPlainMarkers(markers, fullCanvas.width, fullCanvas.height),
+    invalidPixels: [],
+  };
 }
 
 export function parseImage(source: NinePatchImageSource, name: string, slot: BubbleSlot): BubbleAsset {
-  const fullCanvas = document.createElement("canvas");
-  fullCanvas.width = "naturalWidth" in source ? source.naturalWidth : source.width;
-  fullCanvas.height = "naturalHeight" in source ? source.naturalHeight : source.height;
+  const fullCanvas = createCanvasFromSource(source);
   const ctx = context(fullCanvas);
-  ctx.drawImage(source, 0, 0);
 
   // 마커와 유효성 검사는 테두리 1px만 본다. 이미지 전체를 getImageData로 가져오면
   // 픽셀 수만큼 복사 비용을 내므로 네 변만 따로 읽는다.
@@ -77,6 +90,30 @@ export function parseImage(source: NinePatchImageSource, name: string, slot: Bub
     height: fullCanvas.height,
     markers,
     invalidPixels,
+  };
+}
+
+function createCanvasFromSource(source: NinePatchImageSource) {
+  const canvas = document.createElement("canvas");
+  canvas.width = "naturalWidth" in source ? source.naturalWidth : source.width;
+  canvas.height = "naturalHeight" in source ? source.naturalHeight : source.height;
+  context(canvas).drawImage(source, 0, 0);
+  return canvas;
+}
+
+function offsetPlainMarkers(markers: ReturnType<typeof defaultMarkers>, width: number, height: number) {
+  return {
+    top: offsetRange(markers.top, width),
+    bottom: offsetRange(markers.bottom, width),
+    left: offsetRange(markers.left, height),
+    right: offsetRange(markers.right, height),
+  };
+}
+
+function offsetRange(range: Range, max: number): Range {
+  return {
+    start: clamp(range.start + 1, 1, max),
+    end: clamp(range.end + 1, 1, max),
   };
 }
 
@@ -339,4 +376,8 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 
 function isSvgImage(blob: Blob, name: string) {
   return blob.type.toLowerCase().includes("svg") || name.toLowerCase().endsWith(".svg");
+}
+
+function isNinePatchName(name: string) {
+  return name.toLowerCase().endsWith(".9.png");
 }

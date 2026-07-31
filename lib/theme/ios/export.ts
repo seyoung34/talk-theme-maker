@@ -1,4 +1,5 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
+import { centeredBubbleGeometry } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency, themeVersionName } from "@/lib/theme/exportRequest";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
@@ -35,6 +36,12 @@ type IosSlotSource = {
   serverAsset?: string;
   sourceName: string;
   sourceScale: number;
+  sourceDimensions?: IosSourceDimensions;
+};
+
+export type IosSourceDimensions = {
+  width: number;
+  height: number;
 };
 
 type IosImageMap = Partial<Record<ThemeResourceRole, string>>;
@@ -87,6 +94,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   const files: IosExportFile[] = [];
   const imageMap: IosImageMap = {};
   const sourceScaleBySlotId: Record<string, number> = {};
+  const sourceDimensionsBySlotId: Record<string, IosSourceDimensions> = {};
 
   // 슬롯 해석과 배율 리사이즈는 서로 독립이다. 순차 처리는 fetch 왕복과 디코딩이
   // 슬롯 수만큼 누적되므로 동시 실행 수만 제한해 병렬로 처리한다.
@@ -94,12 +102,14 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   const resolved = await mapWithConcurrency(imageSlots, exportSlotConcurrency, async (slot) => {
     const source = await resolveIosSlotSource(slot, uploads, selections, templateId, template, iosSlots);
     if (!source) return null;
-    return { slot, source, exportFiles: await createIosImageExportFiles(slot, source) };
+    const sourceDimensions = isIosBubbleRole(slot.role) ? await getIosSourceDimensions(slot, source) : undefined;
+    return { slot, source, sourceDimensions, exportFiles: await createIosImageExportFiles(slot, source) };
   });
 
   for (const entry of resolved) {
     if (!entry) continue;
     sourceScaleBySlotId[entry.slot.id] = entry.source.sourceScale;
+    if (entry.sourceDimensions) sourceDimensionsBySlotId[entry.slot.id] = entry.sourceDimensions;
     files.push(...entry.exportFiles);
     imageMap[entry.slot.role] = entry.slot.fileName ?? entry.slot.path.split("/").at(-1) ?? "";
   }
@@ -118,6 +128,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
         imageMap,
         bubbleEditsBySlotId: options.bubbleEditsBySlotId,
         sourceScaleBySlotId,
+        sourceDimensionsBySlotId,
       }),
     ),
   );
@@ -163,6 +174,23 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
     sourceName: assetUrl,
     sourceScale,
   };
+}
+
+function isIosBubbleRole(role: ThemeResourceRole) {
+  return role === "bubble_me_1" || role === "bubble_me_2" || role === "bubble_you_1" || role === "bubble_you_2";
+}
+
+async function getIosSourceDimensions(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosSourceDimensions> {
+  if (source.sourceDimensions) return source.sourceDimensions;
+
+  const blob = await getIosSourceBlob(slot, source);
+  const image = await loadBlobImage(blob, source.sourceName);
+  const dimensions = getValidatedIosImageSize(image);
+  const hasMarkerBorder = source.sourceName.toLowerCase().endsWith(".9.png");
+  source.sourceDimensions = hasMarkerBorder
+    ? { width: Math.max(1, dimensions.width - 2), height: Math.max(1, dimensions.height - 2) }
+    : dimensions;
+  return source.sourceDimensions;
 }
 
 async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosExportFile[]> {
@@ -231,6 +259,7 @@ function buildIosThemeCss({
   imageMap,
   bubbleEditsBySlotId,
   sourceScaleBySlotId,
+  sourceDimensionsBySlotId,
 }: {
   template: ThemeTemplate;
   templateId: ThemeTemplateId;
@@ -242,6 +271,7 @@ function buildIosThemeCss({
   imageMap: IosImageMap;
   bubbleEditsBySlotId: Partial<Record<string, BubbleEditState>>;
   sourceScaleBySlotId: Record<string, number>;
+  sourceDimensionsBySlotId: Record<string, IosSourceDimensions>;
 }) {
   const slotByRole = Object.fromEntries(slots.map((slot) => [slot.role, slot])) as Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
   const color = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback;
@@ -409,6 +439,8 @@ function buildIosThemeCss({
       groupEdit: bubbleEditsBySlotId[slotByRole.bubble_me_2?.id ?? ""],
       primaryScale: sourceScaleBySlotId[slotByRole.bubble_me_1?.id ?? ""] ?? 3,
       groupScale: sourceScaleBySlotId[slotByRole.bubble_me_2?.id ?? ""] ?? 3,
+      primarySourceDimensions: sourceDimensionsBySlotId[slotByRole.bubble_me_1?.id ?? ""],
+      groupSourceDimensions: sourceDimensionsBySlotId[slotByRole.bubble_me_2?.id ?? ""],
       fallbackInsets: { top: 10, left: 11, bottom: 7, right: 17 },
       fallbackStretch: { x: 17, y: 17 },
     }),
@@ -425,6 +457,8 @@ function buildIosThemeCss({
       groupEdit: bubbleEditsBySlotId[slotByRole.bubble_you_2?.id ?? ""],
       primaryScale: sourceScaleBySlotId[slotByRole.bubble_you_1?.id ?? ""] ?? 3,
       groupScale: sourceScaleBySlotId[slotByRole.bubble_you_2?.id ?? ""] ?? 3,
+      primarySourceDimensions: sourceDimensionsBySlotId[slotByRole.bubble_you_1?.id ?? ""],
+      groupSourceDimensions: sourceDimensionsBySlotId[slotByRole.bubble_you_2?.id ?? ""],
       fallbackInsets: { top: 10, left: 17, bottom: 7, right: 11 },
       fallbackStretch: { x: 22, y: 17 },
     }),
@@ -473,12 +507,14 @@ function buildMessageCellCss(
     groupEdit?: BubbleEditState;
     primaryScale: number;
     groupScale: number;
+    primarySourceDimensions?: IosSourceDimensions;
+    groupSourceDimensions?: IosSourceDimensions;
     fallbackInsets: Insets;
     fallbackStretch: StretchPoint;
   },
 ) {
-  const primary = getIosCssValues(options.primaryEdit, options.fallbackInsets, options.fallbackStretch, options.primaryScale);
-  const group = getIosCssValues(options.groupEdit, options.fallbackInsets, options.fallbackStretch, options.groupScale);
+  const primary = getIosCssValues(options.primaryEdit, options.fallbackInsets, options.fallbackStretch, options.primaryScale, options.primarySourceDimensions);
+  const group = getIosCssValues(options.groupEdit, options.fallbackInsets, options.fallbackStretch, options.groupScale, options.groupSourceDimensions);
   return [
     selector,
     "{",
@@ -497,10 +533,11 @@ function buildMessageCellCss(
     .join("\n");
 }
 
-function getIosCssValues(edit: BubbleEditState | undefined, fallbackInsets: Insets, fallbackStretch: StretchPoint, sourceScale: number) {
-  const insets = edit?.geometry?.contentInsets ?? edit?.insets ?? fallbackInsets;
-  const stretch = edit?.geometry?.stretch ?? edit?.stretch ?? fallbackStretch;
-  const scale = edit ? sourceScale : 1;
+export function getIosCssValues(edit: BubbleEditState | undefined, fallbackInsets: Insets, fallbackStretch: StretchPoint, sourceScale: number, sourceDimensions?: IosSourceDimensions) {
+  const fallbackGeometry = sourceDimensions ? centeredBubbleGeometry(sourceDimensions.width, sourceDimensions.height) : undefined;
+  const insets = edit?.geometry?.contentInsets ?? edit?.insets ?? fallbackGeometry?.contentInsets ?? fallbackInsets;
+  const stretch = edit?.geometry?.stretch ?? edit?.stretch ?? fallbackGeometry?.stretch ?? fallbackStretch;
+  const scale = edit || sourceDimensions ? sourceScale : 1;
   return {
     stretch: `${Math.round(stretch.x / scale)}px ${Math.round(stretch.y / scale)}px`,
     insets: `${Math.round(insets.top / scale)}px ${Math.round(insets.left / scale)}px ${Math.round(insets.bottom / scale)}px ${Math.round(insets.right / scale)}px`,

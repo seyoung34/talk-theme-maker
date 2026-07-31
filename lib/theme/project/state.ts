@@ -223,6 +223,7 @@ export function getSlotCandidates(slot: ThemeAssetSlot | undefined, templateId: 
   }
 
   const assetUrl = slot.defaultAssetUrls?.[templateId];
+  const previewUrl = slot.defaultPreviewAssetUrls?.[templateId] ?? assetUrl;
   const disabledCandidate = {
     id: disabledImageCandidateId,
     label: "이미지 사용 안 함",
@@ -243,7 +244,7 @@ export function getSlotCandidates(slot: ThemeAssetSlot | undefined, templateId: 
       note: slot.note,
       sourceType: "template-asset",
       assetUrl,
-      previewUrl: assetUrl,
+      previewUrl,
       isDefault: slot.section !== "passcode",
     },
   ];

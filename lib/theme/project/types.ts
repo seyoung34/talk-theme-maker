@@ -6,6 +6,9 @@ export type ThemeProjectFile = {
   size: number;
   file?: File;
   sourceUrl?: string;
+  /** Candidate/preview-only source. Export must continue using sourceUrl or file. */
+  previewUrl?: string;
+  previewName?: string;
 };
 
 export type ThemeProjectResource = {

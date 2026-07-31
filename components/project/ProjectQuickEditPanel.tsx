@@ -239,6 +239,7 @@ export function ProjectQuickEditPanel({
               className={`grid cursor-pointer gap-4 rounded-xl border-2 border-dashed p-4 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#60a5fa] ${dragActive || pasteFeedback ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#d7dee8] bg-[#f8fafc] hover:border-[#93c5fd] hover:bg-[#f5f9ff]"}`}
               onClick={() => fileInputRefs.current[slot.id]?.click()}
               onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
                 if (event.key !== "Enter" && event.key !== " ") return;
                 event.preventDefault();
                 fileInputRefs.current[slot.id]?.click();
@@ -350,7 +351,7 @@ export function ProjectQuickEditPanel({
 }
 
 function getEditableSourceUrl(file: ThemeProjectFile | undefined, selectedPickerCandidate: SlotCandidate | undefined, selectedCandidate: ReturnType<typeof getSelectedCandidate>) {
-  return file?.sourceUrl ?? selectedPickerCandidate?.previewUrl ?? selectedCandidate?.previewUrl ?? selectedCandidate?.assetUrl;
+  return file?.sourceUrl ?? selectedCandidate?.assetUrl ?? selectedPickerCandidate?.previewUrl ?? selectedCandidate?.previewUrl;
 }
 
 async function imageUrlToEditableFile(url: string, fallbackName: string) {

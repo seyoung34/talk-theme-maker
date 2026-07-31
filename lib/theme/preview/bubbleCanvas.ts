@@ -2,22 +2,12 @@
 // 편집기 프리뷰(ChatroomPreview)와 갤러리 모달이 동일한 9-slice/텍스트영역 계산을 공유해
 // 픽셀 단위로 일치하도록 한다. 모든 계산은 소스 픽셀 공간에서 이뤄지고, 표시 크기는 CSS로 축소한다.
 import { mapContentRect, renderNinePatch, shrinkFixed } from "@/lib/theme/android/ninepatch";
-import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
+import { bubbleGeometryToAndroidMarkers, centeredBubbleGeometry } from "@/lib/theme/bubbleGeometry";
 import type { BubbleEditState } from "@/lib/theme/project/state";
-import type { BubbleAsset, BubbleSlot, Insets, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { BubbleAsset, Insets, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
 export const bubbleTextFontSize = 36;
 export const bubbleTextLineHeight = 48;
-
-export const defaultInsets: Record<BubbleSlot, Insets> = {
-  me: { top: 14, right: 40, bottom: 59, left: 59 },
-  you: { top: 17, right: 58, bottom: 60, left: 38 },
-};
-
-export const defaultStretch: Record<BubbleSlot, StretchPoint> = {
-  me: { x: 145, y: 65 },
-  you: { x: 224, y: 59 },
-};
 
 export function drawBubble(
   ctx: CanvasRenderingContext2D,
@@ -40,7 +30,8 @@ export function drawBubble(
   if (asset) {
     if (platform === "ios") {
       const source = getIosSourceCanvas(asset);
-      const stretch = normalizeStretchPoint(edit?.geometry?.stretch ?? edit?.stretch ?? defaultStretch[asset.slot], source.width, source.height);
+      const fallback = centeredBubbleGeometry(source.width, source.height);
+      const stretch = normalizeStretchPoint(edit?.geometry?.stretch ?? edit?.stretch ?? fallback.stretch, source.width, source.height);
       renderCapInset(ctx, asset, stretch, x, y, width, height);
     } else {
       renderNinePatch(ctx, getAndroidRenderAsset(asset, edit), x, y, width, height);
@@ -101,7 +92,8 @@ export function getPreviewContentRect(asset: BubbleAsset | null, platform: Theme
   if (!asset) return { x: x + 28, y: y + 20, width: width - 56, height: height - 40 };
   if (platform === "ios") {
     const source = getIosSourceCanvas(asset);
-    return mapIosContentRect(edit?.geometry?.contentInsets ?? edit?.insets ?? defaultInsets[asset.slot], source.width, source.height, x, y, width, height);
+    const fallback = centeredBubbleGeometry(source.width, source.height);
+    return mapIosContentRect(edit?.geometry?.contentInsets ?? edit?.insets ?? fallback.contentInsets, source.width, source.height, x, y, width, height);
   }
   return mapContentRect(getAndroidRenderAsset(asset, edit), x, y, width, height);
 }

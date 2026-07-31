@@ -5,7 +5,7 @@ import type { ThemeResourceRole } from "@/lib/theme/types";
 export function previewRoleFilesSignature(files: Partial<Record<ThemeResourceRole, ThemeProjectFile>>) {
   return Object.entries(files)
     .sort(([leftRole], [rightRole]) => leftRole.localeCompare(rightRole))
-    .map(([role, file]) => [role, file?.path, file?.sourceUrl, file?.file?.name, file?.file?.size, file?.file?.lastModified].join(":"))
+    .map(([role, file]) => [role, file?.path, file?.sourceUrl, file?.previewUrl, file?.previewName, file?.file?.name, file?.file?.size, file?.file?.lastModified].join(":"))
     .join("|");
 }
 
@@ -32,10 +32,12 @@ export function findBestFile(analysis: ThemeProjectAnalysis, role: ThemeResource
 }
 
 export async function imageUrlForThemeFile(file: ThemeProjectFile, stripNinePatch = file.name.endsWith(".9.png")) {
-  if (file.file) return imageUrlForPreview(file.file, stripNinePatch);
-  if (file.sourceUrl) {
-    if (!stripNinePatch) return file.sourceUrl;
-    return stripNinePatchUrl(file.sourceUrl);
+  const sourceUrl = file.previewUrl ?? file.sourceUrl;
+  const previewIsNinePatch = file.previewUrl ? file.previewName?.toLowerCase().endsWith(".9.png") : stripNinePatch;
+  if (file.file) return imageUrlForPreview(file.file, Boolean(previewIsNinePatch));
+  if (sourceUrl) {
+    if (!previewIsNinePatch) return sourceUrl;
+    return stripNinePatchUrl(sourceUrl);
   }
   return "";
 }
@@ -65,6 +67,15 @@ export async function blobForThemeFile(file: ThemeProjectFile): Promise<Blob | n
   const response = await fetch(file.sourceUrl);
   if (!response.ok) return null;
   return response.blob();
+}
+
+export async function blobForThemePreview(file: ThemeProjectFile): Promise<Blob | null> {
+  if (file.previewUrl) {
+    const response = await fetch(file.previewUrl, { cache: "force-cache" });
+    if (!response.ok) return null;
+    return response.blob();
+  }
+  return blobForThemeFile(file);
 }
 
 // 파싱 결과 캐시용 키. 서명 URL은 재발급될 때마다 쿼리가 바뀌므로 경로만 본다.

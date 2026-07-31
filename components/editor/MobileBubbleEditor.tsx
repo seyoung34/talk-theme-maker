@@ -123,7 +123,7 @@ export function MobileBubbleEditor({
   const initialDraft = useMemo<MobileBubbleEditDraft | null>(() => {
     if (!asset) return null;
     const imageState = initialImageState ?? defaultImageEditState;
-    const source = getArtworkMetrics(asset, platform);
+    const source = getArtworkMetrics(asset);
     // 저장된 편집값이 없으면 이미지 크기에 맞춘 가운데 값에서 시작한다.
     const centered = centeredBubbleGeometry(source.width, source.height);
     const resolved = resolveBubbleGeometry({
@@ -171,7 +171,7 @@ export function MobileBubbleEditor({
     setHelpOpen(true);
   }, []);
 
-  const artwork = asset ? getArtworkMetrics(asset, platform) : null;
+  const artwork = asset ? getArtworkMetrics(asset) : null;
 
   useEffect(() => {
     if (!draft || !artwork || !previewChangeRef.current) return;
@@ -192,29 +192,27 @@ export function MobileBubbleEditor({
     return () => observer.disconnect();
   }, [asset]);
 
-  // Blob URL의 생성과 해제는 같은 effect에서 관리한다. 렌더 중 URL을 만들면
-  // React Strict Mode의 effect 재실행에서 아직 화면에 쓰는 URL이 먼저 해제되어
-  // 새로고침 직후 이미지가 깨질 수 있다.
+  // Android .9 원본은 marker를 읽는 데 필요하지만, 편집 화면에는 marker 1px 테두리를
+  // 제외한 artwork만 보여준다. geometry는 같은 asset에서 이미 계산되므로 편집·내보내기
+  // 원본과 화면 표시를 분리해도 stretch/text 영역 좌표가 달라지지 않는다.
   useEffect(() => {
-    if (!preparedFile) {
+    if (!asset) {
       setImageUrl("");
       return;
     }
-    const nextImageUrl = URL.createObjectURL(preparedFile);
-    setImageUrl(nextImageUrl);
-    return () => URL.revokeObjectURL(nextImageUrl);
-  }, [preparedFile]);
+    setImageUrl(asset.innerCanvas.toDataURL("image/png"));
+  }, [asset]);
 
   // 원본이 작은 말풍선도 편집 영역을 충분히 활용하도록 자동 맞춤의 상한을 넉넉히 둔다.
   // 별도 확대는 이 값의 배율로만 적용되며, 실제 말풍선 편집값에는 저장하지 않는다.
   const fitScale = asset && stageSize.width && stageSize.height
-    ? Math.min(6, (stageSize.width - 64) / asset.width, (stageSize.height - 64) / asset.height)
+    ? Math.min(6, (stageSize.width - 64) / (artwork?.width ?? asset.width), (stageSize.height - 64) / (artwork?.height ?? asset.height))
     : 1;
   const stageScale = fitScale * viewerZoom;
   const effectiveScale = stageScale * (draft?.imageState.scale ?? 1);
   const artboardStyle = draft && asset ? {
-    width: asset.width * stageScale,
-    height: asset.height * stageScale,
+    width: (artwork?.width ?? asset.width) * stageScale,
+    height: (artwork?.height ?? asset.height) * stageScale,
     transform: `translate(${draft.imageState.offsetX * stageScale}px, ${draft.imageState.offsetY * stageScale}px) scale(${draft.imageState.scale})`,
   } satisfies CSSProperties : undefined;
 
@@ -407,13 +405,14 @@ function BubbleValueFeedback({ geometry, activeKind }: { geometry: BubbleGeometr
           : `아래 여백 ${geometry.contentInsets.bottom}`;
   return <output className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-full border border-white/80 bg-[#0f172a]/85 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg backdrop-blur" aria-live="polite">{value}</output>;
 }
-function getArtworkMetrics(asset: BubbleAsset, platform: ThemePlatform): ArtworkMetrics {
-  const hasMarkerBorder = platform === "android" || asset.name.toLowerCase().endsWith(".9.png");
+function getArtworkMetrics(asset: BubbleAsset): ArtworkMetrics {
+  const hasMarkerBorder = asset.name.toLowerCase().endsWith(".9.png");
   const source = hasMarkerBorder ? asset.innerCanvas : asset.fullCanvas;
   return {
     width: source.width,
     height: source.height,
-    offsetX: hasMarkerBorder ? 1 : 0,
-    offsetY: hasMarkerBorder ? 1 : 0,
+    // 편집 화면도 innerCanvas를 그리므로 geometry는 항상 표시 artwork의 좌상단을 기준으로 한다.
+    offsetX: 0,
+    offsetY: 0,
   };
 }

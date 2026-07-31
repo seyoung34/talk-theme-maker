@@ -973,6 +973,9 @@
     "note": "첫번째 내 말풍선",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png"
+    },
+    "defaultPreviewAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.png"
     }
   },
   {
@@ -990,7 +993,10 @@
     "editableInBubbleEditor": true,
     "note": "첫번째 이후 내 말풍선",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png"
+      "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_02_image.9.png"
+    },
+    "defaultPreviewAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_chatroom_bubble_me_02_image.png"
     }
   },
   {
@@ -1009,6 +1015,9 @@
     "note": "첫번째 상대 내 말풍선",
     "defaultAssetUrls": {
       "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.9.png"
+    },
+    "defaultPreviewAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.png"
     }
   },
   {
@@ -1026,7 +1035,10 @@
     "editableInBubbleEditor": true,
     "note": "첫번째 이후 상대 말풍선",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_01_image.9.png"
+      "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_02_image.9.png"
+    },
+    "defaultPreviewAssetUrls": {
+      "basic": "/template-assets/basic/android/theme_chatroom_bubble_you_02_image.png"
     }
   },
   {

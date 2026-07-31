@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { getBubblePairRole, getImageAssetFallbackRole, getInheritedSourceSlot, getInitialSlotCandidateSelections } from "@/lib/theme/project/state";
+import { getBubblePairRole, getImageAssetFallbackRole, getInheritedSourceSlot, getInitialSlotCandidateSelections, getResolvedAssetUrl, getSlotCandidates } from "@/lib/theme/project/state";
+import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getThemeSlots, themeTemplates } from "@/lib/theme/templates";
 
 // getImageAssetFallbackRole은 별도 지정이 없는 이미지 슬롯이 어떤 슬롯을 상속하는지 정의하는 순수 함수다.
@@ -62,5 +63,34 @@ describe("getInheritedSourceSlot", () => {
     const bg = slots.find((slot) => slot.role === "main_background")!;
     const selections = getInitialSlotCandidateSelections(slots, template.id, template);
     expect(getInheritedSourceSlot(bg, {}, selections, template.id, template, slots)).toBeUndefined();
+  });
+});
+
+describe("basic Android bubble asset separation", () => {
+  const template = themeTemplates[0];
+  const slots = getThemeSlots("android");
+  const bubbleRoles = ["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"] as const;
+
+  it("candidate는 일반 PNG를 보여주고 resolved asset은 9-patch를 유지한다", () => {
+    const selections = getInitialSlotCandidateSelections(slots, template.id, template);
+
+    for (const role of bubbleRoles) {
+      const slot = slots.find((candidate) => candidate.role === role)!;
+      const candidate = getSlotCandidates(slot, template.id, template).find((item) => item.isDefault)!;
+
+      expect(candidate.assetUrl).toMatch(/\.9\.png$/);
+      expect(candidate.previewUrl).toMatch(/(?<!\.9)\.png$/);
+      expect(getResolvedAssetUrl(slot, {}, selections, template.id, template)).toBe(candidate.assetUrl);
+    }
+  });
+
+  it("편집기 분석에도 export 원본과 별도의 프리뷰 URL을 전달한다", () => {
+    const selections = getInitialSlotCandidateSelections(slots, template.id, template);
+    const analysis = createThemeProjectAnalysis(template, "android", slots, {}, {}, selections);
+    const me1 = analysis.files.find((file) => file.name === "theme_chatroom_bubble_me_01_image.9.png");
+
+    expect(me1?.sourceUrl).toBe("/template-assets/basic/android/theme_chatroom_bubble_me_01_image.9.png");
+    expect(me1?.previewUrl).toBe("/template-assets/basic/android/theme_chatroom_bubble_me_01_image.png");
+    expect(me1?.previewName).toBe("theme_chatroom_bubble_me_01_image.png");
   });
 });

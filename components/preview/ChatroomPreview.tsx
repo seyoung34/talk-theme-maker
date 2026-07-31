@@ -3,7 +3,7 @@
 import { ArrowLeft, SendHorizontal, Menu, Phone, Plus, Search, Smile } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getResolvedColor, type BubbleEditState, type SlotCandidateSelections } from "@/components/project/projectModel";
-import { blobForThemeFile, findBestFile, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
+import { blobForThemeFile, blobForThemePreview, findBestFile, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { loadCachedBubbleAsset } from "@/lib/theme/preview/bubbleAssetCache";
 import { drawBubble, getAutoBubbleSize } from "@/lib/theme/preview/bubbleCanvas";
@@ -180,10 +180,21 @@ export function ChatroomPreview({
             // 여기서 적용하면 마커를 드래그할 때마다 원본을 다시 받아 다시 파싱하게 된다.
             // 파싱 결과에 slot이 담기므로 캐시 키에도 있어야 한다. 같은 파일을 me/you에 함께 쓰면
             // 파일만으로 키를 만들 때 한쪽 자산이 반대쪽에 그대로 재사용된다.
-            nextAssets[slot.id] = await loadCachedBubbleAsset(`${themeFileCacheKey(file)}:${bubbleSlot}`, async () => {
-              const blob = await blobForThemeFile(file);
-              if (!blob) throw new Error(`bubble source missing: ${file.path}`);
-              return loadNinePatchBlob(blob, file.name, bubbleSlot);
+            nextAssets[slot.id] = await loadCachedBubbleAsset(`${themeFileCacheKey(file)}:${file.previewUrl ?? ""}:${bubbleSlot}`, async () => {
+              const previewBlob = await blobForThemePreview(file);
+              if (!previewBlob) throw new Error(`bubble preview source missing: ${file.path}`);
+              const previewAsset = await loadNinePatchBlob(previewBlob, file.previewName ?? file.name, bubbleSlot);
+              if (!file.previewUrl || !file.sourceUrl || !file.name.toLowerCase().endsWith(".9.png")) return previewAsset;
+
+              try {
+                const sourceBlob = await blobForThemeFile(file);
+                if (!sourceBlob) return previewAsset;
+                const sourceAsset = await loadNinePatchBlob(sourceBlob, file.name, bubbleSlot);
+                return { ...previewAsset, markers: mapMarkersToPreview(sourceAsset, previewAsset) };
+              } catch {
+                // clean preview artwork만으로도 화면은 계속 표시한다.
+                return previewAsset;
+              }
             });
           } catch (error) {
             // 한 슬롯이 실패해도 나머지 말풍선과 배경은 그대로 보여 준다.
@@ -625,7 +636,28 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: n
 
 function fileSignature(file?: ThemeProjectFile) {
   if (!file) return "";
-  return `${file.path}:${file.size}:${file.file?.lastModified ?? file.sourceUrl ?? ""}`;
+  return `${file.path}:${file.size}:${file.file?.lastModified ?? file.sourceUrl ?? ""}:${file.previewUrl ?? ""}:${file.previewName ?? ""}`;
+}
+
+function mapMarkersToPreview(source: BubbleAsset, preview: BubbleAsset) {
+  return {
+    top: mapMarkerRange(source.markers.top, source.innerCanvas.width, preview.innerCanvas.width),
+    bottom: mapMarkerRange(source.markers.bottom, source.innerCanvas.width, preview.innerCanvas.width),
+    left: mapMarkerRange(source.markers.left, source.innerCanvas.height, preview.innerCanvas.height),
+    right: mapMarkerRange(source.markers.right, source.innerCanvas.height, preview.innerCanvas.height),
+  };
+}
+
+function mapMarkerRange(range: { start: number; end: number }, sourceInnerSize: number, previewInnerSize: number) {
+  const scale = previewInnerSize / Math.max(1, sourceInnerSize);
+  return {
+    start: clamp(Math.round((range.start - 1) * scale) + 1, 1, previewInnerSize),
+    end: clamp(Math.round((range.end - 1) * scale) + 1, 1, previewInnerSize),
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function selectPreviewFiles(analysis: ThemeProjectAnalysis) {

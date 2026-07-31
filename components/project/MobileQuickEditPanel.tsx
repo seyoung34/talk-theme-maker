@@ -339,7 +339,7 @@ function ImageControls({
   const selectedUploadEntry = getSelectedUpload(slot, uploads, selections);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
   const directEditableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;
-  const editableSourceUrl = !directEditableSourceFile ? file?.sourceUrl ?? selectedPickerCandidate?.previewUrl ?? selectedCandidate?.previewUrl ?? selectedCandidate?.assetUrl : undefined;
+  const editableSourceUrl = !directEditableSourceFile ? file?.sourceUrl ?? selectedCandidate?.assetUrl ?? selectedPickerCandidate?.previewUrl ?? selectedCandidate?.previewUrl : undefined;
   const imageEditTarget = selectedUploadEntry?.imageEdit?.target ?? getImageEditTarget(selectedCandidate);
   const layoutKind = getCandidateLayoutKind(slot);
   const expandedCollectionClassName = layoutKind === "wallpaper"
@@ -449,4 +449,3 @@ function ImageControls({
     </div>
   );
 }
-

@@ -7,7 +7,7 @@ import SiteHeader from "@/components/layout/SiteHeader";
 import BubbleCanvasPreview from "@/components/preview/BubbleCanvasPreview";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
-import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
+import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload } from "@/lib/theme/project/state";
 import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
@@ -754,7 +754,7 @@ function resolveUserTemplateImage(slots: ThemeAssetSlot[], role: ThemeResourceRo
   const slot = findSlotByRole(slots, role);
   const selectedUpload = getSelectedUpload(slot, record.uploads, record.candidateSelections);
   if (selectedUpload) return uploadPreviewUrls[selectedUpload.id];
-  return getResolvedAssetUrl(slot, record.uploads, record.candidateSelections, templateId, template);
+  return getSelectedCandidate(slot, record.candidateSelections, templateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, record.uploads, record.candidateSelections, templateId, template);
 }
 
 function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {

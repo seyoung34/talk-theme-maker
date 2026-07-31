@@ -224,16 +224,18 @@ function PatchImage({ asset, activeMarker }: { asset: BubbleAsset; activeMarker:
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const previewAsset = getMarkerPreviewAsset(asset);
     const maxWidth = 420;
-    const scale = Math.max(1, Math.floor(maxWidth / asset.width));
-    canvas.width = asset.width * scale;
-    canvas.height = asset.height * scale;
+    const scale = Math.max(1, Math.floor(maxWidth / previewAsset.width));
+    canvas.width = previewAsset.width * scale;
+    canvas.height = previewAsset.height * scale;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
     drawChecker(ctx, canvas.width, canvas.height, 12);
-    ctx.drawImage(asset.fullCanvas, 0, 0, canvas.width, canvas.height);
-    drawMarkerOverlay(ctx, asset, scale, activeMarker);
+    // .9 원본은 marker를 편집값으로 사용하되, 화면에는 테두리 없는 artwork만 그린다.
+    ctx.drawImage(previewAsset.fullCanvas, 0, 0, canvas.width, canvas.height);
+    drawMarkerOverlay(ctx, previewAsset, scale, activeMarker);
   }, [activeMarker, asset]);
 
   return <canvas className="mb-0 block w-full max-h-[260px] rounded-lg border border-[#d5e4e8] object-contain" ref={canvasRef} aria-label="9-patch preview" />;
@@ -426,6 +428,32 @@ function drawInsetOverlay(ctx: CanvasRenderingContext2D, insets: Insets, stretch
   ctx.fillStyle = "rgba(0, 107, 122, .95)";
   ctx.fillRect(pointX, pointY, Math.max(3, scale * 3), Math.max(3, scale * 3));
   ctx.restore();
+}
+
+function getMarkerPreviewAsset(asset: BubbleAsset): BubbleAsset {
+  const width = asset.innerCanvas.width;
+  const height = asset.innerCanvas.height;
+  return {
+    ...asset,
+    fullCanvas: asset.innerCanvas,
+    innerCanvas: asset.innerCanvas,
+    width,
+    height,
+    markers: {
+      top: markerRangeToArtwork(asset.markers.top, width),
+      left: markerRangeToArtwork(asset.markers.left, height),
+      right: markerRangeToArtwork(asset.markers.right, height),
+      bottom: markerRangeToArtwork(asset.markers.bottom, width),
+    },
+  };
+}
+
+function markerRangeToArtwork(range: Range, max: number): Range {
+  const safeMax = Math.max(1, Math.round(max));
+  if (safeMax === 1) return { start: 0, end: 1 };
+  const start = clamp(Math.round(range.start) - 1, 0, safeMax - 1);
+  const end = clamp(Math.round(range.end) - 1, start + 1, safeMax);
+  return { start, end };
 }
 
 function drawChecker(ctx: CanvasRenderingContext2D, width: number, height: number, size: number) {

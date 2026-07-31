@@ -1,4 +1,4 @@
-import { canDisableImageSlot, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { canDisableImageSlot, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { getSlotExportMapping } from "@/lib/theme/project/export";
 import type { ThemeProjectAnalysis, ThemeProjectFile, ThemeProjectResource } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate } from "@/lib/theme/templates";
@@ -34,18 +34,29 @@ export function createThemeProjectAnalysis(
     }
 
     const imageDisabled = isImageSlotDisabled(slot, selections);
+    let sourceSlot = slot;
     let upload = imageDisabled ? undefined : (uploads[slot.id] ?? []).find((entry) => entry.id === selections[slot.id])?.file;
     let sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template);
 
     // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯의 소스를 그대로 사용한다.
     const inheritedSource = imageDisabled ? undefined : getInheritedSourceSlot(slot, uploads, selections, template.id, template, slots);
     if (inheritedSource) {
+      sourceSlot = inheritedSource;
       upload = (uploads[inheritedSource.id] ?? []).find((entry) => entry.id === selections[inheritedSource.id])?.file;
       sourceUrl = getResolvedAssetUrl(inheritedSource, uploads, selections, template.id, template);
     }
 
     if (!imageDisabled && slot.path && slot.fileName) {
-      files.push({ path: slot.path, name: slot.fileName, size: upload?.size ?? 0, file: upload, sourceUrl });
+      const previewUrl = upload ? undefined : getSelectedCandidate(sourceSlot, selections, template.id, template)?.previewUrl;
+      files.push({
+        path: slot.path,
+        name: slot.fileName,
+        size: upload?.size ?? 0,
+        file: upload,
+        sourceUrl,
+        previewUrl,
+        previewName: previewUrl ? getPreviewFileName(previewUrl, sourceSlot.fileName) : undefined,
+      });
       resources.push({ id: slot.id, slotId: slot.id, platform, role: slot.role, screen: slot.screen, filePath: slot.path, exportMapping });
     }
 
@@ -81,4 +92,10 @@ export function createThemeProjectAnalysis(
       accent: template.accent,
     },
   };
+}
+
+function getPreviewFileName(url: string, fallbackName?: string) {
+  const path = url.split(/[?#]/, 1)[0];
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  return name || fallbackName;
 }

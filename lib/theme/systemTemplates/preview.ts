@@ -1,4 +1,4 @@
-import { getResolvedAssetUrl, getResolvedColor } from "@/lib/theme/project/state";
+import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate } from "@/lib/theme/project/state";
 import { getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
 import type { RemoteSlotUploads, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
@@ -187,7 +187,7 @@ function resolveImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary:
   const slot = findSlotByRole(slots, role);
   const uploadPath = getMetadataRef(summary, role) ?? resolvePreviewUploadPath(slot, summary.uploadRefs, summary.candidateSelections);
   if (uploadPath) return signedUrls[uploadPath];
-  return getResolvedAssetUrl(slot, {}, summary.candidateSelections, templateId, template);
+  return getSelectedCandidate(slot, summary.candidateSelections, templateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, {}, summary.candidateSelections, templateId, template);
 }
 
 function resolvePreviewUploadPath(slot: ThemeAssetSlot | undefined, uploadRefs: RemoteSlotUploads, selections: SystemTemplateSummary["candidateSelections"]) {
