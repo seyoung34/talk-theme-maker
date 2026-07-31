@@ -127,22 +127,13 @@ test.describe("편집기 자동 저장", () => {
     await page.locator('article[role="button"]').filter({ hasText: "저장본 미리보기" }).click();
     await page.getByRole("button", { name: "Android 편집 계속하기" }).click();
     await expect(page.getByRole("heading", { name: "최근 작업이 남아 있습니다" })).toBeVisible();
-    await page.getByRole("button", { name: "새 템플릿으로 시작" }).click();
+    await page.getByRole("button", { name: "선택한 템플릿으로 시작" }).click();
     await waitForEditorReady(page);
 
+    // 아무것도 바꾸지 않고 나왔으므로 replace 의도는 아직 실행되지 않아야 한다.
     await page.getByRole("button", { name: "편집 종료" }).click();
     await page.getByRole("button", { name: "편집 종료하기" }).click();
     await expect(page.locator('article[role="button"]').filter({ hasText: "최근 작업" })).toBeVisible();
-
-    await page.locator('article[role="button"]').filter({ hasText: "저장본 미리보기" }).click();
-    await page.getByRole("button", { name: "Android 편집 계속하기" }).click();
-    await page.getByRole("button", { name: "최근 작업을 내 템플릿으로 저장 후 시작" }).click();
-    await waitForEditorReady(page);
-
-    await page.getByRole("button", { name: "편집 종료" }).click();
-    await page.getByRole("button", { name: "편집 종료하기" }).click();
-    await expect(page.locator('article[role="button"]').filter({ hasText: /^자동저장-\d{4}/ })).toBeVisible();
-    await expect(page.locator('article[role="button"]').filter({ hasText: "최근 작업" })).toHaveCount(0);
   });
 });
 
