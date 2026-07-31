@@ -1101,22 +1101,6 @@
     }
   },
   {
-    "id": "android-chat-send-button",
-    "platform": "android",
-    "role": "chat_send_button_color",
-    "section": "chatroom",
-    "group": "input",
-    "screen": "chatroom",
-    "kind": "color",
-    "label": "전송 버튼 배경 색상",
-    "required": true,
-    "note": "전송 버튼 배경 색상",
-    "colorKey": "theme_chatroom_input_bar_send_button_color",
-    "defaultColor": {
-      "basic": "#c9ff3d"
-    }
-  },
-  {
     "id": "android-chat-menu-icon-color",
     "platform": "android",
     "role": "chat_menu_icon_color",
@@ -1141,6 +1125,22 @@
     "required": false,
     "note": "메뉴 버튼과 입력창의 배경 색상",
     "colorKey": "theme_chatroom_input_bar_menu_button_color"
+  },
+  {
+    "id": "android-chat-send-button",
+    "platform": "android",
+    "role": "chat_send_button_color",
+    "section": "chatroom",
+    "group": "input",
+    "screen": "chatroom",
+    "kind": "color",
+    "label": "전송 버튼 배경 색상",
+    "required": true,
+    "note": "전송 버튼 배경 색상",
+    "colorKey": "theme_chatroom_input_bar_send_button_color",
+    "defaultColor": {
+      "basic": "#c9ff3d"
+    }
   },
   {
     "id": "android-chat-send-icon-color",
