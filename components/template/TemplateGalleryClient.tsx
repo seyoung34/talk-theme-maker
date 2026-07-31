@@ -8,7 +8,7 @@ import BubbleCanvasPreview from "@/components/preview/BubbleCanvasPreview";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { getResolvedAssetUrl, getResolvedColor, getSelectedUpload } from "@/lib/theme/project/state";
-import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
+import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
@@ -65,6 +65,8 @@ export default function TemplateGalleryClient() {
   const [userTemplates, setUserTemplates] = useState<UserTemplateSummary[]>([]);
   const [systemTemplates, setSystemTemplates] = useState<SystemTemplateSummary[]>([]);
   const [systemUploadPreviewUrls, setSystemUploadPreviewUrls] = useState<SignedUrlCache>({});
+  // 상세 에셋을 다 받아 둔 템플릿의 id. 이 값이 열려 있는 템플릿과 같을 때만 실제 프리뷰를 그린다.
+  const [detailPreviewReadyId, setDetailPreviewReadyId] = useState<string | null>(null);
   const [isSystemTemplatesLoading, setIsSystemTemplatesLoading] = useState(true);
   const [isLoadingMoreTemplates, setIsLoadingMoreTemplates] = useState(false);
   const [systemTemplateCursor, setSystemTemplateCursor] = useState<string>();
@@ -96,12 +98,36 @@ export default function TemplateGalleryClient() {
   const previewModel = selectedGalleryTemplate ? createGalleryTemplatePreviewModel(selectedGalleryTemplate, selectedGalleryTemplate.onStart) : userPreviewModel;
   const hasPersonalItems = Boolean(recentWork) || userTemplates.length > 0;
 
+  // 카드 목록은 cardPreviewPath만 받아 두므로, 모달을 열면 채팅 배경·말풍선 같은 상세 에셋의
+  // 서명 URL을 그때 발급한다. 그 사이 프리뷰를 그리면 URL이 없는 슬롯이 base 템플릿 기본
+  // 에셋으로 떨어져 어피치가 잠깐 스친다. URL을 받고 핵심 이미지를 브라우저에 올린 뒤에야
+  // 준비됨으로 표시하고, 그전에는 스켈레톤을 보여 준다.
   useEffect(() => {
-    if (selectedGalleryTemplate?.kind !== "system") return;
+    const selected = selectedGalleryTemplate;
+    if (selected?.kind !== "system") return;
     let active = true;
-    createSystemTemplatePreviewUrls([selectedGalleryTemplate.previewTemplate], systemUploadPreviewUrls, { includeDetails: true })
-      .then((urls) => { if (active) setSystemUploadPreviewUrls(urls); })
-      .catch((error) => console.error(error));
+    setDetailPreviewReadyId(null);
+
+    void (async () => {
+      try {
+        const urls = await createSystemTemplatePreviewUrls([selected.previewTemplate], systemUploadPreviewUrls, { includeDetails: true });
+        if (!active) return;
+        setSystemUploadPreviewUrls(urls);
+        const visual = createSystemTemplatePreviewVisual({
+          template: selected.baseTemplate,
+          platform: selected.previewTemplate.platform,
+          summary: selected.previewTemplate,
+          signedUrls: urls,
+        });
+        await preloadPreviewImages(getCorePreviewImageUrls(visual));
+      } catch (error) {
+        // 이미지를 못 받아도 프리뷰 자체는 열려야 한다. 색상과 받은 것만으로 그린다.
+        console.error(error);
+      } finally {
+        if (active) setDetailPreviewReadyId(selected.id);
+      }
+    })();
+
     return () => { active = false; };
   }, [selectedGalleryTemplateId]);
 
@@ -528,6 +554,8 @@ export default function TemplateGalleryClient() {
       {previewModel ? (
         <TemplatePreviewModal
           preview={previewModel}
+          // 내 템플릿은 파일이 이미 손에 있어 기다릴 게 없다. 시스템 템플릿만 상세 에셋을 기다린다.
+          isPreviewLoading={selectedGalleryTemplate?.kind === "system" && detailPreviewReadyId !== selectedGalleryTemplate.id}
           onClose={closePreview}
         />
       ) : null}
@@ -581,6 +609,28 @@ function createGalleryTemplates(systemTemplates: SystemTemplateSummary[], upload
 
 function isDefaultGalleryItem(item: GalleryTemplateItem): boolean {
   return item.kind === "system" && isDefaultSystemTemplate(item.previewTemplate.tags);
+}
+
+/**
+ * 이미지를 브라우저에 올려 둔다. 어떤 이유로든 실패하면 그냥 넘어간다.
+ *
+ * 한 장이 404나 만료로 실패했다고 모달 전체를 붙잡아 둘 이유는 없다. 그 슬롯만 비어 보이고
+ * 나머지는 정상으로 뜨는 편이 낫다. decode()는 디코딩까지 끝내므로 첫 페인트가 밀리지 않는다.
+ */
+function preloadPreviewImages(urls: string[]) {
+  return Promise.all(
+    urls.map(
+      (url) =>
+        new Promise<void>((resolve) => {
+          const image = new Image();
+          image.onload = () => {
+            void image.decode().then(() => resolve(), () => resolve());
+          };
+          image.onerror = () => resolve();
+          image.src = url;
+        }),
+    ),
+  );
 }
 
 function createUserTemplatePreviewUrls(record: UserTemplateRecord) {
@@ -883,7 +933,7 @@ const previewScreens: Array<{ id: PreviewScreenId; label: string }> = [
   { id: "profile", label: "프로필" },
 ];
 
-function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewModel; onClose: () => void }) {
+function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { preview: TemplatePreviewModel; isPreviewLoading?: boolean; onClose: () => void }) {
   const [activeScreenIndex, setActiveScreenIndex] = useState(0);
   const activeScreen = previewScreens[activeScreenIndex];
   const goToPrevScreen = () => setActiveScreenIndex((current) => (current - 1 + previewScreens.length) % previewScreens.length);
@@ -933,10 +983,14 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
               </button>
 
               <ModalScreenFrame>
-                {activeScreen.id === "friends" ? <FriendsScreenPreview visual={preview.visual} /> : null}
-                {activeScreen.id === "chats" ? <ChatsScreenPreview visual={preview.visual} /> : null}
-                {activeScreen.id === "chatroom" ? <ChatroomScreenPreview visual={preview.visual} /> : null}
-                {activeScreen.id === "profile" ? <ProfileScreenPreview visual={preview.visual} /> : null}
+                {isPreviewLoading ? <ScreenPreviewSkeleton /> : (
+                  <>
+                    {activeScreen.id === "friends" ? <FriendsScreenPreview visual={preview.visual} /> : null}
+                    {activeScreen.id === "chats" ? <ChatsScreenPreview visual={preview.visual} /> : null}
+                    {activeScreen.id === "chatroom" ? <ChatroomScreenPreview visual={preview.visual} /> : null}
+                    {activeScreen.id === "profile" ? <ProfileScreenPreview visual={preview.visual} /> : null}
+                  </>
+                )}
               </ModalScreenFrame>
 
               <button
@@ -974,6 +1028,37 @@ function TemplatePreviewModal({ preview, onClose }: { preview: TemplatePreviewMo
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+/**
+ * 상세 에셋을 받는 동안 폰 화면 자리를 지킨다.
+ *
+ * 헤더·목록·하단 탭바의 골격은 실제 프리뷰와 같은 자리에 두어, 준비가 끝나고 바뀔 때
+ * 레이아웃이 튀지 않게 한다. 색은 전부 중립 회색이다. 여기서 템플릿 색을 미리 칠하면
+ * 기본 에셋을 보여 주지 않으려던 이유가 그대로 되살아난다.
+ */
+function ScreenPreviewSkeleton() {
+  return (
+    <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_auto] bg-[var(--color-surface-low)]" role="status" aria-label="미리보기를 준비하는 중입니다">
+      <div className="flex items-center justify-between px-4 h-11">
+        <span className="w-16 h-3 rounded-full animate-pulse bg-black/10" />
+        <span className="rounded-full size-5 animate-pulse bg-black/10" />
+      </div>
+      <div className="grid content-start gap-3 px-4 py-3">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-3">
+            <span className="rounded-full size-9 shrink-0 animate-pulse bg-black/10" />
+            <span className="flex-1 h-4 rounded-full animate-pulse bg-black/10" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-5 items-center gap-3 px-4 h-14 border-t border-[var(--color-outline-variant)]">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <span key={index} className="mx-auto rounded-lg size-6 animate-pulse bg-black/10" />
+        ))}
+      </div>
     </div>
   );
 }

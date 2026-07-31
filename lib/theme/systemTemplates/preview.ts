@@ -84,6 +84,20 @@ export function buildTabIconUrls(resolve: (role: ThemeResourceRole) => string | 
 
 export type SignedUrlCache = Record<string, string>;
 
+/**
+ * 모달 프리뷰를 띄우기 전에 받아 둬야 하는 이미지.
+ *
+ * 서명 URL이 도착해도 브라우저가 아직 받지 못했으면 화면이 한 번 더 비어 보인다. 그렇다고
+ * 모든 이미지를 기다리면 모달이 눈에 띄게 늦게 뜨므로, 비었을 때 가장 크게 티가 나는
+ * 배경 두 장과 말풍선 두 장만 기다린다. 탭 아이콘처럼 작은 것은 늦게 채워져도 괜찮다.
+ */
+const corePreviewImageKeys = ["mainBackgroundImage", "chatBackgroundImage", "myBubbleImage", "friendBubbleImage"] as const;
+
+export function getCorePreviewImageUrls(visual: TemplatePreviewVisual): string[] {
+  const urls = corePreviewImageKeys.map((key) => visual[key]).filter((url): url is string => Boolean(url));
+  return Array.from(new Set(urls));
+}
+
 export async function createSystemTemplatePreviewUrls(templates: SystemTemplateSummary[], cache: SignedUrlCache = {}, options: { includeDetails?: boolean } = {}) {
   const next = { ...cache };
   const paths = new Set<string>();
