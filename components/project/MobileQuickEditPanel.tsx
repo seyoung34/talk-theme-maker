@@ -12,7 +12,7 @@ import {
   getDefaultColor,
   getSelectedCandidate,
   getSelectedUpload,
-  getSlotUploadEntries,
+  getSharedSlotUploadEntries,
   type SlotCandidate,
   type SlotCandidateSelections,
   type SlotColors,
@@ -301,6 +301,7 @@ function ColorControls({
 
 function ImageControls({
   slot,
+  slots,
   uploads,
   adminAssets,
   candidates,
@@ -338,9 +339,11 @@ function ImageControls({
   uploadPreviewUrls: Record<string, string>;
 }) {
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
-  const userUploadIds = new Set(getSlotUploadEntries(slot, uploads).filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id)).map((entry) => entry.id));
+  // 공유 풀이라 다른 말풍선 슬롯이 owner인 업로드도 여기에 들어온다. 삭제 가능 여부는
+  // 후보의 ownerSlotId로 판정하므로 이 집합은 "사용자 업로드인가"만 본다.
+  const userUploadIds = new Set(getSharedSlotUploadEntries(slot, uploads, slots).filter(({ entry }) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id)).map(({ entry }) => entry.id));
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
-  const selectedUploadEntry = getSelectedUpload(slot, uploads, selections);
+  const selectedUploadEntry = getSelectedUpload(slot, uploads, selections, slots);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
   const directEditableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;
   const editableSourceUrl = !directEditableSourceFile ? file?.sourceUrl ?? selectedCandidate?.assetUrl ?? selectedPickerCandidate?.previewUrl ?? selectedCandidate?.previewUrl : undefined;

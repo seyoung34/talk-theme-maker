@@ -4,7 +4,7 @@ import {
   getSelectedCandidate,
   getSelectedUpload,
   getSlotCandidates,
-  getSlotUploadEntries,
+  getSharedSlotUploadEntries,
   disabledImageCandidateId,
   type BubbleEditState,
   type SlotCandidateSelections,
@@ -28,6 +28,13 @@ export type SlotCandidate = {
   adminAsset?: AdminAssetCandidate;
   // 파생 슬롯(탭 선택 아이콘 등)이 기본 슬롯의 선택을 상속해 표시 중인 항목. 읽기 전용(연동 배지).
   inherited?: boolean;
+  /**
+   * 이 업로드가 실제로 들어 있는 bucket의 슬롯 id.
+   *
+   * 말풍선 네 슬롯은 업로드를 공유하므로 후보에 보이는 항목이 다른 슬롯 소유일 수 있다.
+   * 삭제·미리보기 URL 해석은 보고 있는 슬롯이 아니라 이 값을 기준으로 해야 한다.
+   */
+  ownerSlotId?: string;
 };
 
 export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom", "more", "passcode", "common"];
@@ -73,8 +80,10 @@ export {
   getResolvedColor,
   getSelectedCandidate,
   getSelectedUpload,
-  getSlotUploadEntries,
+  getSharedBubbleUploadPeers,
+  getSharedSlotUploadEntries,
   isSlotReady,
+  planUploadRemoval,
   slotStatusLabel,
 } from "@/lib/theme/project/state";
 export type { BubbleEditState, SlotCandidateSelections, SlotColors, SlotUploadEntry, SlotUploads } from "@/lib/theme/project/state";
@@ -114,8 +123,9 @@ export function buildSlotCandidates(
   const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
   const sourceSlot = inheritedSource ?? slot;
   const selected = getSelectedCandidate(sourceSlot, selections, templateId, template);
-  const uploadEntries = getSlotUploadEntries(sourceSlot, uploads);
-  const selectedUpload = getSelectedUpload(sourceSlot, uploads, selections);
+  // 말풍선이면 같은 플랫폼 peer의 업로드까지 후보에 들어온다. owner를 함께 들고 다닌다.
+  const uploadEntries = getSharedSlotUploadEntries(sourceSlot, uploads, allSlots);
+  const selectedUpload = getSelectedUpload(sourceSlot, uploads, selections, allSlots);
   const candidates = getSlotCandidates(slot, templateId, template);
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
 
@@ -131,10 +141,10 @@ export function buildSlotCandidates(
   }));
 
   const uploadItems = uploadEntries
-    .filter((entry) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id))
+    .filter(({ entry }) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id))
     .slice()
     .reverse()
-    .map((entry) => ({
+    .map(({ ownerSlotId, entry }) => ({
       id: entry.id,
       title: "업로드 이미지",
       status: entry.file.name,
@@ -142,12 +152,13 @@ export function buildSlotCandidates(
       selected: selectedUpload?.id === entry.id,
       source: "upload" as const,
       previewUrl: uploadPreviewUrls[entry.id],
+      ownerSlotId,
     }));
   const templateItems = uploadEntries
-    .filter((entry) => entry.source === "template")
+    .filter(({ entry }) => entry.source === "template")
     .slice()
     .reverse()
-    .map((entry) => ({
+    .map(({ ownerSlotId, entry }) => ({
       id: entry.id,
       title: "템플릿 에셋",
       status: entry.file.name,
@@ -155,6 +166,7 @@ export function buildSlotCandidates(
       selected: selectedUpload?.id === entry.id,
       source: "template" as const,
       previewUrl: uploadPreviewUrls[entry.id],
+      ownerSlotId,
     }));
 
   const paletteItems = slot.kind === "color" ? buildPaletteCandidates(slot, allSlots, uploads, colors, selections, templateId, template) : [];

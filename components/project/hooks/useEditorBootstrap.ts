@@ -11,6 +11,7 @@ import { systemTemplateRepository } from "@/lib/theme/systemTemplates";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
 import { clearRecoveryDraft, readRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
+import { getSharedBubbleUploadPeers } from "@/lib/theme/project/state";
 import { getUserTemplate } from "@/lib/theme/userTemplates";
 import { getThemeSlots, getThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
@@ -389,8 +390,21 @@ function createInitialLoadProgress(message: string, current: number, total: numb
   return { status: "loading", message, detail, current, total };
 }
 
+/**
+ * 첫 화면에 필요한 최소 에셋.
+ *
+ * 말풍선 네 슬롯은 업로드를 공유한다. `bubble_me_1`이 고른 업로드가 실제로는 `bubble_you_2`의
+ * bucket에 들어 있을 수 있으므로, 말풍선을 하나라도 채우려면 네 peer의 ref를 함께 받아야 한다.
+ * owner가 어느 쪽인지는 ref를 받아 봐야 알 수 있어서, 부분 hydration 상태에서 기본 이미지로
+ * 조용히 되돌아가는 것보다 네 개를 함께 받는 편이 낫다.
+ */
 function getInitialPreviewSlotIds(platform: ThemePlatform, uploadRefs: RemoteSlotUploads) {
   const slots = getThemeSlots(platform);
   const roleOrder: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "profile_image_1"];
-  return roleOrder.map((role) => slots.find((slot) => slot.role === role)?.id).filter((slotId): slotId is string => Boolean(slotId && uploadRefs[slotId]?.length));
+  const slotIds = roleOrder.flatMap((role) => {
+    const slot = slots.find((candidate) => candidate.role === role);
+    if (!slot) return [];
+    return [slot, ...getSharedBubbleUploadPeers(slot, slots)].map((entry) => entry.id);
+  });
+  return Array.from(new Set(slotIds)).filter((slotId) => Boolean(uploadRefs[slotId]?.length));
 }

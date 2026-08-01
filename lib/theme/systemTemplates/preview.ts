@@ -191,7 +191,7 @@ function resolveImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary:
   const slot = findSlotByRole(slots, role);
   const uploadPath = getMetadataRef(summary, role) ?? resolvePreviewUploadPath(slot, summary.uploadRefs, summary.candidateSelections);
   if (uploadPath) return signedUrls[uploadPath];
-  return getSelectedCandidate(slot, summary.candidateSelections, templateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, {}, summary.candidateSelections, templateId, template);
+  return getSelectedCandidate(slot, summary.candidateSelections, templateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, {}, summary.candidateSelections, templateId, template, slots);
 }
 
 function resolvePreviewUploadPath(slot: ThemeAssetSlot | undefined, uploadRefs: RemoteSlotUploads, selections: SystemTemplateSummary["candidateSelections"]) {

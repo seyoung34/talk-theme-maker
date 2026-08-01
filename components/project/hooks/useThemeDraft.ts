@@ -20,7 +20,7 @@ function omitSlotValue<T>(values: Partial<Record<string, T>>, slotId: string) {
 export type ThemeDraftAction =
   | { type: "replace"; draft: ThemeDraft }
   | { type: "set-uploads"; updater: DraftUpdater<SlotUploads> }
-  | { type: "remove-upload-candidate"; slotId: string; uploadId: string; fallbackCandidateId: string | undefined }
+  | { type: "remove-upload-candidate"; slotId: string; ownerSlotId: string; uploadId: string; fallbackCandidateId: string | undefined }
   | { type: "set-remote-upload-refs"; updater: DraftUpdater<RemoteSlotUploads> }
   | { type: "set-colors"; updater: DraftUpdater<SlotColors> }
   | { type: "set-candidate-selections"; updater: DraftUpdater<SlotCandidateSelections> }
@@ -39,10 +39,12 @@ export function themeDraftReducer(state: ThemeDraft, action: ThemeDraftAction): 
     case "set-uploads":
       return { ...state, uploads: resolveUpdate(state.uploads, action.updater) };
     case "remove-upload-candidate": {
-      const nextEntries = (state.uploads[action.slotId] ?? []).filter((entry) => entry.id !== action.uploadId);
+      // 업로드는 owner bucket에만 들어 있다. 말풍선 공유 풀에서는 지금 보고 있는 슬롯과
+      // owner가 다를 수 있으므로 bucket은 owner, 선택 해제는 요청한 슬롯 기준으로 처리한다.
+      const nextEntries = (state.uploads[action.ownerSlotId] ?? []).filter((entry) => entry.id !== action.uploadId);
       const uploads = { ...state.uploads };
-      if (nextEntries.length > 0) uploads[action.slotId] = nextEntries;
-      else delete uploads[action.slotId];
+      if (nextEntries.length > 0) uploads[action.ownerSlotId] = nextEntries;
+      else delete uploads[action.ownerSlotId];
 
       const sourceChanged = state.candidateSelections[action.slotId] === action.uploadId;
       if (!sourceChanged) return { ...state, uploads };
@@ -106,9 +108,9 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
   const setUploads = useCallback<Dispatch<SetStateAction<SlotUploads>>>((updater) => {
     dispatchDraft({ type: "set-uploads", updater });
   }, [dispatchDraft]);
-  const removeUploadCandidate = useCallback((slotId: string, uploadId: string, fallbackCandidateId: string | undefined) => {
+  const removeUploadCandidate = useCallback((slotId: string, ownerSlotId: string, uploadId: string, fallbackCandidateId: string | undefined) => {
     const sourceChanged = draftRef.current.candidateSelections[slotId] === uploadId;
-    dispatchDraft({ type: "remove-upload-candidate", slotId, uploadId, fallbackCandidateId });
+    dispatchDraft({ type: "remove-upload-candidate", slotId, ownerSlotId, uploadId, fallbackCandidateId });
     return sourceChanged;
   }, [dispatchDraft]);
   const setRemoteUploadRefs = useCallback<Dispatch<SetStateAction<RemoteSlotUploads>>>((updater) => {

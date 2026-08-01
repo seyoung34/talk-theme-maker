@@ -24,9 +24,9 @@ function getSlotThumbnailUrl(
 ): string | undefined {
   if (slot.kind === "color" || isImageSlotDisabled(slot, selections)) return undefined;
   const sourceSlot = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots) ?? slot;
-  const upload = getSelectedUpload(sourceSlot, uploads, selections);
+  const upload = getSelectedUpload(sourceSlot, uploads, selections, allSlots);
   if (upload) return uploadPreviewUrls[upload.id];
-  return getResolvedAssetUrl(sourceSlot, uploads, selections, templateId, template);
+  return getResolvedAssetUrl(sourceSlot, uploads, selections, templateId, template, allSlots);
 }
 
 export function ProjectGroupRail({
@@ -137,7 +137,7 @@ function getSlotDisplayStatus(
   if (isImageSlotDisabled(slot, selections)) return "이미지 사용 안 함";
   const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
   if (inheritedSource) return "기본 이미지와 연결됨";
-  return getSelectedUpload(slot, uploads, selections) ? "내 업로드" : "기본 이미지";
+  return getSelectedUpload(slot, uploads, selections, allSlots) ? "내 업로드" : "기본 이미지";
 }
 
 function SlotRailItem({ slot, selected, status, thumbnailUrl, warning, onSelect }: { slot: ThemeAssetSlot; selected: boolean; status: string; thumbnailUrl?: string; warning?: SlotContrastWarning; onSelect: () => void }) {

@@ -36,14 +36,14 @@ export function createThemeProjectAnalysis(
     const imageDisabled = isImageSlotDisabled(slot, selections);
     let sourceSlot = slot;
     let upload = imageDisabled ? undefined : (uploads[slot.id] ?? []).find((entry) => entry.id === selections[slot.id])?.file;
-    let sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template);
+    let sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template, slots);
 
     // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯의 소스를 그대로 사용한다.
     const inheritedSource = imageDisabled ? undefined : getInheritedSourceSlot(slot, uploads, selections, template.id, template, slots);
     if (inheritedSource) {
       sourceSlot = inheritedSource;
       upload = (uploads[inheritedSource.id] ?? []).find((entry) => entry.id === selections[inheritedSource.id])?.file;
-      sourceUrl = getResolvedAssetUrl(inheritedSource, uploads, selections, template.id, template);
+      sourceUrl = getResolvedAssetUrl(inheritedSource, uploads, selections, template.id, template, slots);
     }
 
     if (!imageDisabled && slot.path && slot.fileName) {

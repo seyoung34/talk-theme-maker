@@ -140,11 +140,11 @@ async function resolveAndroidSlotSource(
   const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
   if (inheritedSource) return resolveAndroidSlotSource(inheritedSource, uploads, selections, templateId, template, bubbleEdit, allSlots);
 
-  const selectedUpload = getSelectedUpload(slot, uploads, selections);
+  const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
   if (slot.kind === "ninepatch") {
     // source 이름과 target `.9.png` 이름을 분리한다. 일반 PNG 업로드를 target 이름으로
     // 파싱하면 artwork의 바깥 1px을 marker border로 오인해 잘라 버린다.
-    const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template);
+    const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template, allSlots);
     const sourceBlob = selectedUpload?.file ?? (await assetUrlToBlob(assetUrl));
     if (!sourceBlob) return null;
     const sourceName = selectedUpload?.file.name ?? assetUrl ?? slot.fileName ?? `${slot.id}.9.png`;
@@ -157,7 +157,7 @@ async function resolveAndroidSlotSource(
   }
 
   if (selectedUpload) return { blob: selectedUpload.file };
-  const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template);
+  const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template, allSlots);
   if (assetUrl) {
     if (canUseServerAssetReference(slot, assetUrl)) return { serverAsset: assetUrl };
     const blob = await fetchAssetBlob(assetUrl);

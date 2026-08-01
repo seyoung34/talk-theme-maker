@@ -285,12 +285,126 @@ export function getSelectedCandidate(
   return candidates.find((candidate) => candidate.id === selectedId) ?? getDefaultSelectedCandidate(slot, templateId, template);
 }
 
-export function getSelectedUpload(slot: ThemeAssetSlot | undefined, uploads: SlotUploads, selections: SlotCandidateSelections) {
+/**
+ * 업로드를 공유하는 말풍선 role과 그 **고정 순서**.
+ *
+ * 순서는 계약이다. 같은 upload ID가 여러 bucket에 있을 때 어느 것을 owner로 볼지, 후보 목록에
+ * 어떤 차례로 나타날지가 이 배열로 결정된다.
+ *
+ * iOS의 `bubble_*_selected` 4개는 이번 범위 밖이다(계획 문서 2-D). 슬롯을 찾을 때
+ * `group === "bubbles"` 같은 조건으로 넓히지 말고 이 상수만 쓴다 — 조건으로 넓히면 선택 변형이
+ * 의도치 않게 딸려 들어와 플랫폼마다 peer 수가 달라진다.
+ */
+export const sharedBubbleUploadRoles: readonly ThemeResourceRole[] = ["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"];
+
+/** 업로드를 공유하는 같은 플랫폼의 다른 말풍선 슬롯. 고정 순서를 유지한다. */
+export function getSharedBubbleUploadPeers(slot: ThemeAssetSlot | undefined, allSlots: ThemeAssetSlot[]): ThemeAssetSlot[] {
+  if (!slot || !sharedBubbleUploadRoles.includes(slot.role)) return [];
+  return sharedBubbleUploadRoles
+    .map((role) => allSlots.find((candidate) => candidate.role === role && candidate.platform === slot.platform))
+    .filter((peer): peer is ThemeAssetSlot => Boolean(peer) && peer!.id !== slot.id);
+}
+
+/**
+ * 업로드 하나와 그 업로드가 실제로 들어 있는 bucket.
+ *
+ * 저장 구조(`SlotUploads`)는 슬롯별 bucket을 그대로 유지하고 **읽을 때만** 공유한다. 그래서
+ * 삭제·라벨·미리보기 URL 해석은 "지금 보고 있는 슬롯"이 아니라 owner를 알아야 한다.
+ */
+export type ResolvedSlotUpload = { ownerSlotId: string; entry: SlotUploadEntry };
+
+/**
+ * 슬롯이 고를 수 있는 업로드 전체. 말풍선이면 같은 플랫폼 peer의 업로드까지 포함한다.
+ *
+ * - 자기 bucket이 항상 먼저다.
+ * - peer에서는 `source: "admin"` entry를 제외한다. admin ID는 여러 bucket에 중복될 수 있어
+ *   owner가 모호하고 슬롯별 조정값도 다를 수 있다.
+ * - 같은 ID가 여러 bucket에 있으면 자기 bucket 우선, 그다음 고정 순서의 첫 entry를 쓴다.
+ */
+export function getSharedSlotUploadEntries(
+  slot: ThemeAssetSlot | undefined,
+  uploads: SlotUploads,
+  allSlots: ThemeAssetSlot[],
+): ResolvedSlotUpload[] {
+  if (!slot) return [];
+  const own = (uploads[slot.id] ?? []).map((entry) => ({ ownerSlotId: slot.id, entry }));
+  const peers = getSharedBubbleUploadPeers(slot, allSlots);
+  if (peers.length === 0) return own;
+
+  const seen = new Set(own.map((resolved) => resolved.entry.id));
+  const shared: ResolvedSlotUpload[] = [];
+  for (const peer of peers) {
+    for (const entry of uploads[peer.id] ?? []) {
+      if ((entry.source ?? "user") === "admin") continue;
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      shared.push({ ownerSlotId: peer.id, entry });
+    }
+  }
+  return [...own, ...shared];
+}
+
+/** 선택된 업로드와 그 owner bucket. 공유 풀을 읽는 canonical 경계다. */
+export function getSelectedUploadRef(
+  slot: ThemeAssetSlot | undefined,
+  uploads: SlotUploads,
+  selections: SlotCandidateSelections,
+  allSlots: ThemeAssetSlot[],
+): ResolvedSlotUpload | undefined {
   if (!slot) return undefined;
   if (isImageSlotDisabled(slot, selections)) return undefined;
-  const uploadEntries = uploads[slot.id] ?? [];
   const selectedId = selections[slot.id];
-  return uploadEntries.find((entry) => entry.id === selectedId);
+  if (!selectedId) return undefined;
+  return getSharedSlotUploadEntries(slot, uploads, allSlots).find((resolved) => resolved.entry.id === selectedId);
+}
+
+/** 공유 풀 안에서 이 업로드를 현재 선택으로 쓰고 있는 슬롯들. */
+export function findUploadReferenceSlots(
+  uploadId: string,
+  ownerSlotId: string,
+  selections: SlotCandidateSelections,
+  allSlots: ThemeAssetSlot[],
+): ThemeAssetSlot[] {
+  const owner = allSlots.find((slot) => slot.id === ownerSlotId);
+  if (!owner) return [];
+  return [owner, ...getSharedBubbleUploadPeers(owner, allSlots)].filter((slot) => selections[slot.id] === uploadId);
+}
+
+export type UploadRemovalPlan =
+  | { kind: "blocked"; blockingSlots: ThemeAssetSlot[] }
+  | { kind: "remove"; ownerSlotId: string };
+
+/**
+ * 공유 업로드 삭제 판정.
+ *
+ * 업로드는 owner bucket에 하나만 있으므로, 지우면 그것을 고른 **모든** 슬롯이 선택을 잃는다.
+ * 요청한 슬롯 말고 다른 슬롯이 쓰고 있으면 지우지 않고 어디서 쓰는지 알려 준다. 암묵적 연쇄
+ * 삭제나 기본값 복원은 사용자가 손대지 않은 슬롯의 선택을 조용히 되돌리는 일이 된다.
+ */
+export function planUploadRemoval(
+  uploadId: string,
+  ownerSlotId: string,
+  requestingSlotId: string,
+  selections: SlotCandidateSelections,
+  allSlots: ThemeAssetSlot[],
+): UploadRemovalPlan {
+  const blockingSlots = findUploadReferenceSlots(uploadId, ownerSlotId, selections, allSlots)
+    .filter((slot) => slot.id !== requestingSlotId);
+  if (blockingSlots.length > 0) return { kind: "blocked", blockingSlots };
+  return { kind: "remove", ownerSlotId };
+}
+
+/**
+ * `allSlots`는 필수다. 빈 배열을 넘기면 공유가 꺼져 peer bucket의 선택을 못 찾고, 호출부는
+ * "업로드가 없다"고 판단해 조용히 기본 이미지로 되돌아간다. 타입으로 강제해 그 실수를 막는다.
+ */
+export function getSelectedUpload(
+  slot: ThemeAssetSlot | undefined,
+  uploads: SlotUploads,
+  selections: SlotCandidateSelections,
+  allSlots: ThemeAssetSlot[],
+) {
+  return getSelectedUploadRef(slot, uploads, selections, allSlots)?.entry;
 }
 
 // 파생 슬롯(예: 탭 선택 아이콘)이 직접 선택 없이 기본 슬롯을 상속 중이면 그 기본 슬롯을 돌려준다.
@@ -306,23 +420,28 @@ export function getInheritedSourceSlot(
   if (!slot) return undefined;
   const fallbackRole = getImageAssetFallbackRole(slot.role);
   if (!fallbackRole) return undefined;
-  if (getSelectedUpload(slot, uploads, selections)) return undefined;
+  if (getSelectedUpload(slot, uploads, selections, allSlots)) return undefined;
   const selectedId = selections[slot.id];
   const defaultCandidate = getDefaultSelectedCandidate(slot, templateId, template);
   if (selectedId && defaultCandidate && selectedId !== defaultCandidate.id) return undefined;
   return allSlots.find((candidate) => candidate.role === fallbackRole && candidate.platform === slot.platform);
 }
 
+/**
+ * `allSlots`가 필수인 이유는 `getSelectedUpload`와 같다. 공유 풀을 못 보면 "업로드 선택 없음"으로
+ * 판단해 기본 candidate URL을 돌려주고, 사용자가 고른 그림이 조용히 기본 이미지로 바뀐다.
+ */
 export function getResolvedAssetUrl(
   slot: ThemeAssetSlot | undefined,
   uploads: SlotUploads,
   selections: SlotCandidateSelections,
   templateId: ThemeTemplateId,
   template: ThemeTemplate,
+  allSlots: ThemeAssetSlot[],
 ) {
   if (!slot || slot.kind === "color") return undefined;
   if (isImageSlotDisabled(slot, selections)) return undefined;
-  if (getSelectedUpload(slot, uploads, selections)) return undefined;
+  if (getSelectedUpload(slot, uploads, selections, allSlots)) return undefined;
   return getSelectedCandidate(slot, selections, templateId, template)?.assetUrl;
 }
 
@@ -337,10 +456,10 @@ export function getResolvedColor(
   return colors[slot.id] ?? getSelectedCandidate(slot, selections, templateId, template)?.colorValue ?? getDefaultColor(slot, templateId, template);
 }
 
-export function isSlotReady(slot: ThemeAssetSlot, uploads: SlotUploads, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate) {
+export function isSlotReady(slot: ThemeAssetSlot, uploads: SlotUploads, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[]) {
   if (slot.kind === "color") return Boolean(getResolvedColor(slot, colors, selections, templateId, template));
   if (isImageSlotDisabled(slot, selections) && canDisableImageSlot(slot)) return true;
-  return Boolean(getSelectedUpload(slot, uploads, selections) || getResolvedAssetUrl(slot, uploads, selections, templateId, template));
+  return Boolean(getSelectedUpload(slot, uploads, selections, allSlots) || getResolvedAssetUrl(slot, uploads, selections, templateId, template, allSlots));
 }
 
 export function getCompletion(
@@ -353,7 +472,7 @@ export function getCompletion(
 ) {
   return {
     total: slots.length,
-    ready: slots.filter((slot) => isSlotReady(slot, uploads, colors, selections, templateId, template)).length,
+    ready: slots.filter((slot) => isSlotReady(slot, uploads, colors, selections, templateId, template, slots)).length,
   };
 }
 
@@ -369,7 +488,7 @@ export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colo
   if (isImageSlotDisabled(slot, selections)) return getImageColorFallbackRole(slot.role) ? "색상 사용 중" : "이미지 사용 안 함";
   // 파생 슬롯(탭 선택 아이콘 등)이 연동 중이면 기본 슬롯의 선택 상태를 그대로 표시한다.
   const sourceSlot = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots) ?? slot;
-  const selectedUpload = getSelectedUpload(sourceSlot, uploads, selections);
+  const selectedUpload = getSelectedUpload(sourceSlot, uploads, selections, allSlots);
   if (selectedUpload) return selectedUpload.file.name;
   const selected = getSelectedCandidate(sourceSlot, selections, templateId, template);
   if (selected?.label) return selected.label;

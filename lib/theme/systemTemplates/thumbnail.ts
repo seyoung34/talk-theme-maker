@@ -73,8 +73,8 @@ export async function generateSystemTemplateThumbnail(
     const slot = slots.find((item) => item.role === role);
     if (!slot) return { source: undefined, selectedUploadName: undefined };
     const overrideUrl = imageUrlByRole?.[role];
-    const selectedUpload = overrideUrl ? undefined : getSelectedUpload(slot, uploads, selections);
-    const source = overrideUrl ?? (selectedUpload ? URL.createObjectURL(selectedUpload.file) : getSelectedCandidate(slot, selections, input.baseTemplateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, uploads, selections, input.baseTemplateId, template));
+    const selectedUpload = overrideUrl ? undefined : getSelectedUpload(slot, uploads, selections, slots);
+    const source = overrideUrl ?? (selectedUpload ? URL.createObjectURL(selectedUpload.file) : getSelectedCandidate(slot, selections, input.baseTemplateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, uploads, selections, input.baseTemplateId, template, slots));
     if (selectedUpload && source) objectUrls.push(source);
     return { source, selectedUploadName: selectedUpload?.file.name };
   };

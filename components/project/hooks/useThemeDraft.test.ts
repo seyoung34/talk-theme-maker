@@ -75,6 +75,7 @@ describe("themeDraftReducer", () => {
     const result = themeDraftReducer(initial, {
       type: "remove-upload-candidate",
       slotId: "slot",
+      ownerSlotId: "slot",
       uploadId: "selected",
       fallbackCandidateId: "default",
     });
@@ -109,6 +110,7 @@ describe("themeDraftReducer", () => {
     const result = themeDraftReducer(initial, {
       type: "remove-upload-candidate",
       slotId: "slot",
+      ownerSlotId: "slot",
       uploadId: "removed",
       fallbackCandidateId: "default",
     });

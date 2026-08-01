@@ -753,9 +753,9 @@ function resolveUserTemplateColor(slots: ThemeAssetSlot[], role: ThemeResourceRo
 
 function resolveUserTemplateImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, record: UserTemplateRecord, templateId: ThemeTemplate["id"], template: ThemeTemplate, uploadPreviewUrls: Record<string, string>) {
   const slot = findSlotByRole(slots, role);
-  const selectedUpload = getSelectedUpload(slot, record.uploads, record.candidateSelections);
+  const selectedUpload = getSelectedUpload(slot, record.uploads, record.candidateSelections, slots);
   if (selectedUpload) return uploadPreviewUrls[selectedUpload.id];
-  return getSelectedCandidate(slot, record.candidateSelections, templateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, record.uploads, record.candidateSelections, templateId, template);
+  return getSelectedCandidate(slot, record.candidateSelections, templateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, record.uploads, record.candidateSelections, templateId, template, slots);
 }
 
 function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {

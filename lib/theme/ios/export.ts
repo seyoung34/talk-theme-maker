@@ -144,16 +144,16 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
   const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
   if (inheritedSource) return resolveIosSlotSource(inheritedSource, uploads, selections, templateId, template, allSlots);
 
-  const selectedUpload = getSelectedUpload(slot, uploads, selections);
+  const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
   if (selectedUpload) {
     return {
       blob: await normalizeIosImageBlob(slot, selectedUpload.file, selectedUpload.file.name),
       sourceName: selectedUpload.file.name,
-      sourceScale: getIosSourceScale(slot, uploads, selections, templateId),
+      sourceScale: getIosSourceScale(slot, uploads, selections, templateId, allSlots),
     };
   }
 
-  const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template);
+  const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template, allSlots);
   if (!assetUrl) {
     // 별도 지정이 없으면 상속 슬롯(예: 탭 선택 아이콘 → 기본 아이콘)의 소스를 사용한다.
     const fallbackRole = getImageAssetFallbackRole(slot.role);
@@ -161,7 +161,7 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
     if (!fallbackSlot) return null;
     return resolveIosSlotSource(fallbackSlot, uploads, selections, templateId, template, allSlots);
   }
-  const sourceScale = getIosSourceScale(slot, uploads, selections, templateId);
+  const sourceScale = getIosSourceScale(slot, uploads, selections, templateId, allSlots);
   if (canUseServerAssetReference(slot, assetUrl)) {
     return {
       assetUrl,
@@ -284,8 +284,8 @@ export function canUseServerAssetReference(slot: ThemeAssetSlot, assetUrl: strin
   return !exportName.endsWith(".png") || assetUrl.toLowerCase().endsWith(".png");
 }
 
-function getIosSourceScale(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId) {
-  const uploadName = getSelectedUpload(slot, uploads, selections)?.file.name;
+function getIosSourceScale(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, allSlots: ThemeAssetSlot[]) {
+  const uploadName = getSelectedUpload(slot, uploads, selections, allSlots)?.file.name;
   return detectIosSourceScale(uploadName)
     ?? detectIosSourceScale(selections[slot.id])
     ?? detectIosSourceScale(slot.defaultAssetUrls?.[templateId])

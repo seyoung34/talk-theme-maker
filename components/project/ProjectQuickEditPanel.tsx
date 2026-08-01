@@ -154,7 +154,7 @@ export function ProjectQuickEditPanel({
 
   const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets, uploadPreviewUrls);
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
-  const selectedUploadEntry = getSelectedUpload(slot, uploads, selections);
+  const selectedUploadEntry = getSelectedUpload(slot, uploads, selections, slots);
   const imageEditTarget = selectedUploadEntry?.imageEdit?.target ?? getImageEditTarget(selectedCandidate);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
   const directEditableSourceFile = selectedUploadEntry?.imageEdit?.originalFile ?? selectedUploadEntry?.file ?? file?.file ?? null;

@@ -49,6 +49,9 @@ import {
   getSectionGroups,
   getSelectedCandidate,
   getSelectedUpload,
+  getSharedBubbleUploadPeers,
+  getSharedSlotUploadEntries,
+  planUploadRemoval,
   getSlotFile,
   groupLabels,
   isSlotVisibleInGroup,
@@ -609,7 +612,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   useEffect(() => {
     if (initialLoadState.status !== "ready" || !selectedSlot) return;
-    void hydrateSystemTemplateUploads(remoteUploadRefs, [selectedSlot.id]).catch((error) => console.error(error));
+    // 말풍선은 공유 풀이라 선택한 업로드의 owner가 다른 슬롯일 수 있다. 네 peer를 함께 받는다.
+    const hydrationSlotIds = [selectedSlot, ...getSharedBubbleUploadPeers(selectedSlot, slots)].map((slot) => slot.id);
+    void hydrateSystemTemplateUploads(remoteUploadRefs, hydrationSlotIds).catch((error) => console.error(error));
   }, [hydrateSystemTemplateUploads, initialLoadState.status, remoteUploadRefs, selectedSlot?.id]);
 
   useEffect(() => {
@@ -804,9 +809,27 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     trackFirstValueReached("upload");
   };
 
+  /**
+   * 업로드 삭제. 말풍선 네 슬롯은 업로드를 공유하므로 두 가지를 먼저 가른다.
+   *
+   * 1. 이 업로드가 실제로 어느 bucket에 있는가(owner) — 지금 보고 있는 슬롯이 아닐 수 있다.
+   * 2. 다른 슬롯이 쓰고 있지는 않은가 — 쓰고 있으면 지우지 않고 어디서 쓰는지 알려 준다.
+   *    조용히 지우면 사용자가 손대지 않은 슬롯의 선택이 기본값으로 되돌아간다.
+   */
   const removeUploadedSlotCandidate = (slot: ThemeAssetSlot, uploadId: string) => {
+    const owner = getSharedSlotUploadEntries(slot, uploads, slots).find((resolved) => resolved.entry.id === uploadId);
+    if (!owner) return;
+
+    const plan = planUploadRemoval(uploadId, owner.ownerSlotId, slot.id, candidateSelections, slots);
+    if (plan.kind === "blocked") {
+      const labels = plan.blockingSlots.map((blocking) => blocking.label).join(", ");
+      setNotice({ tone: "warning", message: `${labels}에서 사용 중이라 지울 수 없습니다. 해당 슬롯에서 다른 이미지를 먼저 고르세요.` });
+      return;
+    }
+
     const sourceChanged = removeUploadCandidate(
       slot.id,
+      plan.ownerSlotId,
       uploadId,
       getDefaultSlotCandidateId(slot, templateId, activeTemplate),
     );
@@ -865,18 +888,16 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const copyBubbleToPair = async (sourceSlot: ThemeAssetSlot, targetSlot: ThemeAssetSlot) => {
 
-    const sourceUpload = getSelectedUpload(sourceSlot, uploads, candidateSelections);
+    const sourceUpload = getSelectedUpload(sourceSlot, uploads, candidateSelections, slots);
     const sourceCandidate = getSelectedCandidate(sourceSlot, candidateSelections, templateId, activeTemplate);
     const copiedAt = Date.now();
 
     try {
       if (sourceUpload) {
-        const copiedId = `${targetSlot.id}:bubble-copy:${copiedAt}`;
-        setUploads((current) => ({
-          ...current,
-          [targetSlot.id]: [...(current[targetSlot.id] ?? []), { ...sourceUpload, id: copiedId, source: "user" }],
-        }));
-        setCandidateSelections((current) => ({ ...current, [targetSlot.id]: copiedId }));
+        // 말풍선 슬롯은 업로드를 공유하므로 target bucket에 사본을 만들지 않는다. 사본을 만들면
+        // 원본과 별개 항목이 되어 저장·내보내기에서 두 번 취급되고, 한쪽만 지워도 다른 쪽이 남는다.
+        // 같은 업로드 ID를 target의 선택으로 기록하는 것이 곧 "같은 말풍선"이다.
+        setCandidateSelections((current) => ({ ...current, [targetSlot.id]: sourceUpload.id }));
       } else if (sourceCandidate?.assetUrl) {
         const matchingTargetCandidate = getSlotCandidates(targetSlot, templateId, activeTemplate).find((candidate) => candidate.assetUrl === sourceCandidate.assetUrl);
         if (matchingTargetCandidate) {

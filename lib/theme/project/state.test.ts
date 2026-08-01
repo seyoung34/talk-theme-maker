@@ -80,7 +80,7 @@ describe("basic Android bubble asset separation", () => {
 
       expect(candidate.assetUrl).toMatch(/\.9\.png$/);
       expect(candidate.previewUrl).toMatch(/(?<!\.9)\.png$/);
-      expect(getResolvedAssetUrl(slot, {}, selections, template.id, template)).toBe(candidate.assetUrl);
+      expect(getResolvedAssetUrl(slot, {}, selections, template.id, template, slots)).toBe(candidate.assetUrl);
     }
   });
 
