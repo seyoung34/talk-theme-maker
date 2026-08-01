@@ -1,11 +1,12 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
-import { exportNinePatch, loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
-import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
+import { exportNinePatch, flipCanvasHorizontally, loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
+import { bubbleGeometryToAndroidMarkers, flipAndroidMarkersHorizontally, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency } from "@/lib/theme/exportRequest";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
+import type { Markers } from "@/lib/theme/types";
 
 type AndroidExportOptions = {
   analysis: ThemeProjectAnalysis;
@@ -74,8 +75,46 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
   return files;
 }
 
-function getAndroidSlotExportPaths(slot: ThemeAssetSlot) {
+/**
+ * 한 슬롯이 만들어 내는 zip 내부 경로들.
+ *
+ * `scaleTargets`가 `path`와 겹치는 슬롯이 있어 중복을 제거한다. 같은 경로를 두 번 넣으면
+ * zip에 같은 이름의 엔트리가 두 개 생긴다.
+ */
+export function getAndroidSlotExportPaths(slot: ThemeAssetSlot) {
   return Array.from(new Set([slot.path, ...(slot.export?.android?.scaleTargets ?? [])].filter((path): path is string => Boolean(path))));
+}
+
+/**
+ * 나인패치 출력에 쓸 marker.
+ *
+ * 우선순위가 계약이다.
+ *
+ * 1. 저장된 canonical geometry — geometry와 markers가 함께 있을 때 markers를 쓰면 편집기에서
+ *    방금 옮긴 값이 아니라 이전 좌표가 나간다.
+ * 2. 저장된 legacy marker
+ * 3. source asset의 marker (반전할 때만. 그대로면 asset을 손대지 않는다)
+ *
+ * `flipX`면 좌표도 함께 뒤집는다. artwork만 뒤집고 marker를 두면 늘어나는 구간과 글자 영역이
+ * 반대편에 남는다. geometry는 canonical 좌표이므로 marker로 바꾸기 **전에** 한 번만 뒤집는다.
+ *
+ * 반환값이 `undefined`면 호출부가 asset의 marker를 그대로 쓴다.
+ */
+export function resolveAndroidNinePatchMarkers(
+  bubbleEdit: BubbleEditState | undefined,
+  sourceMarkers: Markers,
+  innerWidth: number,
+  innerHeight: number,
+): Markers | undefined {
+  const flipX = Boolean(bubbleEdit?.flipX);
+
+  if (bubbleEdit?.geometry) {
+    const geometry = flipX ? flipBubbleGeometryHorizontally(bubbleEdit.geometry, innerWidth) : bubbleEdit.geometry;
+    return bubbleGeometryToAndroidMarkers(geometry, innerWidth, innerHeight);
+  }
+
+  if (!flipX) return bubbleEdit?.markers;
+  return flipAndroidMarkersHorizontally(bubbleEdit?.markers ?? sourceMarkers, innerWidth);
 }
 
 export async function exportAndroidThemePackage(options: AndroidExportOptions) {
@@ -103,14 +142,17 @@ async function resolveAndroidSlotSource(
 
   const selectedUpload = getSelectedUpload(slot, uploads, selections);
   if (slot.kind === "ninepatch") {
-    // 바이트를 data URL로 바꿔 돌리면 base64 인코딩 비용만 더한다. blob 그대로 디코딩한다.
-    const sourceBlob = selectedUpload?.file ?? (await assetUrlToBlob(getResolvedAssetUrl(slot, uploads, selections, templateId, template)));
+    // source 이름과 target `.9.png` 이름을 분리한다. 일반 PNG 업로드를 target 이름으로
+    // 파싱하면 artwork의 바깥 1px을 marker border로 오인해 잘라 버린다.
+    const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template);
+    const sourceBlob = selectedUpload?.file ?? (await assetUrlToBlob(assetUrl));
     if (!sourceBlob) return null;
-    const asset = await loadNinePatchBlob(sourceBlob, slot.fileName ?? `${slot.id}.9.png`, slot.role.includes("_me_") ? "me" : "you");
-    const markers = bubbleEdit?.geometry
-      ? bubbleGeometryToAndroidMarkers(bubbleEdit.geometry, asset.innerCanvas.width, asset.innerCanvas.height)
-      : bubbleEdit?.markers;
-    const nextAsset = markers ? { ...asset, markers } : asset;
+    const sourceName = selectedUpload?.file.name ?? assetUrl ?? slot.fileName ?? `${slot.id}.9.png`;
+    const asset = await loadNinePatchBlob(sourceBlob, sourceName, slot.role.includes("_me_") ? "me" : "you");
+    const markers = resolveAndroidNinePatchMarkers(bubbleEdit, asset.markers, asset.innerCanvas.width, asset.innerCanvas.height);
+    // 픽셀은 여기서 한 번만 뒤집는다. marker는 이미 뒤집힌 좌표로 계산돼 있다.
+    const innerCanvas = bubbleEdit?.flipX ? flipCanvasHorizontally(asset.innerCanvas) : asset.innerCanvas;
+    const nextAsset = { ...asset, innerCanvas, ...(markers ? { markers } : {}) };
     return { blob: await canvasToBlob(exportNinePatch(nextAsset), "image/png") };
   }
 
@@ -128,7 +170,13 @@ async function resolveAndroidSlotSource(
   return resolveAndroidSlotSource(fallbackSlot, uploads, selections, templateId, template, bubbleEdit, allSlots);
 }
 
-function canUseServerAssetReference(slot: ThemeAssetSlot, assetUrl: string) {
+/**
+ * 서버 에셋 URL을 그대로 zip 엔트리로 넘길 수 있는지.
+ *
+ * 로컬 템플릿 에셋이면서 출력 확장자와 원본 확장자가 어긋나지 않을 때만 fetch+디코딩을 건너뛴다.
+ * PNG로 나가야 하는 슬롯에 PNG가 아닌 원본을 그대로 넘기면 확장자만 PNG인 파일이 나간다.
+ */
+export function canUseServerAssetReference(slot: ThemeAssetSlot, assetUrl: string) {
   if (!isLocalTemplateAssetUrl(assetUrl)) return false;
   const exportName = (slot.path ?? slot.fileName ?? "").toLowerCase();
   return !exportName.endsWith(".png") || assetUrl.toLowerCase().endsWith(".png");

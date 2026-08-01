@@ -20,6 +20,7 @@ function omitSlotValue<T>(values: Partial<Record<string, T>>, slotId: string) {
 export type ThemeDraftAction =
   | { type: "replace"; draft: ThemeDraft }
   | { type: "set-uploads"; updater: DraftUpdater<SlotUploads> }
+  | { type: "remove-upload-candidate"; slotId: string; uploadId: string; fallbackCandidateId: string | undefined }
   | { type: "set-remote-upload-refs"; updater: DraftUpdater<RemoteSlotUploads> }
   | { type: "set-colors"; updater: DraftUpdater<SlotColors> }
   | { type: "set-candidate-selections"; updater: DraftUpdater<SlotCandidateSelections> }
@@ -27,6 +28,7 @@ export type ThemeDraftAction =
   | { type: "set-bubble-markers"; updater: DraftUpdater<ThemeDraft["bubbleMarkers"]> }
   | { type: "set-bubble-insets"; updater: DraftUpdater<ThemeDraft["bubbleInsets"]> }
   | { type: "set-bubble-stretch"; updater: DraftUpdater<ThemeDraft["bubbleStretch"]> }
+  | { type: "set-bubble-flip-x"; updater: DraftUpdater<ThemeDraft["bubbleFlipX"]> }
   | { type: "set-bubble-designs"; updater: DraftUpdater<ThemeDraft["bubbleDesigns"]> }
   | { type: "set-bubble-decoration-sources"; updater: DraftUpdater<ThemeDraft["bubbleDecorationSources"]> };
 
@@ -36,6 +38,32 @@ export function themeDraftReducer(state: ThemeDraft, action: ThemeDraftAction): 
       return action.draft;
     case "set-uploads":
       return { ...state, uploads: resolveUpdate(state.uploads, action.updater) };
+    case "remove-upload-candidate": {
+      const nextEntries = (state.uploads[action.slotId] ?? []).filter((entry) => entry.id !== action.uploadId);
+      const uploads = { ...state.uploads };
+      if (nextEntries.length > 0) uploads[action.slotId] = nextEntries;
+      else delete uploads[action.slotId];
+
+      const sourceChanged = state.candidateSelections[action.slotId] === action.uploadId;
+      if (!sourceChanged) return { ...state, uploads };
+
+      return {
+        ...state,
+        uploads,
+        candidateSelections: {
+          ...state.candidateSelections,
+          [action.slotId]: action.fallbackCandidateId,
+        },
+        // geometry/legacy edit 값은 삭제한 source의 픽셀 좌표다. fallback 이미지에
+        // 재사용하지 않고 한 reducer transition에서 함께 비운다. flip도 "지금 선택한 그림을
+        // 뒤집는다"는 뜻이므로 그림이 바뀌면 함께 사라져야 한다.
+        bubbleGeometry: omitSlotValue(state.bubbleGeometry, action.slotId),
+        bubbleMarkers: omitSlotValue(state.bubbleMarkers, action.slotId),
+        bubbleInsets: omitSlotValue(state.bubbleInsets, action.slotId),
+        bubbleStretch: omitSlotValue(state.bubbleStretch, action.slotId),
+        bubbleFlipX: omitSlotValue(state.bubbleFlipX, action.slotId),
+      };
+    }
     case "set-remote-upload-refs":
       return { ...state, remoteUploadRefs: resolveUpdate(state.remoteUploadRefs, action.updater) };
     case "set-colors":
@@ -50,6 +78,8 @@ export function themeDraftReducer(state: ThemeDraft, action: ThemeDraftAction): 
       return { ...state, bubbleInsets: resolveUpdate(state.bubbleInsets, action.updater) };
     case "set-bubble-stretch":
       return { ...state, bubbleStretch: resolveUpdate(state.bubbleStretch, action.updater) };
+    case "set-bubble-flip-x":
+      return { ...state, bubbleFlipX: resolveUpdate(state.bubbleFlipX, action.updater) };
     case "set-bubble-designs":
       return { ...state, bubbleDesigns: resolveUpdate(state.bubbleDesigns, action.updater) };
     case "set-bubble-decoration-sources":
@@ -76,6 +106,11 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
   const setUploads = useCallback<Dispatch<SetStateAction<SlotUploads>>>((updater) => {
     dispatchDraft({ type: "set-uploads", updater });
   }, [dispatchDraft]);
+  const removeUploadCandidate = useCallback((slotId: string, uploadId: string, fallbackCandidateId: string | undefined) => {
+    const sourceChanged = draftRef.current.candidateSelections[slotId] === uploadId;
+    dispatchDraft({ type: "remove-upload-candidate", slotId, uploadId, fallbackCandidateId });
+    return sourceChanged;
+  }, [dispatchDraft]);
   const setRemoteUploadRefs = useCallback<Dispatch<SetStateAction<RemoteSlotUploads>>>((updater) => {
     dispatchDraft({ type: "set-remote-upload-refs", updater });
   }, [dispatchDraft]);
@@ -97,6 +132,9 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
   const setBubbleStretch = useCallback<Dispatch<SetStateAction<ThemeDraft["bubbleStretch"]>>>((updater) => {
     dispatchDraft({ type: "set-bubble-stretch", updater });
   }, [dispatchDraft]);
+  const setBubbleFlipX = useCallback<Dispatch<SetStateAction<ThemeDraft["bubbleFlipX"]>>>((updater) => {
+    dispatchDraft({ type: "set-bubble-flip-x", updater });
+  }, [dispatchDraft]);
   const setBubbleDesigns = useCallback<Dispatch<SetStateAction<ThemeDraft["bubbleDesigns"]>>>((updater) => {
     dispatchDraft({ type: "set-bubble-designs", updater });
   }, [dispatchDraft]);
@@ -106,13 +144,17 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
    * geometry/markers/insets/stretch는 그 슬롯에 있던 그림의 픽셀 좌표다. 새 이미지를
    * 올리면 좌표가 가리키던 대상이 사라지므로, 남겨두면 편집창이 엉뚱한 위치를 복원한다.
    * 값을 비워야 이미지 크기에 맞춘 가운데 기본값이 다시 계산된다.
+   *
+   * flip도 같은 이유로 함께 비운다. "이 그림을 뒤집는다"는 뜻이므로 그림이 바뀌면
+   * 남겨 둘 근거가 없다. 남기면 새로 올린 이미지가 이유 없이 뒤집혀 보인다.
    */
   const clearBubbleEdits = useCallback((slotId: string) => {
     setBubbleGeometry((current) => omitSlotValue(current, slotId));
     setBubbleMarkers((current) => omitSlotValue(current, slotId));
     setBubbleInsets((current) => omitSlotValue(current, slotId));
     setBubbleStretch((current) => omitSlotValue(current, slotId));
-  }, [setBubbleGeometry, setBubbleInsets, setBubbleMarkers, setBubbleStretch]);
+    setBubbleFlipX((current) => omitSlotValue(current, slotId));
+  }, [setBubbleFlipX, setBubbleGeometry, setBubbleInsets, setBubbleMarkers, setBubbleStretch]);
   const setBubbleDecorationSources = useCallback<Dispatch<SetStateAction<ThemeDraft["bubbleDecorationSources"]>>>((updater) => {
     dispatchDraft({ type: "set-bubble-decoration-sources", updater });
   }, [dispatchDraft]);
@@ -153,7 +195,9 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
     ensureSystemTemplateUploadsHydrated,
     hydratePreviewUploads,
     hydrateSystemTemplateUploads,
+    removeUploadCandidate,
     replaceDraft,
+    setBubbleFlipX,
     setBubbleGeometry,
     setBubbleInsets,
     setBubbleMarkers,

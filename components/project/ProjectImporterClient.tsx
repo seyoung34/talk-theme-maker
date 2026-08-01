@@ -103,8 +103,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     ensureSystemTemplateUploadsHydrated,
     hydratePreviewUploads,
     hydrateSystemTemplateUploads,
+    removeUploadCandidate,
     replaceDraft,
     setBubbleGeometry,
+    setBubbleFlipX,
     setBubbleInsets,
     setBubbleMarkers,
     setBubbleStretch,
@@ -113,7 +115,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setRemoteUploadRefs,
     setUploads,
   } = useThemeDraft();
-  const { uploads, remoteUploadRefs, colors, candidateSelections, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleDesigns, bubbleDecorationSources } = draft;
+  const { uploads, remoteUploadRefs, colors, candidateSelections, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleFlipX, bubbleDesigns, bubbleDecorationSources } = draft;
   const [candidateOpen, setCandidateOpen] = useState(false);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
@@ -136,10 +138,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [systemPriceAmount, setSystemPriceAmount] = useState("");
   const [systemCreditCost, setSystemCreditCost] = useState("");
   const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  const [exitSaveState, setExitSaveState] = useState<"idle" | "saving" | "error">("idle");
   const [bubbleBuilderOpen, setBubbleBuilderOpen] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const dismissNotice = useCallback(() => setNotice(null), []);
   const autosaveNoticeRef = useRef<Notice | null>(null);
+  const shouldConfirmExitRef = useRef(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
   const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
@@ -252,24 +256,6 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     };
   }, [mobileEditSheetOpen]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
-    const handlePopState = () => {
-      window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
-      setExitConfirmOpen(true);
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
-
-  const requestExit = () => setExitConfirmOpen(true);
-  const cancelExit = () => setExitConfirmOpen(false);
-  const confirmExit = () => {
-    setExitConfirmOpen(false);
-    router.push(exitDestination);
-  };
-
   const activeTemplate = getThemeTemplate(templateId);
   const displayTemplateName = activeUserTemplate?.name ?? activeSystemTemplate?.title ?? activeTemplate.name;
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
@@ -285,7 +271,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     });
   }, [activeSystemTemplate, activeUserTemplate, mode, platform, systemTemplateBundleId, templateId]);
 
-  const { status: autosaveStatus, lastSavedAt: autosaveSavedAt, message: autosaveMessage, resetAutosave } = useEditorAutosave({
+  const { status: autosaveStatus, lastSavedAt: autosaveSavedAt, message: autosaveMessage, flushAutosave, resetAutosave } = useEditorAutosave({
     arm: autosaveArm,
     mode,
     draftSignature,
@@ -353,7 +339,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           activeGroup,
           selectedSlotId,
         },
-        draft: { uploads, remoteUploadRefs, colors, candidateSelections, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleDesigns, bubbleDecorationSources },
+        draft: { uploads, remoteUploadRefs, colors, candidateSelections, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleFlipX, bubbleDesigns, bubbleDecorationSources },
         exportOptions,
       });
       const returnTo = `/edit?resume=${encodeURIComponent(recovery.resume.token)}`;
@@ -366,7 +352,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       if (!continueWithoutRecovery) return;
       router.push(destination === "login" ? "/login?returnTo=%2Fedit&reason=export" : "/credits?entry=export_block&returnTo=%2Fedit");
     }
-  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, bubbleDecorationSources, bubbleDesigns, bubbleGeometry, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
+  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, bubbleDecorationSources, bubbleDesigns, bubbleFlipX, bubbleGeometry, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
 
   useEffect(() => {
     if (skipDefaultSelectionResetRef.current) {
@@ -384,12 +370,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   );
   const previewBubbleEdits = useMemo(
     () => ({
-      bubble_me_1: slotEditFromRole("bubble_me_1", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch),
-      bubble_me_2: slotEditFromRole("bubble_me_2", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch),
-      bubble_you_1: slotEditFromRole("bubble_you_1", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch),
-      bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch),
+      bubble_me_1: slotEditFromRole("bubble_me_1", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleFlipX),
+      bubble_me_2: slotEditFromRole("bubble_me_2", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleFlipX),
+      bubble_you_1: slotEditFromRole("bubble_you_1", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleFlipX),
+      bubble_you_2: slotEditFromRole("bubble_you_2", slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleFlipX),
     }),
-    [slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch],
+    [slots, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleFlipX],
   );
   const renderedPreviewBubbleEdits = useMemo(
     () => liveBubblePreview ? { ...previewBubbleEdits, [liveBubblePreview.role]: liveBubblePreview.edit } : previewBubbleEdits,
@@ -449,6 +435,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     bubbleInsets,
     bubbleMarkers,
     bubbleStretch,
+    bubbleFlipX,
     bubbleDesigns,
     bubbleDecorationSources,
     candidateSelections,
@@ -501,6 +488,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     bubbleInsets,
     bubbleMarkers,
     bubbleStretch,
+    bubbleFlipX,
     candidateSelections,
     colors,
     displayTemplateName,
@@ -515,6 +503,57 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     slots,
     templateId,
   });
+
+  shouldConfirmExitRef.current = hasUnsavedChanges || isExporting;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
+    const handlePopState = () => {
+      if (!shouldConfirmExitRef.current) {
+        router.push(exitDestination);
+        return;
+      }
+      window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
+      setExitSaveState("idle");
+      setExitConfirmOpen(true);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [exitDestination, router]);
+
+  const navigateAfterExit = () => {
+    setExitConfirmOpen(false);
+    setExitSaveState("idle");
+    router.push(exitDestination);
+  };
+  const requestExit = () => {
+    if (!shouldConfirmExitRef.current) {
+      router.push(exitDestination);
+      return;
+    }
+    setExitSaveState("idle");
+    setExitConfirmOpen(true);
+  };
+  const cancelExit = () => {
+    setExitConfirmOpen(false);
+    setExitSaveState("idle");
+  };
+  const confirmExit = async () => {
+    if (!hasUnsavedChanges) {
+      navigateAfterExit();
+      return;
+    }
+
+    setExitSaveState("saving");
+    const result = await flushAutosave();
+    if (result === "saved" || result === "unchanged") {
+      navigateAfterExit();
+      return;
+    }
+    setExitSaveState("error");
+  };
+
   const handleRecoveryRestored = useCallback((exportOptions: RecoveryExportOptions) => {
     void resumeExportDialog(exportOptions);
   }, [resumeExportDialog]);
@@ -619,6 +658,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       bubbleMarkers: {},
       bubbleInsets: {},
       bubbleStretch: {},
+      bubbleFlipX: {},
       bubbleDesigns: {},
       bubbleDecorationSources: {},
     };
@@ -765,23 +805,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const removeUploadedSlotCandidate = (slot: ThemeAssetSlot, uploadId: string) => {
-    setUploads((current) => {
-      const nextEntries = (current[slot.id] ?? []).filter((entry) => entry.id !== uploadId);
-      const next = { ...current };
-      if (nextEntries.length > 0) {
-        next[slot.id] = nextEntries;
-      } else {
-        delete next[slot.id];
-      }
-      return next;
-    });
-    setCandidateSelections((current) => {
-      if (current[slot.id] !== uploadId) return current;
-      return {
-        ...current,
-        [slot.id]: getDefaultSlotCandidateId(slot, templateId, activeTemplate),
-      };
-    });
+    const sourceChanged = removeUploadCandidate(
+      slot.id,
+      uploadId,
+      getDefaultSlotCandidateId(slot, templateId, activeTemplate),
+    );
+    if (sourceChanged) setLiveBubblePreview(null);
     focusSlot(slot.id);
   };
 
@@ -869,6 +898,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       setBubbleInsets((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
       setBubbleStretch((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
       setBubbleGeometry((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
+      setBubbleFlipX((current) => copyBubbleEditValue(current, sourceSlot.id, targetSlot.id));
       setNotice({ tone: "success", message: `${targetSlot.label}에 같은 말풍선과 편집값을 적용했습니다.` });
       scheduleInteractionEvent("bubble_edit_completed", sourceSlot, { edit_type: "copy_to_pair" });
     } catch (error) {
@@ -884,7 +914,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       bubbleGeometry[targetSlot.id] ||
       bubbleMarkers[targetSlot.id] ||
       bubbleInsets[targetSlot.id] ||
-      bubbleStretch[targetSlot.id],
+      bubbleStretch[targetSlot.id] ||
+      bubbleFlipX[targetSlot.id],
     );
     if (targetHasOverrides) {
       setPendingBubbleCopy({ sourceSlot, targetSlot });
@@ -907,6 +938,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         delete next[slot.id];
         return next;
       });
+      // 관리자 에셋은 자체 조정값을 들고 온다. 이전 그림의 반전을 남기면 그 조정값과 어긋난다.
+      setBubbleFlipX((current) => omitBubbleEditValue(current, slot.id));
       if (asset.bubbleAdjustment.markers) {
         setBubbleMarkers((current) => ({ ...current, [slot.id]: asset.bubbleAdjustment?.markers }));
       }
@@ -940,6 +973,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       bubbleMarkers: { ...bubbleMarkers },
       bubbleInsets: { ...bubbleInsets },
       bubbleStretch: { ...bubbleStretch },
+      bubbleFlipX: { ...bubbleFlipX },
       bubbleDesigns: { ...bubbleDesigns, [selectedSlot.role]: result.spec },
       bubbleDecorationSources: { ...bubbleDecorationSources },
       colors: { ...colors },
@@ -951,6 +985,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     delete nextDraft.bubbleInsets[selectedSlot.id];
     delete nextDraft.bubbleStretch[selectedSlot.id];
     delete nextDraft.bubbleGeometry[selectedSlot.id];
+    // 빌더가 만든 그림은 이미 원하는 방향으로 그려져 있다. 이전 그림의 반전을 물려받지 않는다.
+    delete nextDraft.bubbleFlipX[selectedSlot.id];
     if (result.asset.markers) nextDraft.bubbleMarkers[selectedSlot.id] = result.asset.markers;
     if (result.asset.insets) nextDraft.bubbleInsets[selectedSlot.id] = result.asset.insets;
     if (result.asset.stretch) nextDraft.bubbleStretch[selectedSlot.id] = result.asset.stretch;
@@ -1060,6 +1096,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
       insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
       stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
+      flipX={selectedSlot ? bubbleFlipX[selectedSlot.id] : undefined}
+      onFlipXChange={(next) => {
+        if (!selectedSlot) return;
+        setBubbleFlipX((current) => (next ? { ...current, [selectedSlot.id]: true } : omitBubbleEditValue(current, selectedSlot.id)));
+        scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "flip" });
+      }}
       fileInputRefs={fileInputRefs}
       onUpload={uploadSlot}
       onRemoveUpload={removeUploadedSlotCandidate}
@@ -1107,6 +1149,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       markers={selectedSlot ? bubbleMarkers[selectedSlot.id] : undefined}
       insets={selectedSlot ? bubbleInsets[selectedSlot.id] : undefined}
       stretch={selectedSlot ? bubbleStretch[selectedSlot.id] : undefined}
+      flipX={selectedSlot ? bubbleFlipX[selectedSlot.id] : undefined}
+      onFlipXChange={(next) => {
+        if (!selectedSlot) return;
+        setBubbleFlipX((current) => (next ? { ...current, [selectedSlot.id]: true } : omitBubbleEditValue(current, selectedSlot.id)));
+        scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "flip" });
+      }}
       contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
@@ -1251,7 +1299,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onSubmit={() => void saveSystemTemplate()}
         />
       ) : null}
-      {exitConfirmOpen ? <ExitConfirmDialog onCancel={cancelExit} onConfirm={confirmExit} /> : null}
+      {exitConfirmOpen ? (
+        <ExitConfirmDialog
+          hasUnsavedChanges={hasUnsavedChanges}
+          isExporting={isExporting}
+          isSaving={exitSaveState === "saving"}
+          saveFailed={exitSaveState === "error"}
+          onCancel={cancelExit}
+          onConfirm={() => void confirmExit()}
+          onDiscard={navigateAfterExit}
+        />
+      ) : null}
 
       {initialLoadState.status === "loading" ? (
         <InitialTemplateLoadingPanel
@@ -1506,13 +1564,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 }
 
 
-function copyBubbleEditValue<T extends object>(current: Partial<Record<string, T>>, sourceSlotId: string, targetSlotId: string) {
+// flipX(boolean)까지 같은 helper로 복사하므로 원시값도 받는다. 복제는 객체일 때만 의미가 있다.
+function copyBubbleEditValue<T>(current: Partial<Record<string, T>>, sourceSlotId: string, targetSlotId: string) {
   const next = { ...current };
   const value = current[sourceSlotId];
   if (value === undefined) {
     delete next[targetSlotId];
   } else {
-    next[targetSlotId] = typeof structuredClone === "function" ? structuredClone(value) : { ...value };
+    next[targetSlotId] = typeof value === "object" && value !== null && typeof structuredClone === "function" ? structuredClone(value) : value;
   }
   return next;
 }
@@ -1543,6 +1602,7 @@ function slotEditFromRole(
   bubbleMarkers: Partial<Record<string, Markers>>,
   bubbleInsets: Partial<Record<string, Insets>>,
   bubbleStretch: Partial<Record<string, StretchPoint>>,
+  bubbleFlipX: Partial<Record<string, boolean>>,
 ): BubbleEditState | undefined {
   const slot = slots.find((item) => item.role === role);
   if (!slot) return undefined;
@@ -1552,9 +1612,11 @@ function slotEditFromRole(
     markers: bubbleMarkers[slot.id],
     insets: bubbleInsets[slot.id],
     stretch: bubbleStretch[slot.id],
+    flipX: bubbleFlipX[slot.id],
   };
 
-  return next.geometry || next.markers || next.insets || next.stretch ? next : undefined;
+  // 반전만 있고 좌표 편집이 없는 슬롯도 편집 상태다. flipX를 빼면 하류가 반전을 못 본다.
+  return next.geometry || next.markers || next.insets || next.stretch || next.flipX ? next : undefined;
 }
 
 function omitBubbleEditValue<T>(values: Partial<Record<string, T>>, slotId: string) {

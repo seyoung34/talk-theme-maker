@@ -28,6 +28,8 @@ export type ThemeEditOverrides = {
     markers: Partial<Record<string, Markers>>;
     insets: Partial<Record<string, Insets>>;
     stretch: Partial<Record<string, StretchPoint>>;
+    // 나중에 추가된 필드다. 이전에 저장된 row에는 없으므로 optional로 읽고 `{}`로 승격한다.
+    flipX?: Partial<Record<string, boolean>>;
     designs: BubbleDesigns;
   };
 };
@@ -80,6 +82,8 @@ export type BubblePreviewShape = {
   stretch?: StretchPoint;
   insets?: Insets;
   markers?: Markers;
+  /** 슬롯별 좌우반전. 갤러리 프리뷰도 편집 화면과 같은 방향으로 그려야 한다. */
+  flipX?: boolean;
 };
 
 export type SystemTemplatePreviewMetadata = {

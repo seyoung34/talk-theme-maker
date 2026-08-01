@@ -4,7 +4,7 @@ import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { persistEditorSession, takeTemplateStartPayload } from "@/components/project/editorSession";
 import { clearAutosaveDraft, readAutosaveDraft, type EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice } from "@/components/project/editorTypes";
-import { createEmptyThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
+import { createEmptyThemeDraft, normalizeThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
 import type { SlotUploads } from "@/components/project/projectModel";
 import type { RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import { systemTemplateRepository } from "@/lib/theme/systemTemplates";
@@ -96,7 +96,7 @@ export function useEditorBootstrap({
       setActiveSection(record.editor.activeSection);
       setActiveGroup(record.editor.activeGroup);
       setSelectedSlotId(record.editor.selectedSlotId);
-      replaceDraft(record.draft);
+      replaceDraft(normalizeThemeDraft(record.draft));
       setActiveUserTemplate(record.source.activeUserTemplate ?? null);
       setActiveSystemTemplate(record.source.activeSystemTemplate ?? null);
       setSystemTemplateBundleId(record.source.systemTemplateBundleId ?? record.source.activeSystemTemplate?.bundleId ?? null);
@@ -148,7 +148,7 @@ export function useEditorBootstrap({
             setActiveSection(recovery.editor.activeSection);
             setActiveGroup(recovery.editor.activeGroup);
             setSelectedSlotId(recovery.editor.selectedSlotId);
-            replaceDraft({ ...recovery.draft, bubbleGeometry: recovery.draft.bubbleGeometry ?? {}, bubbleDesigns: recovery.draft.bubbleDesigns ?? {}, bubbleDecorationSources: recovery.draft.bubbleDecorationSources ?? {} });
+            replaceDraft(normalizeThemeDraft(recovery.draft));
             setActiveUserTemplate(recovery.editor.activeUserTemplate ?? null);
             setActiveSystemTemplate(recovery.editor.activeSystemTemplate ?? null);
             setSystemTemplateBundleId(recovery.editor.systemTemplateBundleId ?? recovery.editor.activeSystemTemplate?.bundleId ?? null);
@@ -265,6 +265,7 @@ export function useEditorBootstrap({
             bubbleMarkers: savedTemplate.overrides.bubbleEdits.markers,
             bubbleInsets: savedTemplate.overrides.bubbleEdits.insets,
             bubbleStretch: savedTemplate.overrides.bubbleEdits.stretch,
+            bubbleFlipX: savedTemplate.overrides.bubbleEdits.flipX ?? {},
             bubbleDesigns: savedTemplate.overrides.bubbleEdits.designs ?? {},
             bubbleDecorationSources: {},
           });
@@ -303,6 +304,7 @@ export function useEditorBootstrap({
             bubbleMarkers: converted.bubbleEdits.markers,
             bubbleInsets: converted.bubbleEdits.insets,
             bubbleStretch: converted.bubbleEdits.stretch,
+            bubbleFlipX: converted.bubbleEdits.flipX ?? {},
             bubbleDesigns: converted.bubbleEdits.designs ?? {},
             bubbleDecorationSources: {},
           });
@@ -345,6 +347,7 @@ export function useEditorBootstrap({
           bubbleMarkers: savedTemplate.bubbleEdits.markers,
           bubbleInsets: savedTemplate.bubbleEdits.insets,
           bubbleStretch: savedTemplate.bubbleEdits.stretch,
+          bubbleFlipX: savedTemplate.bubbleEdits.flipX ?? {},
           bubbleDesigns: savedTemplate.bubbleDesigns ?? {},
           bubbleDecorationSources: savedTemplate.bubbleDecorationSources ?? {},
         });

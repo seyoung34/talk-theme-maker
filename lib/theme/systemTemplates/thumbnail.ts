@@ -58,7 +58,8 @@ export async function generateSystemTemplateThumbnail(
     const markers = input.overrides.bubbleEdits.markers[slot.id];
     const insets = input.overrides.bubbleEdits.insets[slot.id];
     const stretch = input.overrides.bubbleEdits.stretch[slot.id];
-    return geometry || markers || insets || stretch ? { geometry, markers, insets, stretch } : undefined;
+    const flipX = input.overrides.bubbleEdits.flipX?.[slot.id];
+    return geometry || markers || insets || stretch || flipX ? { geometry, markers, insets, stretch, flipX } : undefined;
   };
   const meEdit = bubbleEdit("bubble_me_1");
   const youEdit = bubbleEdit("bubble_you_1");

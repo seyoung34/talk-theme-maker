@@ -29,6 +29,7 @@ export function convertSystemTemplateOverridesByRole({
   const markers: ThemeEditOverrides["bubbleEdits"]["markers"] = {};
   const insets: ThemeEditOverrides["bubbleEdits"]["insets"] = {};
   const stretch: ThemeEditOverrides["bubbleEdits"]["stretch"] = {};
+  const flipX: NonNullable<ThemeEditOverrides["bubbleEdits"]["flipX"]> = {};
 
   for (const [sourceSlotId, value] of Object.entries(sourceOverrides.colors)) {
     if (!value) continue;
@@ -91,11 +92,19 @@ export function convertSystemTemplateOverridesByRole({
     if (targetSlot) stretch[targetSlot.id] = value;
   }
 
+  // flipX도 slot id를 키로 쓰므로 플랫폼별 slot id로 다시 매핑해야 한다.
+  // 빠뜨리면 플랫폼을 바꿀 때 좌표는 따라오는데 반전만 조용히 사라진다.
+  for (const [sourceSlotId, value] of Object.entries(sourceOverrides.bubbleEdits.flipX ?? {})) {
+    if (!value) continue;
+    const targetSlot = targetSlotForSourceId(sourceSlotId, sourceById, targetByRole);
+    if (targetSlot) flipX[targetSlot.id] = value;
+  }
+
   return {
     colors,
     uploads,
     candidateSelections,
-    bubbleEdits: { geometry, markers, insets, stretch, designs: sourceOverrides.bubbleEdits.designs ?? {} },
+    bubbleEdits: { geometry, markers, insets, stretch, flipX, designs: sourceOverrides.bubbleEdits.designs ?? {} },
   };
 }
 

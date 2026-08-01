@@ -137,6 +137,34 @@ export function flipBubbleGeometryHorizontally(geometry: BubbleGeometry, width: 
   };
 }
 
+/**
+ * 나인패치 marker를 수평 반전한다.
+ *
+ * 저장된 geometry가 없어 legacy marker나 source asset의 marker를 그대로 쓰는 슬롯에 필요하다.
+ * 아트워크만 뒤집고 marker를 두면 늘어나는 구간과 글자 영역이 반대편에 남는다.
+ *
+ * `top`(가로 stretch)과 `bottom`(가로 콘텐츠)만 뒤집는다. `left`/`right`는 세로 값이라 그대로 둔다.
+ * marker 좌표는 1px marker border를 포함한 1-based 값이므로 내부 좌표로 내렸다가 되돌린다.
+ *
+ * 구간 전체를 반사하므로, 같은 값을 `flipBubbleGeometryHorizontally` → `bubbleGeometryToAndroidMarkers`
+ * 순으로 통과시킨 결과와 2px stretch 패치에서 1px 어긋날 수 있다. 그쪽은 구간이 아니라 stretch
+ * **점**을 `(width-1)-x`로 반사하기 때문이다. 저장 geometry가 있으면 그 경로가 우선하므로 두 값이
+ * 한 슬롯에서 동시에 쓰이지는 않는다.
+ */
+export function flipAndroidMarkersHorizontally(markers: Markers, innerWidth: number): Markers {
+  const width = Math.max(1, Math.round(innerWidth));
+  const flipRange = (range: { start: number; end: number }) => ({
+    start: width - Math.round(range.end) + 2,
+    end: width - Math.round(range.start) + 2,
+  });
+
+  return {
+    ...markers,
+    top: flipRange(markers.top),
+    bottom: flipRange(markers.bottom),
+  };
+}
+
 export function parseBubbleGeometry(value: unknown): BubbleGeometry | undefined {
   if (!isRecord(value) || !isRecord(value.stretch) || !isRecord(value.contentInsets)) return undefined;
   const stretch = value.stretch;

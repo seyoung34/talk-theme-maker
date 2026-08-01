@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { loadCachedBubbleAsset } from "@/lib/theme/preview/bubbleAssetCache";
 import { drawBubble, getAutoBubbleSize } from "@/lib/theme/preview/bubbleCanvas";
+import { isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
 import type { BubbleEditState } from "@/lib/theme/project/state";
 import type { BubbleAsset, BubbleSlot, ThemePlatform } from "@/lib/theme/types";
 
@@ -39,7 +40,7 @@ export default function BubbleCanvasPreview({
       try {
         // 편집기와 동일한 소스 캔버스(innerCanvas/fullCanvas)를 고르도록 원본 URL의 .9.png 여부를 이름에 보존한다.
         const sourcePath = imageUrl.split("?")[0];
-        const isNinePatch = sourcePath.toLowerCase().endsWith(".9.png");
+        const isNinePatch = isAndroidNinePatchSourceName(sourcePath);
         // 서명 URL은 재발급될 때마다 쿼리가 바뀌므로 경로만 캐시 키로 쓴다.
         const loaded = await loadCachedBubbleAsset(`${sourcePath}:${slot}`, async () => {
           const response = await fetch(imageUrl);

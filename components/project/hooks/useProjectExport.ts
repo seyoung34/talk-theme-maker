@@ -23,6 +23,7 @@ type UseProjectExportOptions = {
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleMarkers: Partial<Record<string, Markers>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;
+  bubbleFlipX: Partial<Record<string, boolean>>;
   candidateSelections: SlotCandidateSelections;
   colors: SlotColors;
   displayTemplateName: string;
@@ -41,6 +42,7 @@ export function useProjectExport({
   bubbleInsets,
   bubbleMarkers,
   bubbleStretch,
+  bubbleFlipX,
   candidateSelections,
   colors,
   displayTemplateName,
@@ -165,6 +167,7 @@ export function useProjectExport({
         bubbleMarkers,
         bubbleInsets,
         bubbleStretch,
+        bubbleFlipX,
       });
       setExportProgressStep(platform === "ios" ? 2 : 1);
 
@@ -263,6 +266,7 @@ export function useProjectExport({
     bubbleInsets,
     bubbleMarkers,
     bubbleStretch,
+    bubbleFlipX,
     candidateSelections,
     colors,
     ensureSystemTemplateUploadsHydrated,

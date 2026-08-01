@@ -39,6 +39,28 @@ test.describe("편집기 자동 저장", () => {
     expect(after).toEqual(before);
   });
 
+  test("debounce가 끝나기 전에 내부 종료해도 마지막 변경을 저장한다", async ({ page }) => {
+    const uploaded = { name: "e2e-exit-flush.png", rgb: [240, 80, 30] as const, size: 24 };
+
+    await page.goto("/edit");
+    await waitForEditorReady(page);
+    await uploadSlotImage(page, uploaded);
+
+    // autosaveDebounceMs(2.5초)를 기다리지 않고 앱 내부 종료를 확정한다.
+    await page.getByRole("button", { name: "편집 종료" }).click();
+    await page.getByRole("button", { name: "편집 종료하기" }).click();
+    await expect(page).toHaveURL(/\/template$/);
+
+    const recentWorkCard = page.locator('article[role="button"]').filter({ hasText: "최근 작업" });
+    await expect(recentWorkCard).toBeVisible();
+    await recentWorkCard.click();
+    await expect(page).toHaveURL(/\/edit$/);
+    await waitForEditorReady(page);
+
+    const restored = await readRenderedUploadImage(page);
+    expect(restored.rgb).toEqual([...uploaded.rgb]);
+  });
+
   test("새로 시작을 고르면 초안이 지워지고 프롬프트가 다시 뜨지 않는다", async ({ page }) => {
     await page.goto("/edit");
     await waitForEditorReady(page);

@@ -62,6 +62,16 @@ describe("createThemeDraftSignature", () => {
     expect(createThemeDraftSignature({ ...before, bubbleMarkers: { "slot-a": markers } })).not.toBe(createThemeDraftSignature(before));
   });
 
+  it("좌우반전 토글을 잡는다", () => {
+    // 반전은 이제 새 업로드를 만들지 않으므로, 서명이 잡지 못하면 자동 저장도 이탈 경고도
+    // 반전만 한 편집을 놓친다.
+    const before = createEmptyThemeDraft();
+    const after = { ...before, bubbleFlipX: { "slot-a": true } };
+    expect(createThemeDraftSignature(after)).not.toBe(createThemeDraftSignature(before));
+    // 껐다 켜면 원래 서명으로 돌아온다.
+    expect(createThemeDraftSignature({ ...after, bubbleFlipX: {} })).toBe(createThemeDraftSignature(before));
+  });
+
   it("중첩 값의 키 순서 차이는 변경으로 보지 않는다", () => {
     const base = createEmptyThemeDraft();
     const first = { ...base, bubbleInsets: { "slot-a": { left: 1, right: 2, top: 3, bottom: 4 } } };

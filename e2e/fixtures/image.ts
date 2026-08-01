@@ -35,7 +35,7 @@ function pngChunk(type: string, data: Buffer) {
   return Buffer.concat([length, typed, crc]);
 }
 
-export function createSolidPng(width: number, height: number, [r, g, b]: Rgb): Buffer {
+function encodePng(width: number, height: number, colorAt: (x: number, y: number) => Rgb): Buffer {
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
@@ -47,6 +47,7 @@ export function createSolidPng(width: number, height: number, [r, g, b]: Rgb): B
   for (let y = 0; y < height; y += 1) {
     const offset = y * (1 + width * 3);
     for (let x = 0; x < width; x += 1) {
+      const [r, g, b] = colorAt(x, y);
       raw[offset + 1 + x * 3] = r;
       raw[offset + 2 + x * 3] = g;
       raw[offset + 3 + x * 3] = b;
@@ -59,4 +60,19 @@ export function createSolidPng(width: number, height: number, [r, g, b]: Rgb): B
     pngChunk("IDAT", deflateSync(raw)),
     pngChunk("IEND", Buffer.alloc(0)),
   ]);
+}
+
+export function createSolidPng(width: number, height: number, rgb: Rgb): Buffer {
+  return encodePng(width, height, () => rgb);
+}
+
+/**
+ * 좌우 절반의 색이 다른 PNG.
+ *
+ * 좌우반전은 단색 이미지로는 확인할 수 없다. 반전 전후의 바이트가 완전히 같기 때문이다.
+ * 이 fixture는 어느 쪽 절반이 어떤 색인지를 읽어 **실제 픽셀이 뒤집혔는지**를 판별하게 해 준다.
+ * 반전은 캔버스를 거치는데 happy-dom에는 2D 컨텍스트가 없으므로 이 확인은 E2E에서만 가능하다.
+ */
+export function createHalfSplitPng(width: number, height: number, left: Rgb, right: Rgb): Buffer {
+  return encodePng(width, height, (x) => (x < width / 2 ? left : right));
 }

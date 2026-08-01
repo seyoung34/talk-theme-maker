@@ -1,9 +1,10 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
-import { centeredBubbleGeometry } from "@/lib/theme/bubbleGeometry";
+import { centeredBubbleGeometry, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency, themeVersionName } from "@/lib/theme/exportRequest";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
+import { getAndroidNinePatchInnerSize, isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
 import type { Insets, StretchPoint, ThemeResourceRole } from "@/lib/theme/types";
 
 type IosExportOptions = {
@@ -100,8 +101,10 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   // 슬롯 수만큼 누적되므로 동시 실행 수만 제한해 병렬로 처리한다.
   const imageSlots = iosSlots.filter((slot): slot is ThemeAssetSlot & { path: string } => slot.kind !== "color" && Boolean(slot.path));
   const resolved = await mapWithConcurrency(imageSlots, exportSlotConcurrency, async (slot) => {
-    const source = await resolveIosSlotSource(slot, uploads, selections, templateId, template, iosSlots);
-    if (!source) return null;
+    const resolvedSource = await resolveIosSlotSource(slot, uploads, selections, templateId, template, iosSlots);
+    if (!resolvedSource) return null;
+    // 반전은 배율 target을 만들기 전에 한 번만 적용한다. 배율마다 뒤집으면 같은 일을 세 번 한다.
+    const source = options.bubbleEditsBySlotId[slot.id]?.flipX ? await flipIosSlotSource(slot, resolvedSource) : resolvedSource;
     const sourceDimensions = isIosBubbleRole(slot.role) ? await getIosSourceDimensions(slot, source) : undefined;
     return { slot, source, sourceDimensions, exportFiles: await createIosImageExportFiles(slot, source) };
   });
@@ -176,6 +179,25 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
   };
 }
 
+/**
+ * 좌우반전한 source로 바꾼다.
+ *
+ * `serverAsset` fast path는 원본 바이트를 그대로 넘기는 최적화라 반전을 적용할 자리가 없다.
+ * 그래서 blob으로 실체화하고 참조를 지운다 — 남겨 두면 배율이 같은 target이 원본을 그대로
+ * 내보내 한 슬롯 안에서 방향이 갈린다.
+ */
+async function flipIosSlotSource(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosSlotSource> {
+  const blob = await getIosSourceBlob(slot, source);
+  const image = await loadBlobImage(blob, source.sourceName);
+  const { width, height } = getValidatedIosImageSize(image);
+  return {
+    ...source,
+    blob: await drawImageToPng(image, width, height, undefined, true),
+    assetUrl: undefined,
+    serverAsset: undefined,
+  };
+}
+
 function isIosBubbleRole(role: ThemeResourceRole) {
   return role === "bubble_me_1" || role === "bubble_me_2" || role === "bubble_you_1" || role === "bubble_you_2";
 }
@@ -183,30 +205,54 @@ function isIosBubbleRole(role: ThemeResourceRole) {
 async function getIosSourceDimensions(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosSourceDimensions> {
   if (source.sourceDimensions) return source.sourceDimensions;
 
+  // getIosSourceBlob()은 Android 9-patch source의 marker border를 실제 바이트에서
+  // 제거한다. 이미 정규화된 크기를 다시 2px 줄이면 CSS geometry까지 축소된다.
   const blob = await getIosSourceBlob(slot, source);
   const image = await loadBlobImage(blob, source.sourceName);
-  const dimensions = getValidatedIosImageSize(image);
-  const hasMarkerBorder = source.sourceName.toLowerCase().endsWith(".9.png");
-  source.sourceDimensions = hasMarkerBorder
-    ? { width: Math.max(1, dimensions.width - 2), height: Math.max(1, dimensions.height - 2) }
-    : dimensions;
+  source.sourceDimensions = getValidatedIosImageSize(image);
   return source.sourceDimensions;
 }
 
-async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosExportFile[]> {
+export type IosSlotExportTarget = {
+  path: string;
+  /** 만들어야 할 배율. `undefined`면 배율 변환 없이 원본을 그대로 내보낸다. */
+  targetScale?: number;
+};
+
+/**
+ * 한 슬롯이 만들어 내는 iOS 출력 경로와 배율.
+ *
+ * 매니페스트 `path`에는 `@2x`/`@3x` 접미사가 붙어 있을 수 있으므로 먼저 떼어 base를 만든 뒤
+ * 배율별 이름을 다시 붙인다. 접미사를 떼지 않으면 `...@3x@2x.png` 같은 이름이 나간다.
+ */
+export function getIosSlotExportTargets(slot: ThemeAssetSlot): IosSlotExportTarget[] {
   const scaleTargets = getIosScaleTargets(slot);
   if (!slot.path || scaleTargets.length === 0) {
-    const path = slot.path ?? slot.fileName ?? "Images/image.png";
-    if (source.serverAsset) return [{ path, serverAsset: source.serverAsset }];
-    return [{ path, blob: await getIosSourceBlob(slot, source) }];
+    return [{ path: slot.path ?? slot.fileName ?? "Images/image.png" }];
   }
 
   const basePath = stripPngExtension(stripScaleSuffix(slot.path));
+  return scaleTargets.map((targetScale) => ({
+    path: targetScale === 1 ? `${basePath}.png` : `${basePath}@${targetScale}x.png`,
+    targetScale,
+  }));
+}
+
+/**
+ * 서버 에셋 URL을 그대로 넘겨 fetch·디코딩·리사이즈를 건너뛸 수 있는지.
+ *
+ * 원본 배율과 목표 배율이 같을 때만 가능하다. 다르면 리사이즈해야 하므로 blob으로 실체화한다.
+ */
+export function canReuseIosServerAsset(targetScale: number | undefined, sourceScale: number, hasServerAsset: boolean) {
+  if (!hasServerAsset) return false;
+  return targetScale === undefined || targetScale === sourceScale;
+}
+
+async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosExportFile[]> {
   const entries: IosExportFile[] = [];
 
-  for (const targetScale of scaleTargets) {
-    const path = targetScale === 1 ? `${basePath}.png` : `${basePath}@${targetScale}x.png`;
-    if (targetScale === source.sourceScale && source.serverAsset) {
+  for (const { path, targetScale } of getIosSlotExportTargets(slot)) {
+    if (canReuseIosServerAsset(targetScale, source.sourceScale, Boolean(source.serverAsset)) && source.serverAsset) {
       entries.push({ path, serverAsset: source.serverAsset });
       continue;
     }
@@ -214,7 +260,7 @@ async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSo
     const blob = await getIosSourceBlob(slot, source);
     entries.push({
       path,
-      blob: targetScale === source.sourceScale ? blob : await resizePngBlob(blob, targetScale / source.sourceScale),
+      blob: targetScale === undefined || targetScale === source.sourceScale ? blob : await resizePngBlob(blob, targetScale / source.sourceScale),
     });
   }
 
@@ -229,8 +275,11 @@ async function getIosSourceBlob(slot: ThemeAssetSlot, source: IosSlotSource) {
   return source.blob;
 }
 
-function canUseServerAssetReference(slot: ThemeAssetSlot, assetUrl: string) {
+export function canUseServerAssetReference(slot: ThemeAssetSlot, assetUrl: string) {
   if (!assetUrl.startsWith("/template-assets/")) return false;
+  // iOS target은 plain PNG다. Android 9-patch source는 marker border를 제거해야 하므로
+  // serverAsset fast path로 원본 바이트를 그대로 넘기면 안 된다.
+  if (isAndroidNinePatchSourceName(assetUrl)) return false;
   const exportName = (slot.path ?? slot.fileName ?? "").toLowerCase();
   return !exportName.endsWith(".png") || assetUrl.toLowerCase().endsWith(".png");
 }
@@ -535,13 +584,26 @@ function buildMessageCellCss(
 
 export function getIosCssValues(edit: BubbleEditState | undefined, fallbackInsets: Insets, fallbackStretch: StretchPoint, sourceScale: number, sourceDimensions?: IosSourceDimensions) {
   const fallbackGeometry = sourceDimensions ? centeredBubbleGeometry(sourceDimensions.width, sourceDimensions.height) : undefined;
-  const insets = edit?.geometry?.contentInsets ?? edit?.insets ?? fallbackGeometry?.contentInsets ?? fallbackInsets;
-  const stretch = edit?.geometry?.stretch ?? edit?.stretch ?? fallbackGeometry?.stretch ?? fallbackStretch;
+  const rawInsets = edit?.geometry?.contentInsets ?? edit?.insets ?? fallbackGeometry?.contentInsets ?? fallbackInsets;
+  const rawStretch = edit?.geometry?.stretch ?? edit?.stretch ?? fallbackGeometry?.stretch ?? fallbackStretch;
   const scale = edit || sourceDimensions ? sourceScale : 1;
+  // 이미지 픽셀을 뒤집었으므로 cap inset도 같은 좌표계에서 한 번 뒤집는다.
+  const { insets, stretch } = edit?.flipX ? flipIosBubbleValues(rawInsets, rawStretch, sourceDimensions?.width) : { insets: rawInsets, stretch: rawStretch };
   return {
     stretch: `${Math.round(stretch.x / scale)}px ${Math.round(stretch.y / scale)}px`,
     insets: `${Math.round(insets.top / scale)}px ${Math.round(insets.left / scale)}px ${Math.round(insets.bottom / scale)}px ${Math.round(insets.right / scale)}px`,
   };
+}
+
+/**
+ * 좌우 여백은 폭을 몰라도 서로 바꾸면 되지만, stretch의 x는 폭을 기준으로 반사해야 한다.
+ * 말풍선 슬롯은 항상 source 크기를 재므로 폭이 없는 경우는 실질적으로 없지만, 폭을 모를 때
+ * stretch를 임의의 값으로 추정하는 것보다 여백만 바꾸고 두는 편이 덜 틀린다.
+ */
+function flipIosBubbleValues(insets: Insets, stretch: StretchPoint, sourceWidth?: number) {
+  if (!sourceWidth) return { insets: { ...insets, left: insets.right, right: insets.left }, stretch };
+  const flipped = flipBubbleGeometryHorizontally({ stretch, contentInsets: insets }, sourceWidth);
+  return { insets: flipped.contentInsets, stretch: flipped.stretch };
 }
 
 async function fetchAssetBlob(assetUrl: string) {
@@ -550,12 +612,28 @@ async function fetchAssetBlob(assetUrl: string) {
   return response.blob();
 }
 
+export function getIosImageDrawPlan(sourceName: string, width: number, height: number) {
+  if (!isAndroidNinePatchSourceName(sourceName)) {
+    return { outputWidth: width, outputHeight: height, sourceRect: undefined };
+  }
+  const inner = getAndroidNinePatchInnerSize(width, height);
+  return {
+    outputWidth: inner.width,
+    outputHeight: inner.height,
+    sourceRect: { x: 1, y: 1, width: inner.width, height: inner.height },
+  };
+}
+
 async function normalizeIosImageBlob(slot: ThemeAssetSlot, blob: Blob, sourceName: string) {
   const expectsPng = slot.path?.toLowerCase().endsWith(".png");
   if (!expectsPng) return blob;
 
   const image = await loadBlobImage(blob, sourceName);
   const { width, height } = getValidatedIosImageSize(image);
+  const drawPlan = getIosImageDrawPlan(sourceName, width, height);
+  if (drawPlan.sourceRect) {
+    return drawImageToPng(image, drawPlan.outputWidth, drawPlan.outputHeight, drawPlan.sourceRect);
+  }
   if (await hasPngSignature(blob)) return blob;
   return drawImageToPng(image, width, height);
 }
@@ -602,7 +680,13 @@ function validateIosImageSize(width: number, height: number) {
   }
 }
 
-async function drawImageToPng(image: HTMLImageElement, width: number, height: number) {
+async function drawImageToPng(
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+  sourceRect?: { x: number; y: number; width: number; height: number },
+  flipX = false,
+) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -611,7 +695,25 @@ async function drawImageToPng(image: HTMLImageElement, width: number, height: nu
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
   context.clearRect(0, 0, width, height);
-  context.drawImage(image, 0, 0, width, height);
+  if (flipX) {
+    context.translate(width, 0);
+    context.scale(-1, 1);
+  }
+  if (sourceRect) {
+    context.drawImage(
+      image,
+      sourceRect.x,
+      sourceRect.y,
+      sourceRect.width,
+      sourceRect.height,
+      0,
+      0,
+      width,
+      height,
+    );
+  } else {
+    context.drawImage(image, 0, 0, width, height);
+  }
   const png = await canvasToPngBlob(canvas);
   if (!png) throw new Error("iOS 이미지를 PNG로 변환하지 못했습니다.");
   return png;

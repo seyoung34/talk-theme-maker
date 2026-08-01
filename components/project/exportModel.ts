@@ -38,6 +38,7 @@ export type AndroidExportPayloadOptions = {
   bubbleMarkers: Partial<Record<string, Markers>>;
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;
+  bubbleFlipX: Partial<Record<string, boolean>>;
 };
 
 export type IosExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {

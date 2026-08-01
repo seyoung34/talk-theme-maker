@@ -59,6 +59,8 @@ export function ProjectQuickEditPanel({
   onMarkersChange,
   onInsetsChange,
   onStretchChange,
+  flipX,
+  onFlipXChange,
   candidateOpen,
   onToggleCandidates,
   onOpenBubbleBuilder,
@@ -104,6 +106,8 @@ export function ProjectQuickEditPanel({
   onMarkersChange: (markers: Markers) => void;
   onInsetsChange: (insets: Insets) => void;
   onStretchChange: (stretch: StretchPoint) => void;
+  flipX?: boolean;
+  onFlipXChange: (next: boolean) => void;
   candidateOpen: boolean;
   onToggleCandidates: () => void;
   onOpenBubbleBuilder: () => void;
@@ -313,6 +317,8 @@ export function ProjectQuickEditPanel({
                 markers={markers}
                 insets={insets}
                 stretch={stretch}
+                flipX={flipX}
+                onFlipXChange={onFlipXChange}
                 onApply={({ editedFile, sourceFile, imageState, target, geometry: nextGeometry, markers: nextMarkers, insets: nextInsets, stretch: nextStretch }) => {
                   if (editedFile) onEditedUpload(slot, editedFile, imageState, sourceFile, target);
                   onMarkersChange(nextMarkers);

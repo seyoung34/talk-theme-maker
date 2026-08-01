@@ -3,6 +3,7 @@
 // 픽셀 단위로 일치하도록 한다. 모든 계산은 소스 픽셀 공간에서 이뤄지고, 표시 크기는 CSS로 축소한다.
 import { mapContentRect, renderNinePatch, shrinkFixed } from "@/lib/theme/android/ninepatch";
 import { bubbleGeometryToAndroidMarkers, centeredBubbleGeometry } from "@/lib/theme/bubbleGeometry";
+import { isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
 import type { BubbleEditState } from "@/lib/theme/project/state";
 import type { BubbleAsset, Insets, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -26,8 +27,18 @@ export function drawBubble(
   },
 ) {
   const { asset, edit, platform, x, y, width, height, text, fill, textColor, selected = false } = options;
+  const flipX = Boolean(edit?.flipX);
 
   if (asset) {
+    // 반전은 그림에만 적용한다. 글자와 선택 테두리까지 뒤집히면 안 되므로 asset을 그리는 동안만
+    // 좌표계를 말풍선 rect의 중심을 기준으로 미러링한다. 9-slice 계산은 원본 좌표 그대로 두고
+    // 결과만 뒤집으므로 marker/inset을 따로 변환할 필요가 없다.
+    if (flipX) {
+      ctx.save();
+      ctx.translate(x + width, 0);
+      ctx.scale(-1, 1);
+      ctx.translate(-x, 0);
+    }
     if (platform === "ios") {
       const source = getIosSourceCanvas(asset);
       const fallback = centeredBubbleGeometry(source.width, source.height);
@@ -36,6 +47,7 @@ export function drawBubble(
     } else {
       renderNinePatch(ctx, getAndroidRenderAsset(asset, edit), x, y, width, height);
     }
+    if (flipX) ctx.restore();
   } else {
     ctx.fillStyle = fill;
     ctx.strokeStyle = "rgba(20,52,58,0.7)";
@@ -45,7 +57,8 @@ export function drawBubble(
     ctx.stroke();
   }
 
-  const contentRect = getPreviewContentRect(asset, platform, edit, x, y, width, height);
+  // 글자는 미러링하지 않으므로 글자 영역만 같은 축으로 뒤집어 준다.
+  const contentRect = mirrorContentRect(getPreviewContentRect(asset, platform, edit, x, y, width, height), flipX, x, width);
   if (selected) {
     ctx.strokeStyle = "#60a5fa";
     ctx.lineWidth = 6;
@@ -96,6 +109,17 @@ export function getPreviewContentRect(asset: BubbleAsset | null, platform: Theme
     return mapIosContentRect(edit?.geometry?.contentInsets ?? edit?.insets ?? fallback.contentInsets, source.width, source.height, x, y, width, height);
   }
   return mapContentRect(getAndroidRenderAsset(asset, edit), x, y, width, height);
+}
+
+/**
+ * 말풍선 rect의 세로 중심축을 기준으로 사각형을 뒤집는다.
+ *
+ * `getPreviewContentRect`는 반전을 모르는 순수 계산이다. 반전 여부에 따라 geometry를 미리
+ * 변환하는 대신 결과 사각형만 뒤집으면 계산이 한 곳에 모이고 왕복 오차도 생기지 않는다.
+ */
+export function mirrorContentRect<T extends { x: number; width: number }>(rect: T, flipX: boolean, bubbleX: number, bubbleWidth: number): T {
+  if (!flipX) return rect;
+  return { ...rect, x: 2 * bubbleX + bubbleWidth - rect.x - rect.width };
 }
 
 function getAndroidRenderAsset(asset: BubbleAsset, edit: BubbleEditState | undefined): BubbleAsset {
@@ -200,7 +224,7 @@ function normalizeStretchPoint(stretch: StretchPoint, sourceWidth: number, sourc
 }
 
 export function getIosSourceCanvas(asset: BubbleAsset) {
-  return asset.name.toLowerCase().endsWith(".9.png") ? asset.innerCanvas : asset.fullCanvas;
+  return isAndroidNinePatchSourceName(asset.name) ? asset.innerCanvas : asset.fullCanvas;
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {

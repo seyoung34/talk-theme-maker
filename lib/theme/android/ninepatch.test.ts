@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { collectInvalidBorderPixels, defaultMarkers, parseMarkers, shrinkFixed, type BorderPixels } from "@/lib/theme/android/ninepatch";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { collectInvalidBorderPixels, defaultMarkers, exportNinePatch, parseMarkers, parsePlainImage, shrinkFixed, type BorderPixels } from "@/lib/theme/android/ninepatch";
 
 const black: [number, number, number, number] = [0, 0, 0, 255];
 const clear: [number, number, number, number] = [0, 0, 0, 0];
@@ -78,5 +78,37 @@ describe("shrinkFixed", () => {
 
   it("고정 폭 합이 대상을 넘으면 비례 축소한다", () => {
     expect(shrinkFixed(30, 30, 30)).toEqual([15, 15]);
+  });
+});
+
+
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("plain PNG to Android 9-patch", () => {
+  it("artwork 바깥에 marker border 공간을 추가해 가장자리 픽셀을 보존한다", () => {
+    const drawImage = vi.fn();
+    const context = {
+      clearRect: vi.fn(),
+      drawImage,
+      fillRect: vi.fn(),
+      fillStyle: "",
+    } as unknown as CanvasRenderingContext2D;
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(() => context);
+
+    const source = { width: 20, height: 10 } as ImageBitmap;
+    const asset = parsePlainImage(source, "bubble.png", "me");
+    const exported = exportNinePatch(asset);
+
+    expect(asset.innerCanvas).toBe(asset.fullCanvas);
+    expect(asset.innerCanvas.width).toBe(20);
+    expect(asset.innerCanvas.height).toBe(10);
+    expect(asset.width).toBe(22);
+    expect(asset.height).toBe(12);
+    expect(exported.width).toBe(22);
+    expect(exported.height).toBe(12);
+    expect(drawImage).toHaveBeenLastCalledWith(asset.innerCanvas, 0, 0, 20, 10, 1, 1, 20, 10);
   });
 });

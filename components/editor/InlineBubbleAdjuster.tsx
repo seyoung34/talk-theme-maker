@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { blobForThemeFile, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
+import { blobForThemeFile, getThemeFileSourceName, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { loadCachedBubbleAsset } from "@/lib/theme/preview/bubbleAssetCache";
 import { centeredBubbleGeometry } from "@/lib/theme/bubbleGeometry";
+import { isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { BubbleAsset, BubbleSlot, Insets, Markers, Range, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -55,7 +56,7 @@ export default function InlineBubbleAdjuster({
         const nextAsset = await loadCachedBubbleAsset(`${themeFileCacheKey(file)}:${slot}`, async () => {
           const blob = await blobForThemeFile(file);
           if (!blob) throw new Error(`bubble source missing: ${file.path}`);
-          return loadNinePatchBlob(blob, file.name, slot);
+          return loadNinePatchBlob(blob, getThemeFileSourceName(file), slot);
         });
         if (cancelled) return;
         setAsset(nextAsset);
@@ -522,7 +523,7 @@ function getIosCssImageName(asset: BubbleAsset) {
 }
 
 function getIosSourceCanvas(asset: BubbleAsset) {
-  return asset.name.toLowerCase().endsWith(".9.png") ? asset.innerCanvas : asset.fullCanvas;
+  return isAndroidNinePatchSourceName(asset.name) ? asset.innerCanvas : asset.fullCanvas;
 }
 
 function clamp(value: number, min: number, max: number) {

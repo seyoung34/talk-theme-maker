@@ -23,6 +23,8 @@ export type AutosaveArm =
   /** `expectedUpdatedAt`은 이 탭이 이어받은 레코드의 시각. 새로 시작했으면 null. */
   | { state: "armed"; expectedUpdatedAt: number | null };
 
+export type AutosaveFlushResult = "saved" | "unchanged" | "conflict" | "failed" | "unavailable";
+
 type UseEditorAutosaveOptions = {
   arm: AutosaveArm;
   mode: EditorMode;
@@ -76,9 +78,11 @@ export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot, onSa
   }, [armState, armExpectedUpdatedAt]);
 
   const save = useCallback(
-    (signature: string) =>
-      enqueue(async () => {
-        if (stoppedRef.current) return;
+    (signature: string): Promise<AutosaveFlushResult> =>
+      enqueue(async (): Promise<AutosaveFlushResult> => {
+        if (stoppedRef.current) return "conflict";
+        // debounce timer와 수동 flush가 같은 signature를 queue에 넣어도 한 번만 쓴다.
+        if (savedSignatureRef.current === signature) return "unchanged";
         setStatus("saving");
         // 이전 실패 문구를 지워 둔다. 남겨 두면 재시도가 성공해도 오류 안내가 다시 떠오른다.
         setMessage(null);
@@ -88,7 +92,7 @@ export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot, onSa
             stoppedRef.current = true;
             setStatus("conflict");
             setMessage("다른 탭에서 같은 편집기를 열어 자동 저장을 멈췄습니다. 이 탭의 변경은 저장되지 않습니다.");
-            return;
+            return "conflict";
           }
           savedSignatureRef.current = signature;
           expectedUpdatedAtRef.current = result.record.updatedAt;
@@ -97,9 +101,10 @@ export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot, onSa
           setMessage(null);
           trackAnalyticsEvent("autosave_completed", { mode });
           onSaved?.();
+          return "saved";
         } catch (error) {
           console.error(error);
-          // 기준선을 갱신하지 않으므로 다음 편집에서 다시 시도한다.
+          // 기준선을 갱신하지 않으므로 다음 편집이나 종료 flush에서 다시 시도한다.
           setStatus("error");
           setMessage(
             error instanceof AutosaveQuotaExceededError
@@ -107,6 +112,7 @@ export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot, onSa
               : "자동 저장에 실패했습니다. 브라우저 저장소 권한을 확인해 주세요.",
           );
           trackAnalyticsEvent("autosave_failed", { reason: error instanceof AutosaveQuotaExceededError ? "quota" : "storage" });
+          return "failed";
         }
       }),
     [enqueue, mode, onSaved],
@@ -128,6 +134,21 @@ export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot, onSa
     };
   }, [armState, draftSignature, save]);
 
+  const flushAutosave = useCallback((): Promise<AutosaveFlushResult> => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    if (armState !== "armed") return Promise.resolve("unavailable");
+    if (stoppedRef.current) return Promise.resolve("conflict");
+
+    const signature = draftSignatureRef.current;
+    if (savedSignatureRef.current === null || savedSignatureRef.current === signature) {
+      return Promise.resolve("unchanged");
+    }
+    return save(signature);
+  }, [armState, save]);
+
   /**
    * 저장한 내용이 다른 곳에 안전하게 남은 시점(내 템플릿 저장·내보내기 성공)이나 새 작업을 시작할 때
    * 레코드를 지우고 기준선을 현재 초안으로 다시 잡는다.
@@ -146,5 +167,5 @@ export function useEditorAutosave({ arm, mode, draftSignature, getSnapshot, onSa
     void enqueue(() => clearAutosaveDraft(mode)).catch((error) => console.error(error));
   }, [enqueue, mode]);
 
-  return { status, lastSavedAt, message, resetAutosave };
+  return { status, lastSavedAt, message, flushAutosave, resetAutosave };
 }

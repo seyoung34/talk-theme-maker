@@ -148,6 +148,8 @@ export function describeAutosaveDraft(record: EditorAutosaveDraft) {
     ...Object.keys(draft.bubbleMarkers),
     ...Object.keys(draft.bubbleInsets),
     ...Object.keys(draft.bubbleStretch),
+    // 반전만 한 슬롯도 편집이다. 이 필드가 없는 예전 레코드도 그대로 읽혀야 하므로 기본값을 둔다.
+    ...Object.keys(draft.bubbleFlipX ?? {}),
   ]);
 
   return { uploadCount, colorCount, bubbleEditCount: bubbleEditSlotIds.size };

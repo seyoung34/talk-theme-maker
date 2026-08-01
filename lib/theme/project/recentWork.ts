@@ -31,6 +31,7 @@ export function createRecentWorkUserTemplateInput(
       markers: record.draft.bubbleMarkers,
       insets: record.draft.bubbleInsets,
       stretch: record.draft.bubbleStretch,
+      flipX: record.draft.bubbleFlipX ?? {},
     },
     bubbleDesigns: record.draft.bubbleDesigns,
     bubbleDecorationSources: record.draft.bubbleDecorationSources,

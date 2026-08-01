@@ -23,6 +23,7 @@ export function createThemeDraftSignature(draft: ThemeDraft): string {
     bubbleMarkers: draft.bubbleMarkers,
     bubbleInsets: draft.bubbleInsets,
     bubbleStretch: draft.bubbleStretch,
+    bubbleFlipX: draft.bubbleFlipX,
     bubbleDesigns: draft.bubbleDesigns,
     // 장식 원본은 id가 없어 파일 메타로 대신한다.
     bubbleDecorationSources: mapRecord(draft.bubbleDecorationSources, (file) => `${file.name}:${file.size}:${file.lastModified}`),

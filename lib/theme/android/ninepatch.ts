@@ -1,3 +1,4 @@
+import { isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
 import type { BubbleAsset, BubbleSlot, InvalidPixel, Markers, Range } from "@/lib/theme/types";
 
 const transparent = [0, 0, 0, 0] as const;
@@ -49,8 +50,10 @@ export function parsePlainImage(source: NinePatchImageSource, name: string, slot
     name,
     fullCanvas,
     innerCanvas: fullCanvas,
-    width: fullCanvas.width,
-    height: fullCanvas.height,
+    // 일반 이미지는 artwork 자체라 marker border 공간이 없다. Android export에서는
+    // 바깥에 1px씩 새 border를 만들어야 원본의 가장자리 픽셀이 잘리지 않는다.
+    width: fullCanvas.width + 2,
+    height: fullCanvas.height + 2,
     markers: offsetPlainMarkers(markers, fullCanvas.width, fullCanvas.height),
     invalidPixels: [],
   };
@@ -241,6 +244,25 @@ export function mapStretchRect(asset: BubbleAsset, x: number, y: number, width: 
   };
 }
 
+/**
+ * 캔버스를 좌우로 뒤집은 새 캔버스를 만든다.
+ *
+ * 슬롯별 좌우반전은 업로드 파일을 다시 굽지 않고 결과물을 만드는 마지막 경계에서만 적용한다.
+ * 나인패치는 artwork만 뒤집고 marker는 따로 뒤집어야 하므로(`flipAndroidMarkersHorizontally`)
+ * 여기서는 border 없는 inner 캔버스만 다룬다.
+ */
+export function flipCanvasHorizontally(source: HTMLCanvasElement): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const ctx = context(canvas);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(source, 0, 0);
+  return canvas;
+}
+
 export function exportNinePatch(asset: BubbleAsset): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = asset.width;
@@ -379,5 +401,5 @@ function isSvgImage(blob: Blob, name: string) {
 }
 
 function isNinePatchName(name: string) {
-  return name.toLowerCase().endsWith(".9.png");
+  return isAndroidNinePatchSourceName(name);
 }

@@ -19,6 +19,7 @@ type UseTemplatePersistenceOptions = {
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleMarkers: Partial<Record<string, Markers>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;
+  bubbleFlipX: Partial<Record<string, boolean>>;
   bubbleDesigns: BubbleDesigns;
   bubbleDecorationSources: BubbleDecorationSources;
   candidateSelections: SlotCandidateSelections;
@@ -74,7 +75,7 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
         uploads,
         colors: options.colors,
         candidateSelections: options.candidateSelections,
-        bubbleEdits: { geometry: options.bubbleGeometry, markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch },
+        bubbleEdits: { geometry: options.bubbleGeometry, markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch, flipX: options.bubbleFlipX },
         bubbleDesigns: options.bubbleDesigns,
         bubbleDecorationSources: options.bubbleDecorationSources,
       });
@@ -129,7 +130,7 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
           colors: options.colors,
           uploads,
           candidateSelections: options.candidateSelections,
-          bubbleEdits: { geometry: options.bubbleGeometry, markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch, designs: options.bubbleDesigns },
+          bubbleEdits: { geometry: options.bubbleGeometry, markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch, flipX: options.bubbleFlipX, designs: options.bubbleDesigns },
         },
       });
       options.setActiveSystemTemplate({

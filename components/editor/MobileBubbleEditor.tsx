@@ -8,6 +8,7 @@ import { defaultImageEditState, renderEditedImageFile, type ImageEditState, type
 import { bubbleEditorHelpHint, hasSeenHint, markHintSeen } from "@/lib/shared/hintStorage";
 import { isMobileBubbleEditDirty, type MobileBubbleEditDraft } from "@/lib/theme/mobileBubbleEdit";
 import { bubbleGeometryToLegacyEdit, centeredBubbleGeometry, flipBubbleGeometryHorizontally, normalizeBubbleGeometry, resolveBubbleGeometry } from "@/lib/theme/bubbleGeometry";
+import { isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { BubbleAsset, BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -32,7 +33,9 @@ export function MobileBubbleEditor({
   markers,
   insets,
   stretch,
+  flipX = false,
   onApply,
+  onFlipXChange,
   onPreviewChange,
 }: {
   slot: ThemeAssetSlot;
@@ -46,8 +49,14 @@ export function MobileBubbleEditor({
   markers?: Markers;
   insets?: Insets;
   stretch?: StretchPoint;
+  /**
+   * 슬롯별 좌우반전. 파일에 굽지 않고 프로젝트 상태로만 들고 있다가 결과물을 만들 때 적용한다.
+   * `initialImageState.flipX`(파일에 이미 구워진 legacy 값)와는 별개다.
+   */
+  flipX?: boolean;
   onApply: (input: { editedFile?: File; sourceFile: File; imageState: ImageEditState; target?: ImageEditTarget; geometry: BubbleGeometry; markers: Markers; insets: Insets; stretch: StretchPoint }) => void;
-  onPreviewChange?: (input: { geometry: BubbleGeometry; markers: Markers; insets: Insets; stretch: StretchPoint }) => void;
+  onFlipXChange?: (next: boolean) => void;
+  onPreviewChange?: (input: { geometry: BubbleGeometry; markers: Markers; insets: Insets; stretch: StretchPoint; flipX: boolean }) => void;
 }) {
   const [preparedFile, setPreparedFile] = useState<File | null>(sourceFile);
   const [imageUrl, setImageUrl] = useState("");
@@ -64,6 +73,8 @@ export function MobileBubbleEditor({
   const draftRef = useRef<MobileBubbleEditDraft | null>(null);
   const originalDraftRef = useRef<MobileBubbleEditDraft | null>(null);
   const originalDraftSourceRef = useRef<string | null>(null);
+  // "처음 상태로 되돌리기"의 기준. 이 슬롯/그림을 열었을 때의 반전 상태다.
+  const originalFlipXRef = useRef(flipX);
   const previewChangeRef = useRef(onPreviewChange);
 
   useEffect(() => {
@@ -141,6 +152,9 @@ export function MobileBubbleEditor({
     const hasPersistedGeometry = Boolean(geometry || markers || insets || stretch);
     return {
       imageState,
+      // draft.geometry는 항상 canonical — "선택한 파일(effective file) 기준" 좌표다.
+      // 저장값이 없어 원본 asset의 marker에서 시작할 때만, 파일에 이미 구워진 legacy 반전만큼
+      // 한 번 돌려 effective 좌표로 맞춘다. 슬롯 반전(flipX)은 여기서 다루지 않는다.
       geometry: imageState.flipX && !hasPersistedGeometry ? flipBubbleGeometryHorizontally(resolved, source.width) : resolved,
     };
   }, [asset, geometry, initialImageState, insets, markers, platform, stretch]);
@@ -151,6 +165,10 @@ export function MobileBubbleEditor({
     if (originalDraftSourceRef.current === originalDraftSource) return;
     originalDraftSourceRef.current = originalDraftSource;
     originalDraftRef.current = initialDraft;
+    // 반전 기준선도 같은 시점에만 갱신한다. 매 렌더 갱신하면 되돌리기가 항상 비활성이 된다.
+    originalFlipXRef.current = flipX;
+    // 기준선은 "다른 그림으로 바뀐 순간"에만 잡는다. flipX가 바뀔 때마다 다시 잡으면 안 된다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialDraft, originalDraftSource]);
 
   useEffect(() => {
@@ -177,10 +195,10 @@ export function MobileBubbleEditor({
     if (!draft || !artwork || !previewChangeRef.current) return;
     const frame = window.requestAnimationFrame(() => {
       const legacy = bubbleGeometryToLegacyEdit(draft.geometry, artwork.width, artwork.height);
-      previewChangeRef.current?.(legacy);
+      previewChangeRef.current?.({ ...legacy, flipX });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [artwork, draft]);
+  }, [artwork, draft, flipX]);
 
   useLayoutEffect(() => {
     const stage = stageRef.current;
@@ -231,7 +249,7 @@ export function MobileBubbleEditor({
     const scale = Math.max(effectiveScale, 0.01);
     const dx = (event.clientX - active.startX) / scale;
     const dy = (event.clientY - active.startY) / scale;
-    const nextDraft = updateDraftForDrag(active, dx, dy, artwork);
+    const nextDraft = updateDraftForDrag(active, dx, dy, artwork, flipX);
     draftRef.current = nextDraft;
     setDraft(nextDraft);
   };
@@ -250,6 +268,7 @@ export function MobileBubbleEditor({
     draftRef.current = resetDraft;
     setDraft(resetDraft);
     setActiveDragKind(null);
+    if (flipX !== originalFlipXRef.current) onFlipXChange?.(originalFlipXRef.current);
     void applyDraft(resetDraft, true);
   };
   const applyDraft = async (draftToApply: MobileBubbleEditDraft, force = false) => {
@@ -271,24 +290,26 @@ export function MobileBubbleEditor({
   const fitViewer = () => setViewerZoom(1);
   const zoomIn = () => setViewerZoom((current) => Math.min(2.5, Number((current + 0.25).toFixed(2))));
   const zoomOut = () => setViewerZoom((current) => Math.max(0.5, Number((current - 0.25).toFixed(2))));
+  /**
+   * 좌우반전은 슬롯 상태만 뒤집는다.
+   *
+   * 예전에는 `imageState.flipX`를 뒤집고 `renderEditedImageFile()`로 새 파일을 구웠다. 그래서
+   * 토글할 때마다 업로드 목록이 하나씩 늘었고, 같은 그림을 방향만 다르게 쓰려면 별개의 두
+   * 업로드가 필요했다. 저장 geometry는 canonical 그대로 두므로 왕복해도 값이 흔들리지 않는다.
+   */
   const flip = () => {
-    const current = draftRef.current;
-    if (!current || !artwork) return;
-    const nextDraft = {
-      ...current,
-      imageState: { ...current.imageState, flipX: !current.imageState.flipX },
-      geometry: flipBubbleGeometryHorizontally(current.geometry, artwork.width),
-    };
-    draftRef.current = nextDraft;
-    setDraft(nextDraft);
-    void applyDraft(nextDraft);
+    onFlipXChange?.(!flipX);
   };
 
   if (loading && !asset) return <div className="grid min-h-48 place-items-center rounded-[22px] border border-[#dbe3ed] bg-white text-sm font-bold text-[#64748b]"><span className="inline-flex items-center gap-2"><LoaderCircle size={16} className="animate-spin" />편집 준비 중</span></div>;
   if (error && !asset) return <p className="rounded-[22px] border border-[#fecaca] bg-[#fff1f2] px-4 py-4 text-sm font-bold text-[#be123c]">{error}</p>;
   if (!asset || !draft) return <p className="rounded-[22px] border border-dashed border-[#dbe3ed] bg-[#f8fafc] px-4 py-5 text-center text-sm font-semibold text-[#64748b]">편집할 말풍선을 선택하세요.</p>;
 
-  const isDirty = isMobileBubbleEditDirty(draft, originalDraftRef.current ?? initialDraft);
+  // 화면에 보이는 방향. 파일에 이미 구워진 legacy 반전과 슬롯 반전이 겹치면 서로 상쇄된다.
+  const displayFlipX = Boolean(draft.imageState.flipX) !== flipX;
+  // 저장값은 canonical이고 오버레이는 화면 좌표를 쓴다. 반전 중일 때만 파생해서 그린다.
+  const displayGeometry = flipX && artwork ? flipBubbleGeometryHorizontally(draft.geometry, artwork.width) : draft.geometry;
+  const isDirty = isMobileBubbleEditDirty(draft, originalDraftRef.current ?? initialDraft) || flipX !== originalFlipXRef.current;
   return (
     <section className="grid gap-3 rounded-[24px] border border-[#d8e2ef] bg-[linear-gradient(160deg,#f8fbff_0%,#edf5ff_100%)] p-3 shadow-[0_12px_28px_rgba(37,99,235,0.08)]">
       <header className="flex min-h-11 items-center justify-between gap-2 px-1">
@@ -326,14 +347,14 @@ export function MobileBubbleEditor({
       >
         <div className="relative origin-center" style={artboardStyle}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt="" className="pointer-events-none block size-full origin-center select-none" style={{ transform: `scaleX(${draft.imageState.flipX ? -1 : 1})` }} draggable={false} />
-          {artwork ? <BubbleGeometryOverlay geometry={draft.geometry} artwork={artwork} scale={stageScale} activeKind={activeDragKind} onDrag={beginDrag} /> : null}
+          <img src={imageUrl} alt="" className="pointer-events-none block size-full origin-center select-none" style={{ transform: `scaleX(${displayFlipX ? -1 : 1})` }} draggable={false} />
+          {artwork ? <BubbleGeometryOverlay geometry={displayGeometry} artwork={artwork} scale={stageScale} activeKind={activeDragKind} onDrag={beginDrag} /> : null}
         </div>
         <div className="absolute left-2 top-2 z-30 flex items-center gap-1.5">
-          <button type="button" title="좌우 반전" aria-label="좌우 반전" className={`grid size-10 place-items-center rounded-full border border-white/85 bg-white/85 text-[#475569] backdrop-blur-sm transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] ${draft.imageState.flipX ? "bg-[#eff6ff] text-[#1d4ed8]" : "hover:bg-[#f1f5f9] hover:text-[#1d4ed8]"}`} onClick={flip}><FlipHorizontal2 size={16} aria-hidden="true" /></button>
+          <button type="button" title="좌우 반전" aria-label="좌우 반전" className={`grid size-10 place-items-center rounded-full border border-white/85 bg-white/85 text-[#475569] backdrop-blur-sm transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] ${flipX ? "bg-[#eff6ff] text-[#1d4ed8]" : "hover:bg-[#f1f5f9] hover:text-[#1d4ed8]"}`} aria-pressed={flipX} onClick={flip}><FlipHorizontal2 size={16} aria-hidden="true" /></button>
           <button type="button" title="처음 상태로 되돌리기" aria-label="처음 상태로 되돌리기" className="grid size-10 place-items-center rounded-full border border-white/85 bg-white/85 text-[#64748b] backdrop-blur-sm transition hover:bg-[#f1f5f9] hover:text-[#334155] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-35" disabled={!isDirty || loading} onClick={reset}><RotateCcw size={16} aria-hidden="true" /></button>
         </div>
-        <BubbleValueFeedback geometry={draft.geometry} activeKind={activeDragKind} />
+        <BubbleValueFeedback geometry={displayGeometry} activeKind={activeDragKind} />
       </div>
       {error ? <p className="rounded-xl border border-[#fecaca] bg-[#fff1f2] px-3 py-2 text-xs font-bold text-[#be123c]" role="alert">{error}</p> : null}
     </section>
@@ -378,17 +399,24 @@ function BubbleGeometryOverlay({
   </div>;
 }
 
-function updateDraftForDrag(active: { kind: DragKind; startX: number; startY: number; draft: MobileBubbleEditDraft }, dx: number, dy: number, artwork: ArtworkMetrics) {
+/**
+ * 핸들은 화면에 보이는 좌표(표시 좌표)에서 움직인다. 저장값은 canonical 좌표이므로 반전 중이면
+ * 표시 좌표로 내렸다가 드래그를 적용하고 다시 canonical로 되돌린다.
+ * `flipBubbleGeometryHorizontally`는 대합이라 이 왕복에서 값이 변하지 않는다.
+ */
+function updateDraftForDrag(active: { kind: DragKind; startX: number; startY: number; draft: MobileBubbleEditDraft }, dx: number, dy: number, artwork: ArtworkMetrics, flipX: boolean) {
   const next = structuredClone(active.draft);
+  const display = flipX ? flipBubbleGeometryHorizontally(next.geometry, artwork.width) : next.geometry;
   if (active.kind === "stretch") {
-    next.geometry.stretch.x += dx;
-    next.geometry.stretch.y += dy;
+    display.stretch.x += dx;
+    display.stretch.y += dy;
   }
-  if (active.kind === "content-left") next.geometry.contentInsets.left += dx;
-  if (active.kind === "content-right") next.geometry.contentInsets.right -= dx;
-  if (active.kind === "content-top") next.geometry.contentInsets.top += dy;
-  if (active.kind === "content-bottom") next.geometry.contentInsets.bottom -= dy;
-  next.geometry = normalizeBubbleGeometry(next.geometry, artwork.width, artwork.height);
+  if (active.kind === "content-left") display.contentInsets.left += dx;
+  if (active.kind === "content-right") display.contentInsets.right -= dx;
+  if (active.kind === "content-top") display.contentInsets.top += dy;
+  if (active.kind === "content-bottom") display.contentInsets.bottom -= dy;
+  const normalized = normalizeBubbleGeometry(display, artwork.width, artwork.height);
+  next.geometry = flipX ? flipBubbleGeometryHorizontally(normalized, artwork.width) : normalized;
   return next;
 }
 
@@ -406,7 +434,7 @@ function BubbleValueFeedback({ geometry, activeKind }: { geometry: BubbleGeometr
   return <output className="pointer-events-none absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-full border border-white/80 bg-[#0f172a]/85 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg backdrop-blur" aria-live="polite">{value}</output>;
 }
 function getArtworkMetrics(asset: BubbleAsset): ArtworkMetrics {
-  const hasMarkerBorder = asset.name.toLowerCase().endsWith(".9.png");
+  const hasMarkerBorder = isAndroidNinePatchSourceName(asset.name);
   const source = hasMarkerBorder ? asset.innerCanvas : asset.fullCanvas;
   return {
     width: source.width,

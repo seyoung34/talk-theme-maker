@@ -3,10 +3,11 @@
 import { ArrowLeft, SendHorizontal, Menu, Phone, Plus, Search, Smile } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getResolvedColor, type BubbleEditState, type SlotCandidateSelections } from "@/components/project/projectModel";
-import { blobForThemeFile, blobForThemePreview, findBestFile, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
+import { blobForThemeFile, blobForThemePreview, findBestFile, getThemeFileSourceName, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { loadCachedBubbleAsset } from "@/lib/theme/preview/bubbleAssetCache";
 import { drawBubble, getAutoBubbleSize } from "@/lib/theme/preview/bubbleCanvas";
+import { isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleAsset, BubbleSlot, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
@@ -183,13 +184,14 @@ export function ChatroomPreview({
             nextAssets[slot.id] = await loadCachedBubbleAsset(`${themeFileCacheKey(file)}:${file.previewUrl ?? ""}:${bubbleSlot}`, async () => {
               const previewBlob = await blobForThemePreview(file);
               if (!previewBlob) throw new Error(`bubble preview source missing: ${file.path}`);
-              const previewAsset = await loadNinePatchBlob(previewBlob, file.previewName ?? file.name, bubbleSlot);
-              if (!file.previewUrl || !file.sourceUrl || !file.name.toLowerCase().endsWith(".9.png")) return previewAsset;
+              const sourceName = getThemeFileSourceName(file);
+              const previewAsset = await loadNinePatchBlob(previewBlob, file.previewName ?? sourceName, bubbleSlot);
+              if (!file.previewUrl || !file.sourceUrl || !isAndroidNinePatchSourceName(sourceName)) return previewAsset;
 
               try {
                 const sourceBlob = await blobForThemeFile(file);
                 if (!sourceBlob) return previewAsset;
-                const sourceAsset = await loadNinePatchBlob(sourceBlob, file.name, bubbleSlot);
+                const sourceAsset = await loadNinePatchBlob(sourceBlob, sourceName, bubbleSlot);
                 return { ...previewAsset, markers: mapMarkersToPreview(sourceAsset, previewAsset) };
               } catch {
                 // clean preview artwork만으로도 화면은 계속 표시한다.

@@ -498,6 +498,7 @@ function normalizeBubbleEdits(value: Partial<ThemeEditOverrides["bubbleEdits"]> 
     markers: value?.markers ?? {},
     insets: value?.insets ?? {},
     stretch: value?.stretch ?? {},
+    flipX: value?.flipX ?? {},
     designs: value?.designs ?? {},
   };
 }
@@ -554,8 +555,9 @@ function resolvePreviewBubbleShape(slots: ThemeAssetSlot[], role: ThemeResourceR
   const insets = bubbleEdits.insets[slot.id];
   const markers = bubbleEdits.markers[slot.id];
   const geometry = bubbleEdits.geometry[slot.id];
-  if (!geometry && !stretch && !insets && !markers) return undefined;
-  return { geometry, stretch, insets, markers };
+  const flipX = bubbleEdits.flipX?.[slot.id];
+  if (!geometry && !stretch && !insets && !markers && !flipX) return undefined;
+  return { geometry, stretch, insets, markers, flipX };
 }
 
 function resolvePreviewColor(

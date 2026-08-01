@@ -13,6 +13,8 @@ export type UserTemplateBubbleEdits = {
   markers: Partial<Record<string, Markers>>;
   insets: Partial<Record<string, Insets>>;
   stretch: Partial<Record<string, StretchPoint>>;
+  // 나중에 추가된 필드다. 이전에 저장된 레코드에는 없으므로 normalizer가 `{}`로 승격한다.
+  flipX?: Partial<Record<string, boolean>>;
 };
 
 export type UserTemplateRecord = {
@@ -89,6 +91,7 @@ function normalizeUserTemplateRecord(record: UserTemplateRecord): UserTemplateRe
       markers: record.bubbleEdits?.markers ?? {},
       insets: record.bubbleEdits?.insets ?? {},
       stretch: record.bubbleEdits?.stretch ?? {},
+      flipX: record.bubbleEdits?.flipX ?? {},
     },
     bubbleDesigns: record.bubbleDesigns ?? {},
     bubbleDecorationSources: normalizeDecorationSources(record.bubbleDecorationSources),

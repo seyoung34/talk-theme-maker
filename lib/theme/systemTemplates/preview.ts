@@ -26,10 +26,12 @@ export type TemplatePreviewVisual = {
   myBubbleStretch?: StretchPoint;
   myBubbleInsets?: Insets;
   myBubbleMarkers?: Markers;
+  myBubbleFlipX?: boolean;
   friendBubbleGeometry?: BubbleGeometry;
   friendBubbleStretch?: StretchPoint;
   friendBubbleInsets?: Insets;
   friendBubbleMarkers?: Markers;
+  friendBubbleFlipX?: boolean;
   profileImage?: string;
   // 채팅목록탭 헤더/리스트 미리보기용
   mainHeaderColor: string;
@@ -158,10 +160,12 @@ export function createSystemTemplatePreviewVisual({
     myBubbleStretch: summary.previewMetadata.bubbles?.myBubble?.stretch,
     myBubbleInsets: summary.previewMetadata.bubbles?.myBubble?.insets,
     myBubbleMarkers: summary.previewMetadata.bubbles?.myBubble?.markers,
+    myBubbleFlipX: summary.previewMetadata.bubbles?.myBubble?.flipX,
     friendBubbleGeometry: summary.previewMetadata.bubbles?.friendBubble?.geometry,
     friendBubbleStretch: summary.previewMetadata.bubbles?.friendBubble?.stretch,
     friendBubbleInsets: summary.previewMetadata.bubbles?.friendBubble?.insets,
     friendBubbleMarkers: summary.previewMetadata.bubbles?.friendBubble?.markers,
+    friendBubbleFlipX: summary.previewMetadata.bubbles?.friendBubble?.flipX,
     profileImage: resolveImage(slots, "profile_image_1", summary, templateId, template, signedUrls),
     mainHeaderColor: resolveColor(slots, "main_header_color", summary, templateId, template, template.defaults.mainHeader),
     mainHeaderForegroundColor: resolveColor(slots, "main_header_foreground_color", summary, templateId, template, template.defaults.mainTitle),

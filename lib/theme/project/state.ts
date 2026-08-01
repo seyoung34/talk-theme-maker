@@ -24,6 +24,15 @@ export type BubbleEditState = {
   markers?: Markers;
   insets?: Insets;
   stretch?: StretchPoint;
+  /**
+   * 이 슬롯에서만 적용하는 좌우반전.
+   *
+   * 선택한 파일(effective file)에 **추가로** 적용하는 delta다. `SlotUploadEntry.imageEdit.state.flipX`와
+   * 다르다 — 그쪽은 파일 바이트에 이미 구워진 upload 단위 metadata이고 하류는 다시 적용하지 않는다.
+   * 이 값은 프리뷰·썸네일·내보내기가 결과물을 만드는 마지막 경계에서 한 번만 적용한다.
+   * 파일이 아니라 슬롯에 붙기 때문에 같은 업로드를 슬롯마다 다른 방향으로 쓸 수 있다.
+   */
+  flipX?: boolean;
 };
 
 export type ThemeProjectState = {

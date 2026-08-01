@@ -1,4 +1,5 @@
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
+import { isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
 import type { ThemeResourceRole } from "@/lib/theme/types";
 
 
@@ -31,10 +32,19 @@ export function findBestFile(analysis: ThemeProjectAnalysis, role: ThemeResource
   );
 }
 
-export async function imageUrlForThemeFile(file: ThemeProjectFile, stripNinePatch = file.name.endsWith(".9.png")) {
+export function getThemeFileSourceName(file: ThemeProjectFile) {
+  return file.file?.name ?? file.sourceUrl ?? file.name;
+}
+
+export async function imageUrlForThemeFile(
+  file: ThemeProjectFile,
+  stripNinePatch = isAndroidNinePatchSourceName(getThemeFileSourceName(file)),
+) {
   const sourceUrl = file.previewUrl ?? file.sourceUrl;
-  const previewIsNinePatch = file.previewUrl ? file.previewName?.toLowerCase().endsWith(".9.png") : stripNinePatch;
-  if (file.file) return imageUrlForPreview(file.file, Boolean(previewIsNinePatch));
+  const previewIsNinePatch = file.previewUrl
+    ? isAndroidNinePatchSourceName(file.previewName ?? file.previewUrl)
+    : stripNinePatch;
+  if (file.file) return imageUrlForPreview(file.file, previewIsNinePatch);
   if (sourceUrl) {
     if (!previewIsNinePatch) return sourceUrl;
     return stripNinePatchUrl(sourceUrl);

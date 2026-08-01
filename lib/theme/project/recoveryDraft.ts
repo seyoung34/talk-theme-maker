@@ -45,6 +45,8 @@ export type EditorRecoveryDraft = {
     bubbleMarkers: Partial<Record<string, Markers>>;
     bubbleInsets: Partial<Record<string, Insets>>;
     bubbleStretch: Partial<Record<string, StretchPoint>>;
+    // 이 필드가 없는 기존 레코드는 반전이 없는 상태다. 복원 쪽에서 `{}`로 승격한다.
+    bubbleFlipX?: Partial<Record<string, boolean>>;
     bubbleDesigns: BubbleDesigns;
     bubbleDecorationSources: BubbleDecorationSources;
   };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getIosSourceCanvas, getPreviewContentRect, stretchPointToInsets } from "@/lib/theme/preview/bubbleCanvas";
+import { getIosSourceCanvas, getPreviewContentRect, mirrorContentRect, stretchPointToInsets } from "@/lib/theme/preview/bubbleCanvas";
 import { centeredBubbleGeometry } from "@/lib/theme/bubbleGeometry";
 import type { BubbleAsset, BubbleSlot } from "@/lib/theme/types";
 
@@ -79,5 +79,29 @@ describe("getPreviewContentRect", () => {
     const args = [asset, "ios", undefined, 12, 34, 260, 180] as const;
 
     expect(getPreviewContentRect(...args)).toEqual(getPreviewContentRect(...args));
+  });
+});
+
+describe("mirrorContentRect", () => {
+  const rect = { x: 45, y: 17, width: 340, height: 260 };
+
+  it("반전이 아니면 사각형을 그대로 돌려준다", () => {
+    expect(mirrorContentRect(rect, false, 5, 400)).toBe(rect);
+  });
+
+  it("말풍선 rect의 세로 중심축을 기준으로 좌우를 바꾼다", () => {
+    // 말풍선은 x=5에서 폭 400이므로 오른쪽 끝은 405. 왼쪽 여백 40 / 오른쪽 여백 20이 서로 바뀐다.
+    expect(mirrorContentRect(rect, true, 5, 400)).toEqual({ x: 25, y: 17, width: 340, height: 260 });
+  });
+
+  it("세로 값과 크기는 건드리지 않는다", () => {
+    const mirrored = mirrorContentRect(rect, true, 5, 400);
+    expect(mirrored.y).toBe(rect.y);
+    expect(mirrored.width).toBe(rect.width);
+    expect(mirrored.height).toBe(rect.height);
+  });
+
+  it("두 번 뒤집으면 원래 위치로 돌아온다", () => {
+    expect(mirrorContentRect(mirrorContentRect(rect, true, 5, 400), true, 5, 400)).toEqual(rect);
   });
 });

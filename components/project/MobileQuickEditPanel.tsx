@@ -61,6 +61,8 @@ type MobileQuickEditPanelProps = {
   onMarkersChange: (markers: Markers) => void;
   onInsetsChange: (insets: Insets) => void;
   onStretchChange: (stretch: StretchPoint) => void;
+  flipX?: boolean;
+  onFlipXChange: (next: boolean) => void;
   onOpenBubbleBuilder: () => void;
   onCopyBubbleToPair: (slot: ThemeAssetSlot) => void;
   onBubblePreviewChange?: (edit: BubbleEditState) => void;
@@ -318,6 +320,8 @@ function ImageControls({
   onMarkersChange,
   onInsetsChange,
   onStretchChange,
+  flipX,
+  onFlipXChange,
   onOpenBubbleBuilder,
   pairedBubbleSlot,
   onCopyBubbleToPair,
@@ -435,6 +439,8 @@ function ImageControls({
           markers={markers}
           insets={insets}
           stretch={stretch}
+          flipX={flipX}
+          onFlipXChange={onFlipXChange}
           onApply={({ editedFile, sourceFile, imageState, target, geometry, markers, insets, stretch }) => {
             if (editedFile) onEditedUpload(slot, editedFile, imageState, sourceFile, target);
             onGeometryChange(geometry);
