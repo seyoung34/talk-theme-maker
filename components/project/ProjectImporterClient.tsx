@@ -386,10 +386,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   );
   const {
     activeImageColorPalette,
+    chatImageColorPaletteError,
+    chatPalettePending,
     contrastWarnings,
     imageColorPaletteError,
     mainBackgroundFile,
     mainColorRecommendations,
+    mainPalettePending,
   } = useProjectAutoColors({
     activeTemplate,
     analysis,
@@ -860,7 +863,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const applyAutoColor = (slot: ThemeAssetSlot) => {
-    if (mainBackgroundFile && !activeImageColorPalette) return;
+    if (mainPalettePending || chatPalettePending) return;
     const color = mainColorRecommendations[slot.id];
     if (!color) return;
     setColors((current) => ({ ...current, [slot.id]: color }));
@@ -870,7 +873,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const applyAutoColorToAll = () => {
-    if (mainBackgroundFile && !activeImageColorPalette) return;
+    if (mainPalettePending || chatPalettePending) return;
     const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && mainColorRecommendations[slot.id] && (mainBackgroundFile || slot.role !== "main_background_color"));
     setColors((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, mainColorRecommendations[slot.id]])]));
     setCandidateSelections((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, autoMainPaletteCandidateId])]));
@@ -1142,12 +1145,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onColorChange={changeColor}
       onUnlinkColor={unlinkColor}
       imageColorPalette={activeImageColorPalette}
-      imageColorPaletteError={imageColorPaletteError}
+      imageColorPaletteError={selectedSlot?.autoColorRecipe === "chat-background-average" ? chatImageColorPaletteError : imageColorPaletteError}
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
-      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
-      canApplyAutoColorToAll={Boolean((!mainBackgroundFile || activeImageColorPalette) && Object.keys(mainColorRecommendations).length)}
+      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !mainPalettePending && !chatPalettePending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+      canApplyAutoColorToAll={Boolean(!mainPalettePending && !chatPalettePending && Object.keys(mainColorRecommendations).length)}
       onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
       onApplyAutoColorToAll={applyAutoColorToAll}
       onSelectCandidate={selectCandidate}
@@ -1192,7 +1195,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
-      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !mainPalettePending && !chatPalettePending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
       fileInputRefs={fileInputRefs}
       onUpload={uploadSlot}
       onEditedUpload={uploadEditedSlot}

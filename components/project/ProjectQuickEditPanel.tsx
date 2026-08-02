@@ -743,7 +743,7 @@ function ColorEditor({
               </div>
               <div className="inline-flex overflow-hidden rounded-lg shadow-sm">
                 <button type="button" className="min-h-9 rounded-l-lg border border-r-0 border-[#bfdbfe] bg-white px-3 text-xs font-bold text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45" disabled={!canApplyAutoColorToAll} onClick={onApplyAutoColorToAll}>모든 슬롯 자동 맞춤</button>
-                <InfoTooltip label="메인 색상 모두 자동 맞춤 안내" content="친구·채팅 목록·더보기·하단 탭의 자동 맞춤 대상 색상을 현재 팔레트로 다시 계산합니다. 직접 수정한 색상도 추천값으로 바뀝니다. 배경 이미지가 없으면 현재 배경색을 기준으로 계산합니다." triggerClassName="min-h-9 rounded-r-lg border border-[#bfdbfe] bg-white px-2 text-[#1d4ed8] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff]" />
+                <InfoTooltip label="메인 색상 모두 자동 맞춤 안내" content="친구·채팅 목록·더보기·하단 탭에 더해 채팅방 배경까지, 자동 맞춤 대상 색상을 모두 다시 계산합니다. 채팅방 배경은 채팅방 이미지를, 나머지는 메인 배경 이미지를 기준으로 씁니다. 직접 수정한 색상도 추천값으로 바뀝니다. 배경 이미지가 없으면 현재 배경색을 기준으로 계산합니다." triggerClassName="min-h-9 rounded-r-lg border border-[#bfdbfe] bg-white px-2 text-[#1d4ed8] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff]" />
               </div>
             </div>
           </div>
@@ -827,6 +827,7 @@ function InfoTooltip({ label, content, triggerClassName }: { label: string; cont
 
 function getAutoColorReason(slot: ThemeAssetSlot) {
   if (slot.autoColorRecipe === "background-average") return "배경 이미지 평균색 기준으로";
+  if (slot.autoColorRecipe === "chat-background-average") return "채팅방 배경 이미지 평균색 기준으로";
   if (slot.autoColorRecipe === "header-top") return "배경 이미지 상단색 또는 기본 배경색 기준으로";
   if (slot.autoColorRecipe === "tab-bottom") return "배경 이미지 하단색 또는 기본 배경색 기준으로";
   if (slot.autoColorRecipe?.startsWith("foreground")) return "적용 배경과 읽기 쉬운 대비로";
@@ -838,7 +839,9 @@ function getAutoColorReason(slot: ThemeAssetSlot) {
 function getAutoColorExplanation(slot: ThemeAssetSlot) {
   switch (slot.autoColorRecipe) {
     case "background-average":
-      return "배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 이미지가 없으면 사용자가 입력한 배경색을 유지합니다.";
+      return "배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 이미지가 없으면 사용자가 입력한 배경색을 유지합니다."
+    case "chat-background-average":
+      return "채팅방 배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 메인 배경과 다른 이미지를 쓰므로 기준도 채팅방 이미지입니다. 이미지가 없으면 현재 채팅방 배경색을 유지합니다.";
     case "header-top":
       return "배경 이미지가 있으면 상단 15% 영역의 대표색을 사용하고, 이미지가 없으면 현재 기본 배경색을 사용합니다.";
     case "tab-bottom":

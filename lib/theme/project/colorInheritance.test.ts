@@ -56,10 +56,24 @@ describe("파생 색상 규칙", () => {
   });
 
   it("눌림 변환은 색을 배경 쪽으로 민다", () => {
-    // 밝은 색은 어둡게, 어두운 색은 밝게 — 원래 recipe의 판정을 그대로 옮겼다.
+    // 밝은 색은 어둡게, 어두운 색은 밝게.
     expect(applyDerivedColorTransform("#FFFFFF", "pressed-foreground")).not.toBe("#FFFFFF");
     expect(applyDerivedColorTransform("#111111", "pressed-foreground")).not.toBe("#111111");
     expect(applyDerivedColorTransform("#FF0000", "same")).toBe("#FF0000");
+  });
+
+  /**
+   * 방향 판정이 `=== "#FFFFFF"`이던 시절, 흰색이 아닌 밝은 색은 전부 "더 밝게"로 갔다.
+   * 상한에 걸려 눌림 상태가 원래 색과 사실상 같아진다. 예전에는 seed가 배경에서 계산돼
+   * 이런 값이 잘 안 나왔지만, 이제는 사용자가 고른 글자색이 그대로 들어온다.
+   */
+  it("흰색에 가까운 색도 눌림이 구분된다", () => {
+    for (const base of ["#FEFEFE", "#F8F8F8", "#EEEEEE"]) {
+      const pressed = applyDerivedColorTransform(base, "pressed-foreground");
+      expect(pressed).not.toBe(base);
+      // 밝은 쪽이 아니라 어두운 쪽으로 밀려야 실제로 눈에 띈다.
+      expect(themeColorContrast(pressed, "#FFFFFF")).toBeGreaterThan(themeColorContrast(base, "#FFFFFF"));
+    }
   });
 });
 

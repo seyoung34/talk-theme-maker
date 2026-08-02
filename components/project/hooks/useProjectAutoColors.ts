@@ -35,8 +35,8 @@ export function useProjectAutoColors({
 }: UseProjectAutoColorsOptions) {
   const mainBackgroundFile = useMemo(() => findBestFile(analysis, "main_background"), [analysis]);
   const chatBackgroundFile = useMemo(() => findBestFile(analysis, "chat_background"), [analysis]);
-  const { palette: activeImageColorPalette, error: imageColorPaletteError } = useThemeImagePalette(mainBackgroundFile);
-  const { palette: activeChatImagePalette } = useThemeImagePalette(chatBackgroundFile);
+  const { palette: activeImageColorPalette, error: imageColorPaletteError, pending: mainPalettePending } = useThemeImagePalette(mainBackgroundFile);
+  const { palette: activeChatImagePalette, error: chatImageColorPaletteError, pending: chatPalettePending } = useThemeImagePalette(chatBackgroundFile);
   const mainBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "main_background_color"), [slots]);
   const chatBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "chat_background_color"), [slots]);
   const resolvedChatBackground = chatBackgroundColorSlot
@@ -74,10 +74,13 @@ export function useProjectAutoColors({
   );
 
   useEffect(() => {
-    // 팔레트가 아직 안 나온 이미지가 있으면 기다린다. 먼저 계산된 값으로 한 번 쓰고 나중에
-    // 덮으면 화면이 두 번 튀고, 그 사이 값이 자동 저장에 남는다.
-    if (mainBackgroundFile && !activeImageColorPalette) return;
-    if (chatBackgroundFile && !activeChatImagePalette) return;
+    // 분석 **중인** 이미지가 있으면 기다린다. 먼저 계산된 값으로 한 번 쓰고 나중에 덮으면
+    // 화면이 두 번 튀고, 그 사이 값이 자동 저장에 남는다.
+    //
+    // "팔레트가 없다"로 판정하면 안 된다. 분석이 실패한 이미지는 팔레트가 영영 null이라
+    // 자동 맞춤 전체가 멈춰 버린다 — 채팅방 이미지 하나가 깨지면 메인 색상까지 갱신이
+    // 끊겼다. 실패는 대기가 아니므로 그대로 진행하고, 레시피가 현재 배경색으로 폴백한다.
+    if (mainPalettePending || chatPalettePending) return;
     const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && candidateSelections[slot.id] === autoMainPaletteCandidateId && mainColorRecommendations[slot.id]);
     if (!linkedSlots.length) return;
     setColors((current) => {
@@ -86,7 +89,7 @@ export function useProjectAutoColors({
       for (const slot of linkedSlots) next[slot.id] = mainColorRecommendations[slot.id];
       return next;
     });
-  }, [activeChatImagePalette, activeImageColorPalette, candidateSelections, chatBackgroundFile, mainBackgroundFile, mainColorRecommendations, setColors, slots]);
+  }, [candidateSelections, chatPalettePending, mainColorRecommendations, mainPalettePending, setColors, slots]);
 
   useEffect(() => {
     if (mainBackgroundFile || !mainBackgroundColorSlot) return;
@@ -101,10 +104,13 @@ export function useProjectAutoColors({
 
   return {
     activeImageColorPalette,
+    chatImageColorPaletteError,
+    chatPalettePending,
     contrastWarnings,
     imageColorPaletteError,
     mainBackgroundFile,
     mainColorRecommendations,
+    mainPalettePending,
   };
 }
 
@@ -151,5 +157,11 @@ function useThemeImagePalette(file: ThemeProjectFile | undefined) {
     return () => { active = false; };
   }, [file, paletteKey]);
 
-  return { palette: paletteKey && sourceKey === paletteKey ? palette : null, error };
+  // `pending`은 "이 파일의 분석이 아직 안 끝났다"만 뜻한다. 실패는 끝난 것이다 — 실패를
+  // 대기로 세면 호출부가 영원히 기다린다.
+  return {
+    palette: paletteKey && sourceKey === paletteKey ? palette : null,
+    error,
+    pending: Boolean(paletteKey) && sourceKey !== paletteKey && !error,
+  };
 }

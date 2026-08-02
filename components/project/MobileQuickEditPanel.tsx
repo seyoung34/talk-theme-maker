@@ -302,16 +302,21 @@ function ColorControls({
       ) : null}
 
       {derivedLink ? (
-        <button
-          type="button"
-          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-3 text-[13px] font-bold text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-45"
-          disabled={derivedLink.linked}
-          onClick={() => onUnlinkColor(slot)}
-        >
-          <Sliders size={15} strokeWidth={2.2} aria-hidden="true" />
-          {derivedLink.linked ? "자동 색상 적용됨" : "추천 색상 자동 적용"}
-          {derivedLink.color ? <span className="ml-1 border rounded size-4 border-black/10" style={{ backgroundColor: themeColorToCss(derivedLink.color) }} aria-hidden="true" /> : null}
-        </button>
+        // 데스크톱 카드는 기준 슬롯 이름과 계산 방식을 함께 보여 준다. 버튼 문구만 있으면
+        // 무엇을 기준으로 맞추는지 알 수 없어 같은 설명을 캡션으로 붙인다.
+        <div className="grid gap-1">
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-3 text-[13px] font-bold text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={derivedLink.linked}
+            onClick={() => onUnlinkColor(slot)}
+          >
+            <Sliders size={15} strokeWidth={2.2} aria-hidden="true" />
+            {derivedLink.linked ? "자동 색상 적용됨" : "추천 색상 자동 적용"}
+            {derivedLink.color ? <span className="ml-1 border rounded size-4 border-black/10" style={{ backgroundColor: themeColorToCss(derivedLink.color) }} aria-hidden="true" /> : null}
+          </button>
+          <p className="px-1 text-[11px] font-medium leading-4 text-[#64748b]">{derivedLink.description}</p>
+        </div>
       ) : null}
 
       {canApplyAutoColor ? (

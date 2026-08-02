@@ -79,7 +79,11 @@ export function applyDerivedColorTransform(baseColor: string, transform: Derived
     case "same":
       return baseColor;
     case "pressed-foreground":
-      return adjustThemeColor(baseColor, baseColor.toUpperCase() === "#FFFFFF" ? -0.12 : 0.12);
+      // 밝기 판정으로 방향을 정한다. 원래 recipe는 `=== "#FFFFFF"`만 봤는데, 그때는 seed가
+      // 배경에서 계산된 값이라 흰색이 아닌 밝은 색이 잘 나오지 않았다. 이제 사용자가 고른
+      // 글자색이 그대로 들어오므로 `#FEFEFE` 같은 값이 실제로 온다 — 그런 색을 더 밝히면
+      // 상한에 걸려 눌림 상태가 원래 색과 구분되지 않는다.
+      return adjustThemeColor(baseColor, readableThemeForeground(baseColor) === "#FFFFFF" ? 0.12 : -0.12);
     case "pressed-accent":
       return adjustThemeColor(baseColor, readableThemeForeground(baseColor) === "#FFFFFF" ? -0.12 : 0.12);
     case "surface-alpha":
