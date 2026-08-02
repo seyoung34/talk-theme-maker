@@ -33,18 +33,41 @@ const canvasBottomInset = inputBarHeight + 44;
 const bubbleLeftInset = 44;
 const bubbleRightInset = 44;
 
+/**
+ * 프리뷰 대화 샘플.
+ *
+ * 길이를 일부러 들쭉날쭉하게 잡았다. 말풍선은 글자 수에 따라 늘어나는데, 모든 문장이 비슷한
+ * 길이면 **사용자가 확인할 수 있는 상태가 하나뿐**이 된다. 특히 9-slice 편집(stretch 선과 글자
+ * 여백)의 실수는 짧은 말풍선에서는 거의 드러나지 않고 여러 줄로 늘어날 때 보인다.
+ *
+ * 실제 대화도 "ㅇㅇ" 같은 초단문과 한 문단짜리가 섞이므로, 편차를 주면 자연스러움이 떨어지는
+ * 게 아니라 오히려 올라간다.
+ *
+ * 규칙 두 가지를 지킨다.
+ *
+ * 1. **네 슬롯(me_1/me_2/you_1/you_2) 각각이 보통 길이로 최소 한 번 나온다.** 극단만 있으면
+ *    "내가 만든 말풍선이 예쁜가"를 판단할 수 없다. 극단은 확인용이지 감상용이 아니다.
+ * 2. **내 쪽과 상대 쪽 모두 여러 줄로 늘어나는 예가 있다.** 한쪽만 있으면 반대쪽 말풍선의
+ *    세로 확장을 못 본다.
+ *
+ * `_2`는 같은 사람이 이어서 보낸 연속형이므로 바로 앞 메시지와 발신자가 같아야 한다.
+ */
 const sampleMessages = [
   { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "오늘 날씨 완전 좋다! 산책하기 딱이야 ☺️" },
-  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "그러니까! 나도 지금 잠깐 밖에 나와있어 ㅎㅎ" },
-  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "오 어디야? 나도 갈까?" },
-  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "공원 앞에 새로 생긴 카페! 커피가 진짜 맛있어" },
+  // 초단문: 이미지 고유 크기가 글자보다 커서 말풍선 최소 폭이 결정되는 경우.
+  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "어디야?" },
+  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "공원 앞에 새로 생긴 카페! 커피가 진짜 맛있어" },
+  // 긴 문장: 자동 줄바꿈과 세로 확장. stretch 선을 잘못 잡으면 여기서 티가 난다.
+  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "아 맞다, 저번에 말한 전시회 이번 주말까지래! 시간 괜찮으면 같이 갈래?" },
 
-  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "완전 좋다... 나도 이따 합류해도 돼?" },
-  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "저녁엔 뭐 먹을지 정했어?" },
-  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "당연하지! 자리 맡아둘게" },
-  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "아직 못 정했는데, 오랜만에 떡볶이 어때? 저번에 갔던 그 집" },
-  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "완전 좋아! 그럼 6시에 거기서 보자" },
-  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "콜! 이따 봐 ㅎㅎ" },
+  // 이모지만: 글자 폭 계산과 줄높이가 문자와 다르게 잡히는 경우.
+  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "😍" },
+  { role: "bubble_you_2" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "완전 좋다... 나도 이따 합류해도 돼?" },
+  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "ㅇㅇ" },
+  { role: "bubble_me_2" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "당연하지! 자리 맡아둘게" },
+  // 줄바꿈 포함 + 상대 쪽 세로 확장. 명시적 개행은 자동 줄바꿈과 다른 경로를 탄다.
+  { role: "bubble_you_1" as ThemeResourceRole, slot: "you" as BubbleSlot, mine: false, author: "수아", text: "저녁 뭐 먹을지도 정해야 하는데\n떡볶이랑 파스타 중에 골라줘, 나는 둘 다 좋아" },
+  { role: "bubble_me_1" as ThemeResourceRole, slot: "me" as BubbleSlot, mine: true, author: "나", text: "떡볶이! 6시에 거기서 보자 ㅎㅎ" },
 ];
 
 export function ChatroomPreview({
