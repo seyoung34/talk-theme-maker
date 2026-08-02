@@ -714,7 +714,8 @@
     "fileName": "chatroomBubbleSend01Selected.png",
     "path": "Images/chatroomBubbleSend01Selected.png",
     "required": false,
-    "note": "내가 보낸 첫 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 기본 말풍선과 같은 geometry를 유지하세요.",
+    "note": "내가 보낸 첫 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 비워 두면 기본 말풍선과 같은 그림이 쓰입니다.",
+    "optionLevel": "advanced",
     "cssSelector": "MessageCellStyle-Send",
     "cssProperty": "-ios-selected-background-image"
   },
@@ -730,7 +731,8 @@
     "fileName": "chatroomBubbleSend02Selected.png",
     "path": "Images/chatroomBubbleSend02Selected.png",
     "required": false,
-    "note": "내가 보낸 연속 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 기본 그룹 말풍선과 같은 geometry를 유지하세요.",
+    "note": "내가 보낸 연속 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 비워 두면 기본 그룹 말풍선과 같은 그림이 쓰입니다.",
+    "optionLevel": "advanced",
     "cssSelector": "MessageCellStyle-Send",
     "cssProperty": "-ios-group-selected-background-image"
   },
@@ -746,7 +748,8 @@
     "fileName": "chatroomBubbleReceive01Selected.png",
     "path": "Images/chatroomBubbleReceive01Selected.png",
     "required": false,
-    "note": "상대가 보낸 첫 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 기본 말풍선과 같은 geometry를 유지하세요.",
+    "note": "상대가 보낸 첫 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 비워 두면 기본 말풍선과 같은 그림이 쓰입니다.",
+    "optionLevel": "advanced",
     "cssSelector": "MessageCellStyle-Receive",
     "cssProperty": "-ios-selected-background-image"
   },
@@ -762,7 +765,8 @@
     "fileName": "chatroomBubbleReceive02Selected.png",
     "path": "Images/chatroomBubbleReceive02Selected.png",
     "required": false,
-    "note": "상대가 보낸 연속 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 기본 그룹 말풍선과 같은 geometry를 유지하세요.",
+    "note": "상대가 보낸 연속 메시지를 누르는 동안 표시되는 말풍선 이미지입니다. 비워 두면 기본 그룹 말풍선과 같은 그림이 쓰입니다.",
+    "optionLevel": "advanced",
     "cssSelector": "MessageCellStyle-Receive",
     "cssProperty": "-ios-group-selected-background-image"
   },
@@ -794,6 +798,7 @@
     "label": "내 말풍선 선택 텍스트",
     "required": false,
     "note": "내 말풍선을 누르는 동안 적용되는 메시지 글자색입니다. 기본 텍스트와 충분히 구분되는지 확인하세요.",
+    "optionLevel": "advanced",
     "defaultColor": {
       "basic": "#111111"
     },
@@ -828,6 +833,7 @@
     "label": "상대 말풍선 선택 텍스트",
     "required": false,
     "note": "상대 말풍선을 누르는 동안 적용되는 메시지 글자색입니다. 기본 텍스트와 충분히 구분되는지 확인하세요.",
+    "optionLevel": "advanced",
     "defaultColor": {
       "basic": "#111111"
     },
