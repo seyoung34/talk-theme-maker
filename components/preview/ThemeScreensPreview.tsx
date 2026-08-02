@@ -1,6 +1,6 @@
 "use client";
 
-import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
+import { applyPlatformColorAlpha, applySplitAlpha, getPreviewColorRole, getSplitAlphaSourceRole } from "@/lib/theme/project/platformColor";
 import { Bell, CalendarCheck2, CalendarClock, ChevronRight, Cloud, Gamepad2, Gift, IdCard, ListPlus, MessageCirclePlus, PackageOpen, PawPrint, Percent, Radio, Scan, Search, Settings, Share2, Smile, Store, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getResolvedColor, type SlotCandidateSelections } from "@/components/project/projectModel";
@@ -76,7 +76,19 @@ export function ThemeScreensPreview({
   const profileUrls = useMemo(() => getProfilePreviewUrls(urls), [urls]);
 
   const preview = useMemo(() => {
-    const getColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(applyPlatformColorAlpha(getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback, role, platform));
+    const resolve = (role: ThemeResourceRole) => getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots);
+    /**
+     * 프리뷰 색을 내보내기와 같은 조합으로 만든다.
+     *
+     * 플랫폼마다 세 가지가 다를 수 있다 — 읽는 슬롯(iOS에 없는 role은 대체 role), 색상 코드에
+     * 알파를 담을 수 있는지, 투명도를 별도 슬롯이 들고 있는지. 셋 다 `platformColor`가 답한다.
+     */
+    const getColor = (role: ThemeResourceRole, fallback: string) => {
+      const readRole = getPreviewColorRole(role, platform);
+      const value = applyPlatformColorAlpha(resolve(readRole) ?? fallback, readRole, platform);
+      const alphaRole = getSplitAlphaSourceRole(readRole, platform);
+      return themeColorToCss(alphaRole ? applySplitAlpha(value, resolve(alphaRole)) : value);
+    };
     const mainBackgroundColor = getColor("main_background_color", template.defaults.mainBackground);
     const androidHeaderBackgroundColor = getColor("main_header_color", template.defaults.mainHeader);
 

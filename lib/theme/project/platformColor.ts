@@ -1,4 +1,4 @@
-import { themeColorRgbHex } from "@/lib/theme/color";
+import { themeColorRgbHex, withThemeColorAlpha } from "@/lib/theme/color";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 /**
@@ -32,6 +32,46 @@ export const iosAlphaCapableRoles: readonly ThemeResourceRole[] = [
   "chat_button_background_color",
 ];
 
+/**
+ * iOS에서 **투명도를 다른 슬롯이 들고 있는** 색상 role.
+ *
+ * `-ios-selected-background-alpha`는 색상 슬롯의 알파가 아니라 전용 알파 슬롯에서 나간다.
+ * 그 슬롯은 기본값 `0.05`를 갖고 있어 `getResolvedColor`가 **항상** 값을 돌려주므로, 색상
+ * 쪽에 실린 알파는 iOS 내보내기에서 언제나 덮인다. 프리뷰가 색상 쪽 알파를 그대로 그리면
+ * 연동 규칙이 만든 18%가 화면에 보이지만 결과물은 5%가 된다.
+ *
+ * 색상과 알파가 따로 나가는 것 자체는 iOS 형식이 그렇다. 프리뷰가 그 조합을 재현해야 한다.
+ *
+ * `-ios-normal-background-alpha` 등 나머지 알파 프로퍼티는 전용 슬롯 없이 색상 코드의
+ * 알파를 그대로 쪼개 쓰므로 여기 넣지 않는다.
+ */
+const iosSplitAlphaRoles: Partial<Record<ThemeResourceRole, ThemeResourceRole>> = {
+  main_body_cell_pressed_color: "main_selected_background_alpha",
+};
+
+/** 이 role의 투명도를 대신 들고 있는 슬롯 role. 없으면 `undefined`. */
+export function getSplitAlphaSourceRole(role: ThemeResourceRole, platform: ThemePlatform) {
+  return platform === "ios" ? iosSplitAlphaRoles[role] : undefined;
+}
+
+/**
+ * iOS에서만 쓰는 파생 색상 대체.
+ *
+ * `main_description_pressed_color`에는 iOS 슬롯이 없다. 그래서 편집기에도 노출되지 않고,
+ * 내보내기는 `-ios-description-highlighted-text-color`에 이름 눌림 색을 쓴다. 프리뷰만
+ * `main_description_color` 폴백을 그려 화면과 결과물이 어긋났다.
+ *
+ * 슬롯이 없는 이상 사용자가 고를 수 있는 값이 아니므로, 프리뷰가 내보내기 쪽에 맞춘다.
+ */
+const iosPreviewRoleAliases: Partial<Record<ThemeResourceRole, ThemeResourceRole>> = {
+  main_description_pressed_color: "main_title_pressed_color",
+};
+
+/** 이 플랫폼에서 프리뷰가 대신 읽어야 할 role. 없으면 원래 role. */
+export function getPreviewColorRole(role: ThemeResourceRole, platform: ThemePlatform) {
+  return (platform === "ios" ? iosPreviewRoleAliases[role] : undefined) ?? role;
+}
+
 /** 이 슬롯의 색상이 그 플랫폼에서 투명도를 표현할 수 있는가. */
 export function supportsColorAlpha(role: ThemeResourceRole, platform: ThemePlatform) {
   if (platform === "android") return true;
@@ -48,4 +88,17 @@ export function supportsColorAlpha(role: ThemeResourceRole, platform: ThemePlatf
 export function applyPlatformColorAlpha(value: string, role: ThemeResourceRole, platform: ThemePlatform) {
   if (supportsColorAlpha(role, platform)) return value;
   return themeColorRgbHex(value, value);
+}
+
+/**
+ * 전용 알파 슬롯의 값을 색상에 합성한다.
+ *
+ * 알파 슬롯은 `"0.05"` 같은 숫자 문자열을 담는다. 숫자로 읽히지 않으면 손대지 않는다 —
+ * 슬롯이 비었거나 값이 깨졌을 때 색을 통째로 잃는 것보다 낫다.
+ */
+export function applySplitAlpha(value: string, alphaValue: string | undefined) {
+  if (!alphaValue) return value;
+  const alpha = Number(alphaValue);
+  if (!Number.isFinite(alpha)) return value;
+  return withThemeColorAlpha(value, Math.min(Math.max(alpha, 0), 1));
 }
