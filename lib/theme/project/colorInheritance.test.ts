@@ -62,6 +62,41 @@ describe("파생 색상 규칙", () => {
   });
 });
 
+describe("읽지 않음 숫자 — 채팅방 배경 대비 보정", () => {
+  const unread = bySlotRole("chat_unread_count_color");
+  const chatBackground = bySlotRole("chat_background_color");
+
+  it("기준 슬롯은 채팅방 배경이다", () => {
+    // 말풍선 바깥에 그려지므로 대비 상대는 채팅방 배경이다. 자동 맞춤은 메인 배경 기준이라
+    // 이 슬롯에 맞지 않는다.
+    expect(getColorFallbackRole("chat_unread_count_color")).toBe("chat_background_color");
+    expect(getDerivedColorRule("chat_unread_count_color")?.transform).toBe("contrast-on-base");
+  });
+
+  it("배경색을 따라가는 게 아니라 그 위에서 읽히도록 보정한다", () => {
+    // 배경을 그대로 쓰면 배경과 같은 색이 되어 아예 보이지 않는다.
+    const onDark = resolve(unread, { [chatBackground.id]: "#101010" });
+    expect(onDark).not.toBe("#101010");
+    expect(onDark).toBeDefined();
+  });
+
+  it("배경이 밝을 때와 어두울 때 값이 달라진다", () => {
+    expect(resolve(unread, { [chatBackground.id]: "#101010" })).not.toBe(resolve(unread, { [chatBackground.id]: "#FFFFFF" }));
+  });
+
+  it("이미 충분히 읽히면 강조색을 그대로 둔다", () => {
+    // 대비가 넉넉하면 ensureThemeColorContrast가 값을 건드리지 않는다. 기존 테마의
+    // 색감이 이유 없이 바뀌지 않게 하는 성질이다.
+    const accent = resolve(unread, {});
+    expect(accent).toBeDefined();
+    expect(resolve(unread, { [chatBackground.id]: accent === "#FFFFFF" ? "#000000" : "#FFFFFF" })).toBeDefined();
+  });
+
+  it("직접 지정하면 보정하지 않는다", () => {
+    expect(resolve(unread, { [unread.id]: "#FF0000", [chatBackground.id]: "#FF0000" })).toBe("#FF0000");
+  });
+});
+
 describe("초기 상태에서의 연동", () => {
   it("새 프로젝트의 기본 선택은 명시적 지정이 아니다", () => {
     // 이 단언이 이 파일의 핵심이다. 기본 후보 id를 명시 선택으로 보면 연동이 죽는다.

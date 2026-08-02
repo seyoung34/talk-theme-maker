@@ -225,9 +225,9 @@ function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | u
  * 연동 중일 때도 후보를 남겨 현재 상태(선택됨)를 보여 준다.
  */
 function buildLinkedColorCandidate(slot: ThemeAssetSlot, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[]): SlotCandidate[] {
-  const baseRole = getDerivedColorRule(slot.role)?.baseRole;
-  if (!baseRole) return [];
-  const baseSlot = allSlots.find((candidate) => candidate.role === baseRole && candidate.platform === slot.platform);
+  const rule = getDerivedColorRule(slot.role);
+  if (!rule) return [];
+  const baseSlot = allSlots.find((candidate) => candidate.role === rule.baseRole && candidate.platform === slot.platform);
   if (!baseSlot) return [];
 
   // 선택 표시는 `getInheritedColorSourceSlot`과 같은 기준을 봐야 한다. 둘이 어긋나면
@@ -235,8 +235,10 @@ function buildLinkedColorCandidate(slot: ThemeAssetSlot, colors: SlotColors, sel
   const linked = Boolean(getInheritedColorSourceSlot(slot, colors, selections, templateId, template, allSlots));
   return [{
     id: linkedColorCandidateId,
-    title: "기본 색상 따라가기",
-    status: `${baseSlot.label}과 같은 색`,
+    // 대비 보정형은 기준 색을 "따라가는" 게 아니라 그 위에서 읽히도록 맞추는 것이라
+    // 문구가 달라야 한다. 같은 문구를 쓰면 사용자가 배경색이 그대로 온다고 오해한다.
+    title: rule.transform === "contrast-on-base" ? "배경에 맞춰 자동" : "기본 색상 따라가기",
+    status: rule.transform === "contrast-on-base" ? `${baseSlot.label} 위에서 읽히게` : `${baseSlot.label}과 같은 색`,
     active: linked,
     selected: linked,
     source: "palette" as const,

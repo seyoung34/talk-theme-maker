@@ -533,7 +533,9 @@ export function getResolvedColor(
   if (inheritedSource) {
     const baseColor = getResolvedColor(inheritedSource, colors, selections, templateId, template, allSlots);
     const rule = getDerivedColorRule(slot.role);
-    if (baseColor && rule) return applyDerivedColorTransform(baseColor, rule.transform);
+    // 자기 기본값을 함께 넘긴다. 대비 보정형(읽지 않음 숫자)은 기준 색을 배경으로 삼고
+    // 자기 색을 그 위에서 읽히게 미는 방식이라 seed가 자기 쪽이다.
+    if (baseColor && rule) return applyDerivedColorTransform(baseColor, rule.transform, getDefaultColor(slot, templateId, template));
   }
 
   return getSelectedCandidate(slot, selections, templateId, template)?.colorValue ?? getDefaultColor(slot, templateId, template);

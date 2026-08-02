@@ -1,4 +1,4 @@
-import { adjustThemeColor, readableThemeForeground, withThemeColorAlpha } from "@/lib/theme/color";
+import { adjustThemeColor, ensureThemeColorContrast, readableThemeForeground, withThemeColorAlpha } from "@/lib/theme/color";
 import type { ThemeResourceRole } from "@/lib/theme/types";
 
 /**
@@ -15,8 +15,12 @@ import type { ThemeResourceRole } from "@/lib/theme/types";
  *
  * 변환은 기존 `autoColorRecipe`의 수식을 그대로 옮긴 것이다. seed만 배경에서 기준 슬롯으로
  * 바뀌었을 뿐이라 누를 때의 시각 피드백(12% 밝기 이동)은 유지된다.
+ *
+ * `contrast-on-base`만 성격이 다르다. 나머지는 "기준 색을 가져와 변형한다"인데, 이건 **기준
+ * 색을 배경으로 삼아 자기 색을 읽히게 보정한다**. 읽지 않음 숫자가 그렇다 — 채팅방 배경색을
+ * 따라가는 게 아니라 그 위에서 보여야 한다. seed가 기준 슬롯이 아니라 자기 기본값이다.
  */
-export type DerivedColorTransform = "pressed-foreground" | "pressed-accent" | "surface-alpha" | "same";
+export type DerivedColorTransform = "pressed-foreground" | "pressed-accent" | "surface-alpha" | "contrast-on-base" | "same";
 
 export type DerivedColorRule = {
   baseRole: ThemeResourceRole;
@@ -46,6 +50,9 @@ const derivedColorRules: Partial<Record<ThemeResourceRole, DerivedColorRule>> = 
   // recipe가 없던 슬롯들. 내보내기 폴백이 원래부터 "기준 색 그대로"였다.
   chat_bubble_me_selected_color: { baseRole: "chat_bubble_me_color", transform: "same" },
   chat_bubble_you_selected_color: { baseRole: "chat_bubble_you_color", transform: "same" },
+  // 읽지 않음 숫자는 말풍선 바깥, 채팅방 배경 위에 그려진다. 강조색을 유지하되 그 배경에서
+  // 읽히도록 보정한다. 자동 맞춤은 **메인** 배경 기준이라 이 슬롯에는 맞지 않는다.
+  chat_unread_count_color: { baseRole: "chat_background_color", transform: "contrast-on-base" },
 };
 
 export function getDerivedColorRule(role: ThemeResourceRole): DerivedColorRule | undefined {
@@ -62,8 +69,12 @@ export function getColorFallbackRole(role: ThemeResourceRole): ThemeResourceRole
  *
  * 눌림 계열은 색을 배경 쪽으로 12% 밀어 대비를 살짝 낮춘다. 밝은 색은 어둡게, 어두운 색은
  * 밝게 — 원래 recipe가 쓰던 판정을 그대로 옮겼다.
+ *
+ * `ownColor`는 `contrast-on-base`에서만 쓴다. 그 경우 `baseColor`는 따라갈 색이 아니라
+ * **깔려 있는 배경**이고, 자기 색을 그 위에서 읽히도록 최소 대비까지만 민다. 이미 충분히
+ * 읽히면 `ensureThemeColorContrast`가 값을 그대로 돌려주므로 기존 테마는 바뀌지 않는다.
  */
-export function applyDerivedColorTransform(baseColor: string, transform: DerivedColorTransform) {
+export function applyDerivedColorTransform(baseColor: string, transform: DerivedColorTransform, ownColor?: string) {
   switch (transform) {
     case "same":
       return baseColor;
@@ -73,5 +84,15 @@ export function applyDerivedColorTransform(baseColor: string, transform: Derived
       return adjustThemeColor(baseColor, readableThemeForeground(baseColor) === "#FFFFFF" ? -0.12 : 0.12);
     case "surface-alpha":
       return withThemeColorAlpha(baseColor, 0.18);
+    case "contrast-on-base":
+      return ownColor ? ensureThemeColorContrast(ownColor, baseColor, unreadCountMinimumContrast) : baseColor;
   }
 }
+
+/**
+ * 읽지 않음 숫자에 요구하는 최소 대비.
+ *
+ * 본문 글자(4.5)가 아니라 큰 글자·아이콘 기준(3)을 쓴다. 이 숫자는 작지만 굵고, 4.5를 강제하면
+ * 강조색이 거의 흑백으로 밀려 테마의 색감이 사라진다.
+ */
+const unreadCountMinimumContrast = 3;
