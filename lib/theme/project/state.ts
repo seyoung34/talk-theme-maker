@@ -313,6 +313,36 @@ export function getSharedBubbleUploadPeers(slot: ThemeAssetSlot | undefined, all
  */
 export type ResolvedSlotUpload = { ownerSlotId: string; entry: SlotUploadEntry };
 
+export type ResolvedSharedSlotEntry<T> = { ownerSlotId: string; entry: T };
+
+/**
+ * 슬롯의 선택 ID를 자기 bucket과 공유 말풍선 peer bucket에서 찾는다.
+ *
+ * 로컬 `SlotUploads`뿐 아니라 파일이 hydrate되기 전의 원격 ref도 같은 owner 규칙으로
+ * 해석해야 하므로 entry의 최소 계약인 `id`만 요구한다. 자기 bucket을 항상 먼저 보고,
+ * peer는 `sharedBubbleUploadRoles`의 고정 순서를 따른다.
+ */
+export function getSelectedSharedSlotEntry<T extends { id: string }>(
+  slot: ThemeAssetSlot | undefined,
+  entriesBySlot: Record<string, T[] | undefined>,
+  selections: SlotCandidateSelections,
+  allSlots: ThemeAssetSlot[],
+  canUsePeerEntry: (entry: T) => boolean = () => true,
+): ResolvedSharedSlotEntry<T> | undefined {
+  if (!slot || isImageSlotDisabled(slot, selections)) return undefined;
+  const selectedId = selections[slot.id];
+  if (!selectedId) return undefined;
+
+  const ownerSlots = [slot, ...getSharedBubbleUploadPeers(slot, allSlots)];
+  for (const ownerSlot of ownerSlots) {
+    const entry = (entriesBySlot[ownerSlot.id] ?? []).find((candidate) => (
+      candidate.id === selectedId && (ownerSlot.id === slot.id || canUsePeerEntry(candidate))
+    ));
+    if (entry) return { ownerSlotId: ownerSlot.id, entry };
+  }
+  return undefined;
+}
+
 /**
  * 슬롯이 고를 수 있는 업로드 전체. 말풍선이면 같은 플랫폼 peer의 업로드까지 포함한다.
  *
@@ -351,11 +381,13 @@ export function getSelectedUploadRef(
   selections: SlotCandidateSelections,
   allSlots: ThemeAssetSlot[],
 ): ResolvedSlotUpload | undefined {
-  if (!slot) return undefined;
-  if (isImageSlotDisabled(slot, selections)) return undefined;
-  const selectedId = selections[slot.id];
-  if (!selectedId) return undefined;
-  return getSharedSlotUploadEntries(slot, uploads, allSlots).find((resolved) => resolved.entry.id === selectedId);
+  return getSelectedSharedSlotEntry(
+    slot,
+    uploads,
+    selections,
+    allSlots,
+    (entry) => (entry.source ?? "user") !== "admin",
+  );
 }
 
 /** 공유 풀 안에서 이 업로드를 현재 선택으로 쓰고 있는 슬롯들. */

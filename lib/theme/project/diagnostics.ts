@@ -1,4 +1,4 @@
-import { canDisableImageSlot, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { canDisableImageSlot, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { getSlotExportMapping } from "@/lib/theme/project/export";
 import type { ThemeProjectAnalysis, ThemeProjectFile, ThemeProjectResource } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate } from "@/lib/theme/templates";
@@ -35,14 +35,14 @@ export function createThemeProjectAnalysis(
 
     const imageDisabled = isImageSlotDisabled(slot, selections);
     let sourceSlot = slot;
-    let upload = imageDisabled ? undefined : (uploads[slot.id] ?? []).find((entry) => entry.id === selections[slot.id])?.file;
+    let upload = imageDisabled ? undefined : getSelectedUpload(slot, uploads, selections, slots)?.file;
     let sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template, slots);
 
     // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯의 소스를 그대로 사용한다.
     const inheritedSource = imageDisabled ? undefined : getInheritedSourceSlot(slot, uploads, selections, template.id, template, slots);
     if (inheritedSource) {
       sourceSlot = inheritedSource;
-      upload = (uploads[inheritedSource.id] ?? []).find((entry) => entry.id === selections[inheritedSource.id])?.file;
+      upload = getSelectedUpload(inheritedSource, uploads, selections, slots)?.file;
       sourceUrl = getResolvedAssetUrl(inheritedSource, uploads, selections, template.id, template, slots);
     }
 

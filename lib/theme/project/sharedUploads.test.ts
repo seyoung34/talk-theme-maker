@@ -3,6 +3,7 @@ import {
   findUploadReferenceSlots,
   getSelectedUpload,
   getSelectedUploadRef,
+  getSelectedSharedSlotEntry,
   getSharedBubbleUploadPeers,
   getSharedSlotUploadEntries,
   planUploadRemoval,
@@ -128,6 +129,15 @@ describe("getSelectedUploadRef", () => {
 
   it("선택이 없으면 undefined다", () => {
     expect(getSelectedUploadRef(me1, { [me1.id]: [upload("a")] }, {}, slots)).toBeUndefined();
+  });
+});
+
+describe("getSelectedSharedSlotEntry", () => {
+  it("hydrate 전 원격 ref도 peer owner bucket에서 찾는다", () => {
+    const refs = { [me2.id]: [{ id: "shared", storagePath: "system-templates/shared.png" }] };
+    const resolved = getSelectedSharedSlotEntry(me1, refs, { [me1.id]: "shared" }, slots);
+
+    expect(resolved).toEqual({ ownerSlotId: me2.id, entry: refs[me2.id][0] });
   });
 });
 

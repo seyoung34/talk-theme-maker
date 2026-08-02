@@ -93,4 +93,27 @@ describe("basic Android bubble asset separation", () => {
     expect(me1?.previewUrl).toBe("/template-assets/basic/android/theme_chatroom_bubble_me_01_image.png");
     expect(me1?.previewName).toBe("theme_chatroom_bubble_me_01_image.png");
   });
+
+  it("peer 슬롯이 소유한 공유 업로드를 편집기 분석 파일로 전달한다", () => {
+    const me1Slot = slots.find((slot) => slot.role === "bubble_me_1")!;
+    const me2Slot = slots.find((slot) => slot.role === "bubble_me_2")!;
+    const sharedFile = new File(["shared"], "shared-bubble.png", { type: "image/png" });
+    const selections = {
+      ...getInitialSlotCandidateSelections(slots, template.id, template),
+      [me1Slot.id]: "shared-upload",
+    };
+    const analysis = createThemeProjectAnalysis(
+      template,
+      "android",
+      slots,
+      { [me2Slot.id]: [{ id: "shared-upload", file: sharedFile }] },
+      {},
+      selections,
+    );
+    const me1 = analysis.files.find((file) => file.name === me1Slot.fileName);
+
+    expect(me1?.file).toBe(sharedFile);
+    expect(me1?.sourceUrl).toBeUndefined();
+    expect(analysis.diagnostics).not.toContainEqual(expect.objectContaining({ code: "missing-asset", slotId: me1Slot.id }));
+  });
 });

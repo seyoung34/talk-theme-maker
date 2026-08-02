@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { getCorePreviewImageUrls, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
+import { createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
+import type { SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
+import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
 
 function visual(overrides: Partial<TemplatePreviewVisual> = {}): TemplatePreviewVisual {
   return {
@@ -59,5 +61,44 @@ describe("getCorePreviewImageUrls", () => {
   it("같은 URL은 한 번만 돌려준다", () => {
     const urls = getCorePreviewImageUrls(visual({ myBubbleImage: "bubble.png", friendBubbleImage: "bubble.png" }));
     expect(urls).toEqual(["bubble.png"]);
+  });
+});
+
+describe("createSystemTemplatePreviewVisual", () => {
+  it("peer 슬롯이 소유한 공유 업로드 ref를 말풍선 미리보기에 사용한다", () => {
+    const template = getThemeTemplate("basic");
+    const slots = getThemeSlots("android");
+    const me1 = slots.find((slot) => slot.role === "bubble_me_1")!;
+    const me2 = slots.find((slot) => slot.role === "bubble_me_2")!;
+    const storagePath = "system-templates/shared-bubble.png";
+    const summary: SystemTemplateSummary = {
+      id: "template-id",
+      title: "공유 말풍선",
+      baseTemplateId: "basic",
+      platform: "android",
+      status: "published",
+      visibility: "public",
+      pricingType: "free",
+      tags: [],
+      createdAt: 1,
+      updatedAt: 1,
+      uploadCount: 1,
+      colorCount: 0,
+      colors: {},
+      candidateSelections: { [me1.id]: "shared-upload" },
+      uploadRefs: {
+        [me2.id]: [{ id: "shared-upload", fileName: "bubble.png", mimeType: "image/png", size: 1, storagePath }],
+      },
+      previewMetadata: {},
+    };
+
+    const result = createSystemTemplatePreviewVisual({
+      template,
+      platform: "android",
+      summary,
+      signedUrls: { [storagePath]: "https://example.com/shared-bubble.png" },
+    });
+
+    expect(result.myBubbleImage).toBe("https://example.com/shared-bubble.png");
   });
 });

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName } from "@/lib/theme/remoteAssets";
-import { getResolvedColor } from "@/lib/theme/project/state";
+import { getResolvedColor, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
@@ -576,9 +576,8 @@ function resolvePreviewStoragePath(slots: ThemeAssetSlot[], role: ThemeResourceR
   const slot = slots.find((item) => item.role === role);
   if (!slot) return undefined;
   const entries = uploadRefs[slot.id] ?? [];
-  const selectedId = candidateSelections[slot.id];
-  const selected = selectedId ? entries.find((entry) => entry.id === selectedId) : undefined;
-  return selected?.storagePath ?? entries[0]?.storagePath;
+  const selected = getSelectedSharedSlotEntry(slot, uploadRefs, candidateSelections, slots);
+  return selected?.entry.storagePath ?? entries[0]?.storagePath;
 }
 
 function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | undefined): SystemTemplatePreviewMetadata {
