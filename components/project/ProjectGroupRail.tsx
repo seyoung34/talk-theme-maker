@@ -34,6 +34,7 @@ export function ProjectGroupRail({
   activeGroup,
   onSelectGroup,
   slots,
+  allSlots,
   selectedSlotId,
   uploads,
   colors,
@@ -47,7 +48,16 @@ export function ProjectGroupRail({
   groups: ThemeSlotGroup[];
   activeGroup: ThemeSlotGroup;
   onSelectGroup: (group: ThemeSlotGroup) => void;
+  /** 이 그룹에서 **그릴** 슬롯. 섹션·그룹으로 이미 걸러져 있다. */
   slots: ThemeAssetSlot[];
+  /**
+   * 값을 **해석할 때** 쓰는 전체 슬롯 목록.
+   *
+   * 연동(색상 파생·이미지 상속)은 기준 슬롯을 이 배열에서 찾는다. 그리는 목록을 그대로
+   * 넘기면 기준 슬롯이 다른 그룹에 있을 때 조용히 연동이 꺼져 기본값이 표시된다.
+   * 읽지 않음 숫자(말풍선 그룹)와 채팅방 배경색(배경 그룹)이 실제로 그랬다.
+   */
+  allSlots: ThemeAssetSlot[];
   selectedSlotId?: string;
   uploads: SlotUploads;
   colors: SlotColors;
@@ -96,8 +106,8 @@ export function ProjectGroupRail({
             key={slot.id}
             slot={slot}
             selected={selectedSlotId === slot.id}
-            status={getSlotDisplayStatus(slot, uploads, colors, selections, templateId, template, slots)}
-            thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, slots, uploadPreviewUrls)}
+            status={getSlotDisplayStatus(slot, uploads, colors, selections, templateId, template, allSlots)}
+            thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, allSlots, uploadPreviewUrls)}
             warning={contrastWarnings[slot.id]}
             onSelect={() => onSelectSlot(slot)}
           />
@@ -115,7 +125,7 @@ export function ProjectGroupRail({
               <span className="rounded-full bg-[#e2e8f0] px-1.5 py-0.5 text-[10px] text-[#334155]">{modifiedAdvancedCount}/{advancedSlots.length}</span>
               <ChevronDown size={14} className={`transition-transform ${advancedOpen ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
-            {advancedOpen ? advancedSlots.map((slot) => <SlotRailItem key={slot.id} slot={slot} selected={selectedSlotId === slot.id} status={getSlotDisplayStatus(slot, uploads, colors, selections, templateId, template, slots)} thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, slots, uploadPreviewUrls)} warning={contrastWarnings[slot.id]} onSelect={() => onSelectSlot(slot)} />) : null}
+            {advancedOpen ? advancedSlots.map((slot) => <SlotRailItem key={slot.id} slot={slot} selected={selectedSlotId === slot.id} status={getSlotDisplayStatus(slot, uploads, colors, selections, templateId, template, allSlots)} thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, allSlots, uploadPreviewUrls)} warning={contrastWarnings[slot.id]} onSelect={() => onSelectSlot(slot)} />) : null}
           </div>
         ) : null}
       </div>

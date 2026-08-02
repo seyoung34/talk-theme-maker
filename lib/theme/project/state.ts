@@ -561,7 +561,7 @@ export function getCompletion(
   };
 }
 
-export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[] = []) {
+export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[]) {
   if (slot.kind === "color") {
     if (selections[slot.id] === autoMainPaletteCandidateId) {
       const color = colors[slot.id] ?? getDefaultColor(slot, templateId, template);
