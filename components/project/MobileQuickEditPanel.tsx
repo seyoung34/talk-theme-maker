@@ -24,6 +24,7 @@ import {
 } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { supportsColorAlpha } from "@/lib/theme/project/platformColor";
 import { getBackgroundSourcePair, getImageEditTarget } from "@/components/project/projectImporterHelpers";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
@@ -222,6 +223,7 @@ function ColorControls({
   selections,
   templateId,
   template,
+  platform,
   slots,
   candidates,
   recommendedColor,
@@ -237,6 +239,9 @@ function ColorControls({
   const value = getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template);
   const hex = themeColorRgbHex(value);
   const alpha = themeColorAlphaPercent(value);
+  // iOS CSS는 색상 코드에 알파를 담지 못한다. 표현할 자리가 없는 슬롯에 슬라이더를 보여 주면
+  // 사용자가 조작한 투명도가 내보내기에서 조용히 사라진다.
+  const alphaSupported = supportsColorAlpha(slot.role, platform);
   const swatchCandidates = candidates
     .filter((candidate) => candidate.colorValue)
     .sort((left, right) => Number(right.source === "default") - Number(left.source === "default"));
@@ -270,7 +275,7 @@ function ColorControls({
         />
       </div>
 
-      <div className="flex items-center gap-2">
+      {alphaSupported ? <div className="flex items-center gap-2">
         <span className="w-12 shrink-0 text-[11px] font-bold text-[#64748b]">투명도</span>
         <input
           type="range"
@@ -283,7 +288,7 @@ function ColorControls({
           aria-label="투명도"
         />
         <span className="w-9 shrink-0 text-right text-[11px] font-bold text-[#334155]">{Math.round(alpha)}%</span>
-      </div>
+      </div> : null}
 
       {swatchCandidates.length > 0 ? (
         <div className={candidateGridExpanded ? "grid grid-cols-6 gap-2 min-[430px]:grid-cols-8" : "flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}>

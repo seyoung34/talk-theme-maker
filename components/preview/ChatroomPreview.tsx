@@ -1,5 +1,6 @@
 "use client";
 
+import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
 import { ArrowLeft, SendHorizontal, Menu, Phone, Plus, Search, Smile } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getResolvedColor, type BubbleEditState, type SlotCandidateSelections } from "@/components/project/projectModel";
@@ -119,7 +120,9 @@ export function ChatroomPreview({
   const [contentCanvasHeight, setContentCanvasHeight] = useState(minScrollCanvasHeight);
   const [headerForeground, setHeaderForeground] = useState("#ffffff");
 
-  const previewColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback);
+  // 내보내기와 같은 규칙으로 투명도를 떨어뜨린다. 프리뷰에서 본 반투명이 결과물에 없으면
+  // 화면과 결과가 갈린다.
+  const previewColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(applyPlatformColorAlpha(getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback, role, platform));
   const isIos = platform === "ios";
   const inputBackground = previewColor("chat_input_background_color", template.defaults.chatInputBackground);
   const sendButtonColor = previewColor("chat_send_button_color", template.defaults.chatSendButton);

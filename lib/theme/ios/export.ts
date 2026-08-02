@@ -1,6 +1,7 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { centeredBubbleGeometry, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency, themeVersionName } from "@/lib/theme/exportRequest";
+import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -323,7 +324,20 @@ function buildIosThemeCss({
   sourceDimensionsBySlotId: Record<string, IosSourceDimensions>;
 }) {
   const slotByRole = Object.fromEntries(slots.map((slot) => [slot.role, slot])) as Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
-  const color = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback;
+  /**
+   * 색상 값을 해석한다. 알파 짝이 없는 role이면 여기서 투명도를 떨어뜨린다.
+   *
+   * iOS CSS는 색상 코드에 알파를 담지 못하고 별도 `-alpha` 프로퍼티로만 받는데, 그 짝은
+   * 다섯 곳뿐이다(`iosAlphaCapableRoles`). 나머지를 8자리로 내보내면 참조 테마에 없는 형식이
+   * 나가고, 편집기·프리뷰에서 본 반투명이 결과물에서 재현되지 않는다.
+   */
+  const color = (role: ThemeResourceRole, fallback: string) => {
+    const resolved = getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback;
+    return applyPlatformColorAlpha(resolved, role, "ios");
+  };
+  /** 알파 짝이 있는 role. 색상과 알파를 두 프로퍼티로 나눠 쓴다. */
+  const alphaPair = (role: ThemeResourceRole, fallback: string) =>
+    splitAlphaColor(getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback);
 
   const mainText = color("main_title_color", template.defaults.mainTitle);
   const headerText = color("main_header_foreground_color", mainText);
@@ -332,7 +346,12 @@ function buildIosThemeCss({
   const mainHighlighted = color("main_title_pressed_color", mainText);
   const mainParagraphHighlighted = color("tab_paragraph_pressed_color", mainParagraph);
   const tabText = color("tab_text_color", mainParagraph);
-  const chatButtonBackground = splitAlphaColor(color("chat_button_background_color", "#0FFFFFFF"));
+  const chatButtonBackground = alphaPair("chat_button_background_color", "#0FFFFFFF");
+  // 참조 테마의 셀 배경은 알파 0(투명)이다. Android의 theme_body_cell_color와 같은 슬롯을 쓴다.
+  const cellBackground = alphaPair("main_body_cell_color", "#00FFFFFF");
+  const cellPressedBackground = alphaPair("main_body_cell_pressed_color", mainText);
+  const sectionBorder = alphaPair("main_body_cell_border_color", mainText);
+  const sectionTitle = alphaPair("main_section_title_color", mainText);
 
   return [
     "/*",
@@ -387,10 +406,10 @@ function buildIosThemeCss({
     cssLine("-ios-description-highlighted-text-color", mainHighlighted),
     cssLine("-ios-paragraph-text-color", mainParagraph),
     cssLine("-ios-paragraph-highlighted-text-color", mainParagraphHighlighted),
-    cssLine("-ios-normal-background-color", color("main_background_color", template.defaults.mainBackground)),
-    cssLine("-ios-normal-background-alpha", "0.0"),
-    cssLine("-ios-selected-background-color", color("main_body_cell_pressed_color", mainText)),
-    cssLine("-ios-selected-background-alpha", color("main_selected_background_alpha", "0.05")),
+    cssLine("-ios-normal-background-color", cellBackground.color),
+    cssLine("-ios-normal-background-alpha", cellBackground.alpha),
+    cssLine("-ios-selected-background-color", cellPressedBackground.color),
+    cssLine("-ios-selected-background-alpha", color("main_selected_background_alpha", cellPressedBackground.alpha)),
     "}",
     "",
     "MainViewStyle-Secondary",
@@ -400,10 +419,10 @@ function buildIosThemeCss({
     "",
     "SectionTitleStyle-Main",
     "{",
-    cssLine("border-color", color("main_body_cell_border_color", mainText)),
-    cssLine("border-alpha", color("main_body_cell_border_alpha", "0.18")),
-    cssLine("-ios-text-color", color("main_section_title_color", mainText)),
-    cssLine("-ios-text-alpha", "1.0"),
+    cssLine("border-color", sectionBorder.color),
+    cssLine("border-alpha", color("main_body_cell_border_alpha", sectionBorder.alpha)),
+    cssLine("-ios-text-color", sectionTitle.color),
+    cssLine("-ios-text-alpha", sectionTitle.alpha),
     "}",
     "",
     "FeatureStyle-Primary",

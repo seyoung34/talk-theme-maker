@@ -8,6 +8,7 @@ import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import { getCandidateCardWidthClass, getCandidateLayoutKind, type CandidateLayoutKind } from "@/components/project/candidateLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
+import { supportsColorAlpha } from "@/lib/theme/project/platformColor";
 import { buildSlotCandidates, getResolvedColor, getSharedSlotUploadEntries, isRemovableUploadCandidate, linkedColorCandidateId, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
@@ -240,7 +241,7 @@ export function ProjectQuickEditPanel({
 
       <section className="grid min-h-0 content-start gap-4 rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
         {slot.kind === "color" ? (
-          <ColorEditor slot={slot} value={getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} />
+          <ColorEditor slot={slot} platform={platform} value={getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} />
         ) : (
           <>
             <input
@@ -649,6 +650,7 @@ function CandidatePreview({ candidate, layoutKind }: { candidate: SlotCandidate;
 
 function ColorEditor({
   slot,
+  platform,
   value,
   onChange,
   imageColorPalette,
@@ -662,6 +664,7 @@ function ColorEditor({
   onApplyAutoColorToAll,
 }: {
   slot: ThemeAssetSlot;
+  platform: ThemePlatform;
   value: string;
   onChange: (slot: ThemeAssetSlot, value: string) => void;
   imageColorPalette: ImageColorPalette | null;
@@ -677,6 +680,9 @@ function ColorEditor({
   const [draft, setDraft] = useState(value);
   const colorId = useId();
   const alphaId = useId();
+  // iOS CSS는 색상 코드에 알파를 담지 못한다. 표현할 자리가 없는 슬롯에 슬라이더를 보여 주면
+  // 사용자가 조작한 투명도가 내보내기에서 조용히 사라진다.
+  const alphaSupported = supportsColorAlpha(slot.role, platform);
   const normalizedDraft = normalizeThemeColor(draft);
   const effectiveColor = normalizedDraft ?? normalizeThemeColor(value) ?? "#000000";
 
@@ -742,10 +748,10 @@ function ColorEditor({
           />
         </div>
         {!normalizedDraft ? <p id={`${colorId}-error`} className="text-[11px] font-semibold text-[#b91c1c]" role="alert">#RRGGBB 또는 Android #AARRGGBB 형식으로 입력해 주세요.</p> : null}
-        <div className="grid gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 py-3 sm:grid-cols-[minmax(0,1fr)_96px] sm:items-end">
+        {alphaSupported ? <div className="grid gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 py-3 sm:grid-cols-[minmax(0,1fr)_96px] sm:items-end">
           <label htmlFor={alphaId} className="grid gap-2 text-[11px] font-bold text-[#475569]"><span className="flex items-center justify-between"><span>투명도</span><span>{themeColorAlphaPercent(effectiveColor)}%</span></span><input id={alphaId} type="range" min="0" max="100" value={themeColorAlphaPercent(effectiveColor)} className="w-full accent-[#2563eb]" onChange={(event) => commit(setThemeColorAlpha(effectiveColor, Number(event.currentTarget.value)))} /></label>
           <div className="relative"><input aria-label={`${slot.label} 투명도 퍼센트`} type="number" min="0" max="100" value={themeColorAlphaPercent(effectiveColor)} className="h-10 w-full rounded-lg border border-[#d1d5db] bg-white pl-3 pr-8 text-right text-sm font-bold" onChange={(event) => commit(setThemeColorAlpha(effectiveColor, Number(event.currentTarget.value)))} /><span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#64748b]">%</span></div>
-        </div>
+        </div> : null}
         <ColorContextPreview slot={slot} value={effectiveColor} />
         {contrastWarning ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">

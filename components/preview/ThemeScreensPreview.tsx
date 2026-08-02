@@ -1,5 +1,6 @@
 "use client";
 
+import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
 import { Bell, CalendarCheck2, CalendarClock, ChevronRight, Cloud, Gamepad2, Gift, IdCard, ListPlus, MessageCirclePlus, PackageOpen, PawPrint, Percent, Radio, Scan, Search, Settings, Share2, Smile, Store, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getResolvedColor, type SlotCandidateSelections } from "@/components/project/projectModel";
@@ -75,7 +76,7 @@ export function ThemeScreensPreview({
   const profileUrls = useMemo(() => getProfilePreviewUrls(urls), [urls]);
 
   const preview = useMemo(() => {
-    const getColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback);
+    const getColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(applyPlatformColorAlpha(getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback, role, platform));
     const mainBackgroundColor = getColor("main_background_color", template.defaults.mainBackground);
     const androidHeaderBackgroundColor = getColor("main_header_color", template.defaults.mainHeader);
 
