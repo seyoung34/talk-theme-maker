@@ -257,10 +257,26 @@ function buildPaletteCandidates(
   const currentColor = getResolvedColor(activeSlot, colors, selections, templateId, template, allSlots);
   const map = new Map<string, { color: string; count: number }>();
 
+  /**
+   * 이 슬롯이 그 위에서 읽혀야 하는 배경색은 후보에서 뺀다.
+   *
+   * 팔레트는 테마에서 쓰이는 색을 모아 보여 준다. 그래서 읽지 않음 숫자를 편집할 때 채팅방
+   * 배경색이 스와치로 떴고, 그걸 고르면 배경과 완전히 같은 색이 되어 글자가 사라진다.
+   * 실제로 그렇게 눌러 "배경을 바꿔도 색이 안 변한다"는 신고가 나왔다 — 직접 지정이라
+   * 연동까지 함께 꺼진 상태였다. 고를 수 없게 하는 편이 경고보다 낫다.
+   */
+  const surfaceRule = getDerivedColorRule(activeSlot.role);
+  const surfaceSlot = surfaceRule?.transform === "contrast-on-base"
+    ? allSlots.find((slot) => slot.role === surfaceRule.baseRole && slot.platform === activeSlot.platform)
+    : undefined;
+  const surfaceColor = surfaceSlot ? getResolvedColor(surfaceSlot, colors, selections, templateId, template, allSlots) : undefined;
+  const excluded = surfaceColor ? normalizeColor(surfaceColor) : undefined;
+
   for (const slot of allSlots) {
     if (slot.kind !== "color") continue;
     const color = getResolvedColor(slot, colors, selections, templateId, template, allSlots);
     if (!color) continue;
+    if (excluded && normalizeColor(color) === excluded) continue;
 
     const key = normalizeColor(color);
     const item = map.get(key);
