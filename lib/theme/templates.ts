@@ -35,7 +35,9 @@ export type ThemeAutoColorRecipe =
   | "accent"
   | "accent-pressed"
   | "accent-surface"
-  | "accent-surface-pressed";
+  | "accent-surface-pressed"
+  // 채팅방 배경은 메인 배경과 다른 이미지를 쓴다. 그 이미지의 평균색으로 맞춘다.
+  | "chat-background-average";
 
 export type ThemeSectionDefinition = {
   id: ThemeSection;

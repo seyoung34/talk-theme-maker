@@ -946,6 +946,7 @@
     "label": "채팅방 배경색",
     "required": true,
     "note": "채팅방 기본 배경색",
+    "autoColorRecipe": "chat-background-average",
     "colorKey": "theme_chatroom_background_color",
     "defaultColor": {
       "basic": "#b8f2f7"

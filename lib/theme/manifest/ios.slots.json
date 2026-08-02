@@ -613,6 +613,7 @@
     "label": "채팅방 배경색",
     "required": true,
     "note": "채팅방 배경 이미지가 없거나 투명한 영역에 표시되는 색상입니다. 말풍선과 충분히 구분되는 색을 선택하세요.",
+    "autoColorRecipe": "chat-background-average",
     "defaultColor": {
       "basic": "#b8f2f7"
     },
