@@ -9,7 +9,7 @@ import { getCandidateCardWidthClass, getCandidateLayoutKind, type CandidateLayou
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import { supportsColorAlpha } from "@/lib/theme/project/platformColor";
-import { buildSlotCandidates, getResolvedColor, getSharedSlotUploadEntries, isRemovableUploadCandidate, linkedColorCandidateId, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { buildSlotCandidates, getResolvedColor, getSharedSlotUploadEntries, isRemovableUploadCandidate, getDerivedColorLink, disabledImageCandidateId, type DerivedColorLink, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
@@ -217,11 +217,6 @@ export function ProjectQuickEditPanel({
         isOpen={candidateOpen}
         onToggle={onToggleCandidates}
         onApplyCandidate={(candidate) => {
-          // "기본 색상 따라가기"는 색을 정하는 게 아니라 직접 지정을 해제하는 동작이다.
-          if (candidate.id === linkedColorCandidateId) {
-            onUnlinkColor(slot);
-            return;
-          }
           if (slot.kind === "color" && candidate.source === "palette" && candidate.colorValue) {
             onColorChange(slot, candidate.colorValue);
             return;
@@ -241,7 +236,7 @@ export function ProjectQuickEditPanel({
 
       <section className="grid min-h-0 content-start gap-4 rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
         {slot.kind === "color" ? (
-          <ColorEditor slot={slot} platform={platform} value={getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} />
+          <ColorEditor slot={slot} platform={platform} value={getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} derivedLink={getDerivedColorLink(slot, colors, selections, templateId, template, slots)} onRestoreDerivedLink={() => onUnlinkColor(slot)} />
         ) : (
           <>
             <input
@@ -662,6 +657,8 @@ function ColorEditor({
   canApplyAutoColorToAll,
   onApplyAutoColor,
   onApplyAutoColorToAll,
+  derivedLink,
+  onRestoreDerivedLink,
 }: {
   slot: ThemeAssetSlot;
   platform: ThemePlatform;
@@ -676,6 +673,8 @@ function ColorEditor({
   canApplyAutoColorToAll: boolean;
   onApplyAutoColor: () => void;
   onApplyAutoColorToAll: () => void;
+  derivedLink?: DerivedColorLink;
+  onRestoreDerivedLink: () => void;
 }) {
   const [draft, setDraft] = useState(value);
   const colorId = useId();
@@ -697,6 +696,33 @@ function ColorEditor({
   return (
     <Tooltip.Provider delayDuration={260} skipDelayDuration={100}>
       <div className="grid gap-4 rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
+        {/*
+          기준 슬롯 연동. 배경에서 파생되는 슬롯의 "역할별 자동 맞춤"과 개념이 같으므로
+          카드도 같은 것을 쓴다. 다른 점은 두 가지뿐이다 — 기준이 배경이 아니라 다른 슬롯이고,
+          되돌리기는 값을 새로 쓰는 게 아니라 직접 지정을 지우는 동작이다.
+          `autoColorRecipe`와 파생 규칙을 동시에 갖는 슬롯은 없다.
+        */}
+        {derivedLink ? (
+          <div className="grid gap-3 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] p-3">
+            <div className="flex items-start gap-2">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white text-[#2563eb]"><Link2 size={16} aria-hidden="true" /></span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-[#1e3a8a]">역할별 자동 맞춤</p>
+                  <InfoTooltip label={`${slot.label} 자동 맞춤 기준`} content={`${derivedLink.description} ${derivedLink.baseLabel}을 바꾸면 이 색도 함께 갱신됩니다.`} />
+                </div>
+                <p className="mt-1 text-[11px] font-medium leading-5 text-[#475569]">{derivedLink.linked ? `${derivedLink.description} 변경 사항을 계속 자동 반영합니다.` : `현재는 직접 설정한 색상을 사용합니다. ${derivedLink.baseLabel} 기준으로 다시 맞출 수 있습니다.`}</p>
+              </div>
+            </div>
+            {derivedLink.color ? <div className="flex items-center gap-3 rounded-lg border border-white/80 bg-white p-2.5 shadow-sm"><ColorSwatch value={derivedLink.color} className="size-9 rounded-lg" /><div className="min-w-0"><p className="text-[10px] font-bold text-[#64748b]">현재 추천 색상</p><p className="mt-0.5 font-mono text-xs font-bold text-[#0f172a]">{derivedLink.color.toUpperCase()}</p></div></div> : null}
+            <div className="flex flex-wrap justify-center gap-4">
+              <div className="inline-flex overflow-hidden rounded-lg shadow-sm">
+                <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-l-lg bg-[#2563eb] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-45" disabled={derivedLink.linked} onClick={onRestoreDerivedLink}><RefreshCw size={13} aria-hidden="true" />현재 슬롯 색상 적용</button>
+                <InfoTooltip label="기준 색 연동 안내" content={`직접 지정을 해제하고 ${derivedLink.baseLabel} 기준 자동 계산으로 되돌립니다. 이후 기준 색이 바뀌면 이 슬롯도 함께 갱신되며, 다른 슬롯은 변경하지 않습니다.`} triggerClassName="min-h-9 rounded-r-lg border-l border-white/30 bg-[#2563eb] px-2 text-white hover:bg-[#1d4ed8] focus-visible:bg-[#1d4ed8]" />
+              </div>
+            </div>
+          </div>
+        ) : null}
         {slot.autoColorRecipe ? (
           <div className="grid gap-3 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] p-3">
             <div className="flex items-start gap-2">

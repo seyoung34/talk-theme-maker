@@ -15,7 +15,7 @@ import {
   getSelectedUpload,
   getSharedSlotUploadEntries,
   isRemovableUploadCandidate,
-  linkedColorCandidateId,
+  getDerivedColorLink,
   type SlotCandidate,
   type SlotCandidateSelections,
   type SlotColors,
@@ -89,10 +89,6 @@ export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
 
   const applyCandidate = (candidate: SlotCandidate) => {
     // "기본 색상 따라가기"는 색을 정하는 게 아니라 직접 지정을 해제하는 동작이다.
-    if (candidate.id === linkedColorCandidateId) {
-      props.onUnlinkColor(slot);
-      return;
-    }
     if (slot.kind === "color" && candidate.source === "palette" && candidate.colorValue) {
       props.onColorChange(slot, candidate.colorValue);
       return;
@@ -245,9 +241,8 @@ function ColorControls({
   const swatchCandidates = candidates
     .filter((candidate) => candidate.colorValue)
     .sort((left, right) => Number(right.source === "default") - Number(left.source === "default"));
-  // 연동 복귀 후보는 색이 아니라 "직접 지정 해제"라 colorValue가 없다. 스와치 목록이
-  // colorValue로 거르므로 따로 꺼내 별도 버튼으로 보여 준다.
-  const linkedCandidate = candidates.find((candidate) => candidate.id === linkedColorCandidateId);
+  // 기준 슬롯 연동. 배경 파생 슬롯의 자동 맞춤 버튼과 같은 개념이라 같은 UI로 그린다.
+  const derivedLink = getDerivedColorLink(slot, colors, selections, templateId, template, slots);
   const colorInputId = useId();
 
   return (
@@ -306,17 +301,16 @@ function ColorControls({
         </div>
       ) : null}
 
-      {linkedCandidate ? (
+      {derivedLink ? (
         <button
           type="button"
-          aria-pressed={linkedCandidate.selected}
-          className={`inline-flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3 text-[13px] font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${linkedCandidate.selected
-            ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]"
-            : "border-[#e2e8f0] bg-white text-[#475569] hover:bg-[#f8fafc]"}`}
+          className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-3 text-[13px] font-bold text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-45"
+          disabled={derivedLink.linked}
           onClick={() => onUnlinkColor(slot)}
         >
-          <span>{linkedCandidate.title}</span>
-          <span className="text-[11px] font-semibold text-[#94a3b8]">{linkedCandidate.status}</span>
+          <Sliders size={15} strokeWidth={2.2} aria-hidden="true" />
+          {derivedLink.linked ? "자동 색상 적용됨" : "추천 색상 자동 적용"}
+          {derivedLink.color ? <span className="ml-1 border rounded size-4 border-black/10" style={{ backgroundColor: themeColorToCss(derivedLink.color) }} aria-hidden="true" /> : null}
         </button>
       ) : null}
 
