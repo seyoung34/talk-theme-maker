@@ -8,6 +8,7 @@ import {
   slotStatusLabel,
 } from "@/lib/theme/project/state";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
+import { themeColorContrast } from "@/lib/theme/color";
 
 /**
  * 눌림·선택 색상의 기준 색 연동.
@@ -87,9 +88,38 @@ describe("읽지 않음 숫자 — 채팅방 배경 대비 보정", () => {
   it("이미 충분히 읽히면 강조색을 그대로 둔다", () => {
     // 대비가 넉넉하면 ensureThemeColorContrast가 값을 건드리지 않는다. 기존 테마의
     // 색감이 이유 없이 바뀌지 않게 하는 성질이다.
-    const accent = resolve(unread, {});
-    expect(accent).toBeDefined();
-    expect(resolve(unread, { [chatBackground.id]: accent === "#FFFFFF" ? "#000000" : "#FFFFFF" })).toBeDefined();
+    const accent = resolve(unread, {})!;
+    expect(themeColorContrast(accent, "#FFFFFF")).toBeGreaterThan(4.5);
+    expect(resolve(unread, { [chatBackground.id]: "#FFFFFF" })).toBe(accent);
+  });
+
+  /**
+   * 하한을 3으로 두면 기본 강조색이 순검정에서도 3.25로 통과해, 정작 안 보이는 조합이 그대로
+   * 남는다. "배경을 바꿔도 색이 안 변한다"는 신고가 여기서 나왔다. 값이 아니라 **결과 대비**를
+   * 단언해야 하한을 되돌렸을 때 잡힌다.
+   *
+   * 4.5를 항상 넘긴다고는 단언할 수 없다. 중간 회색(#888888)은 이 앱이 쓰는 전경색 쌍으로도
+   * 4.14가 한계다 — `ensureThemeColorContrast`가 마지막에 `readableThemeForeground`로 물러나는데
+   * 그 값 자체가 못 넘는다. 그래서 "항상 4.5"가 아니라 **절대 나빠지지 않는다**를 잠근다.
+   */
+  it("어떤 배경에서도 강조색보다 대비가 나빠지지 않는다", () => {
+    const seed = resolve(unread, {})!;
+    for (const background of ["#000000", "#101010", "#303030", "#4D5660", "#888888", "#B8F2F7", "#FFFFFF"]) {
+      const result = resolve(unread, { [chatBackground.id]: background })!;
+      expect(themeColorContrast(result, background)).toBeGreaterThanOrEqual(themeColorContrast(seed, background));
+    }
+  });
+
+  it("어두운 배경에서는 하한을 넘긴다", () => {
+    for (const background of ["#000000", "#101010", "#303030", "#4D5660"]) {
+      const result = resolve(unread, { [chatBackground.id]: background })!;
+      expect(themeColorContrast(result, background)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("순검정 배경에서 실제로 보정된다", () => {
+    // 하한이 3이던 시절 이 조합이 그대로 통과했다.
+    expect(resolve(unread, { [chatBackground.id]: "#000000" })).not.toBe(resolve(unread, {}));
   });
 
   it("직접 지정하면 보정하지 않는다", () => {
