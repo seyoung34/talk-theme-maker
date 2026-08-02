@@ -8,7 +8,7 @@ import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import { getCandidateCardWidthClass, getCandidateLayoutKind, type CandidateLayoutKind } from "@/components/project/candidateLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
-import { buildSlotCandidates, getSharedSlotUploadEntries, isRemovableUploadCandidate, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { buildSlotCandidates, getResolvedColor, getSharedSlotUploadEntries, isRemovableUploadCandidate, linkedColorCandidateId, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
@@ -43,6 +43,7 @@ export function ProjectQuickEditPanel({
   onRemoveUpload,
   onEditedUpload,
   onColorChange,
+  onUnlinkColor,
   imageColorPalette,
   imageColorPaletteError,
   recommendedColor,
@@ -90,6 +91,7 @@ export function ProjectQuickEditPanel({
   onRemoveUpload: (slot: ThemeAssetSlot, uploadId: string) => void;
   onEditedUpload: (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
+  onUnlinkColor: (slot: ThemeAssetSlot) => void;
   imageColorPalette: ImageColorPalette | null;
   imageColorPaletteError: string | null;
   recommendedColor?: string;
@@ -214,6 +216,11 @@ export function ProjectQuickEditPanel({
         isOpen={candidateOpen}
         onToggle={onToggleCandidates}
         onApplyCandidate={(candidate) => {
+          // "기본 색상 따라가기"는 색을 정하는 게 아니라 직접 지정을 해제하는 동작이다.
+          if (candidate.id === linkedColorCandidateId) {
+            onUnlinkColor(slot);
+            return;
+          }
           if (slot.kind === "color" && candidate.source === "palette" && candidate.colorValue) {
             onColorChange(slot, candidate.colorValue);
             return;
@@ -233,7 +240,7 @@ export function ProjectQuickEditPanel({
 
       <section className="grid min-h-0 content-start gap-4 rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
         {slot.kind === "color" ? (
-          <ColorEditor slot={slot} value={colors[slot.id] ?? selectedCandidate?.colorValue ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} />
+          <ColorEditor slot={slot} value={getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} />
         ) : (
           <>
             <input

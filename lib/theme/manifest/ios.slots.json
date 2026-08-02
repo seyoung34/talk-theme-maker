@@ -92,7 +92,6 @@
     "defaultColor": {
       "basic": "#111111"
     },
-    "autoColorRecipe": "foreground-pressed",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-highlighted-text-color"
   },
@@ -147,7 +146,6 @@
     "defaultColor": {
       "basic": "#4d5660"
     },
-    "autoColorRecipe": "muted-pressed",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-paragraph-highlighted-text-color"
   },
@@ -166,7 +164,6 @@
     "defaultColor": {
       "basic": "#111111"
     },
-    "autoColorRecipe": "cell-pressed",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-selected-background-color"
   },

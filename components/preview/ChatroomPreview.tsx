@@ -119,7 +119,7 @@ export function ChatroomPreview({
   const [contentCanvasHeight, setContentCanvasHeight] = useState(minScrollCanvasHeight);
   const [headerForeground, setHeaderForeground] = useState("#ffffff");
 
-  const previewColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback);
+  const previewColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback);
   const isIos = platform === "ios";
   const inputBackground = previewColor("chat_input_background_color", template.defaults.chatInputBackground);
   const sendButtonColor = previewColor("chat_send_button_color", template.defaults.chatSendButton);

@@ -4,7 +4,6 @@ import {
   canUseServerAssetReference,
   getIosCssValues,
   getIosImageDrawPlan,
-  getIosPressedTextColor,
   getIosSlotExportTargets,
 } from "@/lib/theme/ios/export";
 import { flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
@@ -133,33 +132,6 @@ describe("iOS bubble export defaults", () => {
       stretch: "17px 17px",
       insets: "10px 11px 7px 17px",
     });
-  });
-});
-
-describe("눌림 상태 글자색", () => {
-  const pressed = findSlot("ios-chat-bubble-me-selected-color");
-
-  it("직접 지정하지 않으면 기본 글자색을 그대로 따라간다", () => {
-    // 이 슬롯은 자체 defaultColor(#111111)를 갖고 있어서 `getResolvedColor`로는 항상 값이 나온다.
-    // 그대로 쓰면 기본 글자색만 흰색으로 바꾼 테마가 누르는 순간 검정으로 튄다.
-    expect(getIosPressedTextColor(pressed, {}, "#ffffff")).toBe("#ffffff");
-  });
-
-  it("직접 지정한 값이 있으면 그 값을 쓴다", () => {
-    expect(getIosPressedTextColor(pressed, { [pressed.id]: "#ff0000" }, "#ffffff")).toBe("#ff0000");
-  });
-
-  it("기본값과 같은 색을 직접 골라도 지정으로 인정한다", () => {
-    // 사용자가 의도적으로 #111111을 고른 것과 손대지 않은 것은 다르다.
-    expect(getIosPressedTextColor(pressed, { [pressed.id]: "#111111" }, "#ffffff")).toBe("#111111");
-  });
-
-  it("다른 슬롯의 색은 끌어오지 않는다", () => {
-    expect(getIosPressedTextColor(pressed, { "ios-chat-bubble-you-selected-color": "#00ff00" }, "#ffffff")).toBe("#ffffff");
-  });
-
-  it("슬롯이 없으면 기본 글자색을 쓴다", () => {
-    expect(getIosPressedTextColor(undefined, { [pressed.id]: "#ff0000" }, "#ffffff")).toBe("#ffffff");
   });
 });
 

@@ -184,7 +184,7 @@ export function createSystemTemplatePreviewVisual({
 
 function resolveColor(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary: SystemTemplateSummary, templateId: ThemeTemplateId, template: ThemeTemplate, fallback: string) {
   const slot = findSlotByRole(slots, role);
-  return getResolvedColor(slot, summary.colors, summary.candidateSelections, templateId, template) ?? fallback;
+  return getResolvedColor(slot, summary.colors, summary.candidateSelections, templateId, template, slots) ?? fallback;
 }
 
 function resolveImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary: SystemTemplateSummary, templateId: ThemeTemplateId, template: ThemeTemplate, signedUrls: SignedUrlCache) {

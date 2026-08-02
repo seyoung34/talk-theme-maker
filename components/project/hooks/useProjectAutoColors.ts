@@ -42,7 +42,7 @@ export function useProjectAutoColors({
   const activeImageColorPalette = mainBackgroundPaletteKey && imageColorPaletteSourceKey === mainBackgroundPaletteKey ? imageColorPalette : null;
   const mainBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "main_background_color"), [slots]);
   const resolvedMainBackground = mainBackgroundColorSlot
-    ? getResolvedColor(mainBackgroundColorSlot, colors, candidateSelections, templateId, activeTemplate) ?? activeTemplate.defaults.mainBackground
+    ? getResolvedColor(mainBackgroundColorSlot, colors, candidateSelections, templateId, activeTemplate, slots) ?? activeTemplate.defaults.mainBackground
     : activeTemplate.defaults.mainBackground;
 
   useEffect(() => {

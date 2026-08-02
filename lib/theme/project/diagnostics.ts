@@ -21,7 +21,7 @@ export function createThemeProjectAnalysis(
 
     if (slot.kind === "color") {
       resources.push({ id: slot.id, slotId: slot.id, platform, role: slot.role, screen: slot.screen, exportMapping });
-      if (slot.required && !getResolvedColor(slot, colors, selections, template.id, template)) {
+      if (slot.required && !getResolvedColor(slot, colors, selections, template.id, template, slots)) {
         diagnostics.push({
           level: "warning",
           code: "missing-color",

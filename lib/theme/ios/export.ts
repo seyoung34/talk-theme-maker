@@ -323,7 +323,7 @@ function buildIosThemeCss({
   sourceDimensionsBySlotId: Record<string, IosSourceDimensions>;
 }) {
   const slotByRole = Object.fromEntries(slots.map((slot) => [slot.role, slot])) as Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
-  const color = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback;
+  const color = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback;
 
   const mainText = color("main_title_color", template.defaults.mainTitle);
   const headerText = color("main_header_foreground_color", mainText);
@@ -482,7 +482,7 @@ function buildIosThemeCss({
       selectedPrimaryImage: imageMap.bubble_me_1_selected,
       selectedGroupImage: imageMap.bubble_me_2_selected,
       textColor: color("chat_bubble_me_color", mainText),
-      selectedTextColor: getIosPressedTextColor(slotByRole.chat_bubble_me_selected_color, colors, color("chat_bubble_me_color", mainText)),
+      selectedTextColor: color("chat_bubble_me_selected_color", color("chat_bubble_me_color", mainText)),
       unreadColor: color("chat_unread_count_color", template.accent),
       primaryEdit: bubbleEditsBySlotId[slotByRole.bubble_me_1?.id ?? ""],
       groupEdit: bubbleEditsBySlotId[slotByRole.bubble_me_2?.id ?? ""],
@@ -500,7 +500,7 @@ function buildIosThemeCss({
       selectedPrimaryImage: imageMap.bubble_you_1_selected,
       selectedGroupImage: imageMap.bubble_you_2_selected,
       textColor: color("chat_bubble_you_color", mainText),
-      selectedTextColor: getIosPressedTextColor(slotByRole.chat_bubble_you_selected_color, colors, color("chat_bubble_you_color", mainText)),
+      selectedTextColor: color("chat_bubble_you_selected_color", color("chat_bubble_you_color", mainText)),
       unreadColor: color("chat_unread_count_color", template.accent),
       primaryEdit: bubbleEditsBySlotId[slotByRole.bubble_you_1?.id ?? ""],
       groupEdit: bubbleEditsBySlotId[slotByRole.bubble_you_2?.id ?? ""],
@@ -580,27 +580,6 @@ function buildMessageCellCss(
   ]
     .filter((line) => line !== null)
     .join("\n");
-}
-
-/**
- * 말풍선을 누르는 동안 쓰는 글자색.
- *
- * 사용자가 이 슬롯을 **직접 지정했을 때만** 그 값을 쓰고, 아니면 기본 글자색을 그대로 따라간다.
- *
- * `getResolvedColor`를 쓸 수 없는 이유는 이 슬롯에 자체 `defaultColor`(`#111111`)가 있어서
- * 항상 값을 돌려주기 때문이다. 그러면 "기본 글자색으로 폴백"이 영원히 도달하지 못하고,
- * 사용자가 기본 글자색만 흰색으로 바꾼 테마에서 누르는 순간 검정으로 튄다. 눌림 상태는
- * 고급 옵션이라 대부분 손대지 않으므로 이 어긋남이 그대로 내보내진다.
- *
- * `defaultColor`를 지우는 대신 여기서 판정하는 이유는, 지우면 `isSlotReady`가 색상 슬롯을
- * `Boolean(getResolvedColor(...))`로 보기 때문에 두 슬롯이 영구 "값 필요"가 되고 준비도
- * 카운터가 떨어지기 때문이다.
- *
- * 자동 색상(팔레트 맞춤)도 결과를 `colors[slot.id]`에 쓰므로 명시 지정으로 함께 잡힌다.
- */
-export function getIosPressedTextColor(pressedSlot: ThemeAssetSlot | undefined, colors: SlotColors, baseColor: string) {
-  const explicit = pressedSlot ? colors[pressedSlot.id] : undefined;
-  return explicit ?? baseColor;
 }
 
 export function getIosCssValues(edit: BubbleEditState | undefined, fallbackInsets: Insets, fallbackStretch: StretchPoint, sourceScale: number, sourceDimensions?: IosSourceDimensions) {

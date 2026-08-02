@@ -1,0 +1,119 @@
+import { describe, expect, it } from "vitest";
+import { applyDerivedColorTransform, getColorFallbackRole, getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
+import {
+  getInheritedColorSourceSlot,
+  getInitialSlotCandidateSelections,
+  getResolvedColor,
+  isSlotReady,
+  slotStatusLabel,
+} from "@/lib/theme/project/state";
+import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
+
+/**
+ * 눌림·선택 색상의 기준 색 연동.
+ *
+ * 예전에는 이 슬롯들이 각자 `autoColorRecipe`로 배경에서 값을 받아, 사용자가 기준 색을 바꿔도
+ * 따라가지 않았다. 이제 기준 슬롯의 해석값을 seed로 같은 변환을 적용한다.
+ *
+ * **선택 상태는 반드시 `getInitialSlotCandidateSelections`로 만든다.** 새 프로젝트는 모든
+ * 색상 슬롯에 기본 후보 id를 넣어 두기 때문에, 빈 객체로 시험하면 실제로는 한 번도 켜지지
+ * 않는 연동을 통과시킨다. 이 파일이 처음 그 함정에 빠졌었다.
+ */
+const slots = getThemeSlots("android");
+const template = getThemeTemplate("basic");
+const initialSelections = getInitialSlotCandidateSelections(slots, "basic", template);
+
+const bySlotRole = (role: string) => slots.find((slot) => slot.role === role)!;
+const title = bySlotRole("main_title_color");
+const titlePressed = bySlotRole("main_title_pressed_color");
+const background = bySlotRole("main_background_color");
+
+// 말풍선 선택 색상은 iOS 전용 슬롯이다.
+const iosSlots = getThemeSlots("ios");
+const iosSelections = getInitialSlotCandidateSelections(iosSlots, "basic", template);
+const bubbleMe = iosSlots.find((slot) => slot.role === "chat_bubble_me_color")!;
+const bubbleMeSelected = iosSlots.find((slot) => slot.role === "chat_bubble_me_selected_color")!;
+
+function resolve(slot: typeof title, colors: Record<string, string | undefined>) {
+  return getResolvedColor(slot, colors, initialSelections, "basic", template, slots);
+}
+
+describe("파생 색상 규칙", () => {
+  it("눌림·선택 색을 기준 색에 짝지어 준다", () => {
+    expect(getColorFallbackRole("main_title_pressed_color")).toBe("main_title_color");
+    expect(getColorFallbackRole("tab_paragraph_pressed_color")).toBe("tab_paragraph_color");
+    expect(getColorFallbackRole("chat_bubble_me_selected_color")).toBe("chat_bubble_me_color");
+    expect(getColorFallbackRole("main_body_cell_pressed_color")).toBe("main_title_color");
+  });
+
+  it("한 기준 슬롯의 함수로 표현되지 않는 파생은 제외한다", () => {
+    // 알림 배경 눌림은 원래 수식이 mix(배경, accent, 0.22)라 seed가 둘이다.
+    expect(getColorFallbackRole("notification_background_pressed_color")).toBeUndefined();
+    // 잠금 키패드 눌림은 recipe도 없고 내보내기 폴백도 상수라 기준이 없다.
+    expect(getColorFallbackRole("passcode_keypad_pressed_color")).toBeUndefined();
+    expect(getColorFallbackRole("main_title_color")).toBeUndefined();
+  });
+
+  it("눌림 변환은 색을 배경 쪽으로 민다", () => {
+    // 밝은 색은 어둡게, 어두운 색은 밝게 — 원래 recipe의 판정을 그대로 옮겼다.
+    expect(applyDerivedColorTransform("#FFFFFF", "pressed-foreground")).not.toBe("#FFFFFF");
+    expect(applyDerivedColorTransform("#111111", "pressed-foreground")).not.toBe("#111111");
+    expect(applyDerivedColorTransform("#FF0000", "same")).toBe("#FF0000");
+  });
+});
+
+describe("초기 상태에서의 연동", () => {
+  it("새 프로젝트의 기본 선택은 명시적 지정이 아니다", () => {
+    // 이 단언이 이 파일의 핵심이다. 기본 후보 id를 명시 선택으로 보면 연동이 죽는다.
+    expect(initialSelections[titlePressed.id]).toBeDefined();
+    expect(getInheritedColorSourceSlot(titlePressed, {}, initialSelections, "basic", template, slots)?.id).toBe(title.id);
+  });
+
+  it("기준 색을 바꾸면 눌림 색이 따라간다", () => {
+    const pressed = resolve(titlePressed, { [title.id]: "#FFFFFF" });
+    // 그대로 복사가 아니라 눌림 변환이 적용된 값이다.
+    expect(pressed).toBe(applyDerivedColorTransform("#FFFFFF", "pressed-foreground"));
+    expect(pressed).not.toBe(resolve(titlePressed, { [title.id]: "#111111" }));
+  });
+
+  it("변환이 없는 짝은 기준 색을 그대로 따라간다", () => {
+    expect(getDerivedColorRule("chat_bubble_me_selected_color")?.transform).toBe("same");
+    expect(getResolvedColor(bubbleMeSelected, { [bubbleMe.id]: "#FFFFFF" }, iosSelections, "basic", template, iosSlots)).toBe("#FFFFFF");
+  });
+
+  it("직접 지정한 눌림 색이 있으면 그 값을 쓴다", () => {
+    expect(resolve(titlePressed, { [title.id]: "#FFFFFF", [titlePressed.id]: "#FF0000" })).toBe("#FF0000");
+  });
+
+  it("기본 후보가 아닌 후보를 직접 고르면 연동이 아니다", () => {
+    const selections = { ...initialSelections, [titlePressed.id]: "some-other-candidate" };
+    expect(getInheritedColorSourceSlot(titlePressed, {}, selections, "basic", template, slots)).toBeUndefined();
+  });
+
+  it("짝이 없는 슬롯은 자기 기본값을 그대로 쓴다", () => {
+    const before = resolve(background, {});
+    expect(resolve(background, { [title.id]: "#FFFFFF" })).toBe(before);
+  });
+
+  it("allSlots가 비면 연동이 꺼진다", () => {
+    // 인자를 필수로 둔 이유다. 빈 배열을 넘기면 자기 defaultColor로 조용히 되돌아간다.
+    expect(getResolvedColor(titlePressed, { [title.id]: "#FFFFFF" }, initialSelections, "basic", template, [])).not.toBe(
+      applyDerivedColorTransform("#FFFFFF", "pressed-foreground"),
+    );
+  });
+});
+
+describe("연동과 준비 상태", () => {
+  it("연동 중인 슬롯도 준비 완료로 센다", () => {
+    expect(isSlotReady(titlePressed, {}, {}, initialSelections, "basic", template, slots)).toBe(true);
+  });
+
+  it("연동 중이면 상태 라벨에 그 사실을 표시한다", () => {
+    const label = slotStatusLabel(titlePressed, {}, { [title.id]: "#FFFFFF" }, initialSelections, "basic", template, slots);
+    expect(label.startsWith("연동 · ")).toBe(true);
+  });
+
+  it("직접 지정하면 색만 표시한다", () => {
+    expect(slotStatusLabel(titlePressed, {}, { [titlePressed.id]: "#ff0000" }, initialSelections, "basic", template, slots)).toBe("#FF0000");
+  });
+});

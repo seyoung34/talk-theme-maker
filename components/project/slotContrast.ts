@@ -38,7 +38,7 @@ export function getSlotContrastWarning(slot: ThemeAssetSlot, context: ContrastCo
   const minimumRatio = getMinimumContrastRatio(slot.role);
   if (!minimumRatio) return null;
 
-  const foreground = getResolvedColor(slot, context.colors, context.selections, context.templateId, context.template);
+  const foreground = getResolvedColor(slot, context.colors, context.selections, context.templateId, context.template, context.slots);
   if (!foreground || !foreground.startsWith("#")) return null;
 
   const backgroundInfo = getContrastBackground(slot.role, context);
@@ -135,5 +135,5 @@ function getContrastBackground(role: ThemeResourceRole, context: ContrastContext
 
 function getColor(role: ThemeResourceRole, fallback: string, context: ContrastContext) {
   const slot = context.slots.find((candidate) => candidate.role === role);
-  return getResolvedColor(slot, context.colors, context.selections, context.templateId, context.template) ?? fallback;
+  return getResolvedColor(slot, context.colors, context.selections, context.templateId, context.template, context.slots) ?? fallback;
 }

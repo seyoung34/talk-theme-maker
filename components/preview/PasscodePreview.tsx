@@ -43,7 +43,7 @@ export function PasscodePreview({ analysis, slots, selectedSlotId, colors, selec
   const slotByRole = useMemo(() => Object.fromEntries(slots.map((slot) => [slot.role, slot])) as Partial<Record<ThemeResourceRole, ThemeAssetSlot>>, [slots]);
 
   const palette = useMemo<PasscodePalette>(() => {
-    const getColor = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback;
+    const getColor = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback;
     return {
       background: getColor("passcode_background_color", "#FCC5C5"),
       text: getColor("passcode_color", "#664242"),
@@ -53,7 +53,7 @@ export function PasscodePreview({ analysis, slots, selectedSlotId, colors, selec
       keypadPressedBackground: getColor("passcode_keypad_pressed_background_color", "#99FFDEDE"),
       patternLine: getColor("passcode_pattern_line_color", "#FCC5C5"),
     };
-  }, [colors, selections, slotByRole, template, templateId]);
+  }, [colors, selections, slotByRole, slots, template, templateId]);
 
   useEffect(() => {
     if (selectedSlotId === slotByRole.passcode_pattern_line_color?.id) setMode("pattern");

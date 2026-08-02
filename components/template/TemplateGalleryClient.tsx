@@ -748,7 +748,7 @@ function createUserTemplatePreviewVisual(record: UserTemplateRecord, template: T
 
 function resolveUserTemplateColor(slots: ThemeAssetSlot[], role: ThemeResourceRole, record: UserTemplateRecord, template: ThemeTemplate, fallback: string) {
   const slot = findSlotByRole(slots, role);
-  return getResolvedColor(slot, record.colors, record.candidateSelections, template.id, template) ?? fallback;
+  return getResolvedColor(slot, record.colors, record.candidateSelections, template.id, template, slots) ?? fallback;
 }
 
 function resolveUserTemplateImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, record: UserTemplateRecord, templateId: ThemeTemplate["id"], template: ThemeTemplate, uploadPreviewUrls: Record<string, string>) {

@@ -569,7 +569,7 @@ function resolvePreviewColor(
   template: ReturnType<typeof getThemeTemplate>,
 ) {
   const slot = slots.find((item) => item.role === role);
-  return getResolvedColor(slot, colors, candidateSelections, templateId, template);
+  return getResolvedColor(slot, colors, candidateSelections, templateId, template, slots);
 }
 
 function resolvePreviewStoragePath(slots: ThemeAssetSlot[], role: ThemeResourceRole, uploadRefs: RemoteSlotUploads, candidateSelections: SlotCandidateSelections) {

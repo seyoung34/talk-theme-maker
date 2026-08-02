@@ -5,12 +5,15 @@ import {
   getSelectedUpload,
   getSlotCandidates,
   getSharedSlotUploadEntries,
+  getInheritedColorSourceSlot,
+  linkedColorCandidateId,
   disabledImageCandidateId,
   type BubbleEditState,
   type SlotCandidateSelections,
   type SlotColors,
   type SlotUploads,
 } from "@/lib/theme/project/state";
+import { getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
 import { describeAdminAssetAnalysis, getAdminAssetKindLabel, isAdminAssetRecommendedForSlot, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -80,9 +83,11 @@ export {
   getResolvedColor,
   getSelectedCandidate,
   getSelectedUpload,
+  getInheritedColorSourceSlot,
   getSharedBubbleUploadPeers,
   getSharedSlotUploadEntries,
   isSlotReady,
+  linkedColorCandidateId,
   planUploadRemoval,
   slotStatusLabel,
 } from "@/lib/theme/project/state";
@@ -149,7 +154,7 @@ export function buildSlotCandidates(
   const baseItems = candidates.map((candidate) => ({
     id: candidate.id,
     title: candidate.label,
-    status: slot.kind === "color" ? (candidate.colorValue ?? getResolvedColor(slot, colors, selections, templateId, template) ?? "값 없음").toUpperCase() : candidate.note ?? slot.note,
+    status: slot.kind === "color" ? (candidate.colorValue ?? getResolvedColor(slot, colors, selections, templateId, template, allSlots) ?? "값 없음").toUpperCase() : candidate.note ?? slot.note,
     active: selected?.id === candidate.id,
     selected: selected?.id === candidate.id && !selectedUpload,
     source: candidate.isDefault || candidate.id === disabledImageCandidateId ? ("default" as const) : ("creator" as const),
@@ -186,7 +191,7 @@ export function buildSlotCandidates(
       ownerSlotId,
     }));
 
-  const paletteItems = slot.kind === "color" ? buildPaletteCandidates(slot, allSlots, uploads, colors, selections, templateId, template) : [];
+  const paletteItems = slot.kind === "color" ? [...buildLinkedColorCandidate(slot, colors, selections, templateId, template, allSlots), ...buildPaletteCandidates(slot, allSlots, uploads, colors, selections, templateId, template)] : [];
   const adminItems = slot.kind !== "color" ? buildAdminCandidates(slot, selectedUpload?.id, adminAssets) : [];
 
   const allItems = [...templateItems, ...uploadItems, ...adminItems, ...paletteItems, ...baseItems];
@@ -210,6 +215,34 @@ function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | u
     }));
 }
 
+/**
+ * "기본 색상 따라가기" 후보.
+ *
+ * 눌림·선택 색은 기준 색을 따라가다가, 사용자가 피커를 한 번 만지는 순간 `colors[slot.id]`에
+ * 값이 써져 연동이 끊긴다. 되돌릴 방법이 없으면 실수로 만진 사람이 원래 상태로 못 돌아온다.
+ * 이미지 쪽에서 기본 후보를 다시 골라 연동으로 복귀하는 것과 같은 역할이다.
+ *
+ * 연동 중일 때도 후보를 남겨 현재 상태(선택됨)를 보여 준다.
+ */
+function buildLinkedColorCandidate(slot: ThemeAssetSlot, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[]): SlotCandidate[] {
+  const baseRole = getDerivedColorRule(slot.role)?.baseRole;
+  if (!baseRole) return [];
+  const baseSlot = allSlots.find((candidate) => candidate.role === baseRole && candidate.platform === slot.platform);
+  if (!baseSlot) return [];
+
+  // 선택 표시는 `getInheritedColorSourceSlot`과 같은 기준을 봐야 한다. 둘이 어긋나면
+  // "따라가는 중"이라고 표시된 상태에서 실제 값은 따라가지 않는 화면이 나온다.
+  const linked = Boolean(getInheritedColorSourceSlot(slot, colors, selections, templateId, template, allSlots));
+  return [{
+    id: linkedColorCandidateId,
+    title: "기본 색상 따라가기",
+    status: `${baseSlot.label}과 같은 색`,
+    active: linked,
+    selected: linked,
+    source: "palette" as const,
+  }];
+}
+
 function buildPaletteCandidates(
   activeSlot: ThemeAssetSlot,
   allSlots: ThemeAssetSlot[],
@@ -219,12 +252,12 @@ function buildPaletteCandidates(
   templateId: ThemeTemplateId,
   template: ThemeTemplate,
 ): SlotCandidate[] {
-  const currentColor = getResolvedColor(activeSlot, colors, selections, templateId, template);
+  const currentColor = getResolvedColor(activeSlot, colors, selections, templateId, template, allSlots);
   const map = new Map<string, { color: string; count: number }>();
 
   for (const slot of allSlots) {
     if (slot.kind !== "color") continue;
-    const color = getResolvedColor(slot, colors, selections, templateId, template);
+    const color = getResolvedColor(slot, colors, selections, templateId, template, allSlots);
     if (!color) continue;
 
     const key = normalizeColor(color);

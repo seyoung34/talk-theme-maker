@@ -10,10 +10,12 @@ import {
   buildSlotCandidates,
   disabledImageCandidateId,
   getDefaultColor,
+  getResolvedColor,
   getSelectedCandidate,
   getSelectedUpload,
   getSharedSlotUploadEntries,
   isRemovableUploadCandidate,
+  linkedColorCandidateId,
   type SlotCandidate,
   type SlotCandidateSelections,
   type SlotColors,
@@ -55,6 +57,8 @@ type MobileQuickEditPanelProps = {
   onEditedUpload: (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => void;
   onRemoveUpload: (slot: ThemeAssetSlot, uploadId: string) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
+  /** 직접 지정을 해제해 기준 색 연동으로 되돌린다. */
+  onUnlinkColor: (slot: ThemeAssetSlot) => void;
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
   onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
   onApplyAutoColor: () => void;
@@ -83,6 +87,11 @@ export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
   const backgroundSourcePair = getBackgroundSourcePair(slot, slots);
 
   const applyCandidate = (candidate: SlotCandidate) => {
+    // "기본 색상 따라가기"는 색을 정하는 게 아니라 직접 지정을 해제하는 동작이다.
+    if (candidate.id === linkedColorCandidateId) {
+      props.onUnlinkColor(slot);
+      return;
+    }
     if (slot.kind === "color" && candidate.source === "palette" && candidate.colorValue) {
       props.onColorChange(slot, candidate.colorValue);
       return;
@@ -213,20 +222,27 @@ function ColorControls({
   selections,
   templateId,
   template,
+  slots,
   candidates,
   recommendedColor,
   isAutoColor,
   canApplyAutoColor,
   onColorChange,
+  onUnlinkColor,
   onApplyAutoColor,
   candidateGridExpanded = false,
 }: MobileQuickEditPanelProps & { slot: ThemeAssetSlot; candidates: SlotCandidate[] }) {
-  const value = colors[slot.id] ?? getSelectedCandidate(slot, selections, templateId, template)?.colorValue ?? getDefaultColor(slot, templateId, template);
+  // 연동 중이면 기준 색에서 파생된 실제 값이 나와야 한다. 파생 슬롯 자기 기본값을 보여 주면
+  // 프리뷰·내보내기와 어긋나고, 그 값에서 편집을 시작하는 순간 연동이 끊긴다.
+  const value = getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template);
   const hex = themeColorRgbHex(value);
   const alpha = themeColorAlphaPercent(value);
   const swatchCandidates = candidates
     .filter((candidate) => candidate.colorValue)
     .sort((left, right) => Number(right.source === "default") - Number(left.source === "default"));
+  // 연동 복귀 후보는 색이 아니라 "직접 지정 해제"라 colorValue가 없다. 스와치 목록이
+  // colorValue로 거르므로 따로 꺼내 별도 버튼으로 보여 준다.
+  const linkedCandidate = candidates.find((candidate) => candidate.id === linkedColorCandidateId);
   const colorInputId = useId();
 
   return (
@@ -283,6 +299,20 @@ function ColorControls({
             />
           ))}
         </div>
+      ) : null}
+
+      {linkedCandidate ? (
+        <button
+          type="button"
+          aria-pressed={linkedCandidate.selected}
+          className={`inline-flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3 text-[13px] font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${linkedCandidate.selected
+            ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]"
+            : "border-[#e2e8f0] bg-white text-[#475569] hover:bg-[#f8fafc]"}`}
+          onClick={() => onUnlinkColor(slot)}
+        >
+          <span>{linkedCandidate.title}</span>
+          <span className="text-[11px] font-semibold text-[#94a3b8]">{linkedCandidate.status}</span>
+        </button>
       ) : null}
 
       {canApplyAutoColor ? (

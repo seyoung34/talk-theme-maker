@@ -1,9 +1,12 @@
 import { normalizeThemeTemplateId, type ThemeAssetSlot, type ThemeSlotCandidate, type ThemeStartPayload, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
+import { applyDerivedColorTransform, getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
 import type { ImageEditMetadata } from "@/lib/theme/imageEdit";
 
 export const disabledImageCandidateId = "__none__";
+/** 눌림·선택 색을 기준 색 연동으로 되돌리는 후보. 고르면 `colors[slot.id]`를 지운다. */
+export const linkedColorCandidateId = "__linked-color__";
 export { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 
 export type SlotUploadSource = "user" | "template" | "admin";
@@ -86,6 +89,35 @@ export function getImageAssetFallbackRole(role: ThemeResourceRole): ThemeResourc
     return role.slice(0, -"_focused".length) as ThemeResourceRole;
   }
   return undefined;
+}
+
+/**
+ * 이 색상 슬롯이 기준 색상을 따라가는 중이면 그 기준 슬롯을 돌려준다.
+ *
+ * 이미지 쪽 `getInheritedSourceSlot`과 판정 규칙을 맞춘다. 특히 **기본 후보가 선택된 상태는
+ * 명시적 선택이 아니다**. 새 프로젝트를 만들면 `getInitialSlotCandidateSelections`가 모든
+ * 색상 슬롯에 기본 후보 id를 넣어 두기 때문에, 선택값이 있다는 이유만으로 연동을 끄면
+ * 연동이 실사용에서 **한 번도 켜지지 않는다**.
+ */
+export function getInheritedColorSourceSlot(
+  slot: ThemeAssetSlot | undefined,
+  colors: SlotColors,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  allSlots: ThemeAssetSlot[],
+): ThemeAssetSlot | undefined {
+  if (!slot || slot.kind !== "color") return undefined;
+  // 색을 직접 지정했으면 연동이 아니다. 자동 맞춤도 결과를 `colors[slot.id]`에 쓰므로 함께 걸러진다.
+  if (colors[slot.id]) return undefined;
+
+  const selectedId = selections[slot.id];
+  const defaultCandidate = getDefaultSelectedCandidate(slot, templateId, template);
+  if (selectedId && selectedId !== defaultCandidate?.id) return undefined;
+
+  const rule = getDerivedColorRule(slot.role);
+  if (!rule) return undefined;
+  return allSlots.find((candidate) => candidate.role === rule.baseRole && candidate.platform === slot.platform);
 }
 
 export function canDisableImageSlot(slot: ThemeAssetSlot | undefined) {
@@ -477,19 +509,38 @@ export function getResolvedAssetUrl(
   return getSelectedCandidate(slot, selections, templateId, template)?.assetUrl;
 }
 
+/**
+ * `allSlots`가 필수인 이유는 `getSelectedUpload`와 같다. 빈 배열을 넘기면 연동이 꺼져
+ * 파생 색상이 자기 `defaultColor`로 되돌아가고, 편집기와 내보내기가 서로 다른 색을 쓴다.
+ */
 export function getResolvedColor(
   slot: ThemeAssetSlot | undefined,
   colors: SlotColors,
   selections: SlotCandidateSelections,
   templateId: ThemeTemplateId,
   template: ThemeTemplate,
-) {
+  allSlots: ThemeAssetSlot[],
+): string | undefined {
   if (!slot || slot.kind !== "color") return undefined;
-  return colors[slot.id] ?? getSelectedCandidate(slot, selections, templateId, template)?.colorValue ?? getDefaultColor(slot, templateId, template);
+  if (colors[slot.id]) return colors[slot.id];
+
+  // 눌림·선택 색은 직접 지정하지 않았으면 기준 색을 따라간다.
+  //
+  // 후보 조회보다 **먼저** 판정해야 한다. 색상 슬롯의 `getSelectedCandidate`는 고른 후보가
+  // 없어도 기본 후보를 합성해 돌려주므로, 뒤에 두면 그 기본값이 먼저 잡혀 연동이 죽는다.
+  // 기준 슬롯은 자기 짝이 없으므로 재귀는 한 단계에서 끝난다.
+  const inheritedSource = getInheritedColorSourceSlot(slot, colors, selections, templateId, template, allSlots);
+  if (inheritedSource) {
+    const baseColor = getResolvedColor(inheritedSource, colors, selections, templateId, template, allSlots);
+    const rule = getDerivedColorRule(slot.role);
+    if (baseColor && rule) return applyDerivedColorTransform(baseColor, rule.transform);
+  }
+
+  return getSelectedCandidate(slot, selections, templateId, template)?.colorValue ?? getDefaultColor(slot, templateId, template);
 }
 
 export function isSlotReady(slot: ThemeAssetSlot, uploads: SlotUploads, colors: SlotColors, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[]) {
-  if (slot.kind === "color") return Boolean(getResolvedColor(slot, colors, selections, templateId, template));
+  if (slot.kind === "color") return Boolean(getResolvedColor(slot, colors, selections, templateId, template, allSlots));
   if (isImageSlotDisabled(slot, selections) && canDisableImageSlot(slot)) return true;
   return Boolean(getSelectedUpload(slot, uploads, selections, allSlots) || getResolvedAssetUrl(slot, uploads, selections, templateId, template, allSlots));
 }
@@ -514,8 +565,11 @@ export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colo
       const color = colors[slot.id] ?? getDefaultColor(slot, templateId, template);
       return color ? `자동 · ${color.toUpperCase()}` : "자동 맞춤 대기 중";
     }
-    const color = getResolvedColor(slot, colors, selections, templateId, template);
-    return color ? color.toUpperCase() : "값 필요";
+    const color = getResolvedColor(slot, colors, selections, templateId, template, allSlots);
+    if (!color) return "값 필요";
+    // 눌림·선택 색이 기준 색을 따라가는 중이면 그 사실을 값과 함께 보여 준다. 값만 보이면
+    // 직접 지정한 것과 구분되지 않아, 기준 색을 바꿨을 때 왜 같이 바뀌는지 알 수 없다.
+    return getInheritedColorSourceSlot(slot, colors, selections, templateId, template, allSlots) ? `연동 · ${color.toUpperCase()}` : color.toUpperCase();
   }
   if (isImageSlotDisabled(slot, selections)) return getImageColorFallbackRole(slot.role) ? "색상 사용 중" : "이미지 사용 안 함";
   // 파생 슬롯(탭 선택 아이콘 등)이 연동 중이면 기본 슬롯의 선택 상태를 그대로 표시한다.

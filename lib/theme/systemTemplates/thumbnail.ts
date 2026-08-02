@@ -49,7 +49,7 @@ export async function generateSystemTemplateThumbnail(
   const colors = input.overrides.colors;
   const selections = input.overrides.candidateSelections;
   const uploads = input.overrides.uploads;
-  const color = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slots.find((slot) => slot.role === role), colors, selections, input.baseTemplateId, template) ?? fallback);
+  const color = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slots.find((slot) => slot.role === role), colors, selections, input.baseTemplateId, template, slots) ?? fallback);
   // 편집기 ChatroomPreview와 동일한 9-slice edit(stretch/inset/marker)을 말풍선에 적용하기 위해 복원한다.
   const bubbleEdit = (role: ThemeResourceRole): BubbleEditState | undefined => {
     const slot = slots.find((item) => item.role === role);

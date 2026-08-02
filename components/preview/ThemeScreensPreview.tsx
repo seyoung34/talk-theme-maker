@@ -75,7 +75,7 @@ export function ThemeScreensPreview({
   const profileUrls = useMemo(() => getProfilePreviewUrls(urls), [urls]);
 
   const preview = useMemo(() => {
-    const getColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback);
+    const getColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback);
     const mainBackgroundColor = getColor("main_background_color", template.defaults.mainBackground);
     const androidHeaderBackgroundColor = getColor("main_header_color", template.defaults.mainHeader);
 
@@ -100,7 +100,7 @@ export function ThemeScreensPreview({
       lightBadgeColor: getColor("tab_light_banner_badge_background_color", template.accent),
       badgeColor: getColor("tab_banner_badge_background_color", template.accent),
     };
-  }, [colors, selections, slotByRole, templateId, template, platform]);
+  }, [colors, selections, slotByRole, slots, templateId, template, platform]);
 
   const mainBackgroundSlot = slotByRole.main_background;
   const mainBackgroundColorSlot = slotByRole.main_background_color;
