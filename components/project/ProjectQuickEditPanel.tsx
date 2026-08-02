@@ -8,7 +8,7 @@ import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import { getCandidateCardWidthClass, getCandidateLayoutKind, type CandidateLayoutKind } from "@/components/project/candidateLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
-import { buildSlotCandidates, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { buildSlotCandidates, getSharedSlotUploadEntries, isRemovableUploadCandidate, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
@@ -153,6 +153,15 @@ export function ProjectQuickEditPanel({
   if (!slot) return null;
 
   const candidates = buildSlotCandidates(slot, uploads, colors, selections, templateId, template, slots, adminAssets, uploadPreviewUrls);
+  /**
+   * 이 슬롯에서 실제로 지울 수 있는 업로드 id.
+   *
+   * 후보 목록에는 이 슬롯이 소유하지 않은 항목도 섞인다. 말풍선 공유 풀(peer 소유)은 지울 수
+   * 있지만, 파생 슬롯이 기본 슬롯의 선택을 읽어 오는 경우(탭 선택 아이콘 등)는 그 슬롯의
+   * bucket에 entry가 없어 삭제가 아무 동작도 하지 않는다. 삭제 핸들러가 owner를 찾는 기준과
+   * 같은 집합을 써서 "눌러도 안 되는 버튼"이 생기지 않게 한다. 모바일 패널과 같은 규칙이다.
+   */
+  const removableUploadIds = new Set(getSharedSlotUploadEntries(slot, uploads, slots).map(({ entry }) => entry.id));
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
   const selectedUploadEntry = getSelectedUpload(slot, uploads, selections, slots);
   const imageEditTarget = selectedUploadEntry?.imageEdit?.target ?? getImageEditTarget(selectedCandidate);
@@ -218,6 +227,7 @@ export function ProjectQuickEditPanel({
         hasMoreAdminAssets={hasMoreAdminAssets}
         isLoadingAdminAssets={isLoadingAdminAssets}
         onLoadMoreAdminAssets={onLoadMoreAdminAssets}
+        removableUploadIds={removableUploadIds}
         onRemoveUpload={(uploadId) => onRemoveUpload(slot, uploadId)}
       />
 
@@ -391,6 +401,7 @@ function CandidatePicker({
   isOpen,
   onToggle,
   onApplyCandidate,
+  removableUploadIds,
   onRemoveUpload,
   hasMoreAdminAssets,
   isLoadingAdminAssets,
@@ -402,6 +413,7 @@ function CandidatePicker({
   isOpen: boolean;
   onToggle: () => void;
   onApplyCandidate: (candidate: SlotCandidate) => void;
+  removableUploadIds: Set<string>;
   onRemoveUpload: (uploadId: string) => void;
   hasMoreAdminAssets: boolean;
   isLoadingAdminAssets: boolean;
@@ -502,7 +514,7 @@ function CandidatePicker({
                 candidate={candidate}
                 layoutKind={layoutKind}
                 onApply={onApplyCandidate}
-                onRemove={candidate.source === "upload" ? onRemoveUpload : undefined}
+                onRemove={isRemovableUploadCandidate(candidate) && removableUploadIds.has(candidate.id) ? onRemoveUpload : undefined}
               />
             )) : activeGroup.key === "admin" && !isLoadingAdminAssets ? (
               <AdminAssetPlaceholderCard layoutKind={layoutKind} />

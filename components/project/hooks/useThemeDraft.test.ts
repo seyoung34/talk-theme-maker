@@ -119,6 +119,125 @@ describe("themeDraftReducer", () => {
     expect(result.candidateSelections).toBe(initial.candidateSelections);
     expect(result.bubbleMarkers).toBe(initial.bubbleMarkers);
   });
+
+  describe("원격 ref 정리", () => {
+    const remoteRef = (id: string) => ({ id, fileName: id + ".png", mimeType: "image/png", size: 128, storagePath: "themes/variant/" + id + ".png" });
+    const kept = remoteRef("kept");
+    const removed = remoteRef("removed");
+
+    function seeded() {
+      return {
+        ...createEmptyThemeDraft(),
+        uploads: { slot: [
+          { id: "kept", file: new File(["kept"], "kept.png"), source: "template" as const },
+          { id: "removed", file: new File(["removed"], "removed.png"), source: "template" as const },
+        ] },
+        remoteUploadRefs: { slot: [kept, removed], other: [kept] },
+        candidateSelections: { slot: "removed" },
+      };
+    }
+
+    it("업로드를 지우면 같은 transition에서 원격 ref도 끊는다", () => {
+      // ref가 남으면 다음 hydration이 파일을 다시 채워 넣어 삭제가 되돌아간다.
+      // 저장 직전에도 hydration이 돌기 때문에 화면에서 지운 에셋이 그대로 저장된다.
+      const result = themeDraftReducer(seeded(), {
+        type: "remove-upload-candidate",
+        slotId: "slot",
+        ownerSlotId: "slot",
+        uploadId: "removed",
+        fallbackCandidateId: "default",
+      });
+
+      expect(result.remoteUploadRefs.slot).toEqual([kept]);
+      expect(result.uploads.slot?.map((entry) => entry.id)).toEqual(["kept"]);
+    });
+
+    it("선택 중이 아닌 업로드를 지울 때도 ref를 끊는다", () => {
+      const result = themeDraftReducer(seeded(), {
+        type: "remove-upload-candidate",
+        slotId: "slot",
+        ownerSlotId: "slot",
+        uploadId: "kept",
+        fallbackCandidateId: "default",
+      });
+
+      expect(result.remoteUploadRefs.slot).toEqual([removed]);
+      // 선택 중이 아니었으므로 현재 선택은 그대로 유지된다.
+      expect(result.candidateSelections.slot).toBe("removed");
+    });
+
+    it("다른 슬롯의 ref와 owner가 아닌 bucket은 건드리지 않는다", () => {
+      const result = themeDraftReducer(seeded(), {
+        type: "remove-upload-candidate",
+        slotId: "slot",
+        ownerSlotId: "slot",
+        uploadId: "removed",
+        fallbackCandidateId: "default",
+      });
+
+      expect(result.remoteUploadRefs.other).toEqual([kept]);
+    });
+
+    it("마지막 ref를 지우면 슬롯 키 자체를 없앤다", () => {
+      const initial = {
+        ...createEmptyThemeDraft(),
+        uploads: { slot: [{ id: "only", file: new File(["only"], "only.png"), source: "template" as const }] },
+        remoteUploadRefs: { slot: [remoteRef("only")] },
+        candidateSelections: { slot: "only" },
+      };
+
+      const result = themeDraftReducer(initial, {
+        type: "remove-upload-candidate",
+        slotId: "slot",
+        ownerSlotId: "slot",
+        uploadId: "only",
+        fallbackCandidateId: "default",
+      });
+
+      expect("slot" in result.remoteUploadRefs).toBe(false);
+      expect("slot" in result.uploads).toBe(false);
+    });
+
+    it("공유 풀에서는 owner bucket의 ref를 끊는다", () => {
+      // 지금 보고 있는 슬롯이 아니라 업로드가 실제로 들어 있는 bucket이 기준이다.
+      const initial = {
+        ...createEmptyThemeDraft(),
+        uploads: { owner: [{ id: "shared", file: new File(["s"], "s.png"), source: "template" as const }] },
+        remoteUploadRefs: { owner: [remoteRef("shared")] },
+        candidateSelections: { viewer: "shared" },
+      };
+
+      const result = themeDraftReducer(initial, {
+        type: "remove-upload-candidate",
+        slotId: "viewer",
+        ownerSlotId: "owner",
+        uploadId: "shared",
+        fallbackCandidateId: "default",
+      });
+
+      expect("owner" in result.remoteUploadRefs).toBe(false);
+      expect(result.candidateSelections.viewer).toBe("default");
+    });
+
+    it("ref가 없는 로컬 업로드 삭제는 ref 객체를 새로 만들지 않는다", () => {
+      const initial = {
+        ...createEmptyThemeDraft(),
+        uploads: { slot: [{ id: "local", file: new File(["l"], "l.png"), source: "user" as const }] },
+        remoteUploadRefs: { other: [kept] },
+        candidateSelections: {},
+      };
+
+      const result = themeDraftReducer(initial, {
+        type: "remove-upload-candidate",
+        slotId: "slot",
+        ownerSlotId: "slot",
+        uploadId: "local",
+        fallbackCandidateId: "default",
+      });
+
+      expect(result.remoteUploadRefs).toBe(initial.remoteUploadRefs);
+    });
+  });
 });
 
 describe("useThemeDraft.clearBubbleEdits", () => {

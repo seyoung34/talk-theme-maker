@@ -17,6 +17,23 @@ function omitSlotValue<T>(values: Partial<Record<string, T>>, slotId: string) {
   return next;
 }
 
+/**
+ * 원격 ref 하나만 끊는다.
+ *
+ * 슬롯 단위로 통째 비우는 경로(`dropRemoteUploadRef`)는 새 이미지를 올려 기존 것을 대체할 때
+ * 쓴다. 여러 후보 중 하나만 지울 때는 나머지 ref가 남아 있어야 하므로 entry 단위로 끊는다.
+ */
+function omitRemoteUploadRef(refs: RemoteSlotUploads, slotId: string, uploadId: string): RemoteSlotUploads {
+  const entries = refs[slotId];
+  if (!entries?.some((entry) => entry.id === uploadId)) return refs;
+
+  const remaining = entries.filter((entry) => entry.id !== uploadId);
+  const next = { ...refs };
+  if (remaining.length > 0) next[slotId] = remaining;
+  else delete next[slotId];
+  return next;
+}
+
 export type ThemeDraftAction =
   | { type: "replace"; draft: ThemeDraft }
   | { type: "set-uploads"; updater: DraftUpdater<SlotUploads> }
@@ -46,12 +63,19 @@ export function themeDraftReducer(state: ThemeDraft, action: ThemeDraftAction): 
       if (nextEntries.length > 0) uploads[action.ownerSlotId] = nextEntries;
       else delete uploads[action.ownerSlotId];
 
+      // 원격 ref도 같은 transition에서 끊는다. `uploads`에서만 지우면 다음 hydration이
+      // ref를 기준으로 파일을 다시 채워 넣어 삭제가 되돌아간다. 저장 직전에도 hydration이
+      // 돌기 때문에(`ensureSystemTemplateUploadsHydrated`) 화면에서 지운 에셋이 그대로 저장된다.
+      // 두 번의 dispatch로 나누면 그 사이에 hydration이 끼어들 수 있어 한 번에 처리한다.
+      const remoteUploadRefs = omitRemoteUploadRef(state.remoteUploadRefs, action.ownerSlotId, action.uploadId);
+
       const sourceChanged = state.candidateSelections[action.slotId] === action.uploadId;
-      if (!sourceChanged) return { ...state, uploads };
+      if (!sourceChanged) return { ...state, uploads, remoteUploadRefs };
 
       return {
         ...state,
         uploads,
+        remoteUploadRefs,
         candidateSelections: {
           ...state.candidateSelections,
           [action.slotId]: action.fallbackCandidateId,

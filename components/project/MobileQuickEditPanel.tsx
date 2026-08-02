@@ -13,6 +13,7 @@ import {
   getSelectedCandidate,
   getSelectedUpload,
   getSharedSlotUploadEntries,
+  isRemovableUploadCandidate,
   type SlotCandidate,
   type SlotCandidateSelections,
   type SlotColors,
@@ -339,9 +340,17 @@ function ImageControls({
   uploadPreviewUrls: Record<string, string>;
 }) {
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
-  // 공유 풀이라 다른 말풍선 슬롯이 owner인 업로드도 여기에 들어온다. 삭제 가능 여부는
-  // 후보의 ownerSlotId로 판정하므로 이 집합은 "사용자 업로드인가"만 본다.
-  const userUploadIds = new Set(getSharedSlotUploadEntries(slot, uploads, slots).filter(({ entry }) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id)).map(({ entry }) => entry.id));
+  // 공유 풀이라 다른 말풍선 슬롯이 owner인 업로드도 여기에 들어온다. 실제 삭제 가능 여부는
+  // 후보의 ownerSlotId와 역참조로 판정하므로 이 집합은 "지울 수 있는 종류인가"만 본다.
+  //
+  // `template`도 포함한다. 저장된 시스템 템플릿을 열면 그때 올린 에셋이 원격 ref에서
+  // hydrate되어 `source: "template"`으로 돌아오는데, 이걸 빼면 관리자가 방금 자기가 올린
+  // 에셋을 지울 수 없다. admin 에셋은 공용 라이브러리라 여기서 다루지 않는다.
+  const removableUploadIds = new Set(
+    getSharedSlotUploadEntries(slot, uploads, slots)
+      .filter(({ entry }) => (entry.source ?? "user") !== "admin" && !adminAssetIds.has(entry.id))
+      .map(({ entry }) => entry.id),
+  );
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
   const selectedUploadEntry = getSelectedUpload(slot, uploads, selections, slots);
   const selectedPickerCandidate = candidates.find((candidate) => candidate.selected);
@@ -375,7 +384,7 @@ function ImageControls({
         </button>
         {orderedCandidates.map((candidate) => {
           const preview = candidate.previewUrl ?? (candidate.id.startsWith(slot.id) ? uploadPreviewUrls[candidate.id] : undefined);
-          const removable = candidate.source === "upload" && userUploadIds.has(candidate.id);
+          const removable = isRemovableUploadCandidate(candidate) && removableUploadIds.has(candidate.id);
           return (
             <div key={candidate.id} className={`relative min-w-0 ${candidateGridExpanded ? "" : compactCardClassName}`}>
               <button
