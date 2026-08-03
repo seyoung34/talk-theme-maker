@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { applyPlatformColorAlpha, applySplitAlpha, getPreviewColorRole, getSplitAlphaSourceRole, iosAlphaCapableRoles, supportsColorAlpha } from "@/lib/theme/project/platformColor";
+import { applyPlatformColorAlpha, applySplitAlpha, getPreviewColorRole, getSplitAlphaSourceRole, iosAlphaCapableRoles, resolvePlatformPreviewColor, supportsColorAlpha } from "@/lib/theme/project/platformColor";
 import { getThemeSlots } from "@/lib/theme/templates";
+import type { ThemeResourceRole } from "@/lib/theme/types";
 
 /**
  * 플랫폼별 투명도 표현 계약.
@@ -85,6 +86,12 @@ describe("getSplitAlphaSourceRole", () => {
     expect(getSplitAlphaSourceRole("main_body_cell_pressed_color", "ios")).toBe("main_selected_background_alpha");
   });
 
+  it("iOS 셀 구분선의 투명도도 전용 슬롯(border-alpha)에서 온다", () => {
+    // 내보내기의 SectionTitleStyle-Main은 border-color/border-alpha를 따로 낸다.
+    // 색상 코드의 알파를 프리뷰가 그대로 그리면 전용 슬롯 값이 결과물에서 덮이는 것과 어긋난다.
+    expect(getSplitAlphaSourceRole("main_body_cell_border_color", "ios")).toBe("main_body_cell_border_alpha");
+  });
+
   it("Android는 색상 코드가 투명도를 직접 담는다", () => {
     expect(getSplitAlphaSourceRole("main_body_cell_pressed_color", "android")).toBeUndefined();
   });
@@ -105,6 +112,39 @@ describe("getSplitAlphaSourceRole", () => {
     expect(applySplitAlpha("#2E111111", undefined)).toBe("#2E111111");
     expect(applySplitAlpha("#2E111111", "")).toBe("#2E111111");
     expect(applySplitAlpha("#2E111111", "없음")).toBe("#2E111111");
+  });
+});
+
+/**
+ * 갤러리 썸네일/저장된 템플릿 미리보기 등 export를 거치지 않는 화면이 색을 읽을 때 쓰는
+ * 조합 함수. 내보내기와 같은 규칙(알파 짝 없는 role은 절삭, 전용 알파 슬롯은 합성)을
+ * 적용해야 화면과 결과물이 어긋나지 않는다.
+ */
+describe("resolvePlatformPreviewColor", () => {
+  it("iOS에서 알파 짝이 없는 role은 알파를 절삭한다", () => {
+    const resolve = () => "#2E111111";
+    expect(resolvePlatformPreviewColor(resolve, "main_title_color", "#000000", "ios")).toBe("#111111");
+  });
+
+  it("iOS에서 전용 알파 슬롯이 있는 role은 그 슬롯 값으로 합성한다", () => {
+    const values: Partial<Record<ThemeResourceRole, string>> = {
+      main_body_cell_border_color: "#111111",
+      main_body_cell_border_alpha: "0.4",
+    };
+    const resolve = (role: ThemeResourceRole) => values[role];
+    const result = resolvePlatformPreviewColor(resolve, "main_body_cell_border_color", "#000000", "ios");
+    expect(result).toBe("rgb(17 17 17 / 0.400)");
+  });
+
+  it("Android는 색상 코드의 알파를 그대로 둔다", () => {
+    const resolve = () => "#2E111111";
+    const result = resolvePlatformPreviewColor(resolve, "main_title_color", "#000000", "android");
+    expect(result).not.toBe("#111111");
+  });
+
+  it("값이 없으면 fallback을 같은 규칙으로 정규화한다", () => {
+    const resolve = () => undefined;
+    expect(resolvePlatformPreviewColor(resolve, "main_title_color", "#2E111111", "ios")).toBe("#111111");
   });
 });
 

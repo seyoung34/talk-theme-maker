@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { buildSlotContrastWarnings } from "@/components/project/slotContrast";
 import { getResolvedColor, type SlotCandidateSelections, type SlotColors } from "@/components/project/projectModel";
 import { findBestFile } from "@/components/preview/previewResourceUtils";
@@ -134,15 +134,21 @@ function useThemeImagePalette(file: ThemeProjectFile | undefined) {
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const paletteKey = file ? getThemeFilePaletteKey(file) : null;
+  // `file`은 매 렌더에 새 래퍼로 다시 만들어질 수 있어도, 실제 이미지가 그대로면
+  // `paletteKey`는 그대로다. 이 ref로 최신 래퍼를 들고 있고, effect 의존성은 key에만
+  // 걸어서 같은 이미지에 대해 추출을 다시 돌리지 않는다.
+  const fileRef = useRef(file);
+  fileRef.current = file;
 
   useEffect(() => {
     let active = true;
     setPalette(null);
     setSourceKey(null);
     setError(null);
-    if (!file) return () => { active = false; };
+    const current = fileRef.current;
+    if (!current) return () => { active = false; };
 
-    extractThemeImagePalette(file)
+    extractThemeImagePalette(current)
       .then((next) => {
         if (!active) return;
         setPalette(next);
@@ -155,7 +161,7 @@ function useThemeImagePalette(file: ThemeProjectFile | undefined) {
         setError(cause instanceof Error ? cause.message : "배경 이미지 색상을 분석하지 못했습니다.");
       });
     return () => { active = false; };
-  }, [file, paletteKey]);
+  }, [paletteKey]);
 
   // `pending`은 "이 파일의 분석이 아직 안 끝났다"만 뜻한다. 실패는 끝난 것이다 — 실패를
   // 대기로 세면 호출부가 영원히 기다린다.

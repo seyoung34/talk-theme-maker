@@ -1,8 +1,9 @@
 import { disabledImageCandidateId, getResolvedColor, type SlotCandidateSelections, type SlotColors } from "@/lib/theme/project/state";
+import { normalizeThemeDraft, type PersistedThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
 import type { ThemePlatform } from "@/lib/theme/types";
 import { autoMainPaletteCandidateId, legacyAutoMainSurfaceCandidateId } from "@/lib/theme/autoColor";
 import { getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
-import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
+import { getThemeSlots, getThemeTemplate, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 
 const androidLegacySlotIds: Record<string, string> = {
   "android-main-body-color": "android-tab-paragraph-color",
@@ -36,11 +37,43 @@ export function normalizeLegacyColorOverrides(
       candidateSelections[slotId] = disabledImageCandidateId;
       continue;
     }
-    if (selectedId === legacyAutoMainSurfaceCandidateId || (platform === "ios" && selectedId === autoMainPaletteCandidateId)) delete candidateSelections[slotId];
+    const slot = context.slots.find((candidate) => candidate.id === slotId);
+    const staleDerivedAutoSelection = selectedId === autoMainPaletteCandidateId
+      && Boolean(slot && !slot.autoColorRecipe && getDerivedColorRule(slot.role));
+    if (selectedId === legacyAutoMainSurfaceCandidateId || (platform === "ios" && selectedId === autoMainPaletteCandidateId) || staleDerivedAutoSelection) {
+      delete candidateSelections[slotId];
+    }
   }
   return {
     colors: nextColors,
     candidateSelections,
+  };
+}
+
+/**
+ * IndexedDB 자동 저장·내보내기 복구본을 현재 런타임 초안 계약으로 승격하면서
+ * 저장 템플릿과 동일한 legacy 색상/선택값 마이그레이션을 적용한다.
+ */
+export function normalizeLegacyThemeDraft(
+  platform: ThemePlatform,
+  templateId: ThemeTemplateId,
+  draft: PersistedThemeDraft,
+): ThemeDraft {
+  const normalizedDraft = normalizeThemeDraft(draft);
+  const normalizedOverrides = normalizeLegacyColorOverrides(
+    platform,
+    normalizedDraft.colors,
+    normalizedDraft.candidateSelections,
+    {
+      templateId,
+      template: getThemeTemplate(templateId),
+      slots: getThemeSlots(platform),
+    },
+  );
+  return {
+    ...normalizedDraft,
+    colors: normalizedOverrides.colors,
+    candidateSelections: normalizedOverrides.candidateSelections,
   };
 }
 

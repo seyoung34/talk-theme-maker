@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildMainPaletteRecommendations, type MainPaletteContext } from "@/lib/theme/autoColor";
+import { themeColorContrast } from "@/lib/theme/color";
 import { getThemeSlots } from "@/lib/theme/templates";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
 
@@ -12,6 +13,7 @@ import type { ImageColorPalette } from "@/lib/theme/colorPalette";
 const slots = getThemeSlots("android");
 const chatBackgroundSlot = slots.find((slot) => slot.role === "chat_background_color")!;
 const mainBackgroundSlot = slots.find((slot) => slot.role === "main_background_color")!;
+const mutedSlots = slots.filter((slot) => ["main_description_color", "tab_paragraph_color"].includes(slot.role));
 
 function palette(average: string): ImageColorPalette {
   return { representative: average, average, top: average, bottom: average, accent: average };
@@ -76,5 +78,17 @@ describe("채팅방 배경 자동 맞춤", () => {
 
     expect(result[mainBackgroundSlot.id]).toBe("#FF0000");
     expect(result[chatBackgroundSlot.id]).toBe("#0000FF");
+  });
+});
+
+describe("보조 텍스트 자동 맞춤", () => {
+  it("어두운 배경에서도 상태 메시지와 마지막 메시지가 지나치게 어둡지 않다", () => {
+    const result = buildMainPaletteRecommendations(slots, context({ currentBackground: "#111111" }));
+
+    for (const slot of mutedSlots) {
+      const color = result[slot.id]!;
+      expect(color).toBe("#ACACAC");
+      expect(themeColorContrast(color, "#111111")).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

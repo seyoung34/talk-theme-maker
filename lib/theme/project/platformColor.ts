@@ -1,4 +1,4 @@
-import { themeColorRgbHex, withThemeColorAlpha } from "@/lib/theme/color";
+import { themeColorRgbHex, themeColorToCss, withThemeColorAlpha } from "@/lib/theme/color";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 /**
@@ -47,6 +47,7 @@ export const iosAlphaCapableRoles: readonly ThemeResourceRole[] = [
  */
 const iosSplitAlphaRoles: Partial<Record<ThemeResourceRole, ThemeResourceRole>> = {
   main_body_cell_pressed_color: "main_selected_background_alpha",
+  main_body_cell_border_color: "main_body_cell_border_alpha",
 };
 
 /** 이 role의 투명도를 대신 들고 있는 슬롯 role. 없으면 `undefined`. */
@@ -101,4 +102,26 @@ export function applySplitAlpha(value: string, alphaValue: string | undefined) {
   const alpha = Number(alphaValue);
   if (!Number.isFinite(alpha)) return value;
   return withThemeColorAlpha(value, Math.min(Math.max(alpha, 0), 1));
+}
+
+/**
+ * 내보내기와 같은 조합으로 색을 정규화한다(프리뷰 role 대체 → 플랫폼 알파 지원 여부 →
+ * 전용 알파 슬롯 합성 → CSS 색상).
+ *
+ * 갤러리 썸네일/저장된 템플릿 미리보기가 `getResolvedColor`를 직접 읽으면, 알파 짝이 없는
+ * iOS role에 사용자가 반투명 색을 고른 경우 결과물은 불투명인데 미리보기만 흐리게 보인다.
+ * `ThemeScreensPreview`가 편집기 프리뷰에서 쓰는 조합과 동일해야 어느 화면에서 봐도
+ * 최종 결과물과 같은 색이 보인다.
+ */
+export function resolvePlatformPreviewColor(
+  resolve: (role: ThemeResourceRole) => string | undefined,
+  role: ThemeResourceRole,
+  fallback: string,
+  platform: ThemePlatform,
+) {
+  const readRole = getPreviewColorRole(role, platform);
+  const value = applyPlatformColorAlpha(resolve(readRole) ?? fallback, readRole, platform);
+  const alphaRole = getSplitAlphaSourceRole(readRole, platform);
+  const normalized = alphaRole ? applySplitAlpha(value, resolve(alphaRole)) : value;
+  return themeColorToCss(normalized);
 }

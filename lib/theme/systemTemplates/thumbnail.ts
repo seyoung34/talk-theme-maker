@@ -5,6 +5,7 @@ import type { BubbleEditState } from "@/lib/theme/project/state";
 import type { SystemTemplateSaveInput } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
 import type { BubbleAsset, BubbleSlot, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import { resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import { themeColorToCss } from "@/lib/theme/color";
 
 // 640x600 = 16:15 비율. 갤러리 카드 비주얼(aspect-[16/15])과 일치시켜 object-cover 시
@@ -49,7 +50,11 @@ export async function generateSystemTemplateThumbnail(
   const colors = input.overrides.colors;
   const selections = input.overrides.candidateSelections;
   const uploads = input.overrides.uploads;
-  const color = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slots.find((slot) => slot.role === role), colors, selections, input.baseTemplateId, template, slots) ?? fallback);
+  const color = (role: ThemeResourceRole, fallback: string) => {
+    const resolve = (readRole: ThemeResourceRole) =>
+      getResolvedColor(slots.find((slot) => slot.role === readRole), colors, selections, input.baseTemplateId, template, slots);
+    return resolvePlatformPreviewColor(resolve, role, fallback, input.platform);
+  };
   // 편집기 ChatroomPreview와 동일한 9-slice edit(stretch/inset/marker)을 말풍선에 적용하기 위해 복원한다.
   const bubbleEdit = (role: ThemeResourceRole): BubbleEditState | undefined => {
     const slot = slots.find((item) => item.role === role);

@@ -8,6 +8,7 @@ import BubbleCanvasPreview from "@/components/preview/BubbleCanvasPreview";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload } from "@/lib/theme/project/state";
+import { resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
@@ -747,8 +748,11 @@ function createUserTemplatePreviewVisual(record: UserTemplateRecord, template: T
 }
 
 function resolveUserTemplateColor(slots: ThemeAssetSlot[], role: ThemeResourceRole, record: UserTemplateRecord, template: ThemeTemplate, fallback: string) {
-  const slot = findSlotByRole(slots, role);
-  return getResolvedColor(slot, record.colors, record.candidateSelections, template.id, template, slots) ?? fallback;
+  const resolve = (readRole: ThemeResourceRole) => {
+    const slot = findSlotByRole(slots, readRole);
+    return getResolvedColor(slot, record.colors, record.candidateSelections, template.id, template, slots);
+  };
+  return resolvePlatformPreviewColor(resolve, role, fallback, record.platform);
 }
 
 function resolveUserTemplateImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, record: UserTemplateRecord, templateId: ThemeTemplate["id"], template: ThemeTemplate, uploadPreviewUrls: Record<string, string>) {

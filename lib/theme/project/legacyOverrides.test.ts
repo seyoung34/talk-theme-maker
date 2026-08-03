@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { normalizeLegacyColorOverrides } from "@/lib/theme/project/legacyOverrides";
+import { normalizeLegacyColorOverrides, normalizeLegacyThemeDraft } from "@/lib/theme/project/legacyOverrides";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
+import { createEmptyThemeDraft } from "@/lib/theme/project/draft";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -30,7 +31,7 @@ describe("normalizeLegacyColorOverrides - 파생 색 연동 복원", () => {
   it("자동 맞춤 잔재가 남은 눌림 색은 값이 달라도 해제한다", () => {
     // 옛 눌림 레시피는 중간 회색을 **밝게** 밀었다. 지금 변환은 밝기로 판정해 어둡게 민다.
     // 값이 다르다고 유지하면 그 옛 버그가 저장본에 영원히 남는다.
-    const { colors } = normalizeLegacyColorOverrides(
+    const { colors, candidateSelections } = normalizeLegacyColorOverrides(
       "android",
       { [title]: "#1F2937", [titlePressed]: "#8E959C" },
       { [title]: autoMainPaletteCandidateId, [titlePressed]: autoMainPaletteCandidateId },
@@ -38,6 +39,18 @@ describe("normalizeLegacyColorOverrides - 파생 색 연동 복원", () => {
     );
     expect(colors[titlePressed]).toBeUndefined();
     expect(colors[title]).toBe("#1F2937");
+    expect(candidateSelections[titlePressed]).toBeUndefined();
+    expect(candidateSelections[title]).toBe(autoMainPaletteCandidateId);
+  });
+
+  it("Android 파생 슬롯은 고정 색이 없어도 오래된 자동 선택 표시를 지운다", () => {
+    const { candidateSelections } = normalizeLegacyColorOverrides(
+      "android",
+      {},
+      { [titlePressed]: autoMainPaletteCandidateId },
+      context("android"),
+    );
+    expect(candidateSelections[titlePressed]).toBeUndefined();
   });
 
   it("잔재가 없어도 값이 계산 결과와 같으면 해제한다", () => {
@@ -94,5 +107,21 @@ describe("normalizeLegacyColorOverrides - 파생 색 연동 복원", () => {
     );
     expect(colors[iosPressed]).toBeUndefined();
     expect(candidateSelections[iosPressed]).toBeUndefined();
+  });
+
+  it("자동 저장·복구 초안도 런타임 승격과 legacy 연동 복원을 함께 적용한다", () => {
+    const draft = createEmptyThemeDraft();
+    const normalized = normalizeLegacyThemeDraft("android", templateId, {
+      ...draft,
+      colors: { [title]: "#1F2937", [titlePressed]: "#8E959C" },
+      candidateSelections: { [titlePressed]: autoMainPaletteCandidateId },
+      bubbleGeometry: undefined,
+      bubbleFlipX: undefined,
+    });
+
+    expect(normalized.colors[titlePressed]).toBeUndefined();
+    expect(normalized.candidateSelections[titlePressed]).toBeUndefined();
+    expect(normalized.bubbleGeometry).toEqual({});
+    expect(normalized.bubbleFlipX).toEqual({});
   });
 });

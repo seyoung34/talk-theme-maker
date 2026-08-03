@@ -1,4 +1,5 @@
 import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
+import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import { getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
 import type { RemoteSlotUploads, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
@@ -144,11 +145,11 @@ export function createSystemTemplatePreviewVisual({
   return {
     platform,
     cardPreviewImage: summary.previewMetadata.cardPreviewPath ? signedUrls[summary.previewMetadata.cardPreviewPath] : undefined,
-    chatBackgroundColor: summary.previewMetadata.colors?.chatBackground ?? resolveColor(slots, "chat_background_color", summary, templateId, template, template.defaults.chatBackground),
-    mainBackgroundColor: summary.previewMetadata.colors?.mainBackground ?? resolveColor(slots, "main_background_color", summary, templateId, template, template.defaults.mainBackground),
-    tabBackgroundColor: summary.previewMetadata.colors?.tabBackground ?? resolveColor(slots, "tab_background", summary, templateId, template, template.defaults.tabBackground),
-    myBubbleTextColor: summary.previewMetadata.colors?.myBubble ?? resolveColor(slots, "chat_bubble_me_color", summary, templateId, template, template.defaults.mainTitle),
-    friendBubbleTextColor: summary.previewMetadata.colors?.friendBubble ?? resolveColor(slots, "chat_bubble_you_color", summary, templateId, template, template.defaults.mainTitle),
+    chatBackgroundColor: resolveColor(slots, "chat_background_color", summary, templateId, template, template.defaults.chatBackground, summary.previewMetadata.colors?.chatBackground),
+    mainBackgroundColor: resolveColor(slots, "main_background_color", summary, templateId, template, template.defaults.mainBackground, summary.previewMetadata.colors?.mainBackground),
+    tabBackgroundColor: resolveColor(slots, "tab_background", summary, templateId, template, template.defaults.tabBackground, summary.previewMetadata.colors?.tabBackground),
+    myBubbleTextColor: resolveColor(slots, "chat_bubble_me_color", summary, templateId, template, template.defaults.mainTitle, summary.previewMetadata.colors?.myBubble),
+    friendBubbleTextColor: resolveColor(slots, "chat_bubble_you_color", summary, templateId, template, template.defaults.mainTitle, summary.previewMetadata.colors?.friendBubble),
     myBubbleFillColor: template.defaults.myBubble,
     friendBubbleFillColor: template.defaults.friendBubble,
     chatBackgroundImage: resolveImage(slots, "chat_background", summary, templateId, template, signedUrls),
@@ -182,9 +183,22 @@ export function createSystemTemplatePreviewVisual({
   };
 }
 
-function resolveColor(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary: SystemTemplateSummary, templateId: ThemeTemplateId, template: ThemeTemplate, fallback: string) {
-  const slot = findSlotByRole(slots, role);
-  return getResolvedColor(slot, summary.colors, summary.candidateSelections, templateId, template, slots) ?? fallback;
+function resolveColor(
+  slots: ThemeAssetSlot[],
+  role: ThemeResourceRole,
+  summary: SystemTemplateSummary,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  fallback: string,
+  persistedPreviewColor?: string,
+) {
+  const previewRole = getPreviewColorRole(role, summary.platform);
+  const resolve = (readRole: ThemeResourceRole) => {
+    if (persistedPreviewColor !== undefined && readRole === previewRole) return persistedPreviewColor;
+    const slot = findSlotByRole(slots, readRole);
+    return getResolvedColor(slot, summary.colors, summary.candidateSelections, templateId, template, slots);
+  };
+  return resolvePlatformPreviewColor(resolve, role, fallback, summary.platform);
 }
 
 function resolveImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary: SystemTemplateSummary, templateId: ThemeTemplateId, template: ThemeTemplate, signedUrls: SignedUrlCache) {

@@ -66,6 +66,7 @@ function getMinimumContrastRatio(role: ThemeResourceRole) {
       "chat_bubble_me_color",
       "chat_bubble_you_color",
       "chat_input_text_color",
+      "chat_unread_count_color",
       "passcode_color",
     ].includes(role)
   ) return 4.5;
