@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createEmptyThemeDraft, normalizeThemeDraft, type PersistedThemeDraft } from "@/lib/theme/project/draft";
+import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
+import { createEmptyThemeDraft, createInitialThemeDraft, normalizeThemeDraft, type PersistedThemeDraft } from "@/lib/theme/project/draft";
 
 /**
  * 저장 레코드 → 런타임 초안 승격 계약.
@@ -43,5 +44,13 @@ describe("normalizeThemeDraft", () => {
   it("빈 초안에는 반전 맵이 항상 존재한다", () => {
     // 런타임 계약이다. 컴포넌트가 `draft.bubbleFlipX[slotId]`를 조건 없이 읽을 수 있어야 한다.
     expect(createEmptyThemeDraft().bubbleFlipX).toEqual({});
+  });
+
+  it("새 iOS 초안은 어두운 배경 연동 슬롯을 자동 후보로 시작한다", () => {
+    const draft = createInitialThemeDraft("ios", "basic");
+
+    expect(draft.candidateSelections["ios-main-text-color"]).toBe(autoMainPaletteCandidateId);
+    expect(draft.candidateSelections["ios-main-description-color"]).toBe(autoMainPaletteCandidateId);
+    expect(draft.candidateSelections["ios-tab-background-color"]).toBe(autoMainPaletteCandidateId);
   });
 });

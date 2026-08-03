@@ -1,5 +1,6 @@
 "use client";
 
+import { applyPlatformColorAlpha, applySplitAlpha, getPreviewColorRole, getSplitAlphaSourceRole } from "@/lib/theme/project/platformColor";
 import { Bell, CalendarCheck2, CalendarClock, ChevronRight, Cloud, Gamepad2, Gift, IdCard, ListPlus, MessageCirclePlus, PackageOpen, PawPrint, Percent, Radio, Scan, Search, Settings, Share2, Smile, Store, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getResolvedColor, type SlotCandidateSelections } from "@/components/project/projectModel";
@@ -75,7 +76,19 @@ export function ThemeScreensPreview({
   const profileUrls = useMemo(() => getProfilePreviewUrls(urls), [urls]);
 
   const preview = useMemo(() => {
-    const getColor = (role: ThemeResourceRole, fallback: string) => themeColorToCss(getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback);
+    const resolve = (role: ThemeResourceRole) => getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots);
+    /**
+     * 프리뷰 색을 내보내기와 같은 조합으로 만든다.
+     *
+     * 플랫폼마다 세 가지가 다를 수 있다 — 읽는 슬롯(iOS에 없는 role은 대체 role), 색상 코드에
+     * 알파를 담을 수 있는지, 투명도를 별도 슬롯이 들고 있는지. 셋 다 `platformColor`가 답한다.
+     */
+    const getColor = (role: ThemeResourceRole, fallback: string) => {
+      const readRole = getPreviewColorRole(role, platform);
+      const value = applyPlatformColorAlpha(resolve(readRole) ?? fallback, role, platform);
+      const alphaRole = getSplitAlphaSourceRole(role, platform);
+      return themeColorToCss(alphaRole ? applySplitAlpha(value, resolve(alphaRole)) : value);
+    };
     const mainBackgroundColor = getColor("main_background_color", template.defaults.mainBackground);
     const androidHeaderBackgroundColor = getColor("main_header_color", template.defaults.mainHeader);
 
@@ -100,7 +113,7 @@ export function ThemeScreensPreview({
       lightBadgeColor: getColor("tab_light_banner_badge_background_color", template.accent),
       badgeColor: getColor("tab_banner_badge_background_color", template.accent),
     };
-  }, [colors, selections, slotByRole, templateId, template, platform]);
+  }, [colors, selections, slotByRole, slots, templateId, template, platform]);
 
   const mainBackgroundSlot = slotByRole.main_background;
   const mainBackgroundColorSlot = slotByRole.main_background_color;
@@ -162,6 +175,8 @@ function FriendsScreen({
   profileUrls: string[];
   onSelectSlot?: (slotId: string) => void;
 }) {
+  const sectionTitleSlot = platform === "ios" ? slotByRole.main_description_color : slotByRole.main_section_title_color;
+
   return (
     <MainScreenFrame>
       <button
@@ -202,10 +217,10 @@ function FriendsScreen({
 
           <button
             type="button"
-            className={`px-1 text-left ${selectedSlotId === slotByRole.main_section_title_color?.id ? "rounded-lg ring-2 ring-[#60a5fa]" : ""}`}
+            className={`px-1 text-left ${selectedSlotId === sectionTitleSlot?.id ? "rounded-lg ring-2 ring-[#60a5fa]" : ""}`}
             onClick={(event) => {
               event.stopPropagation();
-              if (slotByRole.main_section_title_color) onSelectSlot?.(slotByRole.main_section_title_color.id);
+              if (sectionTitleSlot) onSelectSlot?.(sectionTitleSlot.id);
             }}
           >
             <span className="text-[14px] font-semibold" style={{ color: preview.sectionTitleColor }}>
@@ -222,11 +237,11 @@ function FriendsScreen({
                 </div>
                 <button
                   type="button"
-                  className={`block w-full text-center ${selectedSlotId === slotByRole.main_description_color?.id ? "rounded-md bg-white/70 px-0.5 py-0.5 ring-1 ring-[#60a5fa]" : ""}`}
-                  style={{ color: preview.descriptionColor }}
+                  className={`block w-full text-center ${selectedSlotId === slotByRole.main_title_color?.id ? "rounded-md bg-white/70 px-0.5 py-0.5 ring-1 ring-[#60a5fa]" : ""}`}
+                  style={{ color: preview.titleColor }}
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (slotByRole.main_description_color) onSelectSlot?.(slotByRole.main_description_color.id);
+                    if (slotByRole.main_title_color) onSelectSlot?.(slotByRole.main_title_color.id);
                   }}
                 >
                   <span className="block w-full truncate text-[8px] font-medium leading-[1.2]">{name}</span>
@@ -251,8 +266,8 @@ function FriendsScreen({
             <SectionLabel
               label="생일인 친구 4"
               color={preview.sectionTitleColor}
-              selected={selectedSlotId === slotByRole.main_section_title_color?.id}
-              onClick={() => slotByRole.main_section_title_color && onSelectSlot?.(slotByRole.main_section_title_color.id)}
+              selected={selectedSlotId === sectionTitleSlot?.id}
+              onClick={() => sectionTitleSlot && onSelectSlot?.(sectionTitleSlot.id)}
             />
             {friendRows.map((row) => (
               <div key={row.name} className="grid gap-0.5">
@@ -439,6 +454,7 @@ function ChatsScreen({
 //더보기 (Android/iOS 공통 프리뷰)
 function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { platform: ThemePlatform; selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
   const headerColorSlot = platform === "android" ? slotByRole.main_background_color : slotByRole.main_header_color;
+  const sectionTitleSlot = platform === "ios" ? slotByRole.main_description_color : slotByRole.main_section_title_color;
   const headerSelected = selectedSlotId === headerColorSlot?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id;
   const chipSelected = selectedSlotId === slotByRole.main_header_color?.id;
   const hasMainBackgroundImage = Boolean(urls.main_background);
@@ -544,8 +560,8 @@ function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSel
         <SectionLabel
           label="게임플레이"
           color={preview.sectionTitleColor}
-          selected={selectedSlotId === slotByRole.main_section_title_color?.id}
-          onClick={() => slotByRole.main_section_title_color && onSelectSlot?.(slotByRole.main_section_title_color.id)}
+          selected={selectedSlotId === sectionTitleSlot?.id}
+          onClick={() => sectionTitleSlot && onSelectSlot?.(sectionTitleSlot.id)}
         />
       </div>
 

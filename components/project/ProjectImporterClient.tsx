@@ -362,7 +362,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       skipDefaultSelectionResetRef.current = false;
       return;
     }
-    setCandidateSelections(getInitialSlotCandidateSelections(slots, templateId, activeTemplate));
+    const initialSelections = getInitialSlotCandidateSelections(slots, templateId, activeTemplate);
+    setCandidateSelections(initialSelections);
   }, [activeTemplate, setCandidateSelections, slots, templateId]);
 
   const viewportMode = useViewportMode();
@@ -386,10 +387,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   );
   const {
     activeImageColorPalette,
+    chatImageColorPaletteError,
+    chatPalettePending,
     contrastWarnings,
     imageColorPaletteError,
     mainBackgroundFile,
     mainColorRecommendations,
+    mainPalettePending,
   } = useProjectAutoColors({
     activeTemplate,
     analysis,
@@ -837,6 +841,18 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     focusSlot(slot.id);
   };
 
+  /**
+   * 눌림·선택 색의 직접 지정을 해제해 기준 색 연동으로 되돌린다.
+   *
+   * 피커를 한 번 만지면 `colors[slot.id]`에 값이 써져 연동이 끊긴다. 이 경로가 없으면
+   * 실수로 만진 사용자가 원래 상태로 돌아올 방법이 없다.
+   */
+  const unlinkColor = (slot: ThemeAssetSlot) => {
+    setColors((current) => omitBubbleEditValue(current, slot.id));
+    setCandidateSelections((current) => omitBubbleEditValue(current, slot.id));
+    setSelectedSlotId(slot.id);
+  };
+
   const changeColor = (slot: ThemeAssetSlot, value: string) => {
     setColors((current) => ({ ...current, [slot.id]: value }));
     if (candidateSelections[slot.id] === autoMainPaletteCandidateId) {
@@ -848,7 +864,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const applyAutoColor = (slot: ThemeAssetSlot) => {
-    if (mainBackgroundFile && !activeImageColorPalette) return;
+    if (mainPalettePending || chatPalettePending) return;
     const color = mainColorRecommendations[slot.id];
     if (!color) return;
     setColors((current) => ({ ...current, [slot.id]: color }));
@@ -858,7 +874,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const applyAutoColorToAll = () => {
-    if (mainBackgroundFile && !activeImageColorPalette) return;
+    if (mainPalettePending || chatPalettePending) return;
     const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && mainColorRecommendations[slot.id] && (mainBackgroundFile || slot.role !== "main_background_color"));
     setColors((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, mainColorRecommendations[slot.id]])]));
     setCandidateSelections((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, autoMainPaletteCandidateId])]));
@@ -1128,13 +1144,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onRemoveUpload={removeUploadedSlotCandidate}
       onEditedUpload={uploadEditedSlot}
       onColorChange={changeColor}
+      onUnlinkColor={unlinkColor}
       imageColorPalette={activeImageColorPalette}
-      imageColorPaletteError={imageColorPaletteError}
+      imageColorPaletteError={selectedSlot?.autoColorRecipe === "chat-background-average" ? chatImageColorPaletteError : imageColorPaletteError}
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
-      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
-      canApplyAutoColorToAll={Boolean((!mainBackgroundFile || activeImageColorPalette) && Object.keys(mainColorRecommendations).length)}
+      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !mainPalettePending && !chatPalettePending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+      canApplyAutoColorToAll={Boolean(!mainPalettePending && !chatPalettePending && Object.keys(mainColorRecommendations).length)}
       onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
       onApplyAutoColorToAll={applyAutoColorToAll}
       onSelectCandidate={selectCandidate}
@@ -1179,12 +1196,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
-      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && (!mainBackgroundFile || activeImageColorPalette) && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !mainPalettePending && !chatPalettePending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
       fileInputRefs={fileInputRefs}
       onUpload={uploadSlot}
       onEditedUpload={uploadEditedSlot}
       onRemoveUpload={removeUploadedSlotCandidate}
       onColorChange={changeColor}
+      onUnlinkColor={unlinkColor}
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
@@ -1451,6 +1469,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                         activeGroup={activeGroup}
                         onSelectGroup={selectGroup}
                         slots={visibleSlots}
+                        allSlots={slots}
                         selectedSlotId={selectedSlot?.id}
                         uploads={uploads}
                         colors={colors}
@@ -1493,6 +1512,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   activeGroup={activeGroup}
                   onSelectGroup={selectGroup}
                   slots={visibleSlots}
+                  allSlots={slots}
                   selectedSlotId={selectedSlot?.id}
                   uploads={uploads}
                   colors={colors}

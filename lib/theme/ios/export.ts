@@ -1,6 +1,7 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { centeredBubbleGeometry, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency, themeVersionName } from "@/lib/theme/exportRequest";
+import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -323,7 +324,20 @@ function buildIosThemeCss({
   sourceDimensionsBySlotId: Record<string, IosSourceDimensions>;
 }) {
   const slotByRole = Object.fromEntries(slots.map((slot) => [slot.role, slot])) as Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
-  const color = (role: ThemeResourceRole, fallback: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template) ?? fallback;
+  /**
+   * 색상 값을 해석한다. 알파 짝이 없는 role이면 여기서 투명도를 떨어뜨린다.
+   *
+   * iOS CSS는 색상 코드에 알파를 담지 못하고 별도 `-alpha` 프로퍼티로만 받는데, 그 짝은
+   * 다섯 곳뿐이다(`iosAlphaCapableRoles`). 나머지를 8자리로 내보내면 참조 테마에 없는 형식이
+   * 나가고, 편집기·프리뷰에서 본 반투명이 결과물에서 재현되지 않는다.
+   */
+  const color = (role: ThemeResourceRole, fallback: string) => {
+    const resolved = getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback;
+    return applyPlatformColorAlpha(resolved, role, "ios");
+  };
+  /** 알파 짝이 있는 role. 색상과 알파를 두 프로퍼티로 나눠 쓴다. */
+  const alphaPair = (role: ThemeResourceRole, fallback: string) =>
+    splitAlphaColor(getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback);
 
   const mainText = color("main_title_color", template.defaults.mainTitle);
   const headerText = color("main_header_foreground_color", mainText);
@@ -332,7 +346,14 @@ function buildIosThemeCss({
   const mainHighlighted = color("main_title_pressed_color", mainText);
   const mainParagraphHighlighted = color("tab_paragraph_pressed_color", mainParagraph);
   const tabText = color("tab_text_color", mainParagraph);
-  const chatButtonBackground = splitAlphaColor(color("chat_button_background_color", "#0FFFFFFF"));
+  const chatButtonBackground = alphaPair("chat_button_background_color", "#0FFFFFFF");
+  // 참조 테마의 셀 배경은 알파 0(투명)이다. Android의 theme_body_cell_color와 같은 슬롯을 쓴다.
+  const cellBackground = alphaPair("main_body_cell_color", "#00FFFFFF");
+  const cellPressedBackground = alphaPair("main_body_cell_pressed_color", mainText);
+  const sectionBorder = alphaPair("main_body_cell_border_color", mainText);
+  // iOS에는 별도 `main_section_title_color` 슬롯이 없다. SectionTitleStyle-Main의 텍스트는
+  // MainViewStyle-Primary의 description 색상과 같은 값으로 맞춰 프리뷰와 결과물을 일치시킨다.
+  const sectionTitle = alphaPair("main_description_color", mainDescription);
 
   return [
     "/*",
@@ -387,10 +408,10 @@ function buildIosThemeCss({
     cssLine("-ios-description-highlighted-text-color", mainHighlighted),
     cssLine("-ios-paragraph-text-color", mainParagraph),
     cssLine("-ios-paragraph-highlighted-text-color", mainParagraphHighlighted),
-    cssLine("-ios-normal-background-color", color("main_background_color", template.defaults.mainBackground)),
-    cssLine("-ios-normal-background-alpha", "0.0"),
-    cssLine("-ios-selected-background-color", color("main_body_cell_pressed_color", mainText)),
-    cssLine("-ios-selected-background-alpha", color("main_selected_background_alpha", "0.05")),
+    cssLine("-ios-normal-background-color", cellBackground.color),
+    cssLine("-ios-normal-background-alpha", cellBackground.alpha),
+    cssLine("-ios-selected-background-color", cellPressedBackground.color),
+    cssLine("-ios-selected-background-alpha", color("main_selected_background_alpha", cellPressedBackground.alpha)),
     "}",
     "",
     "MainViewStyle-Secondary",
@@ -400,10 +421,10 @@ function buildIosThemeCss({
     "",
     "SectionTitleStyle-Main",
     "{",
-    cssLine("border-color", color("main_body_cell_border_color", mainText)),
-    cssLine("border-alpha", color("main_body_cell_border_alpha", "0.18")),
-    cssLine("-ios-text-color", color("main_section_title_color", mainText)),
-    cssLine("-ios-text-alpha", "1.0"),
+    cssLine("border-color", sectionBorder.color),
+    cssLine("border-alpha", color("main_body_cell_border_alpha", sectionBorder.alpha)),
+    cssLine("-ios-text-color", sectionTitle.color),
+    cssLine("-ios-text-alpha", sectionTitle.alpha),
     "}",
     "",
     "FeatureStyle-Primary",
@@ -482,7 +503,7 @@ function buildIosThemeCss({
       selectedPrimaryImage: imageMap.bubble_me_1_selected,
       selectedGroupImage: imageMap.bubble_me_2_selected,
       textColor: color("chat_bubble_me_color", mainText),
-      selectedTextColor: getIosPressedTextColor(slotByRole.chat_bubble_me_selected_color, colors, color("chat_bubble_me_color", mainText)),
+      selectedTextColor: color("chat_bubble_me_selected_color", color("chat_bubble_me_color", mainText)),
       unreadColor: color("chat_unread_count_color", template.accent),
       primaryEdit: bubbleEditsBySlotId[slotByRole.bubble_me_1?.id ?? ""],
       groupEdit: bubbleEditsBySlotId[slotByRole.bubble_me_2?.id ?? ""],
@@ -500,7 +521,7 @@ function buildIosThemeCss({
       selectedPrimaryImage: imageMap.bubble_you_1_selected,
       selectedGroupImage: imageMap.bubble_you_2_selected,
       textColor: color("chat_bubble_you_color", mainText),
-      selectedTextColor: getIosPressedTextColor(slotByRole.chat_bubble_you_selected_color, colors, color("chat_bubble_you_color", mainText)),
+      selectedTextColor: color("chat_bubble_you_selected_color", color("chat_bubble_you_color", mainText)),
       unreadColor: color("chat_unread_count_color", template.accent),
       primaryEdit: bubbleEditsBySlotId[slotByRole.bubble_you_1?.id ?? ""],
       groupEdit: bubbleEditsBySlotId[slotByRole.bubble_you_2?.id ?? ""],
@@ -580,27 +601,6 @@ function buildMessageCellCss(
   ]
     .filter((line) => line !== null)
     .join("\n");
-}
-
-/**
- * 말풍선을 누르는 동안 쓰는 글자색.
- *
- * 사용자가 이 슬롯을 **직접 지정했을 때만** 그 값을 쓰고, 아니면 기본 글자색을 그대로 따라간다.
- *
- * `getResolvedColor`를 쓸 수 없는 이유는 이 슬롯에 자체 `defaultColor`(`#111111`)가 있어서
- * 항상 값을 돌려주기 때문이다. 그러면 "기본 글자색으로 폴백"이 영원히 도달하지 못하고,
- * 사용자가 기본 글자색만 흰색으로 바꾼 테마에서 누르는 순간 검정으로 튄다. 눌림 상태는
- * 고급 옵션이라 대부분 손대지 않으므로 이 어긋남이 그대로 내보내진다.
- *
- * `defaultColor`를 지우는 대신 여기서 판정하는 이유는, 지우면 `isSlotReady`가 색상 슬롯을
- * `Boolean(getResolvedColor(...))`로 보기 때문에 두 슬롯이 영구 "값 필요"가 되고 준비도
- * 카운터가 떨어지기 때문이다.
- *
- * 자동 색상(팔레트 맞춤)도 결과를 `colors[slot.id]`에 쓰므로 명시 지정으로 함께 잡힌다.
- */
-export function getIosPressedTextColor(pressedSlot: ThemeAssetSlot | undefined, colors: SlotColors, baseColor: string) {
-  const explicit = pressedSlot ? colors[pressedSlot.id] : undefined;
-  return explicit ?? baseColor;
 }
 
 export function getIosCssValues(edit: BubbleEditState | undefined, fallbackInsets: Insets, fallbackStretch: StretchPoint, sourceScale: number, sourceDimensions?: IosSourceDimensions) {

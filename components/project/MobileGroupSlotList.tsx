@@ -14,6 +14,7 @@ export function MobileGroupSlotList({
   activeGroup,
   onSelectGroup,
   slots,
+  allSlots,
   selectedSlotId,
   uploads,
   colors,
@@ -28,7 +29,10 @@ export function MobileGroupSlotList({
   groups: ThemeSlotGroup[];
   activeGroup: ThemeSlotGroup;
   onSelectGroup: (group: ThemeSlotGroup) => void;
+  /** 이 그룹에서 **그릴** 슬롯. 섹션·그룹으로 이미 걸러져 있다. */
   slots: ThemeAssetSlot[];
+  /** 값을 **해석할 때** 쓰는 전체 슬롯 목록. 연동 기준 슬롯은 다른 그룹에 있을 수 있다. */
+  allSlots: ThemeAssetSlot[];
   selectedSlotId?: string;
   uploads: SlotUploads;
   colors: SlotColors;
@@ -45,7 +49,7 @@ export function MobileGroupSlotList({
   const basicSlots = slots.filter((slot) => slot.optionLevel !== "advanced");
   const advancedSlots = slots.filter((slot) => slot.optionLevel === "advanced");
   const selectedSlot = slots.find((slot) => slot.id === selectedSlotId);
-  const selectedStatus = selectedSlot ? slotStatusLabel(selectedSlot, uploads, colors, selections, templateId, template, slots) : undefined;
+  const selectedStatus = selectedSlot ? slotStatusLabel(selectedSlot, uploads, colors, selections, templateId, template, allSlots) : undefined;
   const selectedWarning = selectedSlot ? contrastWarnings[selectedSlot.id] : undefined;
 
   return (
@@ -96,8 +100,8 @@ export function MobileGroupSlotList({
                   key={slot.id}
                   slot={slot}
                   selected={selectedSlotId === slot.id}
-                  status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)}
-                  appliedTitle={getAppliedCandidateTitle(slot, uploads, colors, selections, templateId, template, slots, adminAssets)}
+                  status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, allSlots)}
+                  appliedTitle={getAppliedCandidateTitle(slot, uploads, colors, selections, templateId, template, allSlots, adminAssets)}
                   warning={contrastWarnings[slot.id]}
                   onSelect={() => {
                     onSelectSlot(slot);
@@ -121,8 +125,8 @@ export function MobileGroupSlotList({
                       key={slot.id}
                       slot={slot}
                       selected={selectedSlotId === slot.id}
-                      status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, slots)}
-                      appliedTitle={getAppliedCandidateTitle(slot, uploads, colors, selections, templateId, template, slots, adminAssets)}
+                      status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, allSlots)}
+                      appliedTitle={getAppliedCandidateTitle(slot, uploads, colors, selections, templateId, template, allSlots, adminAssets)}
                       warning={contrastWarnings[slot.id]}
                       onSelect={() => {
                         onSelectSlot(slot);

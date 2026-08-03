@@ -11,6 +11,15 @@ export type MainPaletteContext = {
   currentBackground: string;
   backgroundIsAuto: boolean;
   templateAccent: string;
+  /**
+   * 채팅방 배경은 메인 배경과 **다른 이미지**를 쓴다.
+   *
+   * 메인 팔레트로 대신하면 채팅방 위에 그려지는 것들(읽지 않음 숫자, 말풍선 글자 대비)이
+   * 엉뚱한 밝기를 기준으로 계산된다. 그래서 seed를 따로 받는다.
+   */
+  chatImageActive: boolean;
+  chatPalette: ImageColorPalette | null;
+  currentChatBackground: string;
 };
 
 export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context: MainPaletteContext) {
@@ -27,6 +36,9 @@ export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context
   const muted = mutedThemeForeground(background);
   const headerForeground = readableThemeForeground(header);
   const accentSurface = mixThemeColors(secondary, accent, 0.13);
+
+  const chatImagePalette = context.chatImageActive ? context.chatPalette : null;
+  const chatBackground = chatImagePalette?.average ?? themeColorRgbHex(context.currentChatBackground, currentBackground);
 
   const values: Partial<Record<ThemeAutoColorRecipe, string>> = {
     "background-average": backgroundRecommendation,
@@ -45,6 +57,7 @@ export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context
     "accent-pressed": adjustThemeColor(accent, readableThemeForeground(accent) === "#FFFFFF" ? -0.12 : 0.12),
     "accent-surface": accentSurface,
     "accent-surface-pressed": mixThemeColors(secondary, accent, 0.22),
+    "chat-background-average": chatBackground,
   };
 
   return Object.fromEntries(

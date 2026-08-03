@@ -244,77 +244,79 @@ function buildAndroidColorsXml(
   templateId: ThemeTemplateId,
 ) {
   const slotByRole = Object.fromEntries(slots.map((slot) => [slot.role, slot])) as Record<string, ThemeAssetSlot | undefined>;
-  const mainHeader = getResolvedColor(slotByRole.main_header_color, colors, selections, templateId, template) ?? template.defaults.mainHeader;
+  // iOS 쪽 `color()`와 같은 역할. 조회가 40번 넘게 반복되므로 인자를 한 곳에서만 넘긴다.
+  const resolve = (role: string) => getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots);
+  const mainHeader = resolve("main_header_color") ?? template.defaults.mainHeader;
   const mainHeaderForeground =
-    getResolvedColor(slotByRole.main_header_foreground_color, colors, selections, templateId, template) ??
-    getResolvedColor(slotByRole.main_title_color, colors, selections, templateId, template) ??
+    resolve("main_header_foreground_color") ??
+    resolve("main_title_color") ??
     template.defaults.mainTitle;
-  const mainTitle = getResolvedColor(slotByRole.main_title_color, colors, selections, templateId, template) ?? template.defaults.mainTitle;
+  const mainTitle = resolve("main_title_color") ?? template.defaults.mainTitle;
   const mainTitlePressed =
-    getResolvedColor(slotByRole.main_title_pressed_color, colors, selections, templateId, template) ??
+    resolve("main_title_pressed_color") ??
     mainTitle;
   const mainDescription =
-    getResolvedColor(slotByRole.main_description_color, colors, selections, templateId, template) ??
+    resolve("main_description_color") ??
     template.defaults.mainBody;
-  const mainDescriptionPressed = getResolvedColor(slotByRole.main_description_pressed_color, colors, selections, templateId, template) ?? mainDescription;
-  const tabParagraph = getResolvedColor(slotByRole.tab_paragraph_color, colors, selections, templateId, template) ?? template.defaults.mainBody;
-  const tabParagraphPressed = getResolvedColor(slotByRole.tab_paragraph_pressed_color, colors, selections, templateId, template) ?? tabParagraph;
+  const mainDescriptionPressed = resolve("main_description_pressed_color") ?? mainDescription;
+  const tabParagraph = resolve("tab_paragraph_color") ?? template.defaults.mainBody;
+  const tabParagraphPressed = resolve("tab_paragraph_pressed_color") ?? tabParagraph;
   const mainBackground =
-    getResolvedColor(slotByRole.main_background_color, colors, selections, templateId, template) ??
+    resolve("main_background_color") ??
     template.defaults.mainBackground;
   const mainBodyCellPressed =
-    getResolvedColor(slotByRole.main_body_cell_pressed_color, colors, selections, templateId, template) ??
+    resolve("main_body_cell_pressed_color") ??
     withAlpha(mainBackground, "99");
-  const mainBodyCell = getResolvedColor(slotByRole.main_body_cell_color, colors, selections, templateId, template) ?? withAlpha(mainBackground, "00");
+  const mainBodyCell = resolve("main_body_cell_color") ?? withAlpha(mainBackground, "00");
   const mainBodyCellBorder =
-    getResolvedColor(slotByRole.main_body_cell_border_color, colors, selections, templateId, template) ??
+    resolve("main_body_cell_border_color") ??
     withAlpha(mainTitle, "33");
   const mainSectionTitle =
-    getResolvedColor(slotByRole.main_section_title_color, colors, selections, templateId, template) ??
+    resolve("main_section_title_color") ??
     mainTitle;
   const mainFeatureBrowseTab =
-    getResolvedColor(slotByRole.main_feature_browse_tab_color, colors, selections, templateId, template) ??
-    getResolvedColor(slotByRole.tab_background, colors, selections, templateId, template) ??
+    resolve("main_feature_browse_tab_color") ??
+    resolve("tab_background") ??
     template.defaults.tabBackground;
   const accent = template.accent;
-  const mainFeatureBrowseTabFocused = getResolvedColor(slotByRole.main_feature_browse_tab_focused_color, colors, selections, templateId, template) ?? mainTitle;
-  const featurePrimary = getResolvedColor(slotByRole.feature_primary_color, colors, selections, templateId, template) ?? accent;
-  const featurePrimaryPressed = getResolvedColor(slotByRole.feature_primary_pressed_color, colors, selections, templateId, template) ?? featurePrimary;
+  const mainFeatureBrowseTabFocused = resolve("main_feature_browse_tab_focused_color") ?? mainTitle;
+  const featurePrimary = resolve("feature_primary_color") ?? accent;
+  const featurePrimaryPressed = resolve("feature_primary_pressed_color") ?? featurePrimary;
   const mainBodySecondary =
-    getResolvedColor(slotByRole.main_body_secondary_cell_color, colors, selections, templateId, template) ??
+    resolve("main_body_secondary_cell_color") ??
     lighten(mainBackground, 0.06);
-  const chatBackground = getResolvedColor(slotByRole.chat_background_color, colors, selections, templateId, template) ?? template.defaults.chatBackground;
+  const chatBackground = resolve("chat_background_color") ?? template.defaults.chatBackground;
   const chatBubbleMeColor =
-    getResolvedColor(slotByRole.chat_bubble_me_color, colors, selections, templateId, template) ??
+    resolve("chat_bubble_me_color") ??
     mainTitle;
   const chatBubbleYouColor =
-    getResolvedColor(slotByRole.chat_bubble_you_color, colors, selections, templateId, template) ??
+    resolve("chat_bubble_you_color") ??
     mainTitle;
   const chatUnreadCountColor =
-    getResolvedColor(slotByRole.chat_unread_count_color, colors, selections, templateId, template) ??
+    resolve("chat_unread_count_color") ??
     accent;
-  const tabBackground = getResolvedColor(slotByRole.tab_background, colors, selections, templateId, template) ?? template.defaults.tabBackground;
-  const lightBannerBadge = getResolvedColor(slotByRole.tab_light_banner_badge_background_color, colors, selections, templateId, template) ?? accent;
-  const bannerBadge = getResolvedColor(slotByRole.tab_banner_badge_background_color, colors, selections, templateId, template) ?? accent;
-  const chatInputBackground = getResolvedColor(slotByRole.chat_input_background_color, colors, selections, templateId, template) ?? template.defaults.chatInputBackground;
-  const chatSendButton = getResolvedColor(slotByRole.chat_send_button_color, colors, selections, templateId, template) ?? template.defaults.chatSendButton;
-  const chatInputText = getResolvedColor(slotByRole.chat_input_text_color, colors, selections, templateId, template) ?? mainTitle;
-  const chatSendIcon = getResolvedColor(slotByRole.chat_send_icon_color, colors, selections, templateId, template) ?? mainTitle;
-  const chatMenuIcon = getResolvedColor(slotByRole.chat_menu_icon_color, colors, selections, templateId, template) ?? tabParagraph;
-  const chatMenuButton = getResolvedColor(slotByRole.chat_menu_button_color, colors, selections, templateId, template) ?? withAlpha(tabParagraph, "14");
-  const directShareText = getResolvedColor(slotByRole.direct_share_text_color, colors, selections, templateId, template) ?? mainTitle;
-  const directShareButton = getResolvedColor(slotByRole.direct_share_button_color, colors, selections, templateId, template) ?? accent;
-  const directShareBackground = getResolvedColor(slotByRole.direct_share_background_color, colors, selections, templateId, template) ?? lighten(mainBackground, 0.04);
-  const notificationText = getResolvedColor(slotByRole.notification_text_color, colors, selections, templateId, template) ?? mainTitle;
-  const notificationBackground = getResolvedColor(slotByRole.notification_background_color, colors, selections, templateId, template) ?? template.defaults.friendBubble;
-  const notificationBackgroundPressed = getResolvedColor(slotByRole.notification_background_pressed_color, colors, selections, templateId, template) ?? lighten(notificationBackground, -0.04);
-  const passcodeBackground = getResolvedColor(slotByRole.passcode_background_color, colors, selections, templateId, template) ?? "#FCC5C5";
-  const passcodeColor = getResolvedColor(slotByRole.passcode_color, colors, selections, templateId, template) ?? "#664242";
-  const passcodeKeypad = getResolvedColor(slotByRole.passcode_keypad_color, colors, selections, templateId, template) ?? "#664242";
-  const passcodeKeypadPressed = getResolvedColor(slotByRole.passcode_keypad_pressed_color, colors, selections, templateId, template) ?? "#CCB8B8";
-  const passcodeKeypadBackground = getResolvedColor(slotByRole.passcode_keypad_background_color, colors, selections, templateId, template) ?? "#FFF2F2";
-  const passcodeKeypadPressedBackground = getResolvedColor(slotByRole.passcode_keypad_pressed_background_color, colors, selections, templateId, template) ?? "#99FFDEDE";
-  const passcodePatternLine = getResolvedColor(slotByRole.passcode_pattern_line_color, colors, selections, templateId, template) ?? passcodeBackground;
+  const tabBackground = resolve("tab_background") ?? template.defaults.tabBackground;
+  const lightBannerBadge = resolve("tab_light_banner_badge_background_color") ?? accent;
+  const bannerBadge = resolve("tab_banner_badge_background_color") ?? accent;
+  const chatInputBackground = resolve("chat_input_background_color") ?? template.defaults.chatInputBackground;
+  const chatSendButton = resolve("chat_send_button_color") ?? template.defaults.chatSendButton;
+  const chatInputText = resolve("chat_input_text_color") ?? mainTitle;
+  const chatSendIcon = resolve("chat_send_icon_color") ?? mainTitle;
+  const chatMenuIcon = resolve("chat_menu_icon_color") ?? tabParagraph;
+  const chatMenuButton = resolve("chat_menu_button_color") ?? withAlpha(tabParagraph, "14");
+  const directShareText = resolve("direct_share_text_color") ?? mainTitle;
+  const directShareButton = resolve("direct_share_button_color") ?? accent;
+  const directShareBackground = resolve("direct_share_background_color") ?? lighten(mainBackground, 0.04);
+  const notificationText = resolve("notification_text_color") ?? mainTitle;
+  const notificationBackground = resolve("notification_background_color") ?? template.defaults.friendBubble;
+  const notificationBackgroundPressed = resolve("notification_background_pressed_color") ?? lighten(notificationBackground, -0.04);
+  const passcodeBackground = resolve("passcode_background_color") ?? "#FCC5C5";
+  const passcodeColor = resolve("passcode_color") ?? "#664242";
+  const passcodeKeypad = resolve("passcode_keypad_color") ?? "#664242";
+  const passcodeKeypadPressed = resolve("passcode_keypad_pressed_color") ?? "#CCB8B8";
+  const passcodeKeypadBackground = resolve("passcode_keypad_background_color") ?? "#FFF2F2";
+  const passcodeKeypadPressedBackground = resolve("passcode_keypad_pressed_background_color") ?? "#99FFDEDE";
+  const passcodePatternLine = resolve("passcode_pattern_line_color") ?? passcodeBackground;
 
   const palette: Record<string, string> = {
     theme_header_color: mainHeaderForeground,

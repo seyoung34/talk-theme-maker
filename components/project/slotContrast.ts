@@ -38,7 +38,7 @@ export function getSlotContrastWarning(slot: ThemeAssetSlot, context: ContrastCo
   const minimumRatio = getMinimumContrastRatio(slot.role);
   if (!minimumRatio) return null;
 
-  const foreground = getResolvedColor(slot, context.colors, context.selections, context.templateId, context.template);
+  const foreground = getResolvedColor(slot, context.colors, context.selections, context.templateId, context.template, context.slots);
   if (!foreground || !foreground.startsWith("#")) return null;
 
   const backgroundInfo = getContrastBackground(slot.role, context);
@@ -66,6 +66,7 @@ function getMinimumContrastRatio(role: ThemeResourceRole) {
       "chat_bubble_me_color",
       "chat_bubble_you_color",
       "chat_input_text_color",
+      "chat_unread_count_color",
       "passcode_color",
     ].includes(role)
   ) return 4.5;
@@ -124,6 +125,9 @@ function getContrastBackground(role: ThemeResourceRole, context: ContrastContext
   if (role === "passcode_color" || role === "passcode_pattern_line_color") return { color: getColor("passcode_background_color", context.template.defaults.mainBackground, context), label: "잠금화면 배경" };
   if (role.startsWith("chat_") && role.includes("button")) return { color: getColor("chat_input_background_color", context.template.defaults.chatInputBackground, context), label: "입력창 배경" };
   if (role === "chat_input_text_color" || role === "chat_menu_icon_color") return { color: getColor("chat_input_background_color", context.template.defaults.chatInputBackground, context), label: "입력창 배경" };
+  // 읽지 않음 숫자는 말풍선 바깥, 채팅방 배경 위에 그려진다. 연동을 끄고 직접 지정했을 때
+  // 배경에 묻히면 여기서 경고가 뜬다.
+  if (role === "chat_unread_count_color") return { color: getColor("chat_background_color", context.template.defaults.chatBackground, context), label: "채팅방 배경" };
   if (role === "chat_bubble_me_color") return { color: context.template.defaults.myBubble, label: "내 말풍선" };
   if (role === "chat_bubble_you_color") return { color: context.template.defaults.friendBubble, label: "상대 말풍선" };
   if (role === "direct_share_text_color") return { color: getColor("direct_share_background_color", context.template.defaults.friendBubble, context), label: "바로 공유 배경" };
@@ -135,5 +139,5 @@ function getContrastBackground(role: ThemeResourceRole, context: ContrastContext
 
 function getColor(role: ThemeResourceRole, fallback: string, context: ContrastContext) {
   const slot = context.slots.find((candidate) => candidate.role === role);
-  return getResolvedColor(slot, context.colors, context.selections, context.templateId, context.template) ?? fallback;
+  return getResolvedColor(slot, context.colors, context.selections, context.templateId, context.template, context.slots) ?? fallback;
 }

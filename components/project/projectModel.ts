@@ -5,12 +5,14 @@ import {
   getSelectedUpload,
   getSlotCandidates,
   getSharedSlotUploadEntries,
+  getInheritedColorSourceSlot,
   disabledImageCandidateId,
   type BubbleEditState,
   type SlotCandidateSelections,
   type SlotColors,
   type SlotUploads,
 } from "@/lib/theme/project/state";
+import { getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
 import { describeAdminAssetAnalysis, getAdminAssetKindLabel, isAdminAssetRecommendedForSlot, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -80,6 +82,7 @@ export {
   getResolvedColor,
   getSelectedCandidate,
   getSelectedUpload,
+  getInheritedColorSourceSlot,
   getSharedBubbleUploadPeers,
   getSharedSlotUploadEntries,
   isSlotReady,
@@ -149,7 +152,7 @@ export function buildSlotCandidates(
   const baseItems = candidates.map((candidate) => ({
     id: candidate.id,
     title: candidate.label,
-    status: slot.kind === "color" ? (candidate.colorValue ?? getResolvedColor(slot, colors, selections, templateId, template) ?? "값 없음").toUpperCase() : candidate.note ?? slot.note,
+    status: slot.kind === "color" ? (candidate.colorValue ?? getResolvedColor(slot, colors, selections, templateId, template, allSlots) ?? "값 없음").toUpperCase() : candidate.note ?? slot.note,
     active: selected?.id === candidate.id,
     selected: selected?.id === candidate.id && !selectedUpload,
     source: candidate.isDefault || candidate.id === disabledImageCandidateId ? ("default" as const) : ("creator" as const),
@@ -210,6 +213,57 @@ function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | u
     }));
 }
 
+export type DerivedColorLink = {
+  /** 기준 슬롯 라벨. 안내 문구에 그대로 넣는다. */
+  baseLabel: string;
+  /** 지금 기준 색을 따라가는 중인지. `getInheritedColorSourceSlot`과 같은 기준이다. */
+  linked: boolean;
+  /** 연동했을 때 적용될 색. 카드의 추천 색상 스와치에 쓴다. */
+  color?: string;
+  /** 무엇을 기준으로 계산하는지. 카드 본문과 툴팁에 공용으로 쓴다. */
+  description: string;
+};
+
+/**
+ * 기준 슬롯 연동 상태.
+ *
+ * 눌림·선택 색은 기준 색을 따라가다가, 사용자가 피커를 한 번 만지는 순간 `colors[slot.id]`에
+ * 값이 써져 연동이 끊긴다. 되돌릴 방법이 없으면 실수로 만진 사람이 원래 상태로 못 돌아온다.
+ *
+ * 처음에는 팔레트 후보 칩으로 노출했는데, 배경에서 파생되는 슬롯들이 쓰는 "역할별 자동 맞춤"
+ * 카드와 생김새도 조작법도 달라 같은 개념으로 보이지 않았다. 이제 두 패널 모두 이 값을 받아
+ * 자동 맞춤과 **같은 UI**로 그린다.
+ */
+export function getDerivedColorLink(
+  slot: ThemeAssetSlot,
+  colors: SlotColors,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  allSlots: ThemeAssetSlot[],
+): DerivedColorLink | undefined {
+  const rule = getDerivedColorRule(slot.role);
+  if (!rule) return undefined;
+  const baseSlot = allSlots.find((candidate) => candidate.role === rule.baseRole && candidate.platform === slot.platform);
+  if (!baseSlot) return undefined;
+
+  // 끊긴 상태에서도 "연동하면 이 색이 된다"를 보여 줘야 하므로, 직접 지정을 뺀 상태로 한 번 더
+  // 해석한다. 빼는 키는 되돌리기 동작(`unlinkColor`)이 지우는 것과 정확히 같아야 한다.
+  const withoutOverride = { ...colors, [slot.id]: undefined };
+  const withoutSelection = { ...selections, [slot.id]: undefined };
+
+  return {
+    baseLabel: baseSlot.label,
+    linked: Boolean(getInheritedColorSourceSlot(slot, colors, selections, templateId, template, allSlots)),
+    color: getResolvedColor(slot, withoutOverride, withoutSelection, templateId, template, allSlots),
+    // 대비 보정형은 기준 색을 "따라가는" 게 아니라 그 위에서 읽히도록 맞추는 것이라 문구가
+    // 달라야 한다. 같은 문구를 쓰면 사용자가 배경색이 그대로 온다고 오해한다.
+    description: rule.transform === "contrast-on-base"
+      ? `${baseSlot.label} 위에서 읽히도록 대비를 맞춥니다.`
+      : `${baseSlot.label}을 기준으로 계산합니다.`,
+  };
+}
+
 function buildPaletteCandidates(
   activeSlot: ThemeAssetSlot,
   allSlots: ThemeAssetSlot[],
@@ -219,13 +273,29 @@ function buildPaletteCandidates(
   templateId: ThemeTemplateId,
   template: ThemeTemplate,
 ): SlotCandidate[] {
-  const currentColor = getResolvedColor(activeSlot, colors, selections, templateId, template);
+  const currentColor = getResolvedColor(activeSlot, colors, selections, templateId, template, allSlots);
   const map = new Map<string, { color: string; count: number }>();
+
+  /**
+   * 이 슬롯이 그 위에서 읽혀야 하는 배경색은 후보에서 뺀다.
+   *
+   * 팔레트는 테마에서 쓰이는 색을 모아 보여 준다. 그래서 읽지 않음 숫자를 편집할 때 채팅방
+   * 배경색이 스와치로 떴고, 그걸 고르면 배경과 완전히 같은 색이 되어 글자가 사라진다.
+   * 실제로 그렇게 눌러 "배경을 바꿔도 색이 안 변한다"는 신고가 나왔다 — 직접 지정이라
+   * 연동까지 함께 꺼진 상태였다. 고를 수 없게 하는 편이 경고보다 낫다.
+   */
+  const surfaceRule = getDerivedColorRule(activeSlot.role);
+  const surfaceSlot = surfaceRule?.transform === "contrast-on-base"
+    ? allSlots.find((slot) => slot.role === surfaceRule.baseRole && slot.platform === activeSlot.platform)
+    : undefined;
+  const surfaceColor = surfaceSlot ? getResolvedColor(surfaceSlot, colors, selections, templateId, template, allSlots) : undefined;
+  const excluded = surfaceColor ? normalizeColor(surfaceColor) : undefined;
 
   for (const slot of allSlots) {
     if (slot.kind !== "color") continue;
-    const color = getResolvedColor(slot, colors, selections, templateId, template);
+    const color = getResolvedColor(slot, colors, selections, templateId, template, allSlots);
     if (!color) continue;
+    if (excluded && normalizeColor(color) === excluded) continue;
 
     const key = normalizeColor(color);
     const item = map.get(key);

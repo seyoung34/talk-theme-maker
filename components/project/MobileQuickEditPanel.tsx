@@ -10,10 +10,12 @@ import {
   buildSlotCandidates,
   disabledImageCandidateId,
   getDefaultColor,
+  getResolvedColor,
   getSelectedCandidate,
   getSelectedUpload,
   getSharedSlotUploadEntries,
   isRemovableUploadCandidate,
+  getDerivedColorLink,
   type SlotCandidate,
   type SlotCandidateSelections,
   type SlotColors,
@@ -22,6 +24,7 @@ import {
 } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { supportsColorAlpha } from "@/lib/theme/project/platformColor";
 import { getBackgroundSourcePair, getImageEditTarget } from "@/components/project/projectImporterHelpers";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
@@ -55,6 +58,8 @@ type MobileQuickEditPanelProps = {
   onEditedUpload: (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => void;
   onRemoveUpload: (slot: ThemeAssetSlot, uploadId: string) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
+  /** 직접 지정을 해제해 기준 색 연동으로 되돌린다. */
+  onUnlinkColor: (slot: ThemeAssetSlot) => void;
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
   onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
   onApplyAutoColor: () => void;
@@ -83,6 +88,7 @@ export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
   const backgroundSourcePair = getBackgroundSourcePair(slot, slots);
 
   const applyCandidate = (candidate: SlotCandidate) => {
+    // "기본 색상 따라가기"는 색을 정하는 게 아니라 직접 지정을 해제하는 동작이다.
     if (slot.kind === "color" && candidate.source === "palette" && candidate.colorValue) {
       props.onColorChange(slot, candidate.colorValue);
       return;
@@ -213,20 +219,30 @@ function ColorControls({
   selections,
   templateId,
   template,
+  platform,
+  slots,
   candidates,
   recommendedColor,
   isAutoColor,
   canApplyAutoColor,
   onColorChange,
+  onUnlinkColor,
   onApplyAutoColor,
   candidateGridExpanded = false,
 }: MobileQuickEditPanelProps & { slot: ThemeAssetSlot; candidates: SlotCandidate[] }) {
-  const value = colors[slot.id] ?? getSelectedCandidate(slot, selections, templateId, template)?.colorValue ?? getDefaultColor(slot, templateId, template);
+  // 연동 중이면 기준 색에서 파생된 실제 값이 나와야 한다. 파생 슬롯 자기 기본값을 보여 주면
+  // 프리뷰·내보내기와 어긋나고, 그 값에서 편집을 시작하는 순간 연동이 끊긴다.
+  const value = getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template);
   const hex = themeColorRgbHex(value);
   const alpha = themeColorAlphaPercent(value);
+  // iOS CSS는 색상 코드에 알파를 담지 못한다. 표현할 자리가 없는 슬롯에 슬라이더를 보여 주면
+  // 사용자가 조작한 투명도가 내보내기에서 조용히 사라진다.
+  const alphaSupported = supportsColorAlpha(slot.role, platform);
   const swatchCandidates = candidates
     .filter((candidate) => candidate.colorValue)
     .sort((left, right) => Number(right.source === "default") - Number(left.source === "default"));
+  // 기준 슬롯 연동. 배경 파생 슬롯의 자동 맞춤 버튼과 같은 개념이라 같은 UI로 그린다.
+  const derivedLink = getDerivedColorLink(slot, colors, selections, templateId, template, slots);
   const colorInputId = useId();
 
   return (
@@ -254,7 +270,7 @@ function ColorControls({
         />
       </div>
 
-      <div className="flex items-center gap-2">
+      {alphaSupported ? <div className="flex items-center gap-2">
         <span className="w-12 shrink-0 text-[11px] font-bold text-[#64748b]">투명도</span>
         <input
           type="range"
@@ -267,7 +283,7 @@ function ColorControls({
           aria-label="투명도"
         />
         <span className="w-9 shrink-0 text-right text-[11px] font-bold text-[#334155]">{Math.round(alpha)}%</span>
-      </div>
+      </div> : null}
 
       {swatchCandidates.length > 0 ? (
         <div className={candidateGridExpanded ? "grid grid-cols-6 gap-2 min-[430px]:grid-cols-8" : "flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}>
@@ -282,6 +298,24 @@ function ColorControls({
               onClick={() => (candidate.colorValue ? onColorChange(slot, candidate.colorValue) : undefined)}
             />
           ))}
+        </div>
+      ) : null}
+
+      {derivedLink ? (
+        // 데스크톱 카드는 기준 슬롯 이름과 계산 방식을 함께 보여 준다. 버튼 문구만 있으면
+        // 무엇을 기준으로 맞추는지 알 수 없어 같은 설명을 캡션으로 붙인다.
+        <div className="grid gap-1">
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-3 text-[13px] font-bold text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={derivedLink.linked}
+            onClick={() => onUnlinkColor(slot)}
+          >
+            <Sliders size={15} strokeWidth={2.2} aria-hidden="true" />
+            {derivedLink.linked ? "자동 색상 적용됨" : "추천 색상 자동 적용"}
+            {derivedLink.color ? <span className="ml-1 border rounded size-4 border-black/10" style={{ backgroundColor: themeColorToCss(derivedLink.color) }} aria-hidden="true" /> : null}
+          </button>
+          <p className="px-1 text-[11px] font-medium leading-4 text-[#64748b]">{derivedLink.description}</p>
         </div>
       ) : null}
 

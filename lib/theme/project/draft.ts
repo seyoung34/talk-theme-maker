@@ -1,7 +1,9 @@
-import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
+import { getInitialSlotCandidateSelections, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { RemoteSlotUploads, SystemTemplatePricingType, SystemTemplateStatus, SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
 import type { BubbleGeometry, Insets, Markers, StretchPoint } from "@/lib/theme/types";
+import type { ThemePlatform } from "@/lib/theme/types";
+import { getThemeSlots, getThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 
 export type EditorMode = "user" | "admin";
 
@@ -45,6 +47,15 @@ export function createEmptyThemeDraft(): ThemeDraft {
     bubbleFlipX: {},
     bubbleDesigns: {},
     bubbleDecorationSources: {},
+  };
+}
+
+/** 새 편집 시작 시 자동 색상 슬롯을 실제 자동 후보에 연결한 초안. */
+export function createInitialThemeDraft(platform: ThemePlatform, templateId: ThemeTemplateId): ThemeDraft {
+  const template = getThemeTemplate(templateId);
+  return {
+    ...createEmptyThemeDraft(),
+    candidateSelections: getInitialSlotCandidateSelections(getThemeSlots(platform), templateId, template),
   };
 }
 

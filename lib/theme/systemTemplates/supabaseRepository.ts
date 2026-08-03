@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/client";
 import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName } from "@/lib/theme/remoteAssets";
 import { getResolvedColor, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
+import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
 import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
@@ -527,11 +528,11 @@ function buildPreviewMetadata({
     cardPreviewPath,
     generatedAt: cardPreviewPath ? new Date().toISOString() : undefined,
     colors: {
-      chatBackground: resolvePreviewColor(slots, "chat_background_color", colors, candidateSelections, baseTemplateId, template),
-      mainBackground: resolvePreviewColor(slots, "main_background_color", colors, candidateSelections, baseTemplateId, template),
-      tabBackground: resolvePreviewColor(slots, "tab_background", colors, candidateSelections, baseTemplateId, template),
-      myBubble: resolvePreviewColor(slots, "chat_bubble_me_color", colors, candidateSelections, baseTemplateId, template),
-      friendBubble: resolvePreviewColor(slots, "chat_bubble_you_color", colors, candidateSelections, baseTemplateId, template),
+      chatBackground: resolvePreviewColor(slots, "chat_background_color", colors, candidateSelections, baseTemplateId, template, platform),
+      mainBackground: resolvePreviewColor(slots, "main_background_color", colors, candidateSelections, baseTemplateId, template, platform),
+      tabBackground: resolvePreviewColor(slots, "tab_background", colors, candidateSelections, baseTemplateId, template, platform),
+      myBubble: resolvePreviewColor(slots, "chat_bubble_me_color", colors, candidateSelections, baseTemplateId, template, platform),
+      friendBubble: resolvePreviewColor(slots, "chat_bubble_you_color", colors, candidateSelections, baseTemplateId, template, platform),
     },
     refs: {
       chatBackground: resolvePreviewStoragePath(slots, "chat_background", uploadRefs, candidateSelections),
@@ -560,6 +561,12 @@ function resolvePreviewBubbleShape(slots: ThemeAssetSlot[], role: ThemeResourceR
   return { geometry, stretch, insets, markers, flipX };
 }
 
+/**
+ * 저장된 미리보기 색은 `resolveColor`(state.ts의 `getResolvedColor`)를 거치지 않고
+ * 그대로 카드에 쓰인다. 그래서 이 자리에서 export와 같은 알파 규칙을 적용하지 않으면,
+ * 알파 짝이 없는 iOS role에 반투명 색을 골랐을 때 결과물은 불투명인데 저장된 카드
+ * 썸네일만 흐리게 남는다.
+ */
 function resolvePreviewColor(
   slots: ThemeAssetSlot[],
   role: ThemeResourceRole,
@@ -567,9 +574,16 @@ function resolvePreviewColor(
   candidateSelections: SlotCandidateSelections,
   templateId: ThemeTemplateId,
   template: ReturnType<typeof getThemeTemplate>,
+  platform: ThemePlatform,
 ) {
-  const slot = slots.find((item) => item.role === role);
-  return getResolvedColor(slot, colors, candidateSelections, templateId, template);
+  const resolve = (readRole: ThemeResourceRole) => {
+    const slot = slots.find((item) => item.role === readRole);
+    return getResolvedColor(slot, colors, candidateSelections, templateId, template, slots);
+  };
+  const readRole = getPreviewColorRole(role, platform);
+  const raw = resolve(readRole);
+  if (!raw) return undefined;
+  return resolvePlatformPreviewColor(resolve, role, raw, platform);
 }
 
 function resolvePreviewStoragePath(slots: ThemeAssetSlot[], role: ThemeResourceRole, uploadRefs: RemoteSlotUploads, candidateSelections: SlotCandidateSelections) {

@@ -101,4 +101,30 @@ describe("createSystemTemplatePreviewVisual", () => {
 
     expect(result.myBubbleImage).toBe("https://example.com/shared-bubble.png");
   });
+
+  it("기존 iOS preview metadata의 8자리 색상도 export와 같은 6자리 색상으로 정규화한다", () => {
+    const template = getThemeTemplate("basic");
+    const summary: SystemTemplateSummary = {
+      id: "legacy-ios-template",
+      title: "이전 iOS 템플릿",
+      baseTemplateId: "basic",
+      platform: "ios",
+      status: "published",
+      visibility: "public",
+      pricingType: "free",
+      tags: [],
+      createdAt: 1,
+      updatedAt: 1,
+      uploadCount: 0,
+      colorCount: 1,
+      colors: {},
+      candidateSelections: {},
+      uploadRefs: {},
+      previewMetadata: { colors: { mainBackground: "#80112233" } },
+    };
+
+    const result = createSystemTemplatePreviewVisual({ template, platform: "ios", summary, signedUrls: {} });
+
+    expect(result.mainBackgroundColor).toBe("#112233");
+  });
 });

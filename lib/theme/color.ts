@@ -105,7 +105,9 @@ export function readableThemeForeground(background: string, minimumRatio = 4.5) 
 
 export function mutedThemeForeground(background: string, minimumRatio = 3) {
   const foreground = readableThemeForeground(background, 4.5);
-  for (const amount of [0.55, 0.65, 0.75, 0.85]) {
+  // 보조 텍스트라도 작은 글씨로 표시되므로, 첫 후보를 너무 배경에 가깝게 두지 않는다.
+  // 특히 어두운 배경에서 기존 0.55 혼합값은 대비는 통과해도 회색이 지나치게 어둡게 보였다.
+  for (const amount of [0.65, 0.75, 0.85, 0.95]) {
     const candidate = mixThemeColors(background, foreground, amount);
     if (themeColorContrast(candidate, background) >= minimumRatio) return candidate;
   }

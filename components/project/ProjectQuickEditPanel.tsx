@@ -8,7 +8,8 @@ import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import { getCandidateCardWidthClass, getCandidateLayoutKind, type CandidateLayoutKind } from "@/components/project/candidateLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
-import { buildSlotCandidates, getSharedSlotUploadEntries, isRemovableUploadCandidate, disabledImageCandidateId, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { supportsColorAlpha } from "@/lib/theme/project/platformColor";
+import { buildSlotCandidates, getResolvedColor, getSharedSlotUploadEntries, isRemovableUploadCandidate, getDerivedColorLink, disabledImageCandidateId, type DerivedColorLink, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
@@ -43,6 +44,7 @@ export function ProjectQuickEditPanel({
   onRemoveUpload,
   onEditedUpload,
   onColorChange,
+  onUnlinkColor,
   imageColorPalette,
   imageColorPaletteError,
   recommendedColor,
@@ -90,6 +92,7 @@ export function ProjectQuickEditPanel({
   onRemoveUpload: (slot: ThemeAssetSlot, uploadId: string) => void;
   onEditedUpload: (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => void;
   onColorChange: (slot: ThemeAssetSlot, value: string) => void;
+  onUnlinkColor: (slot: ThemeAssetSlot) => void;
   imageColorPalette: ImageColorPalette | null;
   imageColorPaletteError: string | null;
   recommendedColor?: string;
@@ -233,7 +236,7 @@ export function ProjectQuickEditPanel({
 
       <section className="grid min-h-0 content-start gap-4 rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
         {slot.kind === "color" ? (
-          <ColorEditor slot={slot} value={colors[slot.id] ?? selectedCandidate?.colorValue ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} />
+          <ColorEditor slot={slot} platform={platform} value={getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} derivedLink={getDerivedColorLink(slot, colors, selections, templateId, template, slots)} onRestoreDerivedLink={() => onUnlinkColor(slot)} />
         ) : (
           <>
             <input
@@ -642,6 +645,7 @@ function CandidatePreview({ candidate, layoutKind }: { candidate: SlotCandidate;
 
 function ColorEditor({
   slot,
+  platform,
   value,
   onChange,
   imageColorPalette,
@@ -653,8 +657,11 @@ function ColorEditor({
   canApplyAutoColorToAll,
   onApplyAutoColor,
   onApplyAutoColorToAll,
+  derivedLink,
+  onRestoreDerivedLink,
 }: {
   slot: ThemeAssetSlot;
+  platform: ThemePlatform;
   value: string;
   onChange: (slot: ThemeAssetSlot, value: string) => void;
   imageColorPalette: ImageColorPalette | null;
@@ -666,10 +673,15 @@ function ColorEditor({
   canApplyAutoColorToAll: boolean;
   onApplyAutoColor: () => void;
   onApplyAutoColorToAll: () => void;
+  derivedLink?: DerivedColorLink;
+  onRestoreDerivedLink: () => void;
 }) {
   const [draft, setDraft] = useState(value);
   const colorId = useId();
   const alphaId = useId();
+  // iOS CSS는 색상 코드에 알파를 담지 못한다. 표현할 자리가 없는 슬롯에 슬라이더를 보여 주면
+  // 사용자가 조작한 투명도가 내보내기에서 조용히 사라진다.
+  const alphaSupported = supportsColorAlpha(slot.role, platform);
   const normalizedDraft = normalizeThemeColor(draft);
   const effectiveColor = normalizedDraft ?? normalizeThemeColor(value) ?? "#000000";
 
@@ -684,6 +696,33 @@ function ColorEditor({
   return (
     <Tooltip.Provider delayDuration={260} skipDelayDuration={100}>
       <div className="grid gap-4 rounded-xl border border-[#e5e7eb] bg-[#f8fafc] p-4">
+        {/*
+          기준 슬롯 연동. 배경에서 파생되는 슬롯의 "역할별 자동 맞춤"과 개념이 같으므로
+          카드도 같은 것을 쓴다. 다른 점은 두 가지뿐이다 — 기준이 배경이 아니라 다른 슬롯이고,
+          되돌리기는 값을 새로 쓰는 게 아니라 직접 지정을 지우는 동작이다.
+          `autoColorRecipe`와 파생 규칙을 동시에 갖는 슬롯은 없다.
+        */}
+        {derivedLink ? (
+          <div className="grid gap-3 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] p-3">
+            <div className="flex items-start gap-2">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-white text-[#2563eb]"><Link2 size={16} aria-hidden="true" /></span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-[#1e3a8a]">역할별 자동 맞춤</p>
+                  <InfoTooltip label={`${slot.label} 자동 맞춤 기준`} content={`${derivedLink.description} ${derivedLink.baseLabel}을 바꾸면 이 색도 함께 갱신됩니다.`} />
+                </div>
+                <p className="mt-1 text-[11px] font-medium leading-5 text-[#475569]">{derivedLink.linked ? `${derivedLink.description} 변경 사항을 계속 자동 반영합니다.` : `현재는 직접 설정한 색상을 사용합니다. ${derivedLink.baseLabel} 기준으로 다시 맞출 수 있습니다.`}</p>
+              </div>
+            </div>
+            {derivedLink.color ? <div className="flex items-center gap-3 rounded-lg border border-white/80 bg-white p-2.5 shadow-sm"><ColorSwatch value={derivedLink.color} className="size-9 rounded-lg" /><div className="min-w-0"><p className="text-[10px] font-bold text-[#64748b]">현재 추천 색상</p><p className="mt-0.5 font-mono text-xs font-bold text-[#0f172a]">{derivedLink.color.toUpperCase()}</p></div></div> : null}
+            <div className="flex flex-wrap justify-center gap-4">
+              <div className="inline-flex overflow-hidden rounded-lg shadow-sm">
+                <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-l-lg bg-[#2563eb] px-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-45" disabled={derivedLink.linked} onClick={onRestoreDerivedLink}><RefreshCw size={13} aria-hidden="true" />현재 슬롯 색상 적용</button>
+                <InfoTooltip label="기준 색 연동 안내" content={`직접 지정을 해제하고 ${derivedLink.baseLabel} 기준 자동 계산으로 되돌립니다. 이후 기준 색이 바뀌면 이 슬롯도 함께 갱신되며, 다른 슬롯은 변경하지 않습니다.`} triggerClassName="min-h-9 rounded-r-lg border-l border-white/30 bg-[#2563eb] px-2 text-white hover:bg-[#1d4ed8] focus-visible:bg-[#1d4ed8]" />
+              </div>
+            </div>
+          </div>
+        ) : null}
         {slot.autoColorRecipe ? (
           <div className="grid gap-3 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] p-3">
             <div className="flex items-start gap-2">
@@ -704,7 +743,7 @@ function ColorEditor({
               </div>
               <div className="inline-flex overflow-hidden rounded-lg shadow-sm">
                 <button type="button" className="min-h-9 rounded-l-lg border border-r-0 border-[#bfdbfe] bg-white px-3 text-xs font-bold text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45" disabled={!canApplyAutoColorToAll} onClick={onApplyAutoColorToAll}>모든 슬롯 자동 맞춤</button>
-                <InfoTooltip label="메인 색상 모두 자동 맞춤 안내" content="친구·채팅 목록·더보기·하단 탭의 자동 맞춤 대상 색상을 현재 팔레트로 다시 계산합니다. 직접 수정한 색상도 추천값으로 바뀝니다. 배경 이미지가 없으면 현재 배경색을 기준으로 계산합니다." triggerClassName="min-h-9 rounded-r-lg border border-[#bfdbfe] bg-white px-2 text-[#1d4ed8] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff]" />
+                <InfoTooltip label="메인 색상 모두 자동 맞춤 안내" content="친구·채팅 목록·더보기·하단 탭에 더해 채팅방 배경까지, 자동 맞춤 대상 색상을 모두 다시 계산합니다. 채팅방 배경은 채팅방 이미지를, 나머지는 메인 배경 이미지를 기준으로 씁니다. 직접 수정한 색상도 추천값으로 바뀝니다. 배경 이미지가 없으면 현재 배경색을 기준으로 계산합니다." triggerClassName="min-h-9 rounded-r-lg border border-[#bfdbfe] bg-white px-2 text-[#1d4ed8] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff]" />
               </div>
             </div>
           </div>
@@ -735,10 +774,10 @@ function ColorEditor({
           />
         </div>
         {!normalizedDraft ? <p id={`${colorId}-error`} className="text-[11px] font-semibold text-[#b91c1c]" role="alert">#RRGGBB 또는 Android #AARRGGBB 형식으로 입력해 주세요.</p> : null}
-        <div className="grid gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 py-3 sm:grid-cols-[minmax(0,1fr)_96px] sm:items-end">
+        {alphaSupported ? <div className="grid gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 py-3 sm:grid-cols-[minmax(0,1fr)_96px] sm:items-end">
           <label htmlFor={alphaId} className="grid gap-2 text-[11px] font-bold text-[#475569]"><span className="flex items-center justify-between"><span>투명도</span><span>{themeColorAlphaPercent(effectiveColor)}%</span></span><input id={alphaId} type="range" min="0" max="100" value={themeColorAlphaPercent(effectiveColor)} className="w-full accent-[#2563eb]" onChange={(event) => commit(setThemeColorAlpha(effectiveColor, Number(event.currentTarget.value)))} /></label>
           <div className="relative"><input aria-label={`${slot.label} 투명도 퍼센트`} type="number" min="0" max="100" value={themeColorAlphaPercent(effectiveColor)} className="h-10 w-full rounded-lg border border-[#d1d5db] bg-white pl-3 pr-8 text-right text-sm font-bold" onChange={(event) => commit(setThemeColorAlpha(effectiveColor, Number(event.currentTarget.value)))} /><span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#64748b]">%</span></div>
-        </div>
+        </div> : null}
         <ColorContextPreview slot={slot} value={effectiveColor} />
         {contrastWarning ? (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
@@ -788,6 +827,8 @@ function InfoTooltip({ label, content, triggerClassName }: { label: string; cont
 
 function getAutoColorReason(slot: ThemeAssetSlot) {
   if (slot.autoColorRecipe === "background-average") return "배경 이미지 평균색 기준으로";
+  if (slot.autoColorRecipe === "chat-background-average") return "채팅방 배경 이미지 평균색 기준으로";
+  if (slot.autoColorRecipe === "surface-background") return "메인 배경색 기준으로";
   if (slot.autoColorRecipe === "header-top") return "배경 이미지 상단색 또는 기본 배경색 기준으로";
   if (slot.autoColorRecipe === "tab-bottom") return "배경 이미지 하단색 또는 기본 배경색 기준으로";
   if (slot.autoColorRecipe?.startsWith("foreground")) return "적용 배경과 읽기 쉬운 대비로";
@@ -799,7 +840,9 @@ function getAutoColorReason(slot: ThemeAssetSlot) {
 function getAutoColorExplanation(slot: ThemeAssetSlot) {
   switch (slot.autoColorRecipe) {
     case "background-average":
-      return "배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 이미지가 없으면 사용자가 입력한 배경색을 유지합니다.";
+      return "배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 이미지가 없으면 사용자가 입력한 배경색을 유지합니다."
+    case "chat-background-average":
+      return "채팅방 배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 메인 배경과 다른 이미지를 쓰므로 기준도 채팅방 이미지입니다. 이미지가 없으면 현재 채팅방 배경색을 유지합니다.";
     case "header-top":
       return "배경 이미지가 있으면 상단 15% 영역의 대표색을 사용하고, 이미지가 없으면 현재 기본 배경색을 사용합니다.";
     case "tab-bottom":

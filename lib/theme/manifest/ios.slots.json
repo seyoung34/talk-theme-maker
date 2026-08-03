@@ -92,7 +92,6 @@
     "defaultColor": {
       "basic": "#111111"
     },
-    "autoColorRecipe": "foreground-pressed",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-highlighted-text-color"
   },
@@ -147,7 +146,6 @@
     "defaultColor": {
       "basic": "#4d5660"
     },
-    "autoColorRecipe": "muted-pressed",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-paragraph-highlighted-text-color"
   },
@@ -166,7 +164,6 @@
     "defaultColor": {
       "basic": "#111111"
     },
-    "autoColorRecipe": "cell-pressed",
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-selected-background-color"
   },
@@ -297,7 +294,7 @@
     "defaultColor": {
       "basic": "#ffffff"
     },
-    "autoColorRecipe": "tab-bottom",
+    "autoColorRecipe": "surface-background",
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "background-color"
   },
@@ -616,6 +613,7 @@
     "label": "채팅방 배경색",
     "required": true,
     "note": "채팅방 배경 이미지가 없거나 투명한 영역에 표시되는 색상입니다. 말풍선과 충분히 구분되는 색을 선택하세요.",
+    "autoColorRecipe": "chat-background-average",
     "defaultColor": {
       "basic": "#b8f2f7"
     },
