@@ -245,7 +245,11 @@ export function useEditorBootstrap({
           }
 
           skipDefaultSelectionReset();
-          const normalizedOverrides = normalizeLegacyColorOverrides(savedTemplate.platform, savedTemplate.overrides.colors, savedTemplate.overrides.candidateSelections);
+          const normalizedOverrides = normalizeLegacyColorOverrides(savedTemplate.platform, savedTemplate.overrides.colors, savedTemplate.overrides.candidateSelections, {
+            templateId: savedTemplate.baseTemplateId,
+            template: getThemeTemplate(savedTemplate.baseTemplateId),
+            slots: getThemeSlots(savedTemplate.platform),
+          });
           setTemplateId(savedTemplate.baseTemplateId);
           setPlatform(payload.platform);
           const previewSlotIds = getInitialPreviewSlotIds(savedTemplate.platform, savedTemplate.overrides.uploadRefs);
@@ -295,7 +299,11 @@ export function useEditorBootstrap({
           skipDefaultSelectionReset();
           setTemplateId(sourceTemplate.baseTemplateId);
           setPlatform(payload.platform);
-          const normalizedOverrides = normalizeLegacyColorOverrides(payload.platform, converted.colors, converted.candidateSelections);
+          const normalizedOverrides = normalizeLegacyColorOverrides(payload.platform, converted.colors, converted.candidateSelections, {
+            templateId: sourceTemplate.baseTemplateId,
+            template: baseTemplate,
+            slots: getThemeSlots(payload.platform),
+          });
           replaceDraft({
             uploads: converted.uploads,
             remoteUploadRefs: {},
@@ -336,7 +344,11 @@ export function useEditorBootstrap({
         }
 
         skipDefaultSelectionReset();
-        const normalizedOverrides = normalizeLegacyColorOverrides(savedTemplate.platform, savedTemplate.colors, savedTemplate.candidateSelections);
+        const normalizedOverrides = normalizeLegacyColorOverrides(savedTemplate.platform, savedTemplate.colors, savedTemplate.candidateSelections, {
+          templateId: savedTemplate.templateId,
+          template: getThemeTemplate(savedTemplate.templateId),
+          slots: getThemeSlots(savedTemplate.platform),
+        });
         setTemplateId(savedTemplate.templateId);
         setPlatform(savedTemplate.platform);
         replaceDraft({
