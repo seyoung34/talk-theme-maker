@@ -362,7 +362,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       skipDefaultSelectionResetRef.current = false;
       return;
     }
-    setCandidateSelections(getInitialSlotCandidateSelections(slots, templateId, activeTemplate));
+    const initialSelections = getInitialSlotCandidateSelections(slots, templateId, activeTemplate);
+    setCandidateSelections(initialSelections);
   }, [activeTemplate, setCandidateSelections, slots, templateId]);
 
   const viewportMode = useViewportMode();

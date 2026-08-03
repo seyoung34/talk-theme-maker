@@ -351,7 +351,9 @@ function buildIosThemeCss({
   const cellBackground = alphaPair("main_body_cell_color", "#00FFFFFF");
   const cellPressedBackground = alphaPair("main_body_cell_pressed_color", mainText);
   const sectionBorder = alphaPair("main_body_cell_border_color", mainText);
-  const sectionTitle = alphaPair("main_section_title_color", mainText);
+  // iOS에는 별도 `main_section_title_color` 슬롯이 없다. SectionTitleStyle-Main의 텍스트는
+  // MainViewStyle-Primary의 description 색상과 같은 값으로 맞춰 프리뷰와 결과물을 일치시킨다.
+  const sectionTitle = alphaPair("main_description_color", mainDescription);
 
   return [
     "/*",

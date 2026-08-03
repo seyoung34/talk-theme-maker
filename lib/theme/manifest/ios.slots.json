@@ -294,7 +294,7 @@
     "defaultColor": {
       "basic": "#ffffff"
     },
-    "autoColorRecipe": "tab-bottom",
+    "autoColorRecipe": "surface-background",
     "cssSelector": "TabBarStyle-Main",
     "cssProperty": "background-color"
   },

@@ -28,26 +28,40 @@ export function normalizeLegacyColorOverrides(
   context: LegacyOverrideContext,
 ) {
   const mapping = platform === "android" ? androidLegacySlotIds : iosLegacySlotIds;
+  const remappedColors = remapKeys(colors, mapping);
   const candidateSelections = remapSelections(selections, mapping);
-  // 자동 표시를 지우기 **전에** 판단해야 한다. 아래 루프가 iOS의 자동 표시를 제거하므로,
-  // 순서를 바꾸면 iOS만 판별 근거를 잃고 옛 값이 그대로 굳는다.
-  const nextColors = restoreDerivedColorLinks(remapKeys(colors, mapping), candidateSelections, context);
+  // 자동 표시를 지우기 **전에** 판단해야 한다. 아래 루프가 예전 파생 슬롯의 자동 표시를
+  // 제거하므로, 순서를 바꾸면 옛 값이 그대로 굳는다.
+  const nextColors = restoreDerivedColorLinks(remappedColors, candidateSelections, context);
   for (const [slotId, selectedId] of Object.entries(candidateSelections)) {
     if ((slotId === "android-main-background" || slotId === "ios-main-background-image") && selectedId === `${slotId}:base`) {
       candidateSelections[slotId] = disabledImageCandidateId;
       continue;
     }
     const slot = context.slots.find((candidate) => candidate.id === slotId);
-    const staleDerivedAutoSelection = selectedId === autoMainPaletteCandidateId
-      && Boolean(slot && !slot.autoColorRecipe && getDerivedColorRule(slot.role));
-    if (selectedId === legacyAutoMainSurfaceCandidateId || (platform === "ios" && selectedId === autoMainPaletteCandidateId) || staleDerivedAutoSelection) {
+    const staleAutoSelection = selectedId === autoMainPaletteCandidateId && Boolean(slot && !slot.autoColorRecipe);
+    if (selectedId === legacyAutoMainSurfaceCandidateId || staleAutoSelection) {
       delete candidateSelections[slotId];
     }
   }
+  restoreMissingAutoSelections(candidateSelections, context.slots);
   return {
     colors: nextColors,
     candidateSelections,
   };
+}
+
+/**
+ * 예전 저장본은 자동 색상 슬롯을 후보 선택에 기록하지 않았다. 그 상태를 그대로 읽으면
+ * 기본 후보로 보이기는 하지만 자동 색상 hook이 연동 대상으로 인식하지 못한다. 후보 선택이
+ * 없는 자동 슬롯의 색상은 당시 자동 맞춤이 저장해 둔 스냅샷일 수 있으므로, 자동 후보를
+ * 복원해 다음 배경 변경부터 다시 계산하게 한다. 후보를 명시적으로 고른 슬롯은 건드리지 않는다.
+ */
+function restoreMissingAutoSelections(selections: SlotCandidateSelections, slots: ThemeAssetSlot[]) {
+  for (const slot of slots) {
+    if (!slot.autoColorRecipe || selections[slot.id] !== undefined) continue;
+    selections[slot.id] = autoMainPaletteCandidateId;
+  }
 }
 
 /**

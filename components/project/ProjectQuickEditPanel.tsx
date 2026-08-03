@@ -828,6 +828,7 @@ function InfoTooltip({ label, content, triggerClassName }: { label: string; cont
 function getAutoColorReason(slot: ThemeAssetSlot) {
   if (slot.autoColorRecipe === "background-average") return "배경 이미지 평균색 기준으로";
   if (slot.autoColorRecipe === "chat-background-average") return "채팅방 배경 이미지 평균색 기준으로";
+  if (slot.autoColorRecipe === "surface-background") return "메인 배경색 기준으로";
   if (slot.autoColorRecipe === "header-top") return "배경 이미지 상단색 또는 기본 배경색 기준으로";
   if (slot.autoColorRecipe === "tab-bottom") return "배경 이미지 하단색 또는 기본 배경색 기준으로";
   if (slot.autoColorRecipe?.startsWith("foreground")) return "적용 배경과 읽기 쉬운 대비로";

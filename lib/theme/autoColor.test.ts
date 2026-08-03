@@ -11,9 +11,13 @@ import type { ImageColorPalette } from "@/lib/theme/colorPalette";
  * 숫자, 말풍선 글자 대비)이 메인 배경 밝기를 기준으로 계산되면 어두운 채팅 배경에서 묻힌다.
  */
 const slots = getThemeSlots("android");
+const iosSlots = getThemeSlots("ios");
 const chatBackgroundSlot = slots.find((slot) => slot.role === "chat_background_color")!;
 const mainBackgroundSlot = slots.find((slot) => slot.role === "main_background_color")!;
 const mutedSlots = slots.filter((slot) => ["main_description_color", "tab_paragraph_color"].includes(slot.role));
+const iosTitleSlot = iosSlots.find((slot) => slot.role === "main_title_color")!;
+const iosDescriptionSlot = iosSlots.find((slot) => slot.role === "main_description_color")!;
+const iosTabBackgroundSlot = iosSlots.find((slot) => slot.role === "tab_background")!;
 
 function palette(average: string): ImageColorPalette {
   return { representative: average, average, top: average, bottom: average, accent: average };
@@ -90,5 +94,25 @@ describe("보조 텍스트 자동 맞춤", () => {
       expect(color).toBe("#ACACAC");
       expect(themeColorContrast(color, "#111111")).toBeGreaterThanOrEqual(4.5);
     }
+  });
+});
+
+describe("iOS 메인 배경 연동", () => {
+  it("어두운 메인 배경에서 이름은 밝게, 탭바는 메인 배경을 따른다", () => {
+    const result = buildMainPaletteRecommendations(iosSlots, context({
+      imageActive: true,
+      backgroundIsAuto: true,
+      palette: {
+        representative: "#202020",
+        average: "#202020",
+        top: "#101010",
+        bottom: "#EEEEEE",
+        accent: "#6A5F00",
+      },
+    }));
+
+    expect(result[iosTitleSlot.id]).toBe("#FFFFFF");
+    expect(result[iosDescriptionSlot.id]).toBe("#B1B1B1");
+    expect(result[iosTabBackgroundSlot.id]).toBe("#202020");
   });
 });

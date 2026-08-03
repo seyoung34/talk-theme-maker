@@ -109,6 +109,33 @@ describe("normalizeLegacyColorOverrides - 파생 색 연동 복원", () => {
     expect(candidateSelections[iosPressed]).toBeUndefined();
   });
 
+  it("현재 iOS 자동 레시피 슬롯의 자동 선택은 보존한다", () => {
+    const iosTitle = slotId("ios", "main_title_color");
+    const iosTabBackground = slotId("ios", "tab_background");
+    const { candidateSelections } = normalizeLegacyColorOverrides(
+      "ios",
+      {},
+      { [iosTitle]: autoMainPaletteCandidateId, [iosTabBackground]: autoMainPaletteCandidateId },
+      context("ios"),
+    );
+    expect(candidateSelections[iosTitle]).toBe(autoMainPaletteCandidateId);
+    expect(candidateSelections[iosTabBackground]).toBe(autoMainPaletteCandidateId);
+  });
+
+  it("오래된 저장본에서 누락된 자동 색상 선택을 복원한다", () => {
+    const iosDescription = slotId("ios", "main_description_color");
+    const iosTabBackground = slotId("ios", "tab_background");
+    const { candidateSelections } = normalizeLegacyColorOverrides(
+      "ios",
+      { [iosDescription]: "#7F878F" },
+      {},
+      context("ios"),
+    );
+
+    expect(candidateSelections[iosDescription]).toBe(autoMainPaletteCandidateId);
+    expect(candidateSelections[iosTabBackground]).toBe(autoMainPaletteCandidateId);
+  });
+
   it("자동 저장·복구 초안도 런타임 승격과 legacy 연동 복원을 함께 적용한다", () => {
     const draft = createEmptyThemeDraft();
     const normalized = normalizeLegacyThemeDraft("android", templateId, {

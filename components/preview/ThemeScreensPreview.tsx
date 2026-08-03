@@ -85,8 +85,8 @@ export function ThemeScreensPreview({
      */
     const getColor = (role: ThemeResourceRole, fallback: string) => {
       const readRole = getPreviewColorRole(role, platform);
-      const value = applyPlatformColorAlpha(resolve(readRole) ?? fallback, readRole, platform);
-      const alphaRole = getSplitAlphaSourceRole(readRole, platform);
+      const value = applyPlatformColorAlpha(resolve(readRole) ?? fallback, role, platform);
+      const alphaRole = getSplitAlphaSourceRole(role, platform);
       return themeColorToCss(alphaRole ? applySplitAlpha(value, resolve(alphaRole)) : value);
     };
     const mainBackgroundColor = getColor("main_background_color", template.defaults.mainBackground);
@@ -175,6 +175,8 @@ function FriendsScreen({
   profileUrls: string[];
   onSelectSlot?: (slotId: string) => void;
 }) {
+  const sectionTitleSlot = platform === "ios" ? slotByRole.main_description_color : slotByRole.main_section_title_color;
+
   return (
     <MainScreenFrame>
       <button
@@ -215,10 +217,10 @@ function FriendsScreen({
 
           <button
             type="button"
-            className={`px-1 text-left ${selectedSlotId === slotByRole.main_section_title_color?.id ? "rounded-lg ring-2 ring-[#60a5fa]" : ""}`}
+            className={`px-1 text-left ${selectedSlotId === sectionTitleSlot?.id ? "rounded-lg ring-2 ring-[#60a5fa]" : ""}`}
             onClick={(event) => {
               event.stopPropagation();
-              if (slotByRole.main_section_title_color) onSelectSlot?.(slotByRole.main_section_title_color.id);
+              if (sectionTitleSlot) onSelectSlot?.(sectionTitleSlot.id);
             }}
           >
             <span className="text-[14px] font-semibold" style={{ color: preview.sectionTitleColor }}>
@@ -235,11 +237,11 @@ function FriendsScreen({
                 </div>
                 <button
                   type="button"
-                  className={`block w-full text-center ${selectedSlotId === slotByRole.main_description_color?.id ? "rounded-md bg-white/70 px-0.5 py-0.5 ring-1 ring-[#60a5fa]" : ""}`}
-                  style={{ color: preview.descriptionColor }}
+                  className={`block w-full text-center ${selectedSlotId === slotByRole.main_title_color?.id ? "rounded-md bg-white/70 px-0.5 py-0.5 ring-1 ring-[#60a5fa]" : ""}`}
+                  style={{ color: preview.titleColor }}
                   onClick={(event) => {
                     event.stopPropagation();
-                    if (slotByRole.main_description_color) onSelectSlot?.(slotByRole.main_description_color.id);
+                    if (slotByRole.main_title_color) onSelectSlot?.(slotByRole.main_title_color.id);
                   }}
                 >
                   <span className="block w-full truncate text-[8px] font-medium leading-[1.2]">{name}</span>
@@ -264,8 +266,8 @@ function FriendsScreen({
             <SectionLabel
               label="생일인 친구 4"
               color={preview.sectionTitleColor}
-              selected={selectedSlotId === slotByRole.main_section_title_color?.id}
-              onClick={() => slotByRole.main_section_title_color && onSelectSlot?.(slotByRole.main_section_title_color.id)}
+              selected={selectedSlotId === sectionTitleSlot?.id}
+              onClick={() => sectionTitleSlot && onSelectSlot?.(sectionTitleSlot.id)}
             />
             {friendRows.map((row) => (
               <div key={row.name} className="grid gap-0.5">
@@ -452,6 +454,7 @@ function ChatsScreen({
 //더보기 (Android/iOS 공통 프리뷰)
 function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSelectSlot }: { platform: ThemePlatform; selectedSlotId?: string; preview: MainPreviewPalette; slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>; urls: RoleUrls; onSelectSlot?: (slotId: string) => void }) {
   const headerColorSlot = platform === "android" ? slotByRole.main_background_color : slotByRole.main_header_color;
+  const sectionTitleSlot = platform === "ios" ? slotByRole.main_description_color : slotByRole.main_section_title_color;
   const headerSelected = selectedSlotId === headerColorSlot?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id;
   const chipSelected = selectedSlotId === slotByRole.main_header_color?.id;
   const hasMainBackgroundImage = Boolean(urls.main_background);
@@ -557,8 +560,8 @@ function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSel
         <SectionLabel
           label="게임플레이"
           color={preview.sectionTitleColor}
-          selected={selectedSlotId === slotByRole.main_section_title_color?.id}
-          onClick={() => slotByRole.main_section_title_color && onSelectSlot?.(slotByRole.main_section_title_color.id)}
+          selected={selectedSlotId === sectionTitleSlot?.id}
+          onClick={() => sectionTitleSlot && onSelectSlot?.(sectionTitleSlot.id)}
         />
       </div>
 

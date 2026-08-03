@@ -66,6 +66,9 @@ export function getSplitAlphaSourceRole(role: ThemeResourceRole, platform: Theme
  */
 const iosPreviewRoleAliases: Partial<Record<ThemeResourceRole, ThemeResourceRole>> = {
   main_description_pressed_color: "main_title_pressed_color",
+  // iOS에는 Android의 `main_section_title_color` 슬롯이 없다. SectionTitleStyle-Main의
+  // 텍스트는 MainViewStyle-Primary의 description 색상과 같은 역할로 내보낸다.
+  main_section_title_color: "main_description_color",
 };
 
 /** 이 플랫폼에서 프리뷰가 대신 읽어야 할 role. 없으면 원래 role. */
@@ -120,8 +123,11 @@ export function resolvePlatformPreviewColor(
   platform: ThemePlatform,
 ) {
   const readRole = getPreviewColorRole(role, platform);
-  const value = applyPlatformColorAlpha(resolve(readRole) ?? fallback, readRole, platform);
-  const alphaRole = getSplitAlphaSourceRole(readRole, platform);
+  // `readRole`는 실제 값을 가져올 슬롯이고, `role`은 결과물이 그려지는 CSS 자리다.
+  // iOS SectionTitleStyle-Main은 슬롯은 description을 읽지만 자체 text-alpha를 지원하므로
+  // 출력 role의 투명도 계약은 원래 role을 유지해야 한다.
+  const value = applyPlatformColorAlpha(resolve(readRole) ?? fallback, role, platform);
+  const alphaRole = getSplitAlphaSourceRole(role, platform);
   const normalized = alphaRole ? applySplitAlpha(value, resolve(alphaRole)) : value;
   return themeColorToCss(normalized);
 }

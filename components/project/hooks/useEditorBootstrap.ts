@@ -4,7 +4,7 @@ import { useEffect, type Dispatch, type SetStateAction } from "react";
 import { persistEditorSession, takeTemplateStartPayload } from "@/components/project/editorSession";
 import { clearAutosaveDraft, readAutosaveDraft, type EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice } from "@/components/project/editorTypes";
-import { createEmptyThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
+import { createInitialThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
 import type { SlotUploads } from "@/components/project/projectModel";
 import type { RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import { systemTemplateRepository } from "@/lib/theme/systemTemplates";
@@ -229,7 +229,8 @@ export function useEditorBootstrap({
       setActiveSection("main");
       setActiveGroup("background");
       setSelectedSlotId(undefined);
-      replaceDraft(createEmptyThemeDraft());
+      const initialDraft = createInitialThemeDraft(payload.platform, payload.templateId);
+      replaceDraft(initialDraft);
       setActiveUserTemplate(null);
       setActiveSystemTemplate(null);
       setSystemTemplateBundleId(payload.systemTemplateBundleId ?? null);

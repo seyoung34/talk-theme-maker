@@ -136,6 +136,14 @@ describe("resolvePlatformPreviewColor", () => {
     expect(result).toBe("rgb(17 17 17 / 0.400)");
   });
 
+  it("iOS 섹션 제목은 description 값을 읽되 SectionTitle의 알파는 유지한다", () => {
+    const values: Partial<Record<ThemeResourceRole, string>> = {
+      main_description_color: "#80112233",
+    };
+    const resolve = (role: ThemeResourceRole) => values[role];
+    expect(resolvePlatformPreviewColor(resolve, "main_section_title_color", "#000000", "ios")).toBe("rgb(17 34 51 / 0.502)");
+  });
+
   it("Android는 색상 코드의 알파를 그대로 둔다", () => {
     const resolve = () => "#2E111111";
     const result = resolvePlatformPreviewColor(resolve, "main_title_color", "#000000", "android");
@@ -160,6 +168,12 @@ describe("getPreviewColorRole", () => {
     const iosRoles = new Set(getThemeSlots("ios").map((slot) => slot.role));
     expect(iosRoles.has("main_description_pressed_color")).toBe(false);
     expect(getPreviewColorRole("main_description_pressed_color", "ios")).toBe("main_title_pressed_color");
+  });
+
+  it("iOS 섹션 제목은 상태 메시지 색상 role을 읽는다", () => {
+    const iosRoles = new Set(getThemeSlots("ios").map((slot) => slot.role));
+    expect(iosRoles.has("main_section_title_color")).toBe(false);
+    expect(getPreviewColorRole("main_section_title_color", "ios")).toBe("main_description_color");
   });
 
   it("Android는 자기 슬롯이 있으므로 그대로 읽는다", () => {
