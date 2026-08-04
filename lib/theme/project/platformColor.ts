@@ -7,10 +7,10 @@ import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
  * 두 플랫폼이 투명도를 담는 자리가 다르다.
  *
  * - Android `colors.xml`은 `#AARRGGBB`로 색상 코드 안에 담는다.
- * - iOS CSS는 색상 코드에 담지 못하고 **`색상` + 별도 `-alpha` 프로퍼티** 쌍으로만 받는다.
+ * - iOS CSS는 대부분 색상 코드에 담지 못하고 **`색상` + 별도 `-alpha` 프로퍼티** 쌍으로 받는다.
  *
  * 카카오톡 가이드 테마(`samples/ios/apeach-25.8.0`)와 상용 테마 두 종을 대조한 결과 세 파일이
- * 완전히 같았다. 8자리 hex는 **한 번도 쓰이지 않았고**(0개), 알파 프로퍼티는 아래 다섯 개뿐이다.
+ * 완전히 같았다. 8자리 hex는 **한 번도 쓰이지 않았고**(0개), 알파 프로퍼티는 아래 다섯 개다.
  *
  *     -ios-normal-background-alpha        (MainViewStyle-Primary)
  *     -ios-selected-background-alpha      (MainViewStyle-Primary)
@@ -18,8 +18,9 @@ import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
  *     -ios-text-alpha                     (SectionTitleStyle-Main)
  *     -ios-button-normal-background-alpha (InputBarStyle-Chat)
  *
- * 그래서 나머지 색상은 알파를 실어 보낼 자리가 없다. 그대로 8자리로 내보내면 참조 테마에 없는
- * 형식이 나가고, 편집기·프리뷰에서 본 반투명이 결과물에서 재현되지 않는다.
+ * 단, 실기기에서 확인된 `TabBarStyle-Main`의 `background-color`는 `#AARRGGBB`를 직접
+ * 받아들인다. 따라서 탭바 배경색은 이 목록의 예외적인 직접 alpha 지원 role이다. 그 외
+ * 색상은 알파를 실어 보낼 자리가 없으므로 그대로 8자리로 내보내면 결과물에서 재현되지 않는다.
  *
  * `-ios-text-alpha`는 프로퍼티 이름이 같은 다른 블록(헤더·알림 라벨 등)에는 붙지 않는다.
  * 쌍은 프로퍼티 이름이 아니라 **블록 단위**로 정해지므로, 이름이 아니라 role로 목록을 잡는다.
@@ -30,6 +31,7 @@ export const iosAlphaCapableRoles: readonly ThemeResourceRole[] = [
   "main_body_cell_border_color",
   "main_section_title_color",
   "chat_button_background_color",
+  "tab_background",
 ];
 
 /**

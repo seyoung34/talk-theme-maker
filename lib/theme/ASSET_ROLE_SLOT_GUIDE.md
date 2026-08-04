@@ -382,6 +382,7 @@ Android `android-common-theme-icon`과 iOS `ios-common-theme-icon`의 필수 slo
 
 규칙:
 
+- iOS `TabBarStyle-Main`의 `background-color`는 실기기 검증 결과 `#AARRGGBB` alpha를 직접 허용하므로, 편집기의 탭바 배경 투명도 설정을 export에 그대로 반영한다.
 - 모든 기본/focused 탭 아이콘이 `tab_background` 위에서 읽혀야 한다.
 - badge는 accent와 조화를 이루되 unread/error 의미가 사라질 정도로 배경과 비슷하면 안 된다.
 

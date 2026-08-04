@@ -303,6 +303,7 @@ function FriendsScreen({
 
       <MainBottomTabBar
         active="friends"
+        platform={platform}
         selectedSlotId={selectedSlotId}
         preview={preview}
         slotByRole={slotByRole}
@@ -441,6 +442,7 @@ function ChatsScreen({
 
       <MainBottomTabBar
         active="chats"
+        platform={platform}
         selectedSlotId={selectedSlotId}
         preview={preview}
         slotByRole={slotByRole}
@@ -565,7 +567,7 @@ function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSel
         />
       </div>
 
-      <MainBottomTabBar active="more" selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
+      <MainBottomTabBar platform={platform} active="more" selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
     </MainScreenFrame>
   );
 }
@@ -575,6 +577,7 @@ function MainScreenFrame({ children }: { children: ReactNode }) {
 }
 
 function MainBottomTabBar({
+  platform,
   active,
   selectedSlotId,
   preview,
@@ -582,6 +585,7 @@ function MainBottomTabBar({
   urls,
   onSelectSlot,
 }: {
+  platform: ThemePlatform;
   active: "friends" | "chats" | "now" | "shopping" | "more";
   selectedSlotId?: string;
   preview: MainPreviewPalette;
@@ -591,6 +595,7 @@ function MainBottomTabBar({
 }) {
   return (
     <BottomTabBar
+      platform={platform}
       active={active}
       selectedSlotId={selectedSlotId}
       slotByRole={slotByRole}
@@ -641,6 +646,7 @@ function PhoneFrame({
 
 //탭바
 function BottomTabBar({
+  platform,
   active,
   selectedSlotId,
   slotByRole,
@@ -649,6 +655,7 @@ function BottomTabBar({
   tabBackgroundImageUrl,
   onSelectSlot,
 }: {
+  platform: ThemePlatform;
   active: "friends" | "chats" | "now" | "shopping" | "more";
   selectedSlotId?: string;
   slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
@@ -661,7 +668,8 @@ function BottomTabBar({
     <div
       className={`grid grid-cols-5 items-center px-3 ${selectedSlotId === slotByRole.tab_background?.id || selectedSlotId === slotByRole.tab_background_image?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
       style={{
-        backgroundColor: hexToRgba(tabBackground, 0.96),
+        // Android의 기존 프리뷰 보정은 유지하되, iOS는 export가 쓰는 8자리 alpha를 그대로 그린다.
+        backgroundColor: platform === "ios" ? tabBackground : hexToRgba(tabBackground, 0.96),
         backgroundImage: tabBackgroundImageUrl ? `url(${tabBackgroundImageUrl})` : undefined,
         backgroundSize: "cover",
         backgroundPosition: "center",

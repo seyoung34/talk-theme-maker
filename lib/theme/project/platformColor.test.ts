@@ -7,10 +7,12 @@ import type { ThemeResourceRole } from "@/lib/theme/types";
  * 플랫폼별 투명도 표현 계약.
  *
  * 두 플랫폼이 투명도를 담는 자리가 다르다. Android `colors.xml`은 `#AARRGGBB`로 색상 코드 안에
- * 담고, iOS CSS는 담지 못해 별도 `-alpha` 프로퍼티 쌍으로만 받는다.
+ * 담고, iOS CSS는 대부분 담지 못해 별도 `-alpha` 프로퍼티 쌍으로 받는다. 단, 실기기에서
+ * 확인된 TabBarStyle-Main의 background-color는 8자리 색상을 직접 받는다.
  *
  * 목록의 근거는 참조 테마 세 종(카카오톡 가이드 1 + 상용 2)이다. 세 파일 모두 8자리 hex가
- * 0개였고 알파 프로퍼티는 정확히 다섯 개로 같았다.
+ * 0개였고 알파 프로퍼티는 정확히 다섯 개로 같았다. 탭바의 8자리 색상 동작은 별도 실기기
+ * 검증으로 확인되어 직접 alpha 지원 목록에 포함한다.
  */
 describe("supportsColorAlpha", () => {
   it("Android는 모든 색상이 알파를 담을 수 있다", () => {
@@ -18,8 +20,8 @@ describe("supportsColorAlpha", () => {
     expect(supportsColorAlpha("chat_bubble_me_color", "android")).toBe(true);
   });
 
-  it("iOS는 알파 짝이 있는 다섯 개만 가능하다", () => {
-    expect(iosAlphaCapableRoles).toHaveLength(5);
+  it("iOS는 검증된 alpha 지원 role만 가능하다", () => {
+    expect(iosAlphaCapableRoles).toHaveLength(6);
     for (const role of iosAlphaCapableRoles) expect(supportsColorAlpha(role, "ios")).toBe(true);
   });
 
@@ -30,7 +32,7 @@ describe("supportsColorAlpha", () => {
     expect(supportsColorAlpha("chat_background_color", "ios")).toBe(false);
   });
 
-  it("다섯 중 셋만 iOS 편집 가능한 슬롯이 있다", () => {
+  it("alpha 지원 role 중 넷은 iOS 편집 가능한 슬롯이 있다", () => {
     // 나머지 둘은 iOS 매니페스트에 슬롯이 없어 내보내기 폴백으로만 채워진다.
     // `-ios-normal-background-*`는 참조 테마와 같은 투명 셀(알파 0.0)로,
     // `-ios-text-*`(SectionTitleStyle)는 이름 색상으로 이어진다.
@@ -41,6 +43,7 @@ describe("supportsColorAlpha", () => {
       "main_body_cell_pressed_color",
       "main_body_cell_border_color",
       "chat_button_background_color",
+      "tab_background",
     ]);
     expect(iosAlphaCapableRoles.filter((role) => !iosRoles.has(role))).toEqual([
       "main_body_cell_color",
@@ -61,6 +64,10 @@ describe("applyPlatformColorAlpha", () => {
   it("iOS에서도 알파 짝이 있는 role은 그대로 둔다", () => {
     // 이 값은 내보내기에서 색상과 알파 두 프로퍼티로 나뉜다.
     expect(applyPlatformColorAlpha("#0FFFFFFF", "chat_button_background_color", "ios")).toBe("#0FFFFFFF");
+  });
+
+  it("실기기에서 검증한 iOS 탭바 배경색의 8자리 alpha를 그대로 둔다", () => {
+    expect(applyPlatformColorAlpha("#80111111", "tab_background", "ios")).toBe("#80111111");
   });
 
   it("6자리는 어느 쪽에서도 바뀌지 않는다", () => {
