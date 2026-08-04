@@ -182,7 +182,7 @@ function FriendsScreen({
       <button
         type="button"
         className={`grid grid-cols-[auto_1fr_auto] items-center gap-3 px-6 pb-4 pt-4 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
-        style={{ backgroundColor: hexToRgba(preview.headerBackgroundColor, platform === "ios" && urls.main_background ? 0.32 : 0.72) }}
+        style={{ backgroundColor: headerSurfaceBackground(platform, preview.headerBackgroundColor) }}
         onClick={(event) => {
           event.stopPropagation();
           onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? "");
@@ -337,7 +337,7 @@ function ChatsScreen({
       <button
         type="button"
         className={`flex items-end justify-between px-5 pb-2 pt-3 text-left ${selectedSlotId === slotByRole.main_header_color?.id || selectedSlotId === slotByRole.main_header_foreground_color?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
-        style={{ backgroundColor: hexToRgba(preview.headerBackgroundColor, platform === "ios" && urls.main_background ? 0.32 : 1) }}
+        style={{ backgroundColor: headerSurfaceBackground(platform, preview.headerBackgroundColor) }}
         onClick={(event) => {
           event.stopPropagation();
           onSelectSlot?.(slotByRole.main_header_color?.id ?? slotByRole.main_header_foreground_color?.id ?? "");
@@ -354,7 +354,7 @@ function ChatsScreen({
       </button>
 
       <div className="grid min-w-0 content-start min-h-0 gap-3 pb-1 overflow-hidden">
-        <div className={`min-w-0 px-4 pt-2 ${selectedSlotId === (platform === "ios" ? slotByRole.main_background_color?.id : slotByRole.main_header_color?.id) ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ backgroundColor: hexToRgba(preview.headerBackgroundColor, platform === "ios" && urls.main_background ? 0.32 : 1) }} onClick={(event) => { event.stopPropagation(); const target = platform === "ios" ? slotByRole.main_background_color : slotByRole.main_header_color; if (target) onSelectSlot?.(target.id); }}>
+        <div className={`min-w-0 px-4 pt-2 ${selectedSlotId === (platform === "ios" ? slotByRole.main_background_color?.id : slotByRole.main_header_color?.id) ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ backgroundColor: headerSurfaceBackground(platform, preview.headerBackgroundColor) }} onClick={(event) => { event.stopPropagation(); const target = platform === "ios" ? slotByRole.main_background_color : slotByRole.main_header_color; if (target) onSelectSlot?.(target.id); }}>
           <div className="flex items-center gap-2 overflow-hidden">
             <FilterPill compact dark color={preview.headerForegroundColor}>전체</FilterPill>
             <FilterPill compact color={preview.headerForegroundColor}>
@@ -873,6 +873,21 @@ function hexToRgba(hex: string, alpha: number) {
   const g = (value >> 8) & 255;
   const b = value & 255;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * 상단 헤더·필터 줄의 배경색.
+ *
+ * iOS에는 헤더 배경 슬롯이 **없다**(`main_header_color`는 Android 전용). 내보내기도 헤더에
+ * 아무것도 쓰지 않아 메인 배경 — 이미지가 있으면 그 이미지 — 이 그대로 비친다. 그런데
+ * 프리뷰는 메인 배경색을 32%로 덧칠하고 있었다. 밝은 배경색 + 어두운 배경 이미지 조합에서
+ * 헤더에만 회백색 막이 씌워져 보인 원인이다.
+ *
+ * Android는 실제 슬롯이 있으므로 그 색을 **그대로** 칠한다. 반투명으로 낮추면 결과물에는
+ * 없는 색이 화면에 나온다.
+ */
+function headerSurfaceBackground(platform: ThemePlatform, headerBackgroundColor: string) {
+  return platform === "ios" ? undefined : headerBackgroundColor;
 }
 
 function withAlpha(color: string, alphaHex: string) {
