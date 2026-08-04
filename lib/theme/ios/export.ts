@@ -327,9 +327,9 @@ function buildIosThemeCss({
   /**
    * 색상 값을 해석한다. 알파 짝이 없는 role이면 여기서 투명도를 떨어뜨린다.
    *
-   * iOS CSS는 색상 코드에 알파를 담지 못하고 별도 `-alpha` 프로퍼티로만 받는데, 그 짝은
-   * 다섯 곳뿐이다(`iosAlphaCapableRoles`). 나머지를 8자리로 내보내면 참조 테마에 없는 형식이
-   * 나가고, 편집기·프리뷰에서 본 반투명이 결과물에서 재현되지 않는다.
+   * iOS CSS는 대부분 색상 코드에 알파를 담지 못하고 별도 `-alpha` 프로퍼티로 받는다.
+   * 다만 실기기에서 확인된 `TabBarStyle-Main`의 `background-color`는 `#AARRGGBB`를 직접
+   * 받으므로 `iosAlphaCapableRoles`에 포함된다. 그 외 role의 8자리 알파는 제거한다.
    */
   const color = (role: ThemeResourceRole, fallback: string) => {
     const resolved = getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback;
