@@ -73,7 +73,7 @@ const adminAssetSelect = [
   "created_at",
   "updated_at",
   "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
-  "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch)",
+  "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch,geometry)",
   "admin_asset_variants(id,asset_id,platform,storage_path,file_name,mime_type,analysis)",
   "admin_asset_bubble_designs!admin_asset_bubble_designs_asset_id_fkey(asset_id,recipe,geometry_mode,admin_asset_bubble_decorations(layer_id,storage_path,file_name,mime_type))",
 ].join(",");
@@ -183,6 +183,7 @@ export async function updateAdminAssetCandidate(id: string, input: AdminAssetCan
       android_markers: bubbleSpec.androidMarkers,
       ios_insets: bubbleSpec.iosInsets,
       ios_stretch: bubbleSpec.iosStretch,
+      geometry: bubbleSpec.geometry ?? null,
     });
     const { error: geometryModeError } = await supabase
       .from("admin_asset_bubble_designs")
@@ -305,6 +306,7 @@ export async function saveAdminBubbleBuilderCandidate(input: AdminBubbleBuilderC
         android_markers: input.bubbleSpec.androidMarkers,
         ios_insets: input.bubbleSpec.iosInsets,
         ios_stretch: input.bubbleSpec.iosStretch,
+        geometry: input.bubbleSpec.geometry ?? null,
       },
       p_bubble_design: { recipe: input.recipe, geometry_mode: input.geometryMode ?? "generated" },
       p_decorations: decorationRows.map((decoration) => ({
@@ -442,6 +444,7 @@ type AdminBubbleSpecRow = {
   readonly android_markers: AdminBubbleSpec["androidMarkers"];
   readonly ios_insets: AdminBubbleSpec["iosInsets"];
   readonly ios_stretch: AdminBubbleSpec["iosStretch"];
+  readonly geometry: AdminBubbleSpec["geometry"] | null;
 };
 
 function rowMatchesPlatform(row: unknown, platform: ThemePlatform): boolean {

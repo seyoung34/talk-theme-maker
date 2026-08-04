@@ -5,8 +5,10 @@ import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertTriangle, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
+import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
 import { BubbleBuilderEditor } from "@/components/editor/BubbleBuilderDialog";
+import AdminBubbleTextPreview from "@/components/admin/AdminBubbleTextPreview";
 import {
   deleteAdminAssetCandidate,
   adminAssetToFile,
@@ -20,6 +22,7 @@ import {
   saveAdminAssetCandidate,
   saveAdminBubbleBuilderCandidate,
   updateAdminAssetCandidate,
+  withAdminAssetPlatformVariant,
   type AdminAssetAnalysis,
   type AdminBubbleAdjustment,
   type AdminAssetCandidate,
@@ -33,7 +36,7 @@ import { generateBubbleAsset, type BubbleFamilyDesignSpec, type GeneratedBubbleD
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import { getThemeSlots } from "@/lib/theme/templates";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
-import type { Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
 const assetKindOrder: AdminAssetKind[] = ["background", "icon", "bubble", "profile", "launcher", "passcode"];
 
@@ -63,6 +66,12 @@ type AdminBubbleBuilderDraft = {
 type AdminBubbleBuilderInitial = Pick<AdminBubbleBuilderDraft, "recipe" | "decorations">;
 type BubbleWorkspaceMode = "library" | "adjust" | "builder";
 type SidebarResize = { side: "left" | "right"; startX: number; startWidth: number };
+type AdminBubblePreviewEdit = {
+  geometry: BubbleGeometry;
+  markers: Markers;
+  insets: Insets;
+  stretch: StretchPoint;
+};
 
 function pickValidImageFile(files: FileList | File[] | null | undefined): { file: File } | { error: string } {
   const file = Array.from(files ?? []).find((item) => item.type.startsWith("image/"));
@@ -73,13 +82,17 @@ function pickValidImageFile(files: FileList | File[] | null | undefined): { file
 }
 
 export default function AdminAssetsClient() {
-  const [bubblePreviewPlatform, setBubblePreviewPlatform] = useState<ThemePlatform>("android");
+  const bubblePreviewPlatform: ThemePlatform = "android";
   const [selectedSlotId, setSelectedSlotId] = useState("");
   const [assets, setAssets] = useState<AdminAssetCandidate[]>([]);
   const [title, setTitle] = useState("");
   const [assetKind, setAssetKind] = useState<AdminAssetKind>("background");
   const [analysis, setAnalysis] = useState<AdminAssetAnalysis | null>(null);
   const [bubbleAdjustment, setBubbleAdjustment] = useState<AdminBubbleAdjustment>(createDefaultBubbleAdjustment());
+  const [bubbleGeometry, setBubbleGeometry] = useState<Partial<Record<ThemePlatform, BubbleGeometry>>>({});
+  const [bubblePreviewEdits, setBubblePreviewEdits] = useState<Partial<Record<ThemePlatform, AdminBubblePreviewEdit>>>({});
+  const [bubbleVariantFiles, setBubbleVariantFiles] = useState<Partial<Record<ThemePlatform, File>>>({});
+  const [bubblePreviewText, setBubblePreviewText] = useState("안녕하세요! 말풍선 텍스트가 이렇게 보여요.");
   const [file, setFile] = useState<File | null>(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState("");
   const [dragActive, setDragActive] = useState(false);
@@ -98,6 +111,7 @@ export default function AdminAssetsClient() {
   const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
   const [bubbleBuilderInitial, setBubbleBuilderInitial] = useState<AdminBubbleBuilderInitial | null>(null);
+  const [bubbleGeometryMode, setBubbleGeometryMode] = useState<"generated" | "manual">("manual");
   const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(272);
@@ -110,13 +124,42 @@ export default function AdminAssetsClient() {
   const slotGroups = useMemo(() => groupSlotsByAssetKind(slots), [slots]);
   const activeKindSlots = useMemo(() => slots.filter((slot) => inferAdminAssetKind(slot) === assetKind), [assetKind, slots]);
   const selectedSlot = activeKindSlots.find((slot) => slot.id === selectedSlotId) ?? activeKindSlots[0] ?? slots[0];
-  const adminBubbleFile = useMemo<ThemeProjectFile | undefined>(() => (file ? { path: file.name, name: file.name, size: file.size, file } : undefined), [file]);
+  // 말풍선 편집은 Android 9-patch 원본을 우선 기준으로 삼고, iOS 전용 원본만 있을 때만 iOS를 사용한다.
+  // 저장 데이터에는 두 플랫폼의 geometry를 계속 보관하되, 화면에서 플랫폼을 번갈아 선택하게 하지 않는다.
+  const bubbleEditorPlatform: ThemePlatform = bubbleVariantFiles.android ? "android" : bubbleVariantFiles.ios ? "ios" : "android";
+  const adminBubbleSourceFile = bubbleVariantFiles[bubbleEditorPlatform] ?? file;
   const selectedBubbleSlot = selectedSlot ? (bubbleSlotFromRole(selectedSlot.role) ?? "me") : "me";
+  const selectedBubbleEditorSlot = useMemo(
+    () => selectedSlot ? getThemeSlots(bubbleEditorPlatform).find((slot) => slot.role === selectedSlot.role) ?? selectedSlot : undefined,
+    [bubbleEditorPlatform, selectedSlot],
+  );
   const selectedSaveTargets = useMemo(() => {
     if (!selectedSlot) return [];
     return bubbleBuilderDraft ? getAdminBubbleBuilderTargets(selectedSlot) : getAdminAssetSaveTargets(selectedSlot, assetKind);
   }, [assetKind, bubbleBuilderDraft, selectedSlot]);
-  const bubbleSpec = useMemo(() => bubbleBuilderDraft?.bubbleSpec ?? (assetKind === "bubble" ? bubbleAdjustmentToSpec(bubbleAdjustment) : undefined), [assetKind, bubbleAdjustment, bubbleBuilderDraft]);
+  const effectiveBubbleAdjustment = useMemo<AdminBubbleAdjustment>(() => ({
+    markers: bubblePreviewEdits.android?.markers ?? bubbleAdjustment.markers,
+    insets: bubblePreviewEdits.ios?.insets ?? bubbleAdjustment.insets,
+    stretch: bubblePreviewEdits.ios?.stretch ?? bubbleAdjustment.stretch,
+  }), [bubbleAdjustment.insets, bubbleAdjustment.markers, bubbleAdjustment.stretch, bubblePreviewEdits]);
+  const effectiveBubbleGeometry = useMemo(
+    () => ({
+      ...bubbleGeometry,
+      ...(bubblePreviewEdits.android ? { android: bubblePreviewEdits.android.geometry } : {}),
+      ...(bubblePreviewEdits.ios ? { ios: bubblePreviewEdits.ios.geometry } : {}),
+    }),
+    [bubbleGeometry, bubblePreviewEdits],
+  );
+  const bubbleSpec = useMemo(
+    () => assetKind === "bubble" ? bubbleAdjustmentToSpec(effectiveBubbleAdjustment, effectiveBubbleGeometry) ?? bubbleBuilderDraft?.bubbleSpec : undefined,
+    [assetKind, bubbleBuilderDraft, effectiveBubbleAdjustment, effectiveBubbleGeometry],
+  );
+  const bubblePreviewEdit = useMemo(() => ({
+    geometry: effectiveBubbleGeometry[bubbleEditorPlatform],
+    markers: effectiveBubbleAdjustment.markers,
+    insets: effectiveBubbleAdjustment.insets,
+    stretch: effectiveBubbleAdjustment.stretch,
+  }), [bubbleEditorPlatform, effectiveBubbleAdjustment, effectiveBubbleGeometry]);
   const canSaveAsset = Boolean(
     selectedSlot &&
       !isSavingAsset &&
@@ -157,8 +200,8 @@ export default function AdminAssetsClient() {
   }, [activeKindSlots, selectedSlotId, slots]);
 
   useEffect(() => {
-    if (assetKind !== "bubble") return;
-    setBubbleAdjustment(createDefaultBubbleAdjustment(analysis));
+    if (assetKind !== "bubble" || !analysis) return;
+    setBubbleAdjustment((current) => current.markers || current.insets || current.stretch ? current : createDefaultBubbleAdjustment(analysis));
   }, [analysis, assetKind]);
 
   useEffect(() => {
@@ -192,6 +235,10 @@ export default function AdminAssetsClient() {
     setBubbleBuilderDraft(null);
     setBubbleBuilderInitial(null);
     setEditingAsset(null);
+    setBubbleGeometry({});
+    setBubblePreviewEdits({});
+    setBubbleVariantFiles({});
+    setBubbleGeometryMode("manual");
     setBubbleWorkspaceMode("library");
   }, [selectedSlot?.role]);
 
@@ -235,6 +282,11 @@ export default function AdminAssetsClient() {
         setNotice(result.error);
         return;
       }
+      setAnalysis(null);
+      setBubbleAdjustment({});
+      setBubbleGeometry({});
+      setBubblePreviewEdits({});
+      setBubbleVariantFiles({ android: result.file, ios: result.file });
       setFile(result.file);
       setNotice("클립보드 이미지를 추가했습니다.");
     };
@@ -284,10 +336,10 @@ export default function AdminAssetsClient() {
           slotRole: selectedSlot.role,
           targets: getAdminBubbleBuilderTargets(selectedSlot),
           variants: bubbleBuilderDraft.variants.map((result) => ({ platform: result.asset.platform, file: result.asset.file, analysis: analysis ?? undefined })),
-          bubbleSpec: bubbleBuilderDraft.bubbleSpec,
+          bubbleSpec: bubbleSpec ?? bubbleBuilderDraft.bubbleSpec,
           recipe: bubbleBuilderDraft.recipe,
           decorations: bubbleBuilderDraft.decorations,
-          geometryMode: "generated",
+          geometryMode: bubbleGeometryMode,
           enabled: editingAsset.enabled,
         });
         setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? updatedAsset : asset)));
@@ -339,9 +391,10 @@ export default function AdminAssetsClient() {
             slotRole: selectedSlot.role,
             targets: saveTargets,
             variants: bubbleBuilderDraft.variants.map((result) => ({ platform: result.asset.platform, file: result.asset.file, analysis: analysis ?? undefined })),
-            bubbleSpec: bubbleBuilderDraft.bubbleSpec,
+            bubbleSpec: bubbleSpec ?? bubbleBuilderDraft.bubbleSpec,
             recipe: bubbleBuilderDraft.recipe,
             decorations: bubbleBuilderDraft.decorations,
+            geometryMode: bubbleGeometryMode,
           })
         : await saveAdminAssetCandidate({
         slotRole: representativeTarget.slotRole ?? selectedSlot.role,
@@ -360,6 +413,10 @@ export default function AdminAssetsClient() {
       });
       setTitle("");
       setFile(null);
+      setBubbleGeometry({});
+      setBubblePreviewEdits({});
+      setBubbleVariantFiles({});
+      setBubbleGeometryMode("manual");
       setAnalysis(null);
       setBubbleBuilderDraft(null);
       setNotice("플랫폼 공통 관리 후보를 추가했습니다.");
@@ -382,6 +439,9 @@ export default function AdminAssetsClient() {
         setEditingAsset(null);
         setTitle("");
         setFile(null);
+        setBubbleGeometry({});
+        setBubblePreviewEdits({});
+        setBubbleVariantFiles({});
       }
       setAssetPendingDelete(null);
       setNotice("관리 후보를 삭제했습니다.");
@@ -404,11 +464,19 @@ export default function AdminAssetsClient() {
       setTitle("");
       setNotice("기존 후보 원본은 바꾸지 않습니다. 새 후보 등록으로 전환했습니다.");
     }
+    setAnalysis(null);
+    setBubbleAdjustment({});
+    setBubbleGeometry({});
+    setBubblePreviewEdits({});
+    setBubbleVariantFiles({ android: result.file, ios: result.file });
     setFile(result.file);
   };
 
   const applyRecommendedBubbleAdjustment = () => {
     setBubbleAdjustment(createDefaultBubbleAdjustment(analysis));
+    setBubbleGeometry({});
+    setBubblePreviewEdits({});
+    setBubbleGeometryMode("manual");
     setNotice("이미지 크기 기준으로 말풍선 조정값을 다시 맞췄습니다.");
   };
 
@@ -419,6 +487,9 @@ export default function AdminAssetsClient() {
 
     setFile(null);
     setBubbleBuilderDraft(null);
+    setBubbleGeometry({});
+    setBubblePreviewEdits({});
+    setBubbleVariantFiles({});
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -432,6 +503,10 @@ export default function AdminAssetsClient() {
     setBubbleBuilderInitial(null);
     setTitle(asset.title);
     setFile(null);
+    setBubbleVariantFiles({});
+    setBubbleGeometry(asset.bubbleSpec?.geometry ?? {});
+    setBubblePreviewEdits({});
+    setBubbleGeometryMode(asset.bubbleDesign?.geometryMode ?? "manual");
     setAnalysis(asset.analysis ?? null);
     setBubbleAdjustment(asset.bubbleAdjustment ?? createDefaultBubbleAdjustment(asset.analysis));
     setNotice(null);
@@ -439,7 +514,23 @@ export default function AdminAssetsClient() {
     setBubbleWorkspaceMode("adjust");
     try {
       setIsLoadingEditAsset(true);
-      const source = await adminAssetToFile(asset);
+      // 플랫폼별로 따로 받는다. 한 번에 묶으면 iOS 원본 하나가 없거나 서명이 만료됐을 때
+      // 배치 전체가 실패해, 멀쩡한 Android 원본으로도 geometry를 못 고친다.
+      const loadedFiles = await Promise.all((['android', 'ios'] as const).map(async (platform) => {
+        try {
+          return [platform, await adminAssetToFile(withAdminAssetPlatformVariant(asset, platform))] as const;
+        } catch (error) {
+          console.error(error);
+          return [platform, undefined] as const;
+        }
+      }));
+      const platformFiles = Object.fromEntries(loadedFiles.filter(([, loaded]) => loaded)) as Partial<Record<ThemePlatform, File>>;
+      const source = platformFiles.android ?? platformFiles.ios;
+      if (!source) throw new Error("말풍선 원본을 어느 플랫폼에서도 받지 못했습니다.");
+      if (!platformFiles.android || !platformFiles.ios) {
+        setNotice("한쪽 플랫폼 원본을 받지 못했습니다. 받은 원본으로 편집을 이어갈 수 있습니다.");
+      }
+      setBubbleVariantFiles(platformFiles);
       setFile(source);
       if (asset.bubbleDesign) {
         const decorations = Object.fromEntries(await Promise.all(asset.bubbleDesign.decorations.map(async (decoration) => [decoration.layerId, await adminAssetBubbleDecorationToFile(decoration)] as const)));
@@ -474,10 +565,18 @@ export default function AdminAssetsClient() {
       const android = results.find((item) => item.asset.platform === "android")?.asset;
       const ios = results.find((item) => item.asset.platform === "ios")?.asset;
       if (!android?.markers || !ios?.insets || !ios.stretch) throw new Error("INVALID_BUBBLE_BUILDER_RESULT");
+      const nextGeometry: Partial<Record<ThemePlatform, BubbleGeometry>> = {};
+      for (const generated of results) {
+        if (generated.asset.geometry) nextGeometry[generated.asset.platform] = generated.asset.geometry;
+      }
       const nextSpec = { androidMarkers: android.markers, iosInsets: ios.insets, iosStretch: ios.stretch };
-      setBubbleBuilderDraft({ recipe: result.spec, decorations, variants: results, bubbleSpec: nextSpec });
+      setBubbleBuilderDraft({ recipe: result.spec, decorations, variants: results, bubbleSpec: { ...nextSpec, geometry: nextGeometry } });
       setBubbleBuilderInitial({ recipe: result.spec, decorations });
       setBubbleAdjustment({ markers: android.markers, insets: ios.insets, stretch: ios.stretch });
+      setBubbleGeometry(nextGeometry);
+      setBubblePreviewEdits({});
+      setBubbleVariantFiles({ android: android.file, ios: ios.file });
+      setBubbleGeometryMode("generated");
       setFile(android.file);
       setTitle((current) => current || `${selectedSlot.label} 빌더 말풍선`);
       setBubbleWorkspaceMode("adjust");
@@ -764,22 +863,59 @@ export default function AdminAssetsClient() {
                     <div className="grid gap-4">
                       {editingAsset ? <div className="flex flex-wrap items-center justify-between gap-3 border border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-3 text-xs font-bold text-[var(--color-info-strong)]"><span>편집 중 · {editingAsset.title}</span><button type="button" className="rounded-md bg-white px-2.5 py-1.5 font-black text-[var(--color-on-surface-variant)]" onClick={exitInPlaceEdit}>새 후보</button></div> : null}
                       {bubbleBuilderDraft ? <div className="border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold leading-5 text-emerald-800">빌더 결과가 준비되었습니다. 우측 패널에서 저장하면 Android/iOS 후보가 함께 등록됩니다.</div> : null}
-                      <BubblePlatformSummary adjustment={bubbleAdjustment} activePlatform={bubblePreviewPlatform} onSelectPlatform={setBubblePreviewPlatform} />
-                      <InlineBubbleAdjuster
-                        file={adminBubbleFile}
+                      {selectedBubbleEditorSlot ? (
+                        <MobileBubbleEditor
+                          slot={selectedBubbleEditorSlot}
+                          bubbleSlot={selectedBubbleSlot}
+                          platform={bubbleEditorPlatform}
+                          sourceFile={adminBubbleSourceFile ?? null}
+                          geometry={bubbleGeometry[bubbleEditorPlatform]}
+                          markers={bubbleAdjustment.markers}
+                          insets={bubbleAdjustment.insets}
+                          stretch={bubbleAdjustment.stretch}
+                          showFlip={false}
+                          resetGeometryOnSourceChange={!editingAsset && !bubbleBuilderDraft}
+                          onApply={({ editedFile, geometry, markers, insets, stretch }) => {
+                            const editorPlatform = bubbleEditorPlatform;
+                            if (editedFile) {
+                              setBubbleVariantFiles((current) => ({ ...current, [editorPlatform]: editedFile }));
+                              if (editorPlatform === "android") setFile(editedFile);
+                            }
+                            // 공통 편집기에서 확정한 geometry는 두 플랫폼에 동일한 기준으로 저장한다.
+                            setBubbleGeometry((current) => ({ ...current, android: geometry, ios: geometry }));
+                            setBubblePreviewEdits((current) => {
+                              const next = { ...current };
+                              delete next.android;
+                              delete next.ios;
+                              return next;
+                            });
+                            setBubbleAdjustment((current) => ({ ...current, markers, insets, stretch }));
+                            setBubbleGeometryMode("manual");
+                          }}
+                          onPreviewChange={({ geometry, markers, insets, stretch }) => {
+                            setBubbleAdjustment((current) => current.markers && current.insets && current.stretch
+                              ? current
+                              : { ...current, markers: current.markers ?? markers, insets: current.insets ?? insets, stretch: current.stretch ?? stretch });
+                            // onApply와 같은 규칙 — 공통 편집기가 만든 값은 두 플랫폼에 함께 반영한다.
+                            // 편집기 플랫폼(사실상 android)에만 쓰면 `bubblePreviewEdits.ios`가
+                            // 영영 비어, insets/stretch가 저장 시 옛 DB 값으로 되돌아간다.
+                            const previewEdit = { geometry, markers, insets, stretch };
+                            setBubblePreviewEdits((current) => ({ ...current, android: previewEdit, ios: previewEdit }));
+                          }}
+                        />
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-[var(--color-outline-variant)] bg-white px-4 py-6 text-center text-sm font-bold text-[var(--color-on-surface-variant)]">편집할 말풍선 원본을 선택하세요.</div>
+                      )}
+                      <AdminBubbleTextPreview
+                        sourceFile={adminBubbleSourceFile}
+                        platform={bubbleEditorPlatform}
                         slot={selectedBubbleSlot}
-                        platform={bubblePreviewPlatform}
-                        markers={bubbleAdjustment.markers}
-                        insets={bubbleAdjustment.insets}
-                        stretch={bubbleAdjustment.stretch}
-                        tone="blue"
-                        onMarkersChange={(markers) => setBubbleAdjustment((current) => ({ ...current, markers }))}
-                        onInsetsChange={(insets) => setBubbleAdjustment((current) => ({ ...current, insets }))}
-                        onStretchChange={(stretch) => setBubbleAdjustment((current) => ({ ...current, stretch }))}
+                        edit={bubblePreviewEdit}
+                        text={bubblePreviewText}
+                        onTextChange={setBubblePreviewText}
                       />
                       <div className="flex flex-wrap gap-2">
                         <button type="button" onClick={() => setBubbleWorkspaceMode("builder")} className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]">빌더로 다시 만들기</button>
-                        <button type="button" onClick={applyRecommendedBubbleAdjustment} className="rounded-lg border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]">자동 기준 적용</button>
                       </div>
                     </div>
                   )}
@@ -916,11 +1052,15 @@ export default function AdminAssetsClient() {
 
       <ImageEditDialog
         open={imageEditOpen}
-        sourceFile={file}
+        sourceFile={adminBubbleSourceFile}
         slotLabel={selectedSlot?.label ?? "관리 에셋"}
         onOpenChange={setImageEditOpen}
         onApply={(editedFile) => {
-          setFile(editedFile);
+          // 작업대가 보는 원본은 `bubbleVariantFiles`가 먼저다. `file`만 갈면 편집기와 텍스트
+          // 미리보기가 편집 전 비트맵을 계속 그리는데, 업로드되는 건 편집된 파일이라
+          // 저장된 geometry가 저장된 이미지와 어긋난다. 편집기 자체의 onApply와 같은 규칙을 쓴다.
+          setBubbleVariantFiles((current) => (current[bubbleEditorPlatform] ? { ...current, [bubbleEditorPlatform]: editedFile } : current));
+          if (bubbleEditorPlatform === "android") setFile(editedFile);
           setNotice("편집된 이미지를 적용했습니다.");
         }}
       />

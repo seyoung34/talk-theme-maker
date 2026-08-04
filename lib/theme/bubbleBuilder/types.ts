@@ -1,4 +1,4 @@
-import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 export type BubbleBuilderSide = "me" | "you";
 export type BubbleBuilderVariant = "first" | "group";
@@ -70,6 +70,8 @@ export type GeneratedBubbleAsset = {
   role: ThemeResourceRole;
   variant: BubbleBuilderVariant;
   file: File;
+  /** 공통 편집기에서 다시 열 수 있는 artwork 기준 geometry. */
+  geometry?: BubbleGeometry;
   markers?: Markers;
   insets?: Insets;
   stretch?: StretchPoint;

@@ -12,6 +12,8 @@ import type { BubbleAsset, BubbleSlot, ThemePlatform } from "@/lib/theme/types";
 // 소스 픽셀 공간에서 그린 뒤 scale로 CSS 축소해 표시 → 편집기와 픽셀 단위로 일치.
 export default function BubbleCanvasPreview({
   imageUrl,
+  sourceFile,
+  sourceName,
   platform,
   slot,
   edit,
@@ -21,7 +23,9 @@ export default function BubbleCanvasPreview({
   scale,
   className,
 }: {
-  imageUrl: string;
+  imageUrl?: string;
+  sourceFile?: File;
+  sourceName?: string;
   platform: ThemePlatform;
   slot: BubbleSlot;
   edit?: BubbleEditState;
@@ -36,16 +40,31 @@ export default function BubbleCanvasPreview({
 
   useEffect(() => {
     let active = true;
+    const sourceUrl = imageUrl;
+    const sourcePath = sourceName ?? sourceFile?.name ?? sourceUrl?.split("?")[0] ?? "";
+    const sourceKey = sourceFile
+      ? `${sourceFile.name}:${sourceFile.size}:${sourceFile.lastModified}`
+      : sourceUrl?.split("?")[0] ?? sourcePath;
+
+    if (!sourceFile && !sourceUrl) {
+      setAsset(null);
+      return () => {
+        active = false;
+      };
+    }
+
     (async () => {
       try {
         // 편집기와 동일한 소스 캔버스(innerCanvas/fullCanvas)를 고르도록 원본 URL의 .9.png 여부를 이름에 보존한다.
-        const sourcePath = imageUrl.split("?")[0];
         const isNinePatch = isAndroidNinePatchSourceName(sourcePath);
         // 서명 URL은 재발급될 때마다 쿼리가 바뀌므로 경로만 캐시 키로 쓴다.
-        const loaded = await loadCachedBubbleAsset(`${sourcePath}:${slot}`, async () => {
-          const response = await fetch(imageUrl);
-          if (!response.ok) throw new Error(`bubble image fetch failed: ${sourcePath}`);
-          return loadNinePatchBlob(await response.blob(), `${slot}-bubble${isNinePatch ? ".9" : ""}.png`, slot);
+        const loaded = await loadCachedBubbleAsset(`${sourcePath}:${sourceKey}:${slot}`, async () => {
+          const blob = sourceFile ?? await (async () => {
+            const response = await fetch(sourceUrl!);
+            if (!response.ok) throw new Error(`bubble image fetch failed: ${sourcePath}`);
+            return response.blob();
+          })();
+          return loadNinePatchBlob(blob, `${slot}-bubble${isNinePatch ? ".9" : ""}.png`, slot);
         });
         if (active) setAsset(loaded);
       } catch {
@@ -55,7 +74,7 @@ export default function BubbleCanvasPreview({
     return () => {
       active = false;
     };
-  }, [imageUrl, slot]);
+  }, [imageUrl, slot, sourceFile, sourceName]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

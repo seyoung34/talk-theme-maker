@@ -1,6 +1,7 @@
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
-import type { Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 export type AdminAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode";
 export type AdminAssetShape = "square" | "portrait" | "wide" | "transparent" | "ninepatch" | "unknown";
@@ -25,6 +26,11 @@ export type AdminBubbleSpec = {
   readonly androidMarkers: Markers;
   readonly iosInsets: Insets;
   readonly iosStretch: StretchPoint;
+  /**
+   * 공통 편집기의 기준 geometry. 플랫폼별 원본 크기가 다를 수 있어 variant별로 보관한다.
+   * 기존 markers/insets/stretch는 export와 구버전 레코드 호환을 위해 계속 함께 저장한다.
+   */
+  readonly geometry?: Partial<Record<ThemePlatform, BubbleGeometry>>;
 };
 
 export type AdminAssetTarget = {
@@ -174,6 +180,7 @@ export type AdminAssetPersistencePayload = {
     readonly android_markers: Markers;
     readonly ios_insets: Insets;
     readonly ios_stretch: StretchPoint;
+    readonly geometry: Partial<Record<ThemePlatform, BubbleGeometry>> | null;
   };
 };
 
@@ -234,6 +241,7 @@ export function createAdminAssetPersistencePayload(input: AdminAssetCandidateInp
           android_markers: bubbleSpec.androidMarkers,
           ios_insets: bubbleSpec.iosInsets,
           ios_stretch: bubbleSpec.iosStretch,
+          geometry: bubbleSpec.geometry ?? null,
         }
       : undefined,
   };
@@ -312,12 +320,16 @@ export function bubbleSpecToAdjustment(spec: AdminBubbleSpec): AdminBubbleAdjust
   };
 }
 
-export function bubbleAdjustmentToSpec(adjustment?: AdminBubbleAdjustment): AdminBubbleSpec | undefined {
+export function bubbleAdjustmentToSpec(
+  adjustment?: AdminBubbleAdjustment,
+  geometry?: Partial<Record<ThemePlatform, BubbleGeometry>>,
+): AdminBubbleSpec | undefined {
   if (!adjustment?.markers || !adjustment.insets || !adjustment.stretch) return undefined;
   return {
     androidMarkers: adjustment.markers,
     iosInsets: adjustment.insets,
     iosStretch: adjustment.stretch,
+    ...(geometry && (geometry.android || geometry.ios) ? { geometry } : {}),
   };
 }
 
@@ -441,9 +453,19 @@ function parseOptionalBubbleSpec(value: unknown): AdminBubbleSpec | undefined {
     androidMarkers: parseMarkers(record.android_markers),
     iosInsets: parseInsets(record.ios_insets),
     iosStretch: parseStretchPoint(record.ios_stretch),
+    geometry: parseAdminBubbleGeometry(record.geometry),
   };
   if (!isValidBubbleSpec(spec)) throw new AdminAssetDomainError("INVALID_BUBBLE_SPEC");
   return spec;
+}
+
+function parseAdminBubbleGeometry(value: unknown): Partial<Record<ThemePlatform, BubbleGeometry>> | undefined {
+  const parsed = parseBubbleGeometryMap(value);
+  const geometry = {
+    android: parsed.android,
+    ios: parsed.ios,
+  } satisfies Partial<Record<ThemePlatform, BubbleGeometry>>;
+  return geometry.android || geometry.ios ? geometry : undefined;
 }
 
 function isValidBubbleSpec(value: AdminBubbleSpec): boolean {
