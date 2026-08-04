@@ -355,16 +355,16 @@ function ChatsScreen({
       <div className="grid min-w-0 content-start min-h-0 gap-3 pb-1 overflow-hidden">
         <div className={`min-w-0 px-4 pt-2 ${selectedSlotId === (platform === "ios" ? slotByRole.main_background_color?.id : slotByRole.main_header_color?.id) ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`} style={{ backgroundColor: headerSurfaceBackground(platform, preview.headerBackgroundColor) }} onClick={(event) => { event.stopPropagation(); const target = platform === "ios" ? slotByRole.main_background_color : slotByRole.main_header_color; if (target) onSelectSlot?.(target.id); }}>
           <div className="flex items-center gap-2 overflow-hidden">
-            <FilterPill compact dark color={preview.headerForegroundColor}>전체</FilterPill>
-            <FilterPill compact color={preview.headerForegroundColor}>
+            <FilterPill compact active color={preview.titleColor} backgroundColor={preview.mainBackgroundColor}>전체</FilterPill>
+            <FilterPill compact color={preview.titleColor}>
               <span className="text-sm">안읽음</span>
               <BadgeSmall value="40" />
             </FilterPill>
-            <FilterPill compact color={preview.headerForegroundColor}>
+            <FilterPill compact color={preview.titleColor}>
               <strong className="text-[13px] font-semibold">친구</strong>
               <BadgeSmall value="12" />
             </FilterPill>
-            <FilterPill compact color={preview.headerForegroundColor}>
+            <FilterPill compact color={preview.titleColor}>
               <ListPlus className="w-4 h-4" />
             </FilterPill>
           </div>
@@ -743,26 +743,40 @@ function Chip({ active, backgroundColor, textColor, children }: { active?: boole
   );
 }
 
+/**
+ * 채팅 탭 상단 필터 칩. 친구 탭의 `Chip`과 같은 규칙을 쓴다.
+ *
+ * - 선택됨: 이름 색상으로 채우고 글자는 **배경색** — 글자 자리가 배경에서 오려낸 것처럼 보인다.
+ * - 선택 안 됨: 테두리·글자가 이름 색상이고 채움은 없다. 뒤에 깔린 배경색이나 이미지가 그대로 비친다.
+ *
+ * 예전에는 선택 칩의 글자가 `#ffffff` 고정이라 밝은 테마에서 흰 글자만 남았고, 나머지 칩에는
+ * 흰색 8% 채움이 깔려 어두운 배경 위에 옅은 막처럼 보였다.
+ */
 function FilterPill({
   children,
-  dark,
+  active,
   wide,
   compact,
   color,
+  backgroundColor,
 }: {
   children: ReactNode;
-  dark?: boolean;
+  active?: boolean;
   wide?: boolean;
   compact?: boolean;
+  /** 이름 색상. */
   color?: string;
+  /** 배경색. 선택 칩의 글자색으로 쓴다. */
+  backgroundColor?: string;
 }) {
+  const foreground = color ?? "#0d5b66";
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-3 text-xs font-semibold ${compact ? "h-8" : "h-10"} ${wide ? "min-w-[116px] justify-center" : ""}`}
       style={
-        dark
-          ? { borderColor: "transparent", backgroundColor: hexToRgba(color ?? "#0d5b66", 0.95), color: "#ffffff" }
-          : { borderColor: hexToRgba(color ?? "#0e8394", 0.28), color: color ?? "#0d4f58" }
+        active
+          ? { borderColor: foreground, backgroundColor: foreground, color: backgroundColor ?? "#ffffff" }
+          : { borderColor: foreground, color: foreground }
       }
     >
       {children}
