@@ -560,7 +560,10 @@ export default function AdminAssetsClient() {
     const variant = bubbleVariantFromRole(selectedSlot.role);
     if (!variant) return;
     try {
-      if (editingAsset?.bubbleDesign?.geometryMode === "manual" && typeof window !== "undefined" && !window.confirm("빌더를 다시 적용하면 수동 geometry 조정값이 자동 계산값으로 바뀝니다. 계속할까요?")) return;
+      // 저장된 geometryMode가 generated여도 현재 편집 세션에서 수동 조정했다면
+      // 재생성 결과가 그 값을 덮어쓴다. 새 후보에서 아직 빌더 결과가 없는 첫 적용은 묻지 않는다.
+      const hasManualGeometryToReplace = bubbleGeometryMode === "manual" && Boolean(editingAsset || bubbleBuilderDraft);
+      if (hasManualGeometryToReplace && typeof window !== "undefined" && !window.confirm("빌더를 다시 적용하면 수동 geometry 조정값이 자동 계산값으로 바뀝니다. 계속할까요?")) return;
       const results = await Promise.all((['android', 'ios'] as const).map((platform) => generateBubbleAsset({ spec: result.spec, platform, variant, decorationFiles: decorations })));
       const android = results.find((item) => item.asset.platform === "android")?.asset;
       const ios = results.find((item) => item.asset.platform === "ios")?.asset;
