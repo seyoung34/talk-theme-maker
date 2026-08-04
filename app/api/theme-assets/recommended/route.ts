@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
           "created_at",
           "updated_at",
            "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
-           "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch)",
+           "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch,geometry)",
            "admin_asset_variants(id,asset_id,platform,storage_path,file_name,mime_type,analysis)",
         ].join(","),
       )

@@ -625,7 +625,10 @@ function PhoneFrame({
         if (event.key === "Enter" || event.key === " ") onSelect();
       }}
       style={{
-        backgroundImage: backgroundUrl ? `linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.12)), url(${backgroundUrl})` : undefined,
+        // 올린 이미지를 그대로 깐다. 예전에는 흰색 18%→12% 그라데이션을 위에 덮었는데,
+        // 내보내기는 그런 레이어를 쓰지 않아 화면과 결과물이 어긋났다. 헤더·탭바는 자기 색을
+        // 다시 칠하므로 그 막은 가운데 목록에서만 보였고, 어두운 이미지일수록 뿌옇게 떴다.
+        backgroundImage: backgroundUrl ? `url(${backgroundUrl})` : undefined,
         backgroundColor: fallbackBackground,
         backgroundSize: "cover",
         backgroundPosition: "center",

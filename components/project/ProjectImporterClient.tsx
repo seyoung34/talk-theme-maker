@@ -969,22 +969,25 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       return { ...current, [slot.id]: nextEntries };
     });
     dropRemoteUploadRef(slot.id);
-    if (asset.bubbleAdjustment) {
+    const bubbleAdjustment = asset.bubbleAdjustment;
+    if (bubbleAdjustment || asset.bubbleSpec) {
+      const platformGeometry = asset.bubbleSpec?.geometry?.[platform];
       setBubbleGeometry((current) => {
         const next = { ...current };
-        delete next[slot.id];
+        if (platformGeometry) next[slot.id] = platformGeometry;
+        else delete next[slot.id];
         return next;
       });
       // 관리자 에셋은 자체 조정값을 들고 온다. 이전 그림의 반전을 남기면 그 조정값과 어긋난다.
       setBubbleFlipX((current) => omitBubbleEditValue(current, slot.id));
-      if (asset.bubbleAdjustment.markers) {
-        setBubbleMarkers((current) => ({ ...current, [slot.id]: asset.bubbleAdjustment?.markers }));
+      if (bubbleAdjustment?.markers) {
+        setBubbleMarkers((current) => ({ ...current, [slot.id]: bubbleAdjustment.markers }));
       }
-      if (asset.bubbleAdjustment.insets) {
-        setBubbleInsets((current) => ({ ...current, [slot.id]: asset.bubbleAdjustment?.insets }));
+      if (bubbleAdjustment?.insets) {
+        setBubbleInsets((current) => ({ ...current, [slot.id]: bubbleAdjustment.insets }));
       }
-      if (asset.bubbleAdjustment.stretch) {
-        setBubbleStretch((current) => ({ ...current, [slot.id]: asset.bubbleAdjustment?.stretch }));
+      if (bubbleAdjustment?.stretch) {
+        setBubbleStretch((current) => ({ ...current, [slot.id]: bubbleAdjustment.stretch }));
       }
     }
     setCandidateSelections((current) => ({ ...current, [slot.id]: asset.id }));

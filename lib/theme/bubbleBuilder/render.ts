@@ -1,6 +1,6 @@
 import { bubbleDecorationBaseSize, bubbleDecorationMaxScale, getAndroidBubbleMarkers, getBubbleDecorationLayers, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleBuilderVariant, BubbleDecorationLayer, BubbleFamilyDesignSpec, BubbleRect, GeneratedBubbleAsset, GeneratedBubbleDesign, GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder/types";
-import type { Markers, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import type { BubbleGeometry, Markers, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 type GenerateBubbleFamilyOptions = {
   spec: BubbleFamilyDesignSpec;
@@ -132,6 +132,15 @@ async function renderAndroidAsset(
   variant: BubbleBuilderVariant,
 ): Promise<GeneratedBubbleAsset> {
   const markers = getAndroidBubbleMarkers(geometry);
+  const bubbleGeometry: BubbleGeometry = {
+    stretch: geometry.stretch,
+    contentInsets: {
+      top: geometry.content.y,
+      right: geometry.canvas.width - geometry.content.x - geometry.content.width,
+      bottom: geometry.canvas.height - geometry.content.y - geometry.content.height,
+      left: geometry.content.x,
+    },
+  };
   const canvas = document.createElement("canvas");
   canvas.width = artwork.width + 2;
   canvas.height = artwork.height + 2;
@@ -145,6 +154,7 @@ async function renderAndroidAsset(
     role,
     variant,
     file: new File([await canvasToPngBlob(canvas)], androidFileName(side, variant), { type: "image/png" }),
+    geometry: bubbleGeometry,
     markers,
   };
 }
@@ -161,6 +171,10 @@ async function renderIosAsset(
     role: roleFor(side, variant),
     variant,
     file: new File([await canvasToPngBlob(artwork)], iosFileName(side, variant), { type: "image/png" }),
+    geometry: {
+      stretch,
+      contentInsets: insets,
+    },
     insets,
     stretch,
   };

@@ -30,6 +30,11 @@ async function loadTsModule(path, fileName) {
         if (loaded) return loaded.exports;
         throw new Error("adminAssetDomain.ts must be loaded before adminAssets.ts");
       }
+      if (id === "@/lib/theme/bubbleGeometry") {
+        const loaded = moduleCache.get("bubbleGeometry.ts");
+        if (loaded) return loaded.exports;
+        throw new Error("bubbleGeometry.ts must be loaded before adminAssetDomain.ts");
+      }
     if (id === "@/lib/supabase/client") return { createClient: () => ({}) };
     if (id === "@/lib/shared/api/http") return { readJsonResponse: async (response) => response.json() };
     if (id === "@/lib/theme/remoteAssets") {
@@ -51,6 +56,7 @@ async function loadTsModule(path, fileName) {
   return module.exports;
 }
 
+await loadTsModule(new URL("../lib/theme/bubbleGeometry.ts", import.meta.url), "bubbleGeometry.ts");
 await loadTsModule(new URL("../lib/theme/adminAssetDomain.ts", import.meta.url), "adminAssetDomain.ts");
 const exports = await loadTsModule(new URL("../lib/theme/adminAssets.ts", import.meta.url), "adminAssets.ts");
 
@@ -91,6 +97,10 @@ const row = {
     },
     ios_insets: { top: 4, right: 5, bottom: 6, left: 7 },
     ios_stretch: { x: 8, y: 9 },
+    geometry: {
+      android: { stretch: { x: 8, y: 9 }, contentInsets: { top: 2, right: 3, bottom: 4, left: 5 } },
+      ios: { stretch: { x: 8, y: 9 }, contentInsets: { top: 4, right: 5, bottom: 6, left: 7 } },
+    },
   },
 };
 
@@ -98,6 +108,10 @@ const canonical = mapCanonicalAdminAssetRow(row);
 assert.equal(canonical.title, "Bubble asset", "Given a canonical DB row, When mapping it, Then title is normalized");
 assert.equal(canonical.targets.length, 2, "Given a canonical DB row, When mapping it, Then target rows are preserved");
 assert.deepEqual(structuredClone(canonical.bubbleSpec?.iosStretch), { x: 8, y: 9 }, "Given a bubble spec row, When mapping it, Then iOS stretch is parsed");
+assert.deepEqual(structuredClone(canonical.bubbleSpec?.geometry?.ios), {
+  stretch: { x: 8, y: 9 },
+  contentInsets: { top: 4, right: 5, bottom: 6, left: 7 },
+}, "Given a bubble spec row, When mapping it, Then common iOS geometry is parsed");
 
 const candidate = canonicalAdminAssetToCandidate(canonical, "signed:preview");
 assert.equal(candidate.id, "asset-1", "Given a canonical asset, When adapting it, Then id is preserved");

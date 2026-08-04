@@ -34,6 +34,8 @@ export function MobileBubbleEditor({
   insets,
   stretch,
   flipX = false,
+  showFlip = true,
+  resetGeometryOnSourceChange = false,
   onApply,
   onFlipXChange,
   onPreviewChange,
@@ -54,6 +56,10 @@ export function MobileBubbleEditor({
    * `initialImageState.flipX`(파일에 이미 구워진 legacy 값)와는 별개다.
    */
   flipX?: boolean;
+  /** 관리자 라이브러리처럼 대상 슬롯에서 방향을 결정하는 흐름은 숨길 수 있다. */
+  showFlip?: boolean;
+  /** 새 원본 이미지가 들어오면 이전 픽셀 좌표 대신 새 이미지 중앙에서 geometry를 시작한다. */
+  resetGeometryOnSourceChange?: boolean;
   onApply: (input: { editedFile?: File; sourceFile: File; imageState: ImageEditState; target?: ImageEditTarget; geometry: BubbleGeometry; markers: Markers; insets: Insets; stretch: StretchPoint }) => void;
   onFlipXChange?: (next: boolean) => void;
   onPreviewChange?: (input: { geometry: BubbleGeometry; markers: Markers; insets: Insets; stretch: StretchPoint; flipX: boolean }) => void;
@@ -131,34 +137,47 @@ export function MobileBubbleEditor({
     return () => { cancelled = true; };
   }, [bubbleSlot, preparedFile]);
 
+  const originalDraftSource = asset && preparedFile ? `${slot.id}:${preparedFile.name}:${preparedFile.size}:${preparedFile.lastModified}:${asset.width}:${asset.height}` : null;
+  const sourceChanged = Boolean(originalDraftSourceRef.current && originalDraftSource && originalDraftSourceRef.current !== originalDraftSource);
+
   const initialDraft = useMemo<MobileBubbleEditDraft | null>(() => {
     if (!asset) return null;
     const imageState = initialImageState ?? defaultImageEditState;
     const source = getArtworkMetrics(asset);
     // 저장된 편집값이 없으면 이미지 크기에 맞춘 가운데 값에서 시작한다.
     const centered = centeredBubbleGeometry(source.width, source.height);
-    const resolved = resolveBubbleGeometry({
-      platform,
-      geometry,
-      markers,
-      insets,
-      stretch,
-      fallbackMarkers: asset.markers,
-      fallbackInsets: centered.contentInsets,
-      fallbackStretch: centered.stretch,
-      width: source.width,
-      height: source.height,
-    });
     const hasPersistedGeometry = Boolean(geometry || markers || insets || stretch);
+    // 관리자 에셋은 이미지 교체 시 이전 픽셀 좌표를 재사용하지 않는다. 새 파일의 크기가
+    // 달라도 조정점이 한쪽 모서리에 몰리지 않도록 새 artwork 중앙에서 시작한다.
+    // 첫 마운트를 "원본이 바뀐 것"으로 세지 않는다. 세면 저장된 조정값이 있어도 첫 렌더가
+    // 가운데 값으로 계산되고, 그 값이 되돌리기 기준선으로 굳는다(아래 이펙트는 같은 source에
+    // 대해 다시 잡지 않는다). 후보 라이브러리 ↔ 말풍선 편집을 오갈 때마다 편집기가 다시
+    // 마운트되므로, 사용자가 맞춰 둔 위치가 가운데 기본값으로 덮였다.
+    // 새 파일을 받을 때는 부모가 geometry·조정값을 먼저 비우므로 이 분기가 없어도 가운데에서 시작한다.
+    const sourceNeedsCenteredGeometry = resetGeometryOnSourceChange && sourceChanged;
+    const shouldCenter = resetGeometryOnSourceChange && (!hasPersistedGeometry || sourceNeedsCenteredGeometry);
+    const resolved = shouldCenter
+      ? centered
+      : resolveBubbleGeometry({
+          platform,
+          geometry,
+          markers,
+          insets,
+          stretch,
+          fallbackMarkers: asset.markers,
+          fallbackInsets: centered.contentInsets,
+          fallbackStretch: centered.stretch,
+          width: source.width,
+          height: source.height,
+        });
     return {
       imageState,
       // draft.geometry는 항상 canonical — "선택한 파일(effective file) 기준" 좌표다.
       // 저장값이 없어 원본 asset의 marker에서 시작할 때만, 파일에 이미 구워진 legacy 반전만큼
       // 한 번 돌려 effective 좌표로 맞춘다. 슬롯 반전(flipX)은 여기서 다루지 않는다.
-      geometry: imageState.flipX && !hasPersistedGeometry ? flipBubbleGeometryHorizontally(resolved, source.width) : resolved,
+      geometry: imageState.flipX && (!hasPersistedGeometry || sourceNeedsCenteredGeometry) ? flipBubbleGeometryHorizontally(resolved, source.width) : resolved,
     };
-  }, [asset, geometry, initialImageState, insets, markers, platform, stretch]);
-  const originalDraftSource = asset && preparedFile ? `${slot.id}:${preparedFile.name}:${preparedFile.size}:${preparedFile.lastModified}:${asset.width}:${asset.height}` : null;
+  }, [asset, geometry, initialImageState, insets, markers, platform, resetGeometryOnSourceChange, sourceChanged, stretch]);
 
   useEffect(() => {
     if (!initialDraft || !originalDraftSource) return;
@@ -351,7 +370,7 @@ export function MobileBubbleEditor({
           {artwork ? <BubbleGeometryOverlay geometry={displayGeometry} artwork={artwork} scale={stageScale} activeKind={activeDragKind} onDrag={beginDrag} /> : null}
         </div>
         <div className="absolute left-2 top-2 z-30 flex items-center gap-1.5">
-          <button type="button" title="좌우 반전" aria-label="좌우 반전" className={`grid size-10 place-items-center rounded-full border border-white/85 bg-white/85 text-[#475569] backdrop-blur-sm transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] ${flipX ? "bg-[#eff6ff] text-[#1d4ed8]" : "hover:bg-[#f1f5f9] hover:text-[#1d4ed8]"}`} aria-pressed={flipX} onClick={flip}><FlipHorizontal2 size={16} aria-hidden="true" /></button>
+          {showFlip ? <button type="button" title="좌우 반전" aria-label="좌우 반전" className={`grid size-10 place-items-center rounded-full border border-white/85 bg-white/85 text-[#475569] backdrop-blur-sm transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] ${flipX ? "bg-[#eff6ff] text-[#1d4ed8]" : "hover:bg-[#f1f5f9] hover:text-[#1d4ed8]"}`} aria-pressed={flipX} onClick={flip}><FlipHorizontal2 size={16} aria-hidden="true" /></button> : null}
           <button type="button" title="처음 상태로 되돌리기" aria-label="처음 상태로 되돌리기" className="grid size-10 place-items-center rounded-full border border-white/85 bg-white/85 text-[#64748b] backdrop-blur-sm transition hover:bg-[#f1f5f9] hover:text-[#334155] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-35" disabled={!isDirty || loading} onClick={reset}><RotateCcw size={16} aria-hidden="true" /></button>
         </div>
         <BubbleValueFeedback geometry={displayGeometry} activeKind={activeDragKind} />
