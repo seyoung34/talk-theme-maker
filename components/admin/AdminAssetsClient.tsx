@@ -1210,7 +1210,9 @@ function AdminAssetCard({
           </span>
         </div>
       ) : null}
-      <div className="aspect-[4/3] rounded-[18px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} />
+      <div className="aspect-[4/3] overflow-hidden rounded-[18px] border border-[var(--color-outline-variant)]" style={TRANSPARENCY_CHECKER_STYLE}>
+        <div className="size-full bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} />
+      </div>
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap gap-1.5">
           <span className="rounded-full bg-[var(--color-inverse-surface)] px-2 py-0.5 text-[10px] font-black uppercase text-[var(--color-inverse-on-surface)]">{asset.targets?.some((target) => target.platform === "all") ? "공통" : "target"}</span>
@@ -1253,7 +1255,8 @@ function AdminAssetDockCard({
 }) {
   return (
     <article className="grid min-w-48 max-w-48 grid-rows-[76px_auto] gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-white p-2.5 shadow-[0_8px_18px_rgba(42,103,103,0.06)]">
-      <button type="button" onClick={onEdit} className="relative overflow-hidden rounded-xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] bg-contain bg-center bg-no-repeat text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-info)]" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} aria-label={`${asset.title} 수정`}>
+      <button type="button" onClick={onEdit} className="relative overflow-hidden rounded-xl border border-[var(--color-outline-variant)] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-info)]" style={TRANSPARENCY_CHECKER_STYLE} aria-label={`${asset.title} 수정`}>
+        <span className="absolute inset-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} aria-hidden="true" />
         {warnings.length > 0 ? <span className="absolute right-1.5 top-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-800">확인 {warnings.length}</span> : null}
       </button>
       <div className="min-w-0"><button type="button" onClick={onEdit} className="block w-full truncate text-left text-xs font-black text-[var(--color-on-surface)] hover:underline">{asset.title}</button><span className="mt-0.5 block truncate text-[10px] font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : asset.slotRole}{selectedSlot && asset.slotRole !== selectedSlot.role ? " · 유사" : ""}</span><div className="mt-2 flex gap-1"><button type="button" onClick={onEdit} className="rounded-lg bg-[var(--color-surface-low)] px-2 py-1 text-[10px] font-black text-[var(--color-on-surface-variant)]">수정</button><button type="button" onClick={onDelete} className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-700">삭제</button></div></div>
