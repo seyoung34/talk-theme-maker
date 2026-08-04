@@ -289,7 +289,7 @@ function FriendsScreen({
                       {row.sub}
                     </span>
                   </div>
-                  <span className="rounded-full border border-[#7aa8af]/35 bg-white/12 px-2 py-2 text-[10px] font-semibold" style={{ color: preview.descriptionPressedColor }}>
+                  <span className="rounded-full border border-[#7aa8af]/35 px-2 py-2 text-[10px] font-semibold" style={{ color: preview.descriptionPressedColor }}>
                     {row.cta}
                   </span>
                 </button>
@@ -303,7 +303,6 @@ function FriendsScreen({
 
       <MainBottomTabBar
         active="friends"
-        platform={platform}
         selectedSlotId={selectedSlotId}
         preview={preview}
         slotByRole={slotByRole}
@@ -442,7 +441,6 @@ function ChatsScreen({
 
       <MainBottomTabBar
         active="chats"
-        platform={platform}
         selectedSlotId={selectedSlotId}
         preview={preview}
         slotByRole={slotByRole}
@@ -567,7 +565,7 @@ function MoreScreen({ platform, selectedSlotId, preview, slotByRole, urls, onSel
         />
       </div>
 
-      <MainBottomTabBar platform={platform} active="more" selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
+      <MainBottomTabBar active="more" selectedSlotId={selectedSlotId} preview={preview} slotByRole={slotByRole} urls={urls} onSelectSlot={onSelectSlot} />
     </MainScreenFrame>
   );
 }
@@ -577,7 +575,6 @@ function MainScreenFrame({ children }: { children: ReactNode }) {
 }
 
 function MainBottomTabBar({
-  platform,
   active,
   selectedSlotId,
   preview,
@@ -585,7 +582,6 @@ function MainBottomTabBar({
   urls,
   onSelectSlot,
 }: {
-  platform: ThemePlatform;
   active: "friends" | "chats" | "now" | "shopping" | "more";
   selectedSlotId?: string;
   preview: MainPreviewPalette;
@@ -595,7 +591,6 @@ function MainBottomTabBar({
 }) {
   return (
     <BottomTabBar
-      platform={platform}
       active={active}
       selectedSlotId={selectedSlotId}
       slotByRole={slotByRole}
@@ -646,7 +641,6 @@ function PhoneFrame({
 
 //탭바
 function BottomTabBar({
-  platform,
   active,
   selectedSlotId,
   slotByRole,
@@ -655,7 +649,6 @@ function BottomTabBar({
   tabBackgroundImageUrl,
   onSelectSlot,
 }: {
-  platform: ThemePlatform;
   active: "friends" | "chats" | "now" | "shopping" | "more";
   selectedSlotId?: string;
   slotByRole: Partial<Record<ThemeResourceRole, ThemeAssetSlot>>;
@@ -668,8 +661,9 @@ function BottomTabBar({
     <div
       className={`grid grid-cols-5 items-center px-3 ${selectedSlotId === slotByRole.tab_background?.id || selectedSlotId === slotByRole.tab_background_image?.id ? "ring-2 ring-inset ring-[#60a5fa]" : ""}`}
       style={{
-        // Android의 기존 프리뷰 보정은 유지하되, iOS는 export가 쓰는 8자리 alpha를 그대로 그린다.
-        backgroundColor: platform === "ios" ? tabBackground : hexToRgba(tabBackground, 0.96),
+        // 두 플랫폼 모두 슬롯 색을 그대로 그린다. Android만 96%로 낮추면 뒤 배경이 4% 비쳐
+        // 결과물에 없는 색이 나온다.
+        backgroundColor: tabBackground,
         backgroundImage: tabBackgroundImageUrl ? `url(${tabBackgroundImageUrl})` : undefined,
         backgroundSize: "cover",
         backgroundPosition: "center",
@@ -739,7 +733,7 @@ function AvatarCircle({ src, size }: { src?: string; size: string }) {
 function Chip({ active, backgroundColor, textColor, children }: { active?: boolean; backgroundColor?: string; textColor?: string; children: ReactNode }) {
   return (
     <span
-      className={`inline-flex h-8 items-center rounded-full px-6 text-[14px] font-semibold ${active ? "text-white" : "border bg-white/14"}`}
+      className={`inline-flex h-8 items-center rounded-full px-6 text-[14px] font-semibold ${active ? "text-white" : "border"}`}
       style={active
         ? { backgroundColor: backgroundColor ?? "#0d5b66", color: textColor ?? "#ffffff" }
         : { borderColor: textColor ?? "#0d5b66", color: textColor ?? "#ffffff" }}
@@ -768,7 +762,7 @@ function FilterPill({
       style={
         dark
           ? { borderColor: "transparent", backgroundColor: hexToRgba(color ?? "#0d5b66", 0.95), color: "#ffffff" }
-          : { borderColor: hexToRgba(color ?? "#0e8394", 0.28), backgroundColor: "rgba(255,255,255,0.08)", color: color ?? "#0d4f58" }
+          : { borderColor: hexToRgba(color ?? "#0e8394", 0.28), color: color ?? "#0d4f58" }
       }
     >
       {children}
