@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { inquiryLimits, isInquiryCategory, isInquiryStatus } from "@/lib/inquiries/types";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type InquiryCreateBody = {
   category?: string;
@@ -11,21 +10,15 @@ export type InquiryCreateBody = {
 
 export type InquiryMessageBody = { body?: string };
 
-/**
- * 접수 빈도 상한.
- *
- * 알림이 없어 연타할 이유가 없고, 무제한이면 3년 보존 대상 데이터를 무한히 늘릴 수 있다.
- * 별도 인프라를 도입하지 않고 `created_at` 을 세는 것으로 충분하다 — 정확한 슬라이딩 윈도가
- * 필요한 성격이 아니다. 수치는 초안이며 운영 로그를 보고 조정한다.
- */
-export const inquiryRateLimits = {
-  createPerHour: 10,
-  messagePerMinute: 10,
-} as const;
-
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** 통과하면 `null`, 아니면 사용자에게 보여줄 한국어 사유. 길이 값은 DB CHECK 와 같다. */
+/**
+ * 형식 검증. 통과하면 `null`, 아니면 사용자에게 보여줄 한국어 사유. 길이 값은 DB CHECK 와 같다.
+ *
+ * 소유권·빈도 같은 **상태에 의존하는 검증은 여기서 하지 않는다.** 그것들은 `create_inquiry`
+ * RPC 안에서 락을 잡은 채 확인한다. 서버 코드에만 두면 PostgREST 를 직접 호출해 우회할 수 있고,
+ * 확인과 쓰기 사이에 상태가 바뀔 수도 있다.
+ */
 export function validateInquiryCreate(body: InquiryCreateBody) {
   if (!isInquiryCategory(body.category)) return "문의 분류를 선택해 주세요.";
   if (!body.title || !body.title.trim()) return "제목을 입력해 주세요.";
@@ -47,44 +40,23 @@ export function validateInquiryStatus(value: unknown) {
 }
 
 /**
- * 적어 낸 내보내기 작업이 본인 것인지 확인한다.
+ * RPC 가 올린 예외를 사용자 응답으로 옮긴다.
  *
- * `export_job_id` 에는 FK 가 없다(내보내기 기록이 정리돼도 문의는 남아야 한다). 그래서 값이
- * 무엇이든 저장되며, 확인하지 않으면 사용자가 남의 작업 번호를 적어 관리자 화면이 그 값으로
- * 다른 사람의 내보내기를 열어보게 만들 수 있다.
+ * RPC 는 안정적인 키워드만 던지고 문구는 여기서 정한다. DB 메시지를 그대로 내보내면 스키마
+ * 사정이 사용자에게 새고, 문구를 고칠 때마다 마이그레이션이 필요해진다.
  */
-export async function assertOwnedExportJob(admin: SupabaseClient, userId: string, exportJobId: string) {
-  const { data, error } = await admin.from("export_jobs").select("id").eq("id", exportJobId).eq("user_id", userId).maybeSingle();
-  if (error) return "내보내기 작업을 확인하지 못했습니다.";
-  if (!data) return "본인의 내보내기 작업 번호가 아닙니다.";
-  return null;
-}
+const inquiryRpcErrors: Record<string, { status: number; message: string }> = {
+  unauthenticated: { status: 401, message: "로그인이 필요합니다." },
+  deletion_pending: { status: 409, message: "회원탈퇴가 진행 중인 계정에서는 문의를 접수할 수 없습니다." },
+  rate_limited: { status: 429, message: "문의를 너무 자주 보냈습니다. 잠시 후 다시 시도해 주세요." },
+  export_job_not_owned: { status: 400, message: "본인의 내보내기 작업 번호가 아닙니다." },
+  inquiry_not_found: { status: 404, message: "문의를 찾을 수 없습니다." },
+  inquiry_closed: { status: 400, message: "종료된 문의에는 답신할 수 없습니다. 새 문의를 접수해 주세요." },
+};
 
-export async function denyOverRateLimit(admin: SupabaseClient, userId: string) {
-  const since = new Date(Date.now() - 3600_000).toISOString();
-  const { count, error } = await admin
-    .from("inquiries")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("created_at", since);
-  if (error) return null;
-  if ((count ?? 0) >= inquiryRateLimits.createPerHour) {
-    return NextResponse.json({ error: "문의를 너무 자주 접수했습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
-  }
-  return null;
-}
-
-export async function denyOverMessageRateLimit(admin: SupabaseClient, inquiryId: string) {
-  const since = new Date(Date.now() - 60_000).toISOString();
-  const { count, error } = await admin
-    .from("inquiry_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("inquiry_id", inquiryId)
-    .eq("author", "user")
-    .gte("created_at", since);
-  if (error) return null;
-  if ((count ?? 0) >= inquiryRateLimits.messagePerMinute) {
-    return NextResponse.json({ error: "메시지를 너무 자주 보냈습니다. 잠시 후 다시 시도해 주세요." }, { status: 429 });
-  }
-  return null;
+export function inquiryRpcErrorResponse(error: { message?: string } | null, fallback: string) {
+  const known = Object.entries(inquiryRpcErrors).find(([key]) => error?.message?.includes(key));
+  if (known) return NextResponse.json({ error: known[1].message }, { status: known[1].status });
+  console.error("문의 RPC 실패", error);
+  return NextResponse.json({ error: fallback }, { status: 500 });
 }

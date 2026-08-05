@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { getRequestUser } from "@/lib/supabase/auth";
-import {
-  assertOwnedExportJob,
-  denyOverRateLimit,
-  validateInquiryCreate,
-  type InquiryCreateBody,
-} from "@/lib/inquiries/api";
+import { inquiryRpcErrorResponse, validateInquiryCreate, type InquiryCreateBody } from "@/lib/inquiries/api";
 import { inquirySelectColumns, mapInquiryRow } from "@/lib/inquiries/types";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +10,8 @@ export const dynamic = "force-dynamic";
  * 본인 문의 목록.
  *
  * 사용자 세션 클라이언트로 읽는다. RLS가 `user_id = auth.uid()`를 강제하므로 여기서 조건을
- * 다시 쓰지 않는다 — 두 곳에 두면 한쪽만 고쳐졌을 때 남의 문의가 샌다.
+ * 다시 쓰지 않는다 — 관리자에게 더 넓은 정책이 걸린 `notices`와 달리, 이 테이블의 사용자
+ * 조회 정책은 본인 것만 돌려준다.
  */
 export async function GET() {
   const auth = await getRequestUser();
@@ -33,6 +29,13 @@ export async function GET() {
   return NextResponse.json({ inquiries: (data ?? []).map(mapInquiryRow) });
 }
 
+/**
+ * 접수.
+ *
+ * 문의와 첫 메시지를 `create_inquiry` RPC 한 번으로 만든다. 나눠 쓰면 그 사이에 계정 삭제가
+ * 끼어 본문 없는 문의만 보존본에 남을 수 있다. 빈도 제한과 내보내기 소유권 확인도 그 안에서
+ * 락을 잡은 채 이뤄진다 — 서버 코드에만 두면 PostgREST 직접 호출로 우회된다.
+ */
 export async function POST(request: Request) {
   const auth = await getRequestUser();
   if (auth.denied) return auth.denied;
@@ -41,42 +44,20 @@ export async function POST(request: Request) {
   const invalid = validateInquiryCreate(body);
   if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
 
-  const admin = createAdminClient();
-  const limited = await denyOverRateLimit(admin, auth.userId);
-  if (limited) return limited;
-
-  if (body.exportJobId) {
-    const ownershipError = await assertOwnedExportJob(admin, auth.userId, body.exportJobId);
-    if (ownershipError) return NextResponse.json({ error: ownershipError }, { status: 400 });
-  }
-
-  // 접수는 사용자 세션으로 한다. 삭제 진행 중 차단과 소유권 검사를 RLS가 맡는다.
   const supabase = await createClient();
-  const { data: inquiry, error } = await supabase
-    .from("inquiries")
-    .insert({
-      user_id: auth.userId,
-      category: body.category,
-      title: body.title!.trim(),
-      export_job_id: body.exportJobId || null,
-    })
-    .select(inquirySelectColumns)
-    .single();
-  if (error) {
-    // RLS가 막은 경우도 여기로 온다. 계정 삭제가 진행 중인 계정이 대표적이다.
-    console.error("문의 접수 실패", error);
-    return NextResponse.json({ error: "문의를 접수하지 못했습니다." }, { status: 500 });
-  }
+  const { data: inquiryId, error } = await supabase.rpc("create_inquiry", {
+    p_category: body.category,
+    p_title: body.title!.trim(),
+    p_body: body.body!.trim(),
+    p_export_job_id: body.exportJobId || null,
+  });
+  if (error) return inquiryRpcErrorResponse(error, "문의를 접수하지 못했습니다.");
 
-  const { error: messageError } = await supabase
-    .from("inquiry_messages")
-    .insert({ inquiry_id: inquiry.id, author: "user", body: body.body!.trim() });
-  if (messageError) {
-    // 본문 없는 문의는 의미가 없다. 관리자 화면에 빈 스레드가 남지 않게 되돌린다.
-    console.error("문의 본문 저장 실패", messageError);
-    await admin.from("inquiries").delete().eq("id", inquiry.id);
-    return NextResponse.json({ error: "문의를 접수하지 못했습니다." }, { status: 500 });
+  const { data, error: readError } = await supabase.from("inquiries").select(inquirySelectColumns).eq("id", inquiryId).maybeSingle();
+  if (readError || !data) {
+    console.error("접수한 문의를 다시 읽지 못했습니다.", readError);
+    // 접수 자체는 끝났다. 목록을 다시 불러오면 보이므로 id 만 돌려준다.
+    return NextResponse.json({ inquiry: { id: inquiryId } }, { status: 201 });
   }
-
-  return NextResponse.json({ inquiry: mapInquiryRow(inquiry) }, { status: 201 });
+  return NextResponse.json({ inquiry: mapInquiryRow(data) }, { status: 201 });
 }

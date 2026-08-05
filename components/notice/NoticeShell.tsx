@@ -3,6 +3,7 @@ import { ArrowLeft, Pin } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { InfoTip } from "@/components/common/InfoTip";
 import { noticeCategoryLabels, type Notice } from "@/lib/notices/types";
+import { formatKoreanDate } from "@/lib/shared/koreanDate";
 import type { ReactNode } from "react";
 
 /** 공지 목록·상세가 공유하는 껍데기. 정책 문서 페이지와 같은 표면을 쓴다. */
@@ -48,13 +49,7 @@ export function NoticeMeta({ notice }: { notice: Notice }) {
         </span>
       ) : null}
       <span className="rounded-full border border-[#dbe8fb] bg-[#f7fbff] px-2.5 py-1 text-[#3d7bd6]">{noticeCategoryLabels[notice.category]}</span>
-      <span className="text-[#5b6b82]">{formatNoticeDate(notice.publishedAt ?? notice.createdAt)}</span>
+      <span className="text-[#5b6b82]">{formatKoreanDate(notice.publishedAt ?? notice.createdAt)}</span>
     </div>
   );
-}
-
-export function formatNoticeDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}. ${String(date.getMonth() + 1).padStart(2, "0")}. ${String(date.getDate()).padStart(2, "0")}`;
 }

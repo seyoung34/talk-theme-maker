@@ -1,6 +1,9 @@
 "use client";
 
 import { inquiryCategoryLabels, inquiryStatusLabels, toInquiryParagraphs, type Inquiry, type InquiryMessage } from "@/lib/inquiries/types";
+import { formatKoreanDate, formatKoreanDateTime } from "@/lib/shared/koreanDate";
+
+export { formatKoreanDate as formatInquiryDate };
 
 /** 문의 헤더 — 분류·상태·접수 시각. 사용자·관리자 화면이 공유한다. */
 export function InquiryHeader({ inquiry }: { inquiry: Inquiry }) {
@@ -8,7 +11,7 @@ export function InquiryHeader({ inquiry }: { inquiry: Inquiry }) {
     <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold">
       <span className={`rounded-full px-2.5 py-1 ${statusToneClass(inquiry.status)}`}>{inquiryStatusLabels[inquiry.status]}</span>
       <span className="rounded-full border border-[#dbe8fb] bg-[#f7fbff] px-2.5 py-1 text-[#3d7bd6]">{inquiryCategoryLabels[inquiry.category]}</span>
-      <span className="text-[#5b6b82]">{formatInquiryDate(inquiry.createdAt)}</span>
+      <span className="text-[#5b6b82]">{formatKoreanDate(inquiry.createdAt)}</span>
     </div>
   );
 }
@@ -37,7 +40,7 @@ export function InquiryMessageList({ messages }: { messages: readonly InquiryMes
               <p key={index} className="whitespace-pre-line text-sm font-semibold leading-6 text-[var(--color-on-surface)]">{paragraph}</p>
             ))}
           </div>
-          <p className="mt-2 text-[10px] font-bold text-[#8a99ad]">{formatInquiryDateTime(message.createdAt)}</p>
+          <p className="mt-2 text-[10px] font-bold text-[#8a99ad]">{formatKoreanDateTime(message.createdAt)}</p>
         </li>
       ))}
     </ol>
@@ -48,16 +51,4 @@ export function statusToneClass(status: Inquiry["status"]) {
   if (status === "answered") return "bg-[#e6f7ec] text-[#1f7a43]";
   if (status === "closed") return "bg-[#eef2f7] text-[#5b6b82]";
   return "bg-[#fff2bd] text-[#665300]";
-}
-
-export function formatInquiryDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}. ${String(date.getMonth() + 1).padStart(2, "0")}. ${String(date.getDate()).padStart(2, "0")}`;
-}
-
-export function formatInquiryDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${formatInquiryDate(value)} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
