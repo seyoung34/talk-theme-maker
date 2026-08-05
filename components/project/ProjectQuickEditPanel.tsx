@@ -18,7 +18,7 @@ import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
-import { normalizeThemeColor, readableThemeForeground, setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
+import { readableThemeForeground, setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
 
 export function ProjectQuickEditPanel({
   slot,
@@ -643,6 +643,20 @@ function CandidatePreview({ candidate, layoutKind }: { candidate: SlotCandidate;
   return <span className={`w-full overflow-hidden rounded-xl bg-[#e5e7eb] ${aspectClassName}`} />;
 }
 
+/**
+ * hex 입력창은 RGB만 받는다. 알파는 별도 투명도 슬라이더로만 조작한다.
+ *
+ * 예전엔 이 칸이 알파까지 합친 8자리 hex를 그대로 보여주고 그대로 파싱했는데, 내부 저장
+ * 포맷(`AARRGGBB`, Android 관례)과 iOS 결과물의 실제 순서(`RRGGBBAA`, CSS Color Level 4)가
+ * 달라서 사용자가 그대로 복사해 온 8자리 코드가 플랫폼에 따라 다르게 해석되는 문제가 있었다.
+ * 8자리 조합 표기 자체를 없애 두 순서 중 어느 쪽으로도 오해석될 여지를 없앤다.
+ */
+function normalizeRgbHex(value: string) {
+  const trimmed = value.trim().replace(/^#/, "");
+  if (!/^[0-9a-f]{6}$/i.test(trimmed)) return null;
+  return `#${trimmed.toUpperCase()}`;
+}
+
 function ColorEditor({
   slot,
   platform,
@@ -676,22 +690,34 @@ function ColorEditor({
   derivedLink?: DerivedColorLink;
   onRestoreDerivedLink: () => void;
 }) {
-  const [draft, setDraft] = useState(value);
+  // hex 입력창은 RGB 초안만 들고 있다. 알파는 항상 `value`(부모 상태)에서 읽고, 슬라이더가
+  // 직접 커밋한다 — 두 컨트롤이 같은 문자열을 두고 경합하지 않는다.
+  const [draft, setDraft] = useState(() => themeColorRgbHex(value));
   const colorId = useId();
   const alphaId = useId();
   // iOS CSS는 색상 코드에 알파를 담지 못한다. 표현할 자리가 없는 슬롯에 슬라이더를 보여 주면
   // 사용자가 조작한 투명도가 내보내기에서 조용히 사라진다.
   const alphaSupported = supportsColorAlpha(slot.role, platform);
-  const normalizedDraft = normalizeThemeColor(draft);
-  const effectiveColor = normalizedDraft ?? normalizeThemeColor(value) ?? "#000000";
+  const normalizedDraftRgb = normalizeRgbHex(draft);
+  // 타이핑 중에도 스와치·피커·미리보기가 즉시 반영되도록, 초안 RGB에 현재 알파를 합성한다.
+  const effectiveColor = normalizedDraftRgb ? setThemeColorRgb(value, normalizedDraftRgb) : value;
 
-  useEffect(() => setDraft(value), [slot.id, value]);
+  useEffect(() => setDraft(themeColorRgbHex(value)), [slot.id, value]);
 
-  const commit = (nextValue: string) => {
-    const normalized = normalizeThemeColor(nextValue);
-    setDraft(nextValue);
-    if (normalized) onChange(slot, normalized);
+  const commitRgb = (nextRgbText: string) => {
+    setDraft(nextRgbText);
+    const normalized = normalizeRgbHex(nextRgbText);
+    if (normalized) onChange(slot, setThemeColorRgb(value, normalized));
   };
+
+  // 색상 피커(HexColorPicker)는 내부에서 이미 `setThemeColorRgb(value, nextRgb)`로 알파를
+  // 보존한 값을 돌려준다. 그 값을 그대로 커밋하고, 입력창 초안만 RGB로 다시 맞춘다.
+  const commitFromPicker = (nextValue: string) => {
+    setDraft(themeColorRgbHex(nextValue));
+    onChange(slot, nextValue);
+  };
+
+  const commitAlpha = (percent: number) => onChange(slot, setThemeColorAlpha(value, percent));
 
   return (
     <Tooltip.Provider delayDuration={260} skipDelayDuration={100}>
@@ -750,7 +776,7 @@ function ColorEditor({
         ) : null}
         <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
           <label className="grid gap-1.5 text-[11px] font-bold text-[#475569]" htmlFor={colorId}>색상
-            <ThemeColorPicker value={effectiveColor} label={slot.label} onChange={commit}>
+            <ThemeColorPicker value={effectiveColor} label={slot.label} onChange={commitFromPicker}>
               <button
                 id={colorId}
                 type="button"
@@ -766,17 +792,17 @@ function ColorEditor({
             type="text"
             aria-label={`${slot.label} 색상 코드`}
             value={draft}
-            aria-invalid={!normalizedDraft}
-            aria-describedby={!normalizedDraft ? `${colorId}-error` : undefined}
-            className={`h-12 min-w-0 rounded-xl border bg-white px-4 font-mono text-sm font-semibold text-[#111827] outline-none focus:ring-2 ${normalizedDraft ? "border-[#d1d5db] focus:border-[#60a5fa] focus:ring-[#bfdbfe]" : "border-[#ef4444] focus:ring-[#fecaca]"}`}
-            onChange={(event) => commit(event.currentTarget.value)}
-            onBlur={() => normalizedDraft && setDraft(normalizedDraft)}
+            aria-invalid={!normalizedDraftRgb}
+            aria-describedby={!normalizedDraftRgb ? `${colorId}-error` : undefined}
+            className={`h-12 min-w-0 rounded-xl border bg-white px-4 font-mono text-sm font-semibold text-[#111827] outline-none focus:ring-2 ${normalizedDraftRgb ? "border-[#d1d5db] focus:border-[#60a5fa] focus:ring-[#bfdbfe]" : "border-[#ef4444] focus:ring-[#fecaca]"}`}
+            onChange={(event) => commitRgb(event.currentTarget.value)}
+            onBlur={() => normalizedDraftRgb && setDraft(normalizedDraftRgb)}
           />
         </div>
-        {!normalizedDraft ? <p id={`${colorId}-error`} className="text-[11px] font-semibold text-[#b91c1c]" role="alert">#RRGGBB 또는 Android #AARRGGBB 형식으로 입력해 주세요.</p> : null}
+        {!normalizedDraftRgb ? <p id={`${colorId}-error`} className="text-[11px] font-semibold text-[#b91c1c]" role="alert">#RRGGBB 형식으로 입력해 주세요.</p> : null}
         {alphaSupported ? <div className="grid gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 py-3 sm:grid-cols-[minmax(0,1fr)_96px] sm:items-end">
-          <label htmlFor={alphaId} className="grid gap-2 text-[11px] font-bold text-[#475569]"><span className="flex items-center justify-between"><span>투명도</span><span>{themeColorAlphaPercent(effectiveColor)}%</span></span><input id={alphaId} type="range" min="0" max="100" value={themeColorAlphaPercent(effectiveColor)} className="w-full accent-[#2563eb]" onChange={(event) => commit(setThemeColorAlpha(effectiveColor, Number(event.currentTarget.value)))} /></label>
-          <div className="relative"><input aria-label={`${slot.label} 투명도 퍼센트`} type="number" min="0" max="100" value={themeColorAlphaPercent(effectiveColor)} className="h-10 w-full rounded-lg border border-[#d1d5db] bg-white pl-3 pr-8 text-right text-sm font-bold" onChange={(event) => commit(setThemeColorAlpha(effectiveColor, Number(event.currentTarget.value)))} /><span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#64748b]">%</span></div>
+          <label htmlFor={alphaId} className="grid gap-2 text-[11px] font-bold text-[#475569]"><span className="flex items-center justify-between"><span>투명도</span><span>{themeColorAlphaPercent(value)}%</span></span><input id={alphaId} type="range" min="0" max="100" value={themeColorAlphaPercent(value)} className="w-full accent-[#2563eb]" onChange={(event) => commitAlpha(Number(event.currentTarget.value))} /></label>
+          <div className="relative"><input aria-label={`${slot.label} 투명도 퍼센트`} type="number" min="0" max="100" value={themeColorAlphaPercent(value)} className="h-10 w-full rounded-lg border border-[#d1d5db] bg-white pl-3 pr-8 text-right text-sm font-bold" onChange={(event) => commitAlpha(Number(event.currentTarget.value))} /><span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#64748b]">%</span></div>
         </div> : null}
         <ColorContextPreview slot={slot} value={effectiveColor} />
         {contrastWarning ? (
