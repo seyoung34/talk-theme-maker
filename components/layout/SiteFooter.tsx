@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const hiddenPrefixes = ["/edit", "/admin", "/project"];
 const policyLinks = [
+  { href: "/notice", label: "공지사항" },
   { href: "/terms", label: "이용약관" }, { href: "/privacy", label: "개인정보 처리방침" }, { href: "/refund", label: "환불 안내" },
   { href: "/support", label: "고객지원" }, { href: "/copyright", label: "권리침해 신고" },
 ];
