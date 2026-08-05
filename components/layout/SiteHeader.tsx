@@ -82,8 +82,8 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
   };
 
   const isAccountArea = currentPath === "/account" || currentPath === "/credits" || currentPath?.startsWith("/admin");
-  // 로그인 여부에 따라 목적지가 갈리므로 둘 다 현재 위치로 본다.
-  const isSupportArea = currentPath === "/support" || Boolean(currentPath?.startsWith("/account/inquiries"));
+  // 목록과 상세를 모두 현재 위치로 표시한다.
+  const isNoticeArea = Boolean(currentPath?.startsWith("/notice"));
 
   return (
     <>
@@ -104,14 +104,12 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
             </Link>
 
             {/*
-              문의는 헤더에 둔다. 푸터에도 링크가 있지만 푸터는 /edit·/admin 에서 숨겨져,
-              정작 문제를 겪는 편집 중에는 닿지 않는다.
-
-              로그인 전에는 접수 화면 대신 고객지원 문서로 보낸다. 그 문서가 로그인 접수와
-              비로그인 연락처를 모두 안내하므로, 로그인 벽에 부딪히는 것보다 낫다.
+              공지는 헤더에 둔다. 점검·정책 변경은 로그인 여부와 무관하게 모두가 봐야 하고,
+              푸터는 /edit·/admin 에서 숨겨져 정작 편집 중에는 닿지 않는다.
+              문의는 개인 기록이라 마이페이지와 푸터에 둔다.
             */}
-            <Link href={session?.user ? "/account/inquiries" : "/support"} aria-current={isSupportArea ? "page" : undefined} className={navLinkClassName(isSupportArea)}>
-              문의사항
+            <Link href="/notice" aria-current={isNoticeArea ? "page" : undefined} className={navLinkClassName(isNoticeArea)}>
+              공지사항
             </Link>
 
             <Popover.Root open={isOpen} onOpenChange={setIsOpen}>

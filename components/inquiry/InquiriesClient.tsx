@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowLeft, LoaderCircle, Plus, Send, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Clock, LoaderCircle, Plus, Send, X } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { InfoTip } from "@/components/common/InfoTip";
 import { InquiryHeader, InquiryMessageList, formatInquiryDate } from "@/components/inquiry/InquiryThread";
@@ -122,7 +122,7 @@ export default function InquiriesClient() {
           <h1 className="flex items-center gap-1.5 text-[26px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">
             문의 내역
             <InfoTip label="문의 안내">
-              답변은 이메일로 보내지 않습니다. 이 화면에서 확인해 주세요. 종료된 문의에는 답신할 수 없으며, 새로 접수하시면 됩니다.
+              실시간 상담이 아닙니다. 담당자가 확인한 뒤 답변을 남기며, 답변 알림은 이메일로 보내지 않으니 이 화면에서 확인해 주세요. 종료된 문의에는 답신할 수 없으며 새로 접수하시면 됩니다.
             </InfoTip>
           </h1>
           {!needsLogin && !composing && !selected ? (
@@ -183,6 +183,11 @@ export default function InquiriesClient() {
                 <span className="text-xs font-black text-[#3d7bd6]">내용</span>
                 <textarea value={body} onChange={(event) => setBody(event.target.value)} maxLength={inquiryLimits.bodyMax} rows={7} className="rounded-xl border border-[#dbe8fb] bg-white p-3 text-sm font-semibold leading-6 outline-none focus-visible:border-[#2f6bbf]" placeholder={"내보내기 오류라면 마이페이지의 내보내기 번호를 함께 적어 주세요."} />
               </label>
+              {/* 스레드 UI가 메신저처럼 보여 실시간 상담으로 오해하기 쉽다. 접수 직전에 명시한다. */}
+              <p className="flex items-start gap-1.5 rounded-xl bg-[#f7fbff] px-3 py-2.5 text-[11px] font-semibold leading-relaxed text-[#5b6b82]">
+                <Clock size={13} aria-hidden="true" className="mt-0.5 shrink-0 text-[#3d7bd6]" />
+                실시간 상담이 아닙니다. 담당자가 확인한 뒤 답변을 남기므로 시간이 걸릴 수 있습니다.
+              </p>
               <button type="button" onClick={() => void submit()} disabled={isSending} className="inline-flex h-11 w-fit items-center gap-2 rounded-xl bg-[#2f6bbf] px-4 text-sm font-extrabold text-white transition hover:bg-[#2a60ac] disabled:opacity-60">
                 {isSending ? <LoaderCircle size={15} className="animate-spin" aria-hidden="true" /> : <Send size={15} aria-hidden="true" />}
                 접수하기
@@ -206,6 +211,10 @@ export default function InquiriesClient() {
             </div>
             {canReplyToInquiry(selected.status) ? (
               <div className="mt-5 grid gap-2">
+                <p className="flex items-start gap-1.5 text-[11px] font-semibold leading-relaxed text-[#8a99ad]">
+                  <Clock size={13} aria-hidden="true" className="mt-0.5 shrink-0" />
+                  담당자가 확인한 뒤 답변합니다. 답변이 등록되면 이 화면에 표시됩니다.
+                </p>
                 <textarea value={reply} onChange={(event) => setReply(event.target.value)} maxLength={inquiryLimits.bodyMax} rows={4} className="rounded-xl border border-[#dbe8fb] bg-white p-3 text-sm font-semibold leading-6 outline-none focus-visible:border-[#2f6bbf]" placeholder="추가로 남길 내용" />
                 <button type="button" onClick={() => void sendReply()} disabled={isSending} className="inline-flex h-11 w-fit items-center gap-2 rounded-xl bg-[#2f6bbf] px-4 text-sm font-extrabold text-white transition hover:bg-[#2a60ac] disabled:opacity-60">
                   {isSending ? <LoaderCircle size={15} className="animate-spin" aria-hidden="true" /> : <Send size={15} aria-hidden="true" />}
