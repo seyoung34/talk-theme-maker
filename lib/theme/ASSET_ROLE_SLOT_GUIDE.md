@@ -382,7 +382,7 @@ Android `android-common-theme-icon`과 iOS `ios-common-theme-icon`의 필수 slo
 
 규칙:
 
-- iOS `TabBarStyle-Main`의 `background-color`는 실기기 검증 결과 `#AARRGGBB` alpha를 직접 허용하므로, 편집기의 탭바 배경 투명도 설정을 export에 그대로 반영한다.
+- iOS `TabBarStyle-Main`의 `background-color`는 8자리 hex alpha를 직접 허용하므로, 편집기의 탭바 배경 투명도 설정을 export에 그대로 반영한다. 단, 이 자리의 8자리 hex는 `RRGGBBAA`(알파 마지막, CSS Color Level 4 순서)로 나가야 한다 — 내부 저장 포맷(`AARRGGBB`, Android 관례)을 그대로 내보내면 알파와 색상이 뒤섞인다. `lib/theme/ios/export.ts`의 `themeColorToCssHex`가 이 변환을 담당한다.
 - 모든 기본/focused 탭 아이콘이 `tab_background` 위에서 읽혀야 한다.
 - badge는 accent와 조화를 이루되 unread/error 의미가 사라질 정도로 배경과 비슷하면 안 된다.
 

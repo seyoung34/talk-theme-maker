@@ -18,9 +18,18 @@ import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
  *     -ios-text-alpha                     (SectionTitleStyle-Main)
  *     -ios-button-normal-background-alpha (InputBarStyle-Chat)
  *
- * 단, 실기기에서 확인된 `TabBarStyle-Main`의 `background-color`는 `#AARRGGBB`를 직접
- * 받아들인다. 따라서 탭바 배경색은 이 목록의 예외적인 직접 alpha 지원 role이다. 그 외
- * 색상은 알파를 실어 보낼 자리가 없으므로 그대로 8자리로 내보내면 결과물에서 재현되지 않는다.
+ * 단, `TabBarStyle-Main`의 `background-color`는 8자리 hex를 직접 받아들인다. 따라서
+ * 탭바 배경색은 이 목록의 예외적인 직접 alpha 지원 role이다. 그 외 색상은 알파를 실어 보낼
+ * 자리가 없으므로 그대로 8자리로 내보내면 결과물에서 재현되지 않는다.
+ *
+ * 여기서 `iosAlphaCapableRoles`에 속한다는 건 "알파를 색상 코드 안에 실을 수 있다"는
+ * 뜻일 뿐, 바이트 순서까지 보장하지는 않는다. 이 모듈이 다루는 내부 저장 포맷은 Android
+ * 관례인 `AARRGGBB`(알파 먼저)다. 하지만 `TabBarStyle-Main`의 8자리 hex는 실제로는 CSS
+ * Color Level 4 표준과 같은 `RRGGBBAA`(알파 마지막)로 읽힌다 — 그대로 `AARRGGBB`를
+ * 내보내면 알파와 색상 채널이 뒤섞여 엉뚱한 색이 나온다(예: 완전 투명을 의도한
+ * `#00F4FAFB`가 청록색 `#00F4FA`+알파 98%로 읽히는 식). 그래서 `lib/theme/ios/export.ts`는
+ * 이 role의 최종 CSS 텍스트를 쓰는 지점에서만 `themeColorToCssHex`로 순서를 바꾼다. 이
+ * 파일의 함수들은 내부 포맷(`AARRGGBB`)을 그대로 유지해야 하므로 여기서는 바꾸지 않는다.
  *
  * `-ios-text-alpha`는 프로퍼티 이름이 같은 다른 블록(헤더·알림 라벨 등)에는 붙지 않는다.
  * 쌍은 프로퍼티 이름이 아니라 **블록 단위**로 정해지므로, 이름이 아니라 role로 목록을 잡는다.

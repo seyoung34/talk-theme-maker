@@ -10,6 +10,7 @@ import {
   themeColorContrast,
   themeColorRgbHex,
   themeColorToCss,
+  themeColorToCssHex,
 } from "@/lib/theme/color";
 
 // lib/theme/color.ts는 순수 함수 모음이라 리팩토링 안전망으로 삼기 좋은 첫 테스트 대상이다.
@@ -69,6 +70,21 @@ describe("themeColorToCss", () => {
 
   it("파싱 불가한 값은 입력을 그대로 돌려준다", () => {
     expect(themeColorToCss("var(--x)")).toBe("var(--x)");
+  });
+});
+
+describe("themeColorToCssHex", () => {
+  it("내부 저장 포맷(AARRGGBB)을 표준 CSS 순서(RRGGBBAA)로 바꾼다", () => {
+    // iOS TabBarStyle-Main처럼 8자리 hex를 CSS 텍스트에 직접 박아 넣는 자리 전용.
+    expect(themeColorToCssHex("#80FF8800")).toBe("#FF880080");
+  });
+
+  it("알파가 없는 6자리는 그대로 6자리로 남긴다", () => {
+    expect(themeColorToCssHex("#FF8800")).toBe("#FF8800");
+  });
+
+  it("파싱 불가한 값은 입력을 그대로 돌려준다", () => {
+    expect(themeColorToCssHex("var(--x)")).toBe("var(--x)");
   });
 });
 

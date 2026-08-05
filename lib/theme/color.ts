@@ -43,6 +43,24 @@ export function themeColorRgbHex(value: string, fallback = "#000000") {
   return parsed ? formatThemeColor(parsed, false) : fallback;
 }
 
+/**
+ * 표준 CSS 8자리 hex(`#RRGGBBAA`, 알파 마지막)로 직렬화한다.
+ *
+ * 내부 저장 포맷은 Android 관례인 `AARRGGBB`(알파 먼저)다. iOS `TabBarStyle-Main`의
+ * `background-color`처럼 8자리 hex를 파서가 직접 받는 극히 드문 자리는 CSS Color Level 4
+ * 스펙과 실기기 관찰 색상이 가리키는 순서, 즉 알파가 마지막인 `RRGGBBAA`를 써야 한다.
+ *
+ * 파싱 쪽(`parseThemeColor`)과 나머지 내부 로직은 그대로 `AARRGGBB`를 쓴다 — 이 함수는
+ * "문자열을 그대로 결과 CSS 텍스트에 박아 넣는" 마지막 지점에서만 골라 써야 하고, 다시
+ * 파싱하거나 미리보기 CSS로 되먹임하면 안 된다.
+ */
+export function themeColorToCssHex(value: string) {
+  const parsed = parseThemeColor(value);
+  if (!parsed) return value;
+  const rgb = [parsed.red, parsed.green, parsed.blue].map(toHexByte).join("");
+  return `#${rgb}${parsed.hasExplicitAlpha ? toHexByte(parsed.alpha * 255) : ""}`;
+}
+
 export function themeColorAlphaPercent(value: string) {
   const parsed = parseThemeColor(value);
   return parsed ? Math.round(parsed.alpha * 100) : 100;

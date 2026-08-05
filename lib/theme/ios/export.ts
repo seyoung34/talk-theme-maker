@@ -1,6 +1,7 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { centeredBubbleGeometry, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency, themeVersionName } from "@/lib/theme/exportRequest";
+import { themeColorToCssHex } from "@/lib/theme/color";
 import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
@@ -328,8 +329,14 @@ function buildIosThemeCss({
    * 색상 값을 해석한다. 알파 짝이 없는 role이면 여기서 투명도를 떨어뜨린다.
    *
    * iOS CSS는 대부분 색상 코드에 알파를 담지 못하고 별도 `-alpha` 프로퍼티로 받는다.
-   * 다만 실기기에서 확인된 `TabBarStyle-Main`의 `background-color`는 `#AARRGGBB`를 직접
-   * 받으므로 `iosAlphaCapableRoles`에 포함된다. 그 외 role의 8자리 알파는 제거한다.
+   * 다만 `TabBarStyle-Main`의 `background-color`는 8자리 hex를 직접 받으므로
+   * `iosAlphaCapableRoles`에 포함된다. 그 외 role의 8자리 알파는 제거한다.
+   *
+   * 반환값은 내부 저장 포맷인 `AARRGGBB`(알파 먼저)를 그대로 유지한다 — 실제 CSS 텍스트에
+   * 박아 넣는 자리(아래 `tab_background` 줄)에서만 `themeColorToCssHex`로 표준 `RRGGBBAA`
+   * 순서로 바꿔 쓴다. CSS Color Level 4 8자리 hex는 알파가 마지막이라, `AARRGGBB`를 그대로
+   * 내보내면 알파와 색상이 뒤섞여 엉뚱한 색(예: 알파 0을 의도했는데 청록색이 보이는 등)이
+   * 나온다.
    */
   const color = (role: ThemeResourceRole, fallback: string) => {
     const resolved = getResolvedColor(slotByRole[role], colors, selections, templateId, template, slots) ?? fallback;
@@ -373,7 +380,7 @@ function buildIosThemeCss({
     "",
     "TabBarStyle-Main",
     "{",
-    cssLine("background-color", color("tab_background", template.defaults.tabBackground)),
+    cssLine("background-color", themeColorToCssHex(color("tab_background", template.defaults.tabBackground))),
     cssImageLine("-ios-background-image", imageMap.tab_background_image),
     cssImageLine("-ios-friends-normal-icon-image", imageMap.tab_icon_friends),
     cssImageLine("-ios-friends-selected-icon-image", imageMap.tab_icon_friends_focused),
