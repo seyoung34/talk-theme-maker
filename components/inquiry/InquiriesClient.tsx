@@ -20,6 +20,7 @@ export default function InquiriesClient() {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [selected, setSelected] = useState<Inquiry | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [needsLogin, setNeedsLogin] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [category, setCategory] = useState<InquiryCategory>("etc");
@@ -31,8 +32,14 @@ export default function InquiriesClient() {
   const load = useCallback(async () => {
     try {
       const response = await fetch("/api/inquiries", { cache: "no-store" });
+      // 헤더·푸터에서 로그인 없이도 들어올 수 있는 화면이다. 붉은 오류 대신 로그인 안내를 띄운다.
+      if (response.status === 401) {
+        setNeedsLogin(true);
+        return;
+      }
       const payload = (await response.json()) as { inquiries?: Inquiry[]; error?: string };
       if (!response.ok) throw new Error(payload.error);
+      setNeedsLogin(false);
       setInquiries(payload.inquiries ?? []);
     } catch (error) {
       setNotice(error instanceof Error && error.message ? error.message : "문의 목록을 불러오지 못했습니다.");
@@ -118,7 +125,7 @@ export default function InquiriesClient() {
               답변은 이메일로 보내지 않습니다. 이 화면에서 확인해 주세요. 종료된 문의에는 답신할 수 없으며, 새로 접수하시면 됩니다.
             </InfoTip>
           </h1>
-          {!composing && !selected ? (
+          {!needsLogin && !composing && !selected ? (
             <button
               type="button"
               onClick={() => { setComposing(true); setNotice(null); }}
@@ -129,6 +136,21 @@ export default function InquiriesClient() {
             </button>
           ) : null}
         </header>
+
+        {needsLogin ? (
+          <section className="mt-6 rounded-[28px] border border-[#dbe8fb] bg-white/92 px-6 py-10 text-center shadow-[0_22px_62px_rgba(47,107,191,0.09)]">
+            <p className="text-sm font-bold text-[var(--color-on-surface)]">문의 접수와 답변 확인은 로그인이 필요합니다.</p>
+            <p className="mt-2 text-xs font-semibold text-[#5b6b82]">
+              로그인할 수 없거나 이미 탈퇴하셨다면 <Link href="/support" className="font-bold text-[#2f6bbf] underline underline-offset-2">고객지원</Link>의 연락처로 보내 주세요.
+            </p>
+            <Link
+              href="/login?returnTo=%2Faccount%2Finquiries"
+              className="mt-5 inline-flex h-11 items-center gap-2 rounded-xl bg-[#2f6bbf] px-5 text-sm font-extrabold text-white transition hover:bg-[#2a60ac]"
+            >
+              로그인
+            </Link>
+          </section>
+        ) : null}
 
         {notice ? (
           <p className="mt-4 flex items-center gap-2 rounded-xl bg-[#fff1f0] px-4 py-3 text-xs font-bold text-[#c0392b]">
@@ -198,7 +220,7 @@ export default function InquiriesClient() {
           </section>
         ) : null}
 
-        {!selected && !composing ? (
+        {!needsLogin && !selected && !composing ? (
           <section className="mt-6 overflow-hidden rounded-[28px] border border-[#dbe8fb] bg-white/92 shadow-[0_22px_62px_rgba(47,107,191,0.09)]">
             {isLoading ? (
               <p className="px-5 py-12 text-center text-sm font-bold text-[#5b6b82]">불러오는 중입니다.</p>

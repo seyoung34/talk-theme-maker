@@ -4,8 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const hiddenPrefixes = ["/edit", "/admin", "/project"];
+// `고객지원`은 사업자 정보(상호·사업자등록번호·통신판매업 신고번호)를 담은 페이지라
+// 법정 표시 경로다. 문의사항과 목적지가 달라 둘 다 남긴다.
 const policyLinks = [
-  { href: "/notice", label: "공지사항" },
+  { href: "/account/inquiries", label: "문의사항" },
   { href: "/terms", label: "이용약관" }, { href: "/privacy", label: "개인정보 처리방침" }, { href: "/refund", label: "환불 안내" },
   { href: "/support", label: "고객지원" }, { href: "/copyright", label: "권리침해 신고" },
 ];
