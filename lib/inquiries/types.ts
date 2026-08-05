@@ -70,6 +70,19 @@ export function hasUnreadAnswer(inquiry: Pick<Inquiry, "answeredAt" | "userReadA
   return new Date(inquiry.answeredAt).getTime() > new Date(inquiry.userReadAt).getTime();
 }
 
+/**
+ * 본문을 문단으로 나눈다.
+ *
+ * 공지(`toNoticeParagraphs`)와 같은 규칙이다. 마크다운 렌더러를 붙이지 않으므로 사용자·관리자가
+ * 쓴 글이 마크업으로 해석될 여지가 없다. 문단 안의 한 줄 바꿈은 `whitespace-pre-line`으로 그린다.
+ */
+export function toInquiryParagraphs(body: string): string[] {
+  return body
+    .split(/\r?\n\s*\r?\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+}
+
 export const inquirySelectColumns = "id,category,title,status,export_job_id,created_at,updated_at,answered_at,user_read_at";
 export const inquiryMessageSelectColumns = "id,author,body,created_at";
 
