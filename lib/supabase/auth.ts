@@ -49,3 +49,21 @@ export async function isAdminUser(userId: string) {
   const { data } = await supabase.from("admin_profiles").select("user_id").eq("user_id", userId).eq("role", "admin").maybeSingle();
   return Boolean(data);
 }
+
+/**
+ * API 라우트용 로그인 사용자 조회.
+ *
+ * 통과하면 `{ userId }`, 아니면 그대로 돌려줄 401 응답이 담긴다. 호출부가 분기 한 줄로 끝나도록
+ * 판별 가능한 형태로 돌려준다.
+ */
+export async function getRequestUser(): Promise<{ userId: string; denied?: never } | { userId?: never; denied: Response }> {
+  if (!hasSupabaseBrowserConfig()) {
+    return { denied: Response.json({ error: "로그인이 필요합니다." }, { status: 401 }) };
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    return { denied: Response.json({ error: "로그인이 필요합니다." }, { status: 401 }) };
+  }
+  return { userId: data.user.id };
+}

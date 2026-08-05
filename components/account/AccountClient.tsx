@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowRight, Coins, Download, LoaderCircle, RefreshCw, ShieldCheck, Sparkles, Star, UserRound } from "lucide-react";
+import { AlertCircle, ArrowRight, Coins, Download, LoaderCircle, Megaphone, MessageSquare, RefreshCw, ShieldCheck, Sparkles, Star, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import type { AccountExportDto, AccountMeResponse, ExportDownloadLinkResponse } from "@/lib/billing/apiTypes";
 import { getExportDownloadState } from "@/lib/theme/android/outputRetention";
@@ -136,6 +136,26 @@ export default function AccountClient() {
                 <p className="mt-3 text-center text-[11px] font-semibold text-[var(--color-outline)]">필요한 만큼 상품을 선택해 충전할 수 있습니다.</p>
               </div>
             </section>
+
+            {me?.user ? (
+              <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6" aria-labelledby="support-entry-title">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-11 place-items-center rounded-2xl bg-[#eef5ff] text-[#2f6bbf]"><MessageSquare size={20} aria-hidden="true" /></span>
+                  <div>
+                    <h2 id="support-entry-title" className="text-base font-extrabold">공지·문의</h2>
+                    <p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">문의 답변은 이메일로 보내지 않습니다. 여기에서 확인해 주세요.</p>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-2">
+                  <Link href="/account/inquiries" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#cfe0ff] bg-white px-4 py-3 text-sm font-extrabold text-[#2f6bbf] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
+                    문의하기·답변 보기<ArrowRight size={17} aria-hidden="true" />
+                  </Link>
+                  <Link href="/notice" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#dbe8fb] bg-white px-4 py-3 text-sm font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
+                    <Megaphone size={16} aria-hidden="true" />공지사항
+                  </Link>
+                </div>
+              </section>
+            ) : null}
           </aside>
 
             <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6 lg:col-start-1 lg:row-start-3" aria-labelledby="export-history-title">
@@ -157,7 +177,7 @@ export default function AccountClient() {
                 ) : (
                   <form className="ml-auto grid max-w-md gap-2 rounded-2xl border border-[#f3d4d0] bg-[#fffaf9] p-3 text-left" onSubmit={deleteAccount} noValidate>
                     <p id="account-deletion-title" className="text-xs font-bold leading-5 text-[var(--color-on-surface-variant)]">
-                      계정 정보·업로드 이미지·브라우저 프로젝트·내보내기 이력과 남은 크레딧은 모두 삭제되며 복구할 수 없습니다. 관계 법령에 따라 결제·환불 기록의 최소 항목은 일반 회원정보와 분리해 일정 기간 보관합니다. 계속하려면 <strong className="text-[var(--color-error)]">탈퇴</strong>를 입력해 주세요.
+                      계정 정보·업로드 이미지·브라우저 프로젝트·내보내기 이력과 남은 크레딧은 모두 삭제되며 복구할 수 없습니다. 관계 법령에 따라 결제·환불 기록과 문의 내역의 최소 항목은 일반 회원정보와 분리해 일정 기간 보관합니다. 계속하려면 <strong className="text-[var(--color-error)]">탈퇴</strong>를 입력해 주세요.
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <input className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-outline-variant)] bg-white px-3 text-sm font-semibold outline-none focus:border-[var(--color-error)] focus:ring-2 focus:ring-[var(--color-error-container)]" value={deletionConfirmation} onChange={(event) => setDeletionConfirmation(event.currentTarget.value)} autoComplete="off" disabled={isDeleting} aria-label="회원탈퇴 확인 문구" />

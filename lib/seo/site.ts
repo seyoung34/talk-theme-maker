@@ -96,6 +96,9 @@ export const indexablePaths = [
   { path: "/template", changeFrequency: "daily" as const, priority: 0.9 },
   { path: "/guide", changeFrequency: "weekly" as const, priority: 0.8 },
   { path: "/support", changeFrequency: "monthly" as const, priority: 0.4 },
+  // 상세는 넣지 않는다. 개별 공지가 늘어날 때마다 sitemap을 다시 계산해야 하고, 목록에서
+  // 모두 링크되므로 크롤러가 도달하는 데 문제가 없다.
+  { path: "/notice", changeFrequency: "weekly" as const, priority: 0.4 },
   { path: "/terms", changeFrequency: "yearly" as const, priority: 0.3 },
   { path: "/privacy", changeFrequency: "yearly" as const, priority: 0.3 },
   { path: "/refund", changeFrequency: "yearly" as const, priority: 0.3 },

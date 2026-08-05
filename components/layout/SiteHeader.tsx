@@ -82,6 +82,8 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
   };
 
   const isAccountArea = currentPath === "/account" || currentPath === "/credits" || currentPath?.startsWith("/admin");
+  // 목록과 상세를 모두 현재 위치로 표시한다.
+  const isNoticeArea = Boolean(currentPath?.startsWith("/notice"));
 
   return (
     <>
@@ -99,6 +101,15 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
 
             <Link href="/guide" aria-label="가이드 문서" aria-current={currentPath === "/guide" ? "page" : undefined} className={navLinkClassName(currentPath === "/guide")}>
               <span className="sm:hidden">가이드</span><span className="hidden sm:inline">가이드 문서</span>
+            </Link>
+
+            {/*
+              공지는 헤더에 둔다. 점검·정책 변경은 로그인 여부와 무관하게 모두가 봐야 하고,
+              푸터는 /edit·/admin 에서 숨겨져 정작 편집 중에는 닿지 않는다.
+              문의는 개인 기록이라 마이페이지와 푸터에 둔다.
+            */}
+            <Link href="/notice" aria-current={isNoticeArea ? "page" : undefined} className={navLinkClassName(isNoticeArea)}>
+              공지사항
             </Link>
 
             <Popover.Root open={isOpen} onOpenChange={setIsOpen}>

@@ -38,6 +38,7 @@ CI (`.github/workflows/ci.yml`) runs the full set on every PR, so local runs sta
 - Android sample asset/removal-list changes: `npm run check:android-assets`. The removal list lives in `removeBundledOptionalDrawables()` in `lib/theme/android/buildCore.ts`; the script parses it by name, so moving or renaming that function breaks the check.
 - iOS package validation or ZIP writer changes: `npm run check:ios-export`.
 - `adminAssetDomain.ts` / `adminAssets.ts` contract changes: `npm run check:admin-asset-domain`.
+- New or changed `supabase/migrations/*.sql`: `npx supabase db reset` against the local stack. See "Local Database".
 - TypeScript logic/API changes: `npx tsc --noEmit`.
 - Changes to `lib/theme` pure functions or other unit-tested logic: `npm test` (Vitest). Add/extend a `*.test.ts` beside the changed module when practical.
 - Code quality / catching unused vars and hook-deps issues: `npm run lint` (ESLint flat config; `next/core-web-vitals` + `next/typescript`). CI gates on `--max-warnings 42`, the count when CI was introduced: `error` must stay 0 and warnings must not grow. Lower the baseline in `ci.yml` as warnings get cleaned up; never raise it.
@@ -58,6 +59,31 @@ npm run lint
 npm run build
 npm run test:e2e
 ```
+
+## Local Database
+
+Migrations are verified against a local Supabase stack, never by pushing to the linked project first.
+
+```powershell
+npx supabase start     # needs Docker Desktop running
+npx supabase db reset  # replays every migration from an empty database
+npx supabase stop
+```
+
+`db reset` replays the whole `supabase/migrations/` chain from scratch; `db push` only sends what is
+not yet applied, so it cannot tell you a migration is broken from a clean slate. Run `db reset` for any
+migration change before `npx supabase db push` sends it to the linked project.
+
+- Local endpoints: API `127.0.0.1:54321`, Postgres `54322`, Studio `54323`, Mailpit `54324`.
+- To point the app at it, swap `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and
+  `SUPABASE_SECRET_KEY` in `.env.local` for the `supabase start` output. Back up the production values first.
+- `supabase/config.toml` is committed; `major_version` must match the linked project's Postgres major.
+- Local data starts empty. `/admin/*` needs an account whose `user_id` is in `admin_profiles`.
+
+New tables must grant `service_role` explicitly. It inherits only `REFERENCES`, `TRIGGER` and
+`TRUNCATE` here, so anything reached through `createAdminClient()` fails with `42501 permission denied`
+at the table grant — before RLS is consulted. Verify RLS by querying PostgREST directly rather than
+through the UI, so "the screen hides it" is not mistaken for "the database blocks it".
 
 Testing/lint setup: Vitest (`vitest.config.ts`, happy-dom env, `@/` alias, setup in `vitest.setup.ts`) with `@testing-library/react`; Playwright (`playwright.config.ts`, specs in `e2e/`, `e2e/**` excluded from Vitest); ESLint 9 flat config (`eslint.config.mjs`). `scripts/**` are Node-only and excluded from lint. All are devDependencies (no bundle/edge impact).
 
