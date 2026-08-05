@@ -26,11 +26,11 @@ export default async function NoticeDetailPage({ params }: NoticeDetailProps) {
   const notice = await getPublishedNotice(id);
   if (!notice) notFound();
 
+  // 상세는 제목 자체가 내용이라 덧붙일 안내가 없다. description 을 비우면 info 버튼도 나오지 않는다.
   return (
     <NoticeShell
-      eyebrow="Notice"
       title={notice.title}
-      description={`${notice.publishedAt ? "발행" : "작성"} 공지 상세`}
+      description=""
       backHref="/notice"
       backLabel="공지사항 목록"
     >

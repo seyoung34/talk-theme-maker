@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { ArrowLeft, Megaphone, Pin } from "lucide-react";
+import { ArrowLeft, Pin } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
+import { InfoTip } from "@/components/common/InfoTip";
 import { noticeCategoryLabels, type Notice } from "@/lib/notices/types";
 import type { ReactNode } from "react";
 
 /** 공지 목록·상세가 공유하는 껍데기. 정책 문서 페이지와 같은 표면을 쓴다. */
-export function NoticeShell({ eyebrow, title, description, backHref, backLabel, children }: {
-  eyebrow: string;
+export function NoticeShell({ title, description, backHref, backLabel, children }: {
   title: string;
   description: string;
   backHref: string;
@@ -25,16 +25,11 @@ export function NoticeShell({ eyebrow, title, description, backHref, backLabel, 
           {backLabel}
         </Link>
 
-        <header className="relative mt-5 overflow-hidden rounded-[32px] border border-[#dbe8fb] bg-white/90 px-6 py-8 shadow-[0_24px_70px_rgba(47,107,191,0.1)] sm:px-9 sm:py-10">
-          <div className="pointer-events-none absolute -right-16 -top-20 size-72 rounded-full bg-[radial-gradient(circle,rgba(91,155,255,0.2),transparent_68%)]" />
-          <div className="relative max-w-3xl">
-            <span className="inline-flex items-center gap-2 rounded-full bg-[#fff2bd] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-[#665300]">
-              <Megaphone size={14} aria-hidden="true" />
-              {eyebrow}
-            </span>
-            <h1 className="mt-5 font-[var(--font-display)] text-[32px] font-semibold tracking-[-0.05em] text-[var(--color-on-surface)] sm:text-[46px]">{title}</h1>
-            <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:text-base">{description}</p>
-          </div>
+        <header className="mt-6">
+          <h1 className="flex items-start gap-1.5 font-[var(--font-display)] text-[26px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)] sm:text-[32px]">
+            {title}
+            {description ? <InfoTip label={`${title} 안내`}>{description}</InfoTip> : null}
+          </h1>
         </header>
 
         {children}

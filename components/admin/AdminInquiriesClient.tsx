@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, MessageSquare, RefreshCw, Send } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, RefreshCw, Send } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
+import { InfoTip } from "@/components/common/InfoTip";
 import { InquiryHeader, InquiryMessageList, formatInquiryDate } from "@/components/inquiry/InquiryThread";
 import { inquiryLimits, inquiryStatuses, inquiryStatusLabels, type Inquiry, type InquiryStatus } from "@/lib/inquiries/types";
 
@@ -93,15 +94,13 @@ export default function AdminInquiriesClient() {
           관리자 홈
         </Link>
 
-        <header className="mt-5 rounded-[28px] border border-[#dbe8fb] bg-white/92 px-6 py-7 shadow-[0_22px_62px_rgba(47,107,191,0.09)]">
-          <span className="inline-flex items-center gap-2 rounded-full bg-[#fff2bd] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-[#665300]">
-            <MessageSquare size={14} aria-hidden="true" />
-            Inquiries
-          </span>
-          <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">문의 관리</h1>
-          <p className="mt-2 text-sm font-semibold text-[var(--color-on-surface-variant)]">
-            사용자에게 알림이 가지 않습니다. 답변은 사용자가 서비스에 들어와 확인합니다.
-          </p>
+        <header className="mt-6">
+          <h1 className="flex items-center gap-1.5 text-[26px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">
+            문의 관리
+            <InfoTip label="문의 관리 안내">
+              답변을 등록해도 사용자에게 알림이 가지 않습니다. 사용자가 서비스에 들어와 확인합니다. 종료로 바꾸면 사용자는 더 이상 답신할 수 없습니다.
+            </InfoTip>
+          </h1>
           <div className="mt-4 flex flex-wrap gap-2">
             {(["open", "answered", "closed", "all"] as const).map((value) => (
               <button

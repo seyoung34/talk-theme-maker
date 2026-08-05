@@ -19,7 +19,6 @@ export default async function NoticePage() {
 
   return (
     <NoticeShell
-      eyebrow="Notice"
       title="공지사항"
       description="업데이트, 점검, 정책 변경을 안내합니다."
       backHref="/"

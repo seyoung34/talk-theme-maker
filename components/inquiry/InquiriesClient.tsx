@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowLeft, LoaderCircle, MessageSquare, Plus, Send, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, LoaderCircle, Plus, Send, X } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
+import { InfoTip } from "@/components/common/InfoTip";
 import { InquiryHeader, InquiryMessageList, formatInquiryDate } from "@/components/inquiry/InquiryThread";
 import {
   canReplyToInquiry,
@@ -110,20 +111,18 @@ export default function InquiriesClient() {
           마이페이지
         </Link>
 
-        <header className="mt-5 rounded-[28px] border border-[#dbe8fb] bg-white/92 px-6 py-7 shadow-[0_22px_62px_rgba(47,107,191,0.09)]">
-          <span className="inline-flex items-center gap-2 rounded-full bg-[#fff2bd] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.16em] text-[#665300]">
-            <MessageSquare size={14} aria-hidden="true" />
-            Support
-          </span>
-          <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">문의 내역</h1>
-          <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
-            답변은 이메일로 보내지 않습니다. 이 화면에서 확인해 주세요.
-          </p>
+        <header className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="flex items-center gap-1.5 text-[26px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">
+            문의 내역
+            <InfoTip label="문의 안내">
+              답변은 이메일로 보내지 않습니다. 이 화면에서 확인해 주세요. 종료된 문의에는 답신할 수 없으며, 새로 접수하시면 됩니다.
+            </InfoTip>
+          </h1>
           {!composing && !selected ? (
             <button
               type="button"
               onClick={() => { setComposing(true); setNotice(null); }}
-              className="mt-4 inline-flex h-11 items-center gap-2 rounded-xl bg-[#2f6bbf] px-4 text-sm font-extrabold text-white transition hover:bg-[#2a60ac]"
+              className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#2f6bbf] px-4 text-sm font-extrabold text-white transition hover:bg-[#2a60ac]"
             >
               <Plus size={15} aria-hidden="true" />
               문의하기
