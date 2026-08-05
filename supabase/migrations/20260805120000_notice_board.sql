@@ -34,6 +34,10 @@ alter table public.notices enable row level security;
 
 grant select on public.notices to anon, authenticated;
 grant insert, update, delete on public.notices to authenticated;
+-- 관리자 API는 초안·예약분까지 봐야 해서 service_role 클라이언트로 읽고 쓴다. 이 프로젝트는
+-- service_role에 DML이 기본으로 붙지 않으므로(REFERENCES·TRIGGER·TRUNCATE만 상속) 명시한다.
+-- 빠뜨리면 RLS가 아니라 테이블 권한에서 막혀 관리자 화면 전체가 403이 된다.
+grant select, insert, update, delete on public.notices to service_role;
 
 -- 초안과 예약 발행분은 관리자에게만 보인다. anon도 읽어야 하므로 to anon, authenticated 다.
 drop policy if exists "Public reads published notices" on public.notices;
