@@ -172,7 +172,7 @@ export default function AccountClient() {
                 ) : (
                   <form className="ml-auto grid max-w-md gap-2 rounded-2xl border border-[#f3d4d0] bg-[#fffaf9] p-3 text-left" onSubmit={deleteAccount} noValidate>
                     <p id="account-deletion-title" className="text-xs font-bold leading-5 text-[var(--color-on-surface-variant)]">
-                      계정 정보·업로드 이미지·브라우저 프로젝트·내보내기 이력과 남은 크레딧은 모두 삭제되며 복구할 수 없습니다. 관계 법령에 따라 결제·환불 기록의 최소 항목은 일반 회원정보와 분리해 일정 기간 보관합니다. 계속하려면 <strong className="text-[var(--color-error)]">탈퇴</strong>를 입력해 주세요.
+                      계정 정보·업로드 이미지·브라우저 프로젝트·내보내기 이력과 남은 크레딧은 모두 삭제되며 복구할 수 없습니다. 관계 법령에 따라 결제·환불 기록과 문의 내역의 최소 항목은 일반 회원정보와 분리해 일정 기간 보관합니다. 계속하려면 <strong className="text-[var(--color-error)]">탈퇴</strong>를 입력해 주세요.
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <input className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-outline-variant)] bg-white px-3 text-sm font-semibold outline-none focus:border-[var(--color-error)] focus:ring-2 focus:ring-[var(--color-error-container)]" value={deletionConfirmation} onChange={(event) => setDeletionConfirmation(event.currentTarget.value)} autoComplete="off" disabled={isDeleting} aria-label="회원탈퇴 확인 문구" />
