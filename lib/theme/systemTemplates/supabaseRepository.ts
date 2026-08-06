@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
-import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName } from "@/lib/theme/remoteAssets";
+import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName, themePublicBucketName } from "@/lib/theme/remoteAssets";
 import { getResolvedColor, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
@@ -249,7 +249,9 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       );
       if (thumbnail) {
         const storagePath = `system-templates/${id}/preview/card.webp`;
-        const { error: uploadError } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, thumbnail, {
+        // 공개 버킷. 갤러리에 그대로 노출되는 이미지라 서명할 이유가 없고, 서명하면 10분 뒤
+        // 깨진다. 원본 에셋은 계속 비공개 버킷에 둔다.
+        const { error: uploadError } = await supabase.storage.from(themePublicBucketName).upload(storagePath, thumbnail, {
           contentType: "image/webp",
           cacheControl: "3600",
           upsert: true,
@@ -359,7 +361,7 @@ async function createAndUploadTemplateThumbnail(variantId: string, input: System
     if (!thumbnail) return undefined;
     const storagePath = `system-templates/${variantId}/preview/card.webp`;
     const supabase = createClient();
-    const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, thumbnail, {
+    const { error } = await supabase.storage.from(themePublicBucketName).upload(storagePath, thumbnail, {
       contentType: "image/webp",
       cacheControl: "3600",
       upsert: true,

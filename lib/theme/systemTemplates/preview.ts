@@ -1,6 +1,6 @@
 import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
-import { getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
+import { getPublicThemeAssetUrl, getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
 import type { RemoteSlotUploads, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
@@ -106,16 +106,19 @@ export async function createSystemTemplatePreviewUrls(templates: SystemTemplateS
   const paths = new Set<string>();
 
   for (const template of templates) {
-    if (template.previewMetadata.cardPreviewPath) {
-      if (!next[template.previewMetadata.cardPreviewPath]) paths.add(template.previewMetadata.cardPreviewPath);
-      if (!options.includeDetails) continue;
-    }
+    // 카드 썸네일은 공개 버킷에 있어 서명이 필요 없다. 목록만 그릴 때는 더 볼 것이 없다.
+    if (template.previewMetadata.cardPreviewPath && !options.includeDetails) continue;
+
     const slots = getThemeSlots(template.platform);
     const roles = options.includeDetails ? [...previewRoles, ...tabIconPreviewRoles] : previewRoles;
     for (const role of roles) {
       const slot = findSlotByRole(slots, role);
       const path = getMetadataRef(template, role) ?? resolvePreviewUploadPath(slot, template.uploadRefs, template.candidateSelections);
-      if (path && !next[path]) paths.add(path);
+      // 이미 캐시에 있어도 건너뛰지 않는다. `next`는 만료를 모르는 평범한 객체라, 여기서
+      // 걸러 버리면 10분이 지난 URL이 영원히 갱신되지 않는다. 만료 판단은
+      // `getThemeAssetSignedUrls`가 자기 캐시(9분 TTL + 30초 버퍼)로 한다. 아직 유효하면
+      // 메모리 캐시에서 바로 돌려주므로 네트워크 왕복이 생기지 않는다.
+      if (path) paths.add(path);
     }
   }
 
@@ -144,7 +147,7 @@ export function createSystemTemplatePreviewVisual({
 
   return {
     platform,
-    cardPreviewImage: summary.previewMetadata.cardPreviewPath ? signedUrls[summary.previewMetadata.cardPreviewPath] : undefined,
+    cardPreviewImage: getPublicThemeAssetUrl(summary.previewMetadata.cardPreviewPath),
     chatBackgroundColor: resolveColor(slots, "chat_background_color", summary, templateId, template, template.defaults.chatBackground, summary.previewMetadata.colors?.chatBackground),
     mainBackgroundColor: resolveColor(slots, "main_background_color", summary, templateId, template, template.defaults.mainBackground, summary.previewMetadata.colors?.mainBackground),
     tabBackgroundColor: resolveColor(slots, "tab_background", summary, templateId, template, template.defaults.tabBackground, summary.previewMetadata.colors?.tabBackground),

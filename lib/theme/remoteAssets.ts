@@ -1,7 +1,28 @@
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
+import { supabaseUrl } from "@/lib/supabase/config";
 
 export const themeAssetsBucketName = "theme-assets";
+
+/**
+ * 공개 버킷. 갤러리 카드 썸네일처럼 **보호할 이유가 없는** 이미지만 담는다.
+ *
+ * 원본 에셋은 `theme-assets`(비공개)에 남는다. 그쪽은 내보내기 결과물에 들어가는 재료라
+ * 앱을 거치지 않고 받아갈 수 있으면 안 된다.
+ */
+export const themePublicBucketName = "theme-public";
+
+/**
+ * 공개 버킷 객체의 영구 URL.
+ *
+ * 서명하지 않으므로 만료가 없다. 갤러리가 URL을 오래 들고 있어도 깨지지 않는다.
+ * Supabase URL이 없는 환경(e2e 빌드 등)에서는 `undefined`를 돌려주고, 호출부가 색상만으로
+ * 카드를 그린다.
+ */
+export function getPublicThemeAssetUrl(storagePath: string | undefined) {
+  if (!storagePath || !supabaseUrl) return undefined;
+  return `${supabaseUrl}/storage/v1/object/public/${themePublicBucketName}/${storagePath.split("/").map(encodeURIComponent).join("/")}`;
+}
 // 서버 라우트의 maxSignedUrlPaths(50)와 맞춘다.
 const signedUrlBatchSize = 50;
 const signedUrlBatchConcurrency = 4;
