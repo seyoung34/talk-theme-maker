@@ -7,6 +7,7 @@ import { Cookie } from "lucide-react";
 import { getAcquisitionContext, getAnalyticsConsent, getAnalyticsMeasurementId, saveAnalyticsConsent, trackAnalyticsEvent, updateAnalyticsConsent, type AnalyticsConsent } from "@/lib/analytics/ga4";
 
 export const landingConsentDelayMs = 3000;
+const analyticsConsentUiExemptPaths = new Set(["/edit"]);
 
 function AnalyticsPageTracker({ consent }: { consent: AnalyticsConsent | null }) {
   const pathname = usePathname();
@@ -27,7 +28,9 @@ export default function AnalyticsProvider() {
   const [consent, setConsent] = useState<AnalyticsConsent | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConsentPromptReady, setIsConsentPromptReady] = useState(pathname !== "/");
-  const shouldShowConsentUi = pathname !== "/edit";
+  // 편집 화면에는 분석 동의 UI를 끼워 넣지 않는다. 직접 진입해 아직 동의하지 않은 사용자는
+  // 제품을 그대로 사용할 수 있고, 이미 다른 화면에서 동의한 사용자의 측정만 유지한다.
+  const shouldShowConsentUi = !analyticsConsentUiExemptPaths.has(pathname);
 
   useEffect(() => {
     const initialConsent = getAnalyticsConsent();

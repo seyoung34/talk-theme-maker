@@ -16,8 +16,9 @@ type RouteContext = { params: Promise<{ code: string }> };
  * 두 가지를 동시에 푼다.
  *
  * 1. **길이** — 원본 UTM 링크는 100자가 넘어 인스타 바이오·카카오톡·문자·QR 에서 불리하다.
- * 2. **동의 없이 세는 클릭** — GA4 는 분석 쿠키에 동의한 방문자만 센다. 여기서는 서버가
- *    리다이렉트하며 하루치 카운터만 올리므로, 동의 여부와 무관하게 100% 집계된다.
+ * 2. **동의 없이 세는 리디렉션 요청** — GA4 는 분석 쿠키에 동의한 방문자만 센다. 여기서는
+ *    서버가 리다이렉트 요청을 관측해 하루치 카운터만 올린다. 고유 사용자나 사람의 실제 클릭을
+ *    보장하는 수치가 아니며, 중복 요청·봇·링크 미리보기가 섞일 수 있다.
  *    개인 식별자·IP·User-Agent 는 저장하지 않는다.
  *
  * 목적지와 캠페인은 `lib/marketing/links.ts` 대장에서만 온다. 경로에 들어온 코드는 대장의
@@ -41,9 +42,9 @@ export async function GET(request: Request, { params }: RouteContext) {
           p_medium: link.medium,
           p_campaign: link.campaign,
         });
-        if (error) console.error("홍보 링크 클릭을 기록하지 못했습니다.", error);
+        if (error) console.error("홍보 링크 요청을 기록하지 못했습니다.", error);
       } catch (error) {
-        console.error("홍보 링크 클릭을 기록하지 못했습니다.", error);
+        console.error("홍보 링크 요청을 기록하지 못했습니다.", error);
       }
     })();
 
@@ -54,7 +55,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   }
 
   const response = NextResponse.redirect(destination, 302);
-  // 중간 캐시가 리다이렉트를 대신 응답하면 클릭이 세어지지 않는다.
+  // 중간 캐시가 리다이렉트를 대신 응답하면 요청이 세어지지 않는다.
   response.headers.set("Cache-Control", "no-store");
   return response;
 }

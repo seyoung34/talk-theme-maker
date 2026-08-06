@@ -68,7 +68,7 @@ export default async function AdminPage() {
             <div>
               <span className="mb-3 grid size-9 place-items-center rounded-xl bg-[var(--color-primary-container)]"><TrendingUp className="size-4" aria-hidden="true" /></span>
               <strong className="font-[var(--font-display)] text-2xl font-semibold text-[var(--color-on-surface)]">Marketing</strong>
-              <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">홍보 링크 클릭과 주간 전환을 한 화면에서 봅니다.</p>
+              <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">홍보 링크 요청과 주간 전환을 한 화면에서 봅니다.</p>
             </div>
             <span className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)]">열기<ArrowRight className="h-4 w-4" /></span>
           </Link>

@@ -93,4 +93,14 @@ describe("AnalyticsProvider", () => {
     expect(screen.queryByRole("button", { name: "분석 쿠키 설정" })).toBeNull();
     expect(window.localStorage.getItem(analyticsConsentStorageKey)).toBe("granted");
   });
+
+  it("does not interrupt a direct editor visit when consent is undecided", async () => {
+    pathname = "/edit";
+
+    render(createElement(AnalyticsProvider));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "분석 쿠키 동의" })).toBeNull());
+    expect(screen.queryByRole("button", { name: "분석 쿠키 설정" })).toBeNull();
+    expect(gtag).not.toHaveBeenCalledWith("event", "page_view", expect.anything());
+  });
 });

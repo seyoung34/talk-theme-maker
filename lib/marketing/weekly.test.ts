@@ -13,18 +13,18 @@ describe("buildWeeklyReport", () => {
     { week_start: "2026-08-03", signups: 1, exports_completed: 3, payments_paid: 1 },
   ];
 
-  it("주별로 클릭과 전환을 맞춰 붙인다", () => {
+  it("주별로 리디렉션 요청과 전환을 맞춰 붙인다", () => {
     const report = buildWeeklyReport({
       summaryRows,
-      clickRows: [
+      redirectRequestRows: [
         { week_start: "2026-07-27", campaign: "friends_test", clicks: 5 },
         { week_start: "2026-08-03", campaign: "friends_test", clicks: 7 },
       ],
     });
 
     expect(report.weeks).toEqual([
-      { weekStart: "2026-07-27", clicks: 5, signups: 2, exportsCompleted: 1, paymentsPaid: 0 },
-      { weekStart: "2026-08-03", clicks: 7, signups: 1, exportsCompleted: 3, paymentsPaid: 1 },
+      { weekStart: "2026-07-27", redirectRequests: 5, signups: 2, exportsCompleted: 1, paymentsPaid: 0 },
+      { weekStart: "2026-08-03", redirectRequests: 7, signups: 1, exportsCompleted: 3, paymentsPaid: 1 },
     ]);
   });
 
@@ -32,56 +32,64 @@ describe("buildWeeklyReport", () => {
     // 같은 주에 캠페인을 전환하면 이런 모양이 된다.
     const report = buildWeeklyReport({
       summaryRows,
-      clickRows: [
+      redirectRequestRows: [
         { week_start: "2026-08-03", campaign: "friends_test", clicks: 4 },
         { week_start: "2026-08-03", campaign: "launch_2608", clicks: 6 },
       ],
     });
 
-    expect(report.weeks[1].clicks).toBe(10);
+    expect(report.weeks[1].redirectRequests).toBe(10);
   });
 
-  it("클릭이 없는 주는 0으로 남는다", () => {
-    const report = buildWeeklyReport({ summaryRows, clickRows: [] });
-    expect(report.weeks.map((week) => week.clicks)).toEqual([0, 0]);
+  it("리디렉션 요청이 없는 주는 0으로 남는다", () => {
+    const report = buildWeeklyReport({ summaryRows, redirectRequestRows: [] });
+    expect(report.weeks.map((week) => week.redirectRequests)).toEqual([0, 0]);
   });
 
   it("bigint 가 문자열로 와도 더한다", () => {
     // Postgres 의 count(*)는 bigint 라 JSON 에서 문자열로 올 수 있다. 그대로 더하면 "5"+"7" 이 된다.
     const report = buildWeeklyReport({
       summaryRows: [{ week_start: "2026-08-03", signups: "12", exports_completed: "3", payments_paid: "1" }],
-      clickRows: [
+      redirectRequestRows: [
         { week_start: "2026-08-03", campaign: "friends_test", clicks: "5" },
         { week_start: "2026-08-03", campaign: "launch_2608", clicks: "7" },
       ],
     });
 
-    expect(report.weeks[0]).toEqual({ weekStart: "2026-08-03", clicks: 12, signups: 12, exportsCompleted: 3, paymentsPaid: 1 });
+    expect(report.weeks[0]).toEqual({ weekStart: "2026-08-03", redirectRequests: 12, signups: 12, exportsCompleted: 3, paymentsPaid: 1 });
   });
 
-  it("캠페인별 클릭을 많은 순으로 모은다", () => {
+  it("캠페인별 리디렉션 요청을 많은 순으로 모은다", () => {
     const report = buildWeeklyReport({
       summaryRows,
-      clickRows: [
+      redirectRequestRows: [
         { week_start: "2026-07-27", campaign: "friends_test", clicks: 3 },
         { week_start: "2026-08-03", campaign: "launch_2608", clicks: 9 },
         { week_start: "2026-08-03", campaign: "friends_test", clicks: 2 },
       ],
     });
 
-    expect(report.campaignClicks.map((row) => [row.campaign, row.clicks])).toEqual([
+    expect(report.campaignRequests.map((row) => [row.campaign, row.requests])).toEqual([
       ["launch_2608", 9],
       ["friends_test", 5],
     ]);
-    expect(report.campaignClicks[0].label).toBe("8월 공개 런칭");
+    expect(report.campaignRequests[0].label).toBe("8월 공개 런칭");
+  });
+
+  it("0인 테스트 행은 캠페인 목록에서 숨긴다", () => {
+    const report = buildWeeklyReport({
+      summaryRows,
+      redirectRequestRows: [{ week_start: "2026-08-03", campaign: "probe", clicks: 0 }],
+    });
+    expect(report.campaignRequests).toEqual([]);
   });
 
   it("대장에 없는 캠페인도 코드 그대로 보여 준다", () => {
     // 옛 캠페인 항목을 지워도 과거 데이터가 화면에서 사라지면 안 된다.
     const report = buildWeeklyReport({
       summaryRows,
-      clickRows: [{ week_start: "2026-08-03", campaign: "removed_code", clicks: 1 }],
+      redirectRequestRows: [{ week_start: "2026-08-03", campaign: "removed_code", clicks: 1 }],
     });
-    expect(report.campaignClicks[0]).toMatchObject({ campaign: "removed_code", label: "removed_code" });
+    expect(report.campaignRequests[0]).toMatchObject({ campaign: "removed_code", label: "removed_code" });
   });
 });

@@ -21,12 +21,12 @@ export async function GET() {
   if (denied) return denied;
 
   const admin = createAdminClient();
-  const [summary, clicks] = await Promise.all([
+  const [summary, redirectRequests] = await Promise.all([
     admin.rpc("marketing_weekly_summary", { p_weeks: weekCount }),
     admin.rpc("marketing_weekly_clicks", { p_weeks: weekCount }),
   ]);
 
-  const failed = [summary, clicks].find((result) => result.error);
+  const failed = [summary, redirectRequests].find((result) => result.error);
   if (failed?.error) {
     console.error("주간 마케팅 지표 조회 실패", failed.error);
     return NextResponse.json({ error: "지표를 불러오지 못했습니다." }, { status: 500 });
@@ -35,7 +35,7 @@ export async function GET() {
   return NextResponse.json({
     report: buildWeeklyReport({
       summaryRows: summary.data ?? [],
-      clickRows: clicks.data ?? [],
+      redirectRequestRows: redirectRequests.data ?? [],
     }),
   });
 }
