@@ -6,10 +6,24 @@ export const analyticsInternalStorageKey = "talktheme:analytics-internal:v1";
 const analyticsInternalCookieName = "talktheme_analytics_internal";
 const acquisitionStorageKey = "talktheme:analytics-acquisition:v1";
 const funnelContextStorageKey = "talktheme:analytics-funnel-context:v1";
+/**
+ * 허용 목록. 여기에 없는 값은 조용히 버린다.
+ *
+ * 임의 문자열을 그대로 보내면 오타·봇·장난 값이 GA4 측정기준에 쌓여 보고서를 못 쓰게 된다.
+ * 대신 **새 채널을 쓰려면 이 목록을 먼저 고쳐야 한다.**
+ *
+ * `lib/marketing/links.ts`의 링크 대장이 쓰는 값은 전부 여기 있어야 한다. 어긋나면 내가 뿌린
+ * 링크가 통계에 안 잡히므로 테스트로 묶어 두었다.
+ */
 const allowedUtmValues = {
-  utm_source: new Set(["instagram", "naver", "google", "tiktok", "youtube", "x", "community"]),
+  utm_source: new Set(["instagram", "naver", "google", "tiktok", "youtube", "x", "community", "direct_share"]),
   utm_medium: new Set(["social", "search", "organic", "video", "community", "referral"]),
-  utm_campaign: new Set(["instagram_personal_launch", "naver_search", "google_search", "tiktok_launch", "youtube_launch", "x_launch", "community_launch"]),
+  utm_campaign: new Set([
+    "friends_test",
+    "launch_2608",
+    // 아래는 이 체계 이전에 쓰던 값이다. 이미 뿌린 링크가 있을 수 있어 계속 받는다.
+    "instagram_personal_launch", "naver_search", "google_search", "tiktok_launch", "youtube_launch", "x_launch", "community_launch",
+  ]),
 };
 
 /**
