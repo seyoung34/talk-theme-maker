@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createAdminClient } from "@/lib/supabase/server";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 import { buildMarketingDestination, getMarketingLink } from "@/lib/marketing/links";
@@ -31,23 +32,38 @@ export async function GET(request: Request, { params }: RouteContext) {
 
   const destination = buildMarketingDestination(new URL(request.url).origin, link);
 
-  // 집계 실패가 리다이렉트를 막으면 안 된다. 통계는 부수적이고 방문이 본질이다.
   if (hasSupabaseBrowserConfig()) {
-    try {
-      const admin = createAdminClient();
-      await admin.rpc("record_marketing_link_hit", {
-        p_code: code.trim().toLowerCase(),
-        p_source: link.source,
-        p_medium: link.medium,
-        p_campaign: link.campaign,
-      });
-    } catch (error) {
-      console.error("홍보 링크 클릭을 기록하지 못했습니다.", error);
-    }
+    const record = (async () => {
+      try {
+        const { error } = await createAdminClient().rpc("record_marketing_link_hit", {
+          p_code: code.trim().toLowerCase(),
+          p_source: link.source,
+          p_medium: link.medium,
+          p_campaign: link.campaign,
+        });
+        if (error) console.error("홍보 링크 클릭을 기록하지 못했습니다.", error);
+      } catch (error) {
+        console.error("홍보 링크 클릭을 기록하지 못했습니다.", error);
+      }
+    })();
+
+    // **응답을 기다리게 하지 않는다.** 통계는 부수적이고 방문이 본질이라, Supabase 가 느리면
+    // 링크 자체가 느려지거나 타임아웃으로 리다이렉트를 놓칠 수 있다. Workers 는 응답 후
+    // 남은 작업을 끊으므로 waitUntil 로 넘겨 끝까지 돌게 한다.
+    waitUntil(record);
   }
 
   const response = NextResponse.redirect(destination, 302);
   // 중간 캐시가 리다이렉트를 대신 응답하면 클릭이 세어지지 않는다.
   response.headers.set("Cache-Control", "no-store");
   return response;
+}
+
+/** Workers 밖(로컬 `next dev`·테스트)에서는 컨텍스트가 없다. 그때는 그냥 놓아둔다. */
+function waitUntil(task: Promise<unknown>) {
+  try {
+    getCloudflareContext().ctx.waitUntil(task);
+  } catch {
+    void task;
+  }
 }
