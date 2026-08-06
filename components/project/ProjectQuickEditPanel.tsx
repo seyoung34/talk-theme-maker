@@ -854,6 +854,8 @@ function InfoTooltip({ label, content, triggerClassName }: { label: string; cont
 function getAutoColorReason(slot: ThemeAssetSlot) {
   if (slot.autoColorRecipe === "background-average") return "배경 이미지 평균색 기준으로";
   if (slot.autoColorRecipe === "chat-background-average") return "채팅방 배경 이미지 평균색 기준으로";
+  if (slot.autoColorRecipe === "bubble-me-text") return "내 말풍선 표면과 읽기 쉬운 대비로";
+  if (slot.autoColorRecipe === "bubble-you-text") return "상대 말풍선 표면과 읽기 쉬운 대비로";
   if (slot.autoColorRecipe === "surface-background") return "메인 배경색 기준으로";
   if (slot.autoColorRecipe === "header-top") return "배경 이미지 상단색 또는 기본 배경색 기준으로";
   if (slot.autoColorRecipe === "tab-bottom") return "배경 이미지 하단색 또는 기본 배경색 기준으로";
@@ -869,6 +871,10 @@ function getAutoColorExplanation(slot: ThemeAssetSlot) {
       return "배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 이미지가 없으면 사용자가 입력한 배경색을 유지합니다."
     case "chat-background-average":
       return "채팅방 배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 메인 배경과 다른 이미지를 쓰므로 기준도 채팅방 이미지입니다. 이미지가 없으면 현재 채팅방 배경색을 유지합니다.";
+    case "bubble-me-text":
+      return "내 말풍선 이미지를 분석해 메시지 글자색을 정합니다. 투명한 부분은 실제 채팅방 배경 위에 합성해 판단하고, 4.5:1 이상의 대비를 목표로 합니다. 직접 색을 바꾸면 자동 연결이 해제됩니다.";
+    case "bubble-you-text":
+      return "상대 말풍선 이미지를 분석해 메시지 글자색을 정합니다. 투명한 부분은 실제 채팅방 배경 위에 합성해 판단하고, 4.5:1 이상의 대비를 목표로 합니다. 직접 색을 바꾸면 자동 연결이 해제됩니다.";
     case "header-top":
       return "배경 이미지가 있으면 상단 15% 영역의 대표색을 사용하고, 이미지가 없으면 현재 기본 배경색을 사용합니다.";
     case "tab-bottom":

@@ -782,6 +782,7 @@
     "defaultColor": {
       "basic": "#111111"
     },
+    "autoColorRecipe": "bubble-me-text",
     "cssSelector": "MessageCellStyle-Send",
     "cssProperty": "-ios-text-color"
   },
@@ -817,6 +818,7 @@
     "defaultColor": {
       "basic": "#111111"
     },
+    "autoColorRecipe": "bubble-you-text",
     "cssSelector": "MessageCellStyle-Receive",
     "cssProperty": "-ios-text-color"
   },

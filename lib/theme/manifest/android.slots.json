@@ -1047,6 +1047,7 @@
     "label": "내 말풍선 텍스트 색상",
     "required": false,
     "note": "내가 보낸 메시지의 말풍선 안 텍스트 색상",
+    "autoColorRecipe": "bubble-me-text",
     "colorKey": "theme_chatroom_bubble_me_color"
   },
   {
@@ -1060,6 +1061,7 @@
     "label": "상대 말풍선 텍스트 색상",
     "required": false,
     "note": "상대가 보낸 메시지의 말풍선 안 텍스트 색상",
+    "autoColorRecipe": "bubble-you-text",
     "colorKey": "theme_chatroom_bubble_you_color"
   },
   {

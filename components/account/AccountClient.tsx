@@ -36,6 +36,20 @@ export default function AccountClient() {
 
   useEffect(() => { void refreshMe(); }, [refreshMe]);
 
+  const accountId = me?.user?.id ?? null;
+  const pendingAndroidExportKey = (me?.exports ?? [])
+    .filter((item) => item.platform === "android" && item.status === "pending")
+    .map((item) => `${item.id}:${item.stage ?? ""}`)
+    .join("|");
+
+  useEffect(() => {
+    if (!accountId || !pendingAndroidExportKey) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshMe();
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [accountId, pendingAndroidExportKey, refreshMe]);
+
   const deleteAccount = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isDeleting) return;
@@ -161,7 +175,7 @@ export default function AccountClient() {
             <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6 lg:col-start-1 lg:row-start-3" aria-labelledby="export-history-title">
               <div className="mb-5 flex items-center gap-3">
                 <span className="grid size-11 place-items-center rounded-2xl bg-[#eafaf1] text-[#34c98a]"><Download size={20} aria-hidden="true" /></span>
-                <div><h2 id="export-history-title" className="text-base font-extrabold">최근 Export 이력</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">최근 10개의 내보내기 작업입니다. Android 결과 파일은 7일간 보관합니다.</p></div>
+                <div><h2 id="export-history-title" className="text-base font-extrabold">최근 Export 이력</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">최근 10개의 내보내기 작업입니다. Android 결과 파일은 7일간 보관합니다.</p>{pendingAndroidExportKey ? <p className="mt-1 text-[11px] font-bold text-[#2f6bbf]" role="status">진행 중인 Android 작업은 이 페이지를 열어 두면 자동으로 상태를 확인합니다.</p> : null}</div>
               </div>
               {(me?.exports ?? []).length === 0 ? <div className="rounded-[24px] bg-[#f7fbff] px-4 py-8 text-center text-sm font-semibold text-[var(--color-on-surface-variant)]">아직 내보내기 이력이 없습니다.</div> : (
                 <div className="overflow-hidden rounded-[24px] border border-[#e3ecf7] bg-[#fcfdff] divide-y divide-[var(--color-outline-variant)]">

@@ -30,7 +30,7 @@ import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
-import { setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
+import { readableThemeForeground, setThemeColorAlpha, setThemeColorRgb, themeColorAlphaPercent, themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
 
 type MobileQuickEditPanelProps = {
   slot?: ThemeAssetSlot;
@@ -50,6 +50,7 @@ type MobileQuickEditPanelProps = {
   insets?: Insets;
   stretch?: StretchPoint;
   contrastWarning?: SlotContrastWarning;
+  imageColorPaletteError?: string | null;
   recommendedColor?: string;
   isAutoColor: boolean;
   canApplyAutoColor: boolean;
@@ -222,6 +223,8 @@ function ColorControls({
   platform,
   slots,
   candidates,
+  contrastWarning,
+  imageColorPaletteError,
   recommendedColor,
   isAutoColor,
   canApplyAutoColor,
@@ -301,6 +304,8 @@ function ColorControls({
         </div>
       ) : null}
 
+      {imageColorPaletteError && !recommendedColor ? <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold leading-5 text-amber-900" role="status">{imageColorPaletteError}</p> : null}
+
       {derivedLink ? (
         // 데스크톱 카드는 기준 슬롯 이름과 계산 방식을 함께 보여 준다. 버튼 문구만 있으면
         // 무엇을 기준으로 맞추는지 알 수 없어 같은 설명을 캡션으로 붙인다.
@@ -329,6 +334,13 @@ function ColorControls({
           {isAutoColor ? "자동 색상 적용됨" : "추천 색상 자동 적용"}
           {recommendedColor ? <span className="ml-1 border rounded size-4 border-black/10" style={{ backgroundColor: themeColorToCss(recommendedColor) }} aria-hidden="true" /> : null}
         </button>
+      ) : null}
+
+      {contrastWarning ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="text-[11px] font-semibold leading-5 text-amber-900">{contrastWarning.message} 현재 {contrastWarning.ratio.toFixed(1)}:1 / 권장 {contrastWarning.minimumRatio}:1 이상</p>
+          <button type="button" className="rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-amber-900 shadow-sm" onClick={() => onColorChange(slot, readableThemeForeground(contrastWarning.background, contrastWarning.minimumRatio))}>대비 맞춤</button>
+        </div>
       ) : null}
     </div>
   );
@@ -467,7 +479,7 @@ function ImageControls({
 
       {slot.editableInBubbleEditor ? (
         <>
-        <button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-[13px] font-black text-white shadow-sm hover:bg-blue-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600" onClick={onOpenBubbleBuilder}>
+        <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#cfe0ff] bg-[#f7fbff] px-4 text-[13px] font-bold text-[#2f6bbf] transition hover:bg-[#eef5ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]" onClick={onOpenBubbleBuilder}>
           <Sliders size={17} aria-hidden="true" />나만의 말풍선 만들기
         </button>
         {pairedBubbleSlot ? <button type="button" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#bfdbfe] bg-[#eff6ff] px-4 text-[13px] font-black text-[#1d4ed8] transition hover:bg-[#dbeafe]" onClick={() => onCopyBubbleToPair(slot)}>

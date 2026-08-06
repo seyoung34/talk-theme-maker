@@ -64,34 +64,43 @@ export function ImageEditDialog({
     };
   }, [open, sourceFile]);
 
-  const previewStyle = useMemo<CSSProperties>(
-    () => ({
-      transform: `translate(${state.offsetX * previewPixelScale}px, ${state.offsetY * previewPixelScale}px) scaleX(${state.flipX ? -1 : 1}) scale(${clampImageScale(state.scale)})`,
-      objectFit: state.fitMode === "cover" ? "cover" : state.fitMode === "contain" ? "contain" : "none",
-    }),
-    [previewPixelScale, state],
-  );
   const frameSize = target ?? sourceSize;
   const frameStyle = useMemo<CSSProperties | undefined>(() => {
     if (!frameSize?.width || !frameSize.height) return undefined;
     return { aspectRatio: `${frameSize.width} / ${frameSize.height}` };
   }, [frameSize]);
   const outputSize = target ?? sourceSize;
+  const previewImageScale = sourceSize && outputSize
+    ? getPreviewFitScale(state.fitMode, sourceSize.width, sourceSize.height, outputSize.width, outputSize.height) * previewPixelScale * clampImageScale(state.scale)
+    : clampImageScale(state.scale);
+  const previewStyle = useMemo<CSSProperties>(
+    () => ({
+      width: sourceSize?.width,
+      height: sourceSize?.height,
+      maxWidth: "none",
+      maxHeight: "none",
+      transformOrigin: "center",
+      transform: `translate(${state.offsetX * previewPixelScale}px, ${state.offsetY * previewPixelScale}px) scaleX(${state.flipX ? -1 : 1}) scale(${previewImageScale})`,
+    }),
+    [previewImageScale, previewPixelScale, sourceSize, state],
+  );
   const hasChanges = !isDefaultImageEditState(state);
+  const outputWidth = outputSize?.width;
+  const outputHeight = outputSize?.height;
 
   useEffect(() => {
     const frame = previewFrameRef.current;
-    if (!frame || !outputSize) return;
+    if (!frame || !outputWidth || !outputHeight) return;
     const updatePreviewPixelScale = () => {
       const rect = frame.getBoundingClientRect();
-      const nextScale = Math.min(rect.width / outputSize.width, rect.height / outputSize.height);
+      const nextScale = Math.min(rect.width / outputWidth, rect.height / outputHeight);
       setPreviewPixelScale(Number.isFinite(nextScale) && nextScale > 0 ? nextScale : 1);
     };
     updatePreviewPixelScale();
     const observer = new ResizeObserver(updatePreviewPixelScale);
     observer.observe(frame);
     return () => observer.disconnect();
-  }, [outputSize?.height, outputSize?.width]);
+  }, [outputHeight, outputWidth]);
 
   const beginPreviewDrag = (kind: "move" | "scale") => (event: PointerEvent<HTMLDivElement | HTMLButtonElement>) => {
     if (!sourceUrl || isApplying) return;
@@ -153,25 +162,29 @@ export function ImageEditDialog({
           </header>
 
           <div className="grid min-h-0 gap-3 overflow-y-auto p-3 sm:gap-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <section className="grid min-h-[min(54dvh,460px)] place-items-center rounded-[24px] border border-[#d8e2ef] bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#edf4fb_72%)] p-3 sm:min-h-[360px] sm:bg-[linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] sm:bg-[length:18px_18px] sm:bg-[position:0_0,0_9px,9px_-9px,-9px_0px] sm:p-4">
-              <div ref={previewFrameRef} className="relative grid max-h-[50dvh] min-h-44 w-full max-w-[420px] touch-none place-items-center overflow-hidden rounded-[22px] border border-white/80 bg-white/75 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.04)] cursor-grab active:cursor-grabbing" style={frameStyle} onPointerDown={beginPreviewDrag("move")} onPointerMove={updatePreviewDrag} onPointerUp={endPreviewDrag} onPointerCancel={endPreviewDrag}>
+            <section className="grid h-[clamp(260px,48dvh,460px)] min-h-0 place-items-center rounded-[24px] border border-[#d8e2ef] bg-[radial-gradient(circle_at_50%_30%,#ffffff_0%,#edf4fb_72%)] p-3 sm:h-[min(62dvh,520px)] sm:min-h-[360px] sm:bg-[linear-gradient(45deg,#e2e8f0_25%,transparent_25%),linear-gradient(-45deg,#e2e8f0_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e2e8f0_75%),linear-gradient(-45deg,transparent_75%,#e2e8f0_75%)] sm:bg-[length:18px_18px] sm:bg-[position:0_0,0_9px,9px_-9px,-9px_0px] sm:p-4">
+              <div ref={previewFrameRef} className="relative grid min-h-0 min-w-0 max-h-full w-full max-w-[420px] touch-none place-items-center overflow-hidden rounded-[22px] border border-white/80 bg-white/75 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.04)] cursor-grab active:cursor-grabbing" style={frameStyle} onPointerDown={beginPreviewDrag("move")} onPointerMove={updatePreviewDrag} onPointerUp={endPreviewDrag} onPointerCancel={endPreviewDrag}>
                 {sourceUrl ? <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={sourceUrl} alt="" className="pointer-events-none max-h-full max-w-full select-none transition-transform duration-100 ease-out" style={previewStyle} draggable={false} />
+                  <img src={sourceUrl} alt="" className="pointer-events-none select-none transition-transform duration-100 ease-out" style={previewStyle} draggable={false} />
                   <button type="button" aria-label="이미지 크기 조절" className="absolute bottom-3 right-3 grid size-10 cursor-nwse-resize place-items-center rounded-full border border-[#bfdbfe] bg-white text-[#2563eb] shadow-[0_8px_20px_rgba(37,99,235,0.2)] touch-none" onPointerDown={beginPreviewDrag("scale")}><Maximize2 size={17} aria-hidden="true" /></button>
                 </> : <p className="px-6 text-center text-sm font-semibold text-[#64748b]">편집할 이미지를 찾지 못했습니다.</p>}
               </div>
             </section>
 
-            <aside className="grid grid-cols-2 gap-2 lg:content-start lg:grid-cols-1 lg:gap-3">
+            <aside className="grid min-w-0 grid-cols-2 gap-2 lg:content-start lg:grid-cols-1 lg:gap-3">
               <button type="button" className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition ${state.flipX ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#d1d5db] bg-white text-[#334155] hover:bg-[#f8fafc]"}`} onClick={() => setState((current) => ({ ...current, flipX: !current.flipX }))}><FlipHorizontal2 size={17} aria-hidden="true" />좌우반전</button>
               <button type="button" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#d1d5db] bg-white px-4 text-sm font-black text-[#334155] transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-45" disabled={!hasChanges} onClick={() => setState(defaultImageEditState)}><RotateCcw size={17} aria-hidden="true" />원본으로</button>
+              <div className="col-span-2 grid min-w-0 gap-3 rounded-[20px] border border-[#e5e7eb] bg-white p-3 lg:hidden">
+                <label className="grid min-w-0 gap-2 text-sm font-black text-[#0f172a]">크기<span className="flex min-w-0 items-center gap-3"><input type="range" min="25" max="300" value={Math.round(state.scale * 100)} className="min-w-0 w-full accent-[#2563eb]" onChange={(event) => { const scale = clampImageScale(Number(event.currentTarget.value) / 100); setState((current) => ({ ...current, scale })); }} /><span className="w-12 shrink-0 text-right text-xs font-black text-[#475569]">{Math.round(state.scale * 100)}%</span></span></label>
+                <div className="grid min-w-0 grid-cols-2 gap-2"><NumberControl label="가로 위치" value={state.offsetX} onChange={(value) => setState((current) => ({ ...current, offsetX: value }))} /><NumberControl label="세로 위치" value={state.offsetY} onChange={(value) => setState((current) => ({ ...current, offsetY: value }))} /></div>
+              </div>
               <div className="col-span-2 hidden rounded-[20px] border border-[#e5e7eb] bg-white p-4 lg:grid">
                 <label className="grid gap-2 text-sm font-black text-[#0f172a]">크기<span className="flex items-center gap-3"><input type="range" min="25" max="300" value={Math.round(state.scale * 100)} className="w-full accent-[#2563eb]" onChange={(event) => { const scale = clampImageScale(Number(event.currentTarget.value) / 100); setState((current) => ({ ...current, scale })); }} /><span className="w-12 text-right text-xs font-black text-[#475569]">{Math.round(state.scale * 100)}%</span></span></label>
               </div>
               <div className="col-span-2 hidden rounded-[20px] border border-[#e5e7eb] bg-white p-4 lg:grid">
                 <div className="mb-3 flex items-center justify-between gap-2"><span className="text-sm font-black text-[#0f172a]">위치</span><button type="button" className="rounded-full border border-[#e5e7eb] px-3 py-1.5 text-[11px] font-black text-[#475569] transition hover:bg-[#f8fafc] disabled:cursor-not-allowed disabled:opacity-45" disabled={state.offsetX === 0 && state.offsetY === 0} onClick={() => setState((current) => ({ ...current, offsetX: 0, offsetY: 0 }))}>중앙</button></div>
-                <div className="grid grid-cols-2 gap-3"><NumberControl label="가로" value={state.offsetX} onChange={(value) => setState((current) => ({ ...current, offsetX: value }))} /><NumberControl label="세로" value={state.offsetY} onChange={(value) => setState((current) => ({ ...current, offsetY: value }))} /></div>
+                <div className="grid min-w-0 grid-cols-2 gap-3"><NumberControl label="가로 위치" value={state.offsetX} onChange={(value) => setState((current) => ({ ...current, offsetX: value }))} /><NumberControl label="세로 위치" value={state.offsetY} onChange={(value) => setState((current) => ({ ...current, offsetY: value }))} /></div>
               </div>
               {error ? <p className="col-span-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-700" role="alert">{error}</p> : null}
             </aside>
@@ -198,9 +211,16 @@ function NumberControl({ label, value, onChange }: { label: string; value: numbe
   return (
     <label className="grid gap-1.5 text-xs font-bold text-[#64748b]">
       {label}
-      <input type="number" value={Math.round(value)} className="h-10 rounded-xl border border-[#d1d5db] bg-white px-3 text-sm font-bold text-[#0f172a] outline-none focus:border-[#60a5fa] focus:ring-2 focus:ring-[#bfdbfe]" onChange={(event) => onChange(Number(event.currentTarget.value) || 0)} />
+      <input type="number" value={Math.round(value)} inputMode="numeric" className="h-10 min-w-0 w-full rounded-xl border border-[#d1d5db] bg-white px-2.5 text-sm font-bold text-[#0f172a] outline-none focus:border-[#60a5fa] focus:ring-2 focus:ring-[#bfdbfe]" onChange={(event) => onChange(Number(event.currentTarget.value) || 0)} />
     </label>
   );
+}
+
+function getPreviewFitScale(mode: ImageEditState["fitMode"], sourceWidth: number, sourceHeight: number, outputWidth: number, outputHeight: number) {
+  if (mode === "original") return 1;
+  const widthRatio = outputWidth / Math.max(1, sourceWidth);
+  const heightRatio = outputHeight / Math.max(1, sourceHeight);
+  return mode === "cover" ? Math.max(widthRatio, heightRatio) : Math.min(widthRatio, heightRatio);
 }
 
 function isDefaultImageEditState(state: ImageEditState) {

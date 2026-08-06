@@ -387,6 +387,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   );
   const {
     activeImageColorPalette,
+    bubbleImageColorPaletteError,
+    bubblePalettePending,
     chatImageColorPaletteError,
     chatPalettePending,
     contrastWarnings,
@@ -405,6 +407,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     slots,
     templateId,
   });
+  const autoColorPending = mainPalettePending || chatPalettePending || bubblePalettePending;
 
   useEffect(() => {
     if (!groups.includes(activeGroup)) {
@@ -481,6 +484,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     exportProgressStep,
     isAccountLoading,
     isExporting,
+    isExportQueued,
     isPreparingExport,
     openExportDialog,
     resumeExportDialog,
@@ -511,7 +515,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     templateId,
   });
 
-  shouldConfirmExitRef.current = hasUnsavedChanges || isExporting;
+  const exportExitGuardActive = isExporting && !isExportQueued;
+  shouldConfirmExitRef.current = hasUnsavedChanges || exportExitGuardActive;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -611,8 +616,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setHasUnsavedChanges(draftSignature !== savedSignatureRef.current);
   }, [draftSignature, initialLoadState.status]);
 
-  // 내보내기 중 이탈하면 크레딧은 차감된 채 결과물을 놓칠 수 있어 변경 여부와 무관하게 경고한다.
-  useUnsavedChangesWarning(hasUnsavedChanges || isExporting);
+  // 작업 접수 전에는 결과물을 놓칠 수 있어 이탈을 경고한다. 큐에 들어간 Android 작업은 서버에서 계속 진행된다.
+  useUnsavedChangesWarning(hasUnsavedChanges || exportExitGuardActive);
 
   useEffect(() => {
     if (initialLoadState.status !== "ready" || !selectedSlot) return;
@@ -864,7 +869,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const applyAutoColor = (slot: ThemeAssetSlot) => {
-    if (mainPalettePending || chatPalettePending) return;
+    if (autoColorPending) return;
     const color = mainColorRecommendations[slot.id];
     if (!color) return;
     setColors((current) => ({ ...current, [slot.id]: color }));
@@ -874,7 +879,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const applyAutoColorToAll = () => {
-    if (mainPalettePending || chatPalettePending) return;
+    if (autoColorPending) return;
     const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && mainColorRecommendations[slot.id] && (mainBackgroundFile || slot.role !== "main_background_color"));
     setColors((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, mainColorRecommendations[slot.id]])]));
     setCandidateSelections((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, autoMainPaletteCandidateId])]));
@@ -1149,12 +1154,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onColorChange={changeColor}
       onUnlinkColor={unlinkColor}
       imageColorPalette={activeImageColorPalette}
-      imageColorPaletteError={selectedSlot?.autoColorRecipe === "chat-background-average" ? chatImageColorPaletteError : imageColorPaletteError}
+      imageColorPaletteError={selectedSlot?.autoColorRecipe === "chat-background-average" ? chatImageColorPaletteError : selectedSlot?.autoColorRecipe === "bubble-me-text" || selectedSlot?.autoColorRecipe === "bubble-you-text" ? bubbleImageColorPaletteError : imageColorPaletteError}
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
-      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !mainPalettePending && !chatPalettePending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
-      canApplyAutoColorToAll={Boolean(!mainPalettePending && !chatPalettePending && Object.keys(mainColorRecommendations).length)}
+      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !autoColorPending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+      canApplyAutoColorToAll={Boolean(!autoColorPending && Object.keys(mainColorRecommendations).length)}
       onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
       onApplyAutoColorToAll={applyAutoColorToAll}
       onSelectCandidate={selectCandidate}
@@ -1197,9 +1202,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "flip" });
       }}
       contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
+      imageColorPaletteError={selectedSlot?.autoColorRecipe === "chat-background-average" ? chatImageColorPaletteError : selectedSlot?.autoColorRecipe === "bubble-me-text" || selectedSlot?.autoColorRecipe === "bubble-you-text" ? bubbleImageColorPaletteError : imageColorPaletteError}
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
-      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !mainPalettePending && !chatPalettePending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+      canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !autoColorPending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
       fileInputRefs={fileInputRefs}
       onUpload={uploadSlot}
       onEditedUpload={uploadEditedSlot}
@@ -1288,6 +1294,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       {exportDialogOpen ? (
         <ExportDialog
           isExporting={isExporting}
+          isExportQueued={isExportQueued}
           isPreparingExport={isPreparingExport}
           downloadResult={exportDownloadResult}
           preparationError={exportPreparationError}
@@ -1299,7 +1306,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           accountState={accountState}
           isAccountLoading={isAccountLoading}
           onClose={() => {
-            if (!isExporting) {
+            if (!isExporting || isExportQueued) {
               setExportDialogOpen(false);
             }
           }}
@@ -1344,7 +1351,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       {exitConfirmOpen ? (
         <ExitConfirmDialog
           hasUnsavedChanges={hasUnsavedChanges}
-          isExporting={isExporting}
+          isExporting={exportExitGuardActive}
           isSaving={exitSaveState === "saving"}
           saveFailed={exitSaveState === "error"}
           onCancel={cancelExit}

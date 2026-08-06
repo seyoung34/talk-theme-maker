@@ -59,6 +59,7 @@ export function useProjectExport({
   const [isPreparingExport, setIsPreparingExport] = useState(false);
   const [exportPreparationError, setExportPreparationError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportQueued, setIsExportQueued] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportDownloadResult, setExportDownloadResult] = useState<ExportDownloadResult | null>(null);
   const [exportMode, setExportMode] = useState<ExportMode>("apk");
@@ -88,6 +89,7 @@ export function useProjectExport({
     setExportPreparationError(null);
     setExportDialogOpen(true);
     setExportDownloadResult(null);
+    setIsExportQueued(false);
     setExportName(displayTemplateName);
     setExportMode(platform === "android" ? "apk" : "ktheme");
     setExportProgressStep(0);
@@ -113,6 +115,7 @@ export function useProjectExport({
     setExportPreparationError(null);
     setExportDialogOpen(true);
     setExportDownloadResult(null);
+    setIsExportQueued(false);
     setExportName(options.name);
     setExportMode(options.exportMode);
     setExportProgressStep(0);
@@ -142,6 +145,7 @@ export function useProjectExport({
 
     try {
       setIsExporting(true);
+      setIsExportQueued(false);
       setExportProgressStep(0);
       setExportElapsedSeconds(0);
       setNotice({ tone: "info", message: getExportNotice(exportMode) });
@@ -197,6 +201,7 @@ export function useProjectExport({
       // 202: 비동기(Cloud Run Job) 큐잉 경로. 완료/실패까지 status를 폴링한 뒤 서명 URL로 다운로드한다.
       if (response.status === 202) {
         const queued = await readJsonResponse<{ exportJobId: string; exportNumber?: number; error?: string }>(response);
+        setIsExportQueued(true);
         const stepLabels = getExportProgressSteps(exportMode);
         const outcome = await pollAndroidExportStatus(queued.exportJobId, () => {
           setExportProgressStep((current) => Math.min(current + 1, stepLabels.length - 2));
@@ -256,6 +261,7 @@ export function useProjectExport({
       if (progressTimer) window.clearInterval(progressTimer);
       exportSubmittingRef.current = false;
       setIsExporting(false);
+      setIsExportQueued(false);
     }
   }, [
     accountState?.credits,
@@ -291,6 +297,7 @@ export function useProjectExport({
     exportProgressStep,
     isAccountLoading,
     isExporting,
+    isExportQueued,
     isPreparingExport,
     openExportDialog,
     resumeExportDialog,

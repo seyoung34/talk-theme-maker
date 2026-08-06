@@ -5,16 +5,16 @@ import Link from "next/link";
 import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { Archive, Download, LoaderCircle, Package, ShieldCheck, X } from "lucide-react";
-import { getExportNotice, getExportProgressSteps } from "@/components/project/exportClient";
+import { getExportNotice, getExportProgressSteps, getExportWaitNotice } from "@/components/project/exportClient";
 import type { AccountState, ExportDownloadResult, ExportMode } from "@/components/project/exportModel";
 import type { ThemePlatform } from "@/lib/theme/types";
 
 export function ExportDialog({
-  isExporting, isPreparingExport, preparationError, downloadResult, platform, exportMode, exportName, progressStep,
+  isExporting, isExportQueued, isPreparingExport, preparationError, downloadResult, platform, exportMode, exportName, progressStep,
   elapsedSeconds, accountState, isAccountLoading, onClose, onModeChange, onNameChange,
   onLogin, onBuyCredits, onRetryPreparation, onSubmit,
 }: {
-  isExporting: boolean; isPreparingExport: boolean; preparationError: string | null; downloadResult: ExportDownloadResult | null; platform: ThemePlatform; exportMode: ExportMode;
+  isExporting: boolean; isExportQueued: boolean; isPreparingExport: boolean; preparationError: string | null; downloadResult: ExportDownloadResult | null; platform: ThemePlatform; exportMode: ExportMode;
   exportName: string; progressStep: number; elapsedSeconds: number; accountState: AccountState | null;
   isAccountLoading: boolean; onClose: () => void; onModeChange: (mode: ExportMode) => void; onNameChange: (value: string) => void;
   onLogin: () => void; onBuyCredits: () => void; onRetryPreparation: () => void; onSubmit: () => void;
@@ -26,18 +26,31 @@ export function ExportDialog({
   const credits = accountState?.credits ?? 0;
   const hasCredits = credits >= 1;
   const ctaLabel = !isLoggedIn ? "로그인 후 다운로드" : !hasCredits ? "크레딧 충전" : "다운로드 시작";
+  const canCloseWhileExporting = !isExporting || isExportQueued;
+  const waitNotice = getExportWaitNotice(exportMode);
 
   return (
-    <Dialog.Root open onOpenChange={(open) => { if (!open && !isExporting) onClose(); }}>
+    <Dialog.Root open onOpenChange={(open) => { if (!open && canCloseWhileExporting) onClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[100] bg-[rgba(15,23,42,0.48)] backdrop-blur-[2px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[101] grid max-h-[calc(100dvh-24px)] w-[calc(100%-24px)] max-w-[620px] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[22px] border border-[#e2e8f0] bg-white shadow-[0_24px_72px_rgba(15,23,42,0.24)] focus:outline-none" onEscapeKeyDown={(event) => { if (isExporting) event.preventDefault(); }} onPointerDownOutside={(event) => { if (isExporting) event.preventDefault(); }}>
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[101] grid max-h-[calc(100dvh-24px)] w-[calc(100%-24px)] max-w-[620px] -translate-x-1/2 -translate-y-1/2 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[22px] border border-[#e2e8f0] bg-white shadow-[0_24px_72px_rgba(15,23,42,0.24)] focus:outline-none" onEscapeKeyDown={(event) => { if (isExporting && !isExportQueued) event.preventDefault(); }} onPointerDownOutside={(event) => { if (isExporting && !isExportQueued) event.preventDefault(); }}>
           <div className="flex items-start justify-between gap-4 border-b border-[#e2e8f0] px-5 py-4">
             <div className="grid gap-1"><Dialog.Title className="text-lg font-bold text-[#0f172a]">{isPreparingExport ? "다운로드 정보를 준비하는 중입니다" : downloadResult ? "다운로드를 시작했어요" : platform === "android" ? "Android 다운로드" : "iOS 다운로드"}</Dialog.Title><Dialog.Description className="text-xs font-medium text-[#64748b]">{isPreparingExport ? "버전 정보와 계정 상태를 확인하고 있습니다." : downloadResult ? "파일을 받은 뒤 아래 순서로 설치하거나 공유해 주세요." : "완성된 테마 파일을 다운로드합니다."}</Dialog.Description></div>
-            <Dialog.Close asChild><button type="button" className="grid size-9 shrink-0 place-items-center rounded-full text-[#64748b] transition hover:bg-[#f1f5f9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-40" disabled={isExporting} aria-label="다운로드 창 닫기"><X size={18} /></button></Dialog.Close>
+            <Dialog.Close asChild><button type="button" className="grid size-9 shrink-0 place-items-center rounded-full text-[#64748b] transition hover:bg-[#f1f5f9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-40" disabled={!canCloseWhileExporting} aria-label="다운로드 창 닫기"><X size={18} /></button></Dialog.Close>
           </div>
           <div className="overflow-y-auto px-5 py-4 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
-            {isExporting ? <div className="grid gap-5 py-4 text-center min-h-56 place-content-center" role="status" aria-live="polite"><span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><Download className="animate-pulse" size={22} aria-hidden="true" /></span><div><p className="text-base font-bold text-[#0f172a]">{getExportNotice(exportMode)}</p><p className="mt-2 text-sm font-medium text-[#64748b]">{steps[Math.min(progressStep, steps.length - 1)]} · {formatElapsedTime(elapsedSeconds)}</p></div><div className="mx-auto h-2 w-56 max-w-full overflow-hidden rounded-full bg-[#e2e8f0]"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#2563eb]" /></div><p className="text-xs font-medium text-[#64748b]">완료될 때까지 이 창을 유지해 주세요.</p></div> : downloadResult ? <DownloadComplete result={downloadResult} /> : isPreparingExport ? <div className="grid min-h-56 place-content-center gap-4 py-4 text-center" role="status" aria-live="polite"><span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><LoaderCircle className="animate-spin" size={22} aria-hidden="true" /></span><div><p className="text-base font-bold text-[#0f172a]">다운로드 정보를 준비하는 중입니다</p><p className="mt-2 text-sm font-medium text-[#64748b]">버전 정보를 불러오고 계정 상태를 확인하고 있습니다.</p></div></div> : preparationError ? <div className="grid min-h-56 place-content-center gap-3 py-4 text-center" role="alert"><span className="mx-auto grid size-12 place-items-center rounded-full bg-[#fef2f2] text-[#dc2626]"><X size={22} aria-hidden="true" /></span><div><p className="text-base font-bold text-[#0f172a]">다운로드 정보를 준비하지 못했습니다</p><p className="mt-2 max-w-md text-sm font-medium leading-6 text-[#64748b]">{preparationError}</p></div></div> : <>
+            {isExporting ? (
+              <div className="grid min-h-56 place-content-center gap-5 py-4 text-center" role="status" aria-live="polite">
+                <span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><Download className="animate-pulse" size={22} aria-hidden="true" /></span>
+                <div>
+                  <p className="text-base font-bold text-[#0f172a]">{getExportNotice(exportMode)}</p>
+                  <p className="mt-2 text-sm font-medium text-[#64748b]">{steps[Math.min(progressStep, steps.length - 1)]} · {formatElapsedTime(elapsedSeconds)}</p>
+                </div>
+                <div className="mx-auto h-2 w-56 max-w-full overflow-hidden rounded-full bg-[#e2e8f0]"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#2563eb]" /></div>
+                {waitNotice ? <p className="rounded-xl border border-[#dbeafe] bg-[#f8fbff] px-3 py-2 text-xs font-semibold leading-5 text-[#36577f]">{waitNotice}</p> : null}
+                <p className="text-xs font-medium leading-5 text-[#64748b]">{isExportQueued ? "작업이 접수되었습니다. 이 창을 닫아도 내보내기는 계속 진행되며, 마이페이지에서 상태를 확인할 수 있습니다." : platform === "ios" ? "파일 생성이 끝날 때까지 이 창을 유지해 주세요." : "작업 접수 중에는 이 창을 유지해 주세요."}</p>
+              </div>
+            ) : downloadResult ? <DownloadComplete result={downloadResult} /> : isPreparingExport ? <div className="grid min-h-56 place-content-center gap-4 py-4 text-center" role="status" aria-live="polite"><span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><LoaderCircle className="animate-spin" size={22} aria-hidden="true" /></span><div><p className="text-base font-bold text-[#0f172a]">다운로드 정보를 준비하는 중입니다</p><p className="mt-2 text-sm font-medium text-[#64748b]">버전 정보를 불러오고 계정 상태를 확인하고 있습니다.</p></div></div> : preparationError ? <div className="grid min-h-56 place-content-center gap-3 py-4 text-center" role="alert"><span className="mx-auto grid size-12 place-items-center rounded-full bg-[#fef2f2] text-[#dc2626]"><X size={22} aria-hidden="true" /></span><div><p className="text-base font-bold text-[#0f172a]">다운로드 정보를 준비하지 못했습니다</p><p className="mt-2 max-w-md text-sm font-medium leading-6 text-[#64748b]">{preparationError}</p></div></div> : <>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label={platform === "android" ? "앱 이름" : "테마 이름"} value={exportName} disabled={isExporting} error={exportNameError} onChange={onNameChange} />
                 <div className="flex items-start gap-3 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 text-[#1e3a8a] sm:col-span-2"><ShieldCheck className="mt-0.5 shrink-0" size={17} aria-hidden="true" /><div>{platform === "android" ? <><p className="text-sm font-bold">고유 앱 ID 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 applicationId를 서버에서 생성합니다.</p></> : <><p className="text-sm font-bold">고유 테마 identifier 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 identifier를 서버에서 생성하고 CSS에 적용합니다.</p></>}</div></div>
@@ -52,7 +65,7 @@ export function ExportDialog({
               <p className="mt-3 text-xs font-medium leading-5 text-[#64748b]">{persistenceNotice.browserDetailed} {persistenceNotice.exportTemporary} <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2563eb] underline underline-offset-2">자세히 보기</Link></p>
             </>}
           </div>
-          <div className="flex items-center justify-end gap-2 border-t border-[#e2e8f0] bg-white px-5 py-4"><button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={isExporting}>{downloadResult ? "닫기" : "취소"}</button>{preparationError ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white" onClick={onRetryPreparation}>다시 시도</button> : !isPreparingExport && !downloadResult ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit} disabled={isExporting || isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}>{isExporting ? "다운로드 준비 중…" : ctaLabel}</button> : null}</div>
+          <div className="flex items-center justify-end gap-2 border-t border-[#e2e8f0] bg-white px-5 py-4"><button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={!canCloseWhileExporting}>{downloadResult || isExportQueued ? "닫기" : "취소"}</button>{preparationError ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white" onClick={onRetryPreparation}>다시 시도</button> : !isPreparingExport && !downloadResult && !isExporting ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit} disabled={isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}>{ctaLabel}</button> : null}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

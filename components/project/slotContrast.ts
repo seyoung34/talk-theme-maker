@@ -22,6 +22,7 @@ type ContrastContext = {
   templateId: ThemeTemplateId;
   template: ThemeTemplate;
   imageColorPalette: ImageColorPalette | null;
+  effectiveBackgrounds?: Partial<Record<ThemeResourceRole, string>>;
 };
 
 export function buildSlotContrastWarnings(context: ContrastContext) {
@@ -109,7 +110,7 @@ function getMinimumContrastRatio(role: ThemeResourceRole) {
 }
 
 function getContrastBackground(role: ThemeResourceRole, context: ContrastContext) {
-  if (["tab_light_banner_badge_background_color", "tab_banner_badge_background_color", "direct_share_button_color", "chat_send_button_color", "chat_send_highlighted_button_color"].includes(role)) {
+  if (["tab_light_banner_badge_background_color", "tab_banner_badge_background_color", "direct_share_button_color"].includes(role)) {
     return { color: "#FFFFFF", label: "흰색 텍스트" };
   }
 
@@ -123,13 +124,17 @@ function getContrastBackground(role: ThemeResourceRole, context: ContrastContext
   if (role === "tab_text_color") return { color: getColor("tab_background", context.template.defaults.tabBackground, context), label: "탭바 배경" };
   if (role.startsWith("passcode_keypad_")) return { color: getColor("passcode_keypad_background_color", context.template.defaults.mainBackground, context), label: "키패드 배경" };
   if (role === "passcode_color" || role === "passcode_pattern_line_color") return { color: getColor("passcode_background_color", context.template.defaults.mainBackground, context), label: "잠금화면 배경" };
+  if (role === "chat_send_button_color") return { color: getColor("chat_send_icon_color", context.template.defaults.mainTitle, context), label: "전송 아이콘" };
+  if (role === "chat_send_icon_color") return { color: getColor("chat_send_button_color", context.template.defaults.chatSendButton, context), label: "전송 버튼 배경" };
+  if (role === "chat_send_highlighted_button_color") return { color: getColor("chat_send_highlighted_icon_color", context.template.defaults.mainTitle, context), label: "강조 전송 아이콘" };
+  if (role === "chat_send_highlighted_icon_color") return { color: getColor("chat_send_highlighted_button_color", context.template.defaults.chatSendButton, context), label: "강조 전송 버튼 배경" };
   if (role.startsWith("chat_") && role.includes("button")) return { color: getColor("chat_input_background_color", context.template.defaults.chatInputBackground, context), label: "입력창 배경" };
   if (role === "chat_input_text_color" || role === "chat_menu_icon_color") return { color: getColor("chat_input_background_color", context.template.defaults.chatInputBackground, context), label: "입력창 배경" };
   // 읽지 않음 숫자는 말풍선 바깥, 채팅방 배경 위에 그려진다. 연동을 끄고 직접 지정했을 때
   // 배경에 묻히면 여기서 경고가 뜬다.
   if (role === "chat_unread_count_color") return { color: getColor("chat_background_color", context.template.defaults.chatBackground, context), label: "채팅방 배경" };
-  if (role === "chat_bubble_me_color") return { color: context.template.defaults.myBubble, label: "내 말풍선" };
-  if (role === "chat_bubble_you_color") return { color: context.template.defaults.friendBubble, label: "상대 말풍선" };
+  if (role === "chat_bubble_me_color") return { color: context.effectiveBackgrounds?.[role] ?? context.template.defaults.myBubble, label: "내 말풍선 표면" };
+  if (role === "chat_bubble_you_color") return { color: context.effectiveBackgrounds?.[role] ?? context.template.defaults.friendBubble, label: "상대 말풍선 표면" };
   if (role === "direct_share_text_color") return { color: getColor("direct_share_background_color", context.template.defaults.friendBubble, context), label: "바로 공유 배경" };
   if (role === "notification_text_color") return { color: getColor("notification_background_color", context.template.defaults.friendBubble, context), label: "알림 배경" };
   if (role === "feature_primary_color") return { color: getColor("main_body_secondary_cell_color", context.template.defaults.mainBackground, context), label: "더보기 배경" };

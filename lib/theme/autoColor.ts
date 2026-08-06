@@ -64,3 +64,23 @@ export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context
     slots.flatMap((slot) => slot.autoColorRecipe && values[slot.autoColorRecipe] ? [[slot.id, values[slot.autoColorRecipe]]] : []),
   ) as Record<string, string>;
 }
+
+export type BubbleTextPaletteContext = {
+  mePalette: ImageColorPalette | null;
+  youPalette: ImageColorPalette | null;
+  myBubbleSurface: string;
+  friendBubbleSurface: string;
+};
+
+export function buildBubbleTextRecommendations(slots: ThemeAssetSlot[], context: BubbleTextPaletteContext) {
+  const meSurface = context.mePalette?.average ?? themeColorRgbHex(context.myBubbleSurface, "#FFE27A");
+  const youSurface = context.youPalette?.average ?? themeColorRgbHex(context.friendBubbleSurface, "#FFFFFF");
+  const values: Partial<Record<ThemeAutoColorRecipe, string>> = {
+    "bubble-me-text": readableThemeForeground(meSurface),
+    "bubble-you-text": readableThemeForeground(youSurface),
+  };
+
+  return Object.fromEntries(
+    slots.flatMap((slot) => slot.autoColorRecipe && values[slot.autoColorRecipe] ? [[slot.id, values[slot.autoColorRecipe]]] : []),
+  ) as Record<string, string>;
+}

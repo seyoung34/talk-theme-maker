@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendExportFilesToFormData, getExportPollIntervalMs } from "@/components/project/exportClient";
+import { appendExportFilesToFormData, getExportPollIntervalMs, getExportWaitNotice, isLongRunningAndroidExportMode } from "@/components/project/exportClient";
 
 describe("appendExportFilesToFormData", () => {
   it("같은 blob을 쓰는 경로들은 하나의 field를 공유한다", () => {
@@ -63,5 +63,20 @@ describe("getExportPollIntervalMs", () => {
     expect(getExportPollIntervalMs(119_000)).toBe(5_000);
     expect(getExportPollIntervalMs(120_000)).toBe(10_000);
     expect(getExportPollIntervalMs(600_000)).toBe(10_000);
+  });
+});
+
+describe("내보내기 소요 시간 안내", () => {
+  it("APK 계열만 장시간 작업으로 안내한다", () => {
+    expect(isLongRunningAndroidExportMode("apk")).toBe(true);
+    expect(isLongRunningAndroidExportMode("apk-zip")).toBe(true);
+    expect(isLongRunningAndroidExportMode("project")).toBe(false);
+    expect(isLongRunningAndroidExportMode("ktheme")).toBe(false);
+  });
+
+  it("플랫폼별 안내가 현재 비즈니스 약속과 맞는다", () => {
+    expect(getExportWaitNotice("apk")).toContain("1분 30초~2분");
+    expect(getExportWaitNotice("ktheme")).toContain("창을 유지");
+    expect(getExportWaitNotice("project")).toBeNull();
   });
 });

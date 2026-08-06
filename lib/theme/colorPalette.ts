@@ -1,4 +1,5 @@
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
+import { themeColorToCss } from "@/lib/theme/color";
 
 export type ImageColorPalette = {
   representative: string;
@@ -8,7 +9,7 @@ export type ImageColorPalette = {
   accent: string;
 };
 
-export async function extractThemeImagePalette(file: ThemeProjectFile): Promise<ImageColorPalette> {
+export async function extractThemeImagePalette(file: ThemeProjectFile, options: { backgroundColor?: string } = {}): Promise<ImageColorPalette> {
   const blob = file.file ?? (file.sourceUrl ? await fetch(file.sourceUrl).then((response) => {
     if (!response.ok) throw new Error("배경 이미지를 불러오지 못했습니다.");
     return response.blob();
@@ -24,6 +25,10 @@ export async function extractThemeImagePalette(file: ThemeProjectFile): Promise<
     canvas.height = height;
     const context = canvas.getContext("2d", { willReadFrequently: true });
     if (!context) throw new Error("이미지 색상을 분석할 수 없습니다.");
+    if (options.backgroundColor) {
+      context.fillStyle = themeColorToCss(options.backgroundColor);
+      context.fillRect(0, 0, width, height);
+    }
     context.drawImage(bitmap, 0, 0, width, height);
     const pixels = context.getImageData(0, 0, width, height).data;
     const topRows = Math.max(1, Math.ceil(height * 0.15));

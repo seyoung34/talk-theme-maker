@@ -1,4 +1,5 @@
 import type { EditorSystemTemplateMetadata, ThemeDraft } from "@/lib/theme/project/draft";
+import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 
 /**
  * 편집 초안의 내용 서명.
@@ -12,12 +13,18 @@ import type { EditorSystemTemplateMetadata, ThemeDraft } from "@/lib/theme/proje
  * 제거하되(오탐 방지), 값 비교 자체는 넓게 잡는다(누락 방지).
  */
 export function createThemeDraftSignature(draft: ThemeDraft): string {
+  const userAuthoredColors = Object.fromEntries(
+    Object.entries(draft.colors).filter(([slotId]) => draft.candidateSelections[slotId] !== autoMainPaletteCandidateId),
+  );
+
   return stableStringify({
     // File 자체는 비교할 수 없다. 업로드 id는 슬롯·시각으로 새로 만들어지므로 추가·삭제·재편집을 모두 반영한다.
     uploads: collectUserAuthoredUploadIds(draft.uploads),
     // 어떤 원격 에셋을 쓰는지는 사용자 선택이다. 사용자가 직접 올리면 해당 슬롯의 ref가 제거된다.
     remoteUploadRefs: mapRecord(draft.remoteUploadRefs, (entries) => entries.map((entry) => entry.id)),
-    colors: draft.colors,
+    // 자동 팔레트가 이미지 분석을 마친 뒤 값을 다시 써도 사용자 편집으로 세지 않는다.
+    // 수동 색상은 자동 후보 연결이 끊기므로 그대로 서명에 남는다.
+    colors: userAuthoredColors,
     candidateSelections: draft.candidateSelections,
     bubbleGeometry: draft.bubbleGeometry,
     bubbleMarkers: draft.bubbleMarkers,

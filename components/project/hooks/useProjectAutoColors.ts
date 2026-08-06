@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 import { buildSlotContrastWarnings } from "@/components/project/slotContrast";
 import { getResolvedColor, type SlotCandidateSelections, type SlotColors } from "@/components/project/projectModel";
 import { findBestFile } from "@/components/preview/previewResourceUtils";
-import { autoMainPaletteCandidateId, buildMainPaletteRecommendations } from "@/lib/theme/autoColor";
+import { autoMainPaletteCandidateId, buildBubbleTextRecommendations, buildMainPaletteRecommendations } from "@/lib/theme/autoColor";
 import { extractThemeImagePalette, type ImageColorPalette } from "@/lib/theme/colorPalette";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -35,8 +35,6 @@ export function useProjectAutoColors({
 }: UseProjectAutoColorsOptions) {
   const mainBackgroundFile = useMemo(() => findBestFile(analysis, "main_background"), [analysis]);
   const chatBackgroundFile = useMemo(() => findBestFile(analysis, "chat_background"), [analysis]);
-  const { palette: activeImageColorPalette, error: imageColorPaletteError, pending: mainPalettePending } = useThemeImagePalette(mainBackgroundFile);
-  const { palette: activeChatImagePalette, error: chatImageColorPaletteError, pending: chatPalettePending } = useThemeImagePalette(chatBackgroundFile);
   const mainBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "main_background_color"), [slots]);
   const chatBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "chat_background_color"), [slots]);
   const resolvedChatBackground = chatBackgroundColorSlot
@@ -45,9 +43,28 @@ export function useProjectAutoColors({
   const resolvedMainBackground = mainBackgroundColorSlot
     ? getResolvedColor(mainBackgroundColorSlot, colors, candidateSelections, templateId, activeTemplate, slots) ?? activeTemplate.defaults.mainBackground
     : activeTemplate.defaults.mainBackground;
+  const { palette: activeImageColorPalette, error: imageColorPaletteError, pending: mainPalettePending } = useThemeImagePalette(mainBackgroundFile);
+  const { palette: activeChatImagePalette, error: chatImageColorPaletteError, pending: chatPalettePending } = useThemeImagePalette(chatBackgroundFile);
+  const bubbleMeFile = useMemo(() => findBestFile(analysis, "bubble_me_1"), [analysis]);
+  const bubbleYouFile = useMemo(() => findBestFile(analysis, "bubble_you_1"), [analysis]);
+  const bubbleSurfaceBackground = activeChatImagePalette?.average ?? resolvedChatBackground;
+  const { palette: activeBubbleMePalette, error: bubbleMePaletteError, pending: bubbleMePalettePending } = useThemeImagePalette(bubbleMeFile, bubbleSurfaceBackground);
+  const { palette: activeBubbleYouPalette, error: bubbleYouPaletteError, pending: bubbleYouPalettePending } = useThemeImagePalette(bubbleYouFile, bubbleSurfaceBackground);
+  const bubblePalettePending = bubbleMePalettePending || bubbleYouPalettePending;
+  const bubbleImageColorPaletteError = bubbleMePaletteError ?? bubbleYouPaletteError;
+
+  const bubbleColorRecommendations = useMemo(
+    () => buildBubbleTextRecommendations(slots, {
+      mePalette: activeBubbleMePalette,
+      youPalette: activeBubbleYouPalette,
+      myBubbleSurface: activeTemplate.defaults.myBubble,
+      friendBubbleSurface: activeTemplate.defaults.friendBubble,
+    }),
+    [activeBubbleMePalette, activeBubbleYouPalette, activeTemplate.defaults.friendBubble, activeTemplate.defaults.myBubble, slots],
+  );
 
   const mainColorRecommendations = useMemo(
-    () => buildMainPaletteRecommendations(slots, {
+    () => ({ ...buildMainPaletteRecommendations(slots, {
       imageActive: Boolean(mainBackgroundFile),
       palette: activeImageColorPalette,
       currentBackground: resolvedMainBackground,
@@ -56,8 +73,8 @@ export function useProjectAutoColors({
       chatImageActive: Boolean(chatBackgroundFile),
       chatPalette: activeChatImagePalette,
       currentChatBackground: resolvedChatBackground,
-    }),
-    [activeChatImagePalette, activeImageColorPalette, activeTemplate.accent, candidateSelections, chatBackgroundFile, mainBackgroundColorSlot, mainBackgroundFile, resolvedChatBackground, resolvedMainBackground, slots],
+    }), ...bubbleColorRecommendations }),
+    [activeChatImagePalette, activeImageColorPalette, activeTemplate.accent, bubbleColorRecommendations, candidateSelections, chatBackgroundFile, mainBackgroundColorSlot, mainBackgroundFile, resolvedChatBackground, resolvedMainBackground, slots],
   );
 
   const contrastWarnings = useMemo(
@@ -69,8 +86,12 @@ export function useProjectAutoColors({
       templateId,
       template: activeTemplate,
       imageColorPalette: activeImageColorPalette,
+      effectiveBackgrounds: {
+        chat_bubble_me_color: activeBubbleMePalette?.average ?? activeTemplate.defaults.myBubble,
+        chat_bubble_you_color: activeBubbleYouPalette?.average ?? activeTemplate.defaults.friendBubble,
+      },
     }),
-    [activeImageColorPalette, activeTemplate, candidateSelections, colors, platform, slots, templateId],
+    [activeBubbleMePalette, activeBubbleYouPalette, activeImageColorPalette, activeTemplate, candidateSelections, colors, platform, slots, templateId],
   );
 
   useEffect(() => {
@@ -80,7 +101,7 @@ export function useProjectAutoColors({
     // "팔레트가 없다"로 판정하면 안 된다. 분석이 실패한 이미지는 팔레트가 영영 null이라
     // 자동 맞춤 전체가 멈춰 버린다 — 채팅방 이미지 하나가 깨지면 메인 색상까지 갱신이
     // 끊겼다. 실패는 대기가 아니므로 그대로 진행하고, 레시피가 현재 배경색으로 폴백한다.
-    if (mainPalettePending || chatPalettePending) return;
+    if (mainPalettePending || chatPalettePending || bubblePalettePending) return;
     const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && candidateSelections[slot.id] === autoMainPaletteCandidateId && mainColorRecommendations[slot.id]);
     if (!linkedSlots.length) return;
     setColors((current) => {
@@ -89,7 +110,7 @@ export function useProjectAutoColors({
       for (const slot of linkedSlots) next[slot.id] = mainColorRecommendations[slot.id];
       return next;
     });
-  }, [candidateSelections, chatPalettePending, mainColorRecommendations, mainPalettePending, setColors, slots]);
+  }, [bubblePalettePending, candidateSelections, chatPalettePending, mainColorRecommendations, mainPalettePending, setColors, slots]);
 
   useEffect(() => {
     if (mainBackgroundFile || !mainBackgroundColorSlot) return;
@@ -104,6 +125,8 @@ export function useProjectAutoColors({
 
   return {
     activeImageColorPalette,
+    bubbleImageColorPaletteError,
+    bubblePalettePending,
     chatImageColorPaletteError,
     chatPalettePending,
     contrastWarnings,
@@ -129,11 +152,11 @@ function getThemeFilePaletteKey(file: ThemeProjectFile) {
  * 파일이 바뀌면 이전 팔레트를 즉시 버린다. 남겨 두면 새 이미지가 준비되는 동안 옛 이미지의
  * 색으로 한 번 계산돼 화면이 튄다. 어느 파일에서 나온 값인지는 key로 확인한다.
  */
-function useThemeImagePalette(file: ThemeProjectFile | undefined) {
+function useThemeImagePalette(file: ThemeProjectFile | undefined, backgroundColor?: string) {
   const [palette, setPalette] = useState<ImageColorPalette | null>(null);
   const [sourceKey, setSourceKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const paletteKey = file ? getThemeFilePaletteKey(file) : null;
+  const paletteKey = file ? `${getThemeFilePaletteKey(file)}|background:${backgroundColor ?? "transparent"}` : null;
   // `file`은 매 렌더에 새 래퍼로 다시 만들어질 수 있어도, 실제 이미지가 그대로면
   // `paletteKey`는 그대로다. 이 ref로 최신 래퍼를 들고 있고, effect 의존성은 key에만
   // 걸어서 같은 이미지에 대해 추출을 다시 돌리지 않는다.
@@ -148,7 +171,7 @@ function useThemeImagePalette(file: ThemeProjectFile | undefined) {
     const current = fileRef.current;
     if (!current) return () => { active = false; };
 
-    extractThemeImagePalette(current)
+    extractThemeImagePalette(current, backgroundColor ? { backgroundColor } : undefined)
       .then((next) => {
         if (!active) return;
         setPalette(next);
@@ -161,7 +184,7 @@ function useThemeImagePalette(file: ThemeProjectFile | undefined) {
         setError(cause instanceof Error ? cause.message : "배경 이미지 색상을 분석하지 못했습니다.");
       });
     return () => { active = false; };
-  }, [paletteKey]);
+  }, [backgroundColor, paletteKey]);
 
   // `pending`은 "이 파일의 분석이 아직 안 끝났다"만 뜻한다. 실패는 끝난 것이다 — 실패를
   // 대기로 세면 호출부가 영원히 기다린다.

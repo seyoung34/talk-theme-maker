@@ -37,7 +37,10 @@ export type ThemeAutoColorRecipe =
   | "accent-surface"
   | "accent-surface-pressed"
   // 채팅방 배경은 메인 배경과 다른 이미지를 쓴다. 그 이미지의 평균색으로 맞춘다.
-  | "chat-background-average";
+  | "chat-background-average"
+  // 말풍선 이미지 표면의 밝기를 분석해 안쪽 메시지 글자색을 맞춘다.
+  | "bubble-me-text"
+  | "bubble-you-text";
 
 export type ThemeSectionDefinition = {
   id: ThemeSection;

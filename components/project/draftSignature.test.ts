@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEditorSignature, createThemeDraftSignature } from "@/components/project/draftSignature";
+import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { createEmptyThemeDraft, type EditorSystemTemplateMetadata, type ThemeDraft } from "@/lib/theme/project/draft";
 
 function createFile(name: string, size = 3) {
@@ -46,6 +47,19 @@ describe("createThemeDraftSignature", () => {
     const before = createEmptyThemeDraft();
     const after = { ...before, colors: { "slot-a": "#ff0000" } };
     expect(createThemeDraftSignature(after)).not.toBe(createThemeDraftSignature(before));
+  });
+
+  it("자동 색상 분석 결과는 사용자 변경으로 세지 않지만 수동값은 잡는다", () => {
+    const before = {
+      ...createEmptyThemeDraft(),
+      candidateSelections: { "auto-slot": autoMainPaletteCandidateId },
+      colors: { "auto-slot": "#111111" },
+    };
+    const automaticUpdate = { ...before, colors: { "auto-slot": "#FFFFFF" } };
+    const manualUpdate = { ...automaticUpdate, candidateSelections: { "auto-slot": "auto-slot:base" } };
+
+    expect(createThemeDraftSignature(automaticUpdate)).toBe(createThemeDraftSignature(before));
+    expect(createThemeDraftSignature(manualUpdate)).not.toBe(createThemeDraftSignature(before));
   });
 
   it("후보 선택 변경을 잡는다", () => {

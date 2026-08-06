@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMainPaletteRecommendations, type MainPaletteContext } from "@/lib/theme/autoColor";
+import { buildBubbleTextRecommendations, buildMainPaletteRecommendations, type MainPaletteContext } from "@/lib/theme/autoColor";
 import { themeColorContrast } from "@/lib/theme/color";
 import { getThemeSlots } from "@/lib/theme/templates";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
@@ -114,5 +114,36 @@ describe("iOS 메인 배경 연동", () => {
     expect(result[iosTitleSlot.id]).toBe("#FFFFFF");
     expect(result[iosDescriptionSlot.id]).toBe("#B1B1B1");
     expect(result[iosTabBackgroundSlot.id]).toBe("#202020");
+  });
+});
+
+describe("말풍선 텍스트 자동 맞춤", () => {
+  const bubbleMeSlot = slots.find((slot) => slot.role === "chat_bubble_me_color")!;
+  const bubbleYouSlot = slots.find((slot) => slot.role === "chat_bubble_you_color")!;
+
+  it("각 말풍선 표면에서 읽을 수 있는 텍스트 색을 추천한다", () => {
+    const result = buildBubbleTextRecommendations(slots, {
+      mePalette: palette("#202020"),
+      youPalette: palette("#F7F7F7"),
+      myBubbleSurface: "#FFE27A",
+      friendBubbleSurface: "#FFFFFF",
+    });
+
+    expect(result[bubbleMeSlot.id]).toBe("#FFFFFF");
+    expect(result[bubbleYouSlot.id]).toBe("#1F2937");
+    expect(themeColorContrast(result[bubbleMeSlot.id], "#202020")).toBeGreaterThanOrEqual(4.5);
+    expect(themeColorContrast(result[bubbleYouSlot.id], "#F7F7F7")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("이미지 분석이 없으면 템플릿 말풍선 표면을 기준으로 폴백한다", () => {
+    const result = buildBubbleTextRecommendations(slots, {
+      mePalette: null,
+      youPalette: null,
+      myBubbleSurface: "#202020",
+      friendBubbleSurface: "#F7F7F7",
+    });
+
+    expect(themeColorContrast(result[bubbleMeSlot.id], "#202020")).toBeGreaterThanOrEqual(4.5);
+    expect(themeColorContrast(result[bubbleYouSlot.id], "#F7F7F7")).toBeGreaterThanOrEqual(4.5);
   });
 });

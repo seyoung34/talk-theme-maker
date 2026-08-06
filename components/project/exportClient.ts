@@ -42,6 +42,16 @@ export function getExportNotice(mode: ExportMode) {
   return "Android APK를 빌드하는 중입니다.";
 }
 
+export function isLongRunningAndroidExportMode(mode: ExportMode) {
+  return mode === "apk" || mode === "apk-zip";
+}
+
+export function getExportWaitNotice(mode: ExportMode) {
+  if (isLongRunningAndroidExportMode(mode)) return "Android APK 내보내기는 환경에 따라 약 1분 30초~2분이 걸릴 수 있습니다.";
+  if (mode === "ktheme" || mode === "theme-zip") return "iOS는 파일 생성이 끝날 때까지 이 창을 유지해 주세요.";
+  return null;
+}
+
 // 클라이언트 측 상한. 서버 워치독이 최종 방어선이다.
 const exportPollTimeoutMs = 12 * 60 * 1000;
 
