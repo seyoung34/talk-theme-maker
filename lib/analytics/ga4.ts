@@ -8,9 +8,53 @@ const acquisitionStorageKey = "talktheme:analytics-acquisition:v1";
 const funnelContextStorageKey = "talktheme:analytics-funnel-context:v1";
 const allowedUtmValues = {
   utm_source: new Set(["instagram", "naver", "google", "tiktok", "youtube", "x", "community"]),
-  utm_medium: new Set(["social", "search", "video", "community"]),
+  utm_medium: new Set(["social", "search", "organic", "video", "community", "referral"]),
   utm_campaign: new Set(["instagram_personal_launch", "naver_search", "google_search", "tiktok_launch", "youtube_launch", "x_launch", "community_launch"]),
 };
+
+/**
+ * GA4 기본 채널 그룹이 알아듣는 매체 값으로 옮긴다.
+ *
+ * `utm_medium`은 자유 라벨이 아니다. GA4는 이 값을 패턴으로 읽어 채널 그룹을 정하고, 규칙에
+ * 없는 값은 전부 `Unassigned`로 떨어뜨린다. 실제로 지난 7일 세션의 최다 구간이 `Unassigned`였다.
+ *
+ *   search    → organic    자연 검색 규칙은 `organic`이다. `search`는 어느 규칙에도 없다.
+ *   community → referral   다른 사이트에서 넘어온 링크. GA4에 커뮤니티라는 채널은 없다.
+ *
+ * 이미 뿌린 링크를 회수할 수 없으므로 **입력은 옛 값도 받고 전송할 때 옮긴다.** 허용 목록에
+ * `organic`·`referral`을 함께 넣어 둔 것은 새 링크가 정식 값을 바로 쓸 수 있게 하기 위해서다.
+ *
+ * GA4는 채널 그룹 규칙을 바꿔 왔다. 채널을 늘릴 때는 실제 속성의 트래픽 획득 보고서에서
+ * 어느 채널로 잡히는지 확인하고 이 표를 갱신한다.
+ */
+const ga4MediumAliases: Record<string, string> = {
+  search: "organic",
+  community: "referral",
+};
+
+function toGa4Medium(medium: string) {
+  return ga4MediumAliases[medium] ?? medium;
+}
+
+/**
+ * `page_location`에 붙일 캠페인 쿼리.
+ *
+ * GA4는 `dl`(document location) 안의 `utm_*`를 읽어 세션 소스·매체·캠페인을 채우고, 그 값으로
+ * 채널 그룹을 정한다. 그런데 이 앱은 쿼리를 통째로 잘라 보내고 있었다 — 로그인 `returnTo`,
+ * 오류 코드처럼 무엇이든 들어올 수 있는 자리라 개인정보가 분석 도구로 새는 것을 막으려는
+ * 조치였지만, UTM까지 함께 잘려 캠페인 귀속이 통째로 끊겼다.
+ *
+ * 그래서 **허용 목록을 통과한 세 값만 다시 조립한다.** 원본 쿼리는 여전히 버리므로 임의 값이
+ * 새어 나갈 여지는 없고, GA4 자동 귀속만 되살아난다.
+ */
+function buildCampaignQuery(acquisition: AcquisitionContext) {
+  const query = new URLSearchParams();
+  if (acquisition.utm_source) query.set("utm_source", acquisition.utm_source);
+  if (acquisition.utm_medium) query.set("utm_medium", toGa4Medium(acquisition.utm_medium));
+  if (acquisition.utm_campaign) query.set("utm_campaign", acquisition.utm_campaign);
+  const value = query.toString();
+  return value ? `?${value}` : "";
+}
 const knownCampaignKeys = new Set(["instagram_personal_launch", "naver_search", "google_search", "tiktok_launch", "youtube_launch", "x_launch", "community_launch"]);
 
 export type AnalyticsConsent = "granted" | "denied";
@@ -149,15 +193,20 @@ export function trackAnalyticsEvent<Name extends AnalyticsEventName>(name: Name,
     saveFunnelContext(params);
   }
   const context = name === "page_view" ? {} : readFunnelContext() ?? {};
+  // `page_view`는 호출부(AnalyticsProvider)가 이미 유입 정보를 params 에 담아 넘긴다.
+  // 여기서 또 넣으면 중복이라 비워 두지만, page_location 에 실을 값은 따로 읽어야 한다.
   const acquisition = name === "page_view" ? {} : getAcquisitionContext(window.location.pathname);
   // GA4 데이터 필터가 읽는 파라미터 이름이다. params 뒤에 둬서 이벤트 쪽에서 덮어쓸 수 없게 한다.
   const trafficType = isInternalTraffic() ? { traffic_type: "internal" } : {};
+  // GA4 는 이 값 안의 utm_* 로 세션 소스·매체·캠페인을 정한다. 원본 쿼리 대신 허용 목록을
+  // 통과한 세 값만 다시 붙인다.
+  const campaignQuery = buildCampaignQuery(getAcquisitionContext(window.location.pathname));
   window.gtag?.("event", name, {
     ...acquisition,
     ...context,
     ...params,
     ...trafficType,
-    page_location: `${window.location.origin}${window.location.pathname}`,
+    page_location: `${window.location.origin}${window.location.pathname}${campaignQuery}`,
   });
 }
 
@@ -170,7 +219,10 @@ export function getAcquisitionContext(pathname: string): AcquisitionContext {
   const context: AcquisitionContext = { landing_page: pathname };
   for (const [key, allowedValues] of Object.entries(allowedUtmValues) as Array<[keyof typeof allowedUtmValues, Set<string>]>) {
     const value = query.get(key)?.trim().toLowerCase();
-    if (value && allowedValues.has(value)) context[key] = value;
+    if (!value || !allowedValues.has(value)) continue;
+    // 저장 시점에 GA4 값으로 옮긴다. 이벤트 파라미터와 page_location 이 서로 다른 매체를
+    // 말하면 두 보고서가 어긋나 원인을 찾기 어려워진다.
+    context[key] = key === "utm_medium" ? toGa4Medium(value) : value;
   }
   const referrerHost = getReferrerHost(document.referrer);
   if (referrerHost) context.referrer_host = referrerHost;

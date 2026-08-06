@@ -73,11 +73,63 @@ describe("GA4 analytics", () => {
   it("keeps expanded UTM values on the allowlist and drops arbitrary values", () => {
     saveAnalyticsConsent("granted");
     window.history.replaceState({}, "", "/?utm_source=naver&utm_medium=search&utm_campaign=naver_search");
-    expect(getAcquisitionContext("/")).toEqual(expect.objectContaining({ utm_source: "naver", utm_medium: "search", utm_campaign: "naver_search" }));
+    // `search`로 들어와도 저장은 GA4가 자연 검색으로 읽는 `organic`으로 한다. 이미 뿌린 링크를
+    // 회수할 수 없으므로 입력은 옛 값을 받되 전송 값만 옮긴다.
+    expect(getAcquisitionContext("/")).toEqual(expect.objectContaining({ utm_source: "naver", utm_medium: "organic", utm_campaign: "naver_search" }));
 
     window.sessionStorage.clear();
     window.history.replaceState({}, "", "/?utm_source=untrusted&utm_medium=anything&utm_campaign=free-text");
     expect(getAcquisitionContext("/")).not.toEqual(expect.objectContaining({ utm_source: expect.anything(), utm_medium: expect.anything(), utm_campaign: expect.anything() }));
+  });
+
+  /**
+   * GA4는 `page_location` 안의 `utm_*`를 읽어 세션 소스·매체·캠페인을 채우고, 그 값으로 채널
+   * 그룹을 정한다. 예전에는 여기서 쿼리를 통째로 잘라 보내 캠페인 귀속이 끊겨 있었고,
+   * 운영 속성에서 `Unassigned`가 최다 세션이었다. 그런데 이 파일에 `page_location` 검증이
+   * 하나도 없어 결함이 그대로 통과했다.
+   */
+  it("carries approved campaign values in page_location so GA4 can attribute the session", () => {
+    saveAnalyticsConsent("granted");
+    window.history.replaceState({}, "", "/template?utm_source=instagram&utm_medium=social&utm_campaign=instagram_personal_launch");
+    trackAnalyticsEvent("template_started", { template_key: "basic", template_source: "base", platform: "android" });
+
+    const [, , params] = gtag.mock.calls.at(-1)!;
+    expect(params.page_location).toContain("utm_source=instagram");
+    expect(params.page_location).toContain("utm_medium=social");
+    expect(params.page_location).toContain("utm_campaign=instagram_personal_launch");
+  });
+
+  it("rebuilds page_location instead of forwarding the original query", () => {
+    // 원본 쿼리에는 로그인 returnTo·오류 코드처럼 무엇이든 들어올 수 있다. 그대로 보내면
+    // 개인정보가 분석 도구로 샌다. 허용 목록을 통과한 값만 다시 조립해야 한다.
+    saveAnalyticsConsent("granted");
+    window.history.replaceState({}, "", "/template?utm_source=instagram&utm_medium=social&returnTo=%2Faccount&token=secret");
+    trackAnalyticsEvent("template_started", { template_key: "basic", template_source: "base", platform: "android" });
+
+    const [, , params] = gtag.mock.calls.at(-1)!;
+    expect(params.page_location).toContain("utm_source=instagram");
+    expect(params.page_location).not.toContain("returnTo");
+    expect(params.page_location).not.toContain("token");
+  });
+
+  it("sends no campaign query when the visit has no approved UTM", () => {
+    saveAnalyticsConsent("granted");
+    window.history.replaceState({}, "", "/template");
+    trackAnalyticsEvent("template_started", { template_key: "basic", template_source: "base", platform: "android" });
+
+    const [, , params] = gtag.mock.calls.at(-1)!;
+    expect(params.page_location).not.toContain("?");
+  });
+
+  it("rewrites the medium GA4 does not recognise", () => {
+    // `search`는 GA4 채널 규칙에 없어 Unassigned 로 떨어진다. 자연 검색 규칙은 `organic`이다.
+    saveAnalyticsConsent("granted");
+    window.history.replaceState({}, "", "/?utm_source=naver&utm_medium=search&utm_campaign=naver_search");
+    trackAnalyticsEvent("template_started", { template_key: "basic", template_source: "base", platform: "android" });
+
+    const [, , params] = gtag.mock.calls.at(-1)!;
+    expect(params.page_location).toContain("utm_medium=organic");
+    expect(params.page_location).not.toContain("utm_medium=search");
   });
 
   it("tags events from a device marked as internal traffic", () => {
