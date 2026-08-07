@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Clock3, Eye, Gift, Hash, Info, Menu, SendHorizontal, Plus, Search, Settings, Smile, Trash2, UserPlus, UserRound, X } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
+import InAppBrowserNotice from "@/components/common/InAppBrowserNotice";
 import BubbleCanvasPreview from "@/components/preview/BubbleCanvasPreview";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
@@ -79,6 +80,7 @@ export default function TemplateGalleryClient() {
   const [isUserTemplatePreviewLoading, setIsUserTemplatePreviewLoading] = useState(false);
   const [isUserTemplateInfoOpen, setIsUserTemplateInfoOpen] = useState(false);
   const [recentWork, setRecentWork] = useState<EditorAutosaveDraft | null>(null);
+  const [isRecentWorkResolved, setIsRecentWorkResolved] = useState(false);
   const [recentWorkVisual, setRecentWorkVisual] = useState<TemplatePreviewVisual | null>(null);
   const [pendingTemplateStart, setPendingTemplateStart] = useState<PendingTemplateStart | null>(null);
   const userTemplateCardPreviewUrlsRef = useRef<Record<string, Record<string, string>>>({});
@@ -159,6 +161,9 @@ export default function TemplateGalleryClient() {
       .catch((error) => {
         console.error(error);
         if (active) setNotice("최근 작업을 불러오지 못했습니다.");
+      })
+      .finally(() => {
+        if (active) setIsRecentWorkResolved(true);
       });
     return () => {
       active = false;
@@ -422,6 +427,7 @@ export default function TemplateGalleryClient() {
           </p>
         </section>
 
+        <InAppBrowserNotice ready={isRecentWorkResolved} hasRecentWork={Boolean(recentWork)} />
 
 
         {notice ? (

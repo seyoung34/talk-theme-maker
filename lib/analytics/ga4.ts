@@ -1,6 +1,7 @@
 import type { ExportFailureReason } from "@/lib/theme/export/failureReason";
 
 export const analyticsConsentStorageKey = "talktheme:analytics-consent:v1";
+export const analyticsConsentChangedEvent = "talktheme:analytics-consent-changed";
 const analyticsConsentCookieName = "talktheme_analytics_consent";
 export const analyticsInternalStorageKey = "talktheme:analytics-internal:v1";
 const analyticsInternalCookieName = "talktheme_analytics_internal";
@@ -142,6 +143,7 @@ export function saveAnalyticsConsent(consent: AnalyticsConsent) {
     // Privacy extensions can block localStorage. The first-party cookie below is the fallback.
   }
   document.cookie = `${analyticsConsentCookieName}=${consent}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
+  window.dispatchEvent(new Event(analyticsConsentChangedEvent));
 }
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   ArrowRight,
   ChevronLeft,
@@ -332,6 +332,7 @@ export default function LandingClient() {
             <div className="flex justify-center mt-6 sm:mt-8">
               <Link
                 href="/template"
+                onClick={preserveUtmNavigation}
                 className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#fee500] px-8 py-4 text-base font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8]"
               >
                 내 테마 만들기
@@ -648,6 +649,7 @@ function ShowcaseSection() {
         <Reveal delay={200} className="mt-8 flex justify-center px-5 sm:mt-14 md:px-8">
           <Link
             href="/template"
+            onClick={preserveUtmNavigation}
             className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#fee500] px-7 py-4 text-base font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8]"
           >
             나도 이렇게 만들기
@@ -716,7 +718,10 @@ function HeroActions({ viewportGroup }: { viewportGroup: "mobile" | "desktop" })
       </Link>
       <Link
         href="/template"
-        onClick={() => trackAnalyticsEvent("landing_primary_cta_clicked", { viewport_group: viewportGroup, destination: "template" })}
+        onClick={(event) => {
+          preserveUtmNavigation(event);
+          trackAnalyticsEvent("landing_primary_cta_clicked", { viewport_group: viewportGroup, destination: "template" });
+        }}
         className="group inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[#fee500] px-2 py-3.5 text-[14px] font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:gap-2 sm:px-4 sm:text-[15px] lg:flex-none lg:px-6 lg:py-4 lg:text-base"
       >
         내 테마 만들기
@@ -724,6 +729,24 @@ function HeroActions({ viewportGroup }: { viewportGroup: "mobile" | "desktop" })
       </Link>
     </div>
   );
+}
+
+/**
+ * `/r/*`가 첫 랜딩에서 붙인 UTM을 템플릿 선택 화면까지 이어 간다.
+ * 현재 주소를 새로 만들기 때문에 외부 브라우저 안내에서도 같은 유입 정보를 유지할 수 있다.
+ */
+function preserveUtmNavigation(event: MouseEvent<HTMLAnchorElement>) {
+  if (typeof window === "undefined") return;
+  const current = new URL(window.location.href);
+  const query = new URLSearchParams();
+  for (const key of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"]) {
+    const value = current.searchParams.get(key);
+    if (value) query.set(key, value);
+  }
+  const value = query.toString();
+  if (!value) return;
+  event.preventDefault();
+  window.location.assign(`/template?${value}`);
 }
 
 function HeroBadges() {
