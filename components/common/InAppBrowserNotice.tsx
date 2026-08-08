@@ -5,12 +5,27 @@ import { useEffect, useState } from "react";
 import { getAnalyticsConsent, getAnalyticsMeasurementId, analyticsConsentChangedEvent } from "@/lib/analytics/ga4";
 import { buildAndroidExternalBrowserIntent, detectInAppBrowser, isAndroidUserAgent, type InAppBrowser } from "@/lib/browser/inAppBrowser";
 
-const dismissedStorageKey = "talktheme:in-app-browser-notice-dismissed:v1";
+const dismissedStorageKey = "talktheme:in-app-browser-notice-dismissed:v2";
+// 캐주얼하게 잠깐 둘러보다 닫은 것과, 나중에 실제로 로그인/다운로드를 하려는 방문을 구분하지
+// 못하면 "예전에 닫았다"는 이유만으로 정작 필요한 순간에 다시 안내를 못 받는다. 세션 저장이
+// 아니라 시간 기반으로 만료시켜서, 인앱 브라우저의 불확실한 세션 경계에 기대지 않는다.
+const dismissTtlMs = 3 * 60 * 60 * 1000;
 
 type InAppBrowserNoticeProps = {
   ready: boolean;
   hasRecentWork: boolean;
 };
+
+function readDismissedAt(): number | null {
+  try {
+    const raw = window.localStorage.getItem(dismissedStorageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { dismissedAt?: unknown };
+    return typeof parsed.dismissedAt === "number" ? parsed.dismissedAt : null;
+  } catch {
+    return null;
+  }
+}
 
 export default function InAppBrowserNotice({ ready, hasRecentWork }: InAppBrowserNoticeProps) {
   const [browser, setBrowser] = useState<InAppBrowser | null>(null);
@@ -25,11 +40,8 @@ export default function InAppBrowserNotice({ ready, hasRecentWork }: InAppBrowse
 
     setBrowser(detected);
     setCurrentUrl(window.location.href);
-    try {
-      setIsDismissed(window.sessionStorage.getItem(dismissedStorageKey) === "1");
-    } catch {
-      // 일부 브라우저가 sessionStorage를 막아도 안내 자체는 계속 보여 준다.
-    }
+    const dismissedAt = readDismissedAt();
+    setIsDismissed(dismissedAt !== null && Date.now() - dismissedAt < dismissTtlMs);
   }, []);
 
   useEffect(() => {
@@ -52,14 +64,21 @@ export default function InAppBrowserNotice({ ready, hasRecentWork }: InAppBrowse
   const dismiss = () => {
     setIsDismissed(true);
     try {
-      window.sessionStorage.setItem(dismissedStorageKey, "1");
+      window.localStorage.setItem(dismissedStorageKey, JSON.stringify({ dismissedAt: Date.now() }));
     } catch {
       // 저장할 수 없으면 이번 렌더링에서만 닫는다.
     }
   };
 
   return (
-    <aside className="relative rounded-[20px] border border-[#cfe0ff] bg-[#f7fbff] px-4 py-4 shadow-[0_12px_28px_rgba(47,107,191,0.07)] sm:px-5" aria-label="외부 브라우저 안내">
+    <aside
+      role="dialog"
+      aria-label="외부 브라우저 안내"
+      // 쿠키 동의 배너와 같은 하단 고정 슬롯 언어를 쓴다. 동의가 아직 미결정이면
+      // hasResolvedAnalyticsConsent가 이 컴포넌트를 먼저 숨기므로 동의 배너와는 겹치지 않고,
+      // 동의 후 남는 작은 쿠키 설정 버튼(bottom-3 left-3)과는 z-index를 낮춰 겹쳐도 그 버튼이 위에 오게 한다.
+      className="fixed inset-x-4 bottom-4 z-[150] mx-auto max-w-xl rounded-[20px] border border-[#cfe0ff] bg-[#f7fbff] px-4 py-4 shadow-[0_12px_28px_rgba(47,107,191,0.16)] sm:px-5"
+    >
       <button type="button" onClick={dismiss} className="absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-full text-[#7890ad] transition hover:bg-white hover:text-[#2f6bbf]" aria-label="외부 브라우저 안내 닫기">
         <X size={16} aria-hidden="true" />
       </button>
