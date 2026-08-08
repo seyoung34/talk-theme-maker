@@ -107,7 +107,10 @@ export function normalizeLegacyThemeDraft(
  * 둘 다 아니면 작성자가 의도적으로 고른 색이므로 손대지 않는다. 사용자는 편집창의 연동 카드로
  * 언제든 직접 되돌릴 수 있다.
  *
- * 파생 규칙의 기준 슬롯은 그 자체가 파생인 경우가 없어 순서에 의존하지 않는다.
+ * 잠금화면 계열이 생기면서 기준 슬롯이 그 자체로 또 파생인 체인이 존재하지만, 이 루프는 여전히
+ * 순서에 의존하지 않는다. 이유가 "체인이 없어서"에서 바뀌었다 — 어떤 슬롯을 지우는 조건이
+ * `pinned === derived`라서, 지운 뒤 해석해도 **같은 문자열**이 나오기 때문이다. 즉 앞에서 무엇을
+ * 지웠든 뒤에 오는 슬롯의 계산 결과가 달라지지 않는다.
  */
 function restoreDerivedColorLinks(colors: SlotColors, selections: SlotCandidateSelections, { templateId, template, slots }: LegacyOverrideContext) {
   const next = { ...colors };

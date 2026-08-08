@@ -14,6 +14,7 @@ const slots = getThemeSlots("android");
 const iosSlots = getThemeSlots("ios");
 const chatBackgroundSlot = slots.find((slot) => slot.role === "chat_background_color")!;
 const mainBackgroundSlot = slots.find((slot) => slot.role === "main_background_color")!;
+const passcodeBackgroundSlot = slots.find((slot) => slot.role === "passcode_background_color")!;
 const mutedSlots = slots.filter((slot) => ["main_description_color", "tab_paragraph_color"].includes(slot.role));
 const iosTitleSlot = iosSlots.find((slot) => slot.role === "main_title_color")!;
 const iosDescriptionSlot = iosSlots.find((slot) => slot.role === "main_description_color")!;
@@ -33,6 +34,8 @@ function context(overrides: Partial<MainPaletteContext> = {}): MainPaletteContex
     chatImageActive: false,
     chatPalette: null,
     currentChatBackground: "#B8F2F7",
+    passcodeImageActive: false,
+    passcodePalette: null,
     ...overrides,
   };
 }
@@ -82,6 +85,42 @@ describe("채팅방 배경 자동 맞춤", () => {
 
     expect(result[mainBackgroundSlot.id]).toBe("#FF0000");
     expect(result[chatBackgroundSlot.id]).toBe("#0000FF");
+  });
+});
+
+describe("잠금화면 배경 자동 맞춤", () => {
+  it("잠금화면 이미지가 있으면 그 평균색을 쓴다", () => {
+    const result = buildMainPaletteRecommendations(slots, context({
+      passcodeImageActive: true,
+      passcodePalette: palette("#402030"),
+    }));
+
+    expect(result[passcodeBackgroundSlot.id]).toBe("#402030");
+  });
+
+  it("잠금화면 이미지가 없으면 메인 배경(수동 색)을 그대로 따라간다", () => {
+    const result = buildMainPaletteRecommendations(slots, context({ currentBackground: "#334455" }));
+    expect(result[passcodeBackgroundSlot.id]).toBe("#334455");
+  });
+
+  it("잠금화면 이미지가 없으면 메인 배경 이미지 평균색도 따라간다", () => {
+    const result = buildMainPaletteRecommendations(slots, context({
+      imageActive: true,
+      backgroundIsAuto: true,
+      palette: palette("#112233"),
+    }));
+
+    expect(result[passcodeBackgroundSlot.id]).toBe("#112233");
+  });
+
+  it("잠금화면 이미지는 메인/채팅 배경에 영향을 주지 않는다", () => {
+    const result = buildMainPaletteRecommendations(slots, context({
+      passcodeImageActive: true,
+      passcodePalette: palette("#402030"),
+    }));
+
+    expect(result[mainBackgroundSlot.id]).toBe("#FFFFFF");
+    expect(result[chatBackgroundSlot.id]).toBe("#B8F2F7");
   });
 });
 

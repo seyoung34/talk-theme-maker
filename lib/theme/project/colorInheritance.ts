@@ -20,7 +20,7 @@ import type { ThemeResourceRole } from "@/lib/theme/types";
  * 색을 배경으로 삼아 자기 색을 읽히게 보정한다**. 읽지 않음 숫자가 그렇다 — 채팅방 배경색을
  * 따라가는 게 아니라 그 위에서 보여야 한다. seed가 기준 슬롯이 아니라 자기 기본값이다.
  */
-export type DerivedColorTransform = "pressed-foreground" | "pressed-accent" | "surface-alpha" | "contrast-on-base" | "same";
+export type DerivedColorTransform = "pressed-foreground" | "pressed-accent" | "surface-alpha" | "contrast-on-base" | "readable-foreground" | "same";
 
 export type DerivedColorRule = {
   baseRole: ThemeResourceRole;
@@ -33,7 +33,6 @@ export type DerivedColorRule = {
  * 제외한 것:
  * - `notification_background_pressed_color` — 원래 수식이 `mix(배경, accent, 0.22)`로 seed가
  *   둘이라 한 기준 슬롯의 함수가 아니다.
- * - `passcode_keypad_pressed_color` — recipe가 없고 내보내기 폴백도 상수라 기준이 없다.
  */
 const derivedColorRules: Partial<Record<ThemeResourceRole, DerivedColorRule>> = {
   // foreground-pressed
@@ -53,6 +52,20 @@ const derivedColorRules: Partial<Record<ThemeResourceRole, DerivedColorRule>> = 
   // 읽지 않음 숫자는 말풍선 바깥, 채팅방 배경 위에 그려진다. 강조색을 유지하되 그 배경에서
   // 읽히도록 보정한다. 자동 맞춤은 **메인** 배경 기준이라 이 슬롯에는 맞지 않는다.
   chat_unread_count_color: { baseRole: "chat_background_color", transform: "contrast-on-base" },
+  // 잠금화면 계열. `passcode_background_color`가 자체 이미지 또는 메인 배경을 따라가는 recipe를
+  // 가지므로(`autoColorRecipe: "passcode-background-average"`), 나머지 잠금화면 슬롯은 그 배경
+  // 하나를 기준으로 체이닝한다 — 잠금화면 이미지를 따로 준비하지 않아도 전체가 완성돼 보인다.
+  passcode_color: { baseRole: "passcode_background_color", transform: "readable-foreground" },
+  passcode_pattern_line_color: { baseRole: "passcode_background_color", transform: "readable-foreground" },
+  // 키패드 숫자는 화면 제목과 같은 잉크 색을 쓴다(기본값도 원래 같은 값이었다).
+  passcode_keypad_color: { baseRole: "passcode_color", transform: "same" },
+  passcode_keypad_pressed_color: { baseRole: "passcode_keypad_color", transform: "pressed-foreground" },
+  // 키패드 배경은 잠금화면 배경과 같은 값을 쓰고, 눌림 상태만 그 위에 반투명 오버레이를 얹는다.
+  // 둘 다 `passcode_background_color`를 기준으로 삼는다 — `pressed-foreground`(`mixThemeColors`
+  // 경유)는 알파를 항상 1로 정규화해서, `surface-alpha`가 만든 반투명 값 위에 체이닝하면 알파가
+  // 사라진다. 그래서 눌림 배경도 불투명한 원본 배경에서 새로 반투명화한다.
+  passcode_keypad_background_color: { baseRole: "passcode_background_color", transform: "same" },
+  passcode_keypad_pressed_background_color: { baseRole: "passcode_background_color", transform: "surface-alpha" },
 };
 
 export function getDerivedColorRule(role: ThemeResourceRole): DerivedColorRule | undefined {
@@ -90,6 +103,11 @@ export function applyDerivedColorTransform(baseColor: string, transform: Derived
       return withThemeColorAlpha(baseColor, 0.18);
     case "contrast-on-base":
       return ownColor ? ensureThemeColorContrast(ownColor, baseColor, unreadCountMinimumContrast) : baseColor;
+    case "readable-foreground":
+      // `contrast-on-base`와 달리 이어받을 기존 색이 없다 — 기준 색(배경) 위에서 곧바로 읽히는
+      // 순수 대비색을 새로 계산한다. `main_title_color`가 쓰는 `foreground-background` recipe와
+      // 같은 판정이며, seed만 배경 이미지가 아니라 기준 슬롯이다.
+      return readableThemeForeground(baseColor);
   }
 }
 

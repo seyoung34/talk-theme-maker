@@ -20,6 +20,12 @@ export type MainPaletteContext = {
   chatImageActive: boolean;
   chatPalette: ImageColorPalette | null;
   currentChatBackground: string;
+  /**
+   * 잠금화면은 자체 배경 이미지가 있으면 그 평균색을 쓰고, 없으면 메인 배경(이미지 or 수동 색)을
+   * 그대로 따라간다 — 잠금화면 이미지를 따로 준비 안 하는 경우가 많아서다.
+   */
+  passcodeImageActive: boolean;
+  passcodePalette: ImageColorPalette | null;
 };
 
 export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context: MainPaletteContext) {
@@ -40,6 +46,11 @@ export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context
   const chatImagePalette = context.chatImageActive ? context.chatPalette : null;
   const chatBackground = chatImagePalette?.average ?? themeColorRgbHex(context.currentChatBackground, currentBackground);
 
+  // 메인 배경과 달리 "현재 값 유지"가 아니라 **메인 배경을 계속 따라간다** — 잠금화면 이미지를
+  // 준비하지 않은 사용자가 배경을 나중에 바꿔도 잠금화면이 함께 갱신되게 하기 위해서다.
+  const passcodeImagePalette = context.passcodeImageActive ? context.passcodePalette : null;
+  const passcodeBackground = passcodeImagePalette?.average ?? background;
+
   const values: Partial<Record<ThemeAutoColorRecipe, string>> = {
     "background-average": backgroundRecommendation,
     "header-top": header,
@@ -58,6 +69,7 @@ export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context
     "accent-surface": accentSurface,
     "accent-surface-pressed": mixThemeColors(secondary, accent, 0.22),
     "chat-background-average": chatBackground,
+    "passcode-background-average": passcodeBackground,
   };
 
   return Object.fromEntries(

@@ -1209,6 +1209,7 @@
     "required": true,
     "note": "theme_passcode_background_color 값",
     "colorKey": "theme_passcode_background_color",
+    "autoColorRecipe": "passcode-background-average",
     "defaultColor": {
       "basic": "#FFFFFF"
     }

@@ -528,7 +528,10 @@ export function getResolvedColor(
   //
   // 후보 조회보다 **먼저** 판정해야 한다. 색상 슬롯의 `getSelectedCandidate`는 고른 후보가
   // 없어도 기본 후보를 합성해 돌려주므로, 뒤에 두면 그 기본값이 먼저 잡혀 연동이 죽는다.
-  // 기준 슬롯은 자기 짝이 없으므로 재귀는 한 단계에서 끝난다.
+  //
+  // 기준 슬롯이 그 자체로 또 파생일 수 있어(잠금화면 키패드 눌림 → 키패드 숫자 → 잠금화면
+  // 텍스트 → 잠금화면 배경) 재귀는 한 단계로 끝나지 않는다. 규칙 그래프에 순환이 없어야만
+  // 끝나므로, 그 조건은 `colorInheritance.test.ts`가 규칙 표 전체를 훑어 잠가 둔다.
   const inheritedSource = getInheritedColorSourceSlot(slot, colors, selections, templateId, template, allSlots);
   if (inheritedSource) {
     const baseColor = getResolvedColor(inheritedSource, colors, selections, templateId, template, allSlots);

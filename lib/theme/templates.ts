@@ -38,6 +38,8 @@ export type ThemeAutoColorRecipe =
   | "accent-surface-pressed"
   // 채팅방 배경은 메인 배경과 다른 이미지를 쓴다. 그 이미지의 평균색으로 맞춘다.
   | "chat-background-average"
+  // 잠금화면 배경은 자체 이미지가 있으면 그 평균색을, 없으면 메인 배경(이미지 or 수동 색)을 그대로 따라간다.
+  | "passcode-background-average"
   // 말풍선 이미지 표면의 밝기를 분석해 안쪽 메시지 글자색을 맞춘다.
   | "bubble-me-text"
   | "bubble-you-text";

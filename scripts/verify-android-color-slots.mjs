@@ -34,14 +34,19 @@ const mainPaletteRecipes = new Set([
 // The chatroom carries its own background image, so it seeds from that instead. Keeping it out of
 // the set above is what stops the main palette from leaking onto a screen it never sampled.
 const chatPaletteRecipes = new Set(["chat-background-average"]);
+// The passcode screen prefers its own background image but falls back to the main background when
+// there isn't one — still a distinct seed from the main palette recipes above, so it gets its own set.
+const passcodePaletteRecipes = new Set(["passcode-background-average"]);
 const bubblePaletteRecipes = new Set(["bubble-me-text", "bubble-you-text"]);
-const allowedAutoRecipes = new Set([...mainPaletteRecipes, ...chatPaletteRecipes, ...bubblePaletteRecipes]);
+const allowedAutoRecipes = new Set([...mainPaletteRecipes, ...chatPaletteRecipes, ...passcodePaletteRecipes, ...bubblePaletteRecipes]);
 const autoSlots = colorSlots.filter((slot) => slot.autoColorRecipe);
 if (autoSlots.some((slot) => !allowedAutoRecipes.has(slot.autoColorRecipe))) throw new Error("Android manifest contains an unknown auto color recipe.");
 const mainPaletteSlots = autoSlots.filter((slot) => mainPaletteRecipes.has(slot.autoColorRecipe));
 if (mainPaletteSlots.some((slot) => !["main", "tabs", "more"].includes(slot.section))) throw new Error("Main palette recipes must remain in the main, tabs, or more sections.");
 const chatPaletteSlots = autoSlots.filter((slot) => chatPaletteRecipes.has(slot.autoColorRecipe));
 if (chatPaletteSlots.some((slot) => slot.section !== "chatroom")) throw new Error("Chat palette recipes must remain in the chatroom section.");
+const passcodePaletteSlots = autoSlots.filter((slot) => passcodePaletteRecipes.has(slot.autoColorRecipe));
+if (passcodePaletteSlots.some((slot) => slot.section !== "passcode")) throw new Error("Passcode palette recipes must remain in the passcode section.");
 const bubblePaletteSlots = autoSlots.filter((slot) => bubblePaletteRecipes.has(slot.autoColorRecipe));
 if (bubblePaletteSlots.some((slot) => slot.section !== "chatroom" || slot.group !== "bubbles")) throw new Error("Bubble palette recipes must remain in the chatroom bubbles group.");
 for (const role of ["main_background_color", "main_header_color", "main_body_secondary_cell_color", "tab_background"]) {

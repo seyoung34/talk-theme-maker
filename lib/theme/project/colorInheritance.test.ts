@@ -50,8 +50,6 @@ describe("파생 색상 규칙", () => {
   it("한 기준 슬롯의 함수로 표현되지 않는 파생은 제외한다", () => {
     // 알림 배경 눌림은 원래 수식이 mix(배경, accent, 0.22)라 seed가 둘이다.
     expect(getColorFallbackRole("notification_background_pressed_color")).toBeUndefined();
-    // 잠금 키패드 눌림은 recipe도 없고 내보내기 폴백도 상수라 기준이 없다.
-    expect(getColorFallbackRole("passcode_keypad_pressed_color")).toBeUndefined();
     expect(getColorFallbackRole("main_title_color")).toBeUndefined();
   });
 
@@ -138,6 +136,100 @@ describe("읽지 않음 숫자 — 채팅방 배경 대비 보정", () => {
 
   it("직접 지정하면 보정하지 않는다", () => {
     expect(resolve(unread, { [unread.id]: "#FF0000", [chatBackground.id]: "#FF0000" })).toBe("#FF0000");
+  });
+});
+
+/**
+ * `getResolvedColor`는 기준 슬롯을 재귀로 따라간다. 잠금화면 계열이 생기면서 기준 슬롯이 그
+ * 자체로 또 파생인 체인이 실제로 존재하므로(키패드 눌림 → 키패드 숫자 → 텍스트 → 배경),
+ * 재귀를 멈추는 것은 "한 단계로 끝난다"가 아니라 **그래프에 순환이 없다**는 사실 하나뿐이다.
+ *
+ * 규칙을 새로 추가하다 순환을 만들면 런타임에서 스택 오버플로로 터진다. 개별 체인을 하나씩
+ * 확인하는 대신 규칙 표 전체를 훑어서 잠근다.
+ */
+describe("파생 규칙 그래프", () => {
+  it("순환이 없다", () => {
+    const roles = [...getThemeSlots("android"), ...getThemeSlots("ios")].map((slot) => slot.role);
+
+    for (const role of roles) {
+      const seen: string[] = [];
+      let current: string | undefined = role;
+      while (current) {
+        expect(seen, `파생 규칙에 순환이 있다: ${[...seen, current].join(" → ")}`).not.toContain(current);
+        seen.push(current);
+        current = getColorFallbackRole(current as Parameters<typeof getColorFallbackRole>[0]);
+      }
+    }
+  });
+
+  it("체인의 끝은 직접 지정하거나 배경에서 자동 계산되는 슬롯이다", () => {
+    // 끝까지 따라가면 더 이상 따라갈 기준이 없는 슬롯이 나와야 한다. 그 슬롯이 실제 값의
+    // 출처이므로, 여기가 비어 있으면 체인 전체가 자기 기본값으로 주저앉는다.
+    const terminal = (role: string) => {
+      let current = role;
+      for (let next = getColorFallbackRole(current as Parameters<typeof getColorFallbackRole>[0]); next; next = getColorFallbackRole(current as Parameters<typeof getColorFallbackRole>[0])) {
+        current = next;
+      }
+      return current;
+    };
+
+    expect(terminal("passcode_keypad_pressed_color")).toBe("passcode_background_color");
+    expect(terminal("passcode_keypad_color")).toBe("passcode_background_color");
+    expect(terminal("main_title_pressed_color")).toBe("main_title_color");
+    // 종착 슬롯은 배경 자동 맞춤 recipe를 갖고 있어야 배경 변경이 체인 전체로 전파된다.
+    expect(bySlotRole("passcode_background_color").autoColorRecipe).toBe("passcode-background-average");
+  });
+});
+
+describe("잠금화면 — 배경 하나로 나머지 슬롯이 체이닝된다", () => {
+  const passcodeBackground = bySlotRole("passcode_background_color");
+  const passcodeText = bySlotRole("passcode_color");
+  const patternLine = bySlotRole("passcode_pattern_line_color");
+  const keypadColor = bySlotRole("passcode_keypad_color");
+  const keypadPressedColor = bySlotRole("passcode_keypad_pressed_color");
+  const keypadBackground = bySlotRole("passcode_keypad_background_color");
+  const keypadPressedBackground = bySlotRole("passcode_keypad_pressed_background_color");
+
+  it("텍스트·패턴 라인은 배경 위에서 읽히는 순수 대비색이다", () => {
+    expect(getDerivedColorRule("passcode_color")).toEqual({ baseRole: "passcode_background_color", transform: "readable-foreground" });
+    expect(getDerivedColorRule("passcode_pattern_line_color")).toEqual({ baseRole: "passcode_background_color", transform: "readable-foreground" });
+    expect(applyDerivedColorTransform("#FCC5C5", "readable-foreground")).toBe("#1F2937");
+    expect(applyDerivedColorTransform("#101010", "readable-foreground")).toBe("#FFFFFF");
+  });
+
+  it("배경을 바꾸면 텍스트·패턴 라인이 함께 갱신된다", () => {
+    const onLight = resolve(passcodeText, { [passcodeBackground.id]: "#FCC5C5" });
+    const onDark = resolve(passcodeText, { [passcodeBackground.id]: "#101010" });
+    expect(onLight).not.toBe(onDark);
+    expect(resolve(patternLine, { [passcodeBackground.id]: "#101010" })).toBe(onDark);
+  });
+
+  it("키패드 숫자는 잠금화면 텍스트와 같은 잉크색을 쓴다", () => {
+    expect(getDerivedColorRule("passcode_keypad_color")).toEqual({ baseRole: "passcode_color", transform: "same" });
+    expect(resolve(keypadColor, { [passcodeBackground.id]: "#101010" })).toBe(resolve(passcodeText, { [passcodeBackground.id]: "#101010" }));
+  });
+
+  it("키패드 눌림 숫자색은 원래 색과 구분된다", () => {
+    const base = resolve(keypadColor, { [passcodeBackground.id]: "#101010" })!;
+    const pressed = resolve(keypadPressedColor, { [passcodeBackground.id]: "#101010" });
+    expect(pressed).not.toBe(base);
+    expect(pressed).toBe(applyDerivedColorTransform(base, "pressed-foreground"));
+  });
+
+  it("키패드 배경은 잠금화면 배경과 같은 값을 쓴다", () => {
+    expect(resolve(keypadBackground, { [passcodeBackground.id]: "#FCC5C5" })).toBe("#FCC5C5");
+  });
+
+  /**
+   * `pressed-foreground`(내부적으로 `mixThemeColors` 경유)는 알파를 항상 1로 정규화한다.
+   * 눌림 배경이 `surface-alpha`가 만든 반투명 값을 다시 체이닝하면 알파가 사라지므로,
+   * 두 배경 모두 불투명한 `passcode_background_color`에서 직접 파생시켜 이 손실을 피한다.
+   */
+  it("키패드 눌림 배경은 불투명 배경에서 새로 반투명화되어 알파를 잃지 않는다", () => {
+    expect(getDerivedColorRule("passcode_keypad_pressed_background_color")).toEqual({ baseRole: "passcode_background_color", transform: "surface-alpha" });
+    const pressed = resolve(keypadPressedBackground, { [passcodeBackground.id]: "#FCC5C5" });
+    expect(pressed).toContain("FCC5C5");
+    expect(pressed).not.toBe("#FCC5C5");
   });
 });
 

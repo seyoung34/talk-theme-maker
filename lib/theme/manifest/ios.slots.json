@@ -1169,6 +1169,7 @@
     "label": "잠금화면 배경색",
     "required": true,
     "note": "암호 입력 화면에서 이미지가 없거나 투명한 영역에 표시되는 색상입니다. 제목과 암호 표시가 잘 보이는지 확인하세요.",
+    "autoColorRecipe": "passcode-background-average",
     "defaultColor": {
       "basic": "#FFDEDE"
     },

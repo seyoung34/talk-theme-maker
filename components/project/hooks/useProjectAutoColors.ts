@@ -35,6 +35,7 @@ export function useProjectAutoColors({
 }: UseProjectAutoColorsOptions) {
   const mainBackgroundFile = useMemo(() => findBestFile(analysis, "main_background"), [analysis]);
   const chatBackgroundFile = useMemo(() => findBestFile(analysis, "chat_background"), [analysis]);
+  const passcodeBackgroundFile = useMemo(() => findBestFile(analysis, "passcode_background"), [analysis]);
   const mainBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "main_background_color"), [slots]);
   const chatBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "chat_background_color"), [slots]);
   const resolvedChatBackground = chatBackgroundColorSlot
@@ -45,6 +46,7 @@ export function useProjectAutoColors({
     : activeTemplate.defaults.mainBackground;
   const { palette: activeImageColorPalette, error: imageColorPaletteError, pending: mainPalettePending } = useThemeImagePalette(mainBackgroundFile);
   const { palette: activeChatImagePalette, error: chatImageColorPaletteError, pending: chatPalettePending } = useThemeImagePalette(chatBackgroundFile);
+  const { palette: activePasscodeImagePalette, error: passcodeImageColorPaletteError, pending: passcodePalettePending } = useThemeImagePalette(passcodeBackgroundFile);
   const bubbleMeFile = useMemo(() => findBestFile(analysis, "bubble_me_1"), [analysis]);
   const bubbleYouFile = useMemo(() => findBestFile(analysis, "bubble_you_1"), [analysis]);
   const bubbleSurfaceBackground = activeChatImagePalette?.average ?? resolvedChatBackground;
@@ -73,8 +75,10 @@ export function useProjectAutoColors({
       chatImageActive: Boolean(chatBackgroundFile),
       chatPalette: activeChatImagePalette,
       currentChatBackground: resolvedChatBackground,
+      passcodeImageActive: Boolean(passcodeBackgroundFile),
+      passcodePalette: activePasscodeImagePalette,
     }), ...bubbleColorRecommendations }),
-    [activeChatImagePalette, activeImageColorPalette, activeTemplate.accent, bubbleColorRecommendations, candidateSelections, chatBackgroundFile, mainBackgroundColorSlot, mainBackgroundFile, resolvedChatBackground, resolvedMainBackground, slots],
+    [activeChatImagePalette, activeImageColorPalette, activePasscodeImagePalette, activeTemplate.accent, bubbleColorRecommendations, candidateSelections, chatBackgroundFile, mainBackgroundColorSlot, mainBackgroundFile, passcodeBackgroundFile, resolvedChatBackground, resolvedMainBackground, slots],
   );
 
   const contrastWarnings = useMemo(
@@ -101,7 +105,7 @@ export function useProjectAutoColors({
     // "팔레트가 없다"로 판정하면 안 된다. 분석이 실패한 이미지는 팔레트가 영영 null이라
     // 자동 맞춤 전체가 멈춰 버린다 — 채팅방 이미지 하나가 깨지면 메인 색상까지 갱신이
     // 끊겼다. 실패는 대기가 아니므로 그대로 진행하고, 레시피가 현재 배경색으로 폴백한다.
-    if (mainPalettePending || chatPalettePending || bubblePalettePending) return;
+    if (mainPalettePending || chatPalettePending || passcodePalettePending || bubblePalettePending) return;
     const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && candidateSelections[slot.id] === autoMainPaletteCandidateId && mainColorRecommendations[slot.id]);
     if (!linkedSlots.length) return;
     setColors((current) => {
@@ -110,7 +114,7 @@ export function useProjectAutoColors({
       for (const slot of linkedSlots) next[slot.id] = mainColorRecommendations[slot.id];
       return next;
     });
-  }, [bubblePalettePending, candidateSelections, chatPalettePending, mainColorRecommendations, mainPalettePending, setColors, slots]);
+  }, [bubblePalettePending, candidateSelections, chatPalettePending, mainColorRecommendations, mainPalettePending, passcodePalettePending, setColors, slots]);
 
   useEffect(() => {
     if (mainBackgroundFile || !mainBackgroundColorSlot) return;
@@ -134,6 +138,9 @@ export function useProjectAutoColors({
     mainBackgroundFile,
     mainColorRecommendations,
     mainPalettePending,
+    passcodeBackgroundFile,
+    passcodeImageColorPaletteError,
+    passcodePalettePending,
   };
 }
 
