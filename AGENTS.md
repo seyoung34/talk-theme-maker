@@ -19,6 +19,14 @@
 - Preserve admin/system template persistence separately from user-local template persistence.
 - Keep focused changes focused. Avoid broad reformatting and large TSX rewrites unless the task requires it.
 
+## System Theme Asset Production
+
+- Visual planning, generation runs, prompts, provenance, and asset-level QA now live in the standalone `E:\TalkTheme-Factory` repository. Do not start or store factory runs in this application repository.
+- Consume only explicitly approved clean assets from `E:\TalkTheme-자료\시스템 템플릿`.
+- Keep Factory manifests and application role/slot mappings as a versioned handoff. Do not infer Android/iOS slots from factory filenames.
+- The external Factory must not write `/admin/*`, Supabase, template overrides, exports, publication state, billing, or credits. The operator assembles and publishes system templates manually here.
+- Generated review boards prove candidate consistency only. Android/iOS preview and export remain the final product checks.
+
 ## Windows And Encoding
 
 - Source files stay UTF-8. Korean UI text is expected.

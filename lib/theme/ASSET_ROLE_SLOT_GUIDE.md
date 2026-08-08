@@ -237,25 +237,25 @@ no text, no badge, no individual background tile
 
 핵심 규칙:
 
-- `me`의 꼬리와 방향성은 오른쪽, `you`는 왼쪽을 기준으로 한다.
-- `1`과 `2`는 같은 가족이다. `2`는 연속 메시지용이므로 꼬리를 줄이거나 제거할 수 있지만 크기감, 채움, 테두리, radius는 `1`과 같아야 한다.
+- 꼬리는 필수가 아니다. 꼬리를 사용하는 family라면 `me`는 오른쪽, `you`는 왼쪽을 기준으로 하고, 꼬리 없는 family는 양쪽 모두 허용한다.
+- `1`과 `2`는 같은 가족이다. `2`는 연속 메시지용이므로 꼬리가 있다면 줄이거나 제거할 수 있고, 꼬리가 없는 family는 같은 body를 재사용한다. 크기감, 채움, 테두리, radius는 유지한다.
 - 내부 텍스트 영역은 넓고 단순해야 한다. 얼굴, 패턴, 하이라이트, 테두리 장식이 stretch 중심이나 content 영역을 침범하면 안 된다.
 - 배경은 실제 alpha 투명이어야 한다. 그림자도 canvas 밖에서 잘리지 않도록 안전 여백 안에 둔다.
 - 내/상대 말풍선은 서로 구별되면서 같은 테마 가족으로 보여야 한다.
 - `chat_bubble_me_color`, `chat_bubble_you_color`는 말풍선 채움색이 아니라 현재 manifest상 말풍선 안의 텍스트 색이다. 이미지 밝기와 함께 결정한다.
-- iOS selected image가 비어 있으면 normal image를, selected text color가 비어 있으면 normal text color를 사용한다(부분 지원: 별도 selected slot은 export에 연결되어 있으나 preview/실기기 QA가 남아 있다). selected artwork는 normal과 geometry·꼬리·stretch 영역을 동일하게 유지하고, 명도·채움·pressed feedback만 바꾼다.
+- iOS selected image가 비어 있으면 normal image를, selected text color가 비어 있으면 normal text color를 사용한다(부분 지원: 별도 selected slot은 export에 연결되어 있으나 preview/실기기 QA가 남아 있다). selected artwork는 normal과 geometry·(있는 경우) 꼬리·stretch 영역을 동일하게 유지하고, 명도·채움·pressed feedback만 바꾼다.
 
 Android 규칙:
 
 - 1px 9-patch marker는 AI가 만들지 않는다.
-- 고정 코너와 꼬리는 stretch 영역 밖에 둔다.
+- 고정 코너와 (있는 경우) 꼬리는 stretch 영역 밖에 둔다.
 - 반복/그라데이션이 stretch seam에서 끊기지 않도록 중앙 stretch 영역은 균질하게 만든다.
 - marker와 content padding은 bubble editor에서 설정하고 export 시 `.9.png`로 렌더한다.
 
 iOS 규칙:
 
 - 일반 PNG artwork를 사용하고 cap-inset stretch point와 content insets를 별도로 저장한다.
-- 기본 preview inset은 `me`와 `you`의 꼬리 방향을 반영하므로, 새 artwork에 맞춰 반드시 재조정한다.
+- 기본 preview inset은 새 artwork의 body와 (있는 경우) 꼬리 방향을 반영하므로, 새 artwork에 맞춰 반드시 재조정한다.
 - 고정 코너 합보다 작은 말풍선에서도 왜곡되지 않는지 짧은 메시지와 여러 줄 메시지로 확인한다.
 - iOS 26.3.0 공식 샘플 참고값은 Send stretch `20px 20px`, inset `10px 10px 7px 12px`; Receive stretch `20px 20px`, inset `10px 16px 7px 10px`다. inset은 1x 기준이며 순서는 `top left bottom right`다. 현재 내장 sample의 이전 값과 차이가 있으므로 새 artwork에는 bubble editor의 실제 측정값을 우선하고, 이 수치를 무조건 덮어쓰지 않는다.
 
@@ -264,7 +264,7 @@ iOS 규칙:
 ```text
 text inside bubble, speech content, emoji, person, photo texture,
 busy pattern in stretch area, baked nine-patch markers, asymmetric accidental padding,
-cropped tail, opaque canvas background
+cropped optional tail, opaque canvas background
 ```
 
 ## 6. 잠금화면 indicator와 keypad
@@ -475,8 +475,8 @@ Selected states keep the same geometry and use stronger fill/accent; no text, ba
 
 ```text
 Create a four-piece transparent speech-bubble family: bubble_me_1, bubble_me_2,
-bubble_you_1, bubble_you_2. Me tails face right and you tails face left.
-State 2 is the grouped-message version with reduced or removed tail, while preserving the same body geometry.
+bubble_you_1, bubble_you_2. If a tail is used, me tails face right and you tails face left; a no-tail family is valid.
+State 2 is the grouped-message version with the same body geometry; an existing tail may be reduced or removed.
 Keep a large quiet interior text region and uniform stretchable center; decoration stays in fixed corners only.
 No text, emoji, photo texture, baked 9-patch markers, opaque background, or cropped shadow.
 Output clean artwork; Android markers and iOS cap insets are added after generation.
