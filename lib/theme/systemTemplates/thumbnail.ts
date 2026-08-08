@@ -66,10 +66,12 @@ export async function generateSystemTemplateThumbnail(
     const flipX = input.overrides.bubbleEdits.flipX?.[slot.id];
     return geometry || markers || insets || stretch || flipX ? { geometry, markers, insets, stretch, flipX } : undefined;
   };
-  const meEdit = bubbleEdit("bubble_me_1");
-  const youEdit = bubbleEdit("bubble_you_1");
+  const meEdit1 = bubbleEdit("bubble_me_1");
+  const meEdit2 = bubbleEdit("bubble_me_2");
+  const youEdit1 = bubbleEdit("bubble_you_1");
+  const youEdit2 = bubbleEdit("bubble_you_2");
   const imageRoles: ThemeResourceRole[] = ["main_background", "chat_background", "profile_image_1", ...thumbnailTabIconRoles];
-  const bubbleRoles: ThemeResourceRole[] = ["bubble_me_1", "bubble_you_1"];
+  const bubbleRoles: ThemeResourceRole[] = ["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"];
   const images = new Map<ThemeResourceRole, HTMLImageElement>();
   const bubbleAssets = new Map<ThemeResourceRole, BubbleAsset>();
   const objectUrls: string[] = [];
@@ -97,7 +99,7 @@ export async function generateSystemTemplateThumbnail(
     ...bubbleRoles.map(async (role) => {
       const { source, selectedUploadName } = resolveSource(role);
       if (!source) return;
-      const bubbleSlot: BubbleSlot = role === "bubble_me_1" ? "me" : "you";
+      const bubbleSlot: BubbleSlot = role.startsWith("bubble_me_") ? "me" : "you";
       const fileName = selectedUploadName ?? source.split("?")[0].split("#")[0];
       try {
         bubbleAssets.set(role, await loadBubbleAsset(source, fileName, bubbleSlot));
@@ -129,10 +131,12 @@ export async function generateSystemTemplateThumbnail(
     drawPanel(context, rightX, contentTop, rightWidth, contentHeight, cornerRadius, color("chat_background_color", template.defaults.chatBackground), images.get("chat_background"));
     drawChatBubbles(context, rightX, contentTop, rightWidth, contentHeight, {
       platform: input.platform,
-      meAsset: bubbleAssets.get("bubble_me_1") ?? null,
-      youAsset: bubbleAssets.get("bubble_you_1") ?? null,
-      meEdit,
-      youEdit,
+      bubbles: [
+        { mine: false, asset: bubbleAssets.get("bubble_you_1") ?? null, edit: youEdit1 },
+        { mine: false, asset: bubbleAssets.get("bubble_you_2") ?? null, edit: youEdit2 },
+        { mine: true, asset: bubbleAssets.get("bubble_me_1") ?? null, edit: meEdit1 },
+        { mine: true, asset: bubbleAssets.get("bubble_me_2") ?? null, edit: meEdit2 },
+      ],
       myBubbleFill: themeColorToCss(template.defaults.myBubble),
       friendBubbleFill: themeColorToCss(template.defaults.friendBubble),
     });
@@ -202,7 +206,10 @@ function drawFriendsColumn(context: CanvasRenderingContext2D, x: number, y: numb
   context.restore();
 }
 
-// 우측 컬럼: 말풍선 3개(you/me/you) + 하단 입력창 캡슐. 글자 없이 이미지/단색 캡슐만.
+// 우측 컬럼: 말풍선 4개(you_1/you_2/me_1/me_2, 연속 메시지 묶음 두 쌍) + 하단 입력창 캡슐.
+// 글자 없이 이미지/단색 캡슐만.
+const chatBubbleWidthFactors = [0.74, 0.55, 0.7, 0.5];
+
 function drawChatBubbles(
   context: CanvasRenderingContext2D,
   x: number,
@@ -211,10 +218,7 @@ function drawChatBubbles(
   columnHeight: number,
   options: {
     platform: ThemePlatform;
-    meAsset: BubbleAsset | null;
-    youAsset: BubbleAsset | null;
-    meEdit?: BubbleEditState;
-    youEdit?: BubbleEditState;
+    bubbles: Array<{ mine: boolean; asset: BubbleAsset | null; edit?: BubbleEditState }>;
     myBubbleFill: string;
     friendBubbleFill: string;
   },
@@ -225,29 +229,25 @@ function drawChatBubbles(
   const areaWidth = columnWidth - padX * 2;
   const areaY = y + padTop;
   const areaHeight = columnHeight - padTop - inputBarHeight - 14;
-  const rows: Array<{ mine: boolean; widthFactor: number }> = [
-    { mine: false, widthFactor: 0.74 },
-    { mine: true, widthFactor: 0.7 },
-    { mine: false, widthFactor: 0.86 },
-  ];
-  const rowHeight = areaHeight / rows.length;
+  const rowHeight = areaHeight / options.bubbles.length;
 
-  rows.forEach((row, index) => {
+  options.bubbles.forEach((bubble, index) => {
     // 각 말풍선은 자기 고유 종횡비대로 행 박스 안에 배치된다(잘림 없이 contain).
-    const boxWidth = areaWidth * row.widthFactor;
+    const widthFactor = chatBubbleWidthFactors[index % chatBubbleWidthFactors.length];
+    const boxWidth = areaWidth * widthFactor;
     const boxHeight = rowHeight * 0.84;
-    const boxX = row.mine ? areaX + areaWidth - boxWidth : areaX;
+    const boxX = bubble.mine ? areaX + areaWidth - boxWidth : areaX;
     const boxY = areaY + index * rowHeight + (rowHeight - boxHeight) / 2;
     drawThumbnailBubble(context, {
-      asset: row.mine ? options.meAsset : options.youAsset,
-      edit: row.mine ? options.meEdit : options.youEdit,
+      asset: bubble.asset,
+      edit: bubble.edit,
       platform: options.platform,
-      mine: row.mine,
+      mine: bubble.mine,
       x: boxX,
       y: boxY,
       width: boxWidth,
       height: boxHeight,
-      fill: row.mine ? options.myBubbleFill : options.friendBubbleFill,
+      fill: bubble.mine ? options.myBubbleFill : options.friendBubbleFill,
     });
   });
 

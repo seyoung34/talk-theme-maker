@@ -127,4 +127,44 @@ describe("createSystemTemplatePreviewVisual", () => {
 
     expect(result.mainBackgroundColor).toBe("#112233");
   });
+
+  it("bubble_me_2/bubble_you_2(연속 메시지 변형)의 ref와 geometry도 함께 채운다", () => {
+    const template = getThemeTemplate("basic");
+    const summary: SystemTemplateSummary = {
+      id: "template-id",
+      title: "네 슬롯 말풍선",
+      baseTemplateId: "basic",
+      platform: "android",
+      status: "published",
+      visibility: "public",
+      pricingType: "free",
+      tags: [],
+      createdAt: 1,
+      updatedAt: 1,
+      uploadCount: 0,
+      colorCount: 0,
+      colors: {},
+      candidateSelections: {},
+      uploadRefs: {},
+      previewMetadata: {
+        refs: { myBubble2: "path/me2.png", friendBubble2: "path/you2.png" },
+        bubbles: {
+          myBubble2: { flipX: true },
+          friendBubble2: { flipX: false },
+        },
+      },
+    };
+
+    const result = createSystemTemplatePreviewVisual({
+      template,
+      platform: "android",
+      summary,
+      signedUrls: { "path/me2.png": "https://example.com/me2.png", "path/you2.png": "https://example.com/you2.png" },
+    });
+
+    expect(result.myBubbleImage2).toBe("https://example.com/me2.png");
+    expect(result.friendBubbleImage2).toBe("https://example.com/you2.png");
+    expect(result.myBubbleFlipX2).toBe(true);
+    expect(result.friendBubbleFlipX2).toBe(false);
+  });
 });

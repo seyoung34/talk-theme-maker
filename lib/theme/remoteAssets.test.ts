@@ -44,4 +44,18 @@ describe("getPublicThemeAssetUrl", () => {
     const getPublicThemeAssetUrl = await load(undefined);
     expect(getPublicThemeAssetUrl("system-templates/abc/preview/card.webp")).toBeUndefined();
   });
+
+  // 저장 경로가 고정이라(`system-templates/<id>/preview/card.webp`) 재굽기 후에도 URL이 그대로면
+  // cacheControl(1시간) 때문에 브라우저가 이전 이미지를 계속 돌려준다. 버전을 쿼리로 붙여 무효화한다.
+  it("version을 주면 캐시 무효화용 쿼리를 붙인다", async () => {
+    const getPublicThemeAssetUrl = await load("https://example.supabase.co");
+    expect(getPublicThemeAssetUrl("system-templates/abc/preview/card.webp", 1700000000000)).toBe(
+      "https://example.supabase.co/storage/v1/object/public/theme-public/system-templates/abc/preview/card.webp?v=1700000000000",
+    );
+  });
+
+  it("version이 없으면 쿼리를 붙이지 않는다", async () => {
+    const getPublicThemeAssetUrl = await load("https://example.supabase.co");
+    expect(getPublicThemeAssetUrl("system-templates/abc/preview/card.webp")).not.toContain("?");
+  });
 });

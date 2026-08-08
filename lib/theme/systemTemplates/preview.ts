@@ -33,6 +33,20 @@ export type TemplatePreviewVisual = {
   friendBubbleInsets?: Insets;
   friendBubbleMarkers?: Markers;
   friendBubbleFlipX?: boolean;
+  // bubble_me_2/bubble_you_2(연속 메시지 변형). 텍스트색·채움색은 _1과 같은 role(chat_bubble_me/you_color,
+  // template.defaults.myBubble/friendBubble)을 그대로 쓰므로 별도 텍스트/채움색 필드는 없다.
+  myBubbleImage2?: string;
+  friendBubbleImage2?: string;
+  myBubbleGeometry2?: BubbleGeometry;
+  myBubbleStretch2?: StretchPoint;
+  myBubbleInsets2?: Insets;
+  myBubbleMarkers2?: Markers;
+  myBubbleFlipX2?: boolean;
+  friendBubbleGeometry2?: BubbleGeometry;
+  friendBubbleStretch2?: StretchPoint;
+  friendBubbleInsets2?: Insets;
+  friendBubbleMarkers2?: Markers;
+  friendBubbleFlipX2?: boolean;
   profileImage?: string;
   // 채팅목록탭 헤더/리스트 미리보기용
   mainHeaderColor: string;
@@ -147,7 +161,7 @@ export function createSystemTemplatePreviewVisual({
 
   return {
     platform,
-    cardPreviewImage: getPublicThemeAssetUrl(summary.previewMetadata.cardPreviewPath),
+    cardPreviewImage: getPublicThemeAssetUrl(summary.previewMetadata.cardPreviewPath, summary.updatedAt),
     chatBackgroundColor: resolveColor(slots, "chat_background_color", summary, templateId, template, template.defaults.chatBackground, summary.previewMetadata.colors?.chatBackground),
     mainBackgroundColor: resolveColor(slots, "main_background_color", summary, templateId, template, template.defaults.mainBackground, summary.previewMetadata.colors?.mainBackground),
     tabBackgroundColor: resolveColor(slots, "tab_background", summary, templateId, template, template.defaults.tabBackground, summary.previewMetadata.colors?.tabBackground),
@@ -170,6 +184,18 @@ export function createSystemTemplatePreviewVisual({
     friendBubbleInsets: summary.previewMetadata.bubbles?.friendBubble?.insets,
     friendBubbleMarkers: summary.previewMetadata.bubbles?.friendBubble?.markers,
     friendBubbleFlipX: summary.previewMetadata.bubbles?.friendBubble?.flipX,
+    myBubbleImage2: resolveImage(slots, "bubble_me_2", summary, templateId, template, signedUrls),
+    friendBubbleImage2: resolveImage(slots, "bubble_you_2", summary, templateId, template, signedUrls),
+    myBubbleGeometry2: summary.previewMetadata.bubbles?.myBubble2?.geometry,
+    myBubbleStretch2: summary.previewMetadata.bubbles?.myBubble2?.stretch,
+    myBubbleInsets2: summary.previewMetadata.bubbles?.myBubble2?.insets,
+    myBubbleMarkers2: summary.previewMetadata.bubbles?.myBubble2?.markers,
+    myBubbleFlipX2: summary.previewMetadata.bubbles?.myBubble2?.flipX,
+    friendBubbleGeometry2: summary.previewMetadata.bubbles?.friendBubble2?.geometry,
+    friendBubbleStretch2: summary.previewMetadata.bubbles?.friendBubble2?.stretch,
+    friendBubbleInsets2: summary.previewMetadata.bubbles?.friendBubble2?.insets,
+    friendBubbleMarkers2: summary.previewMetadata.bubbles?.friendBubble2?.markers,
+    friendBubbleFlipX2: summary.previewMetadata.bubbles?.friendBubble2?.flipX,
     profileImage: resolveImage(slots, "profile_image_1", summary, templateId, template, signedUrls),
     mainHeaderColor: resolveColor(slots, "main_header_color", summary, templateId, template, template.defaults.mainHeader),
     mainHeaderForegroundColor: resolveColor(slots, "main_header_foreground_color", summary, templateId, template, template.defaults.mainTitle),
@@ -222,7 +248,7 @@ function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {
   return slots.find((slot) => slot.role === role);
 }
 
-const previewRoles: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "profile_image_1", "profile_image_2", "profile_image_3", "profile_image_full_1"];
+const previewRoles: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "bubble_me_2", "bubble_you_2", "profile_image_1", "profile_image_2", "profile_image_3", "profile_image_full_1"];
 
 type PreviewRefKey = keyof NonNullable<SystemTemplateSummary["previewMetadata"]["refs"]>;
 
@@ -237,5 +263,7 @@ const previewRefKeyByRole: Partial<Record<ThemeResourceRole, PreviewRefKey>> = {
   tab_background_image: "tabBackground",
   bubble_me_1: "myBubble",
   bubble_you_1: "friendBubble",
+  bubble_me_2: "myBubble2",
+  bubble_you_2: "friendBubble2",
   profile_image_1: "profileImage",
 };

@@ -232,7 +232,7 @@ export const systemTemplateRepository: SystemTemplateRepository = {
     let cardPreviewPath = row.preview_metadata?.cardPreviewPath;
     try {
       const slots = getThemeSlots(row.platform);
-      const thumbnailRoles: ThemeResourceRole[] = ["main_background", "chat_background", "bubble_me_1", "bubble_you_1", "profile_image_1", ...thumbnailTabIconRoles];
+      const thumbnailRoles: ThemeResourceRole[] = ["main_background", "chat_background", "bubble_me_1", "bubble_you_1", "bubble_me_2", "bubble_you_2", "profile_image_1", ...thumbnailTabIconRoles];
       const pathByRole = new Map<ThemeResourceRole, string>();
       for (const role of thumbnailRoles) {
         const storagePath = resolvePreviewStoragePath(slots, role, uploadRefs, candidateSelections);
@@ -542,11 +542,15 @@ function buildPreviewMetadata({
       tabBackground: resolvePreviewStoragePath(slots, "tab_background_image", uploadRefs, candidateSelections),
       myBubble: resolvePreviewStoragePath(slots, "bubble_me_1", uploadRefs, candidateSelections),
       friendBubble: resolvePreviewStoragePath(slots, "bubble_you_1", uploadRefs, candidateSelections),
+      myBubble2: resolvePreviewStoragePath(slots, "bubble_me_2", uploadRefs, candidateSelections),
+      friendBubble2: resolvePreviewStoragePath(slots, "bubble_you_2", uploadRefs, candidateSelections),
       profileImage: resolvePreviewStoragePath(slots, "profile_image_1", uploadRefs, candidateSelections),
     },
     bubbles: {
       myBubble: resolvePreviewBubbleShape(slots, "bubble_me_1", bubbleEdits),
       friendBubble: resolvePreviewBubbleShape(slots, "bubble_you_1", bubbleEdits),
+      myBubble2: resolvePreviewBubbleShape(slots, "bubble_me_2", bubbleEdits),
+      friendBubble2: resolvePreviewBubbleShape(slots, "bubble_you_2", bubbleEdits),
     },
   };
 }

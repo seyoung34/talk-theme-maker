@@ -1251,10 +1251,13 @@ function ChatsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
   );
 }
 
-const chatroomPreviewMessages: Array<{ mine: boolean; text: string; time: string }> = [
-  { mine: false, text: "오늘 저녁 뭐 먹지 ㅋㅋ", time: "5:41" },
-  { mine: true, text: "떡볶이 어때 ㅎㅎ", time: "5:42" },
-  { mine: false, text: "콜! 이따 6시에 보자", time: "5:42" },
+// 연속 메시지 두 쌍(you_1→you_2, me_1→me_2)으로 구성해 bubble_me_1/2, bubble_you_1/2 네 슬롯이
+// 모두 보이게 한다. variant 2는 "_2"(연속 메시지 변형) 에셋을 쓴다.
+const chatroomPreviewMessages: Array<{ mine: boolean; variant: 1 | 2; text: string; time: string }> = [
+  { mine: false, variant: 1, text: "오늘 저녁 뭐 먹지 ㅋㅋ", time: "5:41" },
+  { mine: false, variant: 2, text: "떡볶이 어때?", time: "5:41" },
+  { mine: true, variant: 1, text: "콜 좋아 ㅎㅎ", time: "5:42" },
+  { mine: true, variant: 2, text: "6시에 보자!", time: "5:42" },
 ];
 
 // 채팅방
@@ -1273,7 +1276,7 @@ function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
 
       <div className="grid content-end gap-2 px-3 py-3 overflow-hidden">
         {chatroomPreviewMessages.map((message, index) => (
-          <ChatroomBubble key={index} visual={visual} mine={message.mine} text={message.text} time={message.time} />
+          <ChatroomBubble key={index} visual={visual} mine={message.mine} variant={message.variant} text={message.text} time={message.time} />
         ))}
       </div>
 
@@ -1289,12 +1292,12 @@ function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
   );
 }
 
-function ChatroomBubble({ visual, mine, text, time }: { visual: TemplatePreviewVisual; mine: boolean; text: string; time: string }) {
-  const image = mine ? visual.myBubbleImage : visual.friendBubbleImage;
-  const geometry = mine ? visual.myBubbleGeometry : visual.friendBubbleGeometry;
-  const stretch = mine ? visual.myBubbleStretch : visual.friendBubbleStretch;
-  const insets = mine ? visual.myBubbleInsets : visual.friendBubbleInsets;
-  const markers = mine ? visual.myBubbleMarkers : visual.friendBubbleMarkers;
+function ChatroomBubble({ visual, mine, variant, text, time }: { visual: TemplatePreviewVisual; mine: boolean; variant: 1 | 2; text: string; time: string }) {
+  const image = variant === 2 ? (mine ? visual.myBubbleImage2 : visual.friendBubbleImage2) : mine ? visual.myBubbleImage : visual.friendBubbleImage;
+  const geometry = variant === 2 ? (mine ? visual.myBubbleGeometry2 : visual.friendBubbleGeometry2) : mine ? visual.myBubbleGeometry : visual.friendBubbleGeometry;
+  const stretch = variant === 2 ? (mine ? visual.myBubbleStretch2 : visual.friendBubbleStretch2) : mine ? visual.myBubbleStretch : visual.friendBubbleStretch;
+  const insets = variant === 2 ? (mine ? visual.myBubbleInsets2 : visual.friendBubbleInsets2) : mine ? visual.myBubbleInsets : visual.friendBubbleInsets;
+  const markers = variant === 2 ? (mine ? visual.myBubbleMarkers2 : visual.friendBubbleMarkers2) : mine ? visual.myBubbleMarkers : visual.friendBubbleMarkers;
   const textColor = mine ? visual.myBubbleTextColor : visual.friendBubbleTextColor;
   const fillColor = mine ? visual.myBubbleFillColor : visual.friendBubbleFillColor;
   const edit = geometry || stretch || insets || markers ? { geometry, stretch, insets, markers } : undefined;

@@ -90,8 +90,10 @@ export type SystemTemplatePreviewMetadata = {
   cardPreviewPath?: string;
   generatedAt?: string;
   colors?: Partial<Record<"chatBackground" | "mainBackground" | "tabBackground" | "myBubble" | "friendBubble", string>>;
-  refs?: Partial<Record<"chatBackground" | "mainBackground" | "tabBackground" | "myBubble" | "friendBubble" | "profileImage", string>>;
-  bubbles?: Partial<Record<"myBubble" | "friendBubble", BubblePreviewShape>>;
+  // myBubble2/friendBubble2는 bubble_me_2/bubble_you_2(연속 메시지 변형)다. myBubble/friendBubble(_1)과
+  // 같은 색상 role(chat_bubble_me/you_color)을 쓰므로 colors에는 _2 항목이 없다.
+  refs?: Partial<Record<"chatBackground" | "mainBackground" | "tabBackground" | "myBubble" | "friendBubble" | "myBubble2" | "friendBubble2" | "profileImage", string>>;
+  bubbles?: Partial<Record<"myBubble" | "friendBubble" | "myBubble2" | "friendBubble2", BubblePreviewShape>>;
 };
 
 export type SystemTemplateSummary = Pick<SystemTemplateRecord, "id" | "bundleId" | "title" | "description" | "baseTemplateId" | "platform" | "status" | "visibility" | "pricingType" | "priceAmount" | "creditCost" | "tags" | "createdAt" | "updatedAt"> & {

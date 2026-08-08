@@ -18,10 +18,16 @@ export const themePublicBucketName = "theme-public";
  * 서명하지 않으므로 만료가 없다. 갤러리가 URL을 오래 들고 있어도 깨지지 않는다.
  * Supabase URL이 없는 환경(e2e 빌드 등)에서는 `undefined`를 돌려주고, 호출부가 색상만으로
  * 카드를 그린다.
+ *
+ * `version`을 주면 `?v=`로 붙인다. 썸네일은 저장 경로가 `system-templates/<id>/preview/card.webp`로
+ * 고정돼 있고 업로드 시 `cacheControl: "3600"`을 설정하므로, 재굽기로 내용이 바뀌어도 URL이 그대로면
+ * 브라우저/CDN이 최대 1시간 동안 이전 이미지를 계속 돌려준다. 저장 시각(예: `updatedAt`)처럼 저장할
+ * 때마다 바뀌는 값을 넘기면 재굽기 직후에도 새 이미지를 받는다.
  */
-export function getPublicThemeAssetUrl(storagePath: string | undefined) {
+export function getPublicThemeAssetUrl(storagePath: string | undefined, version?: number | string) {
   if (!storagePath || !supabaseUrl) return undefined;
-  return `${supabaseUrl}/storage/v1/object/public/${themePublicBucketName}/${storagePath.split("/").map(encodeURIComponent).join("/")}`;
+  const url = `${supabaseUrl}/storage/v1/object/public/${themePublicBucketName}/${storagePath.split("/").map(encodeURIComponent).join("/")}`;
+  return version !== undefined ? `${url}?v=${encodeURIComponent(String(version))}` : url;
 }
 // 서버 라우트의 maxSignedUrlPaths(50)와 맞춘다.
 const signedUrlBatchSize = 50;
