@@ -12,6 +12,7 @@ import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelecte
 import { resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
+import { generateSystemTemplateThumbnail } from "@/lib/theme/systemTemplates/thumbnail";
 import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
 import { describeAutosaveDraft, readAutosaveDraft, type EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
@@ -84,6 +85,9 @@ export default function TemplateGalleryClient() {
   const [recentWorkVisual, setRecentWorkVisual] = useState<TemplatePreviewVisual | null>(null);
   const [pendingTemplateStart, setPendingTemplateStart] = useState<PendingTemplateStart | null>(null);
   const userTemplateCardPreviewUrlsRef = useRef<Record<string, Record<string, string>>>({});
+  // 내 템플릿/최근 작업 카드에 갤러리 카드와 같은 완성도의 합성 썸네일을 붙이기 위해 구운 blob URL.
+  // id는 userTemplateCardVisuals와 같은 키(템플릿 id 또는 "최근 작업"의 record.id)를 쓴다.
+  const userTemplateCardThumbnailUrlsRef = useRef<Record<string, string>>({});
   const viewedTemplateRef = useRef<string | null>(null);
   const galleryTemplates = createGalleryTemplates(systemTemplates, systemUploadPreviewUrls, !isSystemTemplatesLoading).map((item) => ({
     ...item,
@@ -147,6 +151,12 @@ export default function TemplateGalleryClient() {
   }, []);
 
   useEffect(() => {
+    return () => {
+      revokeObjectUrls(userTemplateCardThumbnailUrlsRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     let active = true;
     let previewUrls: Record<string, string> = {};
     void readAutosaveDraft("user")
@@ -157,6 +167,12 @@ export default function TemplateGalleryClient() {
         const baseTemplate = themeTemplates.find((template) => template.id === previewRecord.templateId) ?? themeTemplates[0];
         setRecentWork(record);
         setRecentWorkVisual(createUserTemplatePreviewVisual(previewRecord, baseTemplate, previewUrls));
+        // CSS 목업을 먼저 보여 준 뒤, 갤러리 카드와 같은 합성 썸네일을 구워지는 대로 얹는다.
+        void bakeUserTemplateCardThumbnail(previewRecord).then((objectUrl) => {
+          if (!active || !objectUrl) return;
+          userTemplateCardThumbnailUrlsRef.current[previewRecord.id] = objectUrl;
+          setRecentWorkVisual((current) => (current ? { ...current, cardPreviewImage: objectUrl } : current));
+        });
       })
       .catch((error) => {
         console.error(error);
@@ -194,6 +210,17 @@ export default function TemplateGalleryClient() {
           return nextUrls;
         });
         setUserTemplateCardVisuals(nextVisuals);
+        revokeObjectUrls(userTemplateCardThumbnailUrlsRef.current);
+        userTemplateCardThumbnailUrlsRef.current = {};
+        // CSS 목업을 먼저 보여 준 뒤, 갤러리 카드와 같은 합성 썸네일을 구워지는 대로 하나씩 얹는다.
+        void Promise.all(
+          records.map(async (record) => {
+            const objectUrl = await bakeUserTemplateCardThumbnail(record);
+            if (!active || !objectUrl) return;
+            userTemplateCardThumbnailUrlsRef.current[record.id] = objectUrl;
+            setUserTemplateCardVisuals((current) => (current[record.id] ? { ...current, [record.id]: { ...current[record.id], cardPreviewImage: objectUrl } } : current));
+          }),
+        );
       } catch (error) {
         console.error(error);
         if (active) {
@@ -398,6 +425,11 @@ export default function TemplateGalleryClient() {
         delete next[template.id];
         return next;
       });
+      const thumbnailUrl = userTemplateCardThumbnailUrlsRef.current[template.id];
+      if (thumbnailUrl) {
+        URL.revokeObjectURL(thumbnailUrl);
+        delete userTemplateCardThumbnailUrlsRef.current[template.id];
+      }
       closePreview();
       setNotice("내 템플릿을 삭제했습니다.");
     } catch (error) {
@@ -656,6 +688,33 @@ function revokeObjectUrls(urls: Record<string, string> | undefined) {
 
 function revokeNestedObjectUrls(urls: Record<string, Record<string, string>>) {
   Object.values(urls).forEach(revokeObjectUrls);
+}
+
+/**
+ * 내 템플릿/최근 작업 카드에 시스템 템플릿 갤러리 카드와 같은 합성 썸네일을 만들어 준다.
+ *
+ * 내 템플릿은 브라우저 로컬(IndexedDB)에만 있고 서버로 올라가지 않는다 — 시스템 템플릿처럼
+ * Supabase에 썸네일을 구워 올리는 경로를 태우지 않는다(영속 경로는 분리 유지). 대신 같은
+ * `generateSystemTemplateThumbnail` 렌더러(관리자 저장·`/dev/bake-thumbnails`와 동일)를 브라우저에서만
+ * 실행해 미리보기용 Blob을 만든다. 실패해도(예: 이미지 디코딩 오류) 카드는 기존 CSS 목업으로 남는다.
+ */
+async function bakeUserTemplateCardThumbnail(record: UserTemplateRecord): Promise<string | undefined> {
+  try {
+    const blob = await generateSystemTemplateThumbnail({
+      baseTemplateId: record.templateId,
+      platform: record.platform,
+      overrides: {
+        colors: record.colors,
+        uploads: record.uploads,
+        candidateSelections: record.candidateSelections,
+        bubbleEdits: { ...record.bubbleEdits, designs: record.bubbleDesigns ?? {} },
+      },
+    });
+    return blob ? URL.createObjectURL(blob) : undefined;
+  } catch (error) {
+    console.error(error);
+    return undefined;
+  }
 }
 
 function autosaveToUserTemplateRecord(record: EditorAutosaveDraft): UserTemplateRecord {
