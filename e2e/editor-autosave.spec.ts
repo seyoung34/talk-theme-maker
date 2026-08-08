@@ -78,6 +78,29 @@ test.describe("편집기 자동 저장", () => {
     await expect(page.getByRole("button", { name: "이어서 편집" })).toHaveCount(0);
   });
 
+  test("닫기를 누르면 결정 없이 나가고, 초안은 남아 있어 다음에 다시 물어본다", async ({ page }) => {
+    await page.goto("/edit");
+    await waitForEditorReady(page);
+    await uploadSlotImage(page, { name: "e2e-close-dialog.png", rgb: [90, 40, 210] });
+    await expectAutosaveSaved(page);
+
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "이어서 편집할까요?" })).toBeVisible();
+
+    // resume도 discard도 아니다 — 결정을 미루고 이전 화면으로 나간다.
+    await page.getByRole("button", { name: "닫기 (결정하지 않고 나가기)" }).click();
+    await expect(page).toHaveURL(/\/template$/);
+
+    // 초안이 지워지지 않았으므로 다시 들어오면 같은 질문을 다시 띄운다.
+    await page.goto("/edit");
+    await expect(page.getByRole("heading", { name: "이어서 편집할까요?" })).toBeVisible();
+    await page.getByRole("button", { name: "이어서 편집" }).click();
+    await waitForEditorReady(page);
+
+    const restored = await readRenderedUploadImage(page);
+    expect(restored.rgb).toEqual([90, 40, 210]);
+  });
+
   test("아무것도 편집하지 않으면 이어하기 프롬프트를 만들지 않는다", async ({ page }) => {
     // 템플릿 로드와 배경 hydration을 사용자 변경으로 세면, 열어만 두고 나간 사용자에게도
     // 프롬프트가 떠서 신뢰를 잃는다. 코드리뷰에서 실제로 발견됐던 회귀다.
@@ -169,6 +192,72 @@ test.describe("단일 편집 탭", () => {
     await expect(secondPage.getByRole("heading", { name: "다른 탭에서 편집 중입니다." })).toBeVisible();
     await secondPage.getByRole("button", { name: "템플릿 갤러리로 돌아가기" }).click();
     await expect(secondPage).toHaveURL(/\/template$/);
+
+    // 차단 화면의 버튼도 leaveEditor()를 거쳐야 가드 엔트리가 남지 않는다. 남으면 여기서 뒤로가기를
+    // 눌렀을 때 /edit(차단 화면)으로 되돌아간다.
+    await secondPage.goBack();
+    await expect(secondPage).not.toHaveURL(/\/edit$/);
+  });
+});
+
+/**
+ * editor-exit-and-resume-dialog-plan.md의 작업 1 — `/edit`의 popstate 히스토리 가드가 이탈 경로마다
+ * 엔트리를 일관되지 않게 남겨, 뒤로가기를 반복하면 `/edit`으로 재진입하던 문제의 회귀 테스트.
+ * `leaveEditor()`가 `history.back()`으로 가드를 실제로 소비한 뒤 `replace`하므로, 아래 모든 이탈
+ * 경로에서 이탈 직후 다시 뒤로가기를 눌러도 `/edit`으로 돌아오면 안 된다.
+ */
+test.describe("이탈 히스토리", () => {
+  test("변경 없이 뒤로가기를 누르면 갤러리로 이동하고, 다시 뒤로가기를 눌러도 편집기로 돌아오지 않는다", async ({ page }) => {
+    await page.goto("/template");
+    await page.goto("/edit");
+    await waitForEditorReady(page);
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/template$/);
+
+    await page.goBack();
+    await expect(page).not.toHaveURL(/\/edit$/);
+  });
+
+  test("변경이 있는 상태에서 뒤로가기를 누르면 종료 확인을 띄우고, 취소 후 다시 눌러도 같은 확인을 다시 띄운다", async ({ page }) => {
+    await page.goto("/template");
+    await page.goto("/edit");
+    await waitForEditorReady(page);
+    await uploadSlotImage(page, { name: "e2e-back-dirty.png", rgb: [200, 40, 120] });
+    await expectAutosaveSaved(page);
+
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "편집을 종료할까요?" })).toBeVisible();
+
+    // 취소하면 /edit에 남고, 가드가 다시 장전되어 있어야 뒤로가기를 또 눌렀을 때 같은 동작이 반복된다.
+    await page.getByRole("button", { name: "편집 계속하기" }).click();
+    await expect(page).toHaveURL(/\/edit$/);
+
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "편집을 종료할까요?" })).toBeVisible();
+
+    await page.getByRole("button", { name: "편집 종료하기" }).click();
+    await expect(page).toHaveURL(/\/template$/);
+
+    await page.goBack();
+    await expect(page).not.toHaveURL(/\/edit$/);
+  });
+
+  test("헤더의 편집 종료 버튼으로 나간 뒤 뒤로가기를 눌러도 편집기로 돌아오지 않는다", async ({ page }) => {
+    // navigateAfterExit()는 브라우저 뒤로가기를 거치지 않고 버튼 클릭으로 바로 호출된다. 가드
+    // 엔트리를 소비한 적이 없는 경로라, popstate 분기만 고친 수정으로는 여기서 재현됐다.
+    await page.goto("/template");
+    await page.goto("/edit");
+    await waitForEditorReady(page);
+    await uploadSlotImage(page, { name: "e2e-exit-button.png", rgb: [40, 200, 160] });
+    await expectAutosaveSaved(page);
+
+    await page.getByRole("button", { name: "편집 종료" }).click();
+    await page.getByRole("button", { name: "편집 종료하기" }).click();
+    await expect(page).toHaveURL(/\/template$/);
+
+    await page.goBack();
+    await expect(page).not.toHaveURL(/\/edit$/);
   });
 });
 

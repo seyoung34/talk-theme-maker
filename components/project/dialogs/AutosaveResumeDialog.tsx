@@ -1,7 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { History, Images, Palette, MessageSquare } from "lucide-react";
+import { History, Images, Palette, MessageSquare, X } from "lucide-react";
 import { formatRelativeSavedAt } from "@/components/project/autosaveStatus";
 import { describeAutosaveDraft, type EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
 
@@ -10,16 +10,23 @@ import { describeAutosaveDraft, type EditorAutosaveDraft } from "@/lib/theme/pro
  *
  * 자동으로 덮어쓰지 않는 것이 이 화면의 목적이다. 사용자가 새 템플릿을 고르고 들어왔는데 이전 작업이
  * 조용히 복원되면 그것대로 혼란스럽고, 반대로 조용히 버리면 작업을 잃는다. 그래서 무엇이 들어 있는지
- * 보여주고 명시적으로 고르게 한다. 답하기 전에는 닫을 수 없다.
+ * 보여주고 명시적으로 고르게 한다.
+ *
+ * ESC·바깥 클릭으로는 닫을 수 없다 — 실수로 스와이프/클릭했다가 결정 없이 넘어가는 걸 막는다.
+ * 대신 우상단 닫기 버튼으로만 "지금은 결정하지 않기"를 명시적으로 고를 수 있게 한다. 이 버튼은
+ * resume/discard 어느 쪽도 답하지 않고 이전 화면으로 돌아간다 — 초안은 그대로 남아 다음에 `/edit`에
+ * 들어오면 다시 묻는다.
  */
 export function AutosaveResumeDialog({
   record,
   onResume,
   onDiscard,
+  onClose,
 }: {
   record: EditorAutosaveDraft;
   onResume: () => void;
   onDiscard: () => void;
+  onClose: () => void;
 }) {
   const summary = describeAutosaveDraft(record);
   const items = [
@@ -38,6 +45,14 @@ export function AutosaveResumeDialog({
           onPointerDownOutside={(event) => event.preventDefault()}
           onInteractOutside={(event) => event.preventDefault()}
         >
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기 (결정하지 않고 나가기)"
+            className="absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-full text-[#94a3b8] transition hover:bg-[#f8fafc] hover:text-[#475569] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
           <span className="mb-4 grid size-11 place-items-center rounded-2xl bg-[#eff6ff] text-[#2563eb]">
             <History size={20} aria-hidden="true" />
           </span>
@@ -87,6 +102,7 @@ export function AutosaveResumeDialog({
           </div>
           <p className="mt-3 text-[11px] font-semibold leading-5 text-[#94a3b8]">
             새로 시작하면 위 내용은 삭제됩니다. 저장해 둔 내 템플릿은 그대로 남습니다.
+            지금 정하지 않으려면 오른쪽 위 닫기를 누르세요 — 초안은 그대로 남고 다음에 다시 물어봅니다.
           </p>
         </Dialog.Content>
       </Dialog.Portal>

@@ -147,6 +147,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const dismissNotice = useCallback(() => setNotice(null), []);
   const autosaveNoticeRef = useRef<Notice | null>(null);
   const shouldConfirmExitRef = useRef(false);
+  // leaveEditor()가 history.back()으로 유발한 popstate인지, 사용자가 실제로 누른 뒤로가기인지 구분한다.
+  const programmaticExitRef = useRef(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
   const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
@@ -518,14 +520,39 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const exportExitGuardActive = isExporting && !isExportQueued;
   shouldConfirmExitRef.current = hasUnsavedChanges || exportExitGuardActive;
 
+  /**
+   * `/edit`을 벗어나는 모든 경로(뒤로가기, 종료 확인, 헤더/액션바 종료 버튼, 탭 차단 화면)가 공유하는
+   * 단일 출구.
+   *
+   * 그냥 `router.push(exitDestination)`을 부르면 아래 popstate 가드가 쌓아 둔 히스토리 엔트리(또는
+   * 그 아래 원래 `/edit` 진입 엔트리)가 스택에 그대로 남는다. 그러면 이탈 직후 뒤로가기를 한 번 더
+   * 누르면 `/edit`으로 재진입한다 — 브라우저 뒤로가기뿐 아니라 버튼 클릭으로 바로 나가는 경로도
+   * 가드 엔트리를 소비한 적이 없어서 같은 문제가 생긴다. `history.back()`으로 가드 엔트리를 실제로
+   * 소비한 뒤에만 `replace`로 목적지로 이동해야 스택이 새지 않는다. `programmaticExitRef`로 이
+   * 함수가 유발한 popstate와 사용자가 실제로 누른 뒤로가기를 구분한다.
+   */
+  const leaveEditor = () => {
+    if (typeof window === "undefined") {
+      router.replace(exitDestination);
+      return;
+    }
+    programmaticExitRef.current = true;
+    window.history.back();
+  };
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
     const handlePopState = () => {
-      if (!shouldConfirmExitRef.current) {
-        router.push(exitDestination);
+      const wasProgrammaticExit = programmaticExitRef.current;
+      programmaticExitRef.current = false;
+      if (wasProgrammaticExit || !shouldConfirmExitRef.current) {
+        // leaveEditor()가 소비시킨 경우거나, 실제 뒤로가기인데 저장할 게 없는 경우 — 두 경우 모두
+        // 가드 엔트리는 이미 소비됐으므로 새 엔트리를 추가하지 않는 replace로 목적지에 안착시킨다.
+        router.replace(exitDestination);
         return;
       }
+      // 저장할 내용이 있는 상태에서 사용자가 실제로 뒤로가기를 눌렀다. 가드를 다시 장전하고 확인창을 띄운다.
       window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
       setExitSaveState("idle");
       setExitConfirmOpen(true);
@@ -537,11 +564,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const navigateAfterExit = () => {
     setExitConfirmOpen(false);
     setExitSaveState("idle");
-    router.push(exitDestination);
+    leaveEditor();
   };
   const requestExit = () => {
     if (!shouldConfirmExitRef.current) {
-      router.push(exitDestination);
+      leaveEditor();
       return;
     }
     setExitSaveState("idle");
@@ -1235,7 +1262,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           <p className="mt-3 text-sm font-semibold leading-6 text-[#64748b]">
             작업 충돌을 막기 위해 편집기는 한 탭에서만 사용할 수 있습니다. 기존 편집 탭을 종료한 뒤 다시 열어 주세요.
           </p>
-          <button type="button" className="mt-6 min-h-11 w-full rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white" onClick={() => router.push(exitDestination)}>
+          <button type="button" className="mt-6 min-h-11 w-full rounded-xl bg-[#0f172a] px-4 text-sm font-black text-white" onClick={leaveEditor}>
             {isAdminMode ? "관리자 페이지로 돌아가기" : "템플릿 갤러리로 돌아가기"}
           </button>
         </section>
@@ -1260,6 +1287,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           record={pendingAutosave}
           onResume={() => answerAutosaveDecision("resume")}
           onDiscard={() => answerAutosaveDecision("discard")}
+          onClose={() => {
+            // resume/discard 어느 쪽도 답하지 않는다 — answerAutosaveDecision을 부르면 useEditorBootstrap의
+            // 대기 중인 결정이 "resume 아님"으로 풀리면서 clearAutosaveDraft가 초안을 지운다. 여기서는
+            // 화면만 닫고 나가서 초안을 그대로 남긴다. bootstrap의 Promise는 컴포넌트가 언마운트되며 함께
+            // 버려지므로 별도로 정리할 필요가 없다.
+            setPendingAutosave(null);
+            leaveEditor();
+          }}
         />
       ) : null}
       <Dialog.Root open={Boolean(pendingBubbleCopy)} onOpenChange={(open) => { if (!open) setPendingBubbleCopy(null); }}>
