@@ -1162,8 +1162,14 @@ function getAdminAssetSaveTargets(slot: ThemeAssetSlot, assetKind: AdminAssetKin
   return platformSlots.map((target) => ({ platform: target.platform, slotRole: target.slot.role, targetKind: "exact_role", priority: 0, enabled: true }));
 }
 
+/**
+ * 편집기에서 말풍선을 비파괴로 좌우반전할 수 있으므로(`bubbleFlipX`), 빌더로 만든 말풍선도 슬롯을
+ * exact로 고정하지 않고 네 기본 슬롯(`bubble_me_1/2`, `bubble_you_1/2`)이 공유하는 그룹 후보로
+ * 등록한다. 일반 파일 업로드 경로(`getAdminAssetSaveTargets`)의 bubble 기본값과 동일하게 맞춘 것이다.
+ */
 function getAdminBubbleBuilderTargets(slot: ThemeAssetSlot): AdminAssetTargetInput[] {
-  return [{ platform: "all", slotRole: slot.role, targetKind: "exact_role", priority: 0, enabled: true }];
+  void slot;
+  return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }];
 }
 
 function bubbleVariantFromRole(role: string): "first" | "group" | null {
@@ -1566,7 +1572,7 @@ function AdminAssetEditDialog({
                     onClick={() => setTargetMode("shared")}
                     className={`rounded-2xl border px-4 py-3 text-left text-xs font-bold leading-5 transition hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-45 ${targetMode === "shared" ? "border-[var(--color-info)] bg-[var(--color-info-container)] text-[var(--color-info-strong)]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
                   >
-                    Android+iOS 공통 대상으로 정리
+                    {isBubble ? "말풍선 네 슬롯 공유 후보로 정리" : "Android+iOS 공통 대상으로 정리"}
                   </button>
                 </div>
               </section>

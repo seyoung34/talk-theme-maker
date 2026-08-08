@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createBubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
-import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, selectAdminAssetPlatformVariant } from "@/lib/theme/adminAssetDomain";
+import { canonicalAdminAssetToCandidate, isValidBubbleBuilderTargets, mapCanonicalAdminAssetRow, selectAdminAssetPlatformVariant } from "@/lib/theme/adminAssetDomain";
 
 const markers = {
   top: { start: 10, end: 11 },
@@ -61,5 +61,39 @@ describe("canonical admin asset variants", () => {
       stretch: { x: 20, y: 20 },
       contentInsets: { top: 12, right: 12, bottom: 12, left: 12 },
     });
+  });
+});
+
+describe("isValidBubbleBuilderTargets", () => {
+  it("accepts a single asset_kind group target (편집기 좌우반전으로 슬롯 방향을 대체)", () => {
+    expect(isValidBubbleBuilderTargets([{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }], "bubble_me_1")).toBe(true);
+  });
+
+  it("accepts an exact_role target matching the given slot", () => {
+    expect(isValidBubbleBuilderTargets([{ platform: "all", slotRole: "bubble_me_1", targetKind: "exact_role", priority: 0, enabled: true }], "bubble_me_1")).toBe(true);
+  });
+
+  it("rejects an exact_role target for a different slot", () => {
+    expect(isValidBubbleBuilderTargets([{ platform: "all", slotRole: "bubble_you_1", targetKind: "exact_role", priority: 0, enabled: true }], "bubble_me_1")).toBe(false);
+  });
+
+  it("rejects a group target mixed with other targets", () => {
+    expect(
+      isValidBubbleBuilderTargets(
+        [
+          { platform: "all", targetKind: "asset_kind", priority: 0, enabled: true },
+          { platform: "all", slotRole: "bubble_me_1", targetKind: "exact_role", priority: 0, enabled: true },
+        ],
+        "bubble_me_1",
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects an empty target list", () => {
+    expect(isValidBubbleBuilderTargets([], "bubble_me_1")).toBe(false);
+  });
+
+  it("rejects a shape_rule target", () => {
+    expect(isValidBubbleBuilderTargets([{ platform: "all", targetKind: "shape_rule", priority: 0, enabled: true }], "bubble_me_1")).toBe(false);
   });
 });

@@ -356,6 +356,23 @@ export function isValidBubbleAdjustment(value: AdminBubbleAdjustment): boolean {
   return isValidBubbleSpecLike(value.markers, value.insets, value.stretch);
 }
 
+/**
+ * 말풍선 빌더로 만든 에셋의 target이 유효한지 판별한다.
+ *
+ * 편집기에서 말풍선을 비파괴로 좌우반전할 수 있으므로(`bubbleFlipX`), 등록 시점에 슬롯을 하나로
+ * 고정할 필요가 없다 — `bubble_me_1`용으로 만든 그림도 `bubble_you_1`에서 반전해 쓸 수 있다. 그래서
+ * 두 형태를 모두 허용한다.
+ *
+ * - 그룹 target: `targetKind: "asset_kind"`(슬롯 없음) 하나만 — 네 기본 말풍선 슬롯이 공유하는 후보가 된다.
+ * - 슬롯 전용 target: 모든 target이 `slot`에 대한 `exact_role` — 특정 슬롯에만 고정하고 싶을 때를 위해 남겨 둔다.
+ */
+export function isValidBubbleBuilderTargets(targets: readonly AdminAssetTargetInput[], slotRole: ThemeResourceRole): boolean {
+  if (!targets.length) return false;
+  const isSharedGroupTarget = targets.length === 1 && targets[0]?.targetKind === "asset_kind" && !targets[0]?.slotRole;
+  if (isSharedGroupTarget) return true;
+  return targets.every((target) => target.targetKind === "exact_role" && target.slotRole === slotRole);
+}
+
 function resolveAdminAssetTargets(input: AdminAssetCandidateInput): readonly AdminAssetTargetInput[] {
   if (input.targets && input.targets.length > 0) return input.targets;
   return [

@@ -15,6 +15,7 @@ import {
   createAdminAssetPersistencePayload,
   inferAdminAssetKind,
   isValidBubbleAdjustment,
+  isValidBubbleBuilderTargets,
   mapCanonicalAdminAssetRow,
   type AdminAssetCandidate,
   type AdminAssetCandidateInput,
@@ -229,7 +230,7 @@ export async function saveAdminBubbleBuilderCandidate(input: AdminBubbleBuilderC
   const androidVariant = input.variants.find((variant) => variant.platform === "android");
   const iosVariant = input.variants.find((variant) => variant.platform === "ios");
   if (!androidVariant || !iosVariant || input.variants.length !== 2) throw new Error("INVALID_PLATFORM_VARIANTS");
-  if (!input.targets.length || input.targets.some((target) => target.targetKind !== "exact_role" || target.slotRole !== input.slotRole)) {
+  if (!isValidBubbleBuilderTargets(input.targets, input.slotRole)) {
     throw new Error("INVALID_BUBBLE_TARGETS");
   }
   const layers = input.recipe.design.decorations ?? [];
