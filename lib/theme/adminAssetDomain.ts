@@ -3,7 +3,7 @@ import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
-export type AdminAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode";
+export type AdminAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode" | "passcode_indicator";
 export type AdminAssetShape = "square" | "portrait" | "wide" | "transparent" | "ninepatch" | "unknown";
 export type AdminAssetPlatform = ThemePlatform | "all";
 export type AdminAssetTargetKind = "exact_role" | "asset_kind" | "shape_rule";
@@ -338,6 +338,9 @@ export function inferAdminAssetKind(slot: Pick<ThemeAssetSlot, "role" | "group" 
   if (slot.role === "theme_icon" || slot.role.startsWith("tab_icon_")) return "icon";
   if (slot.role === "profile_image" || slot.role.startsWith("profile_image_")) return "profile";
   if (slot.role.startsWith("bubble_")) return "bubble";
+  // 잠금화면 표시(점/아이콘)는 3:4 전체 배경 이미지와 모양·용도가 전혀 달라서(정사각형에
+  // 가까운 작은 아이콘) 배경과 같은 kind를 쓰면 후보가 서로 뒤섞인다 — 반드시 배경보다 먼저 검사한다.
+  if (slot.role.startsWith("passcode_indicator")) return "passcode_indicator";
   if (slot.role.startsWith("passcode_")) return "passcode";
   if (slot.group === "background" || slot.role === "tab_background_image") return "background";
   return "icon";
@@ -348,6 +351,7 @@ export function inferLegacyAssetKind(role: ThemeResourceRole): AdminAssetKind {
   if (role === "theme_icon" || role.startsWith("tab_icon_")) return "icon";
   if (role === "profile_image" || role.startsWith("profile_image_")) return "profile";
   if (role.startsWith("bubble_")) return "bubble";
+  if (role.startsWith("passcode_indicator")) return "passcode_indicator";
   if (role.startsWith("passcode_")) return "passcode";
   return "background";
 }
@@ -560,6 +564,7 @@ function legacyRoleFromKind(kind?: AdminAssetKind): ThemeResourceRole {
   if (kind === "bubble") return "bubble_me_1";
   if (kind === "profile") return "profile_image";
   if (kind === "launcher") return "launcher_foreground";
+  if (kind === "passcode_indicator") return "passcode_indicator_1";
   if (kind === "passcode") return "passcode_background";
   if (kind === "background") return "main_background";
   return "theme_icon";
@@ -567,7 +572,15 @@ function legacyRoleFromKind(kind?: AdminAssetKind): ThemeResourceRole {
 
 function parseOptionalAssetKind(value: unknown): AdminAssetKind | undefined {
   if (value == null) return undefined;
-  if (value === "background" || value === "icon" || value === "bubble" || value === "profile" || value === "launcher" || value === "passcode") return value;
+  if (
+    value === "background" ||
+    value === "icon" ||
+    value === "bubble" ||
+    value === "profile" ||
+    value === "launcher" ||
+    value === "passcode" ||
+    value === "passcode_indicator"
+  ) return value;
   throw new AdminAssetDomainError("INVALID_CANONICAL_ASSET_ROW");
 }
 

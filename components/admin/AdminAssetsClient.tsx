@@ -38,7 +38,7 @@ import { getThemeSlots } from "@/lib/theme/templates";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
-const assetKindOrder: AdminAssetKind[] = ["background", "icon", "bubble", "profile", "launcher", "passcode"];
+const assetKindOrder: AdminAssetKind[] = ["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"];
 
 const ACCEPTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -1207,16 +1207,16 @@ function getAdminAssetGuidance(slot: ThemeAssetSlot | undefined, assetKind: Admi
     return items;
   }
 
-  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher" || assetKind === "passcode") && !shapes.has("square")) {
-    items.push("아이콘·프로필·패스코드 이미지는 정사각형에 가까울수록 잘리지 않고 안정적으로 보입니다.");
+  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher" || assetKind === "passcode_indicator") && !shapes.has("square")) {
+    items.push("아이콘·프로필·암호 표시 이미지는 정사각형에 가까울수록 잘리지 않고 안정적으로 보입니다.");
   }
-  if ((assetKind === "background" || slot.role.includes("background")) && width / height > 1.2) {
+  if ((assetKind === "background" || assetKind === "passcode" || slot.role.includes("background")) && width / height > 1.2) {
     items.push("배경 이미지는 세로 화면에서 사용됩니다. 가로형 이미지는 상하 영역이 비거나 잘릴 수 있습니다.");
   }
   if (assetKind === "bubble" && !shapes.has("ninepatch") && slot.platform === "android") {
     items.push("Android 말풍선은 9-patch 또는 stretch 조정값이 중요합니다. 저장 전 말풍선 조정값을 확인하세요.");
   }
-  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher" || assetKind === "passcode" || assetKind === "bubble") && !hasTransparentPixels) {
+  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher" || assetKind === "passcode_indicator" || assetKind === "bubble") && !hasTransparentPixels) {
     items.push(hasTransparencyAnalysis
       ? "투명 픽셀이 거의 없습니다. 누끼가 필요한 에셋은 실제 테마에서 사각 배경이 보일 수 있습니다."
       : "투명 배경 여부를 확인하지 못했습니다. 누끼가 필요한 에셋은 배경이 사각형으로 보일 수 있습니다.");

@@ -381,7 +381,8 @@ export function getAdminAssetKindLabel(kind: AdminAssetKind): string {
     bubble: "말풍선",
     profile: "프로필",
     launcher: "런처 아이콘",
-    passcode: "잠금화면",
+    passcode: "잠금화면 배경",
+    passcode_indicator: "암호 표시",
   };
   return labels[kind];
 }
@@ -398,6 +399,7 @@ export function isAdminAssetRecommendedForSlot(slot: ThemeAssetSlot, asset: Admi
   if (slot.role === "theme_icon") return assetKind === "icon" || assetKind === "launcher";
   if (slot.role.startsWith("launcher_")) return assetKind === "launcher" || assetKind === "icon";
   if (slot.role === "profile_image" || slot.role.startsWith("profile_image_")) return assetKind === "profile" || (assetKind === "icon" && shapes.has("square"));
+  if (slot.role.startsWith("passcode_indicator")) return assetKind === "passcode_indicator" && (shapes.size === 0 || shapes.has("square") || shapes.has("transparent"));
   if (slot.role === "main_background" || slot.role === "chat_background" || slot.role === "passcode_background") return assetKind === "background" || assetKind === "passcode";
   if (slot.role === "tab_background_image") return assetKind === "background" || shapes.has("ninepatch");
   if (slot.role.startsWith("bubble_")) return assetKind === "bubble";

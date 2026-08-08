@@ -6,7 +6,7 @@ import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAss
 
 const bucketName = "theme-assets";
 const allowedPlatforms = new Set(["android", "ios"]);
-const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode"]);
+const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"]);
 const maxSourceRows = 200;
 const recommendedPageCacheTtlSeconds = 30;
 
@@ -146,6 +146,7 @@ function isCompatibleExactRole(assetKind: AdminAssetKind, targetRole: string, re
   if (assetKind === "bubble") return targetRole.startsWith("bubble_") && requestedRole.startsWith("bubble_");
   if (assetKind === "background") return isSharedBackgroundRole(targetRole) && isSharedBackgroundRole(requestedRole);
   if (assetKind === "icon") return targetRole.startsWith("tab_icon_") && requestedRole.startsWith("tab_icon_");
+  if (assetKind === "passcode_indicator") return targetRole.startsWith("passcode_indicator") && requestedRole.startsWith("passcode_indicator");
   return false;
 }
 
