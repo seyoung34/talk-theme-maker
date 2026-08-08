@@ -14,8 +14,10 @@ import {
   getSelectedCandidate,
   getSelectedUpload,
   getSharedSlotUploadEntries,
+  hasUnlinkedAutoColorSlots,
   isRemovableUploadCandidate,
   getDerivedColorLink,
+  type AutoColorLinkSummary,
   type SlotCandidate,
   type SlotCandidateSelections,
   type SlotColors,
@@ -54,6 +56,8 @@ type MobileQuickEditPanelProps = {
   recommendedColor?: string;
   isAutoColor: boolean;
   canApplyAutoColor: boolean;
+  canApplyAutoColorToAll: boolean;
+  autoColorSummary: AutoColorLinkSummary;
   fileInputRefs: MutableRefObject<Record<string, HTMLInputElement | null>>;
   onUpload: (slot: ThemeAssetSlot, files: FileList | readonly File[] | null) => void;
   onEditedUpload: (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => void;
@@ -64,6 +68,7 @@ type MobileQuickEditPanelProps = {
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
   onSelectAdminAsset: (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => void;
   onApplyAutoColor: () => void;
+  onApplyAutoColorToAll: () => void;
   onGeometryChange: (geometry: BubbleGeometry) => void;
   onMarkersChange: (markers: Markers) => void;
   onInsetsChange: (insets: Insets) => void;
@@ -228,9 +233,12 @@ function ColorControls({
   recommendedColor,
   isAutoColor,
   canApplyAutoColor,
+  canApplyAutoColorToAll,
+  autoColorSummary,
   onColorChange,
   onUnlinkColor,
   onApplyAutoColor,
+  onApplyAutoColorToAll,
   candidateGridExpanded = false,
 }: MobileQuickEditPanelProps & { slot: ThemeAssetSlot; candidates: SlotCandidate[] }) {
   // 연동 중이면 기준 색에서 파생된 실제 값이 나와야 한다. 파생 슬롯 자기 기본값을 보여 주면
@@ -334,6 +342,25 @@ function ColorControls({
           {isAutoColor ? "자동 색상 적용됨" : "추천 색상 자동 적용"}
           {recommendedColor ? <span className="ml-1 border rounded size-4 border-black/10" style={{ backgroundColor: themeColorToCss(recommendedColor) }} aria-hidden="true" /> : null}
         </button>
+      ) : null}
+
+      {canApplyAutoColorToAll ? (
+        <div className="grid gap-1">
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-[#bfdbfe] bg-white px-3 text-[13px] font-bold text-[#1d4ed8] transition hover:bg-[#eff6ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={!hasUnlinkedAutoColorSlots(autoColorSummary)}
+            onClick={onApplyAutoColorToAll}
+          >
+            <Sliders size={15} strokeWidth={2.2} aria-hidden="true" />
+            {hasUnlinkedAutoColorSlots(autoColorSummary) ? "끊긴 연동 모두 다시 잇기" : "모두 연동됨"}
+          </button>
+          {autoColorSummary.total > 0 ? (
+            <p className="px-1 text-center text-[11px] font-medium leading-4 text-[#64748b]">
+              배경 자동 연동 <span className="font-bold text-[#1d4ed8]">{autoColorSummary.linked}/{autoColorSummary.total}</span>개
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {contrastWarning ? (

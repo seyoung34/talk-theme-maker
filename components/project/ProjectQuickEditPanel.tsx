@@ -9,7 +9,7 @@ import { getCandidateCardWidthClass, getCandidateLayoutKind, type CandidateLayou
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import { supportsColorAlpha } from "@/lib/theme/project/platformColor";
-import { buildSlotCandidates, getResolvedColor, getSharedSlotUploadEntries, isRemovableUploadCandidate, getDerivedColorLink, disabledImageCandidateId, type DerivedColorLink, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { buildSlotCandidates, getResolvedColor, getSharedSlotUploadEntries, hasUnlinkedAutoColorSlots, isRemovableUploadCandidate, getDerivedColorLink, disabledImageCandidateId, type AutoColorLinkSummary, type DerivedColorLink, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
@@ -52,6 +52,7 @@ export function ProjectQuickEditPanel({
   isAutoColor,
   canApplyAutoColor,
   canApplyAutoColorToAll,
+  autoColorSummary,
   onApplyAutoColor,
   onApplyAutoColorToAll,
   onSelectCandidate,
@@ -100,6 +101,7 @@ export function ProjectQuickEditPanel({
   isAutoColor: boolean;
   canApplyAutoColor: boolean;
   canApplyAutoColorToAll: boolean;
+  autoColorSummary: AutoColorLinkSummary;
   onApplyAutoColor: () => void;
   onApplyAutoColorToAll: () => void;
   onSelectCandidate: (slot: ThemeAssetSlot, candidateId: string) => void;
@@ -236,7 +238,7 @@ export function ProjectQuickEditPanel({
 
       <section className="grid min-h-0 content-start gap-4 rounded-xl border border-[#e5e7eb] bg-white p-5 shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
         {slot.kind === "color" ? (
-          <ColorEditor slot={slot} platform={platform} value={getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} derivedLink={getDerivedColorLink(slot, colors, selections, templateId, template, slots)} onRestoreDerivedLink={() => onUnlinkColor(slot)} />
+          <ColorEditor slot={slot} platform={platform} value={getResolvedColor(slot, colors, selections, templateId, template, slots) ?? getDefaultColor(slot, templateId, template)} onChange={onColorChange} imageColorPalette={imageColorPalette} imageColorPaletteError={imageColorPaletteError} recommendedColor={recommendedColor} contrastWarning={contrastWarning} isAutoColor={isAutoColor} canApplyAutoColor={canApplyAutoColor} canApplyAutoColorToAll={canApplyAutoColorToAll} autoColorSummary={autoColorSummary} onApplyAutoColor={onApplyAutoColor} onApplyAutoColorToAll={onApplyAutoColorToAll} derivedLink={getDerivedColorLink(slot, colors, selections, templateId, template, slots)} onRestoreDerivedLink={() => onUnlinkColor(slot)} />
         ) : (
           <>
             <input
@@ -669,6 +671,7 @@ function ColorEditor({
   isAutoColor,
   canApplyAutoColor,
   canApplyAutoColorToAll,
+  autoColorSummary,
   onApplyAutoColor,
   onApplyAutoColorToAll,
   derivedLink,
@@ -685,6 +688,7 @@ function ColorEditor({
   isAutoColor: boolean;
   canApplyAutoColor: boolean;
   canApplyAutoColorToAll: boolean;
+  autoColorSummary: AutoColorLinkSummary;
   onApplyAutoColor: () => void;
   onApplyAutoColorToAll: () => void;
   derivedLink?: DerivedColorLink;
@@ -768,10 +772,16 @@ function ColorEditor({
                 <InfoTooltip label="추천 색 다시 적용 안내" content="현재 슬롯만 자동 맞춤 상태로 다시 연결합니다. 이후 배경 이미지나 기준 배경색이 바뀌면 이 슬롯의 추천 색도 함께 갱신되며, 다른 수동 설정값은 변경하지 않습니다." triggerClassName="min-h-9 rounded-r-lg border-l border-white/30 bg-[#2563eb] px-2 text-white hover:bg-[#1d4ed8] focus-visible:bg-[#1d4ed8]" />
               </div>
               <div className="inline-flex overflow-hidden rounded-lg shadow-sm">
-                <button type="button" className="min-h-9 rounded-l-lg border border-r-0 border-[#bfdbfe] bg-white px-3 text-xs font-bold text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45" disabled={!canApplyAutoColorToAll} onClick={onApplyAutoColorToAll}>모든 슬롯 자동 맞춤</button>
-                <InfoTooltip label="메인 색상 모두 자동 맞춤 안내" content="친구·채팅 목록·더보기·하단 탭에 더해 채팅방 배경까지, 자동 맞춤 대상 색상을 모두 다시 계산합니다. 채팅방 배경은 채팅방 이미지를, 나머지는 메인 배경 이미지를 기준으로 씁니다. 직접 수정한 색상도 추천값으로 바뀝니다. 배경 이미지가 없으면 현재 배경색을 기준으로 계산합니다." triggerClassName="min-h-9 rounded-r-lg border border-[#bfdbfe] bg-white px-2 text-[#1d4ed8] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff]" />
+                <button type="button" className="min-h-9 rounded-l-lg border border-r-0 border-[#bfdbfe] bg-white px-3 text-xs font-bold text-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-45" disabled={!canApplyAutoColorToAll || !hasUnlinkedAutoColorSlots(autoColorSummary)} onClick={onApplyAutoColorToAll}>{getAutoColorAllLabel(autoColorSummary)}</button>
+                <InfoTooltip label="메인 색상 자동 연동 관리 안내" content="친구·채팅 목록·더보기·하단 탭에 더해 채팅방·잠금화면 배경까지, 자동 맞춤 대상 색상 중 끊긴 연동만 다시 잇습니다. 이미 연동 중인 슬롯은 그대로 두고, 앞으로도 배경이 바뀔 때마다 계속 따라갑니다. 배경 이미지가 없으면 현재 배경색을 기준으로 계산합니다." triggerClassName="min-h-9 rounded-r-lg border border-[#bfdbfe] bg-white px-2 text-[#1d4ed8] hover:bg-[#eff6ff] focus-visible:bg-[#eff6ff]" />
               </div>
             </div>
+            {autoColorSummary.total > 0 ? (
+              <p className="text-center text-[11px] font-semibold text-[#64748b]">
+                배경 자동 연동 <span className="font-bold text-[#1d4ed8]">{autoColorSummary.linked}/{autoColorSummary.total}</span>개
+                {autoColorSummary.linked < autoColorSummary.total ? " · 나머지는 직접 설정한 색상입니다." : " · 모두 연동 중입니다."}
+              </p>
+            ) : null}
           </div>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-end">
@@ -854,6 +864,7 @@ function InfoTooltip({ label, content, triggerClassName }: { label: string; cont
 function getAutoColorReason(slot: ThemeAssetSlot) {
   if (slot.autoColorRecipe === "background-average") return "배경 이미지 평균색 기준으로";
   if (slot.autoColorRecipe === "chat-background-average") return "채팅방 배경 이미지 평균색 기준으로";
+  if (slot.autoColorRecipe === "passcode-background-average") return "잠금화면 배경 이미지 평균색(없으면 메인 배경) 기준으로";
   if (slot.autoColorRecipe === "bubble-me-text") return "내 말풍선 표면과 읽기 쉬운 대비로";
   if (slot.autoColorRecipe === "bubble-you-text") return "상대 말풍선 표면과 읽기 쉬운 대비로";
   if (slot.autoColorRecipe === "surface-background") return "메인 배경색 기준으로";
@@ -865,12 +876,19 @@ function getAutoColorReason(slot: ThemeAssetSlot) {
   return "현재 메인 팔레트 기준으로";
 }
 
+// 벌크 버튼 문구. 끊긴 연동이 없으면 "다시 맞출" 일도 없다는 걸 라벨에서부터 보여 준다.
+function getAutoColorAllLabel(summary: AutoColorLinkSummary) {
+  return hasUnlinkedAutoColorSlots(summary) ? "끊긴 연동 모두 다시 잇기" : "모두 연동됨";
+}
+
 function getAutoColorExplanation(slot: ThemeAssetSlot) {
   switch (slot.autoColorRecipe) {
     case "background-average":
       return "배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 이미지가 없으면 사용자가 입력한 배경색을 유지합니다."
     case "chat-background-average":
       return "채팅방 배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 메인 배경과 다른 이미지를 쓰므로 기준도 채팅방 이미지입니다. 이미지가 없으면 현재 채팅방 배경색을 유지합니다.";
+    case "passcode-background-average":
+      return "잠금화면 배경 이미지가 있으면 그 평균색을 사용합니다. 잠금화면 이미지를 따로 준비하지 않는 경우가 많아, 이미지가 없으면 메인 배경(이미지 또는 직접 지정한 색)을 그대로 따라갑니다.";
     case "bubble-me-text":
       return "내 말풍선 이미지를 분석해 메시지 글자색을 정합니다. 투명한 부분은 실제 채팅방 배경 위에 합성해 판단하고, 4.5:1 이상의 대비를 목표로 합니다. 직접 색을 바꾸면 자동 연결이 해제됩니다.";
     case "bubble-you-text":

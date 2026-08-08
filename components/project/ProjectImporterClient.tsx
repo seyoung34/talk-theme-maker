@@ -57,6 +57,7 @@ import {
   isSlotVisibleInGroup,
   isSlotVisibleInSection,
   sectionLabels,
+  type AutoColorLinkSummary,
   type BubbleEditState,
 } from "@/components/project/projectModel";
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
@@ -905,11 +906,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     trackFirstValueReached("color");
   };
 
+  // 벌크 버튼과 상태 요약이 "무엇을 연동 대상으로 볼지" 같은 기준을 쓰게 필터를 하나로 둔다.
+  const autoColorEligibleSlots = slots.filter((slot) => slot.autoColorRecipe && mainColorRecommendations[slot.id] && (mainBackgroundFile || slot.role !== "main_background_color"));
+  const autoColorSummary: AutoColorLinkSummary = {
+    linked: autoColorEligibleSlots.filter((slot) => candidateSelections[slot.id] === autoMainPaletteCandidateId).length,
+    total: autoColorEligibleSlots.length,
+  };
+
   const applyAutoColorToAll = () => {
     if (autoColorPending) return;
-    const linkedSlots = slots.filter((slot) => slot.autoColorRecipe && mainColorRecommendations[slot.id] && (mainBackgroundFile || slot.role !== "main_background_color"));
-    setColors((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, mainColorRecommendations[slot.id]])]));
-    setCandidateSelections((current) => Object.fromEntries([...Object.entries(current), ...linkedSlots.map((slot) => [slot.id, autoMainPaletteCandidateId])]));
+    setColors((current) => Object.fromEntries([...Object.entries(current), ...autoColorEligibleSlots.map((slot) => [slot.id, mainColorRecommendations[slot.id]])]));
+    setCandidateSelections((current) => Object.fromEntries([...Object.entries(current), ...autoColorEligibleSlots.map((slot) => [slot.id, autoMainPaletteCandidateId])]));
   };
 
   const selectCandidate = (slot: ThemeAssetSlot, candidateId: string) => {
@@ -1187,6 +1194,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
       canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !autoColorPending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
       canApplyAutoColorToAll={Boolean(!autoColorPending && Object.keys(mainColorRecommendations).length)}
+      autoColorSummary={autoColorSummary}
       onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
       onApplyAutoColorToAll={applyAutoColorToAll}
       onSelectCandidate={selectCandidate}
@@ -1233,6 +1241,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
       canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !autoColorPending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}
+      canApplyAutoColorToAll={Boolean(!autoColorPending && Object.keys(mainColorRecommendations).length)}
+      autoColorSummary={autoColorSummary}
       fileInputRefs={fileInputRefs}
       onUpload={uploadSlot}
       onEditedUpload={uploadEditedSlot}
@@ -1242,6 +1252,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onSelectCandidate={selectCandidate}
       onSelectAdminAsset={(slot, asset) => void selectAdminAsset(slot, asset)}
       onApplyAutoColor={() => selectedSlot && applyAutoColor(selectedSlot)}
+      onApplyAutoColorToAll={applyAutoColorToAll}
       onGeometryChange={(geometry) => { if (!selectedSlot) return; setBubbleGeometry((current) => ({ ...current, [selectedSlot.id]: geometry })); setLiveBubblePreview(null); }}
       onMarkersChange={(markers) => { if (!selectedSlot) return; setBubbleMarkers((current) => ({ ...current, [selectedSlot.id]: markers })); }}
       onInsetsChange={(insets) => { if (!selectedSlot) return; setBubbleInsets((current) => ({ ...current, [selectedSlot.id]: insets })); }}

@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ChevronDown, ImageOff, Info } from "lucide-react";
+import { AlertTriangle, ChevronDown, ImageOff, Info, Link2 } from "lucide-react";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeSlotGroup } from "@/lib/theme/types";
-import { buildSlotCandidates, groupLabels, slotStatusLabel, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { buildSlotCandidates, groupLabels, isSlotColorLinked, slotStatusLabel, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import { getStatusColorPreview } from "@/components/project/projectImporterHelpers";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
@@ -103,6 +103,7 @@ export function MobileGroupSlotList({
                   status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, allSlots)}
                   appliedTitle={getAppliedCandidateTitle(slot, uploads, colors, selections, templateId, template, allSlots, adminAssets)}
                   warning={contrastWarnings[slot.id]}
+                  linked={isSlotColorLinked(slot, colors, selections, templateId, template, allSlots)}
                   onSelect={() => {
                     onSelectSlot(slot);
                     setPickerOpen(false);
@@ -128,6 +129,7 @@ export function MobileGroupSlotList({
                       status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, allSlots)}
                       appliedTitle={getAppliedCandidateTitle(slot, uploads, colors, selections, templateId, template, allSlots, adminAssets)}
                       warning={contrastWarnings[slot.id]}
+                      linked={isSlotColorLinked(slot, colors, selections, templateId, template, allSlots)}
                       onSelect={() => {
                         onSelectSlot(slot);
                         setPickerOpen(false);
@@ -158,7 +160,7 @@ function SlotPreviewChip({ slot, status }: { slot: ThemeAssetSlot; status: strin
   );
 }
 
-function MobileSlotOption({ slot, selected, status, appliedTitle, warning, onSelect }: { slot: ThemeAssetSlot; selected: boolean; status: string; appliedTitle?: string; warning?: SlotContrastWarning; onSelect: () => void }) {
+function MobileSlotOption({ slot, selected, status, appliedTitle, warning, linked, onSelect }: { slot: ThemeAssetSlot; selected: boolean; status: string; appliedTitle?: string; warning?: SlotContrastWarning; linked?: boolean; onSelect: () => void }) {
   const [tooltipOpen, setTooltipOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isColor = slot.kind === "color";
@@ -185,6 +187,7 @@ function MobileSlotOption({ slot, selected, status, appliedTitle, warning, onSel
         onClick={onSelect}
       >
         <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{slot.label}</span>
+        {linked ? <Link2 size={12} className="shrink-0 text-[#2563eb]" aria-hidden="true" /> : null}
         {warning ? <AlertTriangle size={12} className="shrink-0 text-amber-600" aria-hidden="true" /> : null}
         {isColor ? (
           <span

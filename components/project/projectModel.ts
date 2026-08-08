@@ -13,6 +13,7 @@ import {
   type SlotUploads,
 } from "@/lib/theme/project/state";
 import { getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
+import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { describeAdminAssetAnalysis, getAdminAssetKindLabel, isAdminAssetRecommendedForSlot, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -211,6 +212,45 @@ function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | u
       previewUrl: asset.previewUrl,
       adminAsset: asset,
     }));
+}
+
+/**
+ * 색상 슬롯이 지금 배경/기준 슬롯에 연동돼 있는지 하나로 합쳐 판정한다.
+ *
+ * 연동 경로가 둘이라(배경 팔레트를 받는 `autoColorRecipe`, 다른 슬롯을 따라가는 파생 규칙)
+ * 목록·배지처럼 "연동 여부"만 필요한 자리에서 매번 두 판정을 따로 조합하지 않게 한다.
+ */
+export function isSlotColorLinked(
+  slot: ThemeAssetSlot,
+  colors: SlotColors,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  allSlots: ThemeAssetSlot[],
+): boolean {
+  if (slot.kind !== "color") return false;
+  if (slot.autoColorRecipe && selections[slot.id] === autoMainPaletteCandidateId) return true;
+  return Boolean(getInheritedColorSourceSlot(slot, colors, selections, templateId, template, allSlots));
+}
+
+/**
+ * 배경 자동 맞춤 대상 슬롯 중 지금 실제로 연동 중인 개수.
+ *
+ * 벌크 버튼("모든 슬롯 자동 맞춤")을 한 번 누르고 끝나는 동작이 아니라, 끊긴 연동을 계속
+ * 관리하는 동작으로 보이게 하려고 상태 요약에 쓴다. `linked === total`이면 더 할 일이 없다는
+ * 뜻이라 버튼 문구도 달라진다.
+ */
+export type AutoColorLinkSummary = {
+  linked: number;
+  total: number;
+};
+
+/**
+ * 다시 이을 연동이 남아 있는지. 벌크 버튼의 라벨과 비활성 여부가 **같은 조건**을 봐야 한다 —
+ * 라벨이 "모두 연동됨"(동작이 아니라 상태)인데 버튼이 눌리면, 눌러도 아무 일이 없어 보인다.
+ */
+export function hasUnlinkedAutoColorSlots(summary: AutoColorLinkSummary): boolean {
+  return summary.total > 0 && summary.linked < summary.total;
 }
 
 export type DerivedColorLink = {

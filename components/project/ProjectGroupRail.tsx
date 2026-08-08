@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ChevronDown, Info, SlidersHorizontal } from "lucide-react";
+import { AlertTriangle, ChevronDown, Info, Link2, SlidersHorizontal } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeSlotGroup } from "@/lib/theme/types";
-import { disabledImageCandidateId, groupLabels, slotStatusLabel, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { disabledImageCandidateId, groupLabels, isSlotColorLinked, slotStatusLabel, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
 import { getInheritedSourceSlot, getResolvedAssetUrl, getSelectedUpload, isImageSlotDisabled } from "@/lib/theme/project/state";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import { getStatusColorPreview } from "@/components/project/projectImporterHelpers";
@@ -109,6 +109,7 @@ export function ProjectGroupRail({
             status={getSlotDisplayStatus(slot, uploads, colors, selections, templateId, template, allSlots)}
             thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, allSlots, uploadPreviewUrls)}
             warning={contrastWarnings[slot.id]}
+            linked={isSlotColorLinked(slot, colors, selections, templateId, template, allSlots)}
             onSelect={() => onSelectSlot(slot)}
           />
         ))}
@@ -125,7 +126,7 @@ export function ProjectGroupRail({
               <span className="rounded-full bg-[#e2e8f0] px-1.5 py-0.5 text-[10px] text-[#334155]">{modifiedAdvancedCount}/{advancedSlots.length}</span>
               <ChevronDown size={14} className={`transition-transform ${advancedOpen ? "rotate-180" : ""}`} aria-hidden="true" />
             </button>
-            {advancedOpen ? advancedSlots.map((slot) => <SlotRailItem key={slot.id} slot={slot} selected={selectedSlotId === slot.id} status={getSlotDisplayStatus(slot, uploads, colors, selections, templateId, template, allSlots)} thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, allSlots, uploadPreviewUrls)} warning={contrastWarnings[slot.id]} onSelect={() => onSelectSlot(slot)} />) : null}
+            {advancedOpen ? advancedSlots.map((slot) => <SlotRailItem key={slot.id} slot={slot} selected={selectedSlotId === slot.id} status={getSlotDisplayStatus(slot, uploads, colors, selections, templateId, template, allSlots)} thumbnailUrl={getSlotThumbnailUrl(slot, uploads, selections, templateId, template, allSlots, uploadPreviewUrls)} warning={contrastWarnings[slot.id]} linked={isSlotColorLinked(slot, colors, selections, templateId, template, allSlots)} onSelect={() => onSelectSlot(slot)} />) : null}
           </div>
         ) : null}
       </div>
@@ -150,7 +151,7 @@ function getSlotDisplayStatus(
   return getSelectedUpload(slot, uploads, selections, allSlots) ? "내 업로드" : "기본 이미지";
 }
 
-function SlotRailItem({ slot, selected, status, thumbnailUrl, warning, onSelect }: { slot: ThemeAssetSlot; selected: boolean; status: string; thumbnailUrl?: string; warning?: SlotContrastWarning; onSelect: () => void }) {
+function SlotRailItem({ slot, selected, status, thumbnailUrl, warning, linked, onSelect }: { slot: ThemeAssetSlot; selected: boolean; status: string; thumbnailUrl?: string; warning?: SlotContrastWarning; linked?: boolean; onSelect: () => void }) {
   const helpText = getSlotHelpText(slot);
   const colorPreview = slot.kind === "color" ? getStatusColorPreview(status) : null;
   const isImageSlot = slot.kind !== "color";
@@ -159,6 +160,12 @@ function SlotRailItem({ slot, selected, status, thumbnailUrl, warning, onSelect 
       <button type="button" className={`w-full rounded-xl border px-3 py-3 pr-10 text-left transition ${selected ? "border-[#93c5fd] bg-[#eff6ff] shadow-sm" : warning ? "border-amber-200 bg-amber-50/70 hover:border-amber-300 hover:bg-amber-50" : "border-[#e5e7eb] bg-white hover:border-[#cbd5e1] hover:bg-[#fcfcfd]"}`} onClick={onSelect}>
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[#111827]">{slot.label}</span>
+          {linked ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#eff6ff] px-1.5 py-0.5 text-[10px] font-bold text-[#2563eb]">
+              <Link2 size={11} aria-hidden="true" />
+              연동
+            </span>
+          ) : null}
           {warning ? (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
               <AlertTriangle size={11} aria-hidden="true" />
