@@ -55,10 +55,23 @@ export async function getThemeAssetSignedUrls(storagePaths: string[]) {
   const uniquePaths = Array.from(new Set(storagePaths.filter(Boolean)));
   const result: Record<string, string> = {};
   const missing: string[] = [];
+  // 영속 캐시는 localStorage 동기 read + 전체 JSON.parse다. 경로마다 한 번씩 돌면 에셋 수십 개짜리
+  // 템플릿의 부트스트랩에서 그만큼 main thread를 잡는다. 이 호출당 한 번만 읽는다.
+  let persistentCache: Record<string, SignedUrlCacheEntry> | null = null;
   for (const path of uniquePaths) {
-    const cached = getCachedSignedUrl(path);
-    if (cached) result[path] = cached;
-    else missing.push(path);
+    const memory = memorySignedUrlCache.get(path);
+    if (memory && isFreshSignedUrlEntry(memory)) {
+      result[path] = memory.signedUrl;
+      continue;
+    }
+    persistentCache ??= readPersistentSignedUrlCache();
+    const persistent = persistentCache[path];
+    if (persistent && isFreshSignedUrlEntry(persistent)) {
+      memorySignedUrlCache.set(path, persistent);
+      result[path] = persistent.signedUrl;
+      continue;
+    }
+    missing.push(path);
   }
   if (!missing.length) return result;
 
@@ -70,11 +83,22 @@ export async function getThemeAssetSignedUrls(storagePaths: string[]) {
   }
 
   const batchResults = await mapWithConcurrency(batches, signedUrlBatchConcurrency, requestSignedUrlBatch);
+  const fetched: [string, SignedUrlCacheEntry][] = [];
+  const expiresAt = Date.now() + signedUrlTtlMs;
   for (const batch of batchResults) {
     for (const [path, signedUrl] of Object.entries(batch)) {
-      setCachedSignedUrl(path, signedUrl);
+      const entry = { signedUrl, expiresAt };
+      memorySignedUrlCache.set(path, entry);
       result[path] = signedUrl;
+      fetched.push([path, entry]);
     }
+  }
+
+  // 받은 것을 모아 한 번만 직렬화한다. 경로마다 쓰면 stringify + localStorage write가 그 수만큼 반복된다.
+  if (fetched.length) {
+    const cache = persistentCache ?? readPersistentSignedUrlCache();
+    for (const [path, entry] of fetched) cache[path] = entry;
+    writePersistentSignedUrlCache(cache);
   }
   return result;
 }
@@ -135,27 +159,8 @@ export function sanitizeStoragePathPart(value: string) {
   );
 }
 
-function getCachedSignedUrl(storagePath: string) {
-  const now = Date.now();
-  const memory = memorySignedUrlCache.get(storagePath);
-  if (memory && memory.expiresAt - signedUrlRefreshBufferMs > now) return memory.signedUrl;
-
-  const persistent = readPersistentSignedUrlCache()[storagePath];
-  if (persistent && persistent.expiresAt - signedUrlRefreshBufferMs > now) {
-    memorySignedUrlCache.set(storagePath, persistent);
-    return persistent.signedUrl;
-  }
-
-  return null;
-}
-
-function setCachedSignedUrl(storagePath: string, signedUrl: string) {
-  const entry = { signedUrl, expiresAt: Date.now() + signedUrlTtlMs };
-  memorySignedUrlCache.set(storagePath, entry);
-
-  const cache = readPersistentSignedUrlCache();
-  cache[storagePath] = entry;
-  writePersistentSignedUrlCache(cache);
+function isFreshSignedUrlEntry(entry: SignedUrlCacheEntry) {
+  return Boolean(entry.signedUrl) && entry.expiresAt - signedUrlRefreshBufferMs > Date.now();
 }
 
 function readPersistentSignedUrlCache(): Record<string, SignedUrlCacheEntry> {
@@ -164,8 +169,8 @@ function readPersistentSignedUrlCache(): Record<string, SignedUrlCacheEntry> {
     const raw = window.localStorage.getItem(signedUrlCacheKey);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, SignedUrlCacheEntry>;
-    const now = Date.now();
-    return Object.fromEntries(Object.entries(parsed).filter(([, entry]) => entry?.signedUrl && entry.expiresAt - signedUrlRefreshBufferMs > now));
+    // 만료 항목은 읽는 김에 걸러 낸다. 걸러진 객체를 그대로 다시 쓰므로 저장본도 함께 정리된다.
+    return Object.fromEntries(Object.entries(parsed).filter(([, entry]) => entry && isFreshSignedUrlEntry(entry)));
   } catch {
     return {};
   }

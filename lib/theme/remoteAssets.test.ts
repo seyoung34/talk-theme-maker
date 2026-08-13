@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
  * 카드 썸네일의 공개 URL 생성.
@@ -57,5 +57,80 @@ describe("getPublicThemeAssetUrl", () => {
   it("version이 없으면 쿼리를 붙이지 않는다", async () => {
     const getPublicThemeAssetUrl = await load("https://example.supabase.co");
     expect(getPublicThemeAssetUrl("system-templates/abc/preview/card.webp")).not.toContain("?");
+  });
+});
+
+/**
+ * 서명 URL 영속 캐시의 접근 횟수.
+ *
+ * 캐시는 localStorage에 JSON 하나로 들어간다. 경로마다 읽고 쓰면 parse/stringify가 에셋 수만큼
+ * 반복되고, localStorage는 동기라 그 시간이 그대로 main thread를 잡는다. 템플릿 하나가 에셋 수십 개를
+ * 참조하므로 편집기 부트스트랩에서 바로 드러난다. 호출당 한 번 읽고 한 번 쓰는 것을 고정한다.
+ */
+describe("getThemeAssetSignedUrls 캐시 접근", () => {
+  const cacheKey = "kakaotalk-theme-maker:signed-url-cache:v1";
+  const paths = ["theme/a.png", "theme/b.png", "theme/c.png"];
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // happy-dom의 `window.localStorage`는 접근할 때마다 같은 객체를 돌려주지 않아 spy가 새는다.
+  // 호출 횟수를 세는 것이 이 테스트의 전부이므로 저장소 자체를 대역으로 바꾼다.
+  function stubStorage(seed?: Record<string, string>) {
+    const store = new Map(Object.entries(seed ?? {}));
+    const fake = {
+      getItem: vi.fn((key: string) => store.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => void store.set(key, value)),
+      removeItem: vi.fn((key: string) => void store.delete(key)),
+      clear: vi.fn(() => store.clear()),
+    };
+    vi.stubGlobal("localStorage", fake);
+    return fake;
+  }
+
+  function freshCacheJson() {
+    const expiresAt = Date.now() + 9 * 60 * 1000;
+    return JSON.stringify(Object.fromEntries(paths.map((path) => [path, { signedUrl: `${path}?cached`, expiresAt }])));
+  }
+
+  async function load() {
+    vi.resetModules();
+    vi.doMock("@/lib/supabase/config", () => ({ supabaseUrl: "https://example.supabase.co" }));
+    return (await import("@/lib/theme/remoteAssets")).getThemeAssetSignedUrls;
+  }
+
+  it("여러 경로를 받아와도 캐시를 한 번만 읽고 한 번만 쓴다", async () => {
+    const storage = stubStorage();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ signedUrls: Object.fromEntries(paths.map((path) => [path, `${path}?signed`])) }), {
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+    const getThemeAssetSignedUrls = await load();
+
+    const result = await getThemeAssetSignedUrls(paths);
+
+    expect(result).toEqual(Object.fromEntries(paths.map((path) => [path, `${path}?signed`])));
+    expect(storage.getItem).toHaveBeenCalledTimes(1);
+    expect(storage.setItem).toHaveBeenCalledTimes(1);
+  });
+
+  it("전부 캐시에 있으면 한 번만 읽고 요청하지 않는다", async () => {
+    const storage = stubStorage({ [cacheKey]: freshCacheJson() });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const getThemeAssetSignedUrls = await load();
+
+    const result = await getThemeAssetSignedUrls(paths);
+
+    expect(result).toEqual(Object.fromEntries(paths.map((path) => [path, `${path}?cached`])));
+    expect(storage.getItem).toHaveBeenCalledTimes(1);
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
