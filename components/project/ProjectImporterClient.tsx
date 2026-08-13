@@ -1170,6 +1170,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const mobilePreviewClearance = mobileSheetLiveHeight != null ? `min(${Math.round(mobileSheetLiveHeight)}px, ${mobileSheetHeight.half})` : mobileSheetSnap === "collapsed" ? mobileSheetHeight.collapsed : mobileSheetHeight.half;
   // 시트가 올라오면 가로 헤더 밴드를 접고 프리뷰 양옆 여백의 rail로 전역 행동을 넘긴다.
   const mobileSheetRaised = mobileSheetSnap !== "collapsed" || mobileSheetLiveHeight != null;
+  // rail은 스냅이 확정된 뒤에만 띄운다. 접힌 상태에서 끌어올리는 도중에는 프리뷰가 아직 전체 폭이라
+  // 좌우 여백이 25px밖에 없어, 드래그 내내 버튼이 프리뷰를 덮는다.
+  const mobileActionRailVisible = mobileSheetSnap !== "collapsed";
   const mobileUsesSourceToggle = Boolean(selectedSlot && getBackgroundSourcePair(selectedSlot, slots));
 
   const quickEditPanel = (
@@ -1524,7 +1527,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 <MobileScaledPreview section={activeSection} placement={mobileSheetSnap === "collapsed" ? "center" : "raised"} isResizing={mobileSheetLiveHeight != null}>
                   <ProjectPreviewPanel {...previewProps} className="w-full h-full" />
                 </MobileScaledPreview>
-                {mobileSheetRaised ? (
+                {mobileActionRailVisible ? (
                   <MobileEditActionRail
                     snap={mobileSheetSnap}
                     isAdminMode={isAdminMode}
