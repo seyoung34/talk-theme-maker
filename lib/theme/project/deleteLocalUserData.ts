@@ -9,9 +9,6 @@ export async function deleteLocalUserThemeData() {
   const database = await openThemeDatabase();
   const userStoreNames = [
     themeDatabaseStores.userTemplates,
-    themeDatabaseStores.userProjects,
-    themeDatabaseStores.projectAssets,
-    themeDatabaseStores.projectThumbnails,
     themeDatabaseStores.editorRecoveryDrafts,
     themeDatabaseStores.editorAutosaveDrafts,
   ];

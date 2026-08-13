@@ -1,5 +1,5 @@
 export const themeDatabaseName = "kakaotalk-theme-maker";
-export const themeDatabaseVersion = 6;
+export const themeDatabaseVersion = 5;
 
 export const themeDatabaseStores = {
   userTemplates: "user-templates",
@@ -8,11 +8,6 @@ export const themeDatabaseStores = {
   // 로그인·충전 왕복 전용 복구 레코드. 일반 자동 저장과 수명주기가 달라 store를 나눈다.
   editorRecoveryDrafts: "editor-recovery-drafts",
   editorAutosaveDrafts: "editor-autosave-drafts",
-  // v6부터 사용자 프로젝트 상태와 대형 바이너리를 분리한다. v5 user-templates는
-  // dual-read/lazy migration이 끝날 때까지 그대로 보존한다.
-  userProjects: "user-projects",
-  projectAssets: "project-assets",
-  projectThumbnails: "project-thumbnails",
 } as const;
 
 export function openThemeDatabase() {

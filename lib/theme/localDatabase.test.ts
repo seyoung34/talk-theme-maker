@@ -31,7 +31,7 @@ function createIndexedDbHarness<T>(result: T) {
 }
 
 describe("withThemeDatabaseStore", () => {
-  it("v6 database에 legacy와 project/asset/thumbnail store를 함께 유지한다", async () => {
+  it("선언한 모든 store를 현재 database version에서 연다", async () => {
     vi.unstubAllGlobals();
 
     const database = await openThemeDatabase();
@@ -39,10 +39,6 @@ describe("withThemeDatabaseStore", () => {
 
     expect(database.version).toBe(themeDatabaseVersion);
     expect(storeNames).toEqual(expect.arrayContaining(Object.values(themeDatabaseStores)));
-    expect(storeNames).toContain(themeDatabaseStores.userTemplates);
-    expect(storeNames).toContain(themeDatabaseStores.userProjects);
-    expect(storeNames).toContain(themeDatabaseStores.projectAssets);
-    expect(storeNames).toContain(themeDatabaseStores.projectThumbnails);
     database.close();
   });
 

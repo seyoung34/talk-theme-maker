@@ -10,9 +10,6 @@ describe("deleteLocalUserThemeData", () => {
 
   it("clears user projects and drafts without removing admin or system template caches", async () => {
     await withThemeDatabaseStore(themeDatabaseStores.userTemplates, "readwrite", (store) => store.put({ id: "user-template" }));
-    await withThemeDatabaseStore(themeDatabaseStores.userProjects, "readwrite", (store) => store.put({ id: "user-project" }));
-    await withThemeDatabaseStore(themeDatabaseStores.projectAssets, "readwrite", (store) => store.put({ id: "project-asset" }));
-    await withThemeDatabaseStore(themeDatabaseStores.projectThumbnails, "readwrite", (store) => store.put({ id: "project-thumbnail" }));
     await withThemeDatabaseStore(themeDatabaseStores.editorRecoveryDrafts, "readwrite", (store) => store.put({ id: "recovery" }));
     await withThemeDatabaseStore(themeDatabaseStores.editorAutosaveDrafts, "readwrite", (store) => store.put({ id: "autosave" }));
     await withThemeDatabaseStore(themeDatabaseStores.adminAssets, "readwrite", (store) => store.put({ id: "admin-asset" }));
@@ -23,9 +20,6 @@ describe("deleteLocalUserThemeData", () => {
     await deleteLocalUserThemeData();
 
     await expect(withThemeDatabaseStore(themeDatabaseStores.userTemplates, "readonly", (store) => store.getAll())).resolves.toEqual([]);
-    await expect(withThemeDatabaseStore(themeDatabaseStores.userProjects, "readonly", (store) => store.getAll())).resolves.toEqual([]);
-    await expect(withThemeDatabaseStore(themeDatabaseStores.projectAssets, "readonly", (store) => store.getAll())).resolves.toEqual([]);
-    await expect(withThemeDatabaseStore(themeDatabaseStores.projectThumbnails, "readonly", (store) => store.getAll())).resolves.toEqual([]);
     await expect(withThemeDatabaseStore(themeDatabaseStores.editorRecoveryDrafts, "readonly", (store) => store.getAll())).resolves.toEqual([]);
     await expect(withThemeDatabaseStore(themeDatabaseStores.editorAutosaveDrafts, "readonly", (store) => store.getAll())).resolves.toEqual([]);
     await expect(withThemeDatabaseStore(themeDatabaseStores.adminAssets, "readonly", (store) => store.get("admin-asset"))).resolves.toBeTruthy();
