@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -46,6 +46,20 @@ describe("MobileEditSheet", () => {
     await user.keyboard(key);
 
     expect(onSnapChange).toHaveBeenCalledWith("half");
+  });
+
+  it("settles a drag on the nearest snap instead of treating it as a tap", () => {
+    const onSnapChange = vi.fn();
+    render(<StatefulSheet onSnapChange={onSnapChange} />);
+
+    // 접힌 상태에서의 탭은 "half"다. 드래그는 놓은 높이에서 가장 가까운 스냅으로 가야 한다.
+    const handle = screen.getByRole("button", { name: "편집 패널 펼치기" });
+    fireEvent.pointerDown(handle, { pointerId: 1, clientY: 600 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 400 });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 400 });
+
+    expect(onSnapChange).toHaveBeenCalledTimes(1);
+    expect(onSnapChange).not.toHaveBeenCalledWith("half");
   });
 
   it("steps down when Escape is pressed", async () => {

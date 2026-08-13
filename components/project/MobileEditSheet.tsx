@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 
 export type MobileSheetSnap = "collapsed" | "half" | "full";
 
@@ -49,7 +49,6 @@ export function MobileEditSheet({
 }) {
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const dragState = useRef<{ startY: number; startHeight: number; currentHeight: number; moved: boolean } | null>(null);
-  const suppressPointerClickRef = useRef(false);
   const contentId = useId();
   const [liveHeight, setLiveHeight] = useState<number | null>(null);
   const [isInteracting, setIsInteracting] = useState(false);
@@ -102,13 +101,9 @@ export function MobileEditSheet({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     if (!state) return;
 
-    if (state.moved) {
-      suppressPointerClickRef.current = true;
-      window.setTimeout(() => {
-        suppressPointerClickRef.current = false;
-      }, 0);
-      onSnapChange(nearestSnap(state.currentHeight));
-    }
+    // 탭과 드래그를 같은 pointer 시퀀스에서 가른다. click을 따로 듣지 않으므로 드래그 뒤에
+    // 뒤늦게 도착하는 click을 눌러 둘 필요가 없다.
+    onSnapChange(state.moved ? nearestSnap(state.currentHeight) : getTappedSnap(snap));
     setLiveHeight(null);
     onLiveHeightChange?.(null);
   };
@@ -121,11 +116,10 @@ export function MobileEditSheet({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
-  const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
-    if (event.detail > 0 && suppressPointerClickRef.current) {
-      suppressPointerClickRef.current = false;
-      return;
-    }
+  // 키보드 조작에는 pointer 이벤트가 없다. Space의 기본 스크롤도 함께 막는다.
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
     onSnapChange(getTappedSnap(snap));
   };
 
@@ -145,7 +139,7 @@ export function MobileEditSheet({
         aria-label={getHandleLabel(snap)}
         aria-controls={contentId}
         aria-expanded={snap !== "collapsed"}
-        onClick={handleClick}
+        onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
