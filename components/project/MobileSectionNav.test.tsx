@@ -17,6 +17,8 @@ describe("MobileSectionNav", () => {
       expect(button).toHaveAttribute("title", sectionLabels[section]);
       expect(button).toHaveClass("min-h-[52px]", "min-w-[47px]", "shrink-0");
       expect(button).toHaveTextContent(mobileSectionLabels[section]);
+      // 음성 제어는 보이는 글자로 버튼을 지목한다. 짧은 label이 접근성 이름에 없으면 지목이 실패한다.
+      expect(sectionLabels[section]).toContain(mobileSectionLabels[section]);
     }
 
     expect(screen.getByRole("button", { name: sectionLabels.main })).toHaveAttribute("aria-current", "page");

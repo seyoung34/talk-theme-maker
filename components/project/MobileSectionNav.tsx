@@ -5,9 +5,12 @@ import { isSlotVisibleInSection, sectionLabels, sectionOrder } from "@/component
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { ThemeSection } from "@/lib/theme/types";
 
+// 좁은 화면용 짧은 label. 접근성 이름은 `sectionLabels`를 그대로 쓰므로, 음성 제어가
+// 보이는 글자로도 버튼을 지목할 수 있게 각 값은 반드시 `sectionLabels`의 부분 문자열이어야 한다
+// (WCAG 2.5.3 Label in Name).
 export const mobileSectionLabels: Record<ThemeSection, string> = {
   main: "친구",
-  tabs: "채팅·탭",
+  tabs: "채팅",
   chatroom: "채팅방",
   more: "더보기",
   passcode: "잠금",
