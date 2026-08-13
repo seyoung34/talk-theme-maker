@@ -19,6 +19,7 @@ import { HeaderNotice } from "@/components/project/HeaderNotice";
 import { getBackgroundSourcePair, getDefaultSlotCandidateId } from "@/components/project/projectImporterHelpers";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { MobileEditActionBar } from "@/components/project/MobileEditActionBar";
+import { MobileEditActionRail } from "@/components/project/MobileEditActionRail";
 import { ProjectPreviewPanel } from "@/components/project/ProjectPreviewPanel";
 import { ProjectQuickEditPanel } from "@/components/project/ProjectQuickEditPanel";
 import { ProjectSectionRail } from "@/components/project/ProjectSectionRail";
@@ -1167,7 +1168,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const mobilePreviewClearance = mobileSheetLiveHeight != null ? `min(${Math.round(mobileSheetLiveHeight)}px, ${mobileSheetHeight.half})` : mobileSheetSnap === "collapsed" ? mobileSheetHeight.collapsed : mobileSheetHeight.half;
-  const mobileActionBarCompact = mobileSheetSnap !== "collapsed" || mobileSheetLiveHeight != null;
+  // 시트가 올라오면 가로 헤더 밴드를 접고 프리뷰 양옆 여백의 rail로 전역 행동을 넘긴다.
+  const mobileSheetRaised = mobileSheetSnap !== "collapsed" || mobileSheetLiveHeight != null;
   const mobileUsesSourceToggle = Boolean(selectedSlot && getBackgroundSourcePair(selectedSlot, slots));
 
   const quickEditPanel = (
@@ -1500,7 +1502,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           {viewportMode === "mobile" ? (
             <div className="flex flex-col h-full min-h-0 overflow-hidden">
               <MobileEditActionBar
-                compact={mobileActionBarCompact}
+                visible={!mobileSheetRaised}
                 isAdminMode={isAdminMode}
                 isSaving={isAdminMode ? isSavingSystemTemplate : isSavingTemplate}
                 isExporting={isExporting}
@@ -1522,6 +1524,20 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 <MobileScaledPreview section={activeSection} placement={mobileSheetSnap === "collapsed" ? "center" : "raised"} isResizing={mobileSheetLiveHeight != null}>
                   <ProjectPreviewPanel {...previewProps} className="w-full h-full" />
                 </MobileScaledPreview>
+                {mobileSheetRaised ? (
+                  <MobileEditActionRail
+                    snap={mobileSheetSnap}
+                    isAdminMode={isAdminMode}
+                    isSaving={isAdminMode ? isSavingSystemTemplate : isSavingTemplate}
+                    isExporting={isExporting}
+                    isPreparingExport={isPreparingExport}
+                    autosaveStatus={autosaveStatus}
+                    autosaveSavedAt={autosaveSavedAt}
+                    onBack={requestExit}
+                    onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
+                    onExport={() => void openExportDialog()}
+                  />
+                ) : null}
               </div>
               <MobileEditSheet
                 snap={mobileSheetSnap}
