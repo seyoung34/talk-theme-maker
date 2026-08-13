@@ -1167,7 +1167,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const mobilePreviewClearance = mobileSheetLiveHeight != null ? `min(${Math.round(mobileSheetLiveHeight)}px, ${mobileSheetHeight.half})` : mobileSheetSnap === "collapsed" ? mobileSheetHeight.collapsed : mobileSheetHeight.half;
-  const mobileActionBarVisible = mobileSheetSnap === "collapsed" && mobileSheetLiveHeight == null;
+  const mobileActionBarCompact = mobileSheetSnap !== "collapsed" || mobileSheetLiveHeight != null;
   const mobileUsesSourceToggle = Boolean(selectedSlot && getBackgroundSourcePair(selectedSlot, slots));
 
   const quickEditPanel = (
@@ -1500,7 +1500,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           {viewportMode === "mobile" ? (
             <div className="flex flex-col h-full min-h-0 overflow-hidden">
               <MobileEditActionBar
-                visible={mobileActionBarVisible}
+                compact={mobileActionBarCompact}
                 isAdminMode={isAdminMode}
                 isSaving={isAdminMode ? isSavingSystemTemplate : isSavingTemplate}
                 isExporting={isExporting}

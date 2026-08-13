@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent, type ReactNode } from "react";
 
 export type MobileSheetSnap = "collapsed" | "half" | "full";
 
@@ -49,6 +49,8 @@ export function MobileEditSheet({
 }) {
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const dragState = useRef<{ startY: number; startHeight: number; currentHeight: number; moved: boolean } | null>(null);
+  const suppressPointerClickRef = useRef(false);
+  const contentId = useId();
   const [liveHeight, setLiveHeight] = useState<number | null>(null);
   const [isInteracting, setIsInteracting] = useState(false);
 
@@ -100,14 +102,13 @@ export function MobileEditSheet({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     if (!state) return;
 
-    if (!state.moved) {
-      onSnapChange(getTappedSnap(snap));
-      setLiveHeight(null);
-      onLiveHeightChange?.(null);
-      return;
+    if (state.moved) {
+      suppressPointerClickRef.current = true;
+      window.setTimeout(() => {
+        suppressPointerClickRef.current = false;
+      }, 0);
+      onSnapChange(nearestSnap(state.currentHeight));
     }
-
-    onSnapChange(nearestSnap(state.currentHeight));
     setLiveHeight(null);
     onLiveHeightChange?.(null);
   };
@@ -118,6 +119,14 @@ export function MobileEditSheet({
     setLiveHeight(null);
     onLiveHeightChange?.(null);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.detail > 0 && suppressPointerClickRef.current) {
+      suppressPointerClickRef.current = false;
+      return;
+    }
+    onSnapChange(getTappedSnap(snap));
   };
 
   const heightStyle = liveHeight != null ? `${Math.round(liveHeight)}px` : mobileSheetHeight[snap];
@@ -134,6 +143,9 @@ export function MobileEditSheet({
         type="button"
         className={`grid touch-none place-items-center gap-1 py-2.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${isInteracting ? "bg-[#eff6ff]" : "bg-transparent"}`}
         aria-label={getHandleLabel(snap)}
+        aria-controls={contentId}
+        aria-expanded={snap !== "collapsed"}
+        onClick={handleClick}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -142,7 +154,7 @@ export function MobileEditSheet({
         <span className={`h-1.5 rounded-full transition-all ${isInteracting ? "w-14 bg-[#2563eb] shadow-[0_0_0_4px_rgba(37,99,235,0.14)]" : "w-11 bg-[#cbd5e1]"}`} aria-hidden="true" />
       </button>
 
-      <div className="flex flex-col min-h-0 gap-3 px-3 pb-3">
+      <div id={contentId} className="flex flex-col min-h-0 gap-3 px-3 pb-3">
         {children}
       </div>
     </div>

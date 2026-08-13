@@ -1,4 +1,4 @@
-import type { KeyboardEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
 
 // 내 템플릿 카드와 템플릿 갤러리 카드가 공유하는 컴포넌트.
@@ -23,36 +23,28 @@ export default function TemplateCard({
   desktopFooter?: ReactNode;
   className?: string;
 }) {
-  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    onOpen();
-  };
-
   return (
     <article
-      role="button"
-      tabIndex={0}
-      className={`group grid min-h-0 w-full content-between gap-2 overflow-hidden rounded-[16px] border border-[var(--color-outline-variant)] bg-white/92 p-2 text-left shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)] sm:gap-3 sm:rounded-[28px] sm:p-4 ${className}`}
-      onClick={onOpen}
-      onKeyDown={handleKeyDown}
+      className={`group relative grid min-h-0 w-full content-between gap-2 overflow-hidden rounded-[16px] border border-[var(--color-outline-variant)] bg-white/92 p-2 text-left shadow-[0_16px_36px_rgba(42,103,103,0.06)] transition hover:-translate-y-1 hover:shadow-[0_22px_46px_rgba(42,103,103,0.12)] focus-within:ring-2 focus-within:ring-[var(--color-primary)] focus-within:ring-offset-2 sm:gap-3 sm:rounded-[28px] sm:p-4 ${className}`}
     >
+      <button
+        type="button"
+        aria-label={openLabel ?? `${title} 열기`}
+        className="absolute inset-0 z-10 rounded-[inherit] focus-visible:outline-none"
+        onClick={onOpen}
+      />
+
       {/* 모바일: 썸네일 + 템플릿 이름 + 모달 여는 버튼 */}
       <div className="grid gap-1.5 sm:hidden">
         {mobileVisual}
         <div className="flex min-w-0 items-center justify-between gap-2">
           <span className="min-w-0 truncate text-xs font-black text-[var(--color-on-surface)]">{title}</span>
-          <button
-            type="button"
-            aria-label={openLabel ?? `${title} 열기`}
+          <span
+            aria-hidden="true"
             className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-low)] text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]"
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpen();
-            }}
           >
             <ArrowRight className="size-3.5" aria-hidden="true" />
-          </button>
+          </span>
         </div>
       </div>
 
