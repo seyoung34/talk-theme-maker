@@ -29,6 +29,7 @@ describe("MobileEditSheet", () => {
     const handle = screen.getByRole("button", { name: "편집 패널 펼치기" });
     expect(handle).toHaveAttribute("aria-expanded", "false");
     expect(handle).toHaveAttribute("aria-controls");
+    expect(document.getElementById(handle.getAttribute("aria-controls") ?? "")).toHaveClass("w-full", "min-w-0");
 
     await user.click(handle);
 

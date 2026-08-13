@@ -5,6 +5,15 @@ import { isSlotVisibleInSection, sectionLabels, sectionOrder } from "@/component
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { ThemeSection } from "@/lib/theme/types";
 
+export const mobileSectionLabels: Record<ThemeSection, string> = {
+  main: "친구",
+  tabs: "채팅·탭",
+  chatroom: "채팅방",
+  more: "더보기",
+  passcode: "잠금",
+  common: "공통",
+};
+
 export function MobileSectionNav({
   activeSection,
   slots,
@@ -17,19 +26,24 @@ export function MobileSectionNav({
   const visibleSections = sectionOrder.filter((section) => slots.some((slot) => isSlotVisibleInSection(slot, section)));
 
   return (
-    <nav className="grid grid-flow-col auto-cols-fr gap-0.5" aria-label="화면 선택">
+    <nav
+      className="flex w-full min-w-0 touch-pan-x snap-x snap-mandatory gap-0.5 overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      aria-label="화면 선택"
+    >
       {visibleSections.map((section) => {
         const active = activeSection === section;
         return (
           <button
             key={section}
             type="button"
-            className={`grid min-h-[52px] place-items-center gap-0.5 rounded-xl px-1 py-1.5 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${active ? "bg-[#eff6ff] text-[#1d4ed8]" : "text-[#64748b] hover:bg-[#f8fafc] hover:text-[#111827]"}`}
+            className={`grid min-h-[52px] min-w-[47px] flex-1 shrink-0 snap-start place-items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${active ? "bg-[#eff6ff] text-[#1d4ed8]" : "text-[#64748b] hover:bg-[#f8fafc] hover:text-[#111827]"}`}
             onClick={() => onSelectSection(section)}
+            aria-label={sectionLabels[section]}
             aria-current={active ? "page" : undefined}
+            title={sectionLabels[section]}
           >
             <span className="grid size-5 place-items-center" aria-hidden="true">{getSectionIcon(section)}</span>
-            <span className="max-w-full truncate text-[10.5px] font-bold tracking-[-0.01em]">{sectionLabels[section]}</span>
+            <span aria-hidden="true" className="max-w-full truncate text-[10.5px] font-bold tracking-[-0.01em]">{mobileSectionLabels[section]}</span>
           </button>
         );
       })}

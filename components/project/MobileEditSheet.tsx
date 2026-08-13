@@ -141,7 +141,7 @@ export function MobileEditSheet({
     >
       <button
         type="button"
-        className={`grid touch-none place-items-center gap-1 py-2.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${isInteracting ? "bg-[#eff6ff]" : "bg-transparent"}`}
+        className={`grid min-h-8 touch-none place-items-center gap-1 py-2.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${isInteracting ? "bg-[#eff6ff]" : "bg-transparent"}`}
         aria-label={getHandleLabel(snap)}
         aria-controls={contentId}
         aria-expanded={snap !== "collapsed"}
@@ -154,7 +154,7 @@ export function MobileEditSheet({
         <span className={`h-1.5 rounded-full transition-all ${isInteracting ? "w-14 bg-[#2563eb] shadow-[0_0_0_4px_rgba(37,99,235,0.14)]" : "w-11 bg-[#cbd5e1]"}`} aria-hidden="true" />
       </button>
 
-      <div id={contentId} className="flex flex-col min-h-0 gap-3 px-3 pb-3">
+      <div id={contentId} className="flex min-h-0 w-full min-w-0 flex-col gap-3 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {children}
       </div>
     </div>
