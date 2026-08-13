@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSlotCandidates, getDerivedColorLink, isRemovableUploadCandidate } from "@/components/project/projectModel";
+import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { getInitialSlotCandidateSelections } from "@/lib/theme/project/state";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
 
@@ -44,6 +45,104 @@ describe("isRemovableUploadCandidate", () => {
     // 둘 다 owner는 기본 슬롯이다. 파생 슬롯의 bucket에는 아무것도 없다.
     expect(candidates.every((candidate) => candidate.ownerSlotId === base.id)).toBe(true);
     expect(uploads[derived.id]).toBeUndefined();
+  });
+});
+
+describe("시스템 템플릿과 추천 에셋 후보 병합", () => {
+  const slots = getThemeSlots("android");
+  const slot = slots.find((candidate) => candidate.role === "bubble_you_1")!;
+  const template = getThemeTemplate("basic");
+
+  function adminAsset(id: string, title = "메론소다"): AdminAssetCandidate {
+    return {
+      id,
+      slotRole: slot.role,
+      platform: "android",
+      assetKind: "bubble",
+      title,
+      tags: [],
+      fileName: "melon-soda.png",
+      mimeType: "image/png",
+      storagePath: `admin-assets/${id}/melon-soda.png`,
+      createdAt: 1,
+      updatedAt: 1,
+      enabled: true,
+    };
+  }
+
+  it("동일 ID는 템플릿 소유권을 유지한 후보 하나로 보여 준다", () => {
+    const id = "shared-melon-soda";
+    const uploads = {
+      [slot.id]: [{ id, file: new File(["template-copy"], "template-copy.png"), source: "template" as const }],
+    };
+
+    const candidates = buildSlotCandidates(
+      slot,
+      uploads,
+      {},
+      { [slot.id]: id },
+      "basic",
+      template,
+      slots,
+      [adminAsset(id)],
+      { [id]: "blob:template-preview" },
+    );
+    const matching = candidates.filter((candidate) => candidate.id === id);
+
+    expect(matching).toHaveLength(1);
+    expect(matching[0]).toMatchObject({
+      id,
+      title: "메론소다",
+      status: "템플릿 포함 · 말풍선",
+      source: "template",
+      ownerSlotId: slot.id,
+      previewUrl: "blob:template-preview",
+      selected: true,
+    });
+    expect(isRemovableUploadCandidate(matching[0])).toBe(true);
+  });
+
+  it("ID가 다른 추천 에셋은 별도 후보로 유지한다", () => {
+    const templateId = "template-only";
+    const recommendedId = "recommended-only";
+    const candidates = buildSlotCandidates(
+      slot,
+      { [slot.id]: [{ id: templateId, file: new File(["template"], "template.png"), source: "template" as const }] },
+      {},
+      { [slot.id]: templateId },
+      "basic",
+      template,
+      slots,
+      [adminAsset(recommendedId, "다른 추천 에셋")],
+    );
+
+    expect(candidates.find((candidate) => candidate.id === templateId)).toMatchObject({
+      title: "템플릿 에셋",
+      source: "template",
+      selected: true,
+    });
+    expect(candidates.find((candidate) => candidate.id === recommendedId)).toMatchObject({
+      title: "다른 추천 에셋",
+      source: "admin",
+      selected: false,
+    });
+  });
+
+  it("추천 목록에 없어도 템플릿 에셋은 그대로 유지한다", () => {
+    const id = "private-template-asset";
+    const candidates = buildSlotCandidates(
+      slot,
+      { [slot.id]: [{ id, file: new File(["template"], "private.png"), source: "template" as const }] },
+      {},
+      { [slot.id]: id },
+      "basic",
+      template,
+      slots,
+    );
+
+    expect(candidates.filter((candidate) => candidate.id === id)).toEqual([
+      expect.objectContaining({ title: "템플릿 에셋", status: "private.png", source: "template", selected: true }),
+    ]);
   });
 });
 

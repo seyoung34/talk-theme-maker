@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FlipHorizontal, ImagePlus, Info, LoaderCircle, RotateCw, Sparkles, X } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
@@ -47,6 +47,11 @@ type BubbleBuilderEditorProps = Omit<BubbleBuilderDialogProps, "open" | "onOpenC
 };
 
 const decorationMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
+
+export function getBubblePreviewScale(availableWidth: number | undefined, canvasWidth: number) {
+  if (!availableWidth || canvasWidth <= 0) return 1.35;
+  return Math.min(1.35, Math.max(0.65, availableWidth / canvasWidth));
+}
 
 export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, active = true, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
   const [spec, setSpec] = useState(() => initialSpec ?? createBubbleFamilyDesignSpec(side));
@@ -253,7 +258,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   );
 
   return (
-    <section className="grid gap-5 bg-white p-4 text-slate-950 md:p-6">
+    <section className="grid min-w-0 w-full gap-5 bg-white p-4 text-slate-950 md:p-6">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h2 className="flex items-center gap-2 text-xl font-black text-slate-950">나만의 말풍선 만들기</h2>
@@ -278,7 +283,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
             </div>
           </div>
 
-          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="mt-5 grid min-w-0 w-full gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
             {/* 데스크톱: 모든 섹션을 한 화면에 표시 */}
             <div className="hidden gap-5 lg:grid">
               {shapeSection}
@@ -287,7 +292,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
             </div>
 
             {/* 미리보기: 모바일은 인디케이터 아래 고정, 데스크톱은 우측 컬럼 */}
-            <aside className="rounded-2xl bg-slate-50 p-4 lg:sticky lg:top-0 lg:self-start">
+            <aside className="min-w-0 rounded-2xl bg-slate-50 p-4 lg:sticky lg:top-0 lg:self-start">
               <BubblePreview
                 spec={spec}
                 variant={variant}
@@ -337,7 +342,7 @@ export function BubbleBuilderDialog({ open, onOpenChange, ...editorProps }: Bubb
     <Dialog.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[90] bg-slate-950/45 backdrop-blur-sm" />
-        <Dialog.Content className="fixed inset-x-3 top-1/2 z-[91] mx-auto max-h-[92dvh] w-auto max-w-4xl -translate-y-1/2 overflow-y-auto rounded-3xl bg-white shadow-2xl focus:outline-none [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
+        <Dialog.Content className="fixed inset-x-3 top-1/2 z-[91] mx-auto max-h-[92dvh] min-w-0 w-auto max-w-4xl -translate-y-1/2 overflow-y-auto rounded-3xl bg-white shadow-2xl focus:outline-none [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
           <BubbleBuilderEditor {...editorProps} active={open} onClose={() => onOpenChange(false)} />
         </Dialog.Content>
       </Dialog.Portal>
@@ -369,11 +374,23 @@ type BubblePreviewProps = {
 
 function BubblePreview({ spec, variant, layers, decorationUrls, selectedLayerId, onSelectLayer, onRemoveLayer, onDecorationChange, onBodyChange }: BubblePreviewProps) {
   const geometry = useMemo(() => getBubbleVariantGeometry(spec.design, variant), [spec, variant]);
-  const scale = 1.35;
+  const [availableWidth, setAvailableWidth] = useState<number>();
+  const frameRef = useRef<HTMLDivElement>(null);
+  const scale = getBubblePreviewScale(availableWidth, geometry.canvas.width);
   const stretchThickness = Math.max(2, Math.round(3 * scale));
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<PreviewDrag | null>(null);
   const activeLayerRef = useRef<string | null>(null);
+
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const update = () => setAvailableWidth(frame.clientWidth);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
 
   const beginDecoDrag = (kind: "move" | "resize" | "rotate", layer: BubbleDecorationLayer) => (event: React.PointerEvent) => {
     if (!onDecorationChange) return;
@@ -424,8 +441,8 @@ function BubblePreview({ spec, variant, layers, decorationUrls, selectedLayerId,
   };
 
   return (
-    <div>
-      <div ref={stageRef} className="relative mx-auto touch-none overflow-hidden rounded-xl ring-1 ring-slate-200" style={{ width: geometry.canvas.width * scale, height: geometry.canvas.height * scale, ...checkerboardStyle }} onPointerMove={handleMove} onPointerUp={endDrag}>
+    <div ref={frameRef} className="min-w-0 w-full">
+      <div ref={stageRef} className="relative mx-auto max-w-full touch-none overflow-hidden rounded-xl ring-1 ring-slate-200" style={{ width: geometry.canvas.width * scale, height: geometry.canvas.height * scale, ...checkerboardStyle }} onPointerMove={handleMove} onPointerUp={endDrag}>
         <div className={onBodyChange ? "absolute cursor-move" : "absolute"} style={{ left: geometry.body.x * scale, top: geometry.body.y * scale, width: geometry.body.width * scale, height: geometry.body.height * scale, borderRadius: geometry.radius * scale, background: spec.design.fill, border: spec.design.borderWidth ? `${spec.design.borderWidth * scale}px solid ${spec.design.borderColor}` : undefined }} onPointerDown={onBodyChange ? beginBodyDrag : undefined} />
         {/* 늘어나는 구간(stretch) 시각화: 세로/가로 십자 */}
         <div className="pointer-events-none absolute bg-sky-400/70" style={{ left: geometry.stretch.x * scale - stretchThickness / 2, top: geometry.body.y * scale, width: stretchThickness, height: geometry.body.height * scale }} />

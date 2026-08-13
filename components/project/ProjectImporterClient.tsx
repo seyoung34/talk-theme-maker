@@ -123,6 +123,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [candidateOpen, setCandidateOpen] = useState(false);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
+  const [mobileCandidateGridExpanded, setMobileCandidateGridExpanded] = useState(false);
   const [mobileSheetLiveHeight, setMobileSheetLiveHeight] = useState<number | null>(null);
   const [liveBubblePreview, setLiveBubblePreview] = useState<{ role: ThemeResourceRole; edit: BubbleEditState } | null>(null);
   const [pendingBubbleCopy, setPendingBubbleCopy] = useState<PendingBubbleCopy | null>(null);
@@ -424,6 +425,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   useEffect(() => {
     setCandidateOpen(false);
   }, [selectedSlot?.id]);
+
+  // 후보 보기 방식은 시트 높이와 독립적이다. 같은 말풍선 그룹 안에서는 슬롯을 바꿔도
+  // 비교 흐름을 유지하고, 다른 화면/그룹으로 이동할 때만 간단히 보기로 되돌린다.
+  useEffect(() => {
+    setMobileCandidateGridExpanded(false);
+  }, [activeGroup, activeSection]);
 
   const selectedFile = getSlotFile(selectedSlot, analysis.files);
   const selectedBubbleSlot = selectedSlot ? bubbleSlotFromRole(selectedSlot.role) : null;
@@ -781,7 +788,15 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const applyMobileSlotChange = (slot: ThemeAssetSlot) => {
     focusSlot(slot.id);
     revealSlot(slot);
-    setMobileSheetSnap("full");
+    setMobileSheetSnap((current) => current === "collapsed" ? "half" : current);
+  };
+
+  const toggleMobileCandidateGrid = () => {
+    const nextExpanded = !mobileCandidateGridExpanded;
+    setMobileCandidateGridExpanded(nextExpanded);
+    // 4×4 후보 페이지를 처음 열 때만 필요한 공간을 확보한다. 이후 시트 드래그나
+    // 간단히 보기 전환은 서로의 상태를 바꾸지 않는다.
+    if (nextExpanded) setMobileSheetSnap("full");
   };
 
   const requestMobileSlotChange = (slot: ThemeAssetSlot) => {
@@ -1260,8 +1275,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onOpenBubbleBuilder={() => setBubbleBuilderOpen(true)}
       onCopyBubbleToPair={requestBubbleCopyToPair}
       onBubblePreviewChange={(edit) => { if (selectedSlot) setLiveBubblePreview({ role: selectedSlot.role, edit }); }}
-      candidateGridExpanded={mobileSheetSnap === "full"}
-      onToggleCandidateGrid={() => setMobileSheetSnap((current) => (current === "full" ? "half" : "full"))}
+      candidateGridExpanded={mobileCandidateGridExpanded}
+      onToggleCandidateGrid={toggleMobileCandidateGrid}
     />
   );
 

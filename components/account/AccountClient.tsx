@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowRight, Coins, Download, LoaderCircle, Megaphone, MessageSquare, RefreshCw, ShieldCheck, Sparkles, Star, UserRound } from "lucide-react";
+import { AlertCircle, ArrowRight, ChevronDown, Coins, Download, LoaderCircle, Megaphone, MessageSquare, RefreshCw, ShieldCheck, Sparkles, Star, UserRound } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
 import type { AccountExportDto, AccountMeResponse, ExportDownloadLinkResponse } from "@/lib/billing/apiTypes";
 import { getExportDownloadState } from "@/lib/theme/android/outputRetention";
@@ -84,17 +84,20 @@ export default function AccountClient() {
   return (
     <main className="min-h-screen overflow-x-clip bg-[linear-gradient(180deg,#e8f1ff_0%,#f4f9ff_18%,#ffffff_40%,#f7fbff_68%,#e9f2ff_100%)] text-[var(--color-on-background)]">
       <SiteHeader currentPath="/account" />
-      <div className="relative mx-auto w-full max-w-7xl px-5 py-8 md:px-8 md:py-11">
+      <div className="relative mx-auto w-full max-w-7xl px-4 py-5 sm:px-5 sm:py-8 md:px-8 md:py-11">
         <Star className="pointer-events-none absolute left-[2%] top-10 hidden h-7 w-7 rotate-12 text-[#fee500] lg:block" />
         <Sparkles className="pointer-events-none absolute right-[8%] top-16 hidden h-7 w-7 text-[#fbbf24] lg:block" />
 
         {/* 이 페이지는 h2 세 개로만 시작해 최상위 제목이 없었다. 제목 탐색으로 화면을 파악할 수 있게 h1을 둔다. */}
-        <header className="mb-6">
+        <header className="mb-4 sm:mb-6">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#3d7bd6]">My Page</p>
-          <h1 className="mt-2 font-[var(--font-display)] text-[30px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)] sm:text-[38px]">
+          <h1 className="mt-1.5 font-[var(--font-display)] text-[28px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)] sm:mt-2 sm:text-[38px]">
             마이페이지
           </h1>
-          <p className="mt-2 text-sm font-semibold leading-7 text-[var(--color-on-surface-variant)]">
+          <p className="mt-1.5 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:hidden">
+            계정·크레딧·내보내기를 한곳에서 관리합니다.
+          </p>
+          <p className="mt-2 hidden text-sm font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:block">
             계정 정보와 보유 크레딧, 최근 내보내기 이력을 한곳에서 확인합니다. 편집 프로젝트는 계정이 아니라 현재 브라우저에 저장됩니다.
           </p>
           {isLoading ? <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#3d7bd6]" role="status"><LoaderCircle className="animate-spin" size={15} aria-hidden="true" />계정 정보를 불러오는 중입니다.</p> : null}
@@ -107,82 +110,94 @@ export default function AccountClient() {
           </div>
         ) : null}
 
-        {/*
-          1열로 접히면 DOM 순서대로 사용자 정보 → 보유 크레딧 → Export 이력이 된다.
-          넓은 화면에서는 좌측 컬럼에 정보/이력, 우측 컬럼에 크레딧을 명시적으로 배치한다.
-        */}
-        <div className="grid content-start gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
-            <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6 lg:col-start-1 lg:row-start-1" aria-labelledby="account-info-title">
-              <div className="mb-5 flex items-center gap-3">
-                <span className="grid size-11 place-items-center rounded-2xl bg-[#eaf2ff] text-[var(--color-secondary)]"><UserRound size={20} aria-hidden="true" /></span>
+        {/* 모바일에서는 계정과 크레딧을 하나의 요약 카드로 묶고, 데스크톱에서는 기존 2열로 펼친다. */}
+        <div className="grid content-start gap-3 sm:gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
+          <div className="grid overflow-hidden rounded-[24px] border border-[#dbe8fb] bg-white/90 shadow-[0_14px_38px_rgba(47,107,191,0.08)] backdrop-blur lg:contents">
+            <section className="p-4 sm:p-6 lg:col-start-1 lg:row-start-1 lg:rounded-[28px] lg:border lg:border-[#dbe8fb] lg:bg-white/86 lg:shadow-[0_18px_48px_rgba(47,107,191,0.08)]" aria-labelledby="account-info-title">
+              <div className="mb-3 flex items-center gap-3 sm:mb-5">
+                <span className="grid size-10 place-items-center rounded-[14px] bg-[#eaf2ff] text-[var(--color-secondary)] sm:size-11 sm:rounded-2xl"><UserRound size={20} aria-hidden="true" /></span>
                 <div><h2 id="account-info-title" className="text-base font-extrabold">사용자 정보</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">현재 로그인한 계정입니다.</p></div>
               </div>
-              {isLoading ? <div className="h-20 animate-pulse rounded-xl bg-[var(--color-surface-low)]" aria-label="계정 정보 불러오는 중" /> : me?.user ? (
-                <dl className="grid gap-3 text-sm sm:grid-cols-2">
-                  <div className="rounded-[22px] border border-[#e3ecf7] bg-[#f7fbff] p-4"><dt className="mb-1 text-xs font-bold uppercase tracking-[0.12em] text-[#3d7bd6]">이름</dt><dd className="min-w-0 truncate text-[15px] font-extrabold">{me.profile?.display_name || "이름 미설정"}</dd></div>
-                  <div className="rounded-[22px] border border-[#e3ecf7] bg-[#f7fbff] p-4"><dt className="mb-1 text-xs font-bold uppercase tracking-[0.12em] text-[#3d7bd6]">로그인 방식</dt><dd className="flex items-center gap-1.5 text-[15px] font-extrabold"><ShieldCheck size={16} className="text-[var(--color-secondary)]" aria-hidden="true" />{provider} 계정</dd></div>
-                  <div className="rounded-[22px] border border-[#e3ecf7] bg-[#f7fbff] p-4 sm:col-span-2"><dt className="mb-1 text-xs font-bold uppercase tracking-[0.12em] text-[#3d7bd6]">이메일</dt><dd className="break-all text-[15px] font-extrabold">{me.user.email || me.profile?.email || "등록된 이메일 없음"}</dd></div>
+              {isLoading ? <div className="h-16 animate-pulse rounded-xl bg-[var(--color-surface-low)] sm:h-20" aria-label="계정 정보 불러오는 중" /> : me?.user ? (
+                <dl className="grid grid-cols-2 gap-2 text-sm sm:gap-3">
+                  <div className="min-w-0 rounded-2xl border border-[#e3ecf7] bg-[#f7fbff] p-3 sm:rounded-[22px] sm:p-4"><dt className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[#3d7bd6] sm:text-xs">이름</dt><dd className="truncate text-sm font-extrabold sm:text-[15px]">{me.profile?.display_name || "이름 미설정"}</dd></div>
+                  <div className="min-w-0 rounded-2xl border border-[#e3ecf7] bg-[#f7fbff] p-3 sm:rounded-[22px] sm:p-4"><dt className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[#3d7bd6] sm:text-xs">로그인 방식</dt><dd className="flex items-center gap-1.5 truncate text-sm font-extrabold sm:text-[15px]"><ShieldCheck size={15} className="shrink-0 text-[var(--color-secondary)]" aria-hidden="true" />{provider} 계정</dd></div>
+                  <div className="col-span-2 min-w-0 rounded-2xl border border-[#e3ecf7] bg-[#f7fbff] p-3 sm:rounded-[22px] sm:p-4"><dt className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[#3d7bd6] sm:text-xs">이메일</dt><dd className="truncate text-sm font-extrabold sm:text-[15px]" title={me.user.email || me.profile?.email || undefined}>{me.user.email || me.profile?.email || "등록된 이메일 없음"}</dd></div>
                 </dl>
               ) : (
-                <div><p className="text-sm font-semibold text-[var(--color-on-surface-variant)]">로그인하면 계정 정보를 확인할 수 있습니다.</p><Link href="/login?returnTo=%2Faccount" className="mt-4 inline-flex rounded-full bg-[#2f6bbf] px-5 py-3 text-sm font-extrabold text-white shadow-[0_16px_30px_rgba(47,107,191,0.22)]">로그인</Link></div>
+                <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold leading-5 text-[var(--color-on-surface-variant)]">로그인하고 계정과 내보내기 이력을 확인하세요.</p><Link href="/login?returnTo=%2Faccount" className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-[#2f6bbf] px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_12px_24px_rgba(47,107,191,0.2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">로그인</Link></div>
               )}
             </section>
 
-            <section className="rounded-[28px] border border-[#dbe8fb] bg-[#f7fbff] p-5 sm:p-6 lg:col-start-1 lg:row-start-2" aria-labelledby="storage-scope-title">
-              <h2 id="storage-scope-title" className="text-base font-extrabold">보관 범위</h2>
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                <div className="rounded-[20px] border border-[#e3ecf7] bg-white p-4"><dt className="text-xs font-black text-[#3d7bd6]">계정에 보관</dt><dd className="mt-1 font-semibold leading-6 text-[var(--color-on-surface-variant)]">{persistenceNotice.accountDetailed}</dd></div>
-                <div className="rounded-[20px] border border-[#e3ecf7] bg-white p-4"><dt className="text-xs font-black text-[#3d7bd6]">이 브라우저에 보관</dt><dd className="mt-1 font-semibold leading-6 text-[var(--color-on-surface-variant)]">{persistenceNotice.browserDetailed} {persistenceNotice.browserRisk}</dd></div>
-              </dl>
-            </section>
-
-          <aside className="grid content-start gap-4 lg:col-start-2 lg:row-start-1">
-            <section className="overflow-hidden rounded-[30px] border border-[#dbe8fb] bg-white/88 shadow-[0_24px_68px_rgba(47,107,191,0.1)] backdrop-blur" aria-labelledby="credit-balance-title">
-              <div className="bg-[linear-gradient(180deg,#f7fbff_0%,#eef5ff_100%)] p-5 sm:p-6">
-                <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--color-on-surface-variant)]"><Coins size={18} aria-hidden="true" /><h2 id="credit-balance-title">보유 크레딧</h2></div>
-                <div className="mt-3 flex items-end gap-2"><strong className="font-[var(--font-display)] text-5xl font-semibold tracking-[-0.05em] text-[#2f6bbf]">{isLoading ? "—" : me?.credits ?? 0}</strong><span className="pb-1.5 text-sm font-bold text-[var(--color-on-surface-variant)]">크레딧</span></div>
-                <p className="mt-3 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">테마를 내보낼 때마다 1크레딧이 사용됩니다.</p>
+            <section className="border-t border-[#e3ecf7] bg-[linear-gradient(180deg,#f7fbff_0%,#eef5ff_100%)] lg:col-start-2 lg:row-start-1 lg:overflow-hidden lg:rounded-[30px] lg:border lg:border-[#dbe8fb] lg:bg-white/88 lg:shadow-[0_24px_68px_rgba(47,107,191,0.1)]" aria-labelledby="credit-balance-title">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 sm:p-6 lg:block lg:bg-[linear-gradient(180deg,#f7fbff_0%,#eef5ff_100%)]">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--color-on-surface-variant)]"><Coins size={18} aria-hidden="true" /><h2 id="credit-balance-title">보유 크레딧</h2></div>
+                  <div className="mt-1.5 flex items-end gap-2 sm:mt-3"><strong className="font-[var(--font-display)] text-4xl font-semibold tracking-[-0.05em] text-[#2f6bbf] sm:text-5xl">{isLoading ? "—" : me?.credits ?? 0}</strong><span className="pb-1 text-sm font-bold text-[var(--color-on-surface-variant)] sm:pb-1.5">크레딧</span></div>
+                  <p className="mt-1 text-[11px] font-semibold leading-5 text-[var(--color-on-surface-variant)] sm:mt-3 sm:text-xs">내보내기 1회당 1크레딧을 사용합니다.</p>
+                </div>
+                <Link href={me?.user ? "/credits" : "/login?returnTo=%2Fcredits&reason=billing"} className="flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-[#fee500] px-4 py-2.5 text-sm font-extrabold text-[#191600] shadow-[0_12px_24px_rgba(254,229,0,0.3)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] lg:hidden">
+                  충전<ArrowRight size={16} aria-hidden="true" />
+                </Link>
               </div>
-              <div className="p-5">
+              <div className="hidden p-5 lg:block">
                 <Link href={me?.user ? "/credits" : "/login?returnTo=%2Fcredits&reason=billing"} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#fee500] px-4 py-3 text-sm font-extrabold text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
                   충전하기<ArrowRight size={17} aria-hidden="true" />
                 </Link>
                 <p className="mt-3 text-center text-[11px] font-semibold text-[var(--color-outline)]">필요한 만큼 상품을 선택해 충전할 수 있습니다.</p>
               </div>
             </section>
+          </div>
 
-            {me?.user ? (
-              <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6" aria-labelledby="support-entry-title">
-                <div className="flex items-center gap-3">
-                  <span className="grid size-11 place-items-center rounded-2xl bg-[#eef5ff] text-[#2f6bbf]"><MessageSquare size={20} aria-hidden="true" /></span>
-                  <div>
-                    <h2 id="support-entry-title" className="text-base font-extrabold">공지·문의</h2>
-                    <p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">문의 답변은 이메일로 보내지 않습니다. 여기에서 확인해 주세요.</p>
-                  </div>
-                </div>
-                <div className="mt-4 grid gap-2">
-                  <Link href="/account/inquiries" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#cfe0ff] bg-white px-4 py-3 text-sm font-extrabold text-[#2f6bbf] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
-                    문의하기·답변 보기<ArrowRight size={17} aria-hidden="true" />
-                  </Link>
-                  <Link href="/notice" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-[#dbe8fb] bg-white px-4 py-3 text-sm font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
-                    <Megaphone size={16} aria-hidden="true" />공지사항
-                  </Link>
-                </div>
-              </section>
-            ) : null}
-          </aside>
+          <section className="rounded-[22px] border border-[#dbe8fb] bg-[#f7fbff] p-4 sm:rounded-[28px] sm:p-6 lg:col-start-1 lg:row-start-2" aria-labelledby="storage-scope-title">
+            <h2 id="storage-scope-title" className="text-sm font-extrabold sm:text-base">보관 범위</h2>
+            <details className="group mt-2 lg:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-white px-3.5 py-2.5 text-sm font-bold text-[var(--color-on-surface-variant)] [&::-webkit-details-marker]:hidden">
+                <span className="flex min-w-0 items-center gap-2"><AlertCircle size={17} className="shrink-0 text-[#3d7bd6]" aria-hidden="true" /><span>프로젝트는 이 브라우저에만 저장됩니다.</span></span>
+                <ChevronDown size={17} className="shrink-0 text-[#3d7bd6] transition group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <dl className="mt-2 grid gap-2 text-xs">
+                <div className="rounded-2xl border border-[#e3ecf7] bg-white p-3"><dt className="font-black text-[#3d7bd6]">계정에 보관</dt><dd className="mt-1 font-semibold leading-5 text-[var(--color-on-surface-variant)]">{persistenceNotice.accountDetailed}</dd></div>
+                <div className="rounded-2xl border border-[#e3ecf7] bg-white p-3"><dt className="font-black text-[#3d7bd6]">이 브라우저에 보관</dt><dd className="mt-1 font-semibold leading-5 text-[var(--color-on-surface-variant)]">{persistenceNotice.browserDetailed} {persistenceNotice.browserRisk}</dd></div>
+              </dl>
+            </details>
+            <dl className="mt-4 hidden gap-3 text-sm lg:grid lg:grid-cols-2">
+              <div className="rounded-[20px] border border-[#e3ecf7] bg-white p-4"><dt className="text-xs font-black text-[#3d7bd6]">계정에 보관</dt><dd className="mt-1 font-semibold leading-6 text-[var(--color-on-surface-variant)]">{persistenceNotice.accountDetailed}</dd></div>
+              <div className="rounded-[20px] border border-[#e3ecf7] bg-white p-4"><dt className="text-xs font-black text-[#3d7bd6]">이 브라우저에 보관</dt><dd className="mt-1 font-semibold leading-6 text-[var(--color-on-surface-variant)]">{persistenceNotice.browserDetailed} {persistenceNotice.browserRisk}</dd></div>
+            </dl>
+          </section>
 
-            <section className="rounded-[28px] border border-[#dbe8fb] bg-white/86 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] backdrop-blur sm:p-6 lg:col-start-1 lg:row-start-3" aria-labelledby="export-history-title">
-              <div className="mb-5 flex items-center gap-3">
-                <span className="grid size-11 place-items-center rounded-2xl bg-[#eafaf1] text-[#34c98a]"><Download size={20} aria-hidden="true" /></span>
-                <div><h2 id="export-history-title" className="text-base font-extrabold">최근 Export 이력</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">최근 10개의 내보내기 작업입니다. Android 결과 파일은 7일간 보관합니다.</p>{pendingAndroidExportKey ? <p className="mt-1 text-[11px] font-bold text-[#2f6bbf]" role="status">진행 중인 Android 작업은 이 페이지를 열어 두면 자동으로 상태를 확인합니다.</p> : null}</div>
+          {me?.user ? (
+            <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6 lg:col-start-2 lg:row-start-2" aria-labelledby="support-entry-title">
+              <div className="flex items-center gap-3">
+                <span className="grid size-10 place-items-center rounded-[14px] bg-[#eef5ff] text-[#2f6bbf] sm:size-11 sm:rounded-2xl"><MessageSquare size={19} aria-hidden="true" /></span>
+                <div>
+                  <h2 id="support-entry-title" className="text-base font-extrabold">공지·문의</h2>
+                  <p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">문의 답변은 이 페이지에서 확인할 수 있습니다.</p>
+                </div>
               </div>
-              {(me?.exports ?? []).length === 0 ? <div className="rounded-[24px] bg-[#f7fbff] px-4 py-8 text-center text-sm font-semibold text-[var(--color-on-surface-variant)]">아직 내보내기 이력이 없습니다.</div> : (
-                <div className="overflow-hidden rounded-[24px] border border-[#e3ecf7] bg-[#fcfdff] divide-y divide-[var(--color-outline-variant)]">
-                  {(me?.exports ?? []).map((item) => <ExportRow key={item.id} item={item} onRefreshed={() => void refreshMe()} />)}
-                </div>
-              )}
+              <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-1">
+                <Link href="/account/inquiries" className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-[#cfe0ff] bg-white px-3 py-2.5 text-sm font-extrabold text-[#2f6bbf] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] lg:min-h-12">
+                  문의·답변<ArrowRight size={16} aria-hidden="true" />
+                </Link>
+                <Link href="/notice" className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-[#dbe8fb] bg-white px-3 py-2.5 text-sm font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] lg:min-h-12">
+                  <Megaphone size={16} aria-hidden="true" />공지사항
+                </Link>
+              </div>
             </section>
+          ) : null}
+
+          <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6 lg:col-start-1 lg:row-start-3" aria-labelledby="export-history-title">
+            <div className="mb-3 flex items-center gap-3 sm:mb-5">
+              <span className="grid size-10 place-items-center rounded-[14px] bg-[#eafaf1] text-[#34c98a] sm:size-11 sm:rounded-2xl"><Download size={20} aria-hidden="true" /></span>
+              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 내보내기</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">최근 10개 · Android 결과 파일은 7일간 보관</p>{pendingAndroidExportKey ? <p className="mt-1 text-[11px] font-bold text-[#2f6bbf]" role="status">진행 중인 Android 작업은 이 페이지를 열어 두면 자동으로 상태를 확인합니다.</p> : null}</div>
+            </div>
+            {(me?.exports ?? []).length === 0 ? <div className="rounded-[18px] bg-[#f7fbff] px-4 py-5 text-center text-sm font-semibold text-[var(--color-on-surface-variant)] sm:rounded-[24px] sm:py-8">아직 내보내기 이력이 없습니다.</div> : (
+              <div className="divide-y divide-[var(--color-outline-variant)] overflow-hidden rounded-[18px] border border-[#e3ecf7] bg-[#fcfdff] sm:rounded-[24px]">
+                {(me?.exports ?? []).map((item) => <ExportRow key={item.id} item={item} onRefreshed={() => void refreshMe()} />)}
+              </div>
+            )}
+          </section>
 
             {me?.user ? (
               <section className="border-t border-[#e3ecf7] pt-5 text-right lg:col-start-1 lg:row-start-4" aria-labelledby="account-deletion-title">

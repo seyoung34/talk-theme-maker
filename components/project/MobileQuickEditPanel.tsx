@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useId, useState, type MutableRefObject } from "react";
+import { useEffect, useId, useRef, useState, type MutableRefObject } from "react";
 import { ImageOff, Maximize2, Minimize2, Plus, Sliders, X } from "lucide-react";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
-import { getCandidateLayoutKind } from "@/components/project/candidateLayout";
+import { getCandidateLayoutKind, getMobileCandidatePageCount, getMobileCandidatePageIndex, mobileCandidatePageSize } from "@/components/project/candidateLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import {
@@ -117,13 +117,15 @@ export function MobileQuickEditPanel(props: MobileQuickEditPanelProps) {
           {slot.kind !== "color" && props.onToggleCandidateGrid ? (
             <button
               type="button"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+              className="grid size-11 shrink-0 place-items-center rounded-full text-[#1d4ed8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
               onClick={props.onToggleCandidateGrid}
-              aria-expanded={Boolean(props.candidateGridExpanded)}
+              aria-pressed={Boolean(props.candidateGridExpanded)}
               aria-label={props.candidateGridExpanded ? "후보 간단히 보기" : "후보 펼쳐 보기"}
               title={props.candidateGridExpanded ? "간단히 보기" : "펼쳐 보기"}
             >
-              {props.candidateGridExpanded ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
+              <span className="grid size-8 place-items-center rounded-full border border-[#bfdbfe] bg-[#eff6ff] transition hover:bg-[#dbeafe]" aria-hidden="true">
+                {props.candidateGridExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              </span>
             </button>
           ) : null}
           {props.contrastWarning ? (
@@ -377,7 +379,6 @@ function ImageControls({
   slot,
   slots,
   uploads,
-  adminAssets,
   candidates,
   applyCandidate,
   uploadPreviewUrls,
@@ -412,7 +413,6 @@ function ImageControls({
   applyCandidate: (candidate: SlotCandidate) => void;
   uploadPreviewUrls: Record<string, string>;
 }) {
-  const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
   // 공유 풀이라 다른 말풍선 슬롯이 owner인 업로드도 여기에 들어온다. 실제 삭제 가능 여부는
   // 후보의 ownerSlotId와 역참조로 판정하므로 이 집합은 "지울 수 있는 종류인가"만 본다.
   //
@@ -421,7 +421,7 @@ function ImageControls({
   // 에셋을 지울 수 없다. admin 에셋은 공용 라이브러리라 여기서 다루지 않는다.
   const removableUploadIds = new Set(
     getSharedSlotUploadEntries(slot, uploads, slots)
-      .filter(({ entry }) => (entry.source ?? "user") !== "admin" && !adminAssetIds.has(entry.id))
+      .filter(({ entry }) => (entry.source ?? "user") !== "admin")
       .map(({ entry }) => entry.id),
   );
   const selectedCandidate = getSelectedCandidate(slot, selections, templateId, template);
@@ -437,62 +437,125 @@ function ImageControls({
   const compactCardClassName = layoutKind === "wallpaper" ? "w-[68px] shrink-0" : "w-[84px] shrink-0";
   const previewAspectClassName = layoutKind === "wallpaper" ? "aspect-[1/2]" : "aspect-square";
   const orderedCandidates = [...candidates].sort((left, right) => Number(right.source === "default") - Number(left.source === "default"));
+  const usePagedCandidateGrid = candidateGridExpanded && slot.editableInBubbleEditor;
+  const candidatePagerItems: Array<{ kind: "upload" } | { kind: "candidate"; candidate: SlotCandidate }> = [
+    { kind: "upload" },
+    ...orderedCandidates.map((candidate) => ({ kind: "candidate" as const, candidate })),
+  ];
+  const candidatePageCount = getMobileCandidatePageCount(candidatePagerItems.length);
+  const candidatePages = Array.from({ length: candidatePageCount }, (_, pageIndex) =>
+    candidatePagerItems.slice(pageIndex * mobileCandidatePageSize, (pageIndex + 1) * mobileCandidatePageSize),
+  );
+  const selectedPagerItemIndex = Math.max(0, orderedCandidates.findIndex((candidate) => candidate.id === selectedPickerCandidate?.id) + 1);
+  const [candidatePage, setCandidatePage] = useState(0);
+  const candidatePagerRef = useRef<HTMLDivElement | null>(null);
   const requestCandidate = (candidate: SlotCandidate) => {
     if (candidate.inherited || candidate.id === selectedPickerCandidate?.id) return;
     applyCandidate(candidate);
   };
 
-  return (
-    <div className="grid gap-3">
-      <div className={candidateGridExpanded ? expandedCollectionClassName : "flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}>
+  useEffect(() => {
+    if (!usePagedCandidateGrid) return;
+    const nextPage = Math.min(candidatePageCount - 1, getMobileCandidatePageIndex(selectedPagerItemIndex));
+    setCandidatePage(nextPage);
+    const frame = window.requestAnimationFrame(() => {
+      const pager = candidatePagerRef.current;
+      if (pager) pager.scrollTo({ left: pager.clientWidth * nextPage, behavior: "auto" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [candidatePageCount, selectedPagerItemIndex, slot.id, usePagedCandidateGrid]);
+
+  const renderUploadTile = (expanded: boolean) => (
+    <button
+      key="candidate-upload"
+      type="button"
+      className={`grid min-w-0 place-items-center gap-1 rounded-xl border border-dashed border-[#bfdbfe] bg-[#eff6ff] p-1.5 text-center text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${expanded ? "h-full grid-rows-[minmax(0,1fr)_auto]" : compactCardClassName}`}
+      onClick={() => fileInputRefs.current[slot.id]?.click()}
+    >
+      <span className={`grid w-full place-items-center rounded-lg bg-white/80 ${previewAspectClassName}`}>
+        <Plus size={20} strokeWidth={2.4} aria-hidden="true" />
+      </span>
+      <span className="truncate text-[10px] font-bold">업로드</span>
+    </button>
+  );
+
+  const renderCandidateTile = (candidate: SlotCandidate, expanded: boolean) => {
+    const preview = candidate.previewUrl ?? (candidate.id.startsWith(slot.id) ? uploadPreviewUrls[candidate.id] : undefined);
+    const removable = isRemovableUploadCandidate(candidate) && removableUploadIds.has(candidate.id);
+    return (
+      <div key={candidate.id} className={`relative min-w-0 ${expanded ? "h-full" : compactCardClassName}`}>
         <button
           type="button"
-          className={`grid min-w-0 place-items-center gap-1 rounded-xl border border-dashed border-[#bfdbfe] bg-[#eff6ff] p-1.5 text-center text-[#1d4ed8] transition hover:bg-[#dbeafe] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${candidateGridExpanded ? "" : compactCardClassName}`}
-          onClick={() => fileInputRefs.current[slot.id]?.click()}
+          aria-pressed={candidate.selected}
+          aria-disabled={candidate.inherited}
+          className={`grid w-full gap-1 rounded-xl border p-1.5 text-center transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${expanded ? "h-full grid-rows-[minmax(0,1fr)_auto]" : ""} ${candidate.selected ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
+          onClick={() => {
+            if (candidate.inherited) return;
+            requestCandidate(candidate);
+          }}
         >
-          <span className={`grid w-full place-items-center rounded-lg bg-white/80 ${previewAspectClassName}`}>
-            <Plus size={20} strokeWidth={2.4} aria-hidden="true" />
+          <span className={`grid place-items-center overflow-hidden rounded-lg bg-[#f8fafc] ${previewAspectClassName}`}>
+            {preview ? (
+              <span className={`block h-full w-full bg-center bg-no-repeat ${layoutKind === "wallpaper" ? "bg-cover" : "bg-contain"}`} style={{ backgroundImage: `url(${preview})` }} />
+            ) : (
+              <ImageOff size={16} className="text-[#94a3b8]" aria-hidden="true" />
+            )}
           </span>
-          <span className="truncate text-[10px] font-bold">업로드</span>
+          <span className="truncate text-center text-[10px] font-semibold text-[#334155]">{candidate.title}</span>
         </button>
-        {orderedCandidates.map((candidate) => {
-          const preview = candidate.previewUrl ?? (candidate.id.startsWith(slot.id) ? uploadPreviewUrls[candidate.id] : undefined);
-          const removable = isRemovableUploadCandidate(candidate) && removableUploadIds.has(candidate.id);
-          return (
-            <div key={candidate.id} className={`relative min-w-0 ${candidateGridExpanded ? "" : compactCardClassName}`}>
-              <button
-                type="button"
-                aria-pressed={candidate.selected}
-                aria-disabled={candidate.inherited}
-                className={`grid w-full gap-1 rounded-xl border p-1.5 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${candidate.selected ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
-                onClick={() => {
-                  if (candidate.inherited) return;
-                  requestCandidate(candidate);
-                }}
-              >
-                <span className={`grid place-items-center overflow-hidden rounded-lg bg-[#f8fafc] ${previewAspectClassName}`}>
-                  {preview ? (
-                    <span className={`block h-full w-full bg-center bg-no-repeat ${layoutKind === "wallpaper" ? "bg-cover" : "bg-contain"}`} style={{ backgroundImage: `url(${preview})` }} />
-                  ) : (
-                    <ImageOff size={16} className="text-[#94a3b8]" aria-hidden="true" />
-                  )}
-                </span>
-                <span className="truncate text-[10px] font-semibold text-[#334155]">{candidate.title}</span>
-              </button>
-              {removable ? (
-                <button
-                  type="button"
-                  aria-label={`${candidate.title} 삭제`}
-                  className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded-full bg-[#ef4444] text-white shadow-sm ring-2 ring-white transition hover:bg-[#dc2626] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ef4444]"
-                  onClick={() => onRemoveUpload(slot, candidate.id)}
-                >
-                  <X size={12} strokeWidth={2.5} aria-hidden="true" />
-                </button>
-              ) : null}
-            </div>
-          );
-        })}
+        {removable ? (
+          <button
+            type="button"
+            aria-label={`${candidate.title} 삭제`}
+            className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded-full bg-[#ef4444] text-white shadow-sm ring-2 ring-white transition hover:bg-[#dc2626] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ef4444]"
+            onClick={() => onRemoveUpload(slot, candidate.id)}
+          >
+            <X size={12} strokeWidth={2.5} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
+    );
+  };
+
+  return (
+    <div className="grid gap-3">
+      {usePagedCandidateGrid ? (
+        <div className="grid gap-2">
+          <div
+            ref={candidatePagerRef}
+            className="flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label="말풍선 후보 페이지"
+            onScroll={(event) => {
+              const width = event.currentTarget.clientWidth;
+              if (!width) return;
+              const nextPage = Math.max(0, Math.min(candidatePageCount - 1, Math.round(event.currentTarget.scrollLeft / width)));
+              setCandidatePage((current) => current === nextPage ? current : nextPage);
+            }}
+          >
+            {candidatePages.map((pageItems, pageIndex) => (
+              <div key={`candidate-page-${pageIndex}`} role="group" aria-label={`${pageIndex + 1}/${candidatePageCount} 페이지`} className="grid w-full shrink-0 snap-start grid-cols-4 auto-rows-[100px] gap-2 min-[430px]:auto-rows-[112px]">
+                {pageItems.map((item) => item.kind === "upload" ? renderUploadTile(true) : renderCandidateTile(item.candidate, true))}
+                {Array.from({ length: mobileCandidatePageSize - pageItems.length }, (_, emptyIndex) => (
+                  <span key={`candidate-page-${pageIndex}-empty-${emptyIndex}`} aria-hidden="true" />
+                ))}
+              </div>
+            ))}
+          </div>
+          {candidatePageCount > 1 ? (
+            <div className="flex items-center justify-center gap-1.5" role="status" aria-live="polite" aria-label={`후보 ${candidatePage + 1}/${candidatePageCount} 페이지`}>
+              {Array.from({ length: candidatePageCount }, (_, pageIndex) => (
+                <span key={`candidate-page-indicator-${pageIndex}`} className={`rounded-full transition ${candidatePage === pageIndex ? "size-2 bg-[#2563eb]" : "size-1.5 bg-[#cbd5e1]"}`} aria-hidden="true" />
+              ))}
+              <span className="sr-only">후보 {candidatePage + 1}/{candidatePageCount} 페이지</span>
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className={candidateGridExpanded ? expandedCollectionClassName : "flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}>
+          {renderUploadTile(candidateGridExpanded)}
+          {orderedCandidates.map((candidate) => renderCandidateTile(candidate, candidateGridExpanded))}
+        </div>
+      )}
 
       <input
         ref={(node) => {

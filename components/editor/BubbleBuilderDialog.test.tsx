@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
+import { BubbleBuilderDialog, getBubblePreviewScale } from "@/components/editor/BubbleBuilderDialog";
 import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 
 const spec: BubbleFamilyDesignSpec = {
@@ -52,6 +52,20 @@ describe("BubbleBuilderDialog decoration input", () => {
     fireEvent.drop(screen.getAllByTestId("bubble-decoration-dropzone")[0], { dataTransfer: { files: [file] } });
 
     expect(screen.getAllByText("dropped-dog.webp").length).toBeGreaterThan(0);
+  });
+});
+
+describe("BubbleBuilderDialog preview scale", () => {
+  it("keeps the desktop scale when the container is wide enough", () => {
+    expect(getBubblePreviewScale(420, 274)).toBe(1.35);
+  });
+
+  it("scales the preview down to the available mobile width", () => {
+    expect(getBubblePreviewScale(240, 274)).toBeCloseTo(240 / 274);
+  });
+
+  it("keeps a usable minimum scale for very narrow containers", () => {
+    expect(getBubblePreviewScale(100, 274)).toBe(0.65);
   });
 });
 

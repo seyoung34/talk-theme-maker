@@ -7,7 +7,6 @@ import {
   getSharedSlotUploadEntries,
   getInheritedColorSourceSlot,
   disabledImageCandidateId,
-  type BubbleEditState,
   type SlotCandidateSelections,
   type SlotColors,
   type SlotUploads,
@@ -149,6 +148,7 @@ export function buildSlotCandidates(
   const selectedUpload = getSelectedUpload(sourceSlot, uploads, selections, allSlots);
   const candidates = getSlotCandidates(slot, templateId, template);
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
+  const adminAssetsById = new Map(adminAssets.map((asset) => [asset.id, asset]));
 
   const baseItems = candidates.map((candidate) => ({
     id: candidate.id,
@@ -179,19 +179,33 @@ export function buildSlotCandidates(
     .filter(({ entry }) => entry.source === "template")
     .slice()
     .reverse()
-    .map(({ ownerSlotId, entry }) => ({
-      id: entry.id,
-      title: "템플릿 에셋",
-      status: entry.file.name,
-      active: selectedUpload?.id === entry.id,
-      selected: selectedUpload?.id === entry.id,
-      source: "template" as const,
-      previewUrl: uploadPreviewUrls[entry.id],
-      ownerSlotId,
-    }));
+    .map(({ ownerSlotId, entry }) => {
+      // 시스템 템플릿 제작자가 같은 관리자 에셋을 추천 라이브러리에도 등록하면 ID가
+      // 보존된 채 hydrate된다. 이 경우 템플릿 파일을 canonical 후보로 유지하고 관리자
+      // 메타데이터는 이름을 설명하는 데만 사용한다. 파일·삭제 권한·내보내기는 템플릿
+      // 사본을 계속 바라보므로 추천 에셋이 나중에 바뀌거나 비활성화돼도 결과가 변하지 않는다.
+      const matchingAdminAsset = adminAssetsById.get(entry.id);
+      return {
+        id: entry.id,
+        title: matchingAdminAsset?.title ?? "템플릿 에셋",
+        status: matchingAdminAsset
+          ? `템플릿 포함 · ${matchingAdminAsset.assetKind ? getAdminAssetKindLabel(matchingAdminAsset.assetKind) : matchingAdminAsset.fileName}`
+          : entry.file.name,
+        active: selectedUpload?.id === entry.id,
+        selected: selectedUpload?.id === entry.id,
+        source: "template" as const,
+        previewUrl: uploadPreviewUrls[entry.id],
+        ownerSlotId,
+      };
+    });
+  const templateAssetIds = new Set(templateItems.map((item) => item.id));
 
   const paletteItems = slot.kind === "color" ? buildPaletteCandidates(slot, allSlots, uploads, colors, selections, templateId, template) : [];
-  const adminItems = slot.kind !== "color" ? buildAdminCandidates(slot, selectedUpload?.id, adminAssets) : [];
+  // 템플릿 사본과 동일한 UUID의 추천 에셋은 위 templateItems 하나로 병합한다. 여기서
+  // 제거하지 않으면 두 카드가 동시에 선택되고 React key도 충돌한다.
+  const adminItems = slot.kind !== "color"
+    ? buildAdminCandidates(slot, selectedUpload?.id, adminAssets.filter((asset) => !templateAssetIds.has(asset.id)))
+    : [];
 
   const allItems = [...templateItems, ...uploadItems, ...adminItems, ...paletteItems, ...baseItems];
   // 연동(기본 슬롯 상속) 중이면 선택 표시된 항목은 읽기 전용 상속 항목으로 표시한다.

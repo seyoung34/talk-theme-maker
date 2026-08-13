@@ -2,6 +2,8 @@ import type { ThemeAssetSlot } from "@/lib/theme/templates";
 
 export type CandidateLayoutKind = "wallpaper" | "image" | "color";
 
+export const mobileCandidatePageSize = 16;
+
 const wallpaperRoles = new Set(["main_background", "chat_background", "passcode_background"]);
 
 export function getCandidateLayoutKind(slot: ThemeAssetSlot): CandidateLayoutKind {
@@ -21,4 +23,13 @@ export function getCandidateCardWidthClass(layoutKind: CandidateLayoutKind) {
   if (layoutKind === "wallpaper") return "w-[88px] shrink-0";
   if (layoutKind === "color") return "w-[92px] shrink-0";
   return "w-[96px] shrink-0";
+}
+
+export function getMobileCandidatePageCount(itemCount: number) {
+  return Math.max(1, Math.ceil(Math.max(0, itemCount) / mobileCandidatePageSize));
+}
+
+export function getMobileCandidatePageIndex(itemIndex: number) {
+  if (itemIndex <= 0) return 0;
+  return Math.floor(itemIndex / mobileCandidatePageSize);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getCandidateCardWidthClass, getCandidateLayoutKind } from "@/components/project/candidateLayout";
+import { getCandidateCardWidthClass, getCandidateLayoutKind, getMobileCandidatePageCount, getMobileCandidatePageIndex, mobileCandidatePageSize } from "@/components/project/candidateLayout";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 
 function makeSlot(overrides: Partial<ThemeAssetSlot>): ThemeAssetSlot {
@@ -46,5 +46,23 @@ describe("getCandidateCardWidthClass", () => {
     expect(getCandidateCardWidthClass("wallpaper")).toBe("w-[88px] shrink-0");
     expect(getCandidateCardWidthClass("color")).toBe("w-[92px] shrink-0");
     expect(getCandidateCardWidthClass("image")).toBe("w-[96px] shrink-0");
+  });
+});
+
+describe("모바일 후보 페이지", () => {
+  it("4×4 한 페이지에 후보 타일을 16개씩 배치한다", () => {
+    expect(mobileCandidatePageSize).toBe(16);
+    expect(getMobileCandidatePageCount(0)).toBe(1);
+    expect(getMobileCandidatePageCount(16)).toBe(1);
+    expect(getMobileCandidatePageCount(17)).toBe(2);
+    expect(getMobileCandidatePageCount(33)).toBe(3);
+  });
+
+  it("선택한 후보가 포함된 페이지를 계산한다", () => {
+    expect(getMobileCandidatePageIndex(-1)).toBe(0);
+    expect(getMobileCandidatePageIndex(0)).toBe(0);
+    expect(getMobileCandidatePageIndex(15)).toBe(0);
+    expect(getMobileCandidatePageIndex(16)).toBe(1);
+    expect(getMobileCandidatePageIndex(32)).toBe(2);
   });
 });
