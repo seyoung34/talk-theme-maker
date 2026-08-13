@@ -16,7 +16,7 @@ import { generateSystemTemplateThumbnail } from "@/lib/theme/systemTemplates/thu
 import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
 import { describeAutosaveDraft, readAutosaveDraft, type EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
-import { deleteUserTemplate, getUserTemplate, listUserTemplates, type UserTemplateRecord, type UserTemplateSummary } from "@/lib/theme/userTemplates";
+import { deleteUserTemplate, getUserTemplate, listUserTemplateRecords, toUserTemplateSummary, type UserTemplateRecord, type UserTemplateSummary } from "@/lib/theme/userTemplates";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 import type { ThemeStartPayload } from "@/lib/theme/templates";
@@ -191,11 +191,10 @@ export default function TemplateGalleryClient() {
     let active = true;
     const loadUserTemplateSummaries = async () => {
       try {
-        const templates = await listUserTemplates();
+        // 목록 요약과 카드 렌더가 같은 레코드를 쓴다. 한 번만 읽고 요약을 파생시킨다.
+        const records = await listUserTemplateRecords();
         if (!active) return;
-        setUserTemplates(templates);
-        const records = (await Promise.all(templates.map((template) => getUserTemplate(template.id)))).filter((record): record is UserTemplateRecord => Boolean(record));
-        if (!active) return;
+        setUserTemplates(records.map(toUserTemplateSummary));
         const nextUrls: Record<string, Record<string, string>> = {};
         const nextVisuals: Record<string, TemplatePreviewVisual> = {};
         for (const record of records) {

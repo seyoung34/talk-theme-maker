@@ -64,21 +64,27 @@ export async function getUserTemplate(id: string) {
   return record ? normalizeUserTemplateRecord(record) : null;
 }
 
-export async function listUserTemplates(): Promise<UserTemplateSummary[]> {
+/**
+ * 목록과 카드 렌더에 같은 레코드가 필요한 화면(`/template`)을 위한 단일 읽기 경로.
+ * `getAll()`이 이미 전체 레코드를 돌려주므로, 여기서 받은 레코드를 재사용하면 같은 진입에서
+ * `getUserTemplate()`으로 하나씩 다시 읽을 이유가 없다.
+ */
+export async function listUserTemplateRecords(): Promise<UserTemplateRecord[]> {
   const records = await withThemeDatabaseStore<UserTemplateRecord[]>(storeName, "readonly", (store) => store.getAll());
-  return records
-    .map(normalizeUserTemplateRecord)
-    .map((record) => ({
-      id: record.id,
-      name: record.name,
-      templateId: record.templateId,
-      platform: record.platform,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt,
-      uploadCount: Object.values(record.uploads).reduce((count, entries) => count + (entries?.length ?? 0), 0),
-      colorCount: Object.values(record.colors).filter(Boolean).length,
-    }))
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+  return records.map(normalizeUserTemplateRecord).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+export function toUserTemplateSummary(record: UserTemplateRecord): UserTemplateSummary {
+  return {
+    id: record.id,
+    name: record.name,
+    templateId: record.templateId,
+    platform: record.platform,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    uploadCount: Object.values(record.uploads).reduce((count, entries) => count + (entries?.length ?? 0), 0),
+    colorCount: Object.values(record.colors).filter(Boolean).length,
+  };
 }
 
 function normalizeUserTemplateRecord(record: UserTemplateRecord): UserTemplateRecord {
