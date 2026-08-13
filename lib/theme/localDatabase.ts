@@ -1,5 +1,5 @@
 export const themeDatabaseName = "kakaotalk-theme-maker";
-export const themeDatabaseVersion = 5;
+export const themeDatabaseVersion = 6;
 
 export const themeDatabaseStores = {
   userTemplates: "user-templates",
@@ -8,6 +8,11 @@ export const themeDatabaseStores = {
   // 로그인·충전 왕복 전용 복구 레코드. 일반 자동 저장과 수명주기가 달라 store를 나눈다.
   editorRecoveryDrafts: "editor-recovery-drafts",
   editorAutosaveDrafts: "editor-autosave-drafts",
+  // v6부터 사용자 프로젝트 상태와 대형 바이너리를 분리한다. v5 user-templates는
+  // dual-read/lazy migration이 끝날 때까지 그대로 보존한다.
+  userProjects: "user-projects",
+  projectAssets: "project-assets",
+  projectThumbnails: "project-thumbnails",
 } as const;
 
 export function openThemeDatabase() {
@@ -75,14 +80,55 @@ export async function withThemeDatabaseStore<T>(storeName: string, mode: IDBTran
   const database = await openThemeDatabase();
   return new Promise<T>((resolve, reject) => {
     const transaction = database.transaction(storeName, mode);
-    const request = callback(transaction.objectStore(storeName));
+    let requestResult: T;
+    let requestSucceeded = false;
+    let settled = false;
 
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => database.close();
-    transaction.onerror = () => {
+    const closeDatabase = () => {
       database.close();
-      reject(transaction.error);
     };
+
+    const rejectOnce = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      closeDatabase();
+      reject(error);
+    };
+
+    transaction.oncomplete = () => {
+      if (settled) return;
+      settled = true;
+      closeDatabase();
+      if (!requestSucceeded) {
+        reject(new Error("theme_database_request_incomplete"));
+        return;
+      }
+      resolve(requestResult);
+    };
+    transaction.onerror = () => {
+      rejectOnce(transaction.error ?? new Error("theme_database_transaction_failed"));
+    };
+    transaction.onabort = () => {
+      rejectOnce(transaction.error ?? new Error("theme_database_transaction_aborted"));
+    };
+
+    let request: IDBRequest<T>;
+    try {
+      request = callback(transaction.objectStore(storeName));
+    } catch (error) {
+      try {
+        transaction.abort();
+      } catch {
+        // 이미 비활성화된 transaction이면 원래 callback 오류를 그대로 반환한다.
+      }
+      rejectOnce(error);
+      return;
+    }
+
+    request.onsuccess = () => {
+      requestResult = request.result;
+      requestSucceeded = true;
+    };
+    request.onerror = () => rejectOnce(request.error ?? new Error("theme_database_request_failed"));
   });
 }
