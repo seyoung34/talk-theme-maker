@@ -4,8 +4,8 @@ import { themeDraftReducer, useThemeDraft } from "@/components/project/hooks/use
 import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 import { createEmptyThemeDraft } from "@/lib/theme/project/draft";
 
-const { hydrateUploads } = vi.hoisted(() => ({ hydrateUploads: vi.fn() }));
-vi.mock("@/lib/theme/systemTemplates", () => ({ systemTemplateRepository: { hydrateUploads } }));
+const { hydrateUploads, prewarmUploads } = vi.hoisted(() => ({ hydrateUploads: vi.fn(), prewarmUploads: vi.fn(async () => {}) }));
+vi.mock("@/lib/theme/systemTemplates", () => ({ systemTemplateRepository: { hydrateUploads, prewarmUploads } }));
 
 describe("themeDraftReducer", () => {
   it("updates one draft field without changing the remaining fields", () => {
@@ -328,6 +328,28 @@ describe("useThemeDraft.hydratePreviewUploads", () => {
 
   beforeEach(() => {
     hydrateUploads.mockReset();
+    prewarmUploads.mockClear();
+  });
+
+  /**
+   * 슬롯을 하나씩 넘기는 호출부라, 저장소 쪽 예열만으로는 슬롯 수만큼 서명 요청이 남는다.
+   * 루프 앞에서 대상 전체를 한 번 예열해야 요청이 1건으로 줄어든다.
+   */
+  it("슬롯 루프 전에 대상 전체를 한 번 예열한다", async () => {
+    const order: string[] = [];
+    prewarmUploads.mockImplementation(async () => void order.push("prewarm"));
+    hydrateUploads.mockImplementation(async (_refs: unknown, ids: string[]) => {
+      order.push("hydrate");
+      return slotResult(ids[0]);
+    });
+
+    const { result } = renderHook(() => useThemeDraft());
+    await result.current.hydratePreviewUploads(uploadRefs, slotIds, () => {});
+
+    expect(prewarmUploads).toHaveBeenCalledTimes(1);
+    expect(prewarmUploads).toHaveBeenCalledWith(uploadRefs, slotIds);
+    expect(order[0]).toBe("prewarm");
+    expect(order.filter((step) => step === "prewarm")).toHaveLength(1);
   });
 
   it("슬롯을 순차가 아니라 겹쳐서 받는다", async () => {
@@ -379,5 +401,6 @@ describe("useThemeDraft.hydratePreviewUploads", () => {
 
     expect(uploads).toEqual({});
     expect(hydrateUploads).not.toHaveBeenCalled();
+    expect(prewarmUploads).not.toHaveBeenCalled();
   });
 });

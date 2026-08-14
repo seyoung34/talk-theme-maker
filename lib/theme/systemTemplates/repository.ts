@@ -6,6 +6,10 @@ export type SystemTemplateRepository = {
   getMetadata(id: string): Promise<SystemTemplateMetadataRecord | null>;
   get(id: string): Promise<SystemTemplateRecord | null>;
   hydrateUploads(uploadRefs: RemoteSlotUploads, slotIds?: string[]): Promise<ThemeEditOverrides["uploads"]>;
+  // 여러 슬롯의 원격 에셋 서명 URL을 한 번에 미리 받아 둔다. 슬롯을 하나씩 넘기는 호출부가
+  // 파일 수만큼 요청을 내보내지 않도록, 루프 앞에서 한 번 부른다.
+  // 최적화이므로 실패해도 던지지 않는다. hydrateUploads가 그대로 동작해야 한다.
+  prewarmUploads(uploadRefs: RemoteSlotUploads, slotIds?: string[]): Promise<void>;
   save(input: SystemTemplateSaveInput): Promise<SystemTemplateRecord>;
   updatePublication(bundleId: string, input: { status: SystemTemplateStatus; visibility: SystemTemplateVisibility }): Promise<void>;
   updateTags(bundleId: string, tags: string[]): Promise<void>;

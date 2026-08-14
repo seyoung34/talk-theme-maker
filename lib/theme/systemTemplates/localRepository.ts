@@ -37,6 +37,10 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
     return {};
   },
 
+  async prewarmUploads() {
+    // 로컬(dev) 저장소는 IndexedDB에서 바로 읽으므로 서명 URL을 쓰지 않는다.
+  },
+
   async save(input: SystemTemplateSaveInput) {
     const now = Date.now();
     const { legacyTitle, ...recordInput } = input;

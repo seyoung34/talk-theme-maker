@@ -138,3 +138,96 @@ describe("systemTemplateRepository.regeneratePreviewMetadata", () => {
     expect((updates[0].preview_metadata as SystemTemplatePreviewMetadata).cardPreviewPath).toBe(previousCardPath);
   });
 });
+
+/**
+ * 원격 업로드 수화의 서명 요청 수.
+ *
+ * `storagePathToFile`은 경로를 하나씩 서명한다. 그래서 50개 단위 배치가 있는데도 걸리지 않아,
+ * 에셋 30개짜리 템플릿을 열면 `/api/theme-assets/signed-urls` 요청이 30건 나갔다. 요청마다
+ * Worker가 인증과 공개 여부 조회를 처음부터 반복하므로 요청 수가 곧 CPU 예산이다.
+ * 루프 앞의 예열이 실제로 캐시에 적중하는지를 요청 수로 고정한다.
+ */
+describe("systemTemplateRepository.hydrateUploads 서명 요청 수", () => {
+  const assetCount = 12;
+  const uploadRefs = Object.fromEntries(
+    Array.from({ length: assetCount }, (_, index) => [
+      `slot-${index}`,
+      [{ id: `u${index}`, fileName: `asset-${index}.png`, mimeType: "image/png", size: 1, storagePath: `system-templates/x/asset-${index}.png` }],
+    ]),
+  );
+
+  let signedUrlRequests: string[][];
+  let warn: ReturnType<typeof vi.spyOn>;
+
+  function stubFetch({ failBatch = false }: { failBatch?: boolean } = {}) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown, init?: RequestInit) => {
+        const url = String(input);
+        if (!url.includes("/api/theme-assets/signed-urls")) return new Response(new Blob(["file"]), { status: 200 });
+
+        const body = JSON.parse(String(init?.body)) as { paths: string[] };
+        signedUrlRequests.push(body.paths);
+        // 배치 실패만 재현한다. 단건 서명은 계속 동작해야 폴백을 확인할 수 있다.
+        if (failBatch && body.paths.length > 1) {
+          return new Response(JSON.stringify({ error: "boom" }), { status: 500, headers: { "content-type": "application/json" } });
+        }
+        return new Response(JSON.stringify({ signedUrls: Object.fromEntries(body.paths.map((path) => [path, `https://signed/${path}`])) }), {
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+  }
+
+  async function loadRepository() {
+    vi.doMock("@/lib/supabase/client", () => ({ createClient: () => ({}) }));
+    return (await import("@/lib/theme/systemTemplates/supabaseRepository")).systemTemplateRepository;
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    // 서명 캐시는 localStorage에도 남는다. 앞 테스트의 저장본이 새 테스트의 요청 수를 가린다.
+    window.localStorage.clear();
+    signedUrlRequests = [];
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warn.mockRestore();
+    vi.unstubAllGlobals();
+    vi.doUnmock("@/lib/supabase/client");
+  });
+
+  it("에셋을 여러 개 받아도 서명 요청은 한 번이다", async () => {
+    stubFetch();
+    const repository = await loadRepository();
+
+    const uploads = await repository.hydrateUploads(uploadRefs as never);
+
+    expect(Object.keys(uploads)).toHaveLength(assetCount);
+    expect(signedUrlRequests).toHaveLength(1);
+    expect(signedUrlRequests[0]).toHaveLength(assetCount);
+  });
+
+  it("prewarmUploads가 같은 경로를 한 번에 요청한다", async () => {
+    stubFetch();
+    const repository = await loadRepository();
+
+    await repository.prewarmUploads(uploadRefs as never);
+
+    expect(signedUrlRequests).toHaveLength(1);
+    expect(signedUrlRequests[0]).toHaveLength(assetCount);
+  });
+
+  it("예열이 실패해도 수화 결과는 같다", async () => {
+    // 예열은 최적화다. 실패하면 단건 서명으로 되돌아가되 파일 목록은 그대로여야 한다.
+    stubFetch({ failBatch: true });
+    const repository = await loadRepository();
+
+    const uploads = await repository.hydrateUploads(uploadRefs as never);
+
+    expect(Object.keys(uploads)).toHaveLength(assetCount);
+    expect(signedUrlRequests.length).toBeGreaterThan(1);
+    expect(warn).toHaveBeenCalled();
+  });
+});

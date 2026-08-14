@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
-import { sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName, themePublicBucketName } from "@/lib/theme/remoteAssets";
+import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName, themePublicBucketName } from "@/lib/theme/remoteAssets";
 import { createAdminThemeAssetSignedUrls } from "@/lib/theme/systemTemplates/adminSignedUrls";
+import { collectRemoteUploadPaths } from "@/lib/theme/systemTemplates/uploadRefPaths";
 import { getResolvedColor, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
@@ -112,6 +113,10 @@ export const systemTemplateRepository: SystemTemplateRepository = {
 
   hydrateUploads(uploadRefs, slotIds) {
     return remoteUploadsToSlotUploads(uploadRefs, slotIds);
+  },
+
+  prewarmUploads(uploadRefs, slotIds) {
+    return prewarmRemoteUploadSignedUrls(uploadRefs, slotIds);
   },
 
   async save(input) {
@@ -439,9 +444,35 @@ function toMetadataRecord(row: VariantRow): SystemTemplateMetadataRecord {
   };
 }
 
+/**
+ * 서명 URL을 한 번에 받아 `getThemeAssetSignedUrls`의 캐시에 채워 둔다.
+ *
+ * 아래 `remoteUploadsToSlotUploads`는 파일마다 `storagePathToFile` → 단건 서명을 부른다.
+ * 경로를 하나씩 넘기므로 배치(50개 단위)가 전혀 걸리지 않아, 에셋 30개짜리 템플릿을 열면
+ * `/api/theme-assets/signed-urls` 요청이 30건 나갔다. 요청마다 Worker가 인증과 공개 여부
+ * 조회를 처음부터 반복하므로, Workers Free의 요청당 CPU 10ms를 밀어 올리는 자리였다.
+ *
+ * 미리 한 번 채워 두면 이후 단건 호출은 전부 메모리 캐시에서 돌아온다. 호출 구조는 그대로 둔다.
+ *
+ * 실패는 삼킨다. 예열은 최적화이지 필수 단계가 아니다. 실패해도 아래 개별 경로가 그대로
+ * 동작하고, 진짜 실패는 거기서 드러난다.
+ */
+async function prewarmRemoteUploadSignedUrls(uploadRefs: RemoteSlotUploads, slotIds?: string[]) {
+  const paths = collectRemoteUploadPaths(uploadRefs, slotIds);
+  if (!paths.length) return;
+  try {
+    await getThemeAssetSignedUrls(paths);
+  } catch (error) {
+    console.warn("Signed URL prewarm failed; falling back to per-file signing.", error);
+  }
+}
+
 async function remoteUploadsToSlotUploads(uploadRefs: RemoteSlotUploads, slotIds?: string[]): Promise<SlotUploads> {
   const uploads: SlotUploads = {};
   const allowed = slotIds?.length ? new Set(slotIds) : null;
+  // 이 호출이 다룰 경로를 먼저 한 번에 서명한다. 이 함수를 거치는 모든 호출자
+  // (편집기 부트스트랩·저장·내보내기)가 같은 이득을 본다.
+  await prewarmRemoteUploadSignedUrls(uploadRefs, slotIds);
   for (const [slotId, entries] of Object.entries(uploadRefs)) {
     if (allowed && !allowed.has(slotId)) continue;
     if (!entries?.length) continue;

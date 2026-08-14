@@ -215,8 +215,13 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
 
     let completed = 0;
     onProgress(completed, slotIds.length);
-    // 슬롯마다 서명 URL 왕복과 파일 다운로드가 붙는다. 순차로 돌리면 그 지연이 슬롯 수만큼 그대로
-    // 쌓여 "준비하는 중" 화면이 길어진다. 대부분 작은 파일이라 비용은 바이트가 아니라 왕복 횟수다.
+
+    // 슬롯을 하나씩 넘기므로 저장소 쪽 예열은 슬롯마다 따로 걸린다. 여기서 대상 전체를 한 번에
+    // 서명해 두면 아래 루프는 캐시만 읽는다. 진행률(total)은 슬롯 수 그대로이므로 영향이 없다.
+    await systemTemplateRepository.prewarmUploads(uploadRefs, slotIds);
+
+    // 슬롯마다 파일 다운로드가 붙는다. 순차로 돌리면 그 지연이 슬롯 수만큼 그대로 쌓여
+    // "준비하는 중" 화면이 길어진다. 대부분 작은 파일이라 비용은 바이트가 아니라 왕복 횟수다.
     const hydratedBySlot = await mapWithConcurrency(slotIds, previewHydrationConcurrency, async (slotId) => {
       const hydrated = await systemTemplateRepository.hydrateUploads(uploadRefs, [slotId]);
       completed += 1;
