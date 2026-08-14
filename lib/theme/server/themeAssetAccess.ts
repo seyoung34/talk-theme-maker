@@ -1,7 +1,8 @@
 import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { maxSignedUrlPaths, themeAssetSignedUrlTtlSeconds } from "@/lib/theme/themeAssetSigning";
 
-export const themeAssetSignedUrlTtlSeconds = 60 * 10;
-export const maxSignedUrlPaths = 50;
+// 관리자 브라우저 경로도 같은 TTL/상한을 써야 해서 상수 자체는 클라이언트 안전 모듈에 있다.
+export { maxSignedUrlPaths, themeAssetSignedUrlTtlSeconds };
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 type SupabaseAdminClient = ReturnType<typeof createAdminClient>;

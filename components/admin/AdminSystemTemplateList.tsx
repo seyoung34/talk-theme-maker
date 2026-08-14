@@ -6,6 +6,7 @@ import { ArrowRight, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
+import { regenerateSystemTemplatePreviews } from "@/lib/theme/systemTemplates/regenerateAll";
 import { systemTemplateRepository, type SystemTemplateStatus, type SystemTemplateSummary, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { templateStartStorageKey, themeTemplates } from "@/lib/theme/templates";
 import type { ThemePlatform } from "@/lib/theme/types";
@@ -126,13 +127,19 @@ export default function AdminSystemTemplateList() {
       setIsRegenerating(true);
       setError(null);
       const all = await systemTemplateRepository.list();
-      let done = 0;
-      for (const template of all) {
-        await systemTemplateRepository.regeneratePreviewMetadata(template.id);
-        done += 1;
-      }
-      setNotice(`프리뷰 메타를 ${done}개 재생성했습니다.`);
+      const result = await regenerateSystemTemplatePreviews(
+        all.map((template) => ({ id: template.id, title: template.title })),
+        (id) => systemTemplateRepository.regeneratePreviewMetadata(id),
+      );
+      // 서버/스토리지 오류로 멈춘 경우에도 그때까지 갱신된 결과는 목록에 반영한다.
+      // loadTemplates가 setError(null)로 시작하므로 안내는 목록을 다시 불러온 뒤에 띄운다.
       await loadTemplates();
+      if (result.failed) {
+        console.error(result.error);
+        setError(`서버 오류로 프리뷰 재생성을 중단했습니다. (완료 ${result.done}/${result.total}, 중단 지점: ${result.failed.title})`);
+      } else {
+        setNotice(`프리뷰 메타를 ${result.done}개 재생성했습니다.`);
+      }
     } catch (regenerateError) {
       console.error(regenerateError);
       setError("프리뷰 재생성에 실패했습니다.");

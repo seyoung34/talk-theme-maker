@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
-import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName, themePublicBucketName } from "@/lib/theme/remoteAssets";
+import { sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName, themePublicBucketName } from "@/lib/theme/remoteAssets";
+import { createAdminThemeAssetSignedUrls } from "@/lib/theme/systemTemplates/adminSignedUrls";
 import { getResolvedColor, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
@@ -228,39 +229,48 @@ export const systemTemplateRepository: SystemTemplateRepository = {
     const uploadRefs = row.upload_refs ?? {};
 
     // 카드 썸네일 재굽기: 원격 에셋을 role별 서명 URL로 주입해 canvas로 다시 굽는다.
-    // 실패해도(예: SSR/이미지 로드 실패) previewMetadata 갱신은 계속 진행하고 기존 webp를 유지한다.
+    //
+    // 실패 처리를 두 갈래로 나눈다. 서명·업로드 같은 인프라 실패는 다음 템플릿에서도 똑같이
+    // 실패하므로 삼키지 않고 던져서 일괄 재생성 자체를 멈춘다. 예전에는 전부 catch 해서
+    // "기존 썸네일 유지"로 넘겼고, 그 바람에 서버가 죽은 상태에서도 템플릿 수만큼 요청이
+    // 계속 나갔다. 반면 이미지 로드/디코딩·canvas 실패는 그 템플릿 하나의 문제라 기존 webp를
+    // 유지하고 previewMetadata 갱신은 그대로 진행한다.
     let cardPreviewPath = row.preview_metadata?.cardPreviewPath;
+    const slots = getThemeSlots(row.platform);
+    const thumbnailRoles: ThemeResourceRole[] = ["main_background", "chat_background", "bubble_me_1", "bubble_you_1", "bubble_me_2", "bubble_you_2", "profile_image_1", ...thumbnailTabIconRoles];
+    const pathByRole = new Map<ThemeResourceRole, string>();
+    for (const role of thumbnailRoles) {
+      const storagePath = resolvePreviewStoragePath(slots, role, uploadRefs, candidateSelections);
+      if (storagePath) pathByRole.set(role, storagePath);
+    }
+    // 관리자 브라우저 → Supabase Storage 직접 서명. Next.js 라우트를 거치지 않는다.
+    const signedUrls = pathByRole.size > 0 ? await createAdminThemeAssetSignedUrls(supabase, Array.from(pathByRole.values())) : {};
+    const imageUrlByRole: Partial<Record<ThemeResourceRole, string>> = {};
+    for (const [role, storagePath] of pathByRole) {
+      if (signedUrls[storagePath]) imageUrlByRole[role] = signedUrls[storagePath];
+    }
+
+    let thumbnail: Blob | null = null;
     try {
-      const slots = getThemeSlots(row.platform);
-      const thumbnailRoles: ThemeResourceRole[] = ["main_background", "chat_background", "bubble_me_1", "bubble_you_1", "bubble_me_2", "bubble_you_2", "profile_image_1", ...thumbnailTabIconRoles];
-      const pathByRole = new Map<ThemeResourceRole, string>();
-      for (const role of thumbnailRoles) {
-        const storagePath = resolvePreviewStoragePath(slots, role, uploadRefs, candidateSelections);
-        if (storagePath) pathByRole.set(role, storagePath);
-      }
-      const signedUrls = pathByRole.size > 0 ? await getThemeAssetSignedUrls(Array.from(pathByRole.values())) : {};
-      const imageUrlByRole: Partial<Record<ThemeResourceRole, string>> = {};
-      for (const [role, storagePath] of pathByRole) {
-        if (signedUrls[storagePath]) imageUrlByRole[role] = signedUrls[storagePath];
-      }
-      const thumbnail = await generateSystemTemplateThumbnail(
+      thumbnail = await generateSystemTemplateThumbnail(
         { baseTemplateId: row.base_template_id, platform: row.platform, overrides: { colors, uploads: {}, candidateSelections, bubbleEdits } },
         imageUrlByRole,
       );
-      if (thumbnail) {
-        const storagePath = `system-templates/${id}/preview/card.webp`;
-        // 공개 버킷. 갤러리에 그대로 노출되는 이미지라 서명할 이유가 없고, 서명하면 10분 뒤
-        // 깨진다. 원본 에셋은 계속 비공개 버킷에 둔다.
-        const { error: uploadError } = await supabase.storage.from(themePublicBucketName).upload(storagePath, thumbnail, {
-          contentType: "image/webp",
-          cacheControl: "3600",
-          upsert: true,
-        });
-        if (uploadError) throw uploadError;
-        cardPreviewPath = storagePath;
-      }
     } catch (thumbnailError) {
-      console.warn("Card thumbnail could not be regenerated; keeping previous.", thumbnailError);
+      console.warn("Card thumbnail could not be rendered; keeping previous.", thumbnailError);
+    }
+
+    if (thumbnail) {
+      const storagePath = `system-templates/${id}/preview/card.webp`;
+      // 공개 버킷. 갤러리에 그대로 노출되는 이미지라 서명할 이유가 없고, 서명하면 10분 뒤
+      // 깨진다. 원본 에셋은 계속 비공개 버킷에 둔다.
+      const { error: uploadError } = await supabase.storage.from(themePublicBucketName).upload(storagePath, thumbnail, {
+        contentType: "image/webp",
+        cacheControl: "3600",
+        upsert: true,
+      });
+      if (uploadError) throw uploadError;
+      cardPreviewPath = storagePath;
     }
 
     const previewMetadata = buildPreviewMetadata({
