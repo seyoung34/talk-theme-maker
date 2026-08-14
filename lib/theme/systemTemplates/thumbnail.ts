@@ -182,13 +182,12 @@ function drawFriendsColumn(context: CanvasRenderingContext2D, x: number, y: numb
   context.clip();
 
   const padX = Math.round(columnWidth * 0.08);
-  const headerHeight = Math.round(columnHeight * 0.1);
-  context.fillStyle = "rgba(255,255,255,.85)";
-  roundRect(context, x, y, columnWidth, headerHeight, cornerRadius);
-  context.fill();
 
+  // 상단 헤더 자리를 두지 않는다. 예전에는 여기에 85% 흰색 띠를 깔았는데, 테마 색을 쓰지 않아
+  // 어떤 템플릿에서도 같은 흰 띠가 얹혔고 안에 그리는 것도 없어 빈 공백으로만 보였다.
+  // 없애면 배경 이미지가 그만큼 넓게 드러난다 — 카드가 보여 줄 것은 결국 그 배경이다.
   const lineX = x + padX + Math.round(columnWidth * 0.2) + 14;
-  let rowY = y + headerHeight + Math.round(columnHeight * 0.07);
+  let rowY = y + Math.round(columnHeight * 0.07);
 
   const bigAvatar = Math.round(columnWidth * 0.2);
   drawAvatar(context, x + padX, rowY, bigAvatar, profileImage);
