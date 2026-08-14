@@ -3,12 +3,22 @@
 import { useCallback, useReducer, useRef, type Dispatch, type SetStateAction } from "react";
 import { getMissingRemoteUploadSlotIds, keepCurrentRemoteUploads, mergeSlotUploads } from "@/components/project/projectImporterHelpers";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
+import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { systemTemplateRepository, type RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 // 초안의 형태 자체는 지속·내보내기 계약이라 lib/theme/project가 소유한다.
 // 이 파일은 그 형태를 다루는 React 상태 기계만 담당한다.
 import { createEmptyThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
 
 type DraftUpdater<T> = SetStateAction<T>;
+
+/**
+ * 첫 화면 에셋을 동시에 몇 개까지 받을지.
+ *
+ * 이 단계는 편집기가 열리기 전을 막고 있으므로 왕복을 겹치는 이득이 크다. 다만 무제한으로 풀면
+ * 저사양 모바일에서 연결 한도와 메모리를 함께 밀어붙이므로, 내보내기 경로(`exportSlotConcurrency`)와
+ * 같은 수준으로 묶는다.
+ */
+const previewHydrationConcurrency = 6;
 
 function omitSlotValue<T>(values: Partial<Record<string, T>>, slotId: string) {
   if (!(slotId in values)) return values;
@@ -203,16 +213,19 @@ export function useThemeDraft(initialDraft: ThemeDraft = createEmptyThemeDraft()
   const hydratePreviewUploads = useCallback(async (uploadRefs: RemoteSlotUploads, slotIds: string[], onProgress: (completed: number, total: number) => void) => {
     if (slotIds.length === 0) return {};
 
-    let nextUploads: SlotUploads = {};
     let completed = 0;
     onProgress(completed, slotIds.length);
-    for (const slotId of slotIds) {
+    // 슬롯마다 서명 URL 왕복과 파일 다운로드가 붙는다. 순차로 돌리면 그 지연이 슬롯 수만큼 그대로
+    // 쌓여 "준비하는 중" 화면이 길어진다. 대부분 작은 파일이라 비용은 바이트가 아니라 왕복 횟수다.
+    const hydratedBySlot = await mapWithConcurrency(slotIds, previewHydrationConcurrency, async (slotId) => {
       const hydrated = await systemTemplateRepository.hydrateUploads(uploadRefs, [slotId]);
-      nextUploads = mergeSlotUploads(nextUploads, hydrated);
       completed += 1;
       onProgress(completed, slotIds.length);
-    }
-    return nextUploads;
+      return hydrated;
+    });
+
+    // 병합은 완료 순서가 아니라 요청 순서로 한다. 같은 입력이면 항상 같은 결과가 나와야 한다.
+    return hydratedBySlot.reduce<SlotUploads>((merged, hydrated) => mergeSlotUploads(merged, hydrated), {});
   }, []);
 
   return {

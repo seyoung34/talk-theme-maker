@@ -8,6 +8,7 @@ import { createInitialThemeDraft, type ThemeDraft } from "@/lib/theme/project/dr
 import type { SlotUploads } from "@/components/project/projectModel";
 import type { RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import { systemTemplateRepository } from "@/lib/theme/systemTemplates";
+import { tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { normalizeLegacyColorOverrides, normalizeLegacyThemeDraft } from "@/lib/theme/project/legacyOverrides";
 import { clearRecoveryDraft, readRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
@@ -411,9 +412,28 @@ function createInitialLoadProgress(message: string, current: number, total: numb
  * owner가 어느 쪽인지는 ref를 받아 봐야 알 수 있어서, 부분 hydration 상태에서 기본 이미지로
  * 조용히 되돌아가는 것보다 네 개를 함께 받는 편이 낫다.
  */
+/**
+ * 편집기를 열기 전에 받아 둘 슬롯. 순서가 곧 우선순위다.
+ *
+ * 탭 아이콘도 포함한다. 편집기는 친구 화면으로 열리고 그 화면 하단에 탭 바가 그대로 보이므로,
+ * 아이콘이 늦게 오면 사용자는 시스템 템플릿이 아니라 기본 아이콘을 첫인상으로 본다. 갤러리 모달은
+ * 같은 아이콘을 일부러 뒤로 미루지만(잠깐 보고 닫는 화면이라), 편집기의 첫 화면은 "이 템플릿이
+ * 이렇게 생겼다"는 판단 자체가 된다.
+ *
+ * 개수가 10개 늘어도 `hydratePreviewUploads`가 동시에 받으므로 대기 시간은 슬롯 수에 비례하지 않는다.
+ * 크기가 큰 배경과 말풍선을 앞에 두어 동시 실행 자리를 먼저 차지하게 한다.
+ */
 function getInitialPreviewSlotIds(platform: ThemePlatform, uploadRefs: RemoteSlotUploads) {
   const slots = getThemeSlots(platform);
-  const roleOrder: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "profile_image_1"];
+  const roleOrder: ThemeResourceRole[] = [
+    "chat_background",
+    "main_background",
+    "tab_background_image",
+    "bubble_me_1",
+    "bubble_you_1",
+    "profile_image_1",
+    ...tabIconPreviewRoles,
+  ];
   const slotIds = roleOrder.flatMap((role) => {
     const slot = slots.find((candidate) => candidate.role === role);
     if (!slot) return [];

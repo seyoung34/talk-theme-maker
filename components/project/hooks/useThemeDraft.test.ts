@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { themeDraftReducer, useThemeDraft } from "@/components/project/hooks/useThemeDraft";
 import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 import { createEmptyThemeDraft } from "@/lib/theme/project/draft";
+
+const { hydrateUploads } = vi.hoisted(() => ({ hydrateUploads: vi.fn() }));
+vi.mock("@/lib/theme/systemTemplates", () => ({ systemTemplateRepository: { hydrateUploads } }));
 
 describe("themeDraftReducer", () => {
   it("updates one draft field without changing the remaining fields", () => {
@@ -306,5 +309,75 @@ describe("useThemeDraft.clearBubbleEdits", () => {
 
     expect(result.current.draft.bubbleGeometry).toBe(before.bubbleGeometry);
     expect(result.current.draft.bubbleMarkers).toBe(before.bubbleMarkers);
+  });
+});
+
+/**
+ * 첫 화면 에셋 수화.
+ *
+ * 이 단계는 편집기가 열리기 전을 막는다. 슬롯마다 서명 URL 왕복과 다운로드가 붙으므로 순차로
+ * 돌리면 대기 시간이 슬롯 수에 그대로 비례한다. 탭 아이콘 10개를 우선순위에 넣은 뒤로는 특히
+ * 겹쳐 받는 것이 전제라, 그 성질을 고정한다.
+ */
+describe("useThemeDraft.hydratePreviewUploads", () => {
+  const slotIds = ["alpha", "beta", "gamma", "delta"];
+  const uploadRefs = Object.fromEntries(
+    slotIds.map((slotId) => [slotId, [{ id: slotId, fileName: `${slotId}.png`, mimeType: "image/png", size: 1, storagePath: `${slotId}.png` }]]),
+  );
+  const slotResult = (slotId: string) => ({ [slotId]: [{ id: slotId, file: new File([slotId], `${slotId}.png`), source: "template" as const }] });
+
+  beforeEach(() => {
+    hydrateUploads.mockReset();
+  });
+
+  it("슬롯을 순차가 아니라 겹쳐서 받는다", async () => {
+    let inFlight = 0;
+    let peakInFlight = 0;
+    hydrateUploads.mockImplementation(async (_refs: unknown, ids: string[]) => {
+      inFlight += 1;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return slotResult(ids[0]);
+    });
+
+    const { result } = renderHook(() => useThemeDraft());
+    await result.current.hydratePreviewUploads(uploadRefs, slotIds, () => {});
+
+    expect(hydrateUploads).toHaveBeenCalledTimes(slotIds.length);
+    expect(peakInFlight).toBeGreaterThan(1);
+  });
+
+  it("완료 순서가 뒤집혀도 요청 순서대로 병합한다", async () => {
+    // 첫 슬롯을 가장 늦게 끝내, 완료 순서를 그대로 쓰면 순서가 뒤집히게 만든다.
+    hydrateUploads.mockImplementation(async (_refs: unknown, ids: string[]) => {
+      await new Promise((resolve) => setTimeout(resolve, ids[0] === "alpha" ? 20 : 1));
+      return slotResult(ids[0]);
+    });
+
+    const { result } = renderHook(() => useThemeDraft());
+    const uploads = await result.current.hydratePreviewUploads(uploadRefs, slotIds, () => {});
+
+    expect(Object.keys(uploads)).toEqual(slotIds);
+  });
+
+  it("완료할 때마다 진행률을 알리고 마지막에 전체를 채운다", async () => {
+    hydrateUploads.mockImplementation(async (_refs: unknown, ids: string[]) => slotResult(ids[0]));
+    const progress: Array<[number, number]> = [];
+
+    const { result } = renderHook(() => useThemeDraft());
+    await result.current.hydratePreviewUploads(uploadRefs, slotIds, (completed, total) => progress.push([completed, total]));
+
+    expect(progress[0]).toEqual([0, slotIds.length]);
+    expect(progress.at(-1)).toEqual([slotIds.length, slotIds.length]);
+    expect(progress.map(([completed]) => completed)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("받을 슬롯이 없으면 요청하지 않는다", async () => {
+    const { result } = renderHook(() => useThemeDraft());
+    const uploads = await result.current.hydratePreviewUploads(uploadRefs, [], () => {});
+
+    expect(uploads).toEqual({});
+    expect(hydrateUploads).not.toHaveBeenCalled();
   });
 });
