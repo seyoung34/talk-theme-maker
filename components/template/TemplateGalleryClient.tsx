@@ -993,7 +993,12 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
         <header className="flex items-start justify-between gap-3 border-b border-[var(--color-outline-variant)] px-4 py-3 sm:px-5 sm:py-4">
           <div>
             <h2 className="mt-1 font-[var(--font-display)] text-2xl font-semibold leading-tight text-[var(--color-on-surface)] sm:text-3xl">{preview.title}</h2>
-            {preview.description ? <p className="mt-1 line-clamp-2 max-w-2xl text-xs leading-5 text-[var(--color-on-surface-variant)] sm:text-sm">{preview.description}</p> : null}
+            {/*
+              좁은 화면에서는 설명을 접는다. 프리뷰 자체가 이미 무엇인지 보여 주는데 두 줄을 더 쓰면
+              정작 볼 것이 그만큼 밀린다. `hidden sm:block`이 아니라 `max-sm:hidden`을 쓰는 이유는
+              `line-clamp-2`가 `display: -webkit-box`라, sm에서 `block`을 덮어쓰면 줄 제한이 풀리기 때문이다.
+            */}
+            {preview.description ? <p className="mt-1 line-clamp-2 max-w-2xl text-xs leading-5 text-[var(--color-on-surface-variant)] max-sm:hidden sm:text-sm">{preview.description}</p> : null}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {preview.onDelete ? (
@@ -1006,8 +1011,13 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
                 {preview.deleteLabel ?? "삭제"}
               </button>
             ) : null}
-            <button className="rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-white sm:px-4 sm:text-sm" type="button" onClick={onClose}>
-              {preview.closeLabel}
+            <button
+              className="grid size-11 shrink-0 place-items-center rounded-full bg-white text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-on-surface)]"
+              type="button"
+              onClick={onClose}
+              aria-label={preview.closeLabel}
+            >
+              <X className="h-5 w-5" strokeWidth={2.2} aria-hidden="true" />
             </button>
           </div>
         </header>
