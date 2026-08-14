@@ -6,17 +6,20 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // api/export 제외: 내보내기 요청은 최대 50MB 멀티파트라 미들웨어를 통과시키면
-  // 본문이 그대로 미들웨어 계층을 거친다. 상태 폴링도 이 경로를 자주 두드린다.
-  // 이 라우트 핸들러들은 각자 인증을 확인하고, Route Handler의 Supabase 클라이언트는
-  // 갱신된 세션 쿠키를 직접 쓸 수 있으므로 미들웨어의 세션 갱신에 의존하지 않는다.
-  //
-  // api/session, api/theme-assets/signed-url(s)도 같은 이유로 제외한다. 셋 다 핸들러에서
-  // 다시 getUser()와 관리자/공개 여부를 확인하므로, 미들웨어의 getClaims()는 같은 검증을
-  // 한 번 더 하는 순수 중복이다. Cloudflare Workers Free는 요청당 CPU 10ms라 이 중복이
-  // 그대로 한도를 밀어 올린다(Error 1102). 뒤에 문자가 더 붙은 경로(api/sessions 등)까지
-  // 딸려 나가지 않도록 세 경로는 `$`로 끝을 고정한다.
-  matcher: [
-    "/((?!_next/static|_next/image|api/export|api/session$|api/theme-assets/signed-url$|api/theme-assets/signed-urls$|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
+  /*
+   * 제외 목록이 아니라 포함 목록이다.
+   *
+   * `updateSession()`이 존재하는 이유는 하나다 — 서버 컴포넌트는 쿠키를 쓸 수 없어서
+   * (`lib/supabase/server.ts`의 `setAll` catch) 세션 갱신을 대신 해 줘야 한다. 그런데 서버에서
+   * 세션을 읽는 페이지는 `requireAdmin()`을 거치는 `/admin/*` 7개뿐이다. 나머지 페이지는 세션
+   * 없이 렌더되고 로그인 표시는 `SiteHeader`가 `/api/session`으로 채운다. Route Handler는 쿠키를
+   * 직접 쓸 수 있으므로 API 경로도 미들웨어가 필요 없다.
+   *
+   * 그런데도 거의 모든 요청에서 `auth.getClaims()`가 돌고 있었다. Cloudflare Workers Free는
+   * 요청당 CPU 10ms라 이 상시 비용이 그대로 한도를 밀어 올린다(Error 1102).
+   *
+   * 세션 갱신 책임은 `/api/session`(전 페이지 공통 `SiteHeader`가 마운트마다 호출)과 각 API
+   * 라우트, 그리고 브라우저 Supabase 클라이언트의 자동 갱신이 나눠 맡는다.
+   */
+  matcher: ["/admin/:path*"],
 };
