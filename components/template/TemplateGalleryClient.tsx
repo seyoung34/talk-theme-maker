@@ -975,6 +975,10 @@ const previewScreens: Array<{ id: PreviewScreenId; label: string }> = [
   { id: "profile", label: "프로필" },
 ];
 
+// 화면을 넘기는 좌우 버튼. 테두리 대신 옅은 면으로 남긴다 — 모달 바탕이 흰색이라 테두리만 빼면 버튼이 보이지 않는다.
+const screenStepButtonClassName =
+  "grid size-8 shrink-0 place-items-center rounded-full bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-high)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-on-surface)] sm:size-9";
+
 function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { preview: TemplatePreviewModel; isPreviewLoading?: boolean; onClose: () => void }) {
   const [activeScreenIndex, setActiveScreenIndex] = useState(0);
   const activeScreen = previewScreens[activeScreenIndex];
@@ -990,7 +994,7 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${preview.title} 미리보기`}>
       <section className="grid h-[min(92dvh,780px)] w-full max-w-3xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:rounded-[32px]">
-        <header className="flex items-start justify-between gap-3 border-b border-[var(--color-outline-variant)] px-4 py-3 sm:px-5 sm:py-4">
+        <header className="flex items-start justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4">
           <div>
             <h2 className="mt-1 font-[var(--font-display)] text-2xl font-semibold leading-tight text-[var(--color-on-surface)] sm:text-3xl">{preview.title}</h2>
             {/*
@@ -1028,7 +1032,7 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
               <button
                 type="button"
                 aria-label="이전 화면"
-                className="grid size-8 shrink-0 place-items-center rounded-full border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] sm:size-9"
+                className={screenStepButtonClassName}
                 onClick={goToPrevScreen}
               >
                 <ArrowLeft className="size-4" aria-hidden="true" />
@@ -1048,7 +1052,7 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
               <button
                 type="button"
                 aria-label="다음 화면"
-                className="grid size-8 shrink-0 place-items-center rounded-full border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] sm:size-9"
+                className={screenStepButtonClassName}
                 onClick={goToNextScreen}
               >
                 <ArrowRight className="size-4" aria-hidden="true" />
@@ -1092,23 +1096,27 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
  * 기본 에셋을 보여 주지 않으려던 이유가 그대로 되살아난다.
  */
 function ScreenPreviewSkeleton() {
+  // `animate-pulse`의 투명도 변화는 옅은 회색 위에서 거의 보이지 않아 멈춘 화면과 구분되지 않는다.
+  // 밝은 띠가 지나가는 `skeleton-shimmer`(globals.css)로 로딩 중임을 분명히 한다.
+  const blockClassName = "skeleton-shimmer bg-black/10";
+
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)_auto] bg-[var(--color-surface-low)]" role="status" aria-label="미리보기를 준비하는 중입니다">
       <div className="flex items-center justify-between px-4 h-11">
-        <span className="w-16 h-3 rounded-full animate-pulse bg-black/10" />
-        <span className="rounded-full size-5 animate-pulse bg-black/10" />
+        <span className={`w-16 h-3 rounded-full ${blockClassName}`} />
+        <span className={`rounded-full size-5 ${blockClassName}`} />
       </div>
       <div className="grid content-start gap-3 px-4 py-3">
         {Array.from({ length: 5 }).map((_, index) => (
           <div key={index} className="flex items-center gap-3">
-            <span className="rounded-full size-9 shrink-0 animate-pulse bg-black/10" />
-            <span className="flex-1 h-4 rounded-full animate-pulse bg-black/10" />
+            <span className={`rounded-full size-9 shrink-0 ${blockClassName}`} />
+            <span className={`flex-1 h-4 rounded-full ${blockClassName}`} />
           </div>
         ))}
       </div>
       <div className="grid grid-cols-5 items-center gap-3 px-4 h-14 border-t border-[var(--color-outline-variant)]">
         {Array.from({ length: 5 }).map((_, index) => (
-          <span key={index} className="mx-auto rounded-lg size-6 animate-pulse bg-black/10" />
+          <span key={index} className={`mx-auto rounded-lg size-6 ${blockClassName}`} />
         ))}
       </div>
     </div>
