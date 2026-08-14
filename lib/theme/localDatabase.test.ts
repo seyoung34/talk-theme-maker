@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   openThemeDatabase,
+  themeDatabaseName,
   themeDatabaseStores,
   themeDatabaseVersion,
   withThemeDatabaseStore,
@@ -19,6 +20,8 @@ function createIndexedDbHarness<T>(result: T) {
     abort: vi.fn(),
   } as unknown as IDBTransaction;
   const database = {
+    // 선언한 store가 이미 다 있는 DB. `openThemeDatabase`가 version을 올리지 않고 그대로 쓴다.
+    objectStoreNames: { contains: () => true },
     transaction: vi.fn(() => transaction),
     close: vi.fn(),
   } as unknown as IDBDatabase;
@@ -31,7 +34,7 @@ function createIndexedDbHarness<T>(result: T) {
 }
 
 describe("withThemeDatabaseStore", () => {
-  it("선언한 모든 store를 현재 database version에서 연다", async () => {
+  it("선언한 모든 store를 최소 database version에서 연다", async () => {
     vi.unstubAllGlobals();
 
     const database = await openThemeDatabase();
@@ -40,6 +43,47 @@ describe("withThemeDatabaseStore", () => {
     expect(database.version).toBe(themeDatabaseVersion);
     expect(storeNames).toEqual(expect.arrayContaining(Object.values(themeDatabaseStores)));
     database.close();
+  });
+
+  /**
+   * 새 store를 추가한 배포를 되돌리면, 이미 높은 version으로 DB를 연 브라우저가 남는다. version을 고정해
+   * 열면 `VersionError`로 로컬 데이터 전체를 읽지 못한다. 서버 백업이 없으므로 곧 작업물 소실이다.
+   */
+  it("브라우저에 더 높은 version이 남아 있어도 그대로 열고 데이터를 유지한다", async () => {
+    vi.unstubAllGlobals();
+    const futureVersion = themeDatabaseVersion + 3;
+
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open(themeDatabaseName, futureVersion);
+      request.onupgradeneeded = () => {
+        const database = request.result;
+        for (const storeName of Object.values(themeDatabaseStores)) {
+          if (!database.objectStoreNames.contains(storeName)) database.createObjectStore(storeName, { keyPath: "id" });
+        }
+        if (!database.objectStoreNames.contains("dropped-store")) database.createObjectStore("dropped-store", { keyPath: "id" });
+      };
+      request.onsuccess = () => {
+        const transaction = request.result.transaction(themeDatabaseStores.userTemplates, "readwrite");
+        transaction.objectStore(themeDatabaseStores.userTemplates).put({ id: "kept", name: "이전 작업" });
+        transaction.oncomplete = () => {
+          request.result.close();
+          resolve();
+        };
+        transaction.onabort = () => reject(transaction.error);
+      };
+      request.onerror = () => reject(request.error);
+    });
+
+    const database = await openThemeDatabase();
+    expect(database.version).toBe(futureVersion);
+    database.close();
+
+    const kept = await withThemeDatabaseStore<{ id: string; name: string } | undefined>(
+      themeDatabaseStores.userTemplates,
+      "readonly",
+      (store) => store.get("kept"),
+    );
+    expect(kept?.name).toBe("이전 작업");
   });
 
   it("request 성공 뒤에도 transaction commit 전에는 완료되지 않는다", async () => {

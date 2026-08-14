@@ -1,4 +1,12 @@
 export const themeDatabaseName = "kakaotalk-theme-maker";
+
+/**
+ * 이 코드가 필요로 하는 **최소** version. 브라우저에 이미 더 높은 version이 있으면 그쪽을 그대로 쓴다.
+ *
+ * IndexedDB는 기존 version보다 낮은 version을 요구하면 `VersionError`로 열기 자체를 거부한다. 새 store를
+ * 추가한 배포를 되돌리면, 이미 새 version으로 DB를 연 사용자는 로컬 데이터 **전체**를 읽지 못하게 된다.
+ * 서버 백업이 없는 로컬 저장소라 그대로 작업물 소실이다. 그래서 version을 고정해 열지 않는다.
+ */
 export const themeDatabaseVersion = 5;
 
 export const themeDatabaseStores = {
@@ -10,9 +18,38 @@ export const themeDatabaseStores = {
   editorAutosaveDrafts: "editor-autosave-drafts",
 } as const;
 
+/**
+ * version을 지정하지 않고 먼저 연다. 그러면 기존 version이 무엇이든 그대로 열리므로, 되돌린 배포가
+ * 로컬 데이터 접근 차단이 되지 않는다. 필요한 store가 없을 때만 version을 올려 만든다.
+ */
 export function openThemeDatabase() {
   return new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(themeDatabaseName, themeDatabaseVersion);
+    const request = indexedDB.open(themeDatabaseName);
+
+    request.onsuccess = () => {
+      const database = request.result;
+      const hasEveryStore = Object.values(themeDatabaseStores).every((storeName) =>
+        database.objectStoreNames.contains(storeName),
+      );
+      if (hasEveryStore) {
+        resolve(database);
+        return;
+      }
+
+      // store 생성은 `onupgradeneeded` 안에서만 가능하고, 그러려면 현재보다 높은 version이어야 한다.
+      // 처음 만들어지는 DB는 이 시점에 version 1이므로 선언한 최소 version으로 올린다.
+      const nextVersion = Math.max(themeDatabaseVersion, database.version + 1);
+      database.close();
+      upgradeThemeDatabase(nextVersion).then(resolve, reject);
+    };
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error("theme_database_upgrade_blocked"));
+  });
+}
+
+function upgradeThemeDatabase(version: number) {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(themeDatabaseName, version);
 
     request.onupgradeneeded = () => {
       const database = request.result;
