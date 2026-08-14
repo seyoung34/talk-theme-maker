@@ -85,9 +85,15 @@ export default function TemplateGalleryClient() {
   const [recentWorkVisual, setRecentWorkVisual] = useState<TemplatePreviewVisual | null>(null);
   const [pendingTemplateStart, setPendingTemplateStart] = useState<PendingTemplateStart | null>(null);
   const userTemplateCardPreviewUrlsRef = useRef<Record<string, Record<string, string>>>({});
-  // 내 템플릿/최근 작업 카드에 갤러리 카드와 같은 완성도의 합성 썸네일을 붙이기 위해 구운 blob URL.
-  // id는 userTemplateCardVisuals와 같은 키(템플릿 id 또는 "최근 작업"의 record.id)를 쓴다.
+  /*
+   * 구운 합성 썸네일의 blob URL. **목록 effect 전용**이고 키는 템플릿 id다.
+   *
+   * 최근 작업은 아래 별도 ref가 소유한다. 예전에는 둘이 이 ref를 함께 썼는데, 목록 effect가 자기
+   * 이전 썸네일을 정리하려고 ref 전체를 revoke하면서 최근 작업이 방금 넣은 URL까지 죽였다. 그 URL은
+   * 이미 `recentWorkVisual`에 들어가 있어 카드가 깨진 이미지가 됐다. 각자 만든 것만 각자 정리한다.
+   */
   const userTemplateCardThumbnailUrlsRef = useRef<Record<string, string>>({});
+  const recentWorkThumbnailUrlRef = useRef<string | null>(null);
   const viewedTemplateRef = useRef<string | null>(null);
   const galleryTemplates = createGalleryTemplates(systemTemplates, systemUploadPreviewUrls, !isSystemTemplatesLoading).map((item) => ({
     ...item,
@@ -150,6 +156,7 @@ export default function TemplateGalleryClient() {
     };
   }, []);
 
+  // 목록 썸네일만 정리한다. 최근 작업 것은 그쪽 effect가 자기 cleanup에서 해제한다.
   useEffect(() => {
     return () => {
       revokeObjectUrls(userTemplateCardThumbnailUrlsRef.current);
@@ -169,8 +176,13 @@ export default function TemplateGalleryClient() {
         setRecentWorkVisual(createUserTemplatePreviewVisual(previewRecord, baseTemplate, previewUrls));
         // CSS 목업을 먼저 보여 준 뒤, 갤러리 카드와 같은 합성 썸네일을 구워지는 대로 얹는다.
         void bakeUserTemplateCardThumbnail(previewRecord).then((objectUrl) => {
-          if (!active || !objectUrl) return;
-          userTemplateCardThumbnailUrlsRef.current[previewRecord.id] = objectUrl;
+          if (!objectUrl) return;
+          // 화면을 이미 떠났으면 이 URL은 아무도 쓰지 않는다. 그대로 두면 해제되지 않는다.
+          if (!active) {
+            URL.revokeObjectURL(objectUrl);
+            return;
+          }
+          recentWorkThumbnailUrlRef.current = objectUrl;
           setRecentWorkVisual((current) => (current ? { ...current, cardPreviewImage: objectUrl } : current));
         });
       })
@@ -184,6 +196,10 @@ export default function TemplateGalleryClient() {
     return () => {
       active = false;
       revokeObjectUrls(previewUrls);
+      if (recentWorkThumbnailUrlRef.current) {
+        URL.revokeObjectURL(recentWorkThumbnailUrlRef.current);
+        recentWorkThumbnailUrlRef.current = null;
+      }
     };
   }, []);
 
@@ -209,13 +225,19 @@ export default function TemplateGalleryClient() {
           return nextUrls;
         });
         setUserTemplateCardVisuals(nextVisuals);
+        // 이 ref에는 목록이 만든 것만 들어 있다. 최근 작업 썸네일은 별도 ref가 소유하므로 여기서 죽지 않는다.
         revokeObjectUrls(userTemplateCardThumbnailUrlsRef.current);
         userTemplateCardThumbnailUrlsRef.current = {};
         // CSS 목업을 먼저 보여 준 뒤, 갤러리 카드와 같은 합성 썸네일을 구워지는 대로 하나씩 얹는다.
         void Promise.all(
           records.map(async (record) => {
             const objectUrl = await bakeUserTemplateCardThumbnail(record);
-            if (!active || !objectUrl) return;
+            if (!objectUrl) return;
+            // 화면을 이미 떠났으면 이 URL은 아무도 쓰지 않는다. 그대로 두면 해제되지 않는다.
+            if (!active) {
+              URL.revokeObjectURL(objectUrl);
+              return;
+            }
             userTemplateCardThumbnailUrlsRef.current[record.id] = objectUrl;
             setUserTemplateCardVisuals((current) => (current[record.id] ? { ...current, [record.id]: { ...current[record.id], cardPreviewImage: objectUrl } } : current));
           }),
