@@ -13,11 +13,17 @@
   --color-background: #fbf9f4;
   --color-on-background: #1b1c19;
   --color-on-surface: #1b1c19;
-  --color-on-surface-variant: #4b4732;
+  /*
+   * 뉴트럴 변형 3종은 노랑(hue 50°)에서 파생됐는데, 페이지 배경은 파랑(hue 215°)이라 거의 보색이다.
+   * 파란 바탕 위의 카키는 동시대비로 주황·붉은 쪽으로 밀려 보여, 붉은 값이 하나도 없는데도 화면 전체에
+   * 붉은 기가 돈다. 색상은 그대로 두고 채도만 절반으로 낮춰 그 쏠림을 줄인다.
+   * 흰 바탕 대비: on-surface-variant 9.35→9.04, outline 4.51→4.32 (둘 다 AA 유지).
+   */
+  --color-on-surface-variant: #4b493f;
   --color-inverse-surface: #30312e;
   --color-inverse-on-surface: #f2f1ec;
-  --color-outline: #7c775f;
-  --color-outline-variant: #cdc7aa;
+  --color-outline: #7c7a6e;
+  --color-outline-variant: #cdcabc;
   --color-primary: #6a5f00;
   --color-on-primary: #ffffff;
   --color-primary-container: #fee500;
