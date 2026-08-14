@@ -10,10 +10,14 @@ colors:
   surface-container-high: '#e3ecf7'
   surface-container-highest: '#dbe8fb'
   on-surface: '#1b1c19'
-  on-surface-variant: '#4b4732'
+  # 이전 웜 팔레트에서 남아 있던 '#4b4732'를 같은 명도의 hue 215로 옮긴 값. 흰 면 대비 8.96.
+  on-surface-variant: '#444a51'
   inverse-surface: '#1b1c19'
   inverse-on-surface: '#f4f9ff'
-  outline: '#9bc0f5'
+  # 코드에서 outline은 테두리가 아니라 11px 안내 문구의 글자색으로 쓴다. 아래 outline-blue('#9bc0f5')는
+  # 흰 면 대비 1.87이라 본문에 못 쓰므로, 글자용은 background('#e8f1ff') 기준 4.58을 만족하는 값을 쓴다.
+  outline: '#676d76'
+  outline-blue: '#9bc0f5'
   outline-variant: '#dbe8fb'
   surface-tint: '#2f6bbf'
   primary: '#fee500'

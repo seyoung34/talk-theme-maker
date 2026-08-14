@@ -1,29 +1,42 @@
 @import "tailwindcss";
 
+/*
+ * 뉴트럴·surface 계열은 `DESIGN.md`의 "Sky Pop" 팔레트를 따른다.
+ *
+ * 이전 값은 노랑(hue 50°)에서 파생된 웜 뉴트럴이었는데, 페이지 배경은 이미 Sky Pop의 파랑
+ * (`#e8f1ff`, hue 215°)을 쓰고 있었다. 거의 보색인 두 팔레트가 한 화면에 섞이면서, 코드에 붉은 값이
+ * 하나도 없는데도 카키 테두리와 크림 면이 동시대비로 붉게 보였다. 배경 쪽으로 맞춰 정리한다.
+ *
+ * 두 토큰은 DESIGN.md 값을 그대로 쓸 수 없어 같은 색상환 위치에서 새로 잡았다.
+ * - `on-surface-variant`: DESIGN.md는 `#4b4732`로 웜 값이 남아 있다. 스펙 자체가 어긋난 자리다.
+ * - `outline`: DESIGN.md의 `#9bc0f5`는 흰 바탕 대비 1.87이라 본문에 못 쓴다. 이 토큰은 결제·약관
+ *   같은 11px 안내 문구의 글자색으로 19곳에서 쓰인다.
+ * 둘 다 hue 215°로 옮기고 대비를 기준으로 명도를 잡았다(각 줄 주석 참조).
+ */
 :root {
-  --color-surface: #fbf9f4;
-  --color-surface-dim: #dbdad5;
-  --color-surface-bright: #fbf9f4;
+  --color-surface: #ffffff;
+  --color-surface-dim: #e8f1ff;
+  --color-surface-bright: #ffffff;
   --color-surface-lowest: #ffffff;
-  --color-surface-low: #f5f3ee;
-  --color-surface-container: #f0eee9;
-  --color-surface-high: #eae8e3;
-  --color-surface-highest: #e4e2dd;
-  --color-surface-variant: #e4e2dd;
-  --color-background: #fbf9f4;
+  --color-surface-low: #f7fbff;
+  --color-surface-container: #eef5ff;
+  --color-surface-high: #e3ecf7;
+  --color-surface-highest: #dbe8fb;
+  --color-surface-variant: #eef5ff;
+  --color-background: #e8f1ff;
   --color-on-background: #1b1c19;
   --color-on-surface: #1b1c19;
+  /* 파생값. 흰 바탕 대비 8.96으로 이전(9.04)과 사실상 같다. */
+  --color-on-surface-variant: #444a51;
+  --color-inverse-surface: #1b1c19;
+  --color-inverse-on-surface: #f4f9ff;
   /*
-   * 뉴트럴 변형 3종은 노랑(hue 50°)에서 파생됐는데, 페이지 배경은 파랑(hue 215°)이라 거의 보색이다.
-   * 파란 바탕 위의 카키는 동시대비로 주황·붉은 쪽으로 밀려 보여, 붉은 값이 하나도 없는데도 화면 전체에
-   * 붉은 기가 돈다. 색상은 그대로 두고 채도만 절반으로 낮춰 그 쏠림을 줄인다.
-   * 흰 바탕 대비: on-surface-variant 9.35→9.04, outline 4.51→4.32 (둘 다 AA 유지).
+   * 파생값. 이 토큰은 11px 안내 문구의 글자색이므로 흰 바탕이 아니라 가장 어두운 일반 배경
+   * (`--color-background` #e8f1ff) 기준으로 잡았다. 대비 4.58(배경) / 5.22(흰 면)으로 둘 다 AA를 넘는다.
+   * 이전 값 `#7c7a6e`는 흰 바탕에서 4.32라 이미 AA(4.5) 미달이었다.
    */
-  --color-on-surface-variant: #4b493f;
-  --color-inverse-surface: #30312e;
-  --color-inverse-on-surface: #f2f1ec;
-  --color-outline: #7c7a6e;
-  --color-outline-variant: #cdcabc;
+  --color-outline: #676d76;
+  --color-outline-variant: #dbe8fb;
   --color-primary: #6a5f00;
   --color-on-primary: #ffffff;
   --color-primary-container: #fee500;
