@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { templateNameMaxLength, validateTemplateName } from "@/lib/theme/templateName";
 import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 
@@ -20,9 +21,24 @@ export function SaveTemplateDialog({ activeUserTemplate, isSaving, mode, name, o
   return (
     <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,0.42)] p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="내 템플릿 저장">
       <section className="grid w-full max-w-[420px] gap-5 rounded-[28px] border border-[#e5e7eb] bg-white p-5 shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
-        <div className="flex items-start justify-between gap-4">
-          <div className="grid gap-1"><h2 className="text-lg font-semibold text-[#0f172a]">내 템플릿 저장</h2><p className="text-sm leading-6 text-[#64748b]">{persistenceNotice.browserDetailed} {persistenceNotice.exportTemporary}</p></div>
-          <button type="button" className="shrink-0 rounded-full border border-[#e5e7eb] px-3 py-2 text-sm font-semibold text-[#475569]" onClick={onClose} disabled={isSaving}>닫기</button>
+        {/*
+          닫기를 제목과 같은 줄에 두고 안내문은 그 아래에서 카드 폭을 다 쓴다. 안내문 옆에 글자 버튼을
+          세우면 문단이 좁아져 여러 줄로 늘어나는 대신, 버튼 아래는 빈 공간으로 남는다.
+        */}
+        <div className="grid gap-1">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-[#0f172a]">내 템플릿 저장</h2>
+            <button
+              type="button"
+              className="-mr-1.5 grid size-11 shrink-0 place-items-center rounded-full text-[#475569] transition hover:bg-[#f1f5f9] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:opacity-50"
+              onClick={onClose}
+              disabled={isSaving}
+              aria-label="닫기"
+            >
+              <X size={18} strokeWidth={2.2} aria-hidden="true" />
+            </button>
+          </div>
+          <p className="text-sm leading-6 text-[#64748b]">{persistenceNotice.browserDetailed} {persistenceNotice.exportTemporary}</p>
         </div>
         <div className="grid gap-3">
           {canOverwrite ? <label className={`grid gap-2 rounded-2xl border px-4 py-3 ${mode === "overwrite" ? "border-[#2563eb] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}><div className="flex items-center gap-3"><input type="radio" name="save-mode" checked={mode === "overwrite"} onChange={() => onModeChange("overwrite")} /><div className="grid gap-0.5"><span className="text-sm font-semibold text-[#0f172a]">기존 템플릿에 저장</span><span className="text-xs text-[#64748b]">{activeUserTemplate?.name}</span></div></div></label> : null}

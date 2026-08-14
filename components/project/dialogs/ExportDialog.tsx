@@ -4,7 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
 import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
-import { Archive, Download, LoaderCircle, Package, ShieldCheck, X } from "lucide-react";
+import { Archive, Download, LoaderCircle, Package, X } from "lucide-react";
 import { getExportNotice, getExportProgressSteps, getExportWaitNotice } from "@/components/project/exportClient";
 import type { AccountState, ExportDownloadResult, ExportMode } from "@/components/project/exportModel";
 import type { ThemePlatform } from "@/lib/theme/types";
@@ -52,8 +52,8 @@ export function ExportDialog({
               </div>
             ) : downloadResult ? <DownloadComplete result={downloadResult} /> : isPreparingExport ? <div className="grid min-h-56 place-content-center gap-4 py-4 text-center" role="status" aria-live="polite"><span className="mx-auto grid size-12 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><LoaderCircle className="animate-spin" size={22} aria-hidden="true" /></span><div><p className="text-base font-bold text-[#0f172a]">다운로드 정보를 준비하는 중입니다</p><p className="mt-2 text-sm font-medium text-[#64748b]">버전 정보를 불러오고 계정 상태를 확인하고 있습니다.</p></div></div> : preparationError ? <div className="grid min-h-56 place-content-center gap-3 py-4 text-center" role="alert"><span className="mx-auto grid size-12 place-items-center rounded-full bg-[#fef2f2] text-[#dc2626]"><X size={22} aria-hidden="true" /></span><div><p className="text-base font-bold text-[#0f172a]">다운로드 정보를 준비하지 못했습니다</p><p className="mt-2 max-w-md text-sm font-medium leading-6 text-[#64748b]">{preparationError}</p></div></div> : <>
               <div className="grid gap-3 sm:grid-cols-2">
+                {/* applicationId·identifier 자동 발급은 사용자가 선택하거나 확인할 것이 없는 내부 동작이라 안내하지 않는다. */}
                 <Field label={platform === "android" ? "앱 이름" : "테마 이름"} value={exportName} disabled={isExporting} error={exportNameError} onChange={onNameChange} />
-                <div className="flex items-start gap-3 rounded-xl border border-[#dbeafe] bg-[#eff6ff] px-3.5 py-3 text-[#1e3a8a] sm:col-span-2"><ShieldCheck className="mt-0.5 shrink-0" size={17} aria-hidden="true" /><div>{platform === "android" ? <><p className="text-sm font-bold">고유 앱 ID 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 applicationId를 서버에서 생성합니다.</p></> : <><p className="text-sm font-bold">고유 테마 identifier 자동 발급</p><p className="mt-0.5 text-xs font-medium leading-5 text-[#475569]">내보낼 때마다 계정과 요청 번호를 조합한 비식별 identifier를 서버에서 생성하고 CSS에 적용합니다.</p></>}</div></div>
               </div>
               <div className="grid gap-2 mt-4 sm:grid-cols-2" role="radiogroup" aria-label="출력 형식">
                 {platform === "ios" ? <ModeButton selected={exportMode === "ktheme"} onClick={() => onModeChange("ktheme")} disabled={isExporting} label="카카오톡으로 공유·적용" description=".ktheme · 기본 추천" /> : <>
