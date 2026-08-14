@@ -979,12 +979,16 @@ const previewScreens: Array<{ id: PreviewScreenId; label: string }> = [
  * 화면을 넘기는 좌우 버튼.
  *
  * 배경도 테두리도 두지 않는다. 화살표 자체가 바탕색과 충분히 대비되므로 판을 깔지 않아도 읽히고,
- * 프리뷰 옆에서 시선을 덜 가져간다. hover는 배경 대신 글자색을 진하게 해서 알린다.
+ * 프리뷰 옆에서 시선을 덜 가져간다. 보이는 것은 아이콘뿐이지만 클릭 영역은 32px(sm 이상 36px)이다.
  *
- * 보이는 것은 아이콘뿐이지만 클릭 영역은 그대로 32px(sm 이상 36px)이다.
+ * 판이 없으면 hover에 반응할 면도 없으므로 화살표를 제 방향으로 밀어 낸다. 색만 진해지는 것보다
+ * "이쪽으로 넘어간다"가 분명하고, 누를 때는 살짝 줄여 hover가 없는 터치에서도 반응이 보이게 한다.
  */
 const screenStepButtonClassName =
-  "grid size-8 shrink-0 place-items-center rounded-full text-[var(--color-on-surface-variant)] transition hover:text-[var(--color-on-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-on-surface)] sm:size-9";
+  "group grid size-8 shrink-0 place-items-center rounded-full text-[var(--color-on-surface-variant)] transition-colors hover:text-[var(--color-on-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-on-surface)] sm:size-9";
+
+// 움직임을 싫어하는 사용자에게는 색 변화만 남긴다.
+const screenStepIconClassName = "size-5 transition-transform duration-150 ease-out motion-safe:group-active:scale-90";
 
 function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { preview: TemplatePreviewModel; isPreviewLoading?: boolean; onClose: () => void }) {
   const [activeScreenIndex, setActiveScreenIndex] = useState(0);
@@ -1042,7 +1046,7 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
                 className={screenStepButtonClassName}
                 onClick={goToPrevScreen}
               >
-                <ArrowLeft className="size-5" strokeWidth={2.2} aria-hidden="true" />
+                <ArrowLeft className={`${screenStepIconClassName} motion-safe:group-hover:-translate-x-1`} strokeWidth={2.2} aria-hidden="true" />
               </button>
 
               <ModalScreenFrame>
@@ -1062,7 +1066,7 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
                 className={screenStepButtonClassName}
                 onClick={goToNextScreen}
               >
-                <ArrowRight className="size-5" strokeWidth={2.2} aria-hidden="true" />
+                <ArrowRight className={`${screenStepIconClassName} motion-safe:group-hover:translate-x-1`} strokeWidth={2.2} aria-hidden="true" />
               </button>
             </div>
 
