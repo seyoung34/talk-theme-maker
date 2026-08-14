@@ -15,8 +15,10 @@ export function InitialTemplateLoadingPanel({
   const progressValue = hasProgress ? Math.max(0, Math.min(100, Math.round((current / total) * 100))) : 18;
 
   return (
-    <div className="grid h-full px-5 place-items-center">
-      <section className="grid w-full max-w-3xl gap-5 rounded-[28px] border border-[#e5e7eb] bg-white/95 p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
+    // 로딩 표시는 한 화면을 넘지 않는다. `h-full`은 부모가 `min-h`만 가져서 auto로 풀리고, 그러면
+    // 아래 스켈레톤 높이만큼 화면이 늘어나 로딩 중에 스크롤이 생겼다. 편집 화면과 같은 높이 계산을 쓴다.
+    <div className="grid h-[calc(100dvh-1.5rem)] place-items-center px-5 md:h-[calc(100dvh-2rem)] lg:h-full">
+      <section className="grid max-h-full w-full max-w-3xl gap-5 overflow-hidden rounded-[28px] border border-[#e5e7eb] bg-white/95 p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[#64748b]">Loading template</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-[-0.02em] text-[#0f172a]">{message}</h1>
@@ -32,8 +34,13 @@ export function InitialTemplateLoadingPanel({
             {hasProgress ? <p className="text-[11px] font-semibold text-[#94a3b8]">{current}/{total} 단계 완료</p> : null}
           </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-[220px_minmax(0,1fr)]">
-          <div className="aspect-[9/16] animate-pulse rounded-[28px] bg-[#f1f5f9]" />
+        {/*
+          장식용 스켈레톤. 좁은 화면에서는 접는다. 한 칸으로 쌓이면 9:16 블록만 화면 폭의 1.8배 높이가
+          되어, 제목과 진행률만으로 충분한 화면을 스크롤해야 하는 상태로 만든다.
+          넓은 화면에서도 높이를 묶어 두어 창이 낮을 때 카드가 뷰포트를 넘지 않게 한다.
+        */}
+        <div className="hidden gap-3 sm:grid sm:grid-cols-[220px_minmax(0,1fr)]">
+          <div className="aspect-[9/16] max-h-[34dvh] animate-pulse rounded-[28px] bg-[#f1f5f9]" />
           <div className="grid content-start gap-3">
             <span className="h-10 animate-pulse rounded-2xl bg-[#f1f5f9]" />
             <span className="h-24 animate-pulse rounded-2xl bg-[#f1f5f9]" />
@@ -47,7 +54,8 @@ export function InitialTemplateLoadingPanel({
 
 export function InitialTemplateErrorPanel({ message, onStartDefault }: { message: string; onStartDefault: () => void }) {
   return (
-    <div className="grid h-full px-5 place-items-center">
+    // 로딩 화면과 같은 높이 계산을 쓴다. `h-full`은 부모의 `min-h` 아래에서 auto로 풀려 가운데 정렬이 무너진다.
+    <div className="grid h-[calc(100dvh-1.5rem)] place-items-center px-5 md:h-[calc(100dvh-2rem)] lg:h-full">
       <section className="grid w-full max-w-xl gap-4 rounded-[28px] border border-rose-100 bg-white p-6 shadow-[0_18px_48px_rgba(15,23,42,0.08)]">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-rose-700">Template load failed</p>
