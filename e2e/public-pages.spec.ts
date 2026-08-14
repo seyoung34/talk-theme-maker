@@ -1,5 +1,6 @@
 import { expect, test } from "./fixtures/test";
 import { waitForEditorReady } from "./fixtures/editor";
+import { templateCards } from "./fixtures/gallery";
 
 /**
  * 비로그인 사용자가 랜딩에서 편집기까지 도달하는 경로. 감사 보고서 시나리오 1·2다.
@@ -58,7 +59,7 @@ test.describe("템플릿 선택", () => {
 
     // E2E 서버는 Supabase를 비활성화하므로 공개 시스템 템플릿이 없을 수 있다.
     // 코드 base 템플릿을 갤러리 상품처럼 대신 노출하지 않는 것도 새 계약이다.
-    const firstCard = page.locator('article[role="button"]').first();
+    const firstCard = templateCards(page).first();
     const emptyState = page.getByText("현재 공개된 시스템 템플릿이 없습니다.");
     await expect(firstCard.or(emptyState)).toBeVisible();
     if (await emptyState.isVisible()) return;

@@ -14,9 +14,11 @@ test.describe("모바일 편집기", () => {
   test("좁은 화면에서 편집기가 열리고 핵심 동작이 가려지지 않는다", async ({ page }) => {
     await page.goto("/edit");
 
+    // 모바일 액션바 버튼은 보이는 글자("저장"·"다운로드")와 접근성 이름이 다르다.
+    // 접근성 이름 쪽이 계약이므로 그것으로 찾는다.
     await expect(page.getByRole("button", { name: "편집 종료" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "저장", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "다운로드" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "템플릿 저장", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "테마 다운로드", exact: true })).toBeVisible();
 
     // 편집 시트는 섹션 선택 상태로 접혀 시작한다.
     await expect(page.getByRole("button", { name: "친구/메인", exact: true })).toBeVisible();

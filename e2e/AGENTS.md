@@ -35,6 +35,13 @@ npm run test:e2e:report     # 마지막 실행 리포트
   올린 이미지와 **같은 바이트인지** 비교해야 하기 때문이다.
 - 프로젝트는 `desktop`과 `mobile`로 나뉜다. 모바일 편집기는 레이아웃이 달라 전용 스펙
   (`mobile-editor.spec.ts`)만 `mobile`에서 돌린다.
+- 갤러리 카드는 `fixtures/gallery.ts`의 `templateCard`/`templateCards`로 찾는다. 스펙마다 선택자를
+  적어 두면 `TemplateCard` 마크업이 바뀔 때 여러 곳이 한꺼번에 어긋난다(실제로 `article[role="button"]`이
+  그렇게 남았다).
+- **버튼은 보이는 글자가 아니라 접근성 이름으로 찾는다.** 모바일 액션바처럼 `aria-label`이 따로 붙은
+  버튼은 화면에 "저장"이라고 쓰여 있어도 이름은 "템플릿 저장"이다.
+- 같은 정보를 레이아웃별로 두 번 그리는 UI(`AutosaveStatusBadge`는 보이는 배지 + `sr-only` 배지)는
+  `getByText`로 찾으면 strict mode에 걸린다. `role`로 좁히고 필요하면 `.first()`를 쓴다.
 
 ## 스펙이 덮는 것
 

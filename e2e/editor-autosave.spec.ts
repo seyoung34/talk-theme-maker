@@ -5,6 +5,7 @@ import {
   uploadSlotImage,
   waitForEditorReady,
 } from "./fixtures/editor";
+import { templateCard } from "./fixtures/gallery";
 
 /**
  * UX-001 / SQ-20~25 — 저장하지 않은 편집 상태의 자동 저장과 복구.
@@ -51,7 +52,7 @@ test.describe("편집기 자동 저장", () => {
     await page.getByRole("button", { name: "편집 종료하기" }).click();
     await expect(page).toHaveURL(/\/template$/);
 
-    const recentWorkCard = page.locator('article[role="button"]').filter({ hasText: "최근 작업" });
+    const recentWorkCard = templateCard(page, "최근 작업");
     await expect(recentWorkCard).toBeVisible();
     await recentWorkCard.click();
     await expect(page).toHaveURL(/\/edit$/);
@@ -142,7 +143,7 @@ test.describe("편집기 자동 저장", () => {
     await page.getByRole("button", { name: "편집 종료하기" }).click();
     await expect(page).toHaveURL(/\/template$/);
 
-    const recentWorkCard = page.locator('article[role="button"]').filter({ hasText: "최근 작업" });
+    const recentWorkCard = templateCard(page, "최근 작업");
     await expect(recentWorkCard).toBeVisible();
     await expect(recentWorkCard.getByText("자동 저장", { exact: true })).toBeVisible();
     await recentWorkCard.click();
@@ -169,7 +170,7 @@ test.describe("편집기 자동 저장", () => {
     await page.getByRole("button", { name: "편집 종료" }).click();
     await page.getByRole("button", { name: "편집 종료하기" }).click();
 
-    await page.locator('article[role="button"]').filter({ hasText: "저장본 미리보기" }).click();
+    await templateCard(page, "저장본 미리보기").click();
     await page.getByRole("button", { name: "Android 편집 계속하기" }).click();
     await expect(page.getByRole("heading", { name: "최근 작업이 남아 있습니다" })).toBeVisible();
     await page.getByRole("button", { name: "선택한 템플릿으로 시작" }).click();
@@ -178,7 +179,7 @@ test.describe("편집기 자동 저장", () => {
     // 아무것도 바꾸지 않고 나왔으므로 replace 의도는 아직 실행되지 않아야 한다.
     await page.getByRole("button", { name: "편집 종료" }).click();
     await page.getByRole("button", { name: "편집 종료하기" }).click();
-    await expect(page.locator('article[role="button"]').filter({ hasText: "최근 작업" })).toBeVisible();
+    await expect(templateCard(page, "최근 작업")).toBeVisible();
   });
 });
 

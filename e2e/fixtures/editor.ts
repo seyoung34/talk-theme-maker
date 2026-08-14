@@ -40,8 +40,15 @@ export async function uploadAsymmetricSlotImage(
   await expect(page.getByText("내 업로드").first()).toBeVisible();
 }
 
+/**
+ * 자동 저장이 "저장됨"까지 갔는지 기다린다.
+ *
+ * 배지(`AutosaveStatusBadge`)는 레이아웃마다 따로 렌더된다. 모바일에서는 액션바(보이는 것)와
+ * 액션레일(`sr-only`)이 함께 떠서, 텍스트로만 찾으면 두 개가 잡혀 strict mode 위반이 난다.
+ * 배지는 `role="status"`를 달고 있으므로 그 역할로 좁히고 첫 번째만 기다린다.
+ */
 export async function expectAutosaveSaved(page: Page) {
-  await expect(page.getByText(/저장됨/)).toBeVisible({ timeout: autosaveSettleTimeoutMs });
+  await expect(page.getByRole("status").filter({ hasText: /저장됨/ }).first()).toBeVisible({ timeout: autosaveSettleTimeoutMs });
 }
 
 async function findRenderedUploadBlobUrl(page: Page) {
