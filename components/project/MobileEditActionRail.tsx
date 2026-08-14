@@ -54,12 +54,13 @@ export function MobileEditActionRail({
         >
           <ArrowLeft size={18} strokeWidth={2.2} aria-hidden="true" />
         </button>
-        {/* 상태 변화를 aria-live로 알리는 요소라 접어 두지 않고 계속 렌더한다. */}
-        <AutosaveStatusBadge
-          status={autosaveStatus}
-          savedAt={autosaveSavedAt}
-          className="inline-flex min-w-0 max-w-full truncate rounded-full border border-[#e5e7eb] bg-white/90 px-2 py-1 text-[11px] leading-4 shadow-[0_4px_14px_rgba(15,23,42,0.12)] backdrop-blur-md"
-        />
+        {/*
+          시트가 올라온 동안에는 저장 배지를 보여 주지 않는다. 프리뷰를 넓히려고 헤더 밴드를 접은
+          자리에 다시 칩을 띄우면 목적이 상쇄되고, 저장 상태는 시트를 접으면 밴드에서 바로 보인다.
+          다만 화면에서만 감춘다. 상태 변화를 알리는 유일한 `aria-live` 영역이라, 지우면 편집하는
+          내내 자동 저장 성공·실패가 스크린리더에 전달되지 않는다.
+        */}
+        <AutosaveStatusBadge status={autosaveStatus} savedAt={autosaveSavedAt} className="sr-only" />
       </div>
 
       <div className={`pointer-events-auto ${stackClassName}`}>

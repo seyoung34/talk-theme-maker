@@ -45,10 +45,14 @@ describe("MobileEditActionRail", () => {
     expect(screen.getByRole("button", { name: "편집 종료" }).parentElement?.parentElement).toHaveClass("pointer-events-none");
   });
 
-  it("keeps announcing autosave state instead of hiding the badge", () => {
+  // 배지는 프리뷰를 가리지 않도록 화면에서만 감춘다. 지우면 시트가 올라온 동안 자동 저장 성공·실패가
+  // 스크린리더에 전달되지 않는다 — 이 rail이 그때 화면에 남는 유일한 `aria-live` 영역이다.
+  it("keeps announcing autosave state without showing the badge", () => {
     renderRail();
 
-    expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
+    const status = screen.getByRole("status");
+    expect(status).toHaveAttribute("aria-live", "polite");
+    expect(status).toHaveClass("sr-only");
   });
 
   it("stacks vertically at half snap and horizontally at full snap", () => {
