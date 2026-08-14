@@ -975,9 +975,16 @@ const previewScreens: Array<{ id: PreviewScreenId; label: string }> = [
   { id: "profile", label: "프로필" },
 ];
 
-// 화면을 넘기는 좌우 버튼. 테두리 대신 옅은 면으로 남긴다 — 모달 바탕이 흰색이라 테두리만 빼면 버튼이 보이지 않는다.
+/**
+ * 화면을 넘기는 좌우 버튼.
+ *
+ * 배경도 테두리도 두지 않는다. 화살표 자체가 바탕색과 충분히 대비되므로 판을 깔지 않아도 읽히고,
+ * 프리뷰 옆에서 시선을 덜 가져간다. hover는 배경 대신 글자색을 진하게 해서 알린다.
+ *
+ * 보이는 것은 아이콘뿐이지만 클릭 영역은 그대로 32px(sm 이상 36px)이다.
+ */
 const screenStepButtonClassName =
-  "grid size-8 shrink-0 place-items-center rounded-full bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-high)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-on-surface)] sm:size-9";
+  "grid size-8 shrink-0 place-items-center rounded-full text-[var(--color-on-surface-variant)] transition hover:text-[var(--color-on-surface)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-on-surface)] sm:size-9";
 
 function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { preview: TemplatePreviewModel; isPreviewLoading?: boolean; onClose: () => void }) {
   const [activeScreenIndex, setActiveScreenIndex] = useState(0);
@@ -1035,7 +1042,7 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
                 className={screenStepButtonClassName}
                 onClick={goToPrevScreen}
               >
-                <ArrowLeft className="size-4" aria-hidden="true" />
+                <ArrowLeft className="size-5" strokeWidth={2.2} aria-hidden="true" />
               </button>
 
               <ModalScreenFrame>
@@ -1055,7 +1062,7 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
                 className={screenStepButtonClassName}
                 onClick={goToNextScreen}
               >
-                <ArrowRight className="size-4" aria-hidden="true" />
+                <ArrowRight className="size-5" strokeWidth={2.2} aria-hidden="true" />
               </button>
             </div>
 
