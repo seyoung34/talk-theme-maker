@@ -992,6 +992,9 @@ const screenStepIconClassName = "size-5 transition-transform duration-150 ease-o
 
 function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { preview: TemplatePreviewModel; isPreviewLoading?: boolean; onClose: () => void }) {
   const [activeScreenIndex, setActiveScreenIndex] = useState(0);
+  // 바깥을 눌러서 시작한 클릭만 닫는다. 모달 안에서 드래그하다 바깥에서 손을 떼면 click은 공통 조상인
+  // 배경에서 발생하므로, 눌린 곳을 따로 기억하지 않으면 글자를 긁다가 창이 닫힌다.
+  const backdropPressRef = useRef(false);
   const activeScreen = previewScreens[activeScreenIndex];
   const goToPrevScreen = () => setActiveScreenIndex((current) => (current - 1 + previewScreens.length) % previewScreens.length);
   const goToNextScreen = () => setActiveScreenIndex((current) => (current + 1) % previewScreens.length);
@@ -1002,8 +1005,28 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
     canStartIos ? { platform: "ios" as const, label: preview.iosLabel, className: "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]" } : null,
   ].filter((action): action is { platform: ThemePlatform; label: string; className: string } => Boolean(action));
 
+  // 바깥 클릭으로 닫을 수 있으면 키보드에도 같은 수준의 탈출구가 있어야 한다.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label={`${preview.title} 미리보기`}>
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${preview.title} 미리보기`}
+      onPointerDown={(event) => {
+        backdropPressRef.current = event.target === event.currentTarget;
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && backdropPressRef.current) onClose();
+      }}
+    >
       <section className="grid h-[min(92dvh,780px)] w-full max-w-3xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:rounded-[32px]">
         <header className="flex items-start justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4">
           <div>
