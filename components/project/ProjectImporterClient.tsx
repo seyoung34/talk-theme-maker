@@ -1309,8 +1309,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     );
   }
 
+  // `bg-[#f8fafc]`는 비워 두면 안 된다. 비면 `body`의 `--color-background`(#e8f1ff, 채도 9%)가 그대로
+  // 비치는데, 프리뷰 패널에도 배경이 없어 사용자가 자기 테마 색을 판단하는 자리가 파란 면에 둘러싸인다.
+  // 그러면 안쪽 색이 동시대비로 반대편(주황·붉은 쪽)으로 밀려 보여, 색을 고르는 화면에서 특히 나쁘다.
+  // 값은 위 로딩·오류 상태와 같게 맞춰 진입할 때 배경이 튀지 않게 한다.
   return (
-    <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
+    <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto bg-[#f8fafc] px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
       {selectedSlot && selectedBubbleSlot && selectedBubbleVariant ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} variant={selectedBubbleVariant} slotLabel={selectedSlot.label} platform={platform} initialSpec={selectedBubbleDesign} initialDecorationFiles={bubbleDecorationSources} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleDesign} /> : null}
       {notice ? <HeaderNotice notice={notice} onDismiss={dismissNotice} /> : null}
       {pendingAutosave ? (
