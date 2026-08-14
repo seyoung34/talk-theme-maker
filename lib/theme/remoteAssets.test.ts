@@ -65,7 +65,8 @@ describe("getPublicThemeAssetUrl", () => {
  *
  * 캐시는 localStorage에 JSON 하나로 들어간다. 경로마다 읽고 쓰면 parse/stringify가 에셋 수만큼
  * 반복되고, localStorage는 동기라 그 시간이 그대로 main thread를 잡는다. 템플릿 하나가 에셋 수십 개를
- * 참조하므로 편집기 부트스트랩에서 바로 드러난다. 호출당 한 번 읽고 한 번 쓰는 것을 고정한다.
+ * 참조하므로 편집기 부트스트랩에서 바로 드러난다. 조회 시 한 번, 새 URL 저장 직전 병합을 위해 한 번
+ * 읽고 결과는 한 번만 쓰는 것을 고정한다.
  */
 describe("getThemeAssetSignedUrls 캐시 접근", () => {
   const cacheKey = "kakaotalk-theme-maker:signed-url-cache:v1";
@@ -100,7 +101,7 @@ describe("getThemeAssetSignedUrls 캐시 접근", () => {
     return (await import("@/lib/theme/remoteAssets")).getThemeAssetSignedUrls;
   }
 
-  it("여러 경로를 받아와도 캐시를 한 번만 읽고 한 번만 쓴다", async () => {
+  it("여러 경로를 받아와도 조회와 commit 병합 때만 읽고 한 번만 쓴다", async () => {
     const storage = stubStorage();
     vi.stubGlobal(
       "fetch",
@@ -116,8 +117,43 @@ describe("getThemeAssetSignedUrls 캐시 접근", () => {
     const result = await getThemeAssetSignedUrls(paths);
 
     expect(result).toEqual(Object.fromEntries(paths.map((path) => [path, `${path}?signed`])));
-    expect(storage.getItem).toHaveBeenCalledTimes(1);
+    expect(storage.getItem).toHaveBeenCalledTimes(2);
     expect(storage.setItem).toHaveBeenCalledTimes(1);
+  });
+
+  it("서로 다른 경로의 병렬 요청 결과를 commit 시점의 최신 캐시에 병합한다", async () => {
+    const storage = stubStorage();
+    const resolvers = new Map<string, (response: Response) => void>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { paths: string[] };
+        const path = body.paths[0];
+        return new Promise<Response>((resolve) => resolvers.set(path, resolve));
+      }),
+    );
+    const getThemeAssetSignedUrls = await load();
+
+    const first = getThemeAssetSignedUrls(["theme/first.png"]);
+    const second = getThemeAssetSignedUrls(["theme/second.png"]);
+    await vi.waitFor(() => expect(resolvers.size).toBe(2));
+
+    resolvers.get("theme/first.png")?.(
+      new Response(JSON.stringify({ signedUrls: { "theme/first.png": "first?signed" } }), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await first;
+    resolvers.get("theme/second.png")?.(
+      new Response(JSON.stringify({ signedUrls: { "theme/second.png": "second?signed" } }), {
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    await second;
+
+    const persisted = JSON.parse(storage.setItem.mock.calls.at(-1)?.[1] ?? "{}") as Record<string, unknown>;
+    expect(Object.keys(persisted).sort()).toEqual(["theme/first.png", "theme/second.png"]);
+    expect(storage.setItem).toHaveBeenCalledTimes(2);
   });
 
   it("전부 캐시에 있으면 한 번만 읽고 요청하지 않는다", async () => {

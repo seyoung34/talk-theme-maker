@@ -96,7 +96,10 @@ export async function getThemeAssetSignedUrls(storagePaths: string[]) {
 
   // 받은 것을 모아 한 번만 직렬화한다. 경로마다 쓰면 stringify + localStorage write가 그 수만큼 반복된다.
   if (fetched.length) {
-    const cache = persistentCache ?? readPersistentSignedUrlCache();
+    // 네트워크 요청을 기다리는 동안 같은 탭의 다른 호출이 캐시를 갱신할 수 있다. 조회 초기에 읽은
+    // snapshot을 그대로 쓰면 나중에 끝난 호출이 먼저 저장된 항목을 지우므로, commit 직전에 최신
+    // 저장본을 다시 읽어 이번 결과만 병합한다. 다중 탭 간 원자적 갱신까지는 보장하지 않는다.
+    const cache = readPersistentSignedUrlCache();
     for (const [path, entry] of fetched) cache[path] = entry;
     writePersistentSignedUrlCache(cache);
   }
