@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, themeAssetsBucketName, themePublicBucketName } from "@/lib/theme/remoteAssets";
 import { createAdminThemeAssetSignedUrls } from "@/lib/theme/systemTemplates/adminSignedUrls";
+import { themeAssetCacheControl } from "@/lib/theme/themeAssetSigning";
 import { collectRemoteUploadPaths } from "@/lib/theme/systemTemplates/uploadRefPaths";
 import { getResolvedColor, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
@@ -313,6 +314,7 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
       const storagePath = `system-templates/${variantId}/${sanitizeStoragePathPart(slotId)}/${sanitizeStoragePathPart(entry.id)}-${fileName}`;
       const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, entry.file, {
         contentType: entry.file.type || "application/octet-stream",
+        cacheControl: themeAssetCacheControl,
         upsert: true,
       });
       if (error) throw error;
@@ -364,6 +366,7 @@ async function uploadOriginalImageEditFile({
   const storagePath = `system-templates/${variantId}/${sanitizeStoragePathPart(slotId)}/${sanitizeStoragePathPart(entryId)}-original-${fileName}`;
   const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, originalFile, {
     contentType: originalFile.type || "application/octet-stream",
+    cacheControl: themeAssetCacheControl,
     upsert: true,
   });
   if (error) throw error;

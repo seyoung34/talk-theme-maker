@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { themeAssetSignedUrlTtlSeconds } from "@/lib/theme/themeAssetSigning";
 
 /**
  * 카드 썸네일의 공개 URL 생성.
@@ -90,8 +91,9 @@ describe("getThemeAssetSignedUrls 캐시 접근", () => {
     return fake;
   }
 
-  function freshCacheJson() {
-    const expiresAt = Date.now() + 9 * 60 * 1000;
+  // 서버가 발급하는 수명 그대로 저장된 항목. 갱신 여유를 빼도 한참 남아 있어야 한다.
+  function freshCacheJson(ttlMs = themeAssetSignedUrlTtlSeconds * 1000) {
+    const expiresAt = Date.now() + ttlMs;
     return JSON.stringify(Object.fromEntries(paths.map((path) => [path, { signedUrl: `${path}?cached`, expiresAt }])));
   }
 
@@ -168,5 +170,40 @@ describe("getThemeAssetSignedUrls 캐시 접근", () => {
     expect(storage.getItem).toHaveBeenCalledTimes(1);
     expect(storage.setItem).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  /**
+   * URL 재사용 기간이 곧 브라우저 캐시 수명이다.
+   *
+   * 서명 URL은 만료될 때마다 토큰이 바뀌고, 토큰이 바뀌면 URL이 바뀌고, 브라우저 HTTP 캐시는
+   * URL이 키다. 실제로 측정했을 때 URL만 같으면 9건 전부 캐시 적중(8ms), 토큰만 달라지면 9건
+   * 전부 재다운로드(588ms)였다. 예전 수명(9분)에서는 세션을 넘기는 순간 무조건 다시 받았다.
+   */
+  it("하루가 지나도 저장된 URL을 재사용한다", async () => {
+    const dayOldEntry = themeAssetSignedUrlTtlSeconds * 1000 - 24 * 60 * 60 * 1000;
+    stubStorage({ [cacheKey]: freshCacheJson(dayOldEntry) });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const getThemeAssetSignedUrls = await load();
+
+    await getThemeAssetSignedUrls(paths);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("만료가 임박하면 미리 새로 받는다", async () => {
+    // 갱신 여유 안에 들어온 URL은 쓰지 않는다. 넘겨받은 쪽에서 만료되면 이미지가 깨진다.
+    stubStorage({ [cacheKey]: freshCacheJson(60 * 1000) });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ signedUrls: Object.fromEntries(paths.map((p) => [p, `${p}?fresh`])) }), {
+        headers: { "content-type": "application/json" },
+      })),
+    );
+    const getThemeAssetSignedUrls = await load();
+
+    const result = await getThemeAssetSignedUrls(paths);
+
+    expect(result[paths[0]]).toBe(`${paths[0]}?fresh`);
   });
 });

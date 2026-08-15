@@ -1,6 +1,7 @@
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { supabaseUrl } from "@/lib/supabase/config";
+import { themeAssetSignedUrlTtlSeconds } from "@/lib/theme/themeAssetSigning";
 
 export const themeAssetsBucketName = "theme-assets";
 
@@ -35,8 +36,15 @@ const signedUrlBatchConcurrency = 4;
 const signedUrlRequestConcurrency = 6;
 
 const signedUrlCacheKey = "kakaotalk-theme-maker:signed-url-cache:v1";
-const signedUrlTtlMs = 9 * 60 * 1000;
-const signedUrlRefreshBufferMs = 30 * 1000;
+/**
+ * 받아 둔 URL을 얼마나 재사용할지.
+ *
+ * 서버가 발급하는 수명(`themeAssetSignedUrlTtlSeconds`)에서 갱신 여유만 빼고 그대로 쓴다.
+ * 여기가 짧으면 서버 수명을 늘려도 클라이언트가 먼저 새 URL을 받아 오고, URL이 바뀌는 순간
+ * 브라우저 캐시가 무효가 된다 — 캐시가 걸리게 하려면 두 값이 같이 길어야 한다.
+ */
+const signedUrlRefreshBufferMs = 60 * 60 * 1000;
+const signedUrlTtlMs = themeAssetSignedUrlTtlSeconds * 1000 - signedUrlRefreshBufferMs;
 const memorySignedUrlCache = new Map<string, SignedUrlCacheEntry>();
 
 type SignedUrlCacheEntry = {

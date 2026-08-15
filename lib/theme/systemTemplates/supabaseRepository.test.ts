@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { themeAssetSignedUrlTtlSeconds } from "@/lib/theme/themeAssetSigning";
 import type { SystemTemplatePreviewMetadata } from "@/lib/theme/systemTemplates/types";
 
 /**
@@ -82,7 +83,7 @@ describe("systemTemplateRepository.regeneratePreviewMetadata", () => {
 
     await repository.regeneratePreviewMetadata(variantId);
 
-    expect(createSignedUrls).toHaveBeenCalledWith([assetPath], 600);
+    expect(createSignedUrls).toHaveBeenCalledWith([assetPath], themeAssetSignedUrlTtlSeconds);
     expect(fetchSpy).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });

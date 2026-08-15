@@ -6,6 +6,7 @@ import {
   storagePathToFile,
   themeAssetsBucketName,
 } from "@/lib/theme/remoteAssets";
+import { themeAssetCacheControl } from "@/lib/theme/themeAssetSigning";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
@@ -136,6 +137,7 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
 
   const { error: uploadError } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, input.blob, {
     contentType: mimeType,
+    cacheControl: themeAssetCacheControl,
     upsert: true,
   });
   if (uploadError) throw uploadError;
@@ -264,12 +266,12 @@ export async function saveAdminBubbleBuilderCandidate(input: AdminBubbleBuilderC
     for (const [index, variant] of input.variants.entries()) {
       const row = variantRows[index];
       if (!row) throw new Error("INVALID_PLATFORM_VARIANTS");
-      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(row.storage_path, variant.file, { contentType: row.mime_type, upsert: false });
+      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(row.storage_path, variant.file, { contentType: row.mime_type, cacheControl: themeAssetCacheControl, upsert: false });
       if (error) throw error;
       uploadedPaths.push(row.storage_path);
     }
     for (const decoration of decorationRows) {
-      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(decoration.storage_path, decoration.file, { contentType: decoration.mime_type, upsert: false });
+      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(decoration.storage_path, decoration.file, { contentType: decoration.mime_type, cacheControl: themeAssetCacheControl, upsert: false });
       if (error) throw error;
       uploadedPaths.push(decoration.storage_path);
     }
