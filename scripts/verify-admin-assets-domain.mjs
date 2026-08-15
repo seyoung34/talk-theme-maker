@@ -48,6 +48,10 @@ async function loadTsModule(path, fileName) {
         themeAssetsBucketName: "theme-assets",
       };
     }
+    // 저장 객체의 Cache-Control 값. 상수뿐이라 실제 값을 그대로 흉내 낸다.
+    if (id === "@/lib/theme/themeAssetSigning") {
+      return { themeAssetCacheControl: String(60 * 60 * 24 * 30) };
+    }
     throw new Error(`Unexpected import: ${id}`);
     },
   };
