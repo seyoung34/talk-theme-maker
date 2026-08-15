@@ -1394,28 +1394,16 @@ function ChatroomBubble({ visual, mine, variant, text, time }: { visual: Templat
   );
 }
 
-// 기본 프로필 사진
+// 기본 프로필 사진 — profile_image_1 하나만 보여 준다(굽는 쪽 drawProfileScreen과 같은 구성).
 function ProfileScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
-  const heroImage = visual.profileImageFull ?? visual.profileImage;
-  const extras = Array.from(new Set([visual.profileImage, visual.profileImage2, visual.profileImage3].filter((src): src is string => Boolean(src))));
-
   return (
     <div
-      className="grid h-full grid-rows-[minmax(0,1fr)_auto] bg-cover bg-center"
+      className="grid h-full place-content-center gap-3 bg-cover bg-center px-6 justify-items-center"
       style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
     >
-      <div className="grid content-center gap-3 px-6 justify-items-center">
-        <ScreenAvatar src={heroImage} sizeClass="size-28" />
-        <strong className="text-[13px] font-bold" style={{ color: visual.titleColor }}>내 프로필</strong>
-        <p className="text-[9px] font-black uppercase tracking-[0.1em]" style={{ color: visual.descriptionColor }}>기본 프로필 사진</p>
-      </div>
-      {extras.length > 0 ? (
-        <div className="flex items-center justify-center gap-2.5 px-6 pb-6">
-          {extras.map((src) => (
-            <ScreenAvatar key={src} src={src} sizeClass="size-10" />
-          ))}
-        </div>
-      ) : null}
+      <ScreenAvatar src={visual.profileImage} sizeClass="size-28" />
+      <strong className="text-[13px] font-bold" style={{ color: visual.titleColor }}>내 프로필</strong>
+      <p className="text-[9px] font-black uppercase tracking-[0.1em]" style={{ color: visual.descriptionColor }}>기본 프로필 사진</p>
     </div>
   );
 }

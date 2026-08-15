@@ -55,8 +55,11 @@ type ScreenImages = {
   mainBackground: HTMLImageElement | null;
   chatBackground: HTMLImageElement | null;
   tabBackground: HTMLImageElement | null;
+  /**
+   * 친구·채팅목록 화면의 리스트 아바타에 돌려 쓴다.
+   * 프로필 화면은 여기서 첫 번째(`profile_image_1`)만 쓴다.
+   */
   profiles: Array<HTMLImageElement | null>;
-  profileFull: HTMLImageElement | null;
   tabIcons: Partial<Record<keyof TabIconUrls, HTMLImageElement | null>>;
   bubbles: Map<string, BubbleAsset>;
 };
@@ -93,14 +96,14 @@ async function renderScreen(id: PreviewScreenId, visual: TemplatePreviewVisual, 
 async function loadScreenImages(visual: TemplatePreviewVisual): Promise<ScreenImages> {
   const tabIconKeys = Object.keys(visual.tabIcons ?? {}) as Array<keyof TabIconUrls>;
 
-  const [mainBackground, chatBackground, tabBackground, profile1, profile2, profile3, profileFull, ...tabIconImages] = await Promise.all([
+  // `profile_image_full_1`은 받지 않는다. 프로필 화면이 `profile_image_1`만 쓰기 때문이다.
+  const [mainBackground, chatBackground, tabBackground, profile1, profile2, profile3, ...tabIconImages] = await Promise.all([
     loadImageOrNull(visual.mainBackgroundImage),
     loadImageOrNull(visual.chatBackgroundImage),
     loadImageOrNull(visual.tabBackgroundImage),
     loadImageOrNull(visual.profileImage),
     loadImageOrNull(visual.profileImage2),
     loadImageOrNull(visual.profileImage3),
-    loadImageOrNull(visual.profileImageFull),
     ...tabIconKeys.map((key) => loadImageOrNull(visual.tabIcons?.[key])),
   ]);
 
@@ -112,7 +115,7 @@ async function loadScreenImages(visual: TemplatePreviewVisual): Promise<ScreenIm
   // 프로필이 하나만 있으면 DOM과 같이 그것을 돌려 쓴다.
   const profiles = [profile1, profile2 ?? profile1, profile3 ?? profile1];
 
-  return { mainBackground, chatBackground, tabBackground, profiles, profileFull: profileFull ?? profile1, tabIcons, bubbles: await loadBubbles(visual) };
+  return { mainBackground, chatBackground, tabBackground, profiles, tabIcons, bubbles: await loadBubbles(visual) };
 }
 
 async function loadBubbles(visual: TemplatePreviewVisual) {
@@ -494,27 +497,22 @@ function resolveBubbleEdit(visual: TemplatePreviewVisual, mine: boolean, variant
 
 // ---------------------------------------------------------------- 화면 4: 기본 프로필
 
+/**
+ * 기본 프로필 화면.
+ *
+ * `profile_image_1` 하나만 보여 준다. 예전에는 `profile_image_full_1`을 크게 놓고 아래에
+ * `profile_image_1~3`을 늘어놓았는데, 대부분의 템플릿이 2·3을 채우지 않아 같은 그림이
+ * 반복되는 줄로만 보였다.
+ */
 function drawProfileScreen(context: CanvasRenderingContext2D, visual: TemplatePreviewVisual, images: ScreenImages) {
   drawBackground(context, { x: 0, y: 0, width: W, height: H }, 0, visual.mainBackgroundColor, images.mainBackground);
 
-  const extras = images.profiles.filter((image): image is HTMLImageElement => Boolean(image));
-  const bottomRowHeight = extras.length > 0 ? 64 : 0;
-  const centerY = (H - bottomRowHeight) / 2;
-
+  const centerY = H / 2;
   const heroSize = 112;
-  drawAvatar(context, W / 2 - heroSize / 2, centerY - heroSize / 2 - 16, heroSize, images.profileFull);
+  drawAvatar(context, W / 2 - heroSize / 2, centerY - heroSize / 2 - 16, heroSize, images.profiles[0]);
 
   drawText(context, "내 프로필", W / 2, centerY + heroSize / 2 + 2, { font: previewFont(700, 13), color: visual.titleColor, align: "center" });
   drawText(context, "기본 프로필 사진", W / 2, centerY + heroSize / 2 + 20, { font: previewFont(800, 9), color: visual.descriptionColor, align: "center" });
-
-  if (extras.length > 0) {
-    const size = 40;
-    const gap = 10;
-    const totalWidth = extras.length * size + (extras.length - 1) * gap;
-    extras.forEach((image, index) => {
-      drawAvatar(context, W / 2 - totalWidth / 2 + index * (size + gap), H - 24 - size, size, image);
-    });
-  }
 }
 
 // ---------------------------------------------------------------- 아이콘
