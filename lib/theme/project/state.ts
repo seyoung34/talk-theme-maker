@@ -3,6 +3,7 @@ import type { BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemeRe
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { applyDerivedColorTransform, getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
 import type { ImageEditMetadata } from "@/lib/theme/imageEdit";
+import { getUploadAssetKind, type ThemeAssetKind } from "@/lib/theme/assetKind";
 
 export const disabledImageCandidateId = "__none__";
 /** 눌림·선택 색을 기준 색 연동으로 되돌리는 후보. 고르면 `colors[slot.id]`를 지운다. */
@@ -329,12 +330,45 @@ export function getSelectedCandidate(
  */
 export const sharedBubbleUploadRoles: readonly ThemeResourceRole[] = ["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"];
 
-/** 업로드를 공유하는 같은 플랫폼의 다른 말풍선 슬롯. 고정 순서를 유지한다. */
-export function getSharedBubbleUploadPeers(slot: ThemeAssetSlot | undefined, allSlots: ThemeAssetSlot[]): ThemeAssetSlot[] {
-  if (!slot || !sharedBubbleUploadRoles.includes(slot.role)) return [];
-  return sharedBubbleUploadRoles
-    .map((role) => allSlots.find((candidate) => candidate.role === role && candidate.platform === slot.platform))
-    .filter((peer): peer is ThemeAssetSlot => Boolean(peer) && peer!.id !== slot.id);
+/**
+ * kind별로 공유 범위를 좁히는 예외.
+ *
+ * 기본은 "같은 플랫폼·같은 kind"지만 말풍선은 그대로 쓸 수 없다. iOS에는 선택 변형
+ * (`bubble_*_selected`) 4개가 더 있어서 kind로만 묶으면 peer가 Android 3개, iOS 7개로 갈린다.
+ * 그 변형을 공유에 넣을지는 별도 판단이 필요해 지금은 기존 4개로 고정한다.
+ */
+const uploadShareRoleAllowList: Partial<Record<ThemeAssetKind, readonly ThemeResourceRole[]>> = {
+  bubble: sharedBubbleUploadRoles,
+};
+
+/**
+ * 업로드를 공유하는 같은 플랫폼의 다른 슬롯.
+ *
+ * 같은 kind끼리 묶는다 — 아이콘을 한 번 올리면 다른 아이콘 슬롯에서도 고를 수 있다.
+ * 색상 슬롯은 업로드를 받지 않으므로 항상 비어 있다.
+ *
+ * 순서는 계약이다. 같은 upload ID가 여러 bucket에 있을 때 어느 것을 owner로 볼지, 후보 목록에
+ * 어떤 차례로 나타날지가 이 순서로 결정된다. 허용 목록이 있는 kind는 그 배열 순서를, 나머지는
+ * manifest 순서를 따른다. 둘 다 결정적이다.
+ */
+export function getSharedUploadPeers(slot: ThemeAssetSlot | undefined, allSlots: ThemeAssetSlot[]): ThemeAssetSlot[] {
+  if (!slot) return [];
+  const kind = getUploadAssetKind(slot);
+  if (!kind) return [];
+
+  const allowedRoles = uploadShareRoleAllowList[kind];
+  if (allowedRoles) {
+    if (!allowedRoles.includes(slot.role)) return [];
+    return allowedRoles
+      .map((role) => allSlots.find((candidate) => candidate.role === role && candidate.platform === slot.platform))
+      .filter((peer): peer is ThemeAssetSlot => Boolean(peer) && peer!.id !== slot.id);
+  }
+
+  return allSlots.filter((candidate) => (
+    candidate.id !== slot.id
+    && candidate.platform === slot.platform
+    && getUploadAssetKind(candidate) === kind
+  ));
 }
 
 /**
@@ -352,7 +386,7 @@ export type ResolvedSharedSlotEntry<T> = { ownerSlotId: string; entry: T };
  *
  * 로컬 `SlotUploads`뿐 아니라 파일이 hydrate되기 전의 원격 ref도 같은 owner 규칙으로
  * 해석해야 하므로 entry의 최소 계약인 `id`만 요구한다. 자기 bucket을 항상 먼저 보고,
- * peer는 `sharedBubbleUploadRoles`의 고정 순서를 따른다.
+ * peer는 `getSharedUploadPeers`의 고정 순서를 따른다.
  */
 export function getSelectedSharedSlotEntry<T extends { id: string }>(
   slot: ThemeAssetSlot | undefined,
@@ -365,7 +399,7 @@ export function getSelectedSharedSlotEntry<T extends { id: string }>(
   const selectedId = selections[slot.id];
   if (!selectedId) return undefined;
 
-  const ownerSlots = [slot, ...getSharedBubbleUploadPeers(slot, allSlots)];
+  const ownerSlots = [slot, ...getSharedUploadPeers(slot, allSlots)];
   for (const ownerSlot of ownerSlots) {
     const entry = (entriesBySlot[ownerSlot.id] ?? []).find((candidate) => (
       candidate.id === selectedId && (ownerSlot.id === slot.id || canUsePeerEntry(candidate))
@@ -390,7 +424,7 @@ export function getSharedSlotUploadEntries(
 ): ResolvedSlotUpload[] {
   if (!slot) return [];
   const own = (uploads[slot.id] ?? []).map((entry) => ({ ownerSlotId: slot.id, entry }));
-  const peers = getSharedBubbleUploadPeers(slot, allSlots);
+  const peers = getSharedUploadPeers(slot, allSlots);
   if (peers.length === 0) return own;
 
   const seen = new Set(own.map((resolved) => resolved.entry.id));
@@ -431,7 +465,7 @@ export function findUploadReferenceSlots(
 ): ThemeAssetSlot[] {
   const owner = allSlots.find((slot) => slot.id === ownerSlotId);
   if (!owner) return [];
-  return [owner, ...getSharedBubbleUploadPeers(owner, allSlots)].filter((slot) => selections[slot.id] === uploadId);
+  return [owner, ...getSharedUploadPeers(owner, allSlots)].filter((slot) => selections[slot.id] === uploadId);
 }
 
 export type UploadRemovalPlan =

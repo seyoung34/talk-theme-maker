@@ -12,7 +12,7 @@ import { tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { normalizeLegacyColorOverrides, normalizeLegacyThemeDraft } from "@/lib/theme/project/legacyOverrides";
 import { clearRecoveryDraft, readRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
-import { getSharedBubbleUploadPeers } from "@/lib/theme/project/state";
+import { getSharedUploadPeers } from "@/lib/theme/project/state";
 import { getUserTemplate } from "@/lib/theme/userTemplates";
 import { getThemeSlots, getThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
@@ -437,7 +437,7 @@ function getInitialPreviewSlotIds(platform: ThemePlatform, uploadRefs: RemoteSlo
   const slotIds = roleOrder.flatMap((role) => {
     const slot = slots.find((candidate) => candidate.role === role);
     if (!slot) return [];
-    return [slot, ...getSharedBubbleUploadPeers(slot, slots)].map((entry) => entry.id);
+    return [slot, ...getSharedUploadPeers(slot, slots)].map((entry) => entry.id);
   });
   return Array.from(new Set(slotIds)).filter((slotId) => Boolean(uploadRefs[slotId]?.length));
 }

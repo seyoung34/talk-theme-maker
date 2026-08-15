@@ -53,7 +53,7 @@ import {
   getSectionGroups,
   getSelectedCandidate,
   getSelectedUpload,
-  getSharedBubbleUploadPeers,
+  getSharedUploadPeers,
   getSharedSlotUploadEntries,
   planUploadRemoval,
   getSlotFile,
@@ -682,8 +682,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   useEffect(() => {
     if (initialLoadState.status !== "ready" || !selectedSlot) return;
-    // 말풍선은 공유 풀이라 선택한 업로드의 owner가 다른 슬롯일 수 있다. 네 peer를 함께 받는다.
-    const hydrationSlotIds = [selectedSlot, ...getSharedBubbleUploadPeers(selectedSlot, slots)].map((slot) => slot.id);
+    // 공유 풀이라 선택한 업로드의 owner가 다른 슬롯일 수 있다. 같은 kind의 peer를 함께 받는다.
+    // 후보 썸네일이 hydrate된 File의 object URL이라, 받지 않으면 목록에 나타나지 않는다.
+    // 실제로 내려받는 것은 remoteUploadRefs에 항목이 있는 bucket뿐이라 슬롯 수가 아니라
+    // 업로드 수에 비례한다.
+    const hydrationSlotIds = [selectedSlot, ...getSharedUploadPeers(selectedSlot, slots)].map((slot) => slot.id);
     void hydrateSystemTemplateUploads(remoteUploadRefs, hydrationSlotIds).catch((error) => console.error(error));
   }, [hydrateSystemTemplateUploads, initialLoadState.status, remoteUploadRefs, selectedSlot?.id]);
 

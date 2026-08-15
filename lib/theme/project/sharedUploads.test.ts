@@ -4,7 +4,7 @@ import {
   getSelectedUpload,
   getSelectedUploadRef,
   getSelectedSharedSlotEntry,
-  getSharedBubbleUploadPeers,
+  getSharedUploadPeers,
   getSharedSlotUploadEntries,
   planUploadRemoval,
   sharedBubbleUploadRoles,
@@ -13,10 +13,12 @@ import { getThemeSlots } from "@/lib/theme/templates";
 import type { SlotUploadEntry } from "@/lib/theme/project/state";
 
 /**
- * 말풍선 업로드 공유 풀 계약.
+ * 업로드 공유 풀 계약.
  *
  * 저장 구조(`SlotUploads`)는 슬롯별 bucket을 그대로 두고 **읽을 때만** 공유한다. 그래서
  * "어느 bucket에 실제로 있는가"(owner)를 잃지 않는 것이 이 계약의 핵심이다.
+ *
+ * 공유 범위는 같은 플랫폼·같은 kind다. 말풍선만 예외로 role 목록이 고정돼 있다.
  */
 const slots = getThemeSlots("android");
 const me1 = slots.find((slot) => slot.role === "bubble_me_1")!;
@@ -28,9 +30,9 @@ function upload(id: string, source: SlotUploadEntry["source"] = "user"): SlotUpl
   return { id, file: new File([id], `${id}.png`), source };
 }
 
-describe("getSharedBubbleUploadPeers", () => {
-  it("같은 플랫폼의 나머지 말풍선 세 개를 고정 순서로 돌려준다", () => {
-    expect(getSharedBubbleUploadPeers(me1, slots).map((slot) => slot.role)).toEqual([
+describe("getSharedUploadPeers", () => {
+  it("말풍선은 같은 플랫폼의 나머지 세 개를 고정 순서로 돌려준다", () => {
+    expect(getSharedUploadPeers(me1, slots).map((slot) => slot.role)).toEqual([
       "bubble_me_2",
       "bubble_you_1",
       "bubble_you_2",
@@ -38,23 +40,46 @@ describe("getSharedBubbleUploadPeers", () => {
   });
 
   it("자기 자신은 제외한다", () => {
-    expect(getSharedBubbleUploadPeers(you1, slots).map((slot) => slot.id)).not.toContain(you1.id);
+    expect(getSharedUploadPeers(you1, slots).map((slot) => slot.id)).not.toContain(you1.id);
   });
 
-  it("말풍선이 아닌 슬롯에는 peer가 없다", () => {
-    expect(getSharedBubbleUploadPeers(background, slots)).toEqual([]);
+  it("배경은 다른 배경 슬롯과 공유한다", () => {
+    // 예전에는 말풍선만 공유해서 여기가 빈 배열이었다. 이제 같은 kind끼리 묶인다.
+    const peers = getSharedUploadPeers(background, slots);
+    expect(peers.length).toBeGreaterThan(0);
+    expect(peers.every((peer) => peer.platform === background.platform)).toBe(true);
+  });
+
+  it("종류가 다르면 섞이지 않는다", () => {
+    // 배경 업로드가 아이콘 슬롯 후보에 나타나면 목록이 다시 통제 불능이 된다.
+    const tabIcon = slots.find((slot) => slot.role === "tab_icon_friends")!;
+    const iconPeers = getSharedUploadPeers(tabIcon, slots);
+    expect(iconPeers.map((peer) => peer.role)).not.toContain("main_background");
+    expect(getSharedUploadPeers(background, slots).map((peer) => peer.role)).not.toContain("tab_icon_friends");
+  });
+
+  it("색상 슬롯에는 peer가 없다", () => {
+    // 업로드를 받지 않는 슬롯이라 공유할 것이 없다.
+    const color = slots.find((slot) => slot.kind === "color")!;
+    expect(getSharedUploadPeers(color, slots)).toEqual([]);
+  });
+
+  it("플랫폼을 넘지 않는다", () => {
+    const iosSlots = getThemeSlots("ios");
+    const androidBackground = getSharedUploadPeers(background, [...slots, ...iosSlots]);
+    expect(androidBackground.every((peer) => peer.platform === "android")).toBe(true);
   });
 
   it("iOS 선택 변형은 공유 풀에 들어가지 않는다", () => {
-    // 이번 범위 밖이다(계획 문서 2-D). peer 집합이 플랫폼마다 달라지면 고정 순서 계약과
-    // hydration 대상이 전부 플랫폼 분기를 갖게 된다.
+    // kind로만 묶으면 `bubble_*_selected` 4개가 딸려 들어와 peer가 Android 3개, iOS 7개로 갈린다.
+    // 그 변형을 공유에 넣을지는 별도 판단이 필요하다.
     const iosSlots = getThemeSlots("ios");
     const selected = iosSlots.find((slot) => slot.role === "bubble_me_1_selected")!;
     const iosMe1 = iosSlots.find((slot) => slot.role === "bubble_me_1")!;
 
     expect(sharedBubbleUploadRoles).toHaveLength(4);
-    expect(getSharedBubbleUploadPeers(selected, iosSlots)).toEqual([]);
-    expect(getSharedBubbleUploadPeers(iosMe1, iosSlots).map((slot) => slot.role)).toEqual([
+    expect(getSharedUploadPeers(selected, iosSlots)).toEqual([]);
+    expect(getSharedUploadPeers(iosMe1, iosSlots).map((slot) => slot.role)).toEqual([
       "bubble_me_2",
       "bubble_you_1",
       "bubble_you_2",

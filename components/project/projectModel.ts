@@ -83,7 +83,7 @@ export {
   getSelectedCandidate,
   getSelectedUpload,
   getInheritedColorSourceSlot,
-  getSharedBubbleUploadPeers,
+  getSharedUploadPeers,
   getSharedSlotUploadEntries,
   isSlotReady,
   planUploadRemoval,
