@@ -112,13 +112,22 @@ export function getDownloadFileName(contentDisposition: string | null) {
   return match?.[1] ?? null;
 }
 
+/**
+ * blob URL 해제를 미루는 시간.
+ *
+ * `click()`은 다운로드를 시작만 시키고, 브라우저가 실제로 바이트를 읽는 것은 그 뒤다. 같은 실행
+ * 단위에서 해제하면 읽기 전에 URL이 무효화될 수 있다 — 데스크톱에서는 대개 살아남지만 처리가
+ * 비동기적인 모바일 웹뷰에서는 취소될 수 있다.
+ */
+const objectUrlReleaseDelayMs = 60_000;
+
 export function triggerDownload(blob: Blob, fileName: string) {
   const href = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = href;
   anchor.download = fileName;
   anchor.click();
-  URL.revokeObjectURL(href);
+  window.setTimeout(() => URL.revokeObjectURL(href), objectUrlReleaseDelayMs);
 }
 
 type ExportManifestSourceFile = { path: string; blob: Blob } | { path: string; serverAsset: string };

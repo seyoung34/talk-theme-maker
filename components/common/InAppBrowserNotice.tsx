@@ -88,8 +88,19 @@ export default function InAppBrowserNotice({ ready, hasRecentWork }: InAppBrowse
         </span>
         <div className="min-w-0">
           <p className="text-sm font-extrabold text-[var(--color-on-surface)]">{isInstagram ? "인스타그램 앱 안에서 열렸어요" : "앱 안의 브라우저에서 열렸어요"}</p>
-          <p className="mt-1 text-xs font-semibold leading-5 text-[#5b6b82]">로그인과 테마 파일 다운로드는 외부 브라우저에서 더 안정적입니다.</p>
-          {hasRecentWork ? <p className="mt-1 text-xs font-bold leading-5 text-[#b06b00]">이미 작업 중인 내용은 현재 브라우저에 저장되어 있어요. 브라우저를 바꾸면 최근 작업이 이어지지 않을 수 있습니다.</p> : null}
+          {/*
+            "다운로드가 안 된다"는 사실보다 "옮기려면 지금 옮겨야 한다"가 더 중요하다. 편집을 마친 뒤에
+            옮기면 작업이 따라가지 않기 때문이다 — 저장소가 브라우저마다 별개라 옮기는 순간 빈 편집기를
+            만난다. 다운로드 시점 안내만으로는 이 손해를 막을 수 없어 여기서 미리 알린다.
+          */}
+          <p className="mt-1 text-xs font-semibold leading-5 text-[#5b6b82]">
+            {isInstagram ? "이 브라우저에서는 테마 파일을 내려받을 수 없습니다." : "이 브라우저에서는 테마 파일 다운로드가 불안정합니다."} 로그인도 외부 브라우저가 안정적입니다.
+          </p>
+          <p className="mt-1 text-xs font-bold leading-5 text-[#b06b00]">
+            {hasRecentWork
+              ? "편집 내용은 지금 이 브라우저에만 저장됩니다. 편집을 마친 뒤에 옮기면 작업이 따라가지 않으니, 옮길 거라면 지금 옮겨 주세요."
+              : "편집을 시작하면 내용이 이 브라우저에만 저장됩니다. 나중에 옮기면 작업이 따라가지 않으니, 옮길 거라면 시작 전에 옮겨 주세요."}
+          </p>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 pl-11">

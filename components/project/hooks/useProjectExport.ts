@@ -219,11 +219,12 @@ export function useProjectExport({
 
         setExportProgressStep(stepLabels.length - 1);
         failureReason = "download_failed";
-        const downloadResponse = await fetch(outcome.downloadUrl);
-        if (!downloadResponse.ok) throw new Error("빌드 결과 파일을 내려받지 못했습니다.");
-        const asyncBlob = await downloadResponse.blob();
         failureReason = "unknown";
-        triggerDownload(asyncBlob, outcome.fileName);
+        // 서명 URL로 바로 이동시킨다. 예전에는 이걸 fetch해서 blob으로 바꾼 뒤 `<a download>`로 넘겼는데,
+        // 인앱 브라우저는 그 조합을 처리하지 못해 파일이 조용히 오지 않았다. 직접 이동은 `/account`의
+        // 다시 받기가 이미 같은 형태의 URL로 쓰고 있는 검증된 경로다.
+        // 덤으로 수십 MB짜리 APK를 메모리에 통째로 올리던 것도 사라진다.
+        window.location.href = outcome.downloadUrl;
         await refreshAccountState();
         await onExportCompleted?.();
         setExportDownloadResult({ platform, mode: exportMode, fileName: outcome.fileName });

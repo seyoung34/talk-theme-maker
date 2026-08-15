@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
+import InAppBrowserNotice from "@/components/common/InAppBrowserNotice";
+import { detectInAppBrowser, type InAppBrowser } from "@/lib/browser/inAppBrowser";
 import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
 import { AutosaveResumeDialog } from "@/components/project/dialogs/AutosaveResumeDialog";
 import { AutosaveStatusBadge } from "@/components/project/AutosaveStatusBadge";
@@ -12,6 +14,7 @@ import { persistEditorSession } from "@/components/project/editorSession";
 import type { ActiveSystemTemplate, ActiveUserTemplate, InitialLoadState, ProjectNotice as Notice } from "@/components/project/editorTypes";
 import { ExitConfirmDialog } from "@/components/project/dialogs/ExitConfirmDialog";
 import { ExportDialog } from "@/components/project/dialogs/ExportDialog";
+import { InAppBrowserExportGate } from "@/components/project/dialogs/InAppBrowserExportGate";
 import { InitialTemplateErrorPanel, InitialTemplateLoadingPanel } from "@/components/project/dialogs/InitialTemplatePanels";
 import { SaveTemplateDialog } from "@/components/project/dialogs/SaveTemplateDialog";
 import { SystemTemplateSaveDialog } from "@/components/project/dialogs/SystemTemplateSaveDialog";
@@ -122,6 +125,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   } = useThemeDraft();
   const { uploads, remoteUploadRefs, colors, candidateSelections, bubbleGeometry, bubbleMarkers, bubbleInsets, bubbleStretch, bubbleFlipX, bubbleDesigns, bubbleDecorationSources } = draft;
   const [candidateOpen, setCandidateOpen] = useState(false);
+  // 인앱 브라우저에서 다운로드를 누르면 빌드 전에 한 번 안내한다. 계속을 고르면 이 세션에서는 다시 묻지 않는다.
+  const [inAppBrowser, setInAppBrowser] = useState<InAppBrowser | null>(null);
+  const [inAppExportGateOpen, setInAppExportGateOpen] = useState(false);
+  const inAppExportAcknowledgedRef = useRef(false);
   const [mobileEditSheetOpen, setMobileEditSheetOpen] = useState(false);
   const [mobileSheetSnap, setMobileSheetSnap] = useState<MobileSheetSnap>("collapsed");
   const [mobileCandidateGridExpanded, setMobileCandidateGridExpanded] = useState(false);
@@ -215,6 +222,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     autosaveDecisionRef.current = null;
     resolve?.(decision);
   }, [isAdminMode, pendingAutosave]);
+
+  useEffect(() => {
+    setInAppBrowser(detectInAppBrowser(navigator.userAgent));
+  }, []);
 
   useEffect(() => {
     if (!mobileEditSheetOpen || typeof window === "undefined") return;
@@ -528,6 +539,20 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const exportExitGuardActive = isExporting && !isExportQueued;
   shouldConfirmExitRef.current = hasUnsavedChanges || exportExitGuardActive;
+
+  /**
+   * 다운로드의 단일 입구. 인앱 브라우저면 빌드가 시작되기 전에 한 번 안내한다.
+   *
+   * 내보내기는 크레딧을 쓰는데 인앱 브라우저는 파일을 받지 못한다. 다이얼로그를 연 뒤나 제출한 뒤에
+   * 알리면 크레딧이 이미 나간 상태가 되므로, 다이얼로그를 열기도 전에 끼어든다.
+   */
+  const requestExport = useCallback(() => {
+    if (inAppBrowser && !inAppExportAcknowledgedRef.current) {
+      setInAppExportGateOpen(true);
+      return;
+    }
+    void openExportDialog();
+  }, [inAppBrowser, openExportDialog]);
 
   /**
    * `/edit`을 벗어나는 모든 경로(뒤로가기, 종료 확인, 헤더/액션바 종료 버튼, 탭 차단 화면)가 공유하는
@@ -1361,6 +1386,18 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onSubmit={() => void saveCurrentTemplate()}
         />
       ) : null}
+      {inAppExportGateOpen && inAppBrowser ? (
+        <InAppBrowserExportGate
+          browser={inAppBrowser}
+          currentUrl={typeof window === "undefined" ? "" : window.location.href}
+          onClose={() => setInAppExportGateOpen(false)}
+          onContinue={() => {
+            inAppExportAcknowledgedRef.current = true;
+            setInAppExportGateOpen(false);
+            void openExportDialog();
+          }}
+        />
+      ) : null}
       {exportDialogOpen ? (
         <ExportDialog
           isExporting={isExporting}
@@ -1440,6 +1477,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       ) : null}
       {initialLoadState.status === "error" ? <InitialTemplateErrorPanel message={initialLoadState.message ?? "템플릿을 불러오지 못했습니다."} onStartDefault={startDefaultTemplate} /> : null}
 
+      {/*
+        `/template`에서만 안내하면 정작 편집을 시작한 뒤에는 경고가 사라진다. 브라우저를 옮기는 순간
+        편집 내용이 따라가지 않으므로, 편집을 시작하기 전에 알수록 손해가 작다. `/template`에서 닫았으면
+        그 컴포넌트의 보관 기간 동안은 여기서도 다시 뜨지 않는다 — 다운로드 시점은 게이트가 따로 막는다.
+      */}
+      <InAppBrowserNotice ready={initialLoadState.status === "ready"} hasRecentWork />
+
+
       {initialLoadState.status === "ready" ? (
         <div className={viewportMode === "mobile" ? "flex h-[calc(100dvh-1.5rem)] min-h-0 min-w-0 w-full flex-col overflow-hidden" : "grid h-[calc(100dvh-1.5rem)] min-h-full min-w-0 w-full grid-rows-[auto_1fr] gap-3 md:h-[calc(100dvh-2rem)] md:gap-4 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]"}>
           {viewportMode === "desktop" ? (
@@ -1497,7 +1542,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 <button
                   type="button"
                   className={`${isAdminMode ? "hidden" : ""} rounded-xl bg-[#0f172a] px-3 py-2.5 text-xs font-semibold text-white shadow-[0_12px_28px_rgba(15,23,42,0.18)] transition hover:bg-[#1e293b] disabled:cursor-wait disabled:opacity-60 md:px-4 md:text-sm`}
-                  onClick={() => void openExportDialog()}
+                  onClick={() => requestExport()}
                   disabled={isPreparingExport || isExporting}
                 >
                   {isExporting ? "다운로드 준비 중.." : isPreparingExport ? "다운로드 준비 중…" : "다운로드"}
@@ -1519,7 +1564,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 autosaveSavedAt={autosaveSavedAt}
                 onBack={requestExit}
                 onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
-                onExport={() => void openExportDialog()}
+                onExport={() => requestExport()}
               />
               <div
                 className="relative flex-1 min-h-0 overflow-hidden"
@@ -1542,7 +1587,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                     autosaveSavedAt={autosaveSavedAt}
                     onBack={requestExit}
                     onSave={isAdminMode ? openSystemSaveDialog : openSaveDialog}
-                    onExport={() => void openExportDialog()}
+                    onExport={() => requestExport()}
                   />
                 ) : null}
               </div>
