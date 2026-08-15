@@ -145,6 +145,17 @@ export async function createSystemTemplatePreviewUrls(templates: SystemTemplateS
   return next;
 }
 
+/**
+ * 미리보기를 그리는 데 실제로 필요한 값만.
+ *
+ * `SystemTemplateSummary`가 그대로 들어맞지만, 저장 직후 화면을 굽는 쪽은 완성된 summary를
+ * 갖고 있지 않다. 필요한 필드만 요구해 굽는 쪽과 보여 주는 쪽이 **같은 함수**를 쓰게 한다.
+ */
+export type SystemTemplatePreviewSource = Pick<
+  SystemTemplateSummary,
+  "platform" | "colors" | "candidateSelections" | "uploadRefs" | "previewMetadata" | "updatedAt"
+>;
+
 export function createSystemTemplatePreviewVisual({
   template,
   platform,
@@ -153,7 +164,7 @@ export function createSystemTemplatePreviewVisual({
 }: {
   template: ThemeTemplate;
   platform: ThemePlatform;
-  summary: SystemTemplateSummary;
+  summary: SystemTemplatePreviewSource;
   signedUrls: SignedUrlCache;
 }): TemplatePreviewVisual {
   const slots = getThemeSlots(platform);
@@ -215,7 +226,7 @@ export function createSystemTemplatePreviewVisual({
 function resolveColor(
   slots: ThemeAssetSlot[],
   role: ThemeResourceRole,
-  summary: SystemTemplateSummary,
+  summary: SystemTemplatePreviewSource,
   templateId: ThemeTemplateId,
   template: ThemeTemplate,
   fallback: string,
@@ -230,14 +241,14 @@ function resolveColor(
   return resolvePlatformPreviewColor(resolve, role, fallback, summary.platform);
 }
 
-function resolveImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary: SystemTemplateSummary, templateId: ThemeTemplateId, template: ThemeTemplate, signedUrls: SignedUrlCache) {
+function resolveImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary: SystemTemplatePreviewSource, templateId: ThemeTemplateId, template: ThemeTemplate, signedUrls: SignedUrlCache) {
   const slot = findSlotByRole(slots, role);
   const uploadPath = getMetadataRef(summary, role) ?? resolvePreviewUploadPath(slot, summary.uploadRefs, summary.candidateSelections);
   if (uploadPath) return signedUrls[uploadPath];
   return getSelectedCandidate(slot, summary.candidateSelections, templateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, {}, summary.candidateSelections, templateId, template, slots);
 }
 
-function resolvePreviewUploadPath(slot: ThemeAssetSlot | undefined, uploadRefs: RemoteSlotUploads, selections: SystemTemplateSummary["candidateSelections"]) {
+function resolvePreviewUploadPath(slot: ThemeAssetSlot | undefined, uploadRefs: RemoteSlotUploads, selections: SystemTemplatePreviewSource["candidateSelections"]) {
   if (!slot) return undefined;
   const entries = uploadRefs[slot.id] ?? [];
   const selectedUpload = getSelectedSharedSlotEntry(slot, uploadRefs, selections, getThemeSlots(slot.platform));
@@ -248,11 +259,11 @@ function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {
   return slots.find((slot) => slot.role === role);
 }
 
-const previewRoles: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "bubble_me_2", "bubble_you_2", "profile_image_1", "profile_image_2", "profile_image_3", "profile_image_full_1"];
+export const previewRoles: ThemeResourceRole[] = ["chat_background", "main_background", "tab_background_image", "bubble_me_1", "bubble_you_1", "bubble_me_2", "bubble_you_2", "profile_image_1", "profile_image_2", "profile_image_3", "profile_image_full_1"];
 
-type PreviewRefKey = keyof NonNullable<SystemTemplateSummary["previewMetadata"]["refs"]>;
+type PreviewRefKey = keyof NonNullable<SystemTemplatePreviewSource["previewMetadata"]["refs"]>;
 
-function getMetadataRef(summary: SystemTemplateSummary, role: ThemeResourceRole) {
+function getMetadataRef(summary: SystemTemplatePreviewSource, role: ThemeResourceRole) {
   const key = previewRefKeyByRole[role];
   return key ? summary.previewMetadata.refs?.[key] : undefined;
 }

@@ -12,6 +12,7 @@ import type { SystemTemplatePreviewMetadata } from "@/lib/theme/systemTemplates/
 describe("systemTemplateRepository.regeneratePreviewMetadata", () => {
   const variantId = "11111111-2222-4333-8444-555555555555";
   const previousCardPath = "system-templates/old/preview/card.webp";
+  const previousScreenPreviews = { friends: "system-templates/old/preview/friends.webp" };
   const assetPath = "system-templates/asset/main-background.png";
 
   let generateThumbnail: ReturnType<typeof vi.fn>;
@@ -32,7 +33,7 @@ describe("systemTemplateRepository.regeneratePreviewMetadata", () => {
           { id: "upload-1", fileName: "bg.png", mimeType: "image/png", size: 10, storagePath: assetPath },
         ],
       },
-      preview_metadata: { cardPreviewPath: previousCardPath },
+      preview_metadata: { cardPreviewPath: previousCardPath, screenPreviews: previousScreenPreviews },
     };
 
     const client = {
@@ -126,6 +127,19 @@ describe("systemTemplateRepository.regeneratePreviewMetadata", () => {
     const metadata = updates[0].preview_metadata as SystemTemplatePreviewMetadata;
     expect(metadata.cardPreviewPath).toBe(previousCardPath);
     expect(metadata.refs?.mainBackground).toBe(assetPath);
+  });
+
+  /**
+   * 굽기는 최적화다. 못 구웠다고 이미 있는 경로를 지우면 모달이 멀쩡히 쓰던 이미지를 잃고
+   * 원본 에셋을 받는 폴백으로 떨어진다 — 고치려던 문제로 되돌아간다.
+   */
+  it("화면을 구울 수 없는 환경에서도 기존 화면 프리뷰 경로를 지우지 않는다", async () => {
+    const repository = await load(await mainBackgroundSlotId());
+
+    await repository.regeneratePreviewMetadata(variantId);
+
+    const metadata = updates.at(-1)?.preview_metadata as SystemTemplatePreviewMetadata;
+    expect(metadata.screenPreviews).toEqual(previousScreenPreviews);
   });
 
   it("캔버스를 쓸 수 없어 썸네일이 없으면 업로드 없이 메타만 갱신한다", async () => {

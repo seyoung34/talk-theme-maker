@@ -3,6 +3,7 @@ import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { BaseTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import type { BubbleDesigns } from "@/lib/theme/bubbleBuilder";
+import type { PreviewScreenId } from "@/lib/theme/systemTemplates/previewScreenData";
 
 export type SystemTemplateStatus = "draft" | "published" | "archived";
 export type SystemTemplateVisibility = "private" | "public";
@@ -94,6 +95,13 @@ export type SystemTemplatePreviewMetadata = {
   // 같은 색상 role(chat_bubble_me/you_color)을 쓰므로 colors에는 _2 항목이 없다.
   refs?: Partial<Record<"chatBackground" | "mainBackground" | "tabBackground" | "myBubble" | "friendBubble" | "myBubble2" | "friendBubble2" | "profileImage", string>>;
   bubbles?: Partial<Record<"myBubble" | "friendBubble" | "myBubble2" | "friendBubble2", BubblePreviewShape>>;
+  /**
+   * 모달 4화면을 미리 구운 이미지의 공개 버킷 경로.
+   *
+   * 없으면 모달이 원본 에셋을 받아 DOM으로 그리는 기존 경로로 떨어진다. 굽기 전 템플릿과
+   * 굽기에 실패한 경우를 위해 그 폴백은 유지한다.
+   */
+  screenPreviews?: Partial<Record<PreviewScreenId, string>>;
 };
 
 export type SystemTemplateSummary = Pick<SystemTemplateRecord, "id" | "bundleId" | "title" | "description" | "baseTemplateId" | "platform" | "status" | "visibility" | "pricingType" | "priceAmount" | "creditCost" | "tags" | "createdAt" | "updatedAt"> & {

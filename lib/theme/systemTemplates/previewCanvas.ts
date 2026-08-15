@@ -14,13 +14,26 @@ export function previewFont(weight: number, size: number) {
   return `${weight} ${size}px ${previewFontStack}`;
 }
 
+/**
+ * 이미지 하나가 응답하지 않을 때 굽기 전체가 멈추지 않도록 두는 상한.
+ *
+ * `onerror`는 "실패했다"를 알려 주지만 **아무 일도 일어나지 않는 경우**는 알려 주지 않는다.
+ * 연결이 매달리거나 이벤트를 발생시키지 않는 환경에서는 프로미스가 영원히 미해결로 남는다.
+ */
+const imageLoadTimeoutMs = 15_000;
+
 export function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
+    const timer = setTimeout(() => reject(new Error(`Preview image load timed out: ${src}`)), imageLoadTimeoutMs);
+    const settle = (run: () => void) => {
+      clearTimeout(timer);
+      run();
+    };
     // 서명 URL이어도 캔버스가 오염되지 않게 한다. 오염되면 toBlob이 던진다.
     image.crossOrigin = "anonymous";
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Preview image load failed."));
+    image.onload = () => settle(() => resolve(image));
+    image.onerror = () => settle(() => reject(new Error(`Preview image load failed: ${src}`)));
     image.src = src;
   });
 }
@@ -32,6 +45,16 @@ export async function loadImageOrNull(src: string | undefined) {
     return await loadImage(src);
   } catch {
     return null;
+  }
+}
+
+/** 2D 컨텍스트를 쓸 수 있는 환경인지. 그릴 수 없으면 이미지를 받을 이유도 없다. */
+export function canRenderPreviewCanvas() {
+  if (typeof document === "undefined") return false;
+  try {
+    return Boolean(document.createElement("canvas").getContext("2d"));
+  } catch {
+    return false;
   }
 }
 

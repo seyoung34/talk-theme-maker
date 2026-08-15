@@ -8,6 +8,9 @@ import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/s
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
+import { createSystemTemplatePreviewVisual, previewRoles, tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
+import { generatePreviewScreens } from "@/lib/theme/systemTemplates/screenPreview";
+import type { PreviewScreenId } from "@/lib/theme/systemTemplates/previewScreenData";
 import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 import { assertValidTemplateName } from "@/lib/theme/templateName";
 import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
@@ -148,6 +151,28 @@ export const systemTemplateRepository: SystemTemplateRepository = {
     const resolvedVariantId = variantId ?? crypto.randomUUID();
     const uploadRefs = await uploadSystemTemplateFiles(resolvedVariantId, input.overrides.uploads);
     const cardPreviewPath = await createAndUploadTemplateThumbnail(resolvedVariantId, input);
+
+    // 방금 올린 에셋을 다시 서명해 화면을 굽는다. 로컬 File을 그대로 쓰지 않는 이유는
+    // 재생성 경로와 **같은 입력**으로 굽기 위해서다 — 경로가 갈라지면 저장 직후와 재생성 후
+    // 화면이 달라진다. 굽는 주체가 운영자 한 명이라 이 왕복은 감당할 수 있다.
+    const slots = getThemeSlots(input.platform);
+    const pathByRole = collectPreviewPathsByRole(slots, uploadRefs, input.overrides.candidateSelections);
+    const signedUrlByPath = pathByRole.size > 0
+      ? await createAdminThemeAssetSignedUrls(supabase, Array.from(new Set(pathByRole.values()))).catch(() => ({}))
+      : {};
+    const screenPreviews = await renderAndUploadScreenPreviews({
+      supabase,
+      variantId: resolvedVariantId,
+      baseTemplateId: input.baseTemplateId,
+      platform: input.platform,
+      colors: input.overrides.colors,
+      candidateSelections: input.overrides.candidateSelections,
+      bubbleEdits: input.overrides.bubbleEdits,
+      uploadRefs,
+      cardPreviewPath,
+      signedUrlByPath,
+    });
+
     const previewMetadata = buildPreviewMetadata({
       baseTemplateId: input.baseTemplateId,
       platform: input.platform,
@@ -156,6 +181,7 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       bubbleEdits: input.overrides.bubbleEdits,
       uploadRefs,
       cardPreviewPath,
+      screenPreviews,
     });
     const variantPayload = {
       id: resolvedVariantId,
@@ -243,17 +269,14 @@ export const systemTemplateRepository: SystemTemplateRepository = {
     // 유지하고 previewMetadata 갱신은 그대로 진행한다.
     let cardPreviewPath = row.preview_metadata?.cardPreviewPath;
     const slots = getThemeSlots(row.platform);
-    const thumbnailRoles: ThemeResourceRole[] = ["main_background", "chat_background", "bubble_me_1", "bubble_you_1", "bubble_me_2", "bubble_you_2", "profile_image_1", ...thumbnailTabIconRoles];
-    const pathByRole = new Map<ThemeResourceRole, string>();
-    for (const role of thumbnailRoles) {
-      const storagePath = resolvePreviewStoragePath(slots, role, uploadRefs, candidateSelections);
-      if (storagePath) pathByRole.set(role, storagePath);
-    }
+    // 카드 썸네일과 4화면이 필요한 role의 합집합을 한 번에 서명한다. 따로 부르면 같은 경로를
+    // 두 번 서명하게 되고, 굽는 도중 URL이 갈라진다.
+    const pathByRole = collectPreviewPathsByRole(slots, uploadRefs, candidateSelections);
     // 관리자 브라우저 → Supabase Storage 직접 서명. Next.js 라우트를 거치지 않는다.
-    const signedUrls = pathByRole.size > 0 ? await createAdminThemeAssetSignedUrls(supabase, Array.from(pathByRole.values())) : {};
+    const signedUrlByPath = pathByRole.size > 0 ? await createAdminThemeAssetSignedUrls(supabase, Array.from(new Set(pathByRole.values()))) : {};
     const imageUrlByRole: Partial<Record<ThemeResourceRole, string>> = {};
     for (const [role, storagePath] of pathByRole) {
-      if (signedUrls[storagePath]) imageUrlByRole[role] = signedUrls[storagePath];
+      if (signedUrlByPath[storagePath]) imageUrlByRole[role] = signedUrlByPath[storagePath];
     }
 
     let thumbnail: Blob | null = null;
@@ -279,6 +302,20 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       cardPreviewPath = storagePath;
     }
 
+    const screenPreviews = await renderAndUploadScreenPreviews({
+      supabase,
+      variantId: id,
+      baseTemplateId: row.base_template_id,
+      platform: row.platform,
+      colors,
+      candidateSelections,
+      bubbleEdits,
+      uploadRefs,
+      cardPreviewPath,
+      signedUrlByPath,
+      previous: row.preview_metadata?.screenPreviews,
+    });
+
     const previewMetadata = buildPreviewMetadata({
       baseTemplateId: row.base_template_id,
       platform: row.platform,
@@ -287,6 +324,7 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       bubbleEdits,
       uploadRefs,
       cardPreviewPath,
+      screenPreviews,
     });
     const { error: updateError } = await supabase
       .from("system_template_variants")
@@ -558,6 +596,7 @@ function buildPreviewMetadata({
   bubbleEdits,
   uploadRefs,
   cardPreviewPath,
+  screenPreviews,
 }: {
   baseTemplateId: ThemeTemplateId;
   platform: ThemePlatform;
@@ -566,12 +605,14 @@ function buildPreviewMetadata({
   bubbleEdits: ThemeEditOverrides["bubbleEdits"];
   uploadRefs: RemoteSlotUploads;
   cardPreviewPath?: string;
+  screenPreviews?: Partial<Record<PreviewScreenId, string>>;
 }): SystemTemplatePreviewMetadata {
   const template = getThemeTemplate(baseTemplateId);
   const slots = getThemeSlots(platform);
 
   return {
     cardPreviewPath,
+    screenPreviews,
     generatedAt: cardPreviewPath ? new Date().toISOString() : undefined,
     colors: {
       chatBackground: resolvePreviewColor(slots, "chat_background_color", colors, candidateSelections, baseTemplateId, template, platform),
@@ -636,6 +677,106 @@ function resolvePreviewColor(
   return resolvePlatformPreviewColor(resolve, role, raw, platform);
 }
 
+/**
+ * 미리보기를 굽는 데 필요한 role → Storage 경로.
+ *
+ * 카드 썸네일이 쓰는 role과 모달 4화면이 쓰는 role의 합집합이다. 한 번에 모아 서명해야
+ * 같은 경로가 두 번 서명되지 않고, 굽는 도중 URL이 갈라지지 않는다.
+ */
+function collectPreviewPathsByRole(slots: ThemeAssetSlot[], uploadRefs: RemoteSlotUploads, candidateSelections: SlotCandidateSelections) {
+  const roles = new Set<ThemeResourceRole>([
+    "main_background",
+    "chat_background",
+    "bubble_me_1",
+    "bubble_you_1",
+    "bubble_me_2",
+    "bubble_you_2",
+    "profile_image_1",
+    ...thumbnailTabIconRoles,
+    ...previewRoles,
+    ...tabIconPreviewRoles,
+  ]);
+
+  const pathByRole = new Map<ThemeResourceRole, string>();
+  for (const role of roles) {
+    const storagePath = resolvePreviewStoragePath(slots, role, uploadRefs, candidateSelections);
+    if (storagePath) pathByRole.set(role, storagePath);
+  }
+  return pathByRole;
+}
+
+/**
+ * 모달 4화면을 굽고 공개 버킷에 올린다.
+ *
+ * 실패해도 던지지 않는다. 화면 굽기는 **최적화**이고, 실패하면 모달이 기존 DOM 렌더로
+ * 떨어져 원본 에셋을 받는다 — 느릴 뿐 화면은 나온다. 여기서 던지면 저장·일괄 재생성 전체가
+ * 멈추는데, 그건 굽기 실패가 감당할 무게가 아니다.
+ *
+ * 반면 서명·업로드 자체가 죽은 상황은 호출부가 이미 카드 썸네일 경로에서 던져 잡아낸다.
+ */
+async function renderAndUploadScreenPreviews({
+  supabase,
+  variantId,
+  baseTemplateId,
+  platform,
+  colors,
+  candidateSelections,
+  bubbleEdits,
+  uploadRefs,
+  cardPreviewPath,
+  signedUrlByPath,
+  previous,
+}: {
+  supabase: ReturnType<typeof createClient>;
+  variantId: string;
+  baseTemplateId: ThemeTemplateId;
+  platform: ThemePlatform;
+  colors: ThemeEditOverrides["colors"];
+  candidateSelections: SlotCandidateSelections;
+  bubbleEdits: ThemeEditOverrides["bubbleEdits"];
+  uploadRefs: RemoteSlotUploads;
+  cardPreviewPath?: string;
+  signedUrlByPath: Record<string, string>;
+  previous?: Partial<Record<PreviewScreenId, string>>;
+}) {
+  try {
+    // 폴백으로 도는 모달 DOM과 같은 함수로 visual을 만든다. 다른 경로로 만들면 구운 이미지와
+    // 폴백이 서로 다른 화면이 된다.
+    const visual = createSystemTemplatePreviewVisual({
+      template: getThemeTemplate(baseTemplateId),
+      platform,
+      summary: {
+        platform,
+        colors,
+        candidateSelections,
+        uploadRefs,
+        updatedAt: Date.now(),
+        previewMetadata: buildPreviewMetadata({ baseTemplateId, platform, colors, candidateSelections, bubbleEdits, uploadRefs, cardPreviewPath }),
+      },
+      signedUrls: signedUrlByPath,
+    });
+
+    const screens = await generatePreviewScreens(visual);
+    const paths: Partial<Record<PreviewScreenId, string>> = { ...previous };
+
+    for (const [id, blob] of Object.entries(screens) as Array<[PreviewScreenId, Blob]>) {
+      const storagePath = `system-templates/${variantId}/preview/${id}.webp`;
+      const { error } = await supabase.storage.from(themePublicBucketName).upload(storagePath, blob, {
+        contentType: "image/webp",
+        cacheControl: "3600",
+        upsert: true,
+      });
+      if (error) throw error;
+      paths[id] = storagePath;
+    }
+
+    return Object.keys(paths).length > 0 ? paths : undefined;
+  } catch (screenError) {
+    console.warn("Screen previews could not be generated; the modal falls back to live rendering.", screenError);
+    return previous;
+  }
+}
+
 function resolvePreviewStoragePath(slots: ThemeAssetSlot[], role: ThemeResourceRole, uploadRefs: RemoteSlotUploads, candidateSelections: SlotCandidateSelections) {
   const slot = slots.find((item) => item.role === role);
   if (!slot) return undefined;
@@ -647,6 +788,7 @@ function resolvePreviewStoragePath(slots: ThemeAssetSlot[], role: ThemeResourceR
 function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | undefined): SystemTemplatePreviewMetadata {
   return {
     cardPreviewPath: value?.cardPreviewPath,
+    screenPreviews: value?.screenPreviews,
     generatedAt: value?.generatedAt,
     colors: value?.colors ?? {},
     refs: value?.refs ?? {},

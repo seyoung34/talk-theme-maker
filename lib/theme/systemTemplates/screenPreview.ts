@@ -2,6 +2,7 @@ import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { drawBubble, getAutoBubbleSize } from "@/lib/theme/preview/bubbleCanvas";
 import type { BubbleEditState } from "@/lib/theme/project/state";
 import {
+  canRenderPreviewCanvas,
   canvasToWebpBlob,
   createPreviewCanvas,
   drawAvatar,
@@ -61,7 +62,8 @@ type ScreenImages = {
 };
 
 export async function generatePreviewScreens(visual: TemplatePreviewVisual): Promise<Partial<Record<PreviewScreenId, Blob>>> {
-  if (typeof document === "undefined") return {};
+  // 그릴 수 없는 환경(SSR·테스트)에서는 이미지를 받기 전에 끝낸다. 받아 봐야 버린다.
+  if (!canRenderPreviewCanvas()) return {};
 
   const images = await loadScreenImages(visual);
   const result: Partial<Record<PreviewScreenId, Blob>> = {};
