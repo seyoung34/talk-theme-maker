@@ -31,6 +31,13 @@ export type SlotCandidate = {
   // 파생 슬롯(탭 선택 아이콘 등)이 기본 슬롯의 선택을 상속해 표시 중인 항목. 읽기 전용(연동 배지).
   inherited?: boolean;
   /**
+   * 다른 슬롯에서 올린 업로드일 때 그 슬롯 이름.
+   *
+   * 같은 종류의 슬롯끼리 업로드를 공유하므로 후보 목록에는 여기서 올리지 않은 항목이 섞인다.
+   * 어디서 온 것인지 모르면 지울 때 놀란다. 자기 bucket 항목에는 붙이지 않는다.
+   */
+  ownerSlotLabel?: string;
+  /**
    * 이 업로드가 실제로 들어 있는 bucket의 슬롯 id.
    *
    * 말풍선 네 슬롯은 업로드를 공유하므로 후보에 보이는 항목이 다른 슬롯 소유일 수 있다.
@@ -126,6 +133,16 @@ export function getSlotFile(slot: ThemeAssetSlot | undefined, files: ThemeProjec
   return files.find((file) => file.path === slot.path);
 }
 
+/**
+ * 후보의 접근성 이름.
+ *
+ * 카드는 88~96px라 원본 슬롯명을 화면에 적을 자리가 없다. 대신 접근성 이름과 툴팁에 넣는다.
+ * 보이는 글자(`title`)를 그대로 앞에 두어 음성 제어가 지목할 수 있게 한다(WCAG 2.5.3).
+ */
+export function getCandidateAccessibleName(candidate: Pick<SlotCandidate, "title" | "ownerSlotLabel">) {
+  return candidate.ownerSlotLabel ? `${candidate.title} · ${candidate.ownerSlotLabel}에서 추가` : candidate.title;
+}
+
 export function buildSlotCandidates(
   slot: ThemeAssetSlot | undefined,
   uploads: SlotUploads,
@@ -161,6 +178,11 @@ export function buildSlotCandidates(
     colorValue: candidate.colorValue,
   }));
 
+  // 다른 슬롯 bucket에서 온 항목에만 붙인다. 자기 것이면 붙일 이유가 없다.
+  const resolveOwnerLabel = (ownerSlotId: string) => (
+    ownerSlotId === sourceSlot.id ? undefined : allSlots.find((candidate) => candidate.id === ownerSlotId)?.label
+  );
+
   const uploadItems = uploadEntries
     .filter(({ entry }) => (entry.source ?? "user") === "user" && !adminAssetIds.has(entry.id))
     .slice()
@@ -174,6 +196,7 @@ export function buildSlotCandidates(
       source: "upload" as const,
       previewUrl: uploadPreviewUrls[entry.id],
       ownerSlotId,
+      ownerSlotLabel: resolveOwnerLabel(ownerSlotId),
     }));
   const templateItems = uploadEntries
     .filter(({ entry }) => entry.source === "template")
@@ -196,6 +219,7 @@ export function buildSlotCandidates(
         source: "template" as const,
         previewUrl: uploadPreviewUrls[entry.id],
         ownerSlotId,
+        ownerSlotLabel: resolveOwnerLabel(ownerSlotId),
       };
     });
   const templateAssetIds = new Set(templateItems.map((item) => item.id));

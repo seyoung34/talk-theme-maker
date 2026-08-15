@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSlotCandidates, getDerivedColorLink, isRemovableUploadCandidate } from "@/components/project/projectModel";
+import { buildSlotCandidates, getCandidateAccessibleName, getDerivedColorLink, isRemovableUploadCandidate } from "@/components/project/projectModel";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { getInitialSlotCandidateSelections } from "@/lib/theme/project/state";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
@@ -233,5 +233,42 @@ describe("getDerivedColorLink", () => {
   it("연동 복귀 후보를 팔레트 칩으로는 더 이상 내보내지 않는다", () => {
     const candidates = buildSlotCandidates(unread, {}, { [chatBackground.id]: "#111111" }, iosSelections, "basic", template, iosSlots);
     expect(candidates.every((candidate) => candidate.colorValue)).toBe(true);
+  });
+});
+
+/**
+ * 다른 슬롯에서 올린 후보 표시.
+ *
+ * 같은 종류의 슬롯끼리 업로드를 공유하므로 후보 목록에는 여기서 올리지 않은 항목이 섞인다.
+ * 어디서 온 것인지 모르면 지울 때 놀란다. 카드가 88~96px라 화면에 적을 자리가 없어
+ * 접근성 이름과 툴팁으로 알린다.
+ */
+describe("다른 슬롯에서 온 후보", () => {
+  const slots = getThemeSlots("android");
+  const template = getThemeTemplate("basic");
+  const me1 = slots.find((slot) => slot.role === "bubble_me_1")!;
+  const me2 = slots.find((slot) => slot.role === "bubble_me_2")!;
+
+  function candidatesFor(viewSlot: typeof me1, uploadOwnerSlotId: string) {
+    const uploads = { [uploadOwnerSlotId]: [{ id: "shared-upload", file: new File(["x"], "x.png"), source: "user" as const }] };
+    return buildSlotCandidates(viewSlot, uploads, {}, getInitialSlotCandidateSelections(slots, "basic", template), "basic", template, slots);
+  }
+
+  it("자기 bucket 업로드에는 원본 슬롯명을 붙이지 않는다", () => {
+    const own = candidatesFor(me1, me1.id).find((candidate) => candidate.id === "shared-upload");
+    expect(own?.ownerSlotLabel).toBeUndefined();
+    expect(getCandidateAccessibleName(own!)).toBe("업로드 이미지");
+  });
+
+  it("다른 슬롯 bucket 업로드에는 그 슬롯 이름을 붙인다", () => {
+    const shared = candidatesFor(me1, me2.id).find((candidate) => candidate.id === "shared-upload");
+    expect(shared?.ownerSlotLabel).toBe(me2.label);
+    expect(getCandidateAccessibleName(shared!)).toBe(`업로드 이미지 · ${me2.label}에서 추가`);
+  });
+
+  it("접근성 이름이 보이는 글자를 그대로 포함한다", () => {
+    // 음성 제어는 보이는 글자로 지목한다. 카드에 보이는 것은 title뿐이다(WCAG 2.5.3).
+    const shared = candidatesFor(me1, me2.id).find((candidate) => candidate.id === "shared-upload")!;
+    expect(getCandidateAccessibleName(shared)).toContain(shared.title);
   });
 });

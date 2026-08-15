@@ -9,7 +9,7 @@ import { getCandidateCardWidthClass, getCandidateLayoutKind, type CandidateLayou
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { useUploadPreviewUrls } from "@/components/project/hooks/useUploadPreviewUrls";
 import { supportsColorAlpha } from "@/lib/theme/project/platformColor";
-import { buildSlotCandidates, getResolvedColor, getSharedSlotUploadEntries, hasUnlinkedAutoColorSlots, isRemovableUploadCandidate, getDerivedColorLink, disabledImageCandidateId, type AutoColorLinkSummary, type DerivedColorLink, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/components/project/projectModel";
+import { buildSlotCandidates, getResolvedColor, getSharedSlotUploadEntries, hasUnlinkedAutoColorSlots, isRemovableUploadCandidate, getDerivedColorLink, disabledImageCandidateId, type AutoColorLinkSummary, type DerivedColorLink, getDefaultColor, getSelectedCandidate, getSelectedUpload, type BubbleEditState, type SlotCandidate, type SlotCandidateSelections, type SlotColors, type SlotUploads, getCandidateAccessibleName} from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ImageColorPalette } from "@/lib/theme/colorPalette";
@@ -571,6 +571,7 @@ function CandidateCard({
         type="button"
         aria-pressed={candidate.selected}
         aria-disabled={candidate.inherited}
+        aria-label={getCandidateAccessibleName(candidate)}
         className={`grid w-full gap-2 rounded-2xl border text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${layoutKind === "color" ? "p-1.5" : "p-2"} ${candidate.selected
           ? "border-[#2563eb] bg-[#eff6ff] shadow-[inset_0_0_0_1px_rgba(37,99,235,0.18)]"
           : candidate.active
@@ -585,7 +586,7 @@ function CandidateCard({
         <CandidatePreview candidate={candidate} layoutKind={layoutKind} />
         <span
           className={`truncate text-center font-semibold text-[#111827] ${layoutKind === "color" ? "font-mono text-[9px] tracking-tight" : "px-1 text-[12px]"}`}
-          title={candidate.title}
+          title={getCandidateAccessibleName(candidate)}
         >
           {candidate.title}
         </span>
@@ -593,7 +594,7 @@ function CandidateCard({
       {onRemove ? (
         <button
           type="button"
-          aria-label={`${candidate.title} 삭제`}
+          aria-label={`${getCandidateAccessibleName(candidate)} 삭제`}
           className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-[#475569] text-white shadow-sm ring-2 ring-white transition hover:bg-[#1e293b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
           onClick={() => onRemove(candidate.id)}
         >

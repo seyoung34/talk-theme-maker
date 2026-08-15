@@ -23,6 +23,7 @@ import {
   type SlotColors,
   type SlotUploads,
   type BubbleEditState,
+  getCandidateAccessibleName,
 } from "@/components/project/projectModel";
 import type { SlotContrastWarning } from "@/components/project/slotContrast";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
@@ -497,6 +498,8 @@ function ImageControls({
           type="button"
           aria-pressed={candidate.selected}
           aria-disabled={candidate.inherited}
+          aria-label={getCandidateAccessibleName(candidate)}
+          title={getCandidateAccessibleName(candidate)}
           className={`grid w-full gap-1 rounded-xl border p-1.5 text-center transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] ${expanded ? "h-full grid-rows-[minmax(0,1fr)_auto]" : ""} ${candidate.selected ? "border-[#60a5fa] bg-[#eff6ff]" : "border-[#e5e7eb] bg-white"}`}
           onClick={() => {
             if (candidate.inherited) return;
@@ -515,7 +518,7 @@ function ImageControls({
         {removable ? (
           <button
             type="button"
-            aria-label={`${candidate.title} 삭제`}
+            aria-label={`${getCandidateAccessibleName(candidate)} 삭제`}
             className="absolute right-0.5 top-0.5 z-10 grid size-5 place-items-center rounded-full bg-[#ef4444] text-white shadow-sm ring-2 ring-white transition hover:bg-[#dc2626] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#ef4444]"
             onClick={() => onRemoveUpload(slot, candidate.id)}
           >
