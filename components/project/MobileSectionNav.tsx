@@ -10,7 +10,9 @@ import type { ThemeSection } from "@/lib/theme/types";
 // (WCAG 2.5.3 Label in Name).
 export const mobileSectionLabels: Record<ThemeSection, string> = {
   main: "친구",
-  tabs: "채팅",
+  // "채팅"만 두면 탭 아이콘·탭 배경을 어디서 바꾸는지 알 수 없다. 이 섹션은 채팅 목록 화면과
+  // 하단 탭바를 함께 담는다.
+  tabs: "채팅·탭",
   chatroom: "채팅방",
   more: "더보기",
   passcode: "잠금",

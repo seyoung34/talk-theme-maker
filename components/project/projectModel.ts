@@ -43,7 +43,7 @@ export const sectionOrder: ThemeSection[] = ["main", "tabs", "chatroom", "more",
 
 export const sectionLabels: Record<ThemeSection, string> = {
   main: "친구/메인",
-  tabs: "채팅/하단 탭",
+  tabs: "채팅·탭바",
   more: "더보기",
   chatroom: "채팅방",
   passcode: "잠금화면",
