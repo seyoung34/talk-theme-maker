@@ -10,6 +10,15 @@ export type ProjectNotice = {
    * 잃는다. 띄운 쪽이 상황이 해소될 때 직접 걷어야 한다.
    */
   persistent?: boolean;
+  /**
+   * 알림에서 바로 실행할 수 있는 다음 행동.
+   *
+   * "왜 안 되는지"만 알려 주고 끝내면 사용자가 직접 길을 찾아야 한다. 막다른 길이 될 수 있는
+   * 알림은 그 자리에서 갈 곳을 준다.
+   *
+   * 행동이 있는 알림은 자동으로 사라지지 않는다. 읽고 누를 시간이 필요하다.
+   */
+  action?: { label: string; onAct: () => void };
 };
 
 export type ActiveUserTemplate = {

@@ -21,7 +21,9 @@ export function HeaderNotice({ notice, onDismiss }: { notice: ProjectNotice; onD
   }, [onDismiss]);
 
   useEffect(() => {
-    if (notice.persistent) return;
+    // 행동이 붙은 알림도 남긴다. 2.5초는 읽고 누르기에 짧고, 사라지면 그 행동에 다시 닿을
+    // 방법이 없다.
+    if (notice.persistent || notice.action) return;
     const timeout = window.setTimeout(() => dismissRef.current(), noticeAutoDismissMs);
     return () => window.clearTimeout(timeout);
   }, [notice]);
@@ -37,7 +39,20 @@ export function HeaderNotice({ notice, onDismiss }: { notice: ProjectNotice; onD
 
   return (
     <div className={`pointer-events-auto fixed left-1/2 top-4 z-[90] flex w-[min(92vw,460px)] -translate-x-1/2 items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur-sm ${noticeToneClass}`}>
-      <span className="truncate">{notice.message}</span>
+      {/* 자르지 않는다. 어느 슬롯이 막고 있는지 같은 정보가 잘리면 알림의 쓸모가 없어진다. */}
+      <span className="min-w-0 flex-1">{notice.message}</span>
+      {notice.action ? (
+        <button
+          type="button"
+          className="shrink-0 rounded-lg border border-current/25 px-2.5 py-1 text-xs font-black transition hover:bg-current/10"
+          onClick={() => {
+            notice.action?.onAct();
+            onDismiss();
+          }}
+        >
+          {notice.action.label}
+        </button>
+      ) : null}
       <button type="button" className="shrink-0 text-current/70 hover:text-current" onClick={onDismiss} aria-label="알림 닫기">
         닫기
       </button>

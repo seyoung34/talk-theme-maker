@@ -900,8 +900,21 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
     const plan = planUploadRemoval(uploadId, owner.ownerSlotId, slot.id, candidateSelections, slots);
     if (plan.kind === "blocked") {
+      const [firstBlocking] = plan.blockingSlots;
       const labels = plan.blockingSlots.map((blocking) => blocking.label).join(", ");
-      setNotice({ tone: "warning", message: `${labels}에서 사용 중이라 지울 수 없습니다. 해당 슬롯에서 다른 이미지를 먼저 고르세요.` });
+      // 막다른 길로 두지 않는다. 어디서 쓰는지 알려 주고, 그 슬롯으로 바로 보내 준다.
+      // 여러 곳이 쓰고 있으면 첫 슬롯부터 간다 — 하나씩 풀고 다시 지우면 된다.
+      setNotice({
+        tone: "warning",
+        message: `${labels}에서 사용 중이라 지울 수 없습니다.`,
+        action: {
+          label: "바꾸러 가기",
+          onAct: () => {
+            revealSlot(firstBlocking);
+            focusSlot(firstBlocking.id);
+          },
+        },
+      });
       return;
     }
 

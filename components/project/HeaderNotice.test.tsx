@@ -79,4 +79,36 @@ describe("HeaderNotice", () => {
 
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
+  /**
+   * 행동이 붙은 알림.
+   *
+   * "왜 안 되는지"만 알려 주고 사라지면 사용자가 갈 곳을 스스로 찾아야 한다. 그래서 행동이 있는
+   * 알림은 남아 있어야 하고, 누르면 그 행동과 닫기가 함께 일어나야 한다.
+   */
+  it("행동이 있는 알림은 스스로 사라지지 않는다", () => {
+    const onDismiss = vi.fn();
+    const onAct = vi.fn();
+    render(<HeaderNotice notice={{ tone: "warning", message: "채팅방 배경에서 사용 중입니다.", action: { label: "바꾸러 가기", onAct } }} onDismiss={onDismiss} />);
+
+    act(() => { vi.advanceTimersByTime(noticeAutoDismissMs * 4); });
+
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("행동을 누르면 실행하고 알림을 닫는다", () => {
+    const onDismiss = vi.fn();
+    const onAct = vi.fn();
+    const { getByRole } = render(<HeaderNotice notice={{ tone: "warning", message: "채팅방 배경에서 사용 중입니다.", action: { label: "바꾸러 가기", onAct } }} onDismiss={onDismiss} />);
+
+    act(() => { getByRole("button", { name: "바꾸러 가기" }).click(); });
+
+    expect(onAct).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("행동이 없으면 버튼도 없다", () => {
+    const { queryByRole } = render(<HeaderNotice notice={notice} onDismiss={vi.fn()} />);
+
+    expect(queryByRole("button", { name: "바꾸러 가기" })).toBeNull();
+  });
 });
