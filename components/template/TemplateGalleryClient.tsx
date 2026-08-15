@@ -126,11 +126,28 @@ export default function TemplateGalleryClient() {
     const selected = selectedGalleryTemplate;
     if (selected?.kind !== "system") return;
 
-    // 구워 둔 화면이 4개 다 있으면 원본 에셋을 받을 이유가 없다. 서명도 프리로드도 건너뛴다.
+    // 구워 둔 화면이 4개 다 있으면 원본 에셋을 받을 이유가 없다. 원본 서명도 건너뛴다.
     // 모달 한 번에 8MB 가까이 나가던 것이 여기서 사라진다.
-    if (hasEveryScreenImage(resolveScreenImages(selected.previewTemplate))) {
-      setDetailPreviewReadyId(selected.id);
-      return;
+    const bakedScreens = resolveScreenImages(selected.previewTemplate);
+    if (hasEveryScreenImage(bakedScreens)) {
+      let bakedActive = true;
+      setDetailPreviewReadyId(null);
+
+      void (async () => {
+        // 첫 화면만 기다렸다가 연다. 나머지 셋은 배경에서 받아 두므로 화면을 넘길 때
+        // 빈 프레임이 스치지 않는다. 4장을 다 기다리면 모달이 그만큼 늦게 열린다.
+        const [first, ...rest] = previewScreens.map(({ id }) => bakedScreens?.[id]).filter((url): url is string => Boolean(url));
+        try {
+          await preloadPreviewImages([first]);
+        } finally {
+          if (bakedActive) setDetailPreviewReadyId(selected.id);
+        }
+        if (bakedActive && rest.length > 0) void preloadPreviewImages(rest);
+      })();
+
+      return () => {
+        bakedActive = false;
+      };
     }
 
     let active = true;
@@ -1248,12 +1265,13 @@ function PreviewAdBanner() {
 // 하단 탭바 (테마 실제 탭 아이콘 반영)
 function PreviewTabBar({ visual, active }: { visual: TemplatePreviewVisual; active: PreviewTabKey }) {
   const icons = visual.tabIcons ?? {};
+  // 5개 모두 기본(비포커스) 아이콘. 굽는 쪽 drawTabBar와 같은 규칙이다.
   const tabs: Array<{ key: PreviewTabKey; label: string; icon?: string; badge?: string }> = [
-    { key: "friends", label: "친구", icon: active === "friends" ? icons.friendsFocused ?? icons.friends : icons.friends, badge: "12" },
-    { key: "chats", label: "채팅", icon: active === "chats" ? icons.chatsFocused ?? icons.chats : icons.chats, badge: "8" },
-    { key: "now", label: "Now", icon: active === "now" ? icons.nowFocused ?? icons.now : icons.now },
-    { key: "shopping", label: "쇼핑", icon: active === "shopping" ? icons.shoppingFocused ?? icons.shopping : icons.shopping },
-    { key: "more", label: "더보기", icon: active === "more" ? icons.moreFocused ?? icons.more : icons.more },
+    { key: "friends", label: "친구", icon: icons.friends, badge: "12" },
+    { key: "chats", label: "채팅", icon: icons.chats, badge: "8" },
+    { key: "now", label: "Now", icon: icons.now },
+    { key: "shopping", label: "쇼핑", icon: icons.shopping },
+    { key: "more", label: "더보기", icon: icons.more },
   ];
   return (
     <div

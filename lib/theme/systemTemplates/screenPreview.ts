@@ -204,8 +204,10 @@ function drawTabBar(context: CanvasRenderingContext2D, visual: TemplatePreviewVi
   previewTabs.forEach((tab, index) => {
     const centerX = cellWidth * index + cellWidth / 2;
     const isActive = tab.key === active;
-    const iconKey = (isActive ? `${tab.key}Focused` : tab.key) as keyof TabIconUrls;
-    const icon = images.tabIcons[iconKey] ?? images.tabIcons[tab.key as keyof TabIconUrls] ?? null;
+    // 5개 모두 기본(비포커스) 아이콘을 쓴다. 포커스 아이콘을 채우지 않은 템플릿이 많아
+    // 선택된 탭만 다른 그림으로 떨어지면 오히려 어긋나 보인다. 활성 표시는 투명도와
+    // 라벨 굵기가 맡는다.
+    const icon = images.tabIcons[tab.key as keyof TabIconUrls] ?? null;
     const iconSize = 20;
     const iconY = y + 5;
 
