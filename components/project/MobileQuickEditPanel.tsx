@@ -437,6 +437,15 @@ function ImageControls({
   const compactCardClassName = layoutKind === "wallpaper" ? "w-[68px] shrink-0" : "w-[84px] shrink-0";
   const previewAspectClassName = layoutKind === "wallpaper" ? "aspect-[1/2]" : "aspect-square";
   const orderedCandidates = [...candidates].sort((left, right) => Number(right.source === "default") - Number(left.source === "default"));
+  /**
+   * 말풍선만 가로 페이지, 나머지는 세로 그리드.
+   *
+   * 다른 슬롯은 이미지를 고르면 끝이라 훑어보기 좋은 세로 스크롤이 맞다. 말풍선은 고른 뒤
+   * **아래에서 편집(9-slice·반전)까지 이어진다.** 목록이 세로로 길어지면 고를 때마다 편집 영역이
+   * 화면 밖으로 밀려나므로, 높이를 고정한 페이지에서 옆으로 넘겨 고르고 바로 아래에서 편집한다.
+   *
+   * 그래서 이 분기는 "말풍선 그룹인가"가 아니라 **"아래에 편집 UI가 붙는가"** 를 뜻한다.
+   */
   const usePagedCandidateGrid = candidateGridExpanded && slot.editableInBubbleEditor;
   const candidatePagerItems: Array<{ kind: "upload" } | { kind: "candidate"; candidate: SlotCandidate }> = [
     { kind: "upload" },
