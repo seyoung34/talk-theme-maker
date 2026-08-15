@@ -64,11 +64,35 @@ type ScreenImages = {
   bubbles: Map<string, BubbleAsset>;
 };
 
+/**
+ * 굽기 전에 확인할 것 — 기대한 에셋이 모두 서명됐는가.
+ *
+ * 서명이 빠진 경로는 visual에서 URL 없는 슬롯이 되고, 렌더는 그것을 "이미지 없음"으로 받아들여
+ * 색과 자리표시자만으로 멀쩡히 4장을 완성한다. 그 결과가 업로드되면 갤러리가 **영구히 우선**하므로
+ * 일시적인 서명 실패가 실제 테마와 다른 미리보기로 굳는다.
+ *
+ * 기대한 경로가 아예 없는 경우(업로드 에셋이 없는 템플릿)는 정상이다. 색만으로 구워도 맞다.
+ */
+export function findUnsignedPreviewAssets(expectedPaths: string[], signedUrlByPath: Record<string, string>) {
+  return expectedPaths.filter((path) => !signedUrlByPath[path]);
+}
+
 export async function generatePreviewScreens(visual: TemplatePreviewVisual): Promise<Partial<Record<PreviewScreenId, Blob>>> {
   // 그릴 수 없는 환경(SSR·테스트)에서는 이미지를 받기 전에 끝낸다. 받아 봐야 버린다.
   if (!canRenderPreviewCanvas()) return {};
 
-  const images = await loadScreenImages(visual);
+  const { images, missing } = await loadScreenImages(visual);
+
+  // URL이 있는데 받지 못한 이미지가 하나라도 있으면 굽지 않는다.
+  //
+  // 여기서 굽으면 그 에셋만 빠진 화면이 완성되고, 업로드된 뒤에는 갤러리가 그것을 영구히
+  // 우선한다. 일시적인 다운로드 실패가 실제 테마와 다른 미리보기로 굳는 셈이다.
+  // 굽지 않으면 모달이 원본을 받아 그리는 폴백으로 떨어진다 — 느리지만 정확하다.
+  if (missing.length > 0) {
+    console.warn(`Screen previews skipped; ${missing.length} image(s) could not be loaded.`, missing);
+    return {};
+  }
+
   const result: Partial<Record<PreviewScreenId, Blob>> = {};
 
   for (const id of previewScreenIds) {
@@ -93,18 +117,32 @@ async function renderScreen(id: PreviewScreenId, visual: TemplatePreviewVisual, 
 
 // ---------------------------------------------------------------- 이미지 적재
 
-async function loadScreenImages(visual: TemplatePreviewVisual): Promise<ScreenImages> {
+/**
+ * 화면에 필요한 이미지를 모두 받는다.
+ *
+ * URL이 없는 슬롯은 원래 비어 있는 것이므로 문제가 아니다. **URL이 있는데 받지 못한 것**만
+ * `missing`에 모아 호출부가 굽기를 포기할 수 있게 한다.
+ */
+async function loadScreenImages(visual: TemplatePreviewVisual): Promise<{ images: ScreenImages; missing: string[] }> {
   const tabIconKeys = Object.keys(visual.tabIcons ?? {}) as Array<keyof TabIconUrls>;
+  const missing: string[] = [];
+
+  const track = async (url: string | undefined) => {
+    if (!url) return null;
+    const image = await loadImageOrNull(url);
+    if (!image) missing.push(url);
+    return image;
+  };
 
   // `profile_image_full_1`은 받지 않는다. 프로필 화면이 `profile_image_1`만 쓰기 때문이다.
   const [mainBackground, chatBackground, tabBackground, profile1, profile2, profile3, ...tabIconImages] = await Promise.all([
-    loadImageOrNull(visual.mainBackgroundImage),
-    loadImageOrNull(visual.chatBackgroundImage),
-    loadImageOrNull(visual.tabBackgroundImage),
-    loadImageOrNull(visual.profileImage),
-    loadImageOrNull(visual.profileImage2),
-    loadImageOrNull(visual.profileImage3),
-    ...tabIconKeys.map((key) => loadImageOrNull(visual.tabIcons?.[key])),
+    track(visual.mainBackgroundImage),
+    track(visual.chatBackgroundImage),
+    track(visual.tabBackgroundImage),
+    track(visual.profileImage),
+    track(visual.profileImage2),
+    track(visual.profileImage3),
+    ...tabIconKeys.map((key) => track(visual.tabIcons?.[key])),
   ]);
 
   const tabIcons: ScreenImages["tabIcons"] = {};
@@ -114,8 +152,12 @@ async function loadScreenImages(visual: TemplatePreviewVisual): Promise<ScreenIm
 
   // 프로필이 하나만 있으면 DOM과 같이 그것을 돌려 쓴다.
   const profiles = [profile1, profile2 ?? profile1, profile3 ?? profile1];
+  const { assets: bubbles, missing: missingBubbles } = await loadBubbles(visual);
 
-  return { mainBackground, chatBackground, tabBackground, profiles, tabIcons, bubbles: await loadBubbles(visual) };
+  return {
+    images: { mainBackground, chatBackground, tabBackground, profiles, tabIcons, bubbles },
+    missing: [...missing, ...missingBubbles],
+  };
 }
 
 async function loadBubbles(visual: TemplatePreviewVisual) {
@@ -127,23 +169,27 @@ async function loadBubbles(visual: TemplatePreviewVisual) {
   ];
 
   const assets = new Map<string, BubbleAsset>();
+  const missing: string[] = [];
+
   await Promise.all(
     sources.map(async ({ key, url, slot }) => {
       if (!url) return;
       try {
         const response = await fetch(url);
-        if (!response.ok) return;
+        if (!response.ok) throw new Error(`bubble fetch failed: ${response.status}`);
         const blob = await response.blob();
         // 나인패치 판정은 파일명으로 한다. 서명 URL이라 쿼리를 떼고 본다.
         const fileName = url.split("?")[0].split("#")[0];
         const isNinePatch = fileName.toLowerCase().endsWith(".9.png");
         assets.set(key, await loadNinePatchBlob(blob, `${slot}-bubble${isNinePatch ? ".9" : ""}.png`, slot));
       } catch {
-        // 말풍선 하나가 없으면 단색 캡슐로 떨어진다. 화면 전체를 잃지 않는다.
+        // 단색 캡슐로 떨어뜨리지 않는다. 말풍선은 테마의 핵심이라 빠진 채로 구워 두면
+        // 실제 테마와 다른 미리보기가 굳는다.
+        missing.push(url);
       }
     }),
   );
-  return assets;
+  return { assets, missing };
 }
 
 // ---------------------------------------------------------------- 공용 조각

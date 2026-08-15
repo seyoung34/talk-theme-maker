@@ -9,7 +9,7 @@ import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/pr
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
 import { createSystemTemplatePreviewVisual, previewRoles, tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
-import { generatePreviewScreens } from "@/lib/theme/systemTemplates/screenPreview";
+import { findUnsignedPreviewAssets, generatePreviewScreens } from "@/lib/theme/systemTemplates/screenPreview";
 import type { PreviewScreenId } from "@/lib/theme/systemTemplates/previewScreenData";
 import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 import { assertValidTemplateName } from "@/lib/theme/templateName";
@@ -157,8 +157,14 @@ export const systemTemplateRepository: SystemTemplateRepository = {
     // 화면이 달라진다. 굽는 주체가 운영자 한 명이라 이 왕복은 감당할 수 있다.
     const slots = getThemeSlots(input.platform);
     const pathByRole = collectPreviewPathsByRole(slots, uploadRefs, input.overrides.candidateSelections);
-    const signedUrlByPath = pathByRole.size > 0
-      ? await createAdminThemeAssetSignedUrls(supabase, Array.from(new Set(pathByRole.values()))).catch(() => ({}))
+    const expectedPaths = Array.from(new Set(pathByRole.values()));
+    // 서명이 실패해도 저장 자체는 되돌리지 않는다. 에셋 업로드와 DB 반영은 이미 끝났고,
+    // 미리보기를 못 구운 것은 모달 폴백으로 감당할 수 있다. 대신 아래에서 굽기를 건너뛴다.
+    const signedUrlByPath = expectedPaths.length > 0
+      ? await createAdminThemeAssetSignedUrls(supabase, expectedPaths).catch((signingError) => {
+          console.warn("Preview asset signing failed; screen previews are skipped for this save.", signingError);
+          return {} as Record<string, string>;
+        })
       : {};
     const screenPreviews = await renderAndUploadScreenPreviews({
       supabase,
@@ -171,6 +177,7 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       uploadRefs,
       cardPreviewPath,
       signedUrlByPath,
+      expectedPaths,
     });
 
     const previewMetadata = buildPreviewMetadata({
@@ -313,6 +320,7 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       uploadRefs,
       cardPreviewPath,
       signedUrlByPath,
+      expectedPaths: Array.from(new Set(pathByRole.values())),
       previous: row.preview_metadata?.screenPreviews,
     });
 
@@ -725,6 +733,7 @@ async function renderAndUploadScreenPreviews({
   uploadRefs,
   cardPreviewPath,
   signedUrlByPath,
+  expectedPaths,
   previous,
 }: {
   supabase: ReturnType<typeof createClient>;
@@ -737,8 +746,17 @@ async function renderAndUploadScreenPreviews({
   uploadRefs: RemoteSlotUploads;
   cardPreviewPath?: string;
   signedUrlByPath: Record<string, string>;
+  expectedPaths: string[];
   previous?: Partial<Record<PreviewScreenId, string>>;
 }) {
+  // 서명이 하나라도 빠지면 굽지 않는다. 굽지 않으면 모달이 원본을 받아 그리는 폴백으로
+  // 떨어질 뿐이다 — 느리지만 정확하다. 판정 근거는 findUnsignedPreviewAssets 주석에 있다.
+  const unsignedPaths = findUnsignedPreviewAssets(expectedPaths, signedUrlByPath);
+  if (unsignedPaths.length > 0) {
+    console.warn(`Screen previews skipped; ${unsignedPaths.length} asset(s) could not be signed.`, unsignedPaths);
+    return previous;
+  }
+
   try {
     // 폴백으로 도는 모달 DOM과 같은 함수로 visual을 만든다. 다른 경로로 만들면 구운 이미지와
     // 폴백이 서로 다른 화면이 된다.

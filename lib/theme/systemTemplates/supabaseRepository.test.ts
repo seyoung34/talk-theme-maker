@@ -142,6 +142,20 @@ describe("systemTemplateRepository.regeneratePreviewMetadata", () => {
     expect(metadata.screenPreviews).toEqual(previousScreenPreviews);
   });
 
+  /**
+   * 서명이 빠진 채로 구우면 그 에셋만 없는 화면이 완성되고, 업로드된 뒤에는 갤러리가 그것을
+   * 영구히 우선한다. 일시적인 서명 실패가 실제 테마와 다른 미리보기로 굳는다.
+   * 굽지 않으면 모달이 원본을 받아 그리는 폴백으로 떨어질 뿐이다 — 느리지만 정확하다.
+   */
+  it("에셋 서명이 빠지면 화면을 굽지 않고 이전 경로를 유지한다", async () => {
+    // 서명은 성공했지만 요청한 경로가 결과에 없는 경우.
+    createSignedUrls.mockResolvedValue({ data: [], error: null });
+    const repository = await load(await mainBackgroundSlotId());
+
+    await expect(repository.regeneratePreviewMetadata(variantId)).rejects.toThrow(assetPath);
+    expect(updates).toHaveLength(0);
+  });
+
   it("캔버스를 쓸 수 없어 썸네일이 없으면 업로드 없이 메타만 갱신한다", async () => {
     // SSR/비지원 환경에서는 generateSystemTemplateThumbnail이 null을 돌려준다.
     generateThumbnail.mockResolvedValue(null);
