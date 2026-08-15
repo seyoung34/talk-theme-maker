@@ -12,6 +12,7 @@ import { bakeUserTemplateCardThumbnail } from "@/components/template/userTemplat
 import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload } from "@/lib/theme/project/state";
 import { resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
+import { chatListPreviewRows, chatroomPreviewMessages, friendBirthdayRows, previewScreens, type PreviewTabKey } from "@/lib/theme/systemTemplates/previewScreenData";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
@@ -987,15 +988,7 @@ function TemplateGallerySkeletonCards({ count }: { count: number }) {
   );
 }
 
-// 템플릿 미리보기
-type PreviewScreenId = "friends" | "chats" | "chatroom" | "profile";
-
-const previewScreens: Array<{ id: PreviewScreenId; label: string }> = [
-  { id: "friends", label: "친구" },
-  { id: "chats", label: "채팅목록" },
-  { id: "chatroom", label: "채팅방" },
-  { id: "profile", label: "프로필" },
-];
+// 템플릿 미리보기 — 화면 목록과 예시 데이터는 굽는 쪽과 공유한다(previewScreenData).
 
 /**
  * 화면을 넘기는 좌우 버튼.
@@ -1209,8 +1202,6 @@ function PreviewAdBanner() {
 }
 
 // 하단 탭바 (테마 실제 탭 아이콘 반영)
-type PreviewTabKey = "friends" | "chats" | "now" | "shopping" | "more";
-
 function PreviewTabBar({ visual, active }: { visual: TemplatePreviewVisual; active: PreviewTabKey }) {
   const icons = visual.tabIcons ?? {};
   const tabs: Array<{ key: PreviewTabKey; label: string; icon?: string; badge?: string }> = [
@@ -1245,12 +1236,6 @@ function PreviewTabBar({ visual, active }: { visual: TemplatePreviewVisual; acti
     </div>
   );
 }
-
-const friendBirthdayRows = [
-  { name: "수아", sub: "오늘도 좋은 하루 ☺️" },
-  { name: "정하늘", sub: "새 프로필로 바꿨어요" },
-  { name: "이준서", sub: "여행 다녀왔습니다" },
-];
 
 // 친구메인탭
 function FriendsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
@@ -1311,13 +1296,6 @@ function FriendsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
   );
 }
 
-const chatListPreviewRows = [
-  { name: "수아", message: "콜! 이따 6시에 보자 ㅎㅎ", time: "09:40", unread: 2 },
-  { name: "가족 단톡방", message: "엄마: 저녁 몇 시에 올 거야?", time: "어제", unread: 5 },
-  { name: "정하늘", message: "그 사진 봤어?? 완전 웃기다 ㅋㅋㅋ", time: "어제", unread: 0 },
-  { name: "이준서", message: "내일 회의 자료 공유할게요", time: "화요일", unread: 0 },
-];
-
 // 채팅목록탭
 function ChatsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
   const avatars = [visual.profileImage, visual.profileImage2 ?? visual.profileImage, visual.profileImage3 ?? visual.profileImage];
@@ -1355,15 +1333,6 @@ function ChatsScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
     </div>
   );
 }
-
-// 연속 메시지 두 쌍(you_1→you_2, me_1→me_2)으로 구성해 bubble_me_1/2, bubble_you_1/2 네 슬롯이
-// 모두 보이게 한다. variant 2는 "_2"(연속 메시지 변형) 에셋을 쓴다.
-const chatroomPreviewMessages: Array<{ mine: boolean; variant: 1 | 2; text: string; time: string }> = [
-  { mine: false, variant: 1, text: "오늘 저녁 뭐 먹지 ㅋㅋ", time: "5:41" },
-  { mine: false, variant: 2, text: "떡볶이 어때?", time: "5:41" },
-  { mine: true, variant: 1, text: "콜 좋아 ㅎㅎ", time: "5:42" },
-  { mine: true, variant: 2, text: "6시에 보자!", time: "5:42" },
-];
 
 // 채팅방
 function ChatroomScreenPreview({ visual }: { visual: TemplatePreviewVisual }) {
