@@ -12,7 +12,8 @@ import { bakeUserTemplateCardThumbnail } from "@/components/template/userTemplat
 import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload } from "@/lib/theme/project/state";
 import { resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
-import { chatListPreviewRows, chatroomPreviewMessages, friendBirthdayRows, previewScreens, type PreviewTabKey } from "@/lib/theme/systemTemplates/previewScreenData";
+import { chatListPreviewRows, chatroomPreviewMessages, friendBirthdayRows, previewScreens, type PreviewScreenId, type PreviewTabKey } from "@/lib/theme/systemTemplates/previewScreenData";
+import { getPublicThemeAssetUrl } from "@/lib/theme/remoteAssets";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
@@ -51,6 +52,11 @@ type TemplatePreviewModel = {
   androidLabel: string;
   iosLabel: string;
   visual: TemplatePreviewVisual;
+  /**
+   * 미리 구워 둔 화면 이미지(공개 버킷). 있으면 원본 에셋을 받지 않고 이것만 띄운다.
+   * 없는 화면은 `visual`로 그리는 기존 DOM 렌더로 떨어진다.
+   */
+  screenImages?: Partial<Record<PreviewScreenId, string>>;
   availablePlatforms?: ThemePlatform[];
   note?: string;
   onStart: (platform: ThemePlatform) => void;
@@ -119,6 +125,14 @@ export default function TemplateGalleryClient() {
   useEffect(() => {
     const selected = selectedGalleryTemplate;
     if (selected?.kind !== "system") return;
+
+    // 구워 둔 화면이 4개 다 있으면 원본 에셋을 받을 이유가 없다. 서명도 프리로드도 건너뛴다.
+    // 모달 한 번에 8MB 가까이 나가던 것이 여기서 사라진다.
+    if (hasEveryScreenImage(resolveScreenImages(selected.previewTemplate))) {
+      setDetailPreviewReadyId(selected.id);
+      return;
+    }
+
     let active = true;
     setDetailPreviewReadyId(null);
 
@@ -837,6 +851,7 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
       androidLabel: "Android로 시작",
       iosLabel: "iOS로 시작",
       visual: template.visual,
+      screenImages: resolveScreenImages(template.previewTemplate),
       availablePlatforms: Object.keys(template.variants) as ThemePlatform[],
       note: "템플릿 이미지는 시작 후 내 업로드 이미지로 자유롭게 교체할 수 있습니다.",
       onStart,
@@ -855,6 +870,28 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
     note: "불필요한 샘플 이미지 없이 색상과 직접 업로드 중심으로 시작합니다.",
     onStart,
   };
+}
+
+/**
+ * 구워 둔 화면의 공개 URL.
+ *
+ * 카드 썸네일과 같은 규칙이다 — 공개 버킷이라 서명이 필요 없고, 경로가 화면 id로 고정이라
+ * 다시 구워도 URL이 그대로다. `updatedAt`을 쿼리로 붙여 캐시를 무효화한다.
+ */
+function resolveScreenImages(summary: SystemTemplateSummary): Partial<Record<PreviewScreenId, string>> | undefined {
+  const paths = summary.previewMetadata.screenPreviews;
+  if (!paths) return undefined;
+
+  const entries = previewScreens
+    .map(({ id }) => [id, getPublicThemeAssetUrl(paths[id], summary.updatedAt)] as const)
+    .filter((entry): entry is readonly [PreviewScreenId, string] => Boolean(entry[1]));
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+/** 4화면이 모두 구워져 있으면 원본 에셋을 받을 이유가 없다. */
+function hasEveryScreenImage(screenImages: Partial<Record<PreviewScreenId, string>> | undefined) {
+  return Boolean(screenImages) && previewScreens.every(({ id }) => screenImages?.[id]);
 }
 
 function getGalleryPlatforms(template: GalleryTemplateItem): ThemePlatform[] {
@@ -1011,6 +1048,7 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
   // 배경에서 발생하므로, 눌린 곳을 따로 기억하지 않으면 글자를 긁다가 창이 닫힌다.
   const backdropPressRef = useRef(false);
   const activeScreen = previewScreens[activeScreenIndex];
+  const activeScreenImage = preview.screenImages?.[activeScreen.id];
   const goToPrevScreen = () => setActiveScreenIndex((current) => (current - 1 + previewScreens.length) % previewScreens.length);
   const goToNextScreen = () => setActiveScreenIndex((current) => (current + 1) % previewScreens.length);
   const canStartAndroid = preview.availablePlatforms?.includes("android") ?? true;
@@ -1088,7 +1126,13 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
               </button>
 
               <ModalScreenFrame>
-                {isPreviewLoading ? <ScreenPreviewSkeleton /> : (
+                {isPreviewLoading ? <ScreenPreviewSkeleton /> : activeScreenImage ? (
+                  // 활성 화면만 렌더하므로 브라우저는 지금 보는 한 장만 받는다.
+                  // next/image를 쓰지 않는다 — 이미 굽는 단계에서 표시 크기·WebP로 맞춰 둔 이미지라
+                  // 최적화기를 한 번 더 태울 이득이 없다.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={activeScreenImage} alt={`${preview.title} ${activeScreen.label} 미리보기`} className="object-cover w-full h-full" decoding="async" />
+                ) : (
                   <>
                     {activeScreen.id === "friends" ? <FriendsScreenPreview visual={preview.visual} /> : null}
                     {activeScreen.id === "chats" ? <ChatsScreenPreview visual={preview.visual} /> : null}
