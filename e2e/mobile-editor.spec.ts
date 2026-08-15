@@ -21,7 +21,7 @@ test.describe("모바일 편집기", () => {
     await expect(page.getByRole("button", { name: "테마 다운로드", exact: true })).toBeVisible();
 
     // 편집 시트는 섹션 선택 상태로 접혀 시작한다.
-    await expect(page.getByRole("button", { name: "친구/메인", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "친구·메인", exact: true })).toBeVisible();
   });
 
   test("편집 시트를 펼쳐 슬롯 이미지를 올릴 수 있다", async ({ page }) => {

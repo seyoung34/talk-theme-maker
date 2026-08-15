@@ -12,7 +12,7 @@ import { tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
 import { convertSystemTemplateOverridesByRole } from "@/lib/theme/systemTemplates/roleOverrides";
 import { normalizeLegacyColorOverrides, normalizeLegacyThemeDraft } from "@/lib/theme/project/legacyOverrides";
 import { clearRecoveryDraft, readRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
-import { getSharedUploadPeers } from "@/lib/theme/project/state";
+import { getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import { getUserTemplate } from "@/lib/theme/userTemplates";
 import { getThemeSlots, getThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
@@ -20,7 +20,6 @@ import type { ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } f
 type UseEditorBootstrapOptions = {
   enabled?: boolean;
   hydratePreviewUploads: (uploadRefs: RemoteSlotUploads, slotIds: string[], onProgress: (completed: number, total: number) => void) => Promise<SlotUploads>;
-  hydrateSystemTemplateUploads: (uploadRefs: RemoteSlotUploads) => Promise<SlotUploads>;
   mode: "user" | "admin";
   onRecoveryRestored: (options: RecoveryExportOptions) => void;
   /** 자동 저장 초안이 있을 때 이어할지 사용자에게 묻는다. 답을 받기 전에는 부트스트랩이 진행되지 않는다. */
@@ -54,7 +53,6 @@ type UseEditorBootstrapOptions = {
 export function useEditorBootstrap({
   enabled = true,
   hydratePreviewUploads,
-  hydrateSystemTemplateUploads,
   mode,
   onRecoveryRestored,
   requestAutosaveDecision,
@@ -254,7 +252,11 @@ export function useEditorBootstrap({
           });
           setTemplateId(savedTemplate.baseTemplateId);
           setPlatform(payload.platform);
-          const previewSlotIds = getInitialPreviewSlotIds(savedTemplate.platform, savedTemplate.overrides.uploadRefs);
+          const previewSlotIds = getInitialPreviewSlotIds(
+            savedTemplate.platform,
+            savedTemplate.overrides.uploadRefs,
+            normalizedOverrides.candidateSelections,
+          );
           const progressTotal = Math.max(3, previewSlotIds.length + 2);
           setInitialLoadState(createInitialLoadProgress("미리보기 에셋을 준비하는 중입니다.", 1, progressTotal, previewSlotIds.length ? `${previewSlotIds.length}개 핵심 에셋을 불러옵니다.` : "저장된 색상과 기본 에셋으로 미리보기를 준비합니다."));
           const previewUploads = await hydratePreviewUploads(savedTemplate.overrides.uploadRefs, previewSlotIds, (completed, total) => {
@@ -279,7 +281,6 @@ export function useEditorBootstrap({
           setActiveSystemTemplate({ id: savedTemplate.id, bundleId: savedTemplate.bundleId ?? savedTemplate.id, title: savedTemplate.title, description: savedTemplate.description, tags: savedTemplate.tags, status: savedTemplate.status, visibility: savedTemplate.visibility, pricingType: savedTemplate.pricingType, priceAmount: savedTemplate.priceAmount, creditCost: savedTemplate.creditCost, createdAt: savedTemplate.createdAt });
           setNotice({ tone: "success", message: `${savedTemplate.title} 시스템 템플릿을 불러왔습니다.` });
           setInitialLoadState({ status: "ready" });
-          void hydrateSystemTemplateUploads(savedTemplate.overrides.uploadRefs);
         } catch (error) {
           console.error(error);
           setInitialLoadState({ status: "error", message: "시스템 템플릿 에셋을 불러오는 중 오류가 발생했습니다." });
@@ -385,7 +386,7 @@ export function useEditorBootstrap({
       });
     return () => { active = false; };
   }, [
-    enabled, hydratePreviewUploads, hydrateSystemTemplateUploads, mode, onAutosaveArmed, onAutosaveRestored, onRecoveryRestored,
+    enabled, hydratePreviewUploads, mode, onAutosaveArmed, onAutosaveRestored, onRecoveryRestored,
     requestAutosaveDecision, resumeToken, setActiveGroup, setActiveSection,
     setActiveSystemTemplate, setActiveUserTemplate, setInitialLoadState, setNotice, setPlatform,
     setSelectedSlotId, setSystemCreditCost, setSystemDescription, setSystemPriceAmount, setSystemPricingType,
@@ -405,14 +406,6 @@ function createInitialLoadProgress(message: string, current: number, total: numb
 }
 
 /**
- * 첫 화면에 필요한 최소 에셋.
- *
- * 말풍선 네 슬롯은 업로드를 공유한다. `bubble_me_1`이 고른 업로드가 실제로는 `bubble_you_2`의
- * bucket에 들어 있을 수 있으므로, 말풍선을 하나라도 채우려면 네 peer의 ref를 함께 받아야 한다.
- * owner가 어느 쪽인지는 ref를 받아 봐야 알 수 있어서, 부분 hydration 상태에서 기본 이미지로
- * 조용히 되돌아가는 것보다 네 개를 함께 받는 편이 낫다.
- */
-/**
  * 편집기를 열기 전에 받아 둘 슬롯. 순서가 곧 우선순위다.
  *
  * 탭 아이콘도 포함한다. 편집기는 친구 화면으로 열리고 그 화면 하단에 탭 바가 그대로 보이므로,
@@ -420,10 +413,14 @@ function createInitialLoadProgress(message: string, current: number, total: numb
  * 같은 아이콘을 일부러 뒤로 미루지만(잠깐 보고 닫는 화면이라), 편집기의 첫 화면은 "이 템플릿이
  * 이렇게 생겼다"는 판단 자체가 된다.
  *
- * 개수가 10개 늘어도 `hydratePreviewUploads`가 동시에 받으므로 대기 시간은 슬롯 수에 비례하지 않는다.
- * 크기가 큰 배경과 말풍선을 앞에 두어 동시 실행 자리를 먼저 차지하게 한다.
+ * 공유 그룹 전체를 받지 않는다. 선택 ID는 원격 ref만으로 owner를 찾을 수 있으므로 그 bucket만
+ * hydration한다. 선택이 없는 옛 레코드는 프리뷰 해석과 동일하게 자기 bucket의 첫 파일을 쓴다.
  */
-function getInitialPreviewSlotIds(platform: ThemePlatform, uploadRefs: RemoteSlotUploads) {
+export function getInitialPreviewSlotIds(
+  platform: ThemePlatform,
+  uploadRefs: RemoteSlotUploads,
+  candidateSelections: Record<string, string | undefined>,
+) {
   const slots = getThemeSlots(platform);
   const roleOrder: ThemeResourceRole[] = [
     "chat_background",
@@ -437,7 +434,9 @@ function getInitialPreviewSlotIds(platform: ThemePlatform, uploadRefs: RemoteSlo
   const slotIds = roleOrder.flatMap((role) => {
     const slot = slots.find((candidate) => candidate.role === role);
     if (!slot) return [];
-    return [slot, ...getSharedUploadPeers(slot, slots)].map((entry) => entry.id);
+    const selected = getSelectedSharedSlotEntry(slot, uploadRefs, candidateSelections, slots);
+    if (selected) return [selected.ownerSlotId];
+    return uploadRefs[slot.id]?.length ? [slot.id] : [];
   });
-  return Array.from(new Set(slotIds)).filter((slotId) => Boolean(uploadRefs[slotId]?.length));
+  return Array.from(new Set(slotIds));
 }

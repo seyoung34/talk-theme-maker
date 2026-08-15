@@ -3,7 +3,7 @@ import type { BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemeRe
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { applyDerivedColorTransform, getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
 import type { ImageEditMetadata } from "@/lib/theme/imageEdit";
-import { getUploadAssetKind, type ThemeAssetKind } from "@/lib/theme/assetKind";
+import { getUploadAssetKind } from "@/lib/theme/assetKind";
 
 export const disabledImageCandidateId = "__none__";
 /** 눌림·선택 색을 기준 색 연동으로 되돌리는 후보. 고르면 `colors[slot.id]`를 지운다. */
@@ -330,36 +330,46 @@ export function getSelectedCandidate(
  */
 export const sharedBubbleUploadRoles: readonly ThemeResourceRole[] = ["bubble_me_1", "bubble_me_2", "bubble_you_1", "bubble_you_2"];
 
+export type UserUploadShareGroup = "background" | "tab-icon" | "bubble";
+
+const sharedBackgroundUploadRoles: readonly ThemeResourceRole[] = ["main_background", "chat_background", "passcode_background"];
+
 /**
- * kind별로 공유 범위를 좁히는 예외.
- *
- * 기본은 "같은 플랫폼·같은 kind"지만 말풍선은 그대로 쓸 수 없다. iOS에는 선택 변형
- * (`bubble_*_selected`) 4개가 더 있어서 kind로만 묶으면 peer가 Android 3개, iOS 7개로 갈린다.
- * 그 변형을 공유에 넣을지는 별도 판단이 필요해 지금은 기존 4개로 고정한다.
+ * 관리자와 사용자 업로드는 같은 asset kind 어휘를 쓰되, 공유 가능성까지 kind 하나로 판단하지 않는다.
+ * 관리용 kind에는 스플래시·테마 아이콘·탭 바 9-patch처럼 크기와 출력 방식이 다른 슬롯도 함께
+ * 들어간다. 사용자가 자주 재사용하는 전체 화면 배경·탭 아이콘·기본 말풍선만 좁은 공유 그룹으로
+ * 열어 잘못된 내보내기를 막는다.
  */
-const uploadShareRoleAllowList: Partial<Record<ThemeAssetKind, readonly ThemeResourceRole[]>> = {
-  bubble: sharedBubbleUploadRoles,
-};
+export function getUserUploadShareGroup(slot: ThemeAssetSlot | undefined): UserUploadShareGroup | undefined {
+  if (!slot || !getUploadAssetKind(slot)) return undefined;
+  if (sharedBackgroundUploadRoles.includes(slot.role)) return "background";
+  if (slot.role.startsWith("tab_icon_")) return "tab-icon";
+  if (sharedBubbleUploadRoles.includes(slot.role)) return "bubble";
+  return undefined;
+}
 
 /**
  * 업로드를 공유하는 같은 플랫폼의 다른 슬롯.
  *
- * 같은 kind끼리 묶는다 — 아이콘을 한 번 올리면 다른 아이콘 슬롯에서도 고를 수 있다.
- * 색상 슬롯은 업로드를 받지 않으므로 항상 비어 있다.
+ * 관리자/사용자 분류는 같은 kind를 쓰지만, 실제 공유는 호환성이 확인된 세 그룹으로 제한한다.
+ * 그룹이 없는 슬롯과 색상 슬롯은 항상 비어 있다.
  *
  * 순서는 계약이다. 같은 upload ID가 여러 bucket에 있을 때 어느 것을 owner로 볼지, 후보 목록에
- * 어떤 차례로 나타날지가 이 순서로 결정된다. 허용 목록이 있는 kind는 그 배열 순서를, 나머지는
+ * 어떤 차례로 나타날지가 이 순서로 결정된다. 말풍선과 배경은 아래 배열 순서를, 탭 아이콘은
  * manifest 순서를 따른다. 둘 다 결정적이다.
  */
 export function getSharedUploadPeers(slot: ThemeAssetSlot | undefined, allSlots: ThemeAssetSlot[]): ThemeAssetSlot[] {
   if (!slot) return [];
-  const kind = getUploadAssetKind(slot);
-  if (!kind) return [];
+  const group = getUserUploadShareGroup(slot);
+  if (!group) return [];
 
-  const allowedRoles = uploadShareRoleAllowList[kind];
-  if (allowedRoles) {
-    if (!allowedRoles.includes(slot.role)) return [];
-    return allowedRoles
+  const orderedRoles = group === "bubble"
+    ? sharedBubbleUploadRoles
+    : group === "background"
+      ? sharedBackgroundUploadRoles
+      : undefined;
+  if (orderedRoles) {
+    return orderedRoles
       .map((role) => allSlots.find((candidate) => candidate.role === role && candidate.platform === slot.platform))
       .filter((peer): peer is ThemeAssetSlot => Boolean(peer) && peer!.id !== slot.id);
   }
@@ -367,7 +377,7 @@ export function getSharedUploadPeers(slot: ThemeAssetSlot | undefined, allSlots:
   return allSlots.filter((candidate) => (
     candidate.id !== slot.id
     && candidate.platform === slot.platform
-    && getUploadAssetKind(candidate) === kind
+    && getUserUploadShareGroup(candidate) === group
   ));
 }
 

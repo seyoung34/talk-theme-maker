@@ -18,7 +18,7 @@ import type { SlotUploadEntry } from "@/lib/theme/project/state";
  * 저장 구조(`SlotUploads`)는 슬롯별 bucket을 그대로 두고 **읽을 때만** 공유한다. 그래서
  * "어느 bucket에 실제로 있는가"(owner)를 잃지 않는 것이 이 계약의 핵심이다.
  *
- * 공유 범위는 같은 플랫폼·같은 kind다. 말풍선만 예외로 role 목록이 고정돼 있다.
+ * 관리자/사용자 분류 어휘는 같지만 실제 공유는 전체 화면 배경·탭 아이콘·기본 말풍선으로 제한한다.
  */
 const slots = getThemeSlots("android");
 const me1 = slots.find((slot) => slot.role === "bubble_me_1")!;
@@ -43,15 +43,33 @@ describe("getSharedUploadPeers", () => {
     expect(getSharedUploadPeers(you1, slots).map((slot) => slot.id)).not.toContain(you1.id);
   });
 
-  it("배경은 다른 배경 슬롯과 공유한다", () => {
-    // 예전에는 말풍선만 공유해서 여기가 빈 배열이었다. 이제 같은 kind끼리 묶인다.
-    const peers = getSharedUploadPeers(background, slots);
-    expect(peers.length).toBeGreaterThan(0);
-    expect(peers.every((peer) => peer.platform === background.platform)).toBe(true);
+  it("전체 화면 배경 세 슬롯만 서로 공유한다", () => {
+    expect(getSharedUploadPeers(background, slots).map((peer) => peer.role)).toEqual([
+      "chat_background",
+      "passcode_background",
+    ]);
   });
 
-  it("종류가 다르면 섞이지 않는다", () => {
-    // 배경 업로드가 아이콘 슬롯 후보에 나타나면 목록이 다시 통제 불능이 된다.
+  it("탭 아이콘끼리만 공유하고 같은 icon kind의 테마 아이콘·스플래시는 제외한다", () => {
+    const tabIcon = slots.find((slot) => slot.role === "tab_icon_friends")!;
+    const iconPeers = getSharedUploadPeers(tabIcon, slots);
+    expect(iconPeers.length).toBeGreaterThan(0);
+    expect(iconPeers.every((peer) => peer.role.startsWith("tab_icon_"))).toBe(true);
+    expect(iconPeers.map((peer) => peer.role)).not.toContain("theme_icon");
+    expect(iconPeers.map((peer) => peer.role)).not.toContain("splash");
+  });
+
+  it("같은 관리 kind여도 출력 규격이 다른 슬롯은 공유하지 않는다", () => {
+    const tabBar = slots.find((slot) => slot.role === "tab_background_image")!;
+    const themeIcon = slots.find((slot) => slot.role === "theme_icon")!;
+    const splash = slots.find((slot) => slot.role === "splash")!;
+
+    expect(getSharedUploadPeers(tabBar, slots)).toEqual([]);
+    expect(getSharedUploadPeers(themeIcon, slots)).toEqual([]);
+    expect(getSharedUploadPeers(splash, slots)).toEqual([]);
+  });
+
+  it("공유 그룹이 다르면 섞이지 않는다", () => {
     const tabIcon = slots.find((slot) => slot.role === "tab_icon_friends")!;
     const iconPeers = getSharedUploadPeers(tabIcon, slots);
     expect(iconPeers.map((peer) => peer.role)).not.toContain("main_background");
@@ -84,6 +102,18 @@ describe("getSharedUploadPeers", () => {
       "bubble_you_1",
       "bubble_you_2",
     ]);
+  });
+
+  it("iOS 잠금 배경은 전체 화면 배경과 공유하지만 키패드 이미지는 제외한다", () => {
+    const iosSlots = getThemeSlots("ios");
+    const passcodeBackground = iosSlots.find((slot) => slot.role === "passcode_background")!;
+    const keypadPressed = iosSlots.find((slot) => slot.role === "passcode_keypad_pressed_image")!;
+
+    expect(getSharedUploadPeers(passcodeBackground, iosSlots).map((slot) => slot.role)).toEqual([
+      "main_background",
+      "chat_background",
+    ]);
+    expect(getSharedUploadPeers(keypadPressed, iosSlots)).toEqual([]);
   });
 });
 
