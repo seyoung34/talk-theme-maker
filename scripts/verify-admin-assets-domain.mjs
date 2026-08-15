@@ -35,6 +35,12 @@ async function loadTsModule(path, fileName) {
         if (loaded) return loaded.exports;
         throw new Error("bubbleGeometry.ts must be loaded before adminAssetDomain.ts");
       }
+      // 분류 규칙은 검사 순서가 의미를 가지므로 스텁으로 흉내 내지 않고 실제 모듈을 쓴다.
+      if (id === "@/lib/theme/assetKind") {
+        const loaded = moduleCache.get("assetKind.ts");
+        if (loaded) return loaded.exports;
+        throw new Error("assetKind.ts must be loaded before adminAssetDomain.ts");
+      }
     if (id === "@/lib/supabase/client") return { createClient: () => ({}) };
     if (id === "@/lib/shared/api/http") return { readJsonResponse: async (response) => response.json() };
     if (id === "@/lib/theme/remoteAssets") {
@@ -61,6 +67,7 @@ async function loadTsModule(path, fileName) {
 }
 
 await loadTsModule(new URL("../lib/theme/bubbleGeometry.ts", import.meta.url), "bubbleGeometry.ts");
+await loadTsModule(new URL("../lib/theme/assetKind.ts", import.meta.url), "assetKind.ts");
 await loadTsModule(new URL("../lib/theme/adminAssetDomain.ts", import.meta.url), "adminAssetDomain.ts");
 const exports = await loadTsModule(new URL("../lib/theme/adminAssets.ts", import.meta.url), "adminAssets.ts");
 

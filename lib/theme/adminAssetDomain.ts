@@ -1,9 +1,13 @@
-import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
+import { inferLegacyThemeAssetKind, inferThemeAssetKind, type ThemeAssetKind } from "@/lib/theme/assetKind";
 
-export type AdminAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode" | "passcode_indicator";
+/**
+ * 관리자 에셋의 종류. 사용자 업로드와 같은 어휘라 정의는 `assetKind.ts`에 있다.
+ * 기존 호출부(50여 곳)를 위해 이름만 남긴다.
+ */
+export type AdminAssetKind = ThemeAssetKind;
 export type AdminAssetShape = "square" | "portrait" | "wide" | "transparent" | "ninepatch" | "unknown";
 export type AdminAssetPlatform = ThemePlatform | "all";
 export type AdminAssetTargetKind = "exact_role" | "asset_kind" | "shape_rule";
@@ -333,28 +337,14 @@ export function bubbleAdjustmentToSpec(
   };
 }
 
-export function inferAdminAssetKind(slot: Pick<ThemeAssetSlot, "role" | "group" | "section" | "kind">): AdminAssetKind {
-  if (slot.role.startsWith("launcher_")) return "launcher";
-  if (slot.role === "theme_icon" || slot.role.startsWith("tab_icon_")) return "icon";
-  if (slot.role === "profile_image" || slot.role.startsWith("profile_image_")) return "profile";
-  if (slot.role.startsWith("bubble_")) return "bubble";
-  // 잠금화면 표시(점/아이콘)는 3:4 전체 배경 이미지와 모양·용도가 전혀 달라서(정사각형에
-  // 가까운 작은 아이콘) 배경과 같은 kind를 쓰면 후보가 서로 뒤섞인다 — 반드시 배경보다 먼저 검사한다.
-  if (slot.role.startsWith("passcode_indicator")) return "passcode_indicator";
-  if (slot.role.startsWith("passcode_")) return "passcode";
-  if (slot.group === "background" || slot.role === "tab_background_image") return "background";
-  return "icon";
-}
-
-export function inferLegacyAssetKind(role: ThemeResourceRole): AdminAssetKind {
-  if (role.startsWith("launcher_")) return "launcher";
-  if (role === "theme_icon" || role.startsWith("tab_icon_")) return "icon";
-  if (role === "profile_image" || role.startsWith("profile_image_")) return "profile";
-  if (role.startsWith("bubble_")) return "bubble";
-  if (role.startsWith("passcode_indicator")) return "passcode_indicator";
-  if (role.startsWith("passcode_")) return "passcode";
-  return "background";
-}
+/**
+ * 슬롯 → 종류. 규칙은 `assetKind.ts`가 갖는다.
+ *
+ * 검사 순서가 규칙의 일부라 복제하면 어긋난다. 관리자 화면과 사용자 업로드 공유가 같은 함수를
+ * 써야 같은 이미지가 양쪽에서 같은 종류로 보인다.
+ */
+export const inferAdminAssetKind = inferThemeAssetKind;
+export const inferLegacyAssetKind = inferLegacyThemeAssetKind;
 
 export function isValidBubbleAdjustment(value: AdminBubbleAdjustment): boolean {
   return isValidBubbleSpecLike(value.markers, value.insets, value.stretch);
