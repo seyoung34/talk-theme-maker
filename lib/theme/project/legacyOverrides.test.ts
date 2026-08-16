@@ -152,3 +152,49 @@ describe("normalizeLegacyColorOverrides - 파생 색 연동 복원", () => {
     expect(normalized.bubbleFlipX).toEqual({});
   });
 });
+
+/**
+ * 슬롯에 `autoColorRecipe`가 **나중에 붙는** 경우.
+ *
+ * 저장 시점에는 자동 대상이 아니어서 `getInitialSlotCandidateSelections`가 기본 후보 id를 적어
+ * 뒀다. 그 값을 그대로 두면 새 레시피가 영영 켜지지 않는다 — 입력바가 채팅방 배경을 따라가게
+ * 되면서 실제로 이 상황이 생겼고, 열어 보면 입력바만 옛 기본색에 머물고 거기서 파생되는
+ * 전송·메뉴 색까지 함께 굳었다.
+ */
+describe("normalizeLegacyColorOverrides - 레시피가 나중에 붙은 슬롯", () => {
+  const inputBackground = slotId("android", "chat_input_background_color");
+
+  const normalize = (colors: Record<string, string | undefined>, selections: Record<string, string | undefined>) =>
+    normalizeLegacyColorOverrides("android", colors, selections, context("android"));
+
+  const defaultCandidateId = `${inputBackground}:base`;
+
+  it("기본 후보 id만 적힌 저장본을 자동 연동으로 올린다", () => {
+    const { candidateSelections } = normalize({}, { [inputBackground]: defaultCandidateId });
+
+    expect(candidateSelections[inputBackground]).toBe(autoMainPaletteCandidateId);
+  });
+
+  it("직접 지정한 색이 있으면 손대지 않는다", () => {
+    // `changeColor`는 색을 `colors`에 쓰고 선택은 기본 후보로 되돌린다. 저장된 색이 그 증거다.
+    const { colors, candidateSelections } = normalize(
+      { [inputBackground]: "#123456" },
+      { [inputBackground]: defaultCandidateId },
+    );
+
+    expect(candidateSelections[inputBackground]).toBe(defaultCandidateId);
+    expect(colors[inputBackground]).toBe("#123456");
+  });
+
+  it("팔레트 스와치를 고른 저장본도 손대지 않는다", () => {
+    // 스와치를 고르면 선택 id 자체가 기본 후보가 아니다.
+    const paletteId = `${inputBackground}:palette:#123456`;
+    const { candidateSelections } = normalize({}, { [inputBackground]: paletteId });
+
+    expect(candidateSelections[inputBackground]).toBe(paletteId);
+  });
+
+  it("선택이 아예 없던 저장본은 기존대로 자동 연동으로 올린다", () => {
+    expect(normalize({}, {}).candidateSelections[inputBackground]).toBe(autoMainPaletteCandidateId);
+  });
+});

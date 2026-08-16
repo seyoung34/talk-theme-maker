@@ -1,4 +1,4 @@
-import { disabledImageCandidateId, getResolvedColor, type SlotCandidateSelections, type SlotColors } from "@/lib/theme/project/state";
+import { disabledImageCandidateId, getDefaultSelectedCandidate, getResolvedColor, type SlotCandidateSelections, type SlotColors } from "@/lib/theme/project/state";
 import { normalizeThemeDraft, type PersistedThemeDraft, type ThemeDraft } from "@/lib/theme/project/draft";
 import type { ThemePlatform } from "@/lib/theme/types";
 import { autoMainPaletteCandidateId, legacyAutoMainSurfaceCandidateId } from "@/lib/theme/autoColor";
@@ -44,7 +44,8 @@ export function normalizeLegacyColorOverrides(
       delete candidateSelections[slotId];
     }
   }
-  restoreMissingAutoSelections(candidateSelections, context.slots);
+  // `nextColors`를 넘긴다. 위에서 기계가 쓴 값으로 판정돼 지워진 슬롯은 여기서도 "손대지 않은 것"이다.
+  restoreMissingAutoSelections(nextColors, candidateSelections, context);
   return {
     colors: nextColors,
     candidateSelections,
@@ -52,14 +53,31 @@ export function normalizeLegacyColorOverrides(
 }
 
 /**
- * 예전 저장본은 자동 색상 슬롯을 후보 선택에 기록하지 않았다. 그 상태를 그대로 읽으면
- * 기본 후보로 보이기는 하지만 자동 색상 hook이 연동 대상으로 인식하지 못한다. 후보 선택이
- * 없는 자동 슬롯의 색상은 당시 자동 맞춤이 저장해 둔 스냅샷일 수 있으므로, 자동 후보를
- * 복원해 다음 배경 변경부터 다시 계산하게 한다. 후보를 명시적으로 고른 슬롯은 건드리지 않는다.
+ * 자동 색상 슬롯의 연동 표시를 복원한다. 두 가지 저장본이 대상이다.
+ *
+ * **① 후보 선택이 없는 저장본.** 예전에는 자동 색상 슬롯을 후보 선택에 기록하지 않았다. 그대로
+ * 읽으면 기본 후보로 보이지만 자동 색상 hook이 연동 대상으로 인식하지 못한다.
+ *
+ * **② 기본 후보 id가 적힌 저장본.** 슬롯에 레시피가 **나중에 붙은** 경우다. 저장 시점에는 자동
+ * 대상이 아니어서 `getInitialSlotCandidateSelections`가 기본 후보 id를 적어 뒀고, 그 값이
+ * 남아 있으면 새 레시피가 영영 켜지지 않는다. 입력바가 채팅방 배경을 따라가게 되면서 실제로
+ * 이 상황이 생겼다 — 열어 보면 입력바만 옛 기본색에 머물고, 거기서 파생되는 전송·메뉴 색도
+ * 함께 굳는다.
+ *
+ * **직접 고른 색은 건드리지 않는다.** 색을 직접 지정하면 `colors[slot.id]`에 값이 남는다
+ * (`changeColor`가 그렇게 쓰고, 선택은 기본 후보로 되돌린다). 그래서 ②의 조건에 "저장된 색이
+ * 없을 것"을 함께 건다. 팔레트 스와치를 고른 경우는 선택 id 자체가 기본 후보가 아니라 걸리지 않는다.
  */
-function restoreMissingAutoSelections(selections: SlotCandidateSelections, slots: ThemeAssetSlot[]) {
+function restoreMissingAutoSelections(colors: SlotColors, selections: SlotCandidateSelections, { templateId, template, slots }: LegacyOverrideContext) {
   for (const slot of slots) {
-    if (!slot.autoColorRecipe || selections[slot.id] !== undefined) continue;
+    if (!slot.autoColorRecipe) continue;
+    const selected = selections[slot.id];
+    if (selected === undefined) {
+      selections[slot.id] = autoMainPaletteCandidateId;
+      continue;
+    }
+    if (selected !== getDefaultSelectedCandidate(slot, templateId, template)?.id) continue;
+    if (colors[slot.id]) continue;
     selections[slot.id] = autoMainPaletteCandidateId;
   }
 }
