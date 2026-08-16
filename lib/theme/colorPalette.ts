@@ -1,5 +1,5 @@
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
-import { themeColorToCss } from "@/lib/theme/color";
+import { themeColorRgbHex } from "@/lib/theme/color";
 
 export type ImageColorPalette = {
   representative: string;
@@ -8,6 +8,29 @@ export type ImageColorPalette = {
   bottom: string;
   accent: string;
 };
+
+/**
+ * 반투명한 부분만 배경색과 섞고, **알파는 그대로 남긴다.**
+ *
+ * 예전에는 캔버스를 배경색으로 칠한 뒤 이미지를 그렸다. 그러면 모든 픽셀이 불투명해져서
+ * 아래 집계 함수들의 `alpha < 0.15` 걸러내기가 무력해지고, **투명한 여백이 배경색 표로 전부
+ * 집계된다.** 말풍선에서 이게 치명적이었다 — 나인패치 아트보드는 실제 말풍선보다 훨씬 커서
+ * (빌더 기본값이 250×230 캔버스에 95×80 본체, 즉 13%) 평균의 대부분이 채팅방 배경이 됐다.
+ * 그 평균으로 글자색을 정하니 "말풍선이 아니라 채팅방 배경에 대비되는 색"이 나왔다.
+ *
+ * 배경을 섞는 것 자체는 필요하다. 반투명한 말풍선은 뒤에 깔린 것과 합쳐진 색으로 보이기
+ * 때문이다. 다만 그 판정에 **완전히 투명한 자리가 한 표를 행사하면 안 된다.**
+ */
+export function compositeOverBackground(pixels: Uint8ClampedArray, backgroundColor: string) {
+  const background = hexRgb(themeColorRgbHex(backgroundColor));
+  for (let index = 0; index < pixels.length; index += 4) {
+    const alpha = pixels[index + 3] / 255;
+    if (alpha >= 1) continue;
+    pixels[index] = pixels[index] * alpha + background.red * (1 - alpha);
+    pixels[index + 1] = pixels[index + 1] * alpha + background.green * (1 - alpha);
+    pixels[index + 2] = pixels[index + 2] * alpha + background.blue * (1 - alpha);
+  }
+}
 
 export async function extractThemeImagePalette(file: ThemeProjectFile, options: { backgroundColor?: string } = {}): Promise<ImageColorPalette> {
   const blob = file.file ?? (file.sourceUrl ? await fetch(file.sourceUrl).then((response) => {
@@ -25,12 +48,9 @@ export async function extractThemeImagePalette(file: ThemeProjectFile, options: 
     canvas.height = height;
     const context = canvas.getContext("2d", { willReadFrequently: true });
     if (!context) throw new Error("이미지 색상을 분석할 수 없습니다.");
-    if (options.backgroundColor) {
-      context.fillStyle = themeColorToCss(options.backgroundColor);
-      context.fillRect(0, 0, width, height);
-    }
     context.drawImage(bitmap, 0, 0, width, height);
     const pixels = context.getImageData(0, 0, width, height).data;
+    if (options.backgroundColor) compositeOverBackground(pixels, options.backgroundColor);
     const topRows = Math.max(1, Math.ceil(height * 0.15));
     const bottomStart = Math.max(0, height - topRows);
     const average = averageColor(pixels, width, height);
