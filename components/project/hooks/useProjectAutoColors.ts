@@ -22,6 +22,23 @@ type UseProjectAutoColorsOptions = {
   templateId: ThemeTemplateId;
 };
 
+/**
+ * 메인 배경색의 자동 연동을 끊고 현재 값으로 굳힐 때인가.
+ *
+ * **이미지를 지운 순간에만** 해당한다. 이미지가 없으면 따라갈 대상이 없어서, 연동을 남겨 두면
+ * 색이 템플릿 기본값으로 튄다 — 그래서 마지막으로 계산된 색을 고정한다.
+ *
+ * "이미지가 없다"만 보면 안 된다. 기본 템플릿에는 배경 이미지가 없어서 편집기를 열자마자
+ * 조건이 성립해 버렸고, 그 결과 아직 아무것도 안 한 사용자의 `main_background_color`가 먼저
+ * 끊겼다. 그 뒤 배경을 올리면 이 슬롯만 연동에서 빠진 채 대상에는 다시 들어가서, 벌크 버튼이
+ * "끊긴 연동 모두 다시 잇기"로 켜졌다. 더 나쁜 것은 `buildMainPaletteRecommendations`가 이
+ * 슬롯의 연동 여부로 기준 배경을 고르기 때문에, 글자색이 올린 이미지가 아니라 굳어 버린
+ * 템플릿 색을 기준으로 계산됐다는 점이다 — 어두운 배경을 올려도 글자가 어두운 채로 남았다.
+ */
+export function shouldReleaseAutoBackgroundLink({ hasImage, hadImage, isAuto }: { hasImage: boolean; hadImage: boolean; isAuto: boolean }) {
+  return !hasImage && hadImage && isAuto;
+}
+
 export function useProjectAutoColors({
   activeTemplate,
   analysis,
@@ -34,6 +51,8 @@ export function useProjectAutoColors({
   templateId,
 }: UseProjectAutoColorsOptions) {
   const mainBackgroundFile = useMemo(() => findBestFile(analysis, "main_background"), [analysis]);
+  // 배경 이미지가 있었는지. 아래 연동 해제가 "지웠다"와 "처음부터 없었다"를 구분하는 데 쓴다.
+  const hadMainBackgroundRef = useRef(false);
   const chatBackgroundFile = useMemo(() => findBestFile(analysis, "chat_background"), [analysis]);
   const passcodeBackgroundFile = useMemo(() => findBestFile(analysis, "passcode_background"), [analysis]);
   const mainBackgroundColorSlot = useMemo(() => slots.find((slot) => slot.role === "main_background_color"), [slots]);
@@ -117,8 +136,14 @@ export function useProjectAutoColors({
   }, [bubblePalettePending, candidateSelections, chatPalettePending, mainColorRecommendations, mainPalettePending, passcodePalettePending, setColors, slots]);
 
   useEffect(() => {
-    if (mainBackgroundFile || !mainBackgroundColorSlot) return;
-    if (candidateSelections[mainBackgroundColorSlot.id] !== autoMainPaletteCandidateId) return;
+    const hadMainBackground = hadMainBackgroundRef.current;
+    hadMainBackgroundRef.current = Boolean(mainBackgroundFile);
+    if (!mainBackgroundColorSlot) return;
+    if (!shouldReleaseAutoBackgroundLink({
+      hasImage: Boolean(mainBackgroundFile),
+      hadImage: hadMainBackground,
+      isAuto: candidateSelections[mainBackgroundColorSlot.id] === autoMainPaletteCandidateId,
+    })) return;
     setColors((current) => current[mainBackgroundColorSlot.id] ? current : { ...current, [mainBackgroundColorSlot.id]: resolvedMainBackground });
     setCandidateSelections((current) => {
       const next = { ...current };
