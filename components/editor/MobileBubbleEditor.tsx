@@ -345,6 +345,7 @@ export function MobileBubbleEditor({
                 <p className="font-black text-[#0f172a]">편집 안내</p>
                 <p className="mt-1.5"><span className="font-bold text-[#0284c7]">파란 교차점</span>은 말풍선이 늘어나는 위치입니다.</p>
                 <p className="mt-1"><span className="font-bold text-[#059669]">초록 테두리</span>는 글자가 들어갈 여백입니다.</p>
+                <p className="mt-1"><span className="font-bold text-[#64748b]">회색 점선</span>은 이미지의 경계입니다.</p>
                 <Popover.Arrow className="fill-white" width={14} height={7} />
               </Popover.Content>
             </Popover.Portal>
@@ -407,6 +408,12 @@ function BubbleGeometryOverlay({
   const contentDot = (kind: DragKind) => <span className={`rounded-full border-2 border-white bg-[#10b981] shadow-[0_2px_8px_rgba(16,185,129,0.35)] transition-[width,height,box-shadow] duration-150 ${activeKind === kind ? "size-[18px] shadow-[0_4px_12px_rgba(16,185,129,0.5)]" : "size-3.5"}`} aria-hidden="true" />;
 
   return <div className="pointer-events-none absolute inset-0">
+    {/*
+      이미지 경계. 배경이 체커보드라 투명한 여백이 넓은 말풍선은 어디까지가 이미지인지 보이지
+      않는다. 그러면 글자 여백을 이미지 밖으로 끌어낸 것인지, 늘어나는 선이 이미지의 어디쯤을
+      지나는지 판단할 기준이 없다. 나인패치의 1px 마커 테두리는 뺀 실제 그림 영역을 그린다.
+    */}
+    <span className="absolute border-2 border-dashed border-slate-400/80" style={{ left: artwork.offsetX * scale, top: artwork.offsetY * scale, width: artwork.width * scale, height: artwork.height * scale }} />
     <span className="absolute w-0.5 -translate-x-1/2 bg-sky-500/90" style={{ left: stretchX, top: artwork.offsetY * scale, height: artwork.height * scale }} />
     <span className="absolute h-0.5 -translate-y-1/2 bg-sky-500/90" style={{ left: artwork.offsetX * scale, top: stretchY, width: artwork.width * scale }} />
     <span className="absolute border-2 border-emerald-500/90" style={{ left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) }} />
