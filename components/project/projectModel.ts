@@ -167,12 +167,29 @@ export function buildSlotCandidates(
   const adminAssetIds = new Set(adminAssets.map((asset) => asset.id));
   const adminAssetsById = new Map(adminAssets.map((asset) => [asset.id, asset]));
 
+  /**
+   * 색상 슬롯의 선택 표시는 **후보 id가 아니라 색으로** 판정한다.
+   *
+   * 색상 슬롯은 실제 값이 색 하나뿐이고, 그 색을 나타내는 후보가 여럿이다 — 기본값 카드와
+   * 팔레트 스와치가 같은 색을 가리킬 수 있다. id로 보면 두 가지가 동시에 어긋난다. 배경에서
+   * 자동 계산된 색을 쓰는 동안에도 `getSelectedCandidate`가 기본 후보를 돌려주기 때문에
+   * **기본값에 파란 링이 계속 붙고**, 정작 지금 색과 같은 팔레트 스와치에는 아무 표시가 없다.
+   */
+  const resolvedColor = slot.kind === "color"
+    ? getResolvedColor(slot, colors, selections, templateId, template, allSlots)
+    : undefined;
+  const matchesResolvedColor = (colorValue?: string) => (
+    Boolean(resolvedColor && colorValue && normalizeColor(colorValue) === normalizeColor(resolvedColor))
+  );
+
   const baseItems = candidates.map((candidate) => ({
     id: candidate.id,
     title: candidate.label,
-    status: slot.kind === "color" ? (candidate.colorValue ?? getResolvedColor(slot, colors, selections, templateId, template, allSlots) ?? "값 없음").toUpperCase() : candidate.note ?? slot.note,
+    status: slot.kind === "color" ? (candidate.colorValue ?? resolvedColor ?? "값 없음").toUpperCase() : candidate.note ?? slot.note,
     active: selected?.id === candidate.id,
-    selected: selected?.id === candidate.id && !selectedUpload,
+    selected: slot.kind === "color"
+      ? matchesResolvedColor(candidate.colorValue)
+      : selected?.id === candidate.id && !selectedUpload,
     source: candidate.isDefault || candidate.id === disabledImageCandidateId ? ("default" as const) : ("creator" as const),
     previewUrl: candidate.previewUrl ?? candidate.assetUrl,
     colorValue: candidate.colorValue,
@@ -386,15 +403,19 @@ function buildPaletteCandidates(
 
   return Array.from(map.values())
     .sort((a, b) => b.count - a.count || a.color.localeCompare(b.color))
-    .map((item) => ({
-      id: `${activeSlot.id}:palette:${item.color}`,
-      title: item.color.toUpperCase(),
-      status: `${item.count}개 슬롯에서 사용 중`,
-      active: normalizeColor(currentColor) === normalizeColor(item.color),
-      selected: false,
-      source: "palette" as const,
-      colorValue: item.color,
-    }));
+    .map((item) => {
+      // 지금 이 슬롯의 색과 같은 스와치가 선택 상태다. 기본값 카드와 마찬가지로 색으로 판정한다.
+      const matchesCurrent = normalizeColor(currentColor) === normalizeColor(item.color);
+      return {
+        id: `${activeSlot.id}:palette:${item.color}`,
+        title: item.color.toUpperCase(),
+        status: `${item.count}개 슬롯에서 사용 중`,
+        active: matchesCurrent,
+        selected: matchesCurrent,
+        source: "palette" as const,
+        colorValue: item.color,
+      };
+    });
 }
 
 function normalizeColor(value?: string) {

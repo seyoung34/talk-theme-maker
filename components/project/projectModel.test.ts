@@ -50,6 +50,57 @@ describe("isRemovableUploadCandidate", () => {
   });
 });
 
+/**
+ * 색상 슬롯의 실제 값은 색 하나뿐인데 그 색을 나타내는 후보는 여럿이다 — 기본값 카드와 팔레트
+ * 스와치가 같은 색을 가리킬 수 있다. 그래서 선택 표시를 후보 id로 판정하면 두 가지가 동시에
+ * 어긋난다. 배경에서 자동 계산된 색을 쓰는 동안에도 기본값에 파란 링이 붙고, 정작 지금 색과
+ * 같은 팔레트 스와치에는 아무 표시가 없다.
+ */
+describe("색상 후보 선택 표시", () => {
+  const slots = getThemeSlots("android");
+  const template = getThemeTemplate("basic");
+  const chatBackground = slots.find((slot) => slot.role === "chat_background_color")!;
+  const selections = getInitialSlotCandidateSelections(slots, "basic", template);
+
+  const build = (colors: Record<string, string | undefined>) =>
+    buildSlotCandidates(chatBackground, {}, colors, selections, "basic", template, slots);
+
+  it("기본값과 다른 색을 쓰는 동안에는 기본값에 표시가 붙지 않는다", () => {
+    const base = build({ [chatBackground.id]: "#123456" }).find((candidate) => candidate.source === "default")!;
+
+    expect(base.colorValue!.toUpperCase()).not.toBe("#123456");
+    expect(base.selected).toBe(false);
+  });
+
+  it("기본값과 같은 색이면 기본값에 표시가 붙는다", () => {
+    const defaultColor = getDefaultColor(chatBackground, "basic", template)!;
+    const base = build({ [chatBackground.id]: defaultColor }).find((candidate) => candidate.source === "default")!;
+
+    expect(base.selected).toBe(true);
+  });
+
+  it("지금 색과 같은 팔레트 스와치에 표시가 붙는다", () => {
+    // 팔레트는 테마에서 쓰이는 색을 모은다. 다른 슬롯이 쓰는 색을 이 슬롯에도 넣으면 스와치가 생긴다.
+    const title = slots.find((slot) => slot.role === "main_title_color")!;
+    const shared = getDefaultColor(title, "basic", template)!;
+    const palette = build({ [chatBackground.id]: shared }).filter((candidate) => candidate.source === "palette");
+
+    const match = palette.find((candidate) => candidate.colorValue!.toUpperCase() === shared.toUpperCase());
+    expect(match?.selected).toBe(true);
+    expect(palette.filter((candidate) => candidate.selected)).toHaveLength(1);
+  });
+
+  it("이미지 슬롯은 그대로 선택 id로 판정한다", () => {
+    // 이미지 슬롯은 후보마다 실제 파일이 달라서 id 비교가 맞다. 색상 규칙이 새면 안 된다.
+    const bubble = slots.find((slot) => slot.role === "bubble_me_1")!;
+    const uploads = { [bubble.id]: [{ id: "u1", file: new File(["a"], "a.png"), source: "user" as const }] };
+    const candidates = buildSlotCandidates(bubble, uploads, {}, { [bubble.id]: "u1" }, "basic", template, slots);
+
+    expect(candidates.find((candidate) => candidate.id === "u1")?.selected).toBe(true);
+    expect(candidates.find((candidate) => candidate.source === "default")?.selected).toBe(false);
+  });
+});
+
 describe("시스템 템플릿과 추천 에셋 후보 병합", () => {
   const slots = getThemeSlots("android");
   const slot = slots.find((candidate) => candidate.role === "bubble_you_1")!;
