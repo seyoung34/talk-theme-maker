@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { BubbleBuilderDialog, getBubblePreviewScale } from "@/components/editor/BubbleBuilderDialog";
+import { BubbleBuilderDialog, getBubblePreviewLayout, getBubblePreviewScale } from "@/components/editor/BubbleBuilderDialog";
 import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 
 const spec: BubbleFamilyDesignSpec = {
@@ -55,6 +55,80 @@ describe("BubbleBuilderDialog decoration input", () => {
   });
 });
 
+describe("BubbleBuilderDialog decoration warnings", () => {
+  it("warns when a decoration sits across the stretch line", () => {
+    renderDialog();
+    // 미리 들어 있는 장식은 오른쪽 위에 몰려 있어 늘어나는 선을 지나가지 않는다.
+    expect(screen.queryByText(/늘어나는 선/)).toBeNull();
+
+    // 새로 추가한 장식은 캔버스 가운데에서 시작하므로 선을 지나간다.
+    fireEvent.paste(window, { clipboardData: { files: [new File(["image"], "centered.png", { type: "image/png" })] } });
+
+    expect(screen.getAllByText(/늘어나는 선/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("늘어남").length).toBeGreaterThan(0);
+  });
+
+  it("no longer offers a one-click reposition", () => {
+    renderDialog();
+
+    expect(screen.queryByRole("button", { name: "안전하게 이동" })).toBeNull();
+  });
+
+  /**
+   * 겹침 판정이 보는 것은 이미지의 사각형이라 실제로 걸친 것이 투명한 여백뿐일 수 있고,
+   * 글자 위에 무늬를 얹는 것처럼 일부러 겹치는 디자인도 있다. 그래서 막지 않는다.
+   */
+  it("keeps apply available while warnings are showing", () => {
+    renderDialog();
+    fireEvent.paste(window, { clipboardData: { files: [new File(["image"], "centered.png", { type: "image/png" })] } });
+
+    expect(screen.getAllByText(/늘어나는 선/).length).toBeGreaterThan(0);
+    for (const button of screen.getAllByRole("button", { name: "적용하기" })) {
+      expect(button).toBeEnabled();
+    }
+  });
+});
+
+/**
+ * 위저드였을 때는 `적용하기`가 마지막 단계에만 있어서, 색만 바꾸려는 사람도 `다음`을 눌러야 했다.
+ */
+describe("BubbleBuilderDialog tabs", () => {
+  it("shows apply without walking through steps", () => {
+    renderDialog();
+
+    expect(screen.getAllByRole("button", { name: "적용하기" }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "다음" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "이전" })).toBeNull();
+  });
+
+  it("opens on the bubble tab and keeps both tabs reachable", () => {
+    renderDialog();
+
+    expect(screen.getByRole("tab", { name: "말풍선" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "꾸미기" })).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("offers body size as a few choices instead of a slider", () => {
+    renderDialog();
+
+    for (const option of ["작게", "기본", "크게"]) {
+      expect(screen.getAllByRole("button", { name: option }).length).toBeGreaterThan(0);
+    }
+    expect(screen.getAllByRole("button", { name: "기본", pressed: true }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("BubbleBuilderDialog frame handles", () => {
+  it("exposes a labelled handle on each corner and each edge of the frame", () => {
+    renderDialog();
+
+    // 변 가운데 손잡이가 있어야 한 축만 늘려 직사각형 프레임을 만들 수 있다.
+    for (const handle of ["왼쪽 위", "오른쪽 위", "왼쪽 아래", "오른쪽 아래", "위", "아래", "왼쪽", "오른쪽"]) {
+      expect(screen.getAllByRole("button", { name: `프레임 크기 조절 (${handle})` }).length).toBeGreaterThan(0);
+    }
+  });
+});
+
 describe("BubbleBuilderDialog preview scale", () => {
   it("keeps the desktop scale when the container is wide enough", () => {
     expect(getBubblePreviewScale(420, 274)).toBe(1.35);
@@ -66,6 +140,37 @@ describe("BubbleBuilderDialog preview scale", () => {
 
   it("keeps a usable minimum scale for very narrow containers", () => {
     expect(getBubblePreviewScale(100, 274)).toBe(0.65);
+  });
+});
+
+/**
+ * 모서리 손잡이가 실제로 무언가를 바꾸는지는 이 계산에 달려 있다. 배율을 현재 캔버스 폭으로 잡으면
+ * 남는 폭에 맞춰 되돌아와 화면 위 상자 크기가 늘 같아지고, 손잡이를 끌어도 아무 일이 없어 보인다.
+ */
+describe("BubbleBuilderDialog preview layout", () => {
+  const maxCanvas = { width: 350, height: 322 };
+
+  it("grows the stage as the frame grows while the outer box stays put", () => {
+    const small = getBubblePreviewLayout({ width: 250, height: 230 }, maxCanvas, 280);
+    const large = getBubblePreviewLayout({ width: 350, height: 322 }, maxCanvas, 280);
+
+    expect(large.stageWidth).toBeGreaterThan(small.stageWidth);
+    expect(large.stageHeight).toBeGreaterThan(small.stageHeight);
+    expect(small.boundsWidth).toBe(large.boundsWidth);
+    expect(small.boundsHeight).toBe(large.boundsHeight);
+  });
+
+  it("keeps the largest frame inside the available width", () => {
+    const layout = getBubblePreviewLayout(maxCanvas, maxCanvas, 280);
+
+    expect(layout.stageWidth).toBeLessThanOrEqual(280);
+    expect(layout.boundsWidth).toBeLessThanOrEqual(280);
+  });
+
+  it("leaves room around a default-size frame for the corner handles", () => {
+    const layout = getBubblePreviewLayout({ width: 250, height: 230 }, maxCanvas, 280);
+
+    expect(layout.boundsWidth - layout.stageWidth).toBeGreaterThan(16);
   });
 });
 
