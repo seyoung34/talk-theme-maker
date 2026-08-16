@@ -45,6 +45,7 @@ export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context
 
   const chatImagePalette = context.chatImageActive ? context.chatPalette : null;
   const chatBackground = chatImagePalette?.average ?? themeColorRgbHex(context.currentChatBackground, currentBackground);
+  const chatInputBackground = chatImagePalette?.bottom ?? chatBackground;
 
   // 메인 배경과 달리 "현재 값 유지"가 아니라 **메인 배경을 계속 따라간다** — 잠금화면 이미지를
   // 준비하지 않은 사용자가 배경을 나중에 바꿔도 잠금화면이 함께 갱신되게 하기 위해서다.
@@ -69,6 +70,10 @@ export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context
     "accent-surface": accentSurface,
     "accent-surface-pressed": mixThemeColors(secondary, accent, 0.22),
     "chat-background-average": chatBackground,
+    // 입력바는 채팅방 화면 **하단**에 붙어 있다. 탭바가 메인 배경의 아래쪽 색을 쓰는 것과 같은
+    // 이유로 평균이 아니라 하단을 따라간다 — 위아래 색이 다른 이미지에서 평균을 쓰면 입력바만
+    // 배경과 어긋난다. 이미지가 없으면 채팅방 배경색으로 떨어진다.
+    "chat-background-bottom": chatInputBackground,
     "passcode-background-average": passcodeBackground,
   };
 

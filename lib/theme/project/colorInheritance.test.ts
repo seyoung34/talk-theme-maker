@@ -181,6 +181,129 @@ describe("파생 규칙 그래프", () => {
   });
 });
 
+/**
+ * 입력바도 잠금화면과 같은 구조다 — 배경 하나가 recipe를 갖고, 나머지가 거기서 체이닝된다.
+ *
+ * 여기 오기 전까지 입력바 슬롯은 전부 고정 기본값이라 채팅방 배경을 무엇으로 바꾸든 혼자 남았다.
+ * `slotContrast.ts`는 이미 이 슬롯들을 "입력창 배경 위"로 판정해 경고만 내고 있었다.
+ */
+describe("입력바 — 채팅방 배경 하단에서 체이닝된다", () => {
+  const inputBackground = bySlotRole("chat_input_background_color");
+  const inputText = bySlotRole("chat_input_text_color");
+  const menuIcon = bySlotRole("chat_menu_icon_color");
+  const menuButton = bySlotRole("chat_menu_button_color");
+  const sendButton = bySlotRole("chat_send_button_color");
+  const sendIcon = bySlotRole("chat_send_icon_color");
+
+  it("입력바 배경이 채팅방 배경 하단을 따라간다", () => {
+    // 평균이 아니라 하단이다. 위아래 색이 다른 이미지에서 평균을 쓰면 입력바만 어긋난다.
+    expect(inputBackground.autoColorRecipe).toBe("chat-background-bottom");
+    expect(getColorFallbackRole("chat_input_background_color")).toBeUndefined();
+  });
+
+  it("입력 글자와 메뉴 아이콘이 배경을 따라 뒤집힌다", () => {
+    const onLight = resolve(inputText, { [inputBackground.id]: "#FFFFFF" })!;
+    const onDark = resolve(inputText, { [inputBackground.id]: "#101010" })!;
+
+    expect(themeColorContrast(onLight, "#FFFFFF")).toBeGreaterThanOrEqual(4.5);
+    expect(themeColorContrast(onDark, "#101010")).toBeGreaterThanOrEqual(4.5);
+    expect(onLight).not.toBe(onDark);
+  });
+
+  it("메뉴 아이콘은 본문 글자보다 흐리다", () => {
+    // 둘 다 readable-foreground면 위계가 사라진다. muted-foreground를 따로 둔 이유다.
+    const text = resolve(inputText, { [inputBackground.id]: "#FFFFFF" })!;
+    const icon = resolve(menuIcon, { [inputBackground.id]: "#FFFFFF" })!;
+
+    expect(icon).not.toBe(text);
+    expect(themeColorContrast(icon, "#FFFFFF")).toBeLessThan(themeColorContrast(text, "#FFFFFF"));
+  });
+
+  /**
+   * 입력바는 한 덩어리로 보여야 한다. 구분은 바탕이 아니라 그 위에 얹힌 아이콘이 진다.
+   *
+   * 전송 버튼에 채도 있는 색을 자동으로 넣어 봤더니, 채팅방 배경 이미지가 없는 테마에서
+   * 템플릿 강조색으로 떨어져 파스텔 톤 위에 검은 알약이 얹혔다. 상용 테마가 강조색을 쓰는 것은
+   * 맞지만 그건 디자이너가 고른 값이지 산식으로 낼 수 있는 값이 아니다.
+   */
+  it("메뉴 버튼과 전송 버튼 바탕이 입력바와 같은 색이다", () => {
+    const iosMenuButton = iosSlots.find((slot) => slot.role === "chat_button_background_color")!;
+    const iosInput = iosSlots.find((slot) => slot.role === "chat_input_background_color")!;
+
+    for (const bar of ["#F1F0D9", "#FFFCC0", "#101010"]) {
+      expect(resolve(menuButton, { [inputBackground.id]: bar })).toBe(bar);
+      expect(resolve(sendButton, { [inputBackground.id]: bar })).toBe(bar);
+      // iOS는 메뉴 버튼 바탕 role 이름이 다르다. 한쪽만 고치면 플랫폼끼리 어긋난다.
+      expect(getResolvedColor(iosMenuButton, { [iosInput.id]: bar }, iosSelections, "basic", template, iosSlots)).toBe(bar);
+    }
+  });
+
+  it("전송 아이콘은 입력바가 아니라 전송 버튼 위에서 읽힌다", () => {
+    // 레퍼런스 4종 모두 아이콘↔버튼 대비가 6.65 이상이다. 이쪽은 자동으로 정해도 되는 값이다.
+    for (const button of ["#FFC754", "#514A45", "#553b31", "#d8e65a", "#FFFFFF", "#101010"]) {
+      const icon = resolve(sendIcon, { [sendButton.id]: button })!;
+      expect(themeColorContrast(icon, button)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  /**
+   * `readable-foreground`는 `#1F2937`과 `#FFFFFF` 둘 중 하나만 돌려준다. 어느 테마에서든 같은
+   * 남색빛 검정이 나와서 버튼 색과 따로 논다.
+   */
+  it("전송 아이콘이 버튼의 색조를 물려받는다", () => {
+    const onSage = resolve(sendIcon, { [sendButton.id]: "#BEC7BD" })!;
+    const onAmber = resolve(sendIcon, { [sendButton.id]: "#FFC754" })!;
+
+    expect(onSage).not.toBe("#1F2937");
+    expect(onAmber).not.toBe("#1F2937");
+    // 같은 "어두운 아이콘"이라도 버튼마다 다른 색이 나와야 색조를 물려받은 것이다.
+    expect(onSage).not.toBe(onAmber);
+  });
+
+  /**
+   * 순검정으로 섞어야 색조가 남는다. `#1F2937`로 섞으면 결과가 전부 그 남색 쪽으로 끌려간다.
+   * 리락쿠마 버섯 테마가 앰버 `#FFC754` 위에 실제로 쓰는 아이콘 색이 갈색 `#663300`이다.
+   */
+  it("앰버 버튼에서 레퍼런스와 같은 갈색 계열이 나온다", () => {
+    const icon = resolve(sendIcon, { [sendButton.id]: "#FFC754" })!;
+    const [red, green, blue] = [1, 3, 5].map((index) => parseInt(icon.slice(index, index + 2), 16));
+
+    // 빨강 > 초록 > 파랑 — 앰버의 색 순서가 그대로 남아 있어야 갈색이다.
+    expect(red).toBeGreaterThan(green);
+    expect(green).toBeGreaterThan(blue);
+    // 남색빛으로 끌려가면 파랑이 가장 커진다.
+    expect(blue).toBeLessThan(red / 2);
+  });
+
+  it("밝은 아이콘 쪽은 색조를 거의 섞지 않는다", () => {
+    // 레퍼런스가 어두운 버튼 위에 #FFFFFF / #fffce7을 쓴다. 같은 세기로 섞으면 탁한 회색이 된다.
+    const icon = resolve(sendIcon, { [sendButton.id]: "#514A45" })!;
+
+    expect(themeColorContrast(icon, "#FFFFFF")).toBeLessThan(1.3);
+  });
+
+  it("전송 버튼을 직접 강조색으로 바꾸면 아이콘이 그 색을 따라간다", () => {
+    // 자동값은 조용한 쪽에 두고 강조색은 직접 지정에 맡긴다. 그때도 아이콘이 따라와야 한다.
+    const onLime = resolve(sendIcon, { [sendButton.id]: "#d8e65a" })!;
+    const onBrown = resolve(sendIcon, { [sendButton.id]: "#514A45" })!;
+    expect(onLime).not.toBe(onBrown);
+    expect(themeColorContrast(onLime, "#d8e65a")).toBeGreaterThanOrEqual(4.5);
+    expect(themeColorContrast(onBrown, "#514A45")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("iOS 눌림 계열도 같은 체인을 탄다", () => {
+    const iosInput = iosSlots.find((slot) => slot.role === "chat_input_background_color")!;
+    const iosResolve = (role: string, colors: Record<string, string | undefined>) =>
+      getResolvedColor(iosSlots.find((slot) => slot.role === role)!, colors, iosSelections, "basic", template, iosSlots)!;
+
+    const dark = { [iosInput.id]: "#101010" };
+    const sendBackground = iosResolve("chat_send_button_color", dark);
+    expect(iosResolve("chat_send_highlighted_button_color", dark)).not.toBe(sendBackground);
+    expect(themeColorContrast(iosResolve("chat_send_highlighted_icon_color", dark), iosResolve("chat_send_highlighted_button_color", dark))).toBeGreaterThanOrEqual(4.5);
+    expect(iosResolve("chat_button_highlighted_foreground_color", dark)).not.toBe(iosResolve("chat_button_foreground_color", dark));
+  });
+});
+
 describe("잠금화면 — 배경 하나로 나머지 슬롯이 체이닝된다", () => {
   const passcodeBackground = bySlotRole("passcode_background_color");
   const passcodeText = bySlotRole("passcode_color");

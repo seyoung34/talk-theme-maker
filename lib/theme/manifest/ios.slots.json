@@ -871,6 +871,7 @@
     "label": "입력바 배경",
     "required": true,
     "note": "채팅방 하단 입력 영역의 배경색입니다. 입력 버튼과 전송 버튼이 또렷하게 보여야 합니다.",
+    "autoColorRecipe": "chat-background-bottom",
     "defaultColor": {
       "basic": "#ffffff"
     },

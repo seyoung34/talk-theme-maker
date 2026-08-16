@@ -1089,6 +1089,7 @@
     "required": true,
     "note": "채팅 입력 바 전체 배경색",
     "colorKey": "theme_chatroom_input_bar_background_color",
+    "autoColorRecipe": "chat-background-bottom",
     "defaultColor": {
       "basic": "#ffffff"
     }

@@ -24,6 +24,7 @@ export type ThemeAutoColorRecipe =
   | "header-top"
   | "surface-background"
   | "tab-bottom"
+  | "chat-background-bottom"
   | "foreground-header"
   | "foreground-background"
   | "foreground-muted"

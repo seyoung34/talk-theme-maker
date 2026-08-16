@@ -33,7 +33,9 @@ const mainPaletteRecipes = new Set([
 ]);
 // The chatroom carries its own background image, so it seeds from that instead. Keeping it out of
 // the set above is what stops the main palette from leaking onto a screen it never sampled.
-const chatPaletteRecipes = new Set(["chat-background-average"]);
+// `chat-background-bottom` seeds the input bar from the lower edge of the same image, the way
+// `tab-bottom` does for the tab bar over the main background. Both stay in the chatroom section.
+const chatPaletteRecipes = new Set(["chat-background-average", "chat-background-bottom"]);
 // The passcode screen prefers its own background image but falls back to the main background when
 // there isn't one — still a distinct seed from the main palette recipes above, so it gets its own set.
 const passcodePaletteRecipes = new Set(["passcode-background-average"]);

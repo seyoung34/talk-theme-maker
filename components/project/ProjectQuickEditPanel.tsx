@@ -865,6 +865,7 @@ function InfoTooltip({ label, content, triggerClassName }: { label: string; cont
 function getAutoColorReason(slot: ThemeAssetSlot) {
   if (slot.autoColorRecipe === "background-average") return "배경 이미지 평균색 기준으로";
   if (slot.autoColorRecipe === "chat-background-average") return "채팅방 배경 이미지 평균색 기준으로";
+  if (slot.autoColorRecipe === "chat-background-bottom") return "채팅방 배경 이미지 하단색 또는 채팅방 배경색 기준으로";
   if (slot.autoColorRecipe === "passcode-background-average") return "잠금화면 배경 이미지 평균색(없으면 메인 배경) 기준으로";
   if (slot.autoColorRecipe === "bubble-me-text") return "내 말풍선 표면과 읽기 쉬운 대비로";
   if (slot.autoColorRecipe === "bubble-you-text") return "상대 말풍선 표면과 읽기 쉬운 대비로";
@@ -888,6 +889,8 @@ function getAutoColorExplanation(slot: ThemeAssetSlot) {
       return "배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 이미지가 없으면 사용자가 입력한 배경색을 유지합니다."
     case "chat-background-average":
       return "채팅방 배경 이미지가 있으면 투명 픽셀을 제외한 전체 평균색을 사용합니다. 메인 배경과 다른 이미지를 쓰므로 기준도 채팅방 이미지입니다. 이미지가 없으면 현재 채팅방 배경색을 유지합니다.";
+    case "chat-background-bottom":
+      return "입력바는 채팅방 화면 하단에 붙어 있어, 배경 이미지가 있으면 하단 15% 영역의 대표색을 사용합니다. 위아래 색이 다른 이미지에서 평균을 쓰면 입력바만 배경과 어긋나기 때문입니다. 이미지가 없으면 현재 채팅방 배경색을 유지합니다. 입력 글자·메뉴 아이콘·전송 버튼은 이 색을 기준으로 함께 조정됩니다.";
     case "passcode-background-average":
       return "잠금화면 배경 이미지가 있으면 그 평균색을 사용합니다. 잠금화면 이미지를 따로 준비하지 않는 경우가 많아, 이미지가 없으면 메인 배경(이미지 또는 직접 지정한 색)을 그대로 따라갑니다.";
     case "bubble-me-text":

@@ -88,6 +88,57 @@ describe("채팅방 배경 자동 맞춤", () => {
   });
 });
 
+/**
+ * 입력바는 채팅방 화면 하단에 붙어 있다. 탭바가 메인 배경의 아래쪽 색을 쓰는 것과 같은 이유로
+ * 평균이 아니라 하단을 따라간다 — 위아래 색이 다른 이미지에서 평균을 쓰면 입력바만 어긋난다.
+ */
+describe("입력바 배경 자동 맞춤", () => {
+  const inputBackgroundSlot = slots.find((slot) => slot.role === "chat_input_background_color")!;
+
+  function gradient(top: string, bottom: string): ImageColorPalette {
+    return { representative: top, average: "#808080", top, bottom, accent: top };
+  }
+
+  it("채팅 배경 이미지의 평균이 아니라 하단색을 쓴다", () => {
+    const result = buildMainPaletteRecommendations(slots, context({
+      chatImageActive: true,
+      chatPalette: gradient("#FFFFFF", "#203040"),
+    }));
+
+    expect(result[inputBackgroundSlot.id]).toBe("#203040");
+    expect(result[inputBackgroundSlot.id]).not.toBe(result[chatBackgroundSlot.id]);
+  });
+
+  it("이미지가 없으면 채팅 배경색으로 떨어진다", () => {
+    expect(buildMainPaletteRecommendations(slots, context())[inputBackgroundSlot.id]).toBe("#B8F2F7");
+  });
+
+  it("메인 배경 이미지는 입력바에 영향을 주지 않는다", () => {
+    const result = buildMainPaletteRecommendations(slots, context({
+      imageActive: true,
+      palette: gradient("#FF0000", "#00FF00"),
+    }));
+
+    expect(result[inputBackgroundSlot.id]).toBe("#B8F2F7");
+  });
+});
+
+/**
+ * 전송 버튼에는 recipe가 없다.
+ *
+ * 채팅방 이미지의 강조색을 자동으로 넣어 봤더니, 이미지가 없는 테마에서 템플릿 강조색으로
+ * 떨어져 파스텔 톤 위에 검은 알약이 얹혔다. 지금은 입력바 색을 그대로 따라가고, 강조색은
+ * 사용자가 직접 지정한다.
+ */
+describe("전송 버튼", () => {
+  const sendButtonSlot = slots.find((slot) => slot.role === "chat_send_button_color")!;
+
+  it("자동 맞춤 대상이 아니다", () => {
+    expect(sendButtonSlot.autoColorRecipe).toBeUndefined();
+    expect(buildMainPaletteRecommendations(slots, context({ templateAccent: "#FFB300" }))[sendButtonSlot.id]).toBeUndefined();
+  });
+});
+
 describe("잠금화면 배경 자동 맞춤", () => {
   it("잠금화면 이미지가 있으면 그 평균색을 쓴다", () => {
     const result = buildMainPaletteRecommendations(slots, context({
