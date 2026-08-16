@@ -428,6 +428,13 @@ export function getInitialPreviewSlotIds(
     "tab_background_image",
     "bubble_me_1",
     "bubble_you_1",
+    // 연속 메시지 말풍선(`_2`)도 첫 화면 대상이다. 채팅방 프리뷰의 표본 대화 6개 중 4개가 이
+    // 역할을 쓰기 때문에, 빼면 말풍선 그룹을 눌러 on-demand hydration이 돌기 전까지 그 4개만
+    // 기본 말풍선으로 남는다 — 사용자에게는 "일부만 반영이 안 된다"로 보인다.
+    // 대개 `_1`과 같은 업로드를 선택하므로 owner bucket이 겹쳐 Set에서 합쳐지고, 실제로 늘어나는
+    // 요청은 `_2`에 다른 이미지를 쓴 템플릿뿐이다.
+    "bubble_me_2",
+    "bubble_you_2",
     "profile_image_1",
     ...tabIconPreviewRoles,
   ];
