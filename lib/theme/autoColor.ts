@@ -30,7 +30,7 @@ export type MainPaletteContext = {
 
 export function buildMainPaletteRecommendations(slots: ThemeAssetSlot[], context: MainPaletteContext) {
   const imagePalette = context.imageActive ? context.palette : null;
-  const currentBackground = themeColorRgbHex(context.currentBackground, "#F4FAFB");
+  const currentBackground = themeColorRgbHex(context.currentBackground, "#F5F6F7");
   const backgroundRecommendation = imagePalette?.average ?? currentBackground;
   const background = context.backgroundIsAuto ? backgroundRecommendation : currentBackground;
   const header = imagePalette?.top ?? background;
@@ -85,7 +85,7 @@ export type BubbleTextPaletteContext = {
 };
 
 export function buildBubbleTextRecommendations(slots: ThemeAssetSlot[], context: BubbleTextPaletteContext) {
-  const meSurface = context.mePalette?.average ?? themeColorRgbHex(context.myBubbleSurface, "#FFE27A");
+  const meSurface = context.mePalette?.average ?? themeColorRgbHex(context.myBubbleSurface, "#E4E6E9");
   const youSurface = context.youPalette?.average ?? themeColorRgbHex(context.friendBubbleSurface, "#FFFFFF");
   const values: Partial<Record<ThemeAutoColorRecipe, string>> = {
     "bubble-me-text": readableThemeForeground(meSurface),

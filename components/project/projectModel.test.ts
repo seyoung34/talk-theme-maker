@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildSlotCandidates, getCandidateAccessibleName, getDerivedColorLink, isRemovableUploadCandidate } from "@/components/project/projectModel";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
-import { getInitialSlotCandidateSelections } from "@/lib/theme/project/state";
+import { themeColorContrast } from "@/lib/theme/color";
+import { applyDerivedColorTransform } from "@/lib/theme/project/colorInheritance";
+import { getDefaultColor, getInitialSlotCandidateSelections } from "@/lib/theme/project/state";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
 
 describe("isRemovableUploadCandidate", () => {
@@ -198,6 +200,16 @@ describe("getDerivedColorLink", () => {
   const link = (colors: Record<string, string | undefined>) =>
     getDerivedColorLink(unread, colors, iosSelections, "basic", template, iosSlots);
 
+  /**
+   * 값을 적어 두지 않고 변환 함수로 구한다.
+   *
+   * 읽지 않음 숫자는 슬롯 기본색(= 템플릿 accent)을 기준 배경에서 읽히도록 보정한 값이다.
+   * 결과를 리터럴로 박아 두면 템플릿 기본색을 바꿀 때마다 이 테스트가 무관하게 깨진다.
+   * 여기서 확인할 것은 "getDerivedColorLink가 파생색을 그대로 넘겨주는가"이지 보정 산식이 아니다.
+   */
+  const derivedOn = (base: string) =>
+    applyDerivedColorTransform(base, "contrast-on-base", getDefaultColor(unread, "basic", template));
+
   it("파생 규칙이 없는 슬롯에는 카드를 띄우지 않는다", () => {
     expect(getDerivedColorLink(chatBackground, {}, iosSelections, "basic", template, iosSlots)).toBeUndefined();
   });
@@ -206,7 +218,9 @@ describe("getDerivedColorLink", () => {
     const result = link({ [chatBackground.id]: "#111111" })!;
     expect(result.linked).toBe(true);
     expect(result.baseLabel).toBe(chatBackground.label);
-    expect(result.color).toBe("#887F33");
+    expect(result.color).toBe(derivedOn("#111111"));
+    // 기본 강조색이 어두운 배경에서 그대로 나오면 보정이 돌지 않은 것이다.
+    expect(themeColorContrast(result.color!, "#111111")).toBeGreaterThanOrEqual(4.5);
   });
 
   /**
@@ -216,7 +230,7 @@ describe("getDerivedColorLink", () => {
   it("직접 지정 중이어도 되돌렸을 때의 색을 계산해 준다", () => {
     const result = link({ [chatBackground.id]: "#111111", [unread.id]: "#FF0000" })!;
     expect(result.linked).toBe(false);
-    expect(result.color).toBe("#887F33");
+    expect(result.color).toBe(derivedOn("#111111"));
   });
 
   it("대비 보정형과 그대로 따라가는 형은 설명이 다르다", () => {

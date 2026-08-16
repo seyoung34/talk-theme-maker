@@ -166,7 +166,7 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
     case "main_body_cell_color":
       return withAlpha(template.defaults.mainBackground, "00");
     case "main_body_cell_pressed_color":
-      return "#99F4FAFB";
+      return "#99E4E6E9";
     case "main_body_cell_border_color":
       return "#33111111";
     case "main_body_cell_border_alpha":
@@ -226,20 +226,22 @@ export function getDefaultColor(slot: ThemeAssetSlot, templateId: ThemeTemplateI
       return template.defaults.friendBubble;
     case "notification_background_pressed_color":
       return lighten(template.defaults.friendBubble, -0.04);
+    // 잠금화면은 템플릿 defaults에 대응하는 항목이 없어 여기서 직접 든다.
+    // 매니페스트의 `defaultColor.basic`과 같은 무채색 계열을 유지한다.
     case "passcode_background_color":
-      return "#FCC5C5";
+      return "#ECEDEF";
     case "passcode_color":
-      return "#664242";
+      return "#111111";
     case "passcode_keypad_color":
-      return "#664242";
+      return "#111111";
     case "passcode_keypad_pressed_color":
-      return "#CCB8B8";
+      return "#8A8F96";
     case "passcode_keypad_background_color":
-      return "#FFF2F2";
+      return "#FFFFFF";
     case "passcode_keypad_pressed_background_color":
-      return "#99FFDEDE";
+      return "#99E4E6E9";
     case "passcode_pattern_line_color":
-      return "#FCC5C5";
+      return "#5C6066";
     default:
       return "#ffffff";
   }

@@ -89,7 +89,7 @@
     "note": "채팅 목록의 마지막 메시지와 시간 색상",
     "colorKey": "theme_paragraph_color",
     "defaultColor": {
-      "basic": "#4d5660"
+      "basic": "#5c6066"
     }
   },
   {
@@ -109,7 +109,7 @@
     ],
     "colorKey": "theme_background_color",
     "defaultColor": {
-      "basic": "#F4FAFB"
+      "basic": "#F5F6F7"
     }
   },
   {
@@ -167,7 +167,7 @@
     "note": "친구 목록의 상태 메시지와 보조 정보 색상",
     "colorKey": "theme_description_color",
     "defaultColor": {
-      "basic": "#4D5660"
+      "basic": "#5C6066"
     }
   },
   {
@@ -198,7 +198,7 @@
     "optionLevel": "advanced",
     "colorKey": "theme_paragraph_pressed_color",
     "defaultColor": {
-      "basic": "#4D5660"
+      "basic": "#5C6066"
     }
   },
   {
@@ -253,7 +253,7 @@
     ],
     "colorKey": "theme_body_cell_pressed_color",
     "defaultColor": {
-      "basic": "#99F4FAFB"
+      "basic": "#99E4E6E9"
     }
   },
   {
@@ -949,7 +949,7 @@
     "autoColorRecipe": "chat-background-average",
     "colorKey": "theme_chatroom_background_color",
     "defaultColor": {
-      "basic": "#b8f2f7"
+      "basic": "#ecedef"
     }
   },
   {
@@ -1148,7 +1148,7 @@
     "note": "전송 버튼 배경 색상",
     "colorKey": "theme_chatroom_input_bar_send_button_color",
     "defaultColor": {
-      "basic": "#c9ff3d"
+      "basic": "#3a3e44"
     }
   },
   {
@@ -1164,7 +1164,7 @@
     "note": "전송 버튼 아이콘 색상",
     "colorKey": "theme_chatroom_input_bar_send_icon_color",
     "defaultColor": {
-      "basic": "#111111"
+      "basic": "#ffffff"
     }
   },
   {
@@ -1211,7 +1211,7 @@
     "colorKey": "theme_passcode_background_color",
     "autoColorRecipe": "passcode-background-average",
     "defaultColor": {
-      "basic": "#FFFFFF"
+      "basic": "#ECEDEF"
     }
   },
   {
@@ -1230,7 +1230,7 @@
     "note": "theme_passcode_color 값",
     "colorKey": "theme_passcode_color",
     "defaultColor": {
-      "basic": "#664242"
+      "basic": "#111111"
     }
   },
   {
@@ -1361,7 +1361,7 @@
     "note": "theme_passcode_keypad_background_color 값",
     "colorKey": "theme_passcode_keypad_background_color",
     "defaultColor": {
-      "basic": "#F2f2f2"
+      "basic": "#FFFFFF"
     }
   },
   {
@@ -1378,7 +1378,7 @@
     "optionLevel": "advanced",
     "colorKey": "theme_passcode_keypad_pressed_background_color",
     "defaultColor": {
-      "basic": "#99FFDEDE"
+      "basic": "#99E4E6E9"
     }
   },
   {
@@ -1394,7 +1394,7 @@
     "note": "theme_passcode_keypad_color 값",
     "colorKey": "theme_passcode_keypad_color",
     "defaultColor": {
-      "basic": "#664242"
+      "basic": "#111111"
     }
   },
   {
@@ -1411,7 +1411,7 @@
     "optionLevel": "advanced",
     "colorKey": "theme_passcode_keypad_pressed_color",
     "defaultColor": {
-      "basic": "#CCB8B8"
+      "basic": "#8A8F96"
     }
   },
   {
@@ -1427,7 +1427,7 @@
     "note": "theme_passcode_pattern_line_color 값",
     "colorKey": "theme_passcode_pattern_line_color",
     "defaultColor": {
-      "basic": "#FCC5C5"
+      "basic": "#5C6066"
     }
   },
   {

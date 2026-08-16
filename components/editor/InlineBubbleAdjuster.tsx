@@ -459,7 +459,7 @@ function markerRangeToArtwork(range: Range, max: number): Range {
 
 function drawChecker(ctx: CanvasRenderingContext2D, width: number, height: number, size: number) {
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#f4fafb";
+  ctx.fillStyle = "#f5f6f7";
   ctx.fillRect(0, 0, width, height);
   ctx.fillStyle = "#e3eef1";
   for (let y = 0; y < height; y += size) {

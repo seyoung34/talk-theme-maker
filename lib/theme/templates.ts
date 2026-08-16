@@ -155,21 +155,30 @@ export const themeTemplates: ThemeTemplate[] = [
     name: "기본 템플릿",
     description: "가장 단순한 구조로 테마 화면을 먼저 점검하는 기본 템플릿입니다.",
     previewNote: "색상과 이미지를 빠르게 교체하면서 전체 흐름을 확인하는 시작 템플릿입니다.",
-    accent: "#6a5f00",
+    /**
+     * 기본 템플릿은 무채색만 쓴다.
+     *
+     * 시작 템플릿의 역할은 "내 이미지를 얹기 전 화면 구조를 확인하는 것"이라, 채도가 있는 기본색은
+     * 사용자가 올린 이미지와 충돌하고 어떤 색을 직접 고른 것인지 헷갈리게 만든다. 아래 값은 모두
+     * R=G=B에 가까운 중성 회색 계열이며, 매니페스트의 `defaultColor.basic`도 같은 계열을 쓴다.
+     *
+     * 계단: #FFFFFF → #F5F6F7 → #ECEDEF → #E4E6E9 → #8A8F96 → #5C6066 → #3A3E44 → #111111
+     */
+    accent: "#3a3e44",
     supportedPlatforms: ["android", "ios"],
     sections: sharedSections,
     defaults: {
       platform: "android",
-      chatBackground: "#b8f2f7",
-      myBubble: "#ffe27a",
+      chatBackground: "#ecedef",
+      myBubble: "#e4e6e9",
       friendBubble: "#ffffff",
-      mainBackground: "#f4fafb",
+      mainBackground: "#f5f6f7",
       mainHeader: "#ffffff",
       mainTitle: "#111111",
-      mainBody: "#4d5660",
+      mainBody: "#5c6066",
       tabBackground: "#ffffff",
       chatInputBackground: "#ffffff",
-      chatSendButton: "#c9ff3d",
+      chatSendButton: "#3a3e44",
     },
   },
 ];

@@ -32,7 +32,7 @@
     "required": true,
     "note": "배경 이미지가 없거나 투명한 영역에 표시되는 색상입니다. 이미지와 자연스럽게 이어지는 색을 선택하세요.",
     "defaultColor": {
-      "basic": "#f4fafb"
+      "basic": "#f5f6f7"
     },
     "autoColorRecipe": "background-average",
     "cssSelector": "MainViewStyle-Primary",
@@ -53,7 +53,7 @@
       "tabs"
     ],
     "defaultColor": {
-      "basic": "#664242"
+      "basic": "#111111"
     },
     "autoColorRecipe": "foreground-header",
     "cssSelector": "HeaderStyle-Main",
@@ -107,7 +107,7 @@
     "required": true,
     "note": "친구 목록의 상태 메시지와 보조 정보에 적용되는 색상입니다. 이름보다 약하게 보이면서도 읽을 수 있어야 합니다.",
     "defaultColor": {
-      "basic": "#4d5660"
+      "basic": "#5c6066"
     },
     "autoColorRecipe": "foreground-muted",
     "cssSelector": "MainViewStyle-Primary",
@@ -125,7 +125,7 @@
     "required": true,
     "note": "채팅 목록의 마지막 메시지와 시간에 적용되는 색상입니다. 이름보다 약한 위계를 유지하세요.",
     "defaultColor": {
-      "basic": "#4d5660"
+      "basic": "#5c6066"
     },
     "autoColorRecipe": "foreground-muted",
     "cssSelector": "MainViewStyle-Primary",
@@ -144,7 +144,7 @@
     "note": "채팅 항목을 누르는 동안 마지막 메시지와 시간에 적용되는 색상입니다. 기본 색상과 차이가 지나치게 크지 않아야 합니다.",
     "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#4d5660"
+      "basic": "#5c6066"
     },
     "cssSelector": "MainViewStyle-Primary",
     "cssProperty": "-ios-paragraph-highlighted-text-color"
@@ -255,7 +255,7 @@
     "required": true,
     "note": "더보기 화면과 보조 콘텐츠 영역의 배경색입니다. 프로필과 서비스 항목이 자연스럽게 구분되어야 합니다.",
     "defaultColor": {
-      "basic": "#FFDEDE"
+      "basic": "#FFFFFF"
     },
     "autoColorRecipe": "surface-background",
     "cssSelector": "MainViewStyle-Secondary",
@@ -274,7 +274,7 @@
     "note": "더보기 화면의 서비스 이름과 주요 기능에 적용되는 색상입니다. 배경 위에서 읽기 쉬운지 확인하세요.",
     "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#805959"
+      "basic": "#3A3E44"
     },
     "autoColorRecipe": "accent",
     "cssSelector": "FeatureStyle-Primary",
@@ -310,7 +310,7 @@
     "required": false,
     "note": "상단의 탭형 텍스트에 적용되는 기본 색상입니다. 선택된 텍스트보다 한 단계 약하게 보이도록 설정하세요.",
     "defaultColor": {
-      "basic": "#4d5660"
+      "basic": "#5c6066"
     },
     "autoColorRecipe": "foreground-header",
     "cssSelector": "HeaderStyle-Main",
@@ -615,7 +615,7 @@
     "note": "채팅방 배경 이미지가 없거나 투명한 영역에 표시되는 색상입니다. 말풍선과 충분히 구분되는 색을 선택하세요.",
     "autoColorRecipe": "chat-background-average",
     "defaultColor": {
-      "basic": "#b8f2f7"
+      "basic": "#ecedef"
     },
     "cssSelector": "BackgroundStyle-ChatRoom",
     "cssProperty": "background-color"
@@ -852,7 +852,7 @@
     "required": false,
     "note": "말풍선 옆의 읽지 않은 메시지 수에 적용되는 색상입니다. 채팅방 배경과 말풍선 모두에서 잘 보여야 합니다.",
     "defaultColor": {
-      "basic": "#6a5f00"
+      "basic": "#3a3e44"
     },
     "cssSelector": [
       "MessageCellStyle-Send",
@@ -906,7 +906,7 @@
     "required": false,
     "note": "첨부와 메뉴 버튼의 기본 아이콘 색상입니다. 입력 영역 배경 위에서 선명하게 보이는지 확인하세요.",
     "defaultColor": {
-      "basic": "#4d5660"
+      "basic": "#5c6066"
     },
     "cssSelector": "InputBarStyle-Chat",
     "cssProperty": "-ios-button-normal-foreground-color"
@@ -958,7 +958,7 @@
     "required": true,
     "note": "전송 버튼의 기본 배경색입니다. 전송 아이콘과 충분한 대비를 유지하세요.",
     "defaultColor": {
-      "basic": "#c9ff3d"
+      "basic": "#3a3e44"
     },
     "cssSelector": "InputBarStyle-Chat",
     "cssProperty": "-ios-send-normal-background-color"
@@ -975,7 +975,7 @@
     "required": false,
     "note": "전송 버튼 안의 아이콘 색상입니다. 버튼 배경 위에서 또렷하게 보여야 합니다.",
     "defaultColor": {
-      "basic": "#111111"
+      "basic": "#ffffff"
     },
     "cssSelector": "InputBarStyle-Chat",
     "cssProperty": "-ios-send-normal-foreground-color"
@@ -993,7 +993,7 @@
     "note": "전송 버튼을 누르는 동안 표시되는 배경색입니다. 기본 상태와 자연스럽게 구분되어야 합니다.",
     "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#c9ff3d"
+      "basic": "#2e3237"
     },
     "cssSelector": "InputBarStyle-Chat",
     "cssProperty": "-ios-send-highlighted-background-color"
@@ -1011,7 +1011,7 @@
     "note": "전송 버튼을 누르는 동안 아이콘에 적용되는 색상입니다. 눌림 배경 위에서 잘 보이는지 확인하세요.",
     "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#111111"
+      "basic": "#ffffff"
     },
     "cssSelector": "InputBarStyle-Chat",
     "cssProperty": "-ios-send-highlighted-foreground-color"
@@ -1029,7 +1029,7 @@
     "note": "채팅방 상단의 메시지 알림 배너 배경색입니다.",
     "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#FCC5C5"
+      "basic": "#FFFFFF"
     },
     "cssSelector": "BackgroundStyle-MessageNotificationBar",
     "cssProperty": "background-color"
@@ -1047,7 +1047,7 @@
     "note": "메시지 알림 배너의 발신자 이름 색상입니다.",
     "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#604242"
+      "basic": "#111111"
     },
     "cssSelector": "LabelStyle-MessageNotificationBarName",
     "cssProperty": "-ios-text-color"
@@ -1065,7 +1065,7 @@
     "note": "메시지 알림 배너의 안내 메시지 색상입니다.",
     "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#805959"
+      "basic": "#5C6066"
     },
     "cssSelector": "LabelStyle-MessageNotificationBarMessage",
     "cssProperty": "-ios-text-color"
@@ -1101,7 +1101,7 @@
     "note": "전달완료 배너의 대상 이름 색상입니다.",
     "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#B35959"
+      "basic": "#111111"
     },
     "cssSelector": "LabelStyle-DirectShareBarName",
     "cssProperty": "-ios-text-color"
@@ -1119,7 +1119,7 @@
     "note": "전달완료 배너의 안내 메시지 색상입니다.",
     "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#D47B82"
+      "basic": "#5C6066"
     },
     "cssSelector": "LabelStyle-DirectShareBarMessage",
     "cssProperty": "-ios-text-color"
@@ -1137,7 +1137,7 @@
     "note": "하단 배너의 배경색입니다. 어두운 색을 권장합니다.",
     "optionLevel": "advanced",
     "defaultColor": {
-      "basic": "#664142"
+      "basic": "#3A3E44"
     },
     "cssSelector": "BottomBannerStyle",
     "cssProperty": "background-color"
@@ -1171,7 +1171,7 @@
     "note": "암호 입력 화면에서 이미지가 없거나 투명한 영역에 표시되는 색상입니다. 제목과 암호 표시가 잘 보이는지 확인하세요.",
     "autoColorRecipe": "passcode-background-average",
     "defaultColor": {
-      "basic": "#FFDEDE"
+      "basic": "#ECEDEF"
     },
     "cssSelector": "BackgroundStyle-Passcode",
     "cssProperty": "background-color"
@@ -1188,7 +1188,7 @@
     "required": true,
     "note": "암호 입력 화면의 제목과 안내 문구에 적용되는 색상입니다. 배경 위에서 충분히 읽을 수 있어야 합니다.",
     "defaultColor": {
-      "basic": "#664242"
+      "basic": "#111111"
     },
     "cssSelector": "LabelStyle-PasscodeTitle",
     "cssProperty": "-ios-text-color"
@@ -1336,7 +1336,7 @@
     "required": true,
     "note": "숫자 키패드 영역의 배경색입니다. 숫자와 삭제 아이콘이 잘 보이는지 확인하세요.",
     "defaultColor": {
-      "basic": "#FFF2F2"
+      "basic": "#FFFFFF"
     },
     "cssSelector": "PasscodeStyle",
     "cssProperty": "-ios-keypad-background-color"
@@ -1353,7 +1353,7 @@
     "required": true,
     "note": "키패드 숫자와 삭제 아이콘의 기본 색상입니다. 키패드 배경과 충분한 대비를 유지하세요.",
     "defaultColor": {
-      "basic": "#664242"
+      "basic": "#111111"
     },
     "cssSelector": "PasscodeStyle",
     "cssProperty": "-ios-keypad-text-normal-color"
