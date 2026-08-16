@@ -19,7 +19,7 @@ import { InitialTemplateErrorPanel, InitialTemplateLoadingPanel } from "@/compon
 import { SaveTemplateDialog } from "@/components/project/dialogs/SaveTemplateDialog";
 import { SystemTemplateSaveDialog } from "@/components/project/dialogs/SystemTemplateSaveDialog";
 import { HeaderNotice } from "@/components/project/HeaderNotice";
-import { getBackgroundSourcePair, getDefaultSlotCandidateId } from "@/components/project/projectImporterHelpers";
+import { getBackgroundSourcePair, getDefaultSlotCandidateId, getSlotPaletteError } from "@/components/project/projectImporterHelpers";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { MobileEditActionBar } from "@/components/project/MobileEditActionBar";
 import { MobileEditActionRail } from "@/components/project/MobileEditActionRail";
@@ -412,6 +412,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     mainBackgroundFile,
     mainColorRecommendations,
     mainPalettePending,
+    passcodeImageColorPaletteError,
+    passcodePalettePending,
   } = useProjectAutoColors({
     activeTemplate,
     analysis,
@@ -423,7 +425,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     slots,
     templateId,
   });
-  const autoColorPending = mainPalettePending || chatPalettePending || bubblePalettePending;
+  // 잠금화면도 함께 센다. 훅 안의 기록 effect는 이미 넷을 다 기다리는데 여기만 셋이면, 분석이
+  // 끝나기 전에 벌크 버튼이 눌려 옛 값이 저장되고 곧바로 effect가 덮어쓴다.
+  const autoColorPending = mainPalettePending || chatPalettePending || bubblePalettePending || passcodePalettePending;
 
   useEffect(() => {
     if (!groups.includes(activeGroup)) {
@@ -962,6 +966,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     trackFirstValueReached("color");
   };
 
+  const selectedSlotPaletteError = getSlotPaletteError(selectedSlot, {
+    main: imageColorPaletteError,
+    chat: chatImageColorPaletteError,
+    bubble: bubbleImageColorPaletteError,
+    passcode: passcodeImageColorPaletteError,
+  });
+
   // 벌크 버튼과 상태 요약이 "무엇을 연동 대상으로 볼지" 같은 기준을 쓰게 필터를 하나로 둔다.
   const autoColorEligibleSlots = slots.filter((slot) => slot.autoColorRecipe && mainColorRecommendations[slot.id] && (mainBackgroundFile || slot.role !== "main_background_color"));
   const autoColorSummary: AutoColorLinkSummary = {
@@ -1248,7 +1259,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       onColorChange={changeColor}
       onUnlinkColor={unlinkColor}
       imageColorPalette={activeImageColorPalette}
-      imageColorPaletteError={selectedSlot?.autoColorRecipe === "chat-background-average" ? chatImageColorPaletteError : selectedSlot?.autoColorRecipe === "bubble-me-text" || selectedSlot?.autoColorRecipe === "bubble-you-text" ? bubbleImageColorPaletteError : imageColorPaletteError}
+      imageColorPaletteError={selectedSlotPaletteError}
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
@@ -1297,7 +1308,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "flip" });
       }}
       contrastWarning={selectedSlot ? contrastWarnings[selectedSlot.id] : undefined}
-      imageColorPaletteError={selectedSlot?.autoColorRecipe === "chat-background-average" ? chatImageColorPaletteError : selectedSlot?.autoColorRecipe === "bubble-me-text" || selectedSlot?.autoColorRecipe === "bubble-you-text" ? bubbleImageColorPaletteError : imageColorPaletteError}
+      imageColorPaletteError={selectedSlotPaletteError}
       recommendedColor={selectedSlot ? mainColorRecommendations[selectedSlot.id] : undefined}
       isAutoColor={Boolean(selectedSlot && candidateSelections[selectedSlot.id] === autoMainPaletteCandidateId)}
       canApplyAutoColor={Boolean(selectedSlot?.autoColorRecipe && mainColorRecommendations[selectedSlot.id] && !autoColorPending && (mainBackgroundFile || selectedSlot.role !== "main_background_color"))}

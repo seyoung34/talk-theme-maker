@@ -5,6 +5,35 @@ import { getImageColorFallbackRole } from "@/lib/theme/project/state";
 import type { RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 
+/**
+ * 이 슬롯이 색을 받는 이미지의 분석 실패를 고른다.
+ *
+ * recipe마다 seed 이미지가 다르다. 목록에서 빠진 레시피는 조용히 **메인 배경** 오류로 넘어가서,
+ * 실패한 적 없는 이미지의 오류가 뜨거나 정작 실패한 채팅 이미지의 오류가 안 뜬다. 입력바가
+ * 채팅방 배경을 따라가게 됐을 때 실제로 그렇게 빠졌다.
+ *
+ * 데스크톱·모바일 패널이 같은 식을 각자 갖고 있었다. 한쪽만 고치면 어긋나므로 함수로 둔다.
+ */
+export function getSlotPaletteError(
+  slot: ThemeAssetSlot | undefined,
+  errors: { main: string | null; chat: string | null; bubble: string | null; passcode: string | null },
+) {
+  switch (slot?.autoColorRecipe) {
+    case "chat-background-average":
+    case "chat-background-bottom":
+      return errors.chat;
+    case "bubble-me-text":
+    case "bubble-you-text":
+      return errors.bubble;
+    case "passcode-background-average":
+      // 잠금화면은 자체 이미지가 없으면 메인 배경을 따라가지만, 자체 이미지를 넣었는데 분석이
+      // 실패한 경우가 있다. 그때 메인 오류를 보여 주면 멀쩡한 이미지를 의심하게 된다.
+      return errors.passcode ?? errors.main;
+    default:
+      return errors.main;
+  }
+}
+
 export function getDefaultSlotCandidateId(slot: ThemeAssetSlot, templateId: ThemeTemplateId, template: ThemeTemplate) {
   return getInitialSlotCandidateSelections([slot], templateId, template)[slot.id];
 }
