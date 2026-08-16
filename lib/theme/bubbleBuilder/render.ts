@@ -1,4 +1,4 @@
-import { bubbleDecorationBaseSize, bubbleDecorationMaxScale, getAndroidBubbleMarkers, getBubbleDecorationLayers, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
+import { bubbleDecorationBaseSize, bubbleDecorationMaxScale, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleDecorationLayers, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleBuilderVariant, BubbleDecorationLayer, BubbleFamilyDesignSpec, BubbleRect, GeneratedBubbleAsset, GeneratedBubbleDesign, GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder/types";
 import type { BubbleGeometry, Markers, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -69,6 +69,8 @@ async function renderBubbleAsset(spec: BubbleFamilyDesignSpec, platform: ThemePl
   for (const { layer, bitmap } of decorations) {
     const decorationRect = drawDecoration(context, bitmap, artwork.width, artwork.height, layer);
     if (rectsOverlap(decorationRect, geometry.content)) warnings.push({ code: "decoration-overlap", message: "꾸미기 이미지가 글자 영역과 겹쳐요." });
+    // 여기서는 원본 비율로 그린 실제 사각형을 본다. 미리보기는 정사각형 근사를 쓰므로 판정이 다를 수 있다.
+    if (crossesBubbleStretch(decorationRect, geometry.stretch)) warnings.push({ code: "decoration-stretch", message: "꾸미기 이미지가 늘어나는 선을 지나가요." });
   }
   if (geometry.content.width < 24 || geometry.content.height < 24) warnings.push({ code: "content-too-small", message: "글자가 들어갈 영역이 너무 작아요." });
 

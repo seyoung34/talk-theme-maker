@@ -1,4 +1,4 @@
-export { bubbleBuilderPresetVersion, bubbleDecorationBaseSize, bubbleDecorationMaxScale, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, getAndroidBubbleMarkers, getBubbleDecorationLayers, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
+export { bubbleBodyScalePresets, bubbleBodyScaleRange, bubbleBuilderPresetVersion, bubbleCanvasScaleRange, bubbleDecorationBaseSize, bubbleDecorationMaxScale, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleBodyScalePreset, getBubbleCanvasScale, getBubbleDecorationLayers, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap, type BubbleBodyScalePresetId } from "@/lib/theme/bubbleBuilder/geometry";
 export { generateBubbleAsset, generateBubbleFamily } from "@/lib/theme/bubbleBuilder/render";
 export type {
   BubbleBuilderSide,

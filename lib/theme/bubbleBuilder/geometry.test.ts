@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createBubbleDecorationLayer, createBubbleFamilyDesignSpec, getAndroidBubbleMarkers, getBubbleDecorationLayers, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
+import { bubbleBodyScalePresets, bubbleBodyScaleRange, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleBodyScalePreset, getBubbleCanvasScale, getBubbleDecorationLayers, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleSideDesignSpec } from "@/lib/theme/bubbleBuilder/types";
 
 const baseDesign: BubbleSideDesignSpec = {
@@ -69,6 +69,84 @@ describe("bubble builder geometry", () => {
     expect(clamped.body.y).toBe(0);
   });
 
+  it("maps any stored body scale onto the nearest preset", () => {
+    // 슬라이더 시절 spec에는 임의의 값이 들어 있다. 못 읽으면 세그먼트가 아무것도 안 눌린 상태로 보인다.
+    expect(getBubbleBodyScalePreset(undefined)).toBe("normal");
+    expect(getBubbleBodyScalePreset(1)).toBe("normal");
+    expect(getBubbleBodyScalePreset(0.72)).toBe("small");
+    expect(getBubbleBodyScalePreset(1.38)).toBe("large");
+    // 범위 밖 값도 clamp 뒤에 가장 가까운 선택지로 떨어진다.
+    expect(getBubbleBodyScalePreset(99)).toBe("large");
+    expect(getBubbleBodyScalePreset(0)).toBe("small");
+  });
+
+  it("keeps every body scale preset inside the allowed range", () => {
+    for (const preset of bubbleBodyScalePresets) {
+      expect(preset.value).toBeGreaterThanOrEqual(bubbleBodyScaleRange.min);
+      expect(preset.value).toBeLessThanOrEqual(bubbleBodyScaleRange.max);
+      // 왕복이 되어야 고른 값이 그대로 다시 선택돼 보인다.
+      expect(getBubbleBodyScalePreset(preset.value)).toBe(preset.id);
+    }
+  });
+
+  it("scales the body and moves the radius ceiling with it", () => {
+    const bigger = getBubbleVariantGeometry({ ...baseDesign, bodyScale: 1.4 }, "first");
+    const smaller = getBubbleVariantGeometry({ ...baseDesign, bodyScale: 0.7 }, "first");
+
+    expect(bigger.body).toMatchObject({ width: 133, height: 112 });
+    expect(smaller.body).toMatchObject({ width: 67, height: 56 });
+    // 캔버스는 그대로이고 본체만 커지므로 여백이 줄어든다. 중앙 정렬도 유지된다.
+    expect(bigger.canvas).toEqual({ width: 250, height: 230 });
+    expect(bigger.body.x).toBe(Math.round((250 - 133) / 2));
+    expect(getBubbleRadiusMax("rounded", "first", 1.4)).toBe(56);
+    expect(getBubbleRadiusMax("rounded", "first", 0.7)).toBe(28);
+  });
+
+  it("scales the canvas without changing the body", () => {
+    const wide = getBubbleVariantGeometry({ ...baseDesign, canvasScaleX: 1.4, canvasScaleY: 1.4 }, "first");
+
+    expect(wide.canvas).toEqual({ width: 350, height: 322 });
+    expect(wide.body.width).toBe(95);
+    expect(wide.body.height).toBe(80);
+    // 여백이 늘어난 만큼 본체는 안쪽으로 밀린다.
+    expect(wide.body.x).toBe(Math.round((350 - 95) / 2));
+  });
+
+  it("scales canvas width and height independently", () => {
+    // 두 축이 묶여 있으면 원본 비율(250:230)을 벗어날 수 없어 직사각형 프레임을 만들지 못한다.
+    const geometry = getBubbleVariantGeometry({ ...baseDesign, canvasScaleX: 1.4, canvasScaleY: 0.8 }, "first");
+
+    expect(geometry.canvas).toEqual({ width: 350, height: 184 });
+    expect(geometry.body).toMatchObject({ width: 95, height: 80 });
+    expect(geometry.body.x).toBe(Math.round((350 - 95) / 2));
+    expect(geometry.body.y).toBe(Math.round((184 - 80) / 2));
+  });
+
+  it("reads the legacy single canvasScale as both axes", () => {
+    // 축이 갈리기 전에 저장된 spec은 한 값만 갖는다. 이걸 못 읽으면 프레임이 기본 크기로 돌아간다.
+    expect(getBubbleCanvasScale({ canvasScale: 1.2 })).toEqual({ x: 1.2, y: 1.2 });
+    // 축별 값이 있으면 그쪽이 이긴다.
+    expect(getBubbleCanvasScale({ canvasScale: 1.2, canvasScaleY: 0.9 })).toEqual({ x: 1.2, y: 0.9 });
+    expect(getBubbleVariantGeometry({ ...baseDesign, canvasScale: 1.4 }, "first").canvas).toEqual({ width: 350, height: 322 });
+  });
+
+  it("clamps out-of-range scales instead of letting the body escape the canvas", () => {
+    const geometry = getBubbleVariantGeometry({ ...baseDesign, bodyScale: 99, canvasScaleX: 0.01, canvasScaleY: 99 }, "first");
+
+    expect(geometry.canvas).toEqual({ width: 200, height: 322 });
+    expect(geometry.body.width).toBeLessThanOrEqual(geometry.canvas.width);
+    expect(geometry.body.height).toBeLessThanOrEqual(geometry.canvas.height);
+    expect(geometry.body.x).toBeGreaterThanOrEqual(0);
+    expect(geometry.body.y).toBeGreaterThanOrEqual(0);
+  });
+
+  it("keeps default geometry unchanged when no scale is stored", () => {
+    // 저장된 옛 spec에는 배율 필드가 없다. 기본값이 1이 아니면 기존 말풍선이 조용히 달라진다.
+    expect(getBubbleVariantGeometry(baseDesign, "first")).toEqual(
+      getBubbleVariantGeometry({ ...baseDesign, bodyScale: 1, canvasScaleX: 1, canvasScaleY: 1 }, "first"),
+    );
+  });
+
   it("makes the circle body square and preserves a text-safe rect", () => {
     const geometry = getBubbleVariantGeometry({ ...baseDesign, preset: "circle", radius: 999 }, "first");
 
@@ -76,6 +154,30 @@ describe("bubble builder geometry", () => {
     expect(geometry.radius).toBe(geometry.body.width / 2);
     expect(geometry.content.width).toBeGreaterThanOrEqual(24);
     expect(geometry.content.height).toBeGreaterThanOrEqual(24);
+  });
+
+  /**
+   * 9-slice는 `stretch` 지점의 픽셀 열·행을 반복한다. 그 지점에 걸친 그림만 늘어나고, 한쪽에
+   * 몰려 있으면 통째로 밀릴 뿐 모양은 그대로다.
+   */
+  describe("crossesBubbleStretch", () => {
+    const stretch = { x: 125, y: 115 };
+
+    it("한쪽에 몰려 있으면 늘어나지 않는다", () => {
+      expect(crossesBubbleStretch({ x: 10, y: 10, width: 80, height: 80 }, stretch)).toBe(false);
+      expect(crossesBubbleStretch({ x: 140, y: 130, width: 80, height: 80 }, stretch)).toBe(false);
+    });
+
+    it("가로나 세로 어느 한쪽만 걸쳐도 늘어난다", () => {
+      expect(crossesBubbleStretch({ x: 100, y: 10, width: 80, height: 40 }, stretch)).toBe(true);
+      expect(crossesBubbleStretch({ x: 10, y: 100, width: 40, height: 80 }, stretch)).toBe(true);
+    });
+
+    it("경계에 닿기만 한 것은 걸친 것이 아니다", () => {
+      // 오른쪽 끝이 정확히 stretch.x면 늘어나는 열의 왼쪽에서 끝난다.
+      expect(crossesBubbleStretch({ x: 45, y: 10, width: 80, height: 40 }, stretch)).toBe(false);
+      expect(crossesBubbleStretch({ x: 125, y: 10, width: 80, height: 40 }, stretch)).toBe(false);
+    });
   });
 
   it("stores iOS geometry in source pixels", () => {
