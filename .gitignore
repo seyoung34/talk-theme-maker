@@ -65,6 +65,9 @@ temp/
 *.tmp
 .template-factory/
 
+# 촬영 산출물 대체 경로 (E:\TalkTheme-자료에 접근할 수 없을 때)
+.capture-out/
+
 # Local project documents
 docs/
 
