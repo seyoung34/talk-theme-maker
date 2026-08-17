@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
 import { AlertTriangle, Apple, Check, CircleAlert, FileText, Images, MapPin, Smartphone } from "lucide-react";
 import { guideContent, type EasyStep, type GuideMode, type GuidePlatform, type GuideSection } from "@/lib/guide/content";
+import { EasyStepMediaFrame } from "@/components/guide/EasyStepMedia";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 
 type GuideClientProps = {
@@ -143,7 +144,7 @@ function EasyStepCard({ step, index, platformLabel }: { step: EasyStep; index: n
         <div className="relative order-2 bg-[#eef5ff] md:order-1">
           {step.media ? (
             <div className="relative aspect-[16/9] w-full">
-              <img src={step.media.type === "video" ? step.media.poster ?? step.media.src : step.media.src} alt={`${platformLabel} ${step.title} 화면`} className="h-full w-full object-cover object-top" loading="lazy" />
+              <EasyStepMediaFrame media={step.media} label={`${platformLabel} ${step.title} 화면`} />
               {step.annotations?.map((a, i) =>
                 a.kind === "highlight" ? (
                   <div key={i} className="pointer-events-none absolute" style={{ left: `${a.x * 100}%`, top: `${a.y * 100}%`, width: `${(a.w ?? 0.1) * 100}%`, height: `${(a.h ?? 0.06) * 100}%` }}>

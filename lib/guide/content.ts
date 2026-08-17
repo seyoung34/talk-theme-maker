@@ -34,14 +34,29 @@ export type EasyAnnotation = {
   label?: string;
 };
 
+/**
+ * 쉬운 가이드 스텝의 화면 자료.
+ *
+ * 영상에 `poster`를 **필수**로 둔다. 축소 모션 설정에서는 영상 대신 이 이미지만 보여주고,
+ * 재생이 막히거나 실패했을 때도 같은 이미지로 되돌리기 때문이다. 없으면 두 경우 모두 빈
+ * 화면이 남는다. 예전 타입은 `poster`가 선택이라 빠뜨리면 영상 URL이 `<img src>`로 들어가
+ * 조용히 깨졌다.
+ *
+ * 영상 규격: 16:9(1920×1080). 카드가 `aspect-[16/9]` + `object-cover`라 다른 비율을 넣으면
+ * 오류 없이 잘리기만 한다. 무음이므로 오디오 트랙은 넣지 않는다.
+ *
+ * 용량은 **클립당 1.5MB 이하**로 맞춘다. 스텝마다 영상을 달면 페이지 하나가 수 MB가 되고,
+ * 가이드를 여는 사람 상당수가 테마를 적용하려는 모바일 데이터 환경이다. 렌더러가
+ * `preload="none"`으로 실제로 본 스텝만 받게 하지만, 그건 상한을 대신하지 못한다.
+ */
+export type EasyStepMedia =
+  | { type: "image"; src: string }
+  | { type: "video"; src: string; poster: string };
+
 export type EasyStep = {
   title: string;
   caption: string;
-  media?: {
-    type: "image" | "video";
-    src: string;
-    poster?: string;
-  };
+  media?: EasyStepMedia;
   annotations?: EasyAnnotation[];
   hardStep?: boolean;
 };
