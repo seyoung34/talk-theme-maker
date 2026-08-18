@@ -19,6 +19,15 @@
       "service": "talk-theme-maker"
     }
   ],
+  // 공개 preview 파생물 전용. 원본은 GCS catalog에 남고 이 버킷에는 들어오지 않는다.
+  // 바인딩으로만 쓰므로 장기 R2 액세스 키를 만들지 않는다. `next dev`에는 바인딩이 없어
+  // 호출부가 기존 Supabase `theme-public` 경로로 fallback한다.
+  "r2_buckets": [
+    {
+      "binding": "THEME_PREVIEW_BUCKET",
+      "bucket_name": "talktheme-preview"
+    }
+  ],
   "observability": {
     "enabled": true,
     "logs": {
