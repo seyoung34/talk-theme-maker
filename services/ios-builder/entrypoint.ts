@@ -8,6 +8,7 @@ import {
   validateIosPackage,
   type IosPackageEntry,
 } from "../../lib/theme/ios/packageValidation.js";
+import { INPUT_ARCHIVE_FILE_NAME, readInputArchive } from "../../lib/theme/export/inputArchive.js";
 import { createStoredZipBytes } from "../../lib/theme/project/zip.js";
 
 type BundleManifestItem = { path: string; field: string } | { path: string; serverAsset: string };
@@ -20,6 +21,7 @@ type LocalBundle = {
     themeIdentifier?: string;
   };
   manifest?: BundleManifestItem[];
+  files_archive?: string;
 };
 type BuildSource =
   | { mode: "local"; inputDir: string; outputDir: string }
@@ -130,6 +132,10 @@ async function readInputEntries(bundle: LocalBundle, source: BuildSource, assets
   const manifest = bundle.manifest ?? [];
   const paths = new Set<string>();
   const bytesBySource = new Map<string, Uint8Array>();
+  const archiveByField =
+    source.mode === "gcs" && bundle.files_archive
+      ? readInputArchive(await downloadBytes(resolveGcsInputArchive(source)))
+      : null;
   const entries: IosPackageEntry[] = [];
 
   for (const item of manifest) {
@@ -148,11 +154,13 @@ async function readInputEntries(bundle: LocalBundle, source: BuildSource, assets
     const field = normalizeInputFileField(item.field);
     if (!field || isUnsafeRelativePath(field)) throw new Error("invalid_manifest_field");
     const cacheKey = `field:${field}`;
+    const archivedBytes = archiveByField?.get(field);
+    if (archiveByField && !archivedBytes) throw new Error("input_archive_file_missing");
     const bytes =
       bytesBySource.get(cacheKey) ??
-      (source.mode === "gcs"
+      (archivedBytes ?? (source.mode === "gcs"
         ? await downloadBytes(resolveGcsInputFile(source, field))
-        : new Uint8Array(await readFile(resolveInputFilePath(source.inputDir, field))));
+        : new Uint8Array(await readFile(resolveInputFilePath(source.inputDir, field)))));
     bytesBySource.set(cacheKey, bytes);
     entries.push({ path: normalizedPath, bytes });
   }
@@ -205,6 +213,9 @@ function validateGcsBundle(bundle: LocalBundle, exportJobId: string) {
   if (bundle.export_job_id !== exportJobId) throw new Error("bundle_job_mismatch");
   if (!nonEmptyString(bundle.user_id)) throw new Error("missing_user_id");
   if (!Array.isArray(bundle.manifest)) throw new Error("missing_manifest");
+  if (bundle.files_archive !== undefined && bundle.files_archive !== INPUT_ARCHIVE_FILE_NAME) {
+    throw new Error("invalid_input_archive");
+  }
 }
 
 function isLocalBundle(value: unknown): value is LocalBundle {
@@ -212,6 +223,7 @@ function isLocalBundle(value: unknown): value is LocalBundle {
   const bundle = value as Record<string, unknown>;
   if (bundle.export_job_id !== undefined && typeof bundle.export_job_id !== "string") return false;
   if (bundle.user_id !== undefined && typeof bundle.user_id !== "string") return false;
+  if (bundle.files_archive !== undefined && typeof bundle.files_archive !== "string") return false;
   if (bundle.options !== undefined && (typeof bundle.options !== "object" || bundle.options === null)) return false;
   if (bundle.manifest !== undefined && !Array.isArray(bundle.manifest)) return false;
   return (bundle.manifest ?? []).every(isManifestItem);
@@ -233,6 +245,10 @@ function resolveInputFilePath(root: string, field: string) {
 
 function resolveGcsInputFile(source: Extract<BuildSource, { mode: "gcs" }>, field: string): GcsObjectRef {
   return { bucket: source.input.bucket, object: joinGcsPath(source.inputPrefix, "files", field) };
+}
+
+function resolveGcsInputArchive(source: Extract<BuildSource, { mode: "gcs" }>): GcsObjectRef {
+  return { bucket: source.input.bucket, object: joinGcsPath(source.inputPrefix, INPUT_ARCHIVE_FILE_NAME) };
 }
 
 function normalizeInputFileField(field: string) {

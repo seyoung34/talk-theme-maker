@@ -17,6 +17,7 @@
   },
   "include": [
     "../../lib/theme/ios/packageValidation.ts",
+    "../../lib/theme/export/inputArchive.ts",
     "../../lib/theme/project/zip.ts",
     "./entrypoint.ts"
   ]

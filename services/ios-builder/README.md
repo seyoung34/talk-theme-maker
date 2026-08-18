@@ -17,8 +17,11 @@ docker run --rm -v "${PWD}\services\ios-builder\fixtures\basic:/in:ro" -v "${PWD
 
 ```text
 <job-id>/bundle.json
-<job-id>/files/<field>
+<job-id>/files.bin
 ```
+
+`files.bin`은 Worker가 만든 단일 입력 아카이브입니다. 이전 버전의
+`<job-id>/files/<field>` 개별 파일 구조도 호환됩니다.
 
 성공 시 다음을 기록합니다.
 

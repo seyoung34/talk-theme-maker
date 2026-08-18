@@ -1,4 +1,5 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
+import { createInputArchive, INPUT_ARCHIVE_FILE_NAME } from "@/lib/theme/export/inputArchive";
 
 // Cloudflare Worker → GCP를 Workload Identity Federation(OIDC)으로 인증하고,
 // 입력 번들을 GCS에 올린 뒤 Cloud Run Job 실행을 트리거한다. SA JSON 키는 사용하지 않는다.
@@ -95,6 +96,7 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: { platfor
   const config = readBuilderConfig(options);
   const accessToken = await getBuilderAccessToken(config);
   const prefix = bundle.exportJobId;
+  const inputArchive = options.platform === "ios" ? createInputArchive(bundle.files) : null;
 
   const bundleJson = JSON.stringify({
     export_job_id: bundle.exportJobId,
@@ -108,14 +110,22 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: { platfor
       ...(bundle.options.themeIdentifier ? { themeIdentifier: bundle.options.themeIdentifier } : {}),
     },
     manifest: bundle.manifest,
+    ...(inputArchive ? { files_archive: INPUT_ARCHIVE_FILE_NAME } : {}),
   });
 
-  await Promise.all([
+  const uploads: Promise<unknown>[] = [
     uploadObject(config.inputBucket, `${prefix}/bundle.json`, new TextEncoder().encode(bundleJson), "application/json", accessToken),
-    mapWithConcurrency(bundle.files, uploadConcurrency, (file) =>
-      uploadObject(config.inputBucket, `${prefix}/files/${file.field}`, file.bytes, "application/octet-stream", accessToken),
-    ),
-  ]);
+  ];
+  if (inputArchive) {
+    uploads.push(uploadObject(config.inputBucket, `${prefix}/${INPUT_ARCHIVE_FILE_NAME}`, inputArchive, "application/octet-stream", accessToken));
+  } else {
+    uploads.push(
+      mapWithConcurrency(bundle.files, uploadConcurrency, (file) =>
+        uploadObject(config.inputBucket, `${prefix}/files/${file.field}`, file.bytes, "application/octet-stream", accessToken),
+      ),
+    );
+  }
+  await Promise.all(uploads);
 
   await runBuilderJob(config, accessToken, {
     inputUri: `gs://${config.inputBucket}/${prefix}`,
@@ -213,6 +223,7 @@ export async function uploadObject(bucket: string, objectName: string, bytes: Ui
   if (!response.ok) {
     throw new BuildEnqueueError("gcs_upload_failed", "빌드 입력 업로드에 실패했습니다.", `HTTP ${response.status}`);
   }
+  await response.arrayBuffer();
 }
 
 export async function runBuilderJob(config: BuilderConfig, accessToken: string, uris: { inputUri: string; outputUri: string }) {
@@ -240,6 +251,7 @@ export async function runBuilderJob(config: BuilderConfig, accessToken: string, 
   if (!response.ok) {
     throw new BuildEnqueueError("job_run_failed", "빌드 작업 실행에 실패했습니다.", await readHttpErrorDetail(response));
   }
+  await response.arrayBuffer();
 }
 
 function requireEnv(name: string) {
