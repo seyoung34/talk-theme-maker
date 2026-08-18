@@ -58,11 +58,19 @@ export type BuilderConfig = {
   outputBucket: string;
   jobRegion: string;
   jobName: string;
+  jobNameEnv?: string;
 };
 
-export function readBuilderConfig(options: { jobNameEnv?: string } = {}): BuilderConfig {
+export type BuilderPlatform = "android" | "ios";
+
+export function getBuilderJobNameEnv(platform: BuilderPlatform) {
+  return platform === "ios" ? "GCP_IOS_BUILD_JOB_NAME" : "GCP_BUILD_JOB_NAME";
+}
+
+export function readBuilderConfig(options: { platform?: BuilderPlatform; jobNameEnv?: string } = {}): BuilderConfig {
   const projectId = requireEnv("GCP_PROJECT_ID");
   const projectNumber = requireEnv("GCP_PROJECT_NUMBER");
+  const jobNameEnv = options.jobNameEnv ?? (options.platform ? getBuilderJobNameEnv(options.platform) : "GCP_BUILD_JOB_NAME");
   const poolId = optionalEnv("GCP_WIF_POOL_ID") ?? "vercel-pool";
   const providerId = optionalEnv("GCP_WIF_PROVIDER_ID") ?? "cloudflare-provider";
   const wifAudience =
@@ -78,11 +86,12 @@ export function readBuilderConfig(options: { jobNameEnv?: string } = {}): Builde
     inputBucket: requireEnv("GCP_BUILD_INPUT_BUCKET"),
     outputBucket: requireEnv("GCP_BUILD_OUTPUT_BUCKET"),
     jobRegion: requireEnv("GCP_BUILD_JOB_REGION"),
-    jobName: requireEnv(options.jobNameEnv ?? "GCP_BUILD_JOB_NAME"),
+    jobName: requireEnv(jobNameEnv),
+    jobNameEnv,
   };
 }
 
-export async function enqueueBuild(bundle: ExportBuildBundle, options: { jobNameEnv?: string } = {}) {
+export async function enqueueBuild(bundle: ExportBuildBundle, options: { platform?: BuilderPlatform; jobNameEnv?: string } = {}) {
   const config = readBuilderConfig(options);
   const accessToken = await getBuilderAccessToken(config);
   const prefix = bundle.exportJobId;
@@ -229,7 +238,7 @@ export async function runBuilderJob(config: BuilderConfig, accessToken: string, 
     timeoutMs: cloudRunRequestTimeoutMs,
   });
   if (!response.ok) {
-    throw new BuildEnqueueError("job_run_failed", "빌드 작업 실행에 실패했습니다.", `HTTP ${response.status}`);
+    throw new BuildEnqueueError("job_run_failed", "빌드 작업 실행에 실패했습니다.", await readHttpErrorDetail(response));
   }
 }
 
@@ -244,11 +253,11 @@ function optionalEnv(name: string) {
   return value || undefined;
 }
 
-function buildRunJobUrl(config: Pick<BuilderConfig, "projectId" | "jobRegion" | "jobName">) {
+function buildRunJobUrl(config: Pick<BuilderConfig, "projectId" | "jobRegion" | "jobName" | "jobNameEnv">) {
   const projectId = validatePathSegment(config.projectId, "GCP_PROJECT_ID");
   const jobRegion = validatePathSegment(config.jobRegion, "GCP_BUILD_JOB_REGION");
-  const jobName = validatePathSegment(config.jobName, "GCP_IOS_BUILD_JOB_NAME");
-  return `https://${jobRegion}-run.googleapis.com/v2/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(jobRegion)}/jobs/${encodeURIComponent(jobName)}:run`;
+  const jobName = validatePathSegment(config.jobName, config.jobNameEnv ?? "GCP_BUILD_JOB_NAME");
+  return `https://run.googleapis.com/v2/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(jobRegion)}/jobs/${encodeURIComponent(jobName)}:run`;
 }
 
 function validatePathSegment(value: string, envName: string) {
@@ -274,6 +283,11 @@ async function fetchWithTimeout(
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function readHttpErrorDetail(response: Response) {
+  const body = (await response.text().catch(() => "")).trim().replace(/\s+/g, " ");
+  return `HTTP ${response.status}${body ? `: ${body}` : ""}`.slice(0, 800);
 }
 
 function readPrivateJwk() {

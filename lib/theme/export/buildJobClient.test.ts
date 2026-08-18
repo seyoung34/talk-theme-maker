@@ -17,6 +17,20 @@ const builderConfig: BuilderConfig = {
 describe("Cloud Run builder enqueue", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("uses the global Cloud Run API endpoint for a regional job", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runBuilderJob(builderConfig, "access-token", {
+      inputUri: "gs://kt-theme-build-input-dev/job-id",
+      outputUri: "gs://kt-theme-build-output-dev/job-id",
+    });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "https://run.googleapis.com/v2/projects/project-78d94000-bff9-4358-821/locations/asia-northeast3/jobs/ios-builder:run",
+    );
+  });
+
   it("converts a Cloud Run transport failure into a typed enqueue error", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
 

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import {
-  failExportJob,
   getCurrentUserOrNull,
   isExportAlreadyInProgressError,
   isInsufficientCreditsError,
@@ -10,6 +9,7 @@ import {
   updateExportJobStage,
 } from "@/lib/billing/credits";
 import { elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
+import { settleFailedExportJob } from "@/lib/theme/export/asyncExportRoute";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
 import { IosExportRequestError, validateExportName } from "@/lib/theme/ios/packageValidation";
 import { enqueueIosBuild, IosBuildEnqueueError } from "@/lib/theme/ios/buildJobClient";
@@ -89,7 +89,13 @@ export async function handleAsyncIosExportRequest(request: Request) {
     let refunded = false;
 
     if (userId && exportJobId) {
-      refunded = await settleFailedExportJob({ userId, exportJobId, errorCode: failure.code, errorMessage: failure.message, durationMs });
+      refunded = await settleFailedExportJob({
+        userId,
+        exportJobId,
+        errorCode: error instanceof IosBuildEnqueueError ? error.code : failure.code,
+        errorMessage: failure.message,
+        durationMs,
+      }, "ios-export");
     }
 
     console.error(`[ios-export] ${JSON.stringify({
@@ -102,26 +108,6 @@ export async function handleAsyncIosExportRequest(request: Request) {
     })}`);
     return NextResponse.json({ error: failure.message, reason: failure.code, ...(refunded ? { refunded: true } : {}) }, { status: failure.status });
   }
-}
-
-async function settleFailedExportJob(args: {
-  userId: string;
-  exportJobId: string;
-  errorCode: string;
-  errorMessage: string;
-  durationMs: number;
-}) {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      await failExportJob(args);
-      return true;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  console.error(`[ios-export] ${JSON.stringify({ event: "refund_failed", exportJobId: args.exportJobId, error: safeErrorSummary(lastError) })}`);
-  return false;
 }
 
 function classifyFailure(error: unknown) {

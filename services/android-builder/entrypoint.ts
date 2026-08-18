@@ -58,10 +58,11 @@ function getDbClientOrNull(): DbClient | null {
 
 // 3.5 소유권 검증: 번들의 export_job_id/user_id가 DB export_jobs row와 일치해야 한다.
 async function verifyOwnership(db: DbClient, exportJobId: string, userId: string) {
-  const { data, error } = await db.from("export_jobs").select("user_id").eq("id", exportJobId).maybeSingle();
+  const { data, error } = await db.from("export_jobs").select("user_id,platform").eq("id", exportJobId).maybeSingle();
   if (error) throw new Error("ownership_check_failed");
   if (!data) throw new Error("export_job_not_found");
-  if ((data as { user_id?: string }).user_id !== userId) throw new Error("ownership_mismatch");
+  const row = data as { user_id?: string; platform?: string };
+  if (row.user_id !== userId || row.platform !== "android") throw new Error("ownership_mismatch");
 }
 
 // 3.6 스테이지 갱신: status='pending'일 때만(멱등). 실패해도 빌드를 막지 않는다(best-effort).

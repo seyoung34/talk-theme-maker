@@ -24,13 +24,9 @@ export class IosBuildEnqueueError extends BuildEnqueueError {
   }
 }
 
-export function isAsyncIosExportEnabled() {
-  return process.env.IOS_EXPORT_ASYNC === "1" || process.env.IOS_EXPORT_ASYNC === "true";
-}
-
 export async function enqueueIosBuild(bundle: IosBuildBundle) {
   try {
-    await enqueueBuild(bundle, { jobNameEnv: "GCP_IOS_BUILD_JOB_NAME" });
+    await enqueueBuild(bundle, { platform: "ios" });
   } catch (error) {
     if (error instanceof BuildEnqueueError) throw new IosBuildEnqueueError(error.code, error.message, error.detail);
     throw error;

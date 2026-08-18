@@ -2,9 +2,6 @@ import type { AndroidBundleUploadFile, AndroidExportManifestItem } from "@/lib/t
 import {
   BuildEnqueueError,
   enqueueBuild,
-  getBuilderAccessToken,
-  readBuilderConfig,
-  type BuilderConfig,
 } from "@/lib/theme/export/buildJobClient";
 
 export type AndroidBuildBundle = {
@@ -16,25 +13,18 @@ export type AndroidBuildBundle = {
   files: AndroidBundleUploadFile[];
 };
 
-export { getBuilderAccessToken, readBuilderConfig };
-export type { BuilderConfig };
-
 export class AndroidBuildEnqueueError extends BuildEnqueueError {
-  constructor(code: string, message: string) {
-    super(code, message);
+  constructor(code: string, message: string, detail?: string) {
+    super(code, message, detail);
     this.name = "AndroidBuildEnqueueError";
   }
 }
 
-export function isAsyncAndroidExportEnabled() {
-  return process.env.ANDROID_EXPORT_ASYNC === "1" || process.env.ANDROID_EXPORT_ASYNC === "true";
-}
-
 export async function enqueueAndroidBuild(bundle: AndroidBuildBundle) {
   try {
-    await enqueueBuild(bundle);
+    await enqueueBuild(bundle, { platform: "android" });
   } catch (error) {
-    if (error instanceof BuildEnqueueError) throw new AndroidBuildEnqueueError(error.code, error.message);
+    if (error instanceof BuildEnqueueError) throw new AndroidBuildEnqueueError(error.code, error.message, error.detail);
     throw error;
   }
 }

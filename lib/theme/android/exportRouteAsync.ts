@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import {
-  failExportJob,
   getCurrentUserOrNull,
   isExportAlreadyInProgressError,
   isInsufficientCreditsError,
+  markExportJobBackend,
   prepareExportJobIdentity,
   reserveCreditForExport,
   type ExportMode,
+  updateExportJobStage,
 } from "@/lib/billing/credits";
 import { AndroidBuildEnqueueError, enqueueAndroidBuild } from "@/lib/theme/android/buildJobClient";
 import { AndroidExportRequestError, readAndroidBundleUpload } from "@/lib/theme/android/requestShared";
 import { AndroidValidationError, validateAndroidApplicationId, validateAndroidVersionName } from "@/lib/theme/android/validation";
+import { settleFailedExportJob } from "@/lib/theme/export/asyncExportRoute";
 import { elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
 
@@ -22,10 +24,13 @@ export async function handleAsyncAndroidExportRequest(
 ) {
   const startedAt = performance.now();
   let mode: AndroidExportMode = options.forcedMode ?? "apk";
+  let userId: string | null = null;
+  let exportJobId: string | null = null;
 
   try {
     const user = await getCurrentUserOrNull();
     if (!user) return NextResponse.json({ error: "로그인이 필요합니다.", reason: "unauthenticated" }, { status: 401 });
+    userId = user.id;
 
     if (isExportRequestTooLarge(request)) return NextResponse.json(getExportRequestTooLargePayload(), { status: 413 });
 
@@ -47,73 +52,61 @@ export async function handleAsyncAndroidExportRequest(
     const versionName = typeof versionNameRaw === "string" && versionNameRaw.trim() ? versionNameRaw.trim() : undefined;
     if (versionName) validateAndroidVersionName(versionName);
 
-    return await enqueueAsyncAndroidExport({ formData, manifestRaw, user, mode, exportName, versionName });
-  } catch (error) {
-    const failure = classifyFailure(error);
-    logAndroidExport("error", "failed", {
-      mode,
-      durationMs: elapsedMs(startedAt),
-      errorCode: failure.code,
-      error: safeErrorSummary(error),
-    });
-    return NextResponse.json({ error: failure.message, reason: failure.code }, { status: failure.status });
-  }
-}
+    const themeIdRaw = formData.get("themeId");
+    const themeId = typeof themeIdRaw === "string" && themeIdRaw.trim() ? themeIdRaw.trim().slice(0, 120) : "unknown";
+    const { manifest, files, inputBytes } = await readAndroidBundleUpload(formData, manifestRaw);
+    const reservation = await reserveCreditForExport({ userId, platform: "android", mode, inputFileCount: files.length, inputBytes });
+    exportJobId = reservation.exportJobId;
+    await markExportJobBackend({ userId, exportJobId, backend: "cloud_run" });
 
-async function enqueueAsyncAndroidExport(args: {
-  formData: FormData;
-  manifestRaw: string;
-  user: { id: string };
-  mode: Extract<AndroidExportMode, "apk">;
-  exportName: string;
-  versionName?: string;
-}) {
-  const { formData, manifestRaw, user, mode, exportName, versionName } = args;
-  const themeIdRaw = formData.get("themeId");
-  const themeId = typeof themeIdRaw === "string" && themeIdRaw.trim() ? themeIdRaw.trim().slice(0, 120) : "unknown";
+    const identity = await prepareExportJobIdentity({ userId, exportJobId, exportName });
+    if (!identity.applicationId) throw new AndroidExportRequestError("missing_application_id", "Android 앱 식별자를 발급하지 못했습니다.");
+    validateAndroidApplicationId(identity.applicationId);
+    await updateExportJobStage({ userId, exportJobId, stage: "preparing" });
 
-  const { manifest, files, inputBytes } = await readAndroidBundleUpload(formData, manifestRaw);
-  const reservation = await reserveCreditForExport({ userId: user.id, platform: "android", mode, inputFileCount: files.length, inputBytes });
-  const identity = await prepareExportJobIdentity({ userId: user.id, exportJobId: reservation.exportJobId, exportName });
-  if (!identity.applicationId) throw new AndroidExportRequestError("missing_application_id", "Android 앱 식별자를 발급하지 못했습니다.");
-  validateAndroidApplicationId(identity.applicationId);
-
-  try {
     await enqueueAndroidBuild({
-      exportJobId: reservation.exportJobId,
-      userId: user.id,
+      exportJobId,
+      userId,
       themeId,
       options: { mode, exportName, versionName, applicationId: identity.applicationId },
       manifest,
       files,
     });
-  } catch (error) {
-    await failExportJob({
-      userId: user.id,
-      exportJobId: reservation.exportJobId,
-      errorCode: error instanceof AndroidBuildEnqueueError ? error.code : "enqueue_failed",
-      errorMessage: "빌드 작업을 시작하지 못했습니다.",
-      durationMs: 0,
-    }).catch(() => undefined);
-    logAndroidExport("error", "enqueue_failed", {
-      exportJobId: reservation.exportJobId,
-      mode,
-      errorCode: error instanceof AndroidBuildEnqueueError ? error.code : "enqueue_failed",
-    });
-    return NextResponse.json({ error: "빌드 작업을 시작하지 못했습니다.", reason: "enqueue_failed", refunded: true }, { status: 502 });
-  }
 
-  logAndroidExport("info", "enqueued", {
-    exportJobId: reservation.exportJobId,
-    exportNumber: identity.exportNumber,
-    mode,
-    inputFileCount: files.length,
-    inputBytes,
-  });
-  return NextResponse.json(
-    { exportJobId: reservation.exportJobId, exportNumber: identity.exportNumber, applicationId: identity.applicationId, status: "queued" },
-    { status: 202 },
-  );
+    logAndroidExport("info", "enqueued", {
+      exportJobId,
+      exportNumber: identity.exportNumber,
+      mode,
+      inputFileCount: files.length,
+      inputBytes,
+      durationMs: elapsedMs(startedAt),
+    });
+    return NextResponse.json(
+      { exportJobId, exportNumber: identity.exportNumber, applicationId: identity.applicationId, status: "queued" },
+      { status: 202 },
+    );
+  } catch (error) {
+    const failure = classifyFailure(error);
+    const durationMs = elapsedMs(startedAt);
+    let refunded = false;
+    if (userId && exportJobId) {
+      refunded = await settleFailedExportJob({
+        userId,
+        exportJobId,
+        errorCode: error instanceof AndroidBuildEnqueueError ? error.code : failure.code,
+        errorMessage: failure.message,
+        durationMs,
+      }, "android-export");
+    }
+    logAndroidExport("error", "failed", {
+      exportJobId,
+      mode,
+      durationMs,
+      errorCode: failure.code,
+      error: safeErrorSummary(error),
+    });
+    return NextResponse.json({ error: failure.message, reason: failure.code, ...(refunded ? { refunded: true } : {}) }, { status: failure.status });
+  }
 }
 
 async function readFormData(request: Request) {

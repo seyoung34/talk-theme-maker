@@ -2,8 +2,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { access, cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-export { validateAndroidApplicationId, validateAndroidVersionName } from "@/lib/theme/android/validation";
-import { validateAndroidApplicationId, validateAndroidVersionName } from "@/lib/theme/android/validation";
+export { validateAndroidApplicationId, validateAndroidVersionName } from "./validation.js";
+import { validateAndroidApplicationId, validateAndroidVersionName } from "./validation.js";
 
 const sampleProjectRoot = path.join(/* turbopackIgnore: true */ process.cwd(), "android-sample-theme", "apeach-26.1.0-source");
 const defaultGradleTimeoutMs = 4 * 60 * 1000;

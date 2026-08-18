@@ -113,7 +113,7 @@ export async function resolveExportDownload(userId: string, exportJobId: string,
 }
 
 function readPlatformBuilderConfig(platform: AsyncExportPlatform) {
-  return readBuilderConfig({ jobNameEnv: platform === "ios" ? "GCP_IOS_BUILD_JOB_NAME" : "GCP_BUILD_JOB_NAME" });
+  return readBuilderConfig({ platform });
 }
 
 function getWatchdogStaleMs(platform: AsyncExportPlatform) {

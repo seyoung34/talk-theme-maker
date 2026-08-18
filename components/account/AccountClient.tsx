@@ -209,7 +209,7 @@ export default function AccountClient() {
           <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6 lg:col-start-1 lg:row-start-3" aria-labelledby="export-history-title">
             <div className="mb-3 flex items-center gap-3 sm:mb-5">
               <span className="grid size-10 place-items-center rounded-[14px] bg-[#eafaf1] text-[#34c98a] sm:size-11 sm:rounded-2xl"><Download size={20} aria-hidden="true" /></span>
-              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 내보내기</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">최근 10개 · 완료된 Android와 비동기 iOS 결과는 최대 7일간 다시 받을 수 있습니다.</p></div>
+              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 내보내기</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">최근 10개 · 완료된 Android·iOS 결과는 최대 7일간 다시 받을 수 있습니다.</p></div>
             </div>
             {pendingExportKey ? <div className="mb-3 flex items-start gap-2 rounded-2xl border border-[#cfe0ff] bg-[#f4f9ff] px-3.5 py-3 text-[11px] font-semibold leading-5 text-[#36577f]" role="status" aria-live="polite"><RefreshCw className="mt-0.5 shrink-0 text-[#2f6bbf]" size={15} aria-hidden="true" /><span><strong className="font-extrabold text-[#2f6bbf]">백그라운드에서 생성 중입니다.</strong> 이 페이지는 10초마다 상태를 확인하며, 창을 닫아도 작업은 계속됩니다.</span></div> : null}
             {(me?.exports ?? []).length === 0 ? <div className="rounded-[18px] bg-[#f7fbff] px-4 py-5 text-center text-sm font-semibold text-[var(--color-on-surface-variant)] sm:rounded-[24px] sm:py-8">아직 내보내기 이력이 없습니다.</div> : (
