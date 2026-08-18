@@ -47,8 +47,8 @@ export function isLongRunningAndroidExportMode(mode: ExportMode) {
 }
 
 export function getExportWaitNotice(mode: ExportMode) {
-  if (isLongRunningAndroidExportMode(mode)) return "Android APK 내보내기는 환경에 따라 약 1분 30초~2분이 걸릴 수 있습니다.";
-  if (mode === "ktheme" || mode === "theme-zip") return "iOS 파일은 작업 접수 후 백그라운드에서 생성됩니다. 접수 전까지 이 창을 유지해 주세요.";
+  if (isLongRunningAndroidExportMode(mode)) return "Android APK는 환경에 따라 약 1분 30초~2분이 걸리며, 작업 접수 후 백그라운드에서 생성됩니다.";
+  if (mode === "ktheme" || mode === "theme-zip") return "iOS 파일은 작업 접수 후 백그라운드에서 생성됩니다.";
   return null;
 }
 

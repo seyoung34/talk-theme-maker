@@ -39,23 +39,34 @@ export default function AccountClient() {
   const accountId = me?.user?.id ?? null;
   const pendingExportKey = (me?.exports ?? [])
     .filter((item) => (item.platform === "android" || item.platform === "ios") && item.status === "pending")
-    .map((item) => `${item.id}:${item.platform}:${item.stage ?? ""}`)
+    .map((item) => `${item.id}:${item.platform}`)
     .join("|");
 
   useEffect(() => {
     if (!accountId || !pendingExportKey) return;
+    let isChecking = false;
     const checkPendingExports = async () => {
-      if (document.visibilityState !== "visible") return;
-      const pendingJobs = pendingExportKey.split("|").map((value) => {
-        const [id, platform] = value.split(":");
-        return { id, platform: platform === "ios" ? "ios" : "android" } as const;
-      });
-      await Promise.all(pendingJobs.map(({ id, platform }) => fetch(`/api/export/${platform}/status?jobId=${encodeURIComponent(id)}`, { cache: "no-store" }).catch(() => undefined)));
-      await refreshMe();
+      if (isChecking || document.visibilityState !== "visible") return;
+      isChecking = true;
+      try {
+        const pendingJobs = pendingExportKey.split("|").map((value) => {
+          const [id, platform] = value.split(":");
+          return { id, platform: platform === "ios" ? "ios" : "android" } as const;
+        });
+        await Promise.all(pendingJobs.map(({ id, platform }) => fetch(`/api/export/${platform}/status?jobId=${encodeURIComponent(id)}`, { cache: "no-store" }).catch(() => undefined)));
+        await refreshMe();
+      } finally {
+        isChecking = false;
+      }
     };
     void checkPendingExports();
     const interval = window.setInterval(() => { void checkPendingExports(); }, 10_000);
-    return () => window.clearInterval(interval);
+    const handleVisibilityChange = () => { if (document.visibilityState === "visible") void checkPendingExports(); };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [accountId, pendingExportKey, refreshMe]);
 
   const deleteAccount = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -198,8 +209,9 @@ export default function AccountClient() {
           <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6 lg:col-start-1 lg:row-start-3" aria-labelledby="export-history-title">
             <div className="mb-3 flex items-center gap-3 sm:mb-5">
               <span className="grid size-10 place-items-center rounded-[14px] bg-[#eafaf1] text-[#34c98a] sm:size-11 sm:rounded-2xl"><Download size={20} aria-hidden="true" /></span>
-              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 내보내기</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">최근 10개 · 결과 파일은 7일간 보관</p>{pendingExportKey ? <p className="mt-1 text-[11px] font-bold text-[#2f6bbf]" role="status">진행 중인 내보내기 작업은 이 페이지를 열어 두면 자동으로 상태를 확인합니다.</p> : null}</div>
+              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 내보내기</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">최근 10개 · 완료된 Android와 비동기 iOS 결과는 최대 7일간 다시 받을 수 있습니다.</p></div>
             </div>
+            {pendingExportKey ? <div className="mb-3 flex items-start gap-2 rounded-2xl border border-[#cfe0ff] bg-[#f4f9ff] px-3.5 py-3 text-[11px] font-semibold leading-5 text-[#36577f]" role="status" aria-live="polite"><RefreshCw className="mt-0.5 shrink-0 text-[#2f6bbf]" size={15} aria-hidden="true" /><span><strong className="font-extrabold text-[#2f6bbf]">백그라운드에서 생성 중입니다.</strong> 이 페이지는 10초마다 상태를 확인하며, 창을 닫아도 작업은 계속됩니다.</span></div> : null}
             {(me?.exports ?? []).length === 0 ? <div className="rounded-[18px] bg-[#f7fbff] px-4 py-5 text-center text-sm font-semibold text-[var(--color-on-surface-variant)] sm:rounded-[24px] sm:py-8">아직 내보내기 이력이 없습니다.</div> : (
               <div className="divide-y divide-[var(--color-outline-variant)] overflow-hidden rounded-[18px] border border-[#e3ecf7] bg-[#fcfdff] sm:rounded-[24px]">
                 {(me?.exports ?? []).map((item) => <ExportRow key={item.id} item={item} onRefreshed={() => void refreshMe()} />)}
@@ -236,7 +248,7 @@ function ExportRow({ item, onRefreshed }: { item: AccountExportDto; onRefreshed:
   const creditLabel = item.status === "failed" ? "차감 없음" : `${item.credit_cost}크레딧`;
   const title = item.export_name || item.file_name || "이름 없는 테마";
   const identifier = item.application_id ?? item.theme_identifier;
-  return <div className="grid gap-2 bg-white/75 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={item.status} /><strong className="text-sm font-extrabold">{item.export_number ? `#${item.export_number} · ` : ""}{title}</strong>{item.status === "pending" && item.stage ? <span className="text-[11px] font-bold text-[var(--color-on-surface-variant)]">{getExportStageLabel(item.stage)}</span> : null}</div><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{getPlatformLabel(item.platform)} · {getExportModeLabel(item.export_mode)}{item.file_name ? ` · ${item.file_name}` : ""}</p>{identifier ? <p className="mt-1 truncate font-mono text-[11px] text-[var(--color-outline)]" title={identifier}>{identifier}</p> : null}<ExportRowAction item={item} onRefreshed={onRefreshed} /></div><div className="flex items-center justify-between gap-4 text-xs font-bold text-[var(--color-on-surface-variant)] sm:block sm:text-right"><span className="sm:block">{creditLabel}</span>{item.duration_ms != null ? <span className="sm:mt-1 sm:block">{formatDuration(item.duration_ms)}</span> : null}<time className="sm:mt-1 sm:block" dateTime={item.created_at}>{new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(item.created_at))}</time></div></div>;
+  return <div className="grid gap-2 bg-white/75 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={item.status} /><strong className="text-sm font-extrabold">{item.export_number ? `#${item.export_number} · ` : ""}{title}</strong>{item.status === "pending" && item.stage ? <span className="rounded-full bg-[#eff6ff] px-2 py-1 text-[11px] font-bold text-[#2f6bbf]">{getExportStageLabel(item.stage, item.platform)}</span> : null}</div><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{getPlatformLabel(item.platform)} · {getExportModeLabel(item.export_mode)}{item.file_name ? ` · ${item.file_name}` : ""}</p>{identifier ? <p className="mt-1 truncate font-mono text-[11px] text-[var(--color-outline)]" title={identifier}>{identifier}</p> : null}<ExportRowAction item={item} onRefreshed={onRefreshed} /></div><div className="flex items-center justify-between gap-4 text-xs font-bold text-[var(--color-on-surface-variant)] sm:block sm:text-right"><span className="sm:block">{creditLabel}</span>{item.duration_ms != null ? <span className="sm:mt-1 sm:block">{formatDuration(item.duration_ms)}</span> : null}<time className="sm:mt-1 sm:block" dateTime={item.created_at}>{new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(item.created_at))}</time></div></div>;
 }
 
 /**
@@ -340,6 +352,10 @@ function StatusBadge({ status }: { status: string }) {
 function getPlatformLabel(platform: string) { return platform === "android" ? "Android" : platform === "ios" ? "iOS" : platform; }
 function getExportApiPlatform(platform: string) { return platform === "ios" ? "ios" : "android"; }
 function getExportModeLabel(mode: string) { return ({ project: "프로젝트", apk: "APK", "apk-zip": "APK ZIP", "theme-zip": "테마 ZIP", ktheme: "KTheme" } as Record<string, string>)[mode] ?? mode; }
-function getExportStatusLabel(status: string) { return ({ pending: "진행 중", succeeded: "완료", failed: "실패" } as Record<string, string>)[status] ?? status; }
-function getExportStageLabel(stage: string) { return ({ queued: "대기 중", preparing: "리소스 준비", building: "APK 빌드", packaging: "압축 중", finalizing: "결과 정리" } as Record<string, string>)[stage] ?? stage; }
+function getExportStatusLabel(status: string) { return ({ pending: "처리 중", succeeded: "완료", failed: "실패" } as Record<string, string>)[status] ?? status; }
+function getExportStageLabel(stage: string, platform: string) {
+  if (stage === "building") return platform === "ios" ? "iOS 파일 생성" : "APK 빌드";
+  if (stage === "packaging") return platform === "ios" ? "KTheme 압축" : "APK 압축";
+  return ({ queued: "대기 중", preparing: "리소스 준비", finalizing: "결과 정리" } as Record<string, string>)[stage] ?? stage;
+}
 function formatDuration(durationMs: number) { return durationMs >= 60_000 ? `${Math.floor(durationMs / 60_000)}분 ${Math.round((durationMs % 60_000) / 1000)}초` : `${Math.max(1, Math.round(durationMs / 1000))}초`; }

@@ -89,6 +89,7 @@ test.describe("마이페이지 내보내기 결과 복구", () => {
   test("진행 중인 Android 작업은 상태 확인으로 정산을 직접 트리거할 수 있다", async ({ page }) => {
     // 워치독은 status 조회가 들어와야 돈다. 폴링 탭이 닫히면 아무도 조회하지 않아 예약이 남는다(SQ-04).
     let settled = false;
+    let allowSettlement = false;
     await mockAccountMe(page, () =>
       createMeResponse([
         settled
@@ -100,19 +101,44 @@ test.describe("마이페이지 내보내기 결과 복구", () => {
     const statusCalls: string[] = [];
     await page.route("**/api/export/android/status**", async (route) => {
       statusCalls.push(route.request().url());
+      if (!allowSettlement) {
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "pending", stage: "building" }) });
+        return;
+      }
       settled = true;
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "failed" }) });
     });
 
     await page.goto("/account");
     await expect(page.getByText("APK 빌드")).toBeVisible();
+    // 계정 화면 진입 직후의 자동 확인은 작업을 끝내지 않고, 수동 확인에서만 정산하도록 구분한다.
+    await expect.poll(() => statusCalls.length).toBeGreaterThan(0);
+    const callsBeforeManualCheck = statusCalls.length;
+    allowSettlement = true;
 
     await page.getByRole("button", { name: "상태 확인" }).click();
 
     await expect(page.getByText("실패")).toBeVisible();
     await expect(page.getByText("차감 없음")).toBeVisible();
-    expect(statusCalls).toHaveLength(1);
+    await expect.poll(() => statusCalls.length).toBeGreaterThan(callsBeforeManualCheck);
     expect(statusCalls[0]).toContain("jobId=job-stuck");
+  });
+
+  test("진행 중인 iOS 작업은 같은 백그라운드 안내와 iOS 단계 문구를 보여 준다", async ({ page }) => {
+    await mockAccountMe(page, () =>
+      createMeResponse([
+        createExportJob({ id: "job-ios-pending", platform: "ios", export_mode: "ktheme", status: "pending", stage: "building", completed_at: null }),
+      ]),
+    );
+    await page.route("**/api/export/ios/status**", async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "pending", stage: "building" }) });
+    });
+
+    await page.goto("/account");
+
+    await expect(page.getByText("iOS 파일 생성")).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "백그라운드에서 생성 중입니다." })).toBeVisible();
+    await expect(page.getByRole("button", { name: "상태 확인" })).toBeVisible();
   });
 
   test("iOS 결과에는 재다운로드 버튼 대신 서버 미보관 안내가 붙는다", async ({ page }) => {
