@@ -11,8 +11,7 @@
 // 자리를 회색으로 채우며, `deviceScaleFactor`는 무시한다. `size`를 아예 주지 않으면 Playwright가
 // 800px 상자에 맞춰 줄여 버리므로(1280x720 → 800x450), size는 뷰포트와 같은 값으로 **반드시** 준다.
 //
-// 그래서 문서 규격 1920x1080(뷰포트 1280x720 x 1.5)은 screencast로 도달할 수 없다.
-// screenshot 백엔드(Phase B2)가 생기면 guide 프로필의 backend만 바꿔 도달한다.
+// 그래서 1920x1080이나 1080x1920 풀블리드는 screenshot 백엔드로만 나온다.
 
 /** @typedef {"screencast" | "screenshot"} CaptureBackend */
 
@@ -35,23 +34,33 @@ export const profiles = {
     fps: 30,
     isMobile: false,
     // 가이드는 색을 만지지 않는다. 제품 화면과 다르면 사용자가 자기 화면에서 같은 곳을 못 찾는다.
-    colorGrade: false,
+    toneDown: 0,
+    // 자막을 영상에 굽지 않는다. 가이드 페이지가 DOM(`EasyAnnotation`)으로 그려서 문구 수정·번역·
+    // 접근성을 살린다.
+    captions: false,
     outputs: ["webm", "mp4", "poster"],
   },
 
   reel: {
     id: "reel",
     label: "홍보 릴스 9:16",
-    // 9:16 풀블리드 1080x1920은 page.screenshot()만 낸다(§2.1). Phase B2에서 구현한다.
+    // 9:16 풀블리드 1080x1920은 page.screenshot()만 낸다.
     backend: /** @type {CaptureBackend} */ ("screenshot"),
+    // 432 x 2.5 = 1080, 768 x 2.5 = 1920. 정확히 9:16이다.
     viewport: { width: 432, height: 768 },
     deviceScaleFactor: 2.5,
     capture: { width: 1080, height: 1920 },
     spec: { width: 1080, height: 1920 },
     fps: 30,
     isMobile: true,
-    // 릴스는 배경 톤다운을 허용한다. 다만 버튼 대비와 브랜드 색을 왜곡하지 않는 선에서 육안 QA.
-    colorGrade: true,
+    /**
+     * 1080x1920 JPEG 한 장에 약 52ms라 19fps가 상한이다. 30fps를 채우려면 페이지를 이만큼
+     * 느리게 연출하고 인코딩에서 시간축을 되돌린다. 19 x 1.6 = 30.4fps.
+     */
+    slowdown: 1.6,
+    // 배경 토큰만 내린다. 0이면 끈다. 값은 육안 QA로 정한다(계획서 §9 열린 질문).
+    toneDown: 0,
+    captions: true,
     outputs: ["mp4"],
   },
 };

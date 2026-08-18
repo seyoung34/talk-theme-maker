@@ -31,3 +31,15 @@ export async function settle(page, ms = 400) {
   await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
   await page.waitForTimeout(ms);
 }
+
+/**
+ * 모바일 편집기 준비 대기.
+ *
+ * 데스크톱용 `waitForEditorReady`를 그대로 쓰면 안 된다. 모바일 패널은 색상/이미지를 탭으로
+ * 나눠서 **`input[type=file]`이 이미지 탭에서만 존재한다.** 진입 직후에는 없으므로 그 조건으로
+ * 기다리면 영원히 멈춘다.
+ */
+export async function waitForMobileEditorReady(page) {
+  await page.getByRole("button", { name: "편집 종료" }).waitFor({ state: "visible", timeout: 60_000 });
+  await page.getByRole("button", { name: "편집 패널 펼치기" }).waitFor({ state: "visible", timeout: 60_000 });
+}

@@ -15,9 +15,11 @@ export const templateGallery = {
   title: "템플릿 고르기",
   description: "마음에 드는 분위기를 고르면 바로 편집기로 들어갑니다",
 
-  async run({ page, baseURL, beat, dismissNotices }) {
-    await page.goto(`${baseURL}/template`, { waitUntil: "load" });
-    await settle(page);
+  async run({ page, baseURL, beat, dismissNotices, offCamera }) {
+    await offCamera(async () => {
+      await page.goto(`${baseURL}/template`, { waitUntil: "load" });
+      await settle(page);
+    });
 
     // `e2e/fixtures/gallery.ts`의 `templateCards`와 같은 선택자다.
     const cards = page.locator("article");
@@ -44,9 +46,12 @@ export const templateGallery = {
     await beat(900);
     await start.click();
 
-    await page.waitForURL(/\/edit$/, { timeout: 60_000 });
-    await waitForEditorReady(page);
-    await dismissNotices();
+    // 편집기 부트스트랩은 길다. 도착했다는 사실만 보여주고 대기는 카메라 밖에서 끝낸다.
+    await offCamera(async () => {
+      await page.waitForURL(/\/edit$/, { timeout: 60_000 });
+      await waitForEditorReady(page);
+      await dismissNotices();
+    });
     await beat(800);
   },
 };

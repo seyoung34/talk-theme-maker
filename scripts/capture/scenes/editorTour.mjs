@@ -11,12 +11,14 @@ export const editorTour = {
   title: "화면별로 바꿔보기",
   description: "친구 목록부터 채팅방 말풍선까지 한 화면에서 편집합니다",
 
-  async run({ page, baseURL, beat, dismissNotices }) {
-    await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
-    await waitForEditorReady(page);
-    // 진입 토스트가 상단 가운데를 덮는다. 걷어내고 시작한다.
-    await dismissNotices();
-    await settle(page);
+  async run({ page, baseURL, beat, dismissNotices, offCamera }) {
+    await offCamera(async () => {
+      await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
+      await waitForEditorReady(page);
+      // 진입 토스트가 상단 가운데를 덮는다. 걷어내고 시작한다.
+      await dismissNotices();
+      await settle(page);
+    });
     await beat(800);
 
     for (const section of ["친구", "채팅방"]) {

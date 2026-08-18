@@ -5,7 +5,7 @@
 // 않는다(새 셸을 열어야 보인다). 실제로 설치 직후 여기서 막혔다.
 import { execFile, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readdir } from "node:fs/promises";
+import { readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -136,6 +136,46 @@ export async function posterWebp(source, target, { atSec = 1 } = {}) {
     "-frames:v", "1",
     "-c:v", "libwebp",
     "-quality", "82",
+    target,
+  ]);
+  return target;
+}
+
+/**
+ * 캡처한 프레임들을 배포용 mp4로 굽는다. **시간축을 `slowdown`으로 나눠 정상 속도로 되돌린다.**
+ *
+ * 프레임 간격이 일정하지 않아서(스크린샷 한 장의 소요가 화면마다 다르다) 고정 프레임 레이트로
+ * 이어 붙이면 움직임이 미세하게 밀린다. concat 디먹서에 **프레임마다 실제 표시 시간**을 적어
+ * 넘기고, `fps` 필터가 목표 레이트로 다시 샘플링하게 한다.
+ */
+export async function framesToVideo(frames, target, { fps, slowdown, framesDir }) {
+  const { ffmpeg } = await resolveFfmpeg();
+  if (frames.length < 2) throw new Error(`프레임이 ${frames.length}장뿐이라 영상을 만들 수 없습니다.`);
+
+  const lines = ["ffconcat version 1.0"];
+  for (let i = 0; i < frames.length; i += 1) {
+    // 마지막 프레임은 다음 시각이 없다. 직전 간격을 그대로 쓴다.
+    const next = frames[i + 1]?.t ?? frames[i].t + (frames[i].t - frames[i - 1].t);
+    lines.push(`file '${path.basename(frames[i].file)}'`);
+    lines.push(`duration ${((next - frames[i].t) / slowdown).toFixed(6)}`);
+  }
+  // concat 디먹서는 마지막 항목의 duration을 무시한다. 파일을 한 번 더 적어야 그 길이가 살아난다.
+  lines.push(`file '${path.basename(frames[frames.length - 1].file)}'`);
+
+  const listPath = path.join(framesDir, "frames.txt");
+  await writeFile(listPath, `${lines.join("\n")}\n`, "utf8");
+
+  await execFileAsync(ffmpeg, [
+    "-y", "-v", "error",
+    "-f", "concat", "-safe", "0",
+    "-i", listPath,
+    "-vf", `fps=${fps},scale=trunc(iw/2)*2:trunc(ih/2)*2`,
+    "-c:v", "libx264",
+    "-preset", "slow",
+    "-crf", "20",
+    "-pix_fmt", "yuv420p",
+    "-movflags", "+faststart",
+    "-an",
     target,
   ]);
   return target;

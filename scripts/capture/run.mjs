@@ -84,7 +84,12 @@ async function startServer() {
 
 const args = parseArgs(process.argv.slice(2));
 const profile = getProfile(typeof args.profile === "string" ? args.profile : "guide");
-const sceneIds = typeof args.scenes === "string" ? args.scenes.split(",").map((s) => s.trim()) : defaultSceneIds;
+const sceneIds = typeof args.scenes === "string" ? args.scenes.split(",").map((s) => s.trim()) : defaultSceneIds(profile.id);
+// 배경 톤다운은 육안 QA로 값을 정하는 항목이라 프로필 기본값을 인자로 덮을 수 있게 둔다.
+if (typeof args["tone-down"] === "string") profile.toneDown = Number(args["tone-down"]);
+// 백엔드는 해상도와 연출 수단을 함께 결정한다. 가이드를 규격(1920x1080)으로 올리려면
+// screenshot으로 바꾸면 되지만 커서·클릭 강조를 잃는다. 어느 쪽이 나은지는 눈으로 보고 정한다.
+if (typeof args.backend === "string") profile.backend = args.backend;
 const scenes = selectScenes(sceneIds);
 const outDir = resolveOutDir(args, profile.id);
 
@@ -106,16 +111,25 @@ try {
     baseURL = server.baseURL;
   }
 
-  console.log(`· 프로필 ${profile.id} (${profile.label}) / 씬 ${sceneIds.join(", ")}`);
+  console.log(`· 프로필 ${profile.id} (${profile.label}) / 백엔드 ${profile.backend} / 씬 ${sceneIds.join(", ")}`);
+  if (profile.toneDown > 0) console.log(`· 배경 톤다운 ${Math.round(profile.toneDown * 100)}%`);
   console.log(`· 출력 ${outDir}\n`);
 
-  const manifest = await runCapture({ profile, scenes, baseURL, outDir, captureEnv });
+  const manifest = await runCapture({
+    profile,
+    scenes,
+    baseURL,
+    outDir,
+    captureEnv,
+    safeGuides: Boolean(args["safe-guides"]),
+    keepFrames: Boolean(args["keep-frames"]),
+  });
 
   const { measured, spec } = manifest;
   console.log(`\n· 실측 ${measured.width}x${measured.height} @ ${measured.fps}fps, ${measured.durationSec}초`);
   if (!manifest.meetsSpec) {
     console.log(`  규격 ${spec.width}x${spec.height} 미달 — screencast의 해상도 상한은 뷰포트 CSS 픽셀입니다.`);
-    console.log("  1920x1080은 page.screenshot() 백엔드(Phase B2)로만 나옵니다.");
+    console.log("  규격 해상도는 screenshot 백엔드로만 나옵니다 (profiles.mjs의 backend).");
   }
   console.log(`· 산출물 ${Object.values(manifest.outputs).join(", ")}`);
   console.log(`· manifest capture-manifest.json`);
