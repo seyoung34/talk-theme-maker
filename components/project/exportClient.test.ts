@@ -76,7 +76,7 @@ describe("내보내기 소요 시간 안내", () => {
 
   it("플랫폼별 안내가 현재 비즈니스 약속과 맞는다", () => {
     expect(getExportWaitNotice("apk")).toContain("1분 30초~2분");
-    expect(getExportWaitNotice("ktheme")).toContain("창을 유지");
+    expect(getExportWaitNotice("ktheme")).toContain("백그라운드");
     expect(getExportWaitNotice("project")).toBeNull();
   });
 });

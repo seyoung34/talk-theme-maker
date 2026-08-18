@@ -29,8 +29,13 @@ describe("getExportDownloadState", () => {
     expect(getExportDownloadState(androidJob({ status: "failed" }), completedMs)).toBe("unavailable");
   });
 
-  it("iOS는 서버에 보관본이 없어 다시 받기를 약속하지 않는다", () => {
+  it("기존 동기 iOS 결과는 다시 받기를 제공하지 않는다", () => {
     expect(getExportDownloadState(androidJob({ platform: "ios" }), completedMs + day)).toBe("unsupported");
+  });
+
+  it("iOS 비동기 결과는 같은 출력 버킷 보관 기간 안이면 다시 받을 수 있다", () => {
+    expect(getExportDownloadState(androidJob({ platform: "ios", backend: "cloud_run" }), completedMs + day)).toBe("available");
+    expect(getExportDownloadState(androidJob({ platform: "ios", backend: "cloud_run" }), completedMs + androidExportOutputRetentionMs)).toBe("expired");
   });
 
   it("completed_at이 없으면 created_at으로 보수적으로 판단한다", () => {

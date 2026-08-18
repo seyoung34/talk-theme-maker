@@ -5,20 +5,23 @@
  * (2026-07-14 운영 버킷 확인, `docs/architecture/commercial-launch-phase-1-data-policy.md`).
  * 이 값을 바꾸면 lifecycle 규칙·개인정보 처리방침·해당 문서를 같은 변경에서 함께 고쳐야 한다.
  */
-export const androidExportOutputRetentionMs = 7 * 24 * 60 * 60 * 1000;
+export const exportOutputRetentionMs = 7 * 24 * 60 * 60 * 1000;
+// 기존 Android 전용 import와의 호환성을 유지한다.
+export const androidExportOutputRetentionMs = exportOutputRetentionMs;
 
 export type ExportDownloadState =
   /** 보관 기간 안이라 다시 받을 수 있다. */
   | "available"
   /** 성공했지만 보관 기간이 지나 결과 파일이 삭제됐다. */
   | "expired"
-  /** 서버에 보관되는 결과물이 없는 방식이다(iOS는 동기 응답으로 바로 내려받는다). */
+  /** 서버 결과 보관을 지원하지 않는 플랫폼 또는 출력 방식이다. */
   | "unsupported"
   /** 아직 완료되지 않았거나 실패했다. */
   | "unavailable";
 
 type ExportDownloadInput = {
   platform: string;
+  backend?: string;
   status: string;
   completedAt?: string | null;
   createdAt: string;
@@ -31,13 +34,14 @@ type ExportDownloadInput = {
 export function getExportDownloadExpiresAt(input: ExportDownloadInput): number | null {
   const reference = input.completedAt ?? input.createdAt;
   const completedAt = Date.parse(reference);
-  return Number.isFinite(completedAt) ? completedAt + androidExportOutputRetentionMs : null;
+  return Number.isFinite(completedAt) ? completedAt + exportOutputRetentionMs : null;
 }
 
 export function getExportDownloadState(input: ExportDownloadInput, now: number = Date.now()): ExportDownloadState {
   if (input.status !== "succeeded") return "unavailable";
-  // iOS 내보내기는 응답 본문으로 파일을 바로 내려주고 서버에 남기지 않는다.
-  if (input.platform !== "android") return "unsupported";
+  if (input.platform !== "android" && input.platform !== "ios") return "unsupported";
+  // Legacy iOS jobs were packaged in the Worker and have no server-side result object.
+  if (input.platform === "ios" && input.backend !== "cloud_run") return "unsupported";
 
   const expiresAt = getExportDownloadExpiresAt(input);
   if (expiresAt === null) return "unavailable";

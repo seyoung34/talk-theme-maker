@@ -37,18 +37,26 @@ export default function AccountClient() {
   useEffect(() => { void refreshMe(); }, [refreshMe]);
 
   const accountId = me?.user?.id ?? null;
-  const pendingAndroidExportKey = (me?.exports ?? [])
-    .filter((item) => item.platform === "android" && item.status === "pending")
-    .map((item) => `${item.id}:${item.stage ?? ""}`)
+  const pendingExportKey = (me?.exports ?? [])
+    .filter((item) => (item.platform === "android" || item.platform === "ios") && item.status === "pending")
+    .map((item) => `${item.id}:${item.platform}:${item.stage ?? ""}`)
     .join("|");
 
   useEffect(() => {
-    if (!accountId || !pendingAndroidExportKey) return;
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refreshMe();
-    }, 10_000);
+    if (!accountId || !pendingExportKey) return;
+    const checkPendingExports = async () => {
+      if (document.visibilityState !== "visible") return;
+      const pendingJobs = pendingExportKey.split("|").map((value) => {
+        const [id, platform] = value.split(":");
+        return { id, platform: platform === "ios" ? "ios" : "android" } as const;
+      });
+      await Promise.all(pendingJobs.map(({ id, platform }) => fetch(`/api/export/${platform}/status?jobId=${encodeURIComponent(id)}`, { cache: "no-store" }).catch(() => undefined)));
+      await refreshMe();
+    };
+    void checkPendingExports();
+    const interval = window.setInterval(() => { void checkPendingExports(); }, 10_000);
     return () => window.clearInterval(interval);
-  }, [accountId, pendingAndroidExportKey, refreshMe]);
+  }, [accountId, pendingExportKey, refreshMe]);
 
   const deleteAccount = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -190,7 +198,7 @@ export default function AccountClient() {
           <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6 lg:col-start-1 lg:row-start-3" aria-labelledby="export-history-title">
             <div className="mb-3 flex items-center gap-3 sm:mb-5">
               <span className="grid size-10 place-items-center rounded-[14px] bg-[#eafaf1] text-[#34c98a] sm:size-11 sm:rounded-2xl"><Download size={20} aria-hidden="true" /></span>
-              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 내보내기</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">최근 10개 · Android 결과 파일은 7일간 보관</p>{pendingAndroidExportKey ? <p className="mt-1 text-[11px] font-bold text-[#2f6bbf]" role="status">진행 중인 Android 작업은 이 페이지를 열어 두면 자동으로 상태를 확인합니다.</p> : null}</div>
+              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 내보내기</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">최근 10개 · 결과 파일은 7일간 보관</p>{pendingExportKey ? <p className="mt-1 text-[11px] font-bold text-[#2f6bbf]" role="status">진행 중인 내보내기 작업은 이 페이지를 열어 두면 자동으로 상태를 확인합니다.</p> : null}</div>
             </div>
             {(me?.exports ?? []).length === 0 ? <div className="rounded-[18px] bg-[#f7fbff] px-4 py-5 text-center text-sm font-semibold text-[var(--color-on-surface-variant)] sm:rounded-[24px] sm:py-8">아직 내보내기 이력이 없습니다.</div> : (
               <div className="divide-y divide-[var(--color-outline-variant)] overflow-hidden rounded-[18px] border border-[#e3ecf7] bg-[#fcfdff] sm:rounded-[24px]">
@@ -234,7 +242,7 @@ function ExportRow({ item, onRefreshed }: { item: AccountExportDto; onRefreshed:
 /**
  * 내보내기 결과를 다시 받거나, 멈춘 것처럼 보이는 작업의 상태를 확인한다.
  *
- * APK 빌드는 최대 12분 폴링인데 그동안 탭이 닫히면 크레딧만 차감된 채 결과를 받을 방법이 없었다.
+ * 비동기 빌드는 최대 12분 폴링인데 그동안 탭이 닫히면 크레딧만 차감된 채 결과를 받을 방법이 없었다.
  * 결과 파일은 보관 기간 동안 남아 있으므로 여기서 서명 URL을 새로 발급받는다.
  */
 function ExportRowAction({ item, onRefreshed }: { item: AccountExportDto; onRefreshed: () => void }) {
@@ -242,6 +250,7 @@ function ExportRowAction({ item, onRefreshed }: { item: AccountExportDto; onRefr
   const [error, setError] = useState<string | null>(null);
   const downloadState = getExportDownloadState({
     platform: item.platform,
+    backend: item.export_backend,
     status: item.status,
     completedAt: item.completed_at,
     createdAt: item.created_at,
@@ -252,7 +261,7 @@ function ExportRowAction({ item, onRefreshed }: { item: AccountExportDto; onRefr
     setIsWorking(true);
     setError(null);
     try {
-      const response = await fetch(`/api/export/android/download?jobId=${encodeURIComponent(item.id)}`, { cache: "no-store" });
+      const response = await fetch(`/api/export/${getExportApiPlatform(item.platform)}/download?jobId=${encodeURIComponent(item.id)}`, { cache: "no-store" });
       const payload = await readJsonResponse<ExportDownloadLinkResponse>(response);
       if (!response.ok || !payload.downloadUrl) {
         setError(payload.error ?? "다운로드 링크를 발급하지 못했습니다.");
@@ -274,7 +283,7 @@ function ExportRowAction({ item, onRefreshed }: { item: AccountExportDto; onRefr
     setError(null);
     try {
       // status 엔드포인트는 조회하면서 멈춘 작업을 정산한다. 오래 진행 중인 작업의 크레딧이 여기서 반환된다.
-      const response = await fetch(`/api/export/android/status?jobId=${encodeURIComponent(item.id)}`, { cache: "no-store" });
+      const response = await fetch(`/api/export/${getExportApiPlatform(item.platform)}/status?jobId=${encodeURIComponent(item.id)}`, { cache: "no-store" });
       if (!response.ok) {
         setError("상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
         return;
@@ -287,7 +296,7 @@ function ExportRowAction({ item, onRefreshed }: { item: AccountExportDto; onRefr
     }
   };
 
-  if (item.status === "pending" && item.platform === "android") {
+  if (item.status === "pending" && (item.platform === "android" || item.platform === "ios")) {
     return (
       <div className="mt-2">
         <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[#cfe0ff] bg-white px-3 text-xs font-extrabold text-[#2f6bbf] transition hover:bg-[#f4f9ff] disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]" onClick={() => void refreshStatus()} disabled={isWorking}>
@@ -329,7 +338,8 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function getPlatformLabel(platform: string) { return platform === "android" ? "Android" : platform === "ios" ? "iOS" : platform; }
+function getExportApiPlatform(platform: string) { return platform === "ios" ? "ios" : "android"; }
 function getExportModeLabel(mode: string) { return ({ project: "프로젝트", apk: "APK", "apk-zip": "APK ZIP", "theme-zip": "테마 ZIP", ktheme: "KTheme" } as Record<string, string>)[mode] ?? mode; }
 function getExportStatusLabel(status: string) { return ({ pending: "진행 중", succeeded: "완료", failed: "실패" } as Record<string, string>)[status] ?? status; }
-function getExportStageLabel(stage: string) { return ({ queued: "대기 중", preparing: "프로젝트 준비", building: "APK 빌드", packaging: "압축 중", finalizing: "결과 정리" } as Record<string, string>)[stage] ?? stage; }
+function getExportStageLabel(stage: string) { return ({ queued: "대기 중", preparing: "리소스 준비", building: "APK 빌드", packaging: "압축 중", finalizing: "결과 정리" } as Record<string, string>)[stage] ?? stage; }
 function formatDuration(durationMs: number) { return durationMs >= 60_000 ? `${Math.floor(durationMs / 60_000)}분 ${Math.round((durationMs % 60_000) / 1000)}초` : `${Math.max(1, Math.round(durationMs / 1000))}초`; }

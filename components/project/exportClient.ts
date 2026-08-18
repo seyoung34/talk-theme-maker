@@ -48,23 +48,27 @@ export function isLongRunningAndroidExportMode(mode: ExportMode) {
 
 export function getExportWaitNotice(mode: ExportMode) {
   if (isLongRunningAndroidExportMode(mode)) return "Android APK 내보내기는 환경에 따라 약 1분 30초~2분이 걸릴 수 있습니다.";
-  if (mode === "ktheme" || mode === "theme-zip") return "iOS는 파일 생성이 끝날 때까지 이 창을 유지해 주세요.";
+  if (mode === "ktheme" || mode === "theme-zip") return "iOS 파일은 작업 접수 후 백그라운드에서 생성됩니다. 접수 전까지 이 창을 유지해 주세요.";
   return null;
 }
 
 // 클라이언트 측 상한. 서버 워치독이 최종 방어선이다.
 const exportPollTimeoutMs = 12 * 60 * 1000;
 
-export type AsyncAndroidExportOutcome =
+export type AsyncExportOutcome =
   | { status: "completed"; downloadUrl: string; fileName: string }
   | { status: "failed"; error: string; reason: ExportFailureReason };
 
-// 4.7: 비동기 Android 내보내기 큐잉 후 완료/실패까지 status 엔드포인트를 폴링한다.
-export async function pollAndroidExportStatus(exportJobId: string, onStage?: (stage: string) => void): Promise<AsyncAndroidExportOutcome> {
+// 비동기 export 큐잉 후 완료/실패까지 플랫폼별 status 엔드포인트를 폴링한다.
+export async function pollAsyncExportStatus(
+  platform: "android" | "ios",
+  exportJobId: string,
+  onStage?: (stage: string) => void,
+): Promise<AsyncExportOutcome> {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < exportPollTimeoutMs) {
-    const response = await fetch(`/api/export/android/status?jobId=${encodeURIComponent(exportJobId)}`, { cache: "no-store" });
+    const response = await fetch(`/api/export/${platform}/status?jobId=${encodeURIComponent(exportJobId)}`, { cache: "no-store" });
     const payload = (await response.json().catch(() => null)) as
       | { status: "pending"; stage: string }
       | { status: "completed"; downloadUrl: string; fileName: string }
@@ -79,7 +83,7 @@ export async function pollAndroidExportStatus(exportJobId: string, onStage?: (st
         return { status: "completed", downloadUrl: payload.downloadUrl, fileName: payload.fileName };
       } else {
         // 빌더가 만든 코드는 임의 문자열일 수 있으므로 허용 목록을 통과한 값만 분석에 쓴다.
-        return { status: "failed", error: payload.error, reason: toExportFailureReason(payload.reason, "android_build_failed") };
+        return { status: "failed", error: payload.error, reason: toExportFailureReason(payload.reason, platform === "ios" ? "ios_export_failed" : "android_build_failed") };
       }
     }
 
@@ -87,6 +91,11 @@ export async function pollAndroidExportStatus(exportJobId: string, onStage?: (st
   }
 
   return { status: "failed", error: "내보내기 상태 확인 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.", reason: "poll_timeout" };
+}
+
+// 기존 Android 호출부와 외부 테스트의 이름을 유지한다.
+export function pollAndroidExportStatus(exportJobId: string, onStage?: (stage: string) => void) {
+  return pollAsyncExportStatus("android", exportJobId, onStage);
 }
 
 // APK 빌드는 보통 수 분이 걸린다. 초반에는 촘촘히 확인해 빠른 실패를 바로 보여 주고,

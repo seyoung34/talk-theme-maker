@@ -19,7 +19,7 @@ export async function GET() {
   const [profileResult, balanceResult, exportsResult, adminResult] = await Promise.all([
     admin.from("profiles").select("user_id,email,display_name,avatar_url,provider").eq("user_id", user.id).maybeSingle(),
     admin.from("credit_balances").select("balance").eq("user_id", user.id).maybeSingle(),
-    admin.from("export_jobs").select("id,platform,export_mode,status,stage,credit_cost,file_name,export_number,application_id,theme_identifier,export_name,error,error_code,input_file_count,input_bytes,output_bytes,duration_ms,created_at,completed_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
+    admin.from("export_jobs").select("id,platform,export_mode,export_backend,status,stage,credit_cost,file_name,export_number,application_id,theme_identifier,export_name,error,error_code,input_file_count,input_bytes,output_bytes,duration_ms,created_at,completed_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
     admin.from("admin_profiles").select("user_id").eq("user_id", user.id).eq("role", "admin").maybeSingle(),
   ]);
   const readError = profileResult.error ?? balanceResult.error ?? exportsResult.error ?? adminResult.error;
