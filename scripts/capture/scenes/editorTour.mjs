@@ -11,7 +11,7 @@ export const editorTour = {
   title: "화면별로 바꿔보기",
   description: "친구 목록부터 채팅방 말풍선까지 한 화면에서 편집합니다",
 
-  async run({ page, baseURL, beat, dismissNotices, offCamera }) {
+  async run({ page, baseURL, hold, dismissNotices, offCamera }) {
     await offCamera(async () => {
       await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
       await waitForEditorReady(page);
@@ -19,15 +19,15 @@ export const editorTour = {
       await dismissNotices();
       await settle(page);
     });
-    await beat(800);
+    await hold(0.8);
 
     for (const section of ["친구", "채팅방"]) {
       await openSection(page, section);
-      await beat(1100);
+      await hold(1.1);
     }
 
     // 채팅방 안의 말풍선 그룹. 미리보기가 함께 바뀌는 구간이라 가이드에서 보여줄 값이 있다.
     await page.getByRole("button", { name: "말풍선", exact: true }).first().click();
-    await beat(1400);
+    await hold(1.4);
   },
 };

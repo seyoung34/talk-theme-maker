@@ -15,7 +15,7 @@ export const mobileEdit = {
   title: "폰에서 바로",
   description: "카톡 테마를 손에서 만들어요",
 
-  async run({ page, baseURL, hold, caption, scrollTo, dismissNotices, offCamera, profile }) {
+  async run({ page, baseURL, hold, caption, scrollTo, dismissNotices, offCamera }) {
     // 진입과 부트스트랩은 보여줄 것이 없다. 그대로 찍으면 앞머리 몇 초가 로딩 화면이 된다.
     await offCamera(async () => {
       await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
@@ -24,21 +24,19 @@ export const mobileEdit = {
       await settle(page);
     });
 
-    const seconds = (value) => Math.round(value * profile.fps);
-
     await caption("내 사진으로 카톡을 바꿔요");
-    await hold(seconds(1.6));
+    await hold(1.6);
 
     await page.getByRole("button", { name: "편집 패널 펼치기" }).click();
     await page.getByRole("button", { name: "배경", exact: true }).first().waitFor({ state: "visible", timeout: 20_000 });
-    await hold(seconds(0.8));
+    await hold(0.8);
 
     await caption("화면마다 배경과 색을 고르고");
     await page.getByRole("button", { name: "배경", exact: true }).first().click();
-    await hold(seconds(1));
+    await hold(1);
 
     await page.getByRole("button", { name: "색상으로 설정" }).first().click();
-    await hold(seconds(0.7));
+    await hold(0.7);
 
     // 색상 코드 입력은 sr-only 라벨을 가진다. 스와치보다 안정적인 선택자다.
     const hexInput = page.getByLabel("색상 코드").first();
@@ -47,11 +45,11 @@ export const mobileEdit = {
     await caption("색을 바꾸면 미리보기가 바로 따라와요");
     for (const hex of ["#FFD400", "#7BC6FF", "#1B1C19"]) {
       await hexInput.fill(hex);
-      await hold(seconds(0.9));
+      await hold(0.9);
     }
 
     await caption("마음에 들면 그대로 내려받기");
-    await scrollTo("bottom", { frames: seconds(1.2) });
-    await hold(seconds(1.2));
+    await scrollTo("bottom", { seconds: 1.2 });
+    await hold(1.2);
   },
 };

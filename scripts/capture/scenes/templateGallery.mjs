@@ -15,7 +15,7 @@ export const templateGallery = {
   title: "템플릿 고르기",
   description: "마음에 드는 분위기를 고르면 바로 편집기로 들어갑니다",
 
-  async run({ page, baseURL, beat, dismissNotices, offCamera }) {
+  async run({ page, baseURL, hold, dismissNotices, offCamera }) {
     await offCamera(async () => {
       await page.goto(`${baseURL}/template`, { waitUntil: "load" });
       await settle(page);
@@ -37,13 +37,13 @@ export const templateGallery = {
 
     const card = cards.first();
     await card.scrollIntoViewIfNeeded();
-    await beat(700);
+    await hold(0.7);
     await card.click();
 
     // 상세 모달. 여기서 한 번 더 눌러야 편집기로 간다.
     const start = page.getByRole("button", { name: "Android로 시작" });
     await start.waitFor({ state: "visible", timeout: 15_000 });
-    await beat(900);
+    await hold(0.9);
     await start.click();
 
     // 편집기 부트스트랩은 길다. 도착했다는 사실만 보여주고 대기는 카메라 밖에서 끝낸다.
@@ -52,6 +52,6 @@ export const templateGallery = {
       await waitForEditorReady(page);
       await dismissNotices();
     });
-    await beat(800);
+    await hold(0.8);
   },
 };

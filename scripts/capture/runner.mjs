@@ -11,7 +11,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { analyticsConsentDenied, assertCleanChrome, hideCaptureChromeCss } from "./pageSetup.mjs";
 import { applyToneDown, buildToneDownTokens, installCaptureOverlay, safeArea } from "./overlays.mjs";
-import { framesToVideo, posterWebp, probeVideo, toMp4 } from "./encode.mjs";
+import { framesToVideo, posterWebp, probeVideo, toMp4, trimVideo } from "./encode.mjs";
 import { createScreencastBackend } from "./backends/screencast.mjs";
 import { createScreenshotBackend } from "./backends/screenshot.mjs";
 
@@ -24,9 +24,6 @@ const backendFactories = {
   screencast: createScreencastBackend,
   screenshot: createScreenshotBackend,
 };
-
-/** 연출 기본 박자. 120BPM 기준 0.5초. */
-const beatMs = 500;
 
 function appCommit() {
   try {
@@ -102,14 +99,41 @@ export async function runCapture({
   /** 현재 씬에서 카메라를 내렸던 구간. 백엔드가 프레임을 버리지 못할 때만 쌓인다. */
   let deadSpans = [];
 
+  // 직접 그리는 커서의 현재 위치. 화면 아래쪽에서 시작해 첫 이동이 자연스럽게 보이게 한다.
+  let cursorAt = { x: profile.viewport.width * 0.5, y: profile.viewport.height * 0.86 };
+
+  /** 커서를 목표 지점까지 **프레임 단위로** 옮긴다. 마지막에 실제 좌표를 기억한다. */
+  async function moveCursor(to, frames) {
+    const from = cursorAt;
+    await frameStep(frames, (index, count) => {
+      const progress = easeInOut((index + 1) / count);
+      const at = { x: from.x + (to.x - from.x) * progress, y: from.y + (to.y - from.y) * progress };
+      return page.evaluate((pos) => window.__capture?.cursor(pos), at);
+    });
+    cursorAt = to;
+  }
+
+  /** 요소의 중앙. 화면 밖이면 먼저 굴려 올린다. */
+  async function centerOf(locator) {
+    await locator.scrollIntoViewIfNeeded().catch(() => {});
+    const box = await locator.boundingBox();
+    if (!box) throw new Error("클릭 대상의 위치를 잡지 못했습니다. 화면에 보이는 요소인지 확인하세요.");
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  }
+
   const ctx = {
     page,
     baseURL,
     profile,
-    /** 연출용 쉼. 배속 촬영 중에는 그만큼 실제로 더 기다려야 최종 영상에서 의도한 길이가 된다. */
-    beat: (ms = beatMs) => page.waitForTimeout(ms * backend.slowdown),
-    /** 움직임 없이 N프레임 머문다. 자막을 읽힐 때 쓴다. */
-    hold: (frames) => frameStep(frames, () => {}),
+    /**
+     * 움직임 없이 머문다. **단위는 최종 영상 기준 초다.**
+     *
+     * 프레임 수로 세면 안 된다. 최종 길이는 프레임 개수가 아니라 **촬영 시각**으로 정해지므로,
+     * 촬영이 느린 환경(dev 서버는 프로덕션 빌드보다 훨씬 느리다)에서 같은 프레임 수가 훨씬 긴
+     * 영상이 된다. 실제로 6초로 의도한 스텝이 13초로 나왔다. 시간으로 기다리면 촬영 속도와
+     * 무관하게 의도한 길이가 나온다 — 배속만큼 더 기다리고, 인코딩이 그만큼 되돌린다.
+     */
+    hold: (seconds) => page.waitForTimeout(seconds * 1000 * backend.slowdown),
     frameStep,
     dismissNotices: () => dismissNotices(page),
 
@@ -135,12 +159,44 @@ export async function runCapture({
     caption: (text) => page.evaluate((value) => window.__capture?.caption(value), text ?? null),
 
     /**
+     * 커서를 보여주며 누른다. **가이드 영상의 핵심 동작이다** — 어디를 누르는지 보이지 않으면
+     * 보는 사람이 자기 화면에서 같은 곳을 찾을 수 없다.
+     *
+     * 커서를 스스로 그리는 백엔드에서는 직접 옮기고 파문을 찍는다. `showActions`가 있는
+     * 백엔드에서는 그쪽이 이미 그리므로 클릭만 한다 — 안 그러면 커서가 두 개로 보인다.
+     */
+    async click(locator, { moveSeconds = 0.5, settleSeconds = 0.35 } = {}) {
+      if (backend.drawsCursor) {
+        await locator.click();
+        return;
+      }
+      const target = await centerOf(locator);
+      // 모바일 화면에는 마우스 화살표가 있을 수 없다. 손가락으로 누르는 화면이므로 파문만 찍는다.
+      if (!profile.isMobile) {
+        // 움직임은 프레임으로 나눈다 — 부드러움은 프레임 개수가 정하기 때문이다. 길이가 촬영
+        // 속도에 따라 조금 흔들리지만 0.5초짜리라 티가 나지 않는다.
+        await moveCursor(target, Math.max(2, Math.round(moveSeconds * profile.fps)));
+      }
+      await page.evaluate((pos) => window.__capture?.ripple(pos.x, pos.y), target);
+      await locator.click();
+      // 누른 결과가 화면에 나타날 시간을 준다. 바로 다음 동작으로 넘어가면 무엇이 바뀌었는지 안 보인다.
+      await page.waitForTimeout(settleSeconds * 1000 * backend.slowdown);
+    },
+
+    /** 누르지 않고 가리키기만 한다. 어디를 볼지 안내할 때. */
+    async point(locator, { moveSeconds = 0.5 } = {}) {
+      if (backend.drawsCursor || profile.isMobile) return;
+      await moveCursor(await centerOf(locator), Math.max(2, Math.round(moveSeconds * profile.fps)));
+    },
+
+    /**
      * 스크롤을 **캡처된 프레임 단위로** 굴린다(§2.6 5번).
      *
      * 시간으로 굴리면 스크린샷 루프가 렌더러를 점유해 requestAnimationFrame이 굶고, 9.6초로
      * 의도한 스크롤이 27초 걸린다. 프레임 수로 세면 촬영 머신이 느려도 결과가 같다.
      */
-    async scrollTo(target, { frames = 45 } = {}) {
+    async scrollTo(target, { seconds = 1.5 } = {}) {
+      const frames = Math.max(2, Math.round(seconds * profile.fps));
       const from = await page.evaluate(() => window.scrollY);
       const to =
         target === "bottom"
@@ -187,11 +243,14 @@ export async function runCapture({
     await browser.close();
   }
 
-  const { outputs, primary, timeScale } = await materialize(captured, { profile, outDir, keepFrames });
-
   // clips가 가리키는 바로 그 파일을 잰다. 중간 산출물을 재고 배포본 경로를 적으면 manifest
   // 안에서 숫자와 파일이 서로 다른 것을 말하게 된다.
-  const measured = await probeVideo(primary);
+  const { outputs, measured, timeScale, clipOutputs } = await materialize(captured, {
+    profile,
+    outDir,
+    keepFrames,
+    clips,
+  });
 
   const manifest = {
     schemaVersion: manifestSchemaVersion,
@@ -207,42 +266,81 @@ export async function runCapture({
     spec: profile.spec,
     meetsSpec: measured.width >= profile.spec.width && measured.height >= profile.spec.height,
     outputs,
-    clips: clips.map((clip) => ({
-      ...clip,
-      // 촬영 중 시각을 최종 영상의 시각으로 옮긴다. 배속으로 찍었으면 그만큼 앞당겨진다.
-      startSec: Math.round((clip.startSec / timeScale) * 1000) / 1000,
-      // 영상 길이를 넘지 않게 자른다. 마지막 프레임 길이 추정과 fps 재샘플링이 조금씩 달라
-      // 그대로 두면 합성 쪽이 끝을 넘겨 자르려 한다.
-      endSec: Math.min(measured.durationSec, Math.round((clip.endSec / timeScale) * 1000) / 1000),
-      // 볼 것이 없는 구간. 합성 쪽은 여기를 잘라내고 이어 붙인다.
-      skip: clip.skip.map(([from, to]) => [
-        Math.round((from / timeScale) * 1000) / 1000,
-        Math.round((to / timeScale) * 1000) / 1000,
-      ]),
-      path: path.basename(primary),
-      source: "auto",
-    })),
+    // 스텝마다 파일이 따로 나가는지 여부. 소비자가 path를 어떻게 읽어야 하는지 결정한다.
+    splitScenes: Boolean(profile.splitScenes),
+    clips: clips.map((clip, index) => {
+      const own = clipOutputs?.[index];
+      const scale = (value) => Math.round((value / timeScale) * 1000) / 1000;
+      // 분리 모드에서는 파일이 그 씬 하나뿐이라 시각이 0에서 시작한다. 이어 붙인 모드에서는
+      // 촬영 시각을 최종 영상 시각으로 옮기고, 마지막 프레임 추정과 fps 재샘플링 차이 때문에
+      // 끝이 길이를 넘지 않도록 자른다.
+      const span = own
+        ? { startSec: 0, endSec: own.measured.durationSec }
+        : { startSec: scale(clip.startSec), endSec: Math.min(measured.durationSec, scale(clip.endSec)) };
+      return {
+        scene: clip.scene,
+        title: clip.title,
+        ...span,
+        // 볼 것이 없는 구간. 합성 쪽은 여기를 잘라내고 이어 붙인다.
+        skip: clip.skip.map(([from, to]) => [scale(from), scale(to)]),
+        path: own ? own.path : outputs.mp4 ?? outputs.webm,
+        ...(own?.poster ? { poster: own.poster } : {}),
+        ...(own ? { measured: own.measured } : {}),
+        source: "auto",
+      };
+    }),
   };
 
   await writeFile(path.join(outDir, "capture-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   return manifest;
 }
 
-/** 백엔드가 남긴 원본(영상 파일 또는 프레임 묶음)을 배포 형식으로 만든다. */
-async function materialize(captured, { profile, outDir, keepFrames }) {
+/**
+ * 백엔드가 남긴 원본(영상 파일 또는 프레임 묶음)을 배포 형식으로 만든다.
+ *
+ * `splitScenes` 프로필은 **씬마다 파일을 따로** 낸다. 가이드가 그렇다 —
+ * `EasyStep.media.src`가 파일 하나를 가리키므로, 한 편으로 이어 붙이면 스텝에 꽂을 수가 없다.
+ */
+async function materialize(captured, { profile, outDir, keepFrames, clips }) {
   if (!captured) throw new Error("캡처가 원본을 남기지 못했습니다.");
 
+  const timeScale = captured.frames ? captured.slowdown : 1;
+
+  if (profile.splitScenes) {
+    const clipOutputs = [];
+    for (const clip of clips) {
+      const name = `${profile.id}-${clip.scene}`;
+      const target = path.join(outDir, `${name}.mp4`);
+      await cutScene(captured, clip, target, profile);
+
+      const own = { path: path.basename(target), measured: await probeVideo(target) };
+      if (profile.outputs.includes("poster")) {
+        own.poster = path.basename(await posterWebp(target, path.join(outDir, `${name}-poster.webp`), { atSec: 0.2 }));
+      }
+      clipOutputs.push(own);
+      console.log(`  · ${own.path.padEnd(34)} ${own.measured.width}x${own.measured.height} ${own.measured.durationSec}초`);
+    }
+
+    await cleanupFrames(captured, keepFrames);
+    if (!clipOutputs.length) throw new Error("씬이 없어 산출물을 만들지 못했습니다.");
+    return {
+      outputs: Object.fromEntries(clipOutputs.map((own, index) => [clips[index].scene, own.path])),
+      // 씬마다 파일이 다르므로 대표값으로 첫 파일을 잰다. 프로필이 같아 크기·레이트는 모두 같다.
+      measured: clipOutputs[0].measured,
+      timeScale,
+      clipOutputs,
+    };
+  }
+
   if (captured.frames) {
-    const framesDir = path.dirname(captured.frames[0].file);
     const target = path.join(outDir, `${profile.id}.mp4`);
     await framesToVideo(captured.frames, target, {
       fps: profile.fps,
       slowdown: captured.slowdown,
-      framesDir,
+      framesDir: path.dirname(captured.frames[0].file),
     });
-    // 프레임은 금방 수백 MB가 된다. 다시 인코딩할 일이 있을 때만 남긴다.
-    if (!keepFrames) await rm(framesDir, { recursive: true, force: true });
-    return { outputs: { mp4: path.basename(target) }, primary: target, timeScale: captured.slowdown };
+    await cleanupFrames(captured, keepFrames);
+    return { outputs: { mp4: path.basename(target) }, measured: await probeVideo(target), timeScale, clipOutputs: null };
   }
 
   const outputs = { webm: path.basename(captured.videoPath) };
@@ -254,7 +352,30 @@ async function materialize(captured, { profile, outDir, keepFrames }) {
   if (profile.outputs.includes("poster")) {
     outputs.poster = path.basename(await posterWebp(captured.videoPath, path.join(outDir, `${profile.id}-poster.webp`)));
   }
-  return { outputs, primary, timeScale: 1 };
+  return { outputs, measured: await probeVideo(primary), timeScale, clipOutputs: null };
+}
+
+/** 씬 하나만 잘라 낸다. 프레임을 가진 백엔드는 골라 담고, 영상 파일뿐이면 시간으로 자른다. */
+async function cutScene(captured, clip, target, profile) {
+  if (captured.frames) {
+    const frames = captured.frames.filter((frame) => frame.t >= clip.startSec && frame.t <= clip.endSec);
+    if (frames.length < 2) {
+      throw new Error(`'${clip.scene}' 씬의 프레임이 ${frames.length}장뿐입니다. 씬이 너무 짧거나 전부 offCamera였습니다.`);
+    }
+    await framesToVideo(frames, target, {
+      fps: profile.fps,
+      slowdown: captured.slowdown,
+      framesDir: path.dirname(captured.frames[0].file),
+    });
+    return;
+  }
+  await trimVideo(captured.videoPath, target, { startSec: clip.startSec, endSec: clip.endSec });
+}
+
+/** 프레임은 금방 수백 MB가 된다. 다시 인코딩할 일이 있을 때만 남긴다. */
+async function cleanupFrames(captured, keepFrames) {
+  if (!captured.frames || keepFrames) return;
+  await rm(path.dirname(captured.frames[0].file), { recursive: true, force: true });
 }
 
 /**

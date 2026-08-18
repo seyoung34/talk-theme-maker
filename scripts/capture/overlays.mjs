@@ -72,6 +72,60 @@ export function installCaptureOverlay({ safeTop, safeBottom }) {
           : "");
     },
 
+    /**
+     * 마우스 커서. 가이드 영상의 핵심이다 — 어디를 누르는지 보이지 않으면 따라 할 수가 없다.
+     *
+     * `showActions`(screencast 전용)와 같은 역할을 DOM으로 한다. 그래야 해상도를 지키는
+     * screenshot 백엔드에서도 커서가 나온다.
+     *
+     * 흰 채움 + 검은 테두리 + 그림자로 그린다. 이 앱은 배경이 밝은 화면과 어두운 미리보기가
+     * 한 프레임에 같이 나오므로 한쪽 색만으로는 반드시 어딘가에서 묻힌다.
+     */
+    cursor({ x, y, size = 26 }) {
+      const node = slot("cursor");
+      if (!node.firstChild) {
+        node.style.cssText = "position:absolute;left:0;top:0;will-change:transform";
+        node.innerHTML =
+          `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="display:block;` +
+          `filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45))">` +
+          `<path d="M5 2.5 L5 19.5 L9.4 15.4 L12.2 21.4 L15.1 20 L12.3 14.2 L18.4 14.2 Z" ` +
+          `fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+      }
+      // transform으로 옮긴다. left/top을 쓰면 매 프레임 레이아웃이 다시 계산된다.
+      node.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    },
+
+    cursorHide() {
+      slot("cursor").innerHTML = "";
+    },
+
+    /**
+     * 클릭 파문. 커서만 있으면 "언제 눌렀는지"가 안 보인다.
+     *
+     * CSS 애니메이션으로 그린다. 배속 촬영 중에는 CDP가 이것도 함께 늦추고 인코딩이 시간축을
+     * 되돌리므로, 최종 영상에서 의도한 속도로 퍼진다.
+     */
+    ripple(x, y) {
+      const node = slot("ripple");
+      if (!document.getElementById("__capture-ripple-css")) {
+        const style = document.createElement("style");
+        style.id = "__capture-ripple-css";
+        style.textContent =
+          "@keyframes __captureRipple{from{transform:translate(-50%,-50%) scale(0.35);opacity:0.9}" +
+          "to{transform:translate(-50%,-50%) scale(1);opacity:0}}";
+        (document.head ?? document.documentElement).appendChild(style);
+      }
+      const dot = document.createElement("span");
+      dot.style.cssText =
+        `position:absolute;left:${x}px;top:${y}px;width:56px;height:56px;border-radius:50%;` +
+        "border:3px solid #2f6bbf;background:rgba(47,107,191,0.22);" +
+        "animation:__captureRipple 620ms ease-out forwards";
+      node.style.cssText = "position:absolute;inset:0";
+      node.appendChild(dot);
+      // 파문은 쌓이면 안 된다. 애니메이션이 끝난 것부터 걷어낸다.
+      dot.addEventListener("animationend", () => dot.remove());
+    },
+
     /** 안전영역 가늠자. 촬영 확인용이며 배포본에는 끄고 찍는다. */
     safeAreas(on) {
       const node = slot("safe");

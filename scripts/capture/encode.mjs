@@ -180,3 +180,28 @@ export async function framesToVideo(frames, target, { fps, slowdown, framesDir }
   ]);
   return target;
 }
+
+/**
+ * 영상에서 한 구간만 잘라 mp4로 낸다. 프레임을 갖고 있지 않은 백엔드(실시간 녹화)의 씬 분리용이다.
+ *
+ * `-ss`를 입력 **앞**에 두면 키프레임 단위로 건너뛰어 빠르지만 시작이 최대 몇 백 ms 어긋난다.
+ * 씬 경계는 그만큼의 오차도 눈에 띄므로 다시 인코딩하면서 정확히 자른다.
+ */
+export async function trimVideo(source, target, { startSec, endSec }) {
+  const { ffmpeg } = await resolveFfmpeg();
+  await execFileAsync(ffmpeg, [
+    "-y", "-v", "error",
+    "-i", source,
+    "-ss", String(startSec),
+    "-to", String(endSec),
+    "-c:v", "libx264",
+    "-preset", "slow",
+    "-crf", "20",
+    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+    "-pix_fmt", "yuv420p",
+    "-movflags", "+faststart",
+    "-an",
+    target,
+  ]);
+  return target;
+}

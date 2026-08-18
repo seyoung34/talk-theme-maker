@@ -20,24 +20,33 @@ export const profiles = {
     id: "guide",
     label: "가이드 16:9",
     /**
-     * screencast는 실시간 캡처라 rAF를 굶기지 않는다(§2.6 5번). 커서·클릭 강조·챕터 오버레이가
-     * 내장이라 가이드에 필요한 연출이 그대로 나온다. 대신 해상도가 뷰포트에 묶인다.
+     * screenshot 백엔드를 쓴다. 규격(1920x1080)에 도달하는 유일한 길이면서, 커서도 함께 얻는다.
+     *
+     * screencast의 `showActions`가 커서를 내장하지만 해상도가 뷰포트 CSS 픽셀에 묶여 1280x720이
+     * 상한이다. 둘 중 하나를 고르는 문제로 보였는데, 커서를 자막과 같은 방식으로 DOM에 직접
+     * 그리면(overlays.mjs) 양쪽을 다 가진다. **가이드에 커서는 선택이 아니다** — 어디를 누르는지
+     * 보이지 않으면 보는 사람이 자기 화면에서 같은 곳을 찾을 수 없다.
      */
-    backend: /** @type {CaptureBackend} */ ("screencast"),
+    backend: /** @type {CaptureBackend} */ ("screenshot"),
     viewport: { width: 1280, height: 720 },
-    // screencast는 무시하지만, backend를 screenshot으로 바꾸면 이 값이 해상도 배율이 된다.
+    // 1280 x 1.5 = 1920, 720 x 1.5 = 1080.
     deviceScaleFactor: 1.5,
-    // 이번 백엔드가 실제로 뱉는 크기. manifest에는 이 값이 아니라 **인코딩 후 실측값**을 적는다.
-    capture: { width: 1280, height: 720 },
-    // 문서 §6.1이 정한 배포 규격. 현재 백엔드로는 미달이며 그 사실을 manifest가 드러낸다.
+    capture: { width: 1920, height: 1080 },
     spec: { width: 1920, height: 1080 },
     fps: 30,
     isMobile: false,
+    /**
+     * 1920x1080 JPEG 한 장에 드는 시간이 릴스(1080x1920)와 비슷하다. 같은 배속을 쓴다.
+     */
+    slowdown: 1.6,
     // 가이드는 색을 만지지 않는다. 제품 화면과 다르면 사용자가 자기 화면에서 같은 곳을 못 찾는다.
     toneDown: 0,
-    // 자막을 영상에 굽지 않는다. 가이드 페이지가 DOM(`EasyAnnotation`)으로 그려서 문구 수정·번역·
-    // 접근성을 살린다.
+    // 자막과 챕터를 영상에 굽지 않는다. 가이드 페이지가 스텝 제목·설명·`EasyAnnotation`을 DOM으로
+    // 그리므로 영상에 또 얹으면 같은 말이 두 번 나오고, 문구를 고칠 때마다 다시 찍어야 한다.
     captions: false,
+    chapters: false,
+    // 스텝마다 별도 파일이 필요하다. `EasyStep.media.src`가 파일 하나를 가리키기 때문이다.
+    splitScenes: true,
     outputs: ["webm", "mp4", "poster"],
   },
 
@@ -61,6 +70,9 @@ export const profiles = {
     // 배경 토큰만 내린다. 0이면 끈다. 값은 육안 QA로 정한다(계획서 §9 열린 질문).
     toneDown: 0,
     captions: true,
+    chapters: true,
+    // 릴스는 한 편으로 이어 붙여 내보낸다. 씬 경계는 manifest가 알려준다.
+    splitScenes: false,
     outputs: ["mp4"],
   },
 };

@@ -15,6 +15,8 @@ export function createScreencastBackend({ profile, page, outDir }) {
     supportsFrameStep: false,
     // 실시간 녹화라 멈출 수 없다. 로딩 구간이 영상에 그대로 남으므로 manifest가 위치를 알려준다.
     dropsPausedFrames: false,
+    // showActions가 커서와 클릭 강조를 브라우저 바깥에서 그린다. 우리가 또 그리면 두 개가 된다.
+    drawsCursor: true,
     // 실시간이라 배속 촬영이 필요 없다. 연출 시간을 늘리지 않는다.
     slowdown: 1,
 

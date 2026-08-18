@@ -41,6 +41,8 @@ export function createScreenshotBackend({ profile, page, outDir }) {
     supportsFrameStep: true,
     // 멈춘 동안 프레임을 아예 만들지 않는다. 그 구간은 최종 영상에 남지 않는다.
     dropsPausedFrames: true,
+    // 프레임을 우리가 만들므로 커서도 우리가 그려야 한다(overlays.mjs).
+    drawsCursor: false,
     slowdown,
 
     async start() {
