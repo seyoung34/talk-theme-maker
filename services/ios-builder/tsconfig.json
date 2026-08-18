@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "outDir": "../../dist",
+    "rootDir": "../..",
+    "incremental": false,
+    "isolatedModules": false,
+    "declaration": false,
+    "sourceMap": false,
+    "paths": {},
+    "types": ["node"]
+  },
+  "include": [
+    "../../lib/theme/ios/packageValidation.ts",
+    "../../lib/theme/project/zip.ts",
+    "./entrypoint.ts"
+  ]
+}

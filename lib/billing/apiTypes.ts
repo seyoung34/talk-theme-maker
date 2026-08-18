@@ -2,6 +2,7 @@ export type AccountExportDto = {
   id: string;
   platform: string;
   export_mode: string;
+  export_backend?: string;
   status: string;
   stage?: string;
   credit_cost: number;

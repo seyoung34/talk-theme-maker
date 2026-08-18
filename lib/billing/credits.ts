@@ -5,6 +5,7 @@ export const exportCreditCost = 1;
 export type ExportPlatform = "android" | "ios";
 export type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
 export type ExportStage = "queued" | "preparing" | "building" | "packaging" | "finalizing" | "completed" | "failed";
+export type ExportBackend = "worker" | "cloud_run";
 
 type ReservationRow = { export_job_id: string; balance: number };
 type ExportIdentityRow = { export_number: number; application_id: string | null; theme_identifier: string | null; export_name: string | null };
@@ -76,6 +77,25 @@ export async function prepareExportJobIdentity({
     themeIdentifier: row.theme_identifier,
     exportName: row.export_name,
   };
+}
+
+export async function markExportJobBackend({
+  userId,
+  exportJobId,
+  backend,
+}: {
+  userId: string;
+  exportJobId: string;
+  backend: ExportBackend;
+}) {
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("export_jobs")
+    .update({ export_backend: backend } as never)
+    .eq("id", exportJobId)
+    .eq("user_id", userId)
+    .eq("status", "pending");
+  if (error) throw error;
 }
 
 export async function updateExportJobStage({

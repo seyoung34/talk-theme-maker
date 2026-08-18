@@ -4,7 +4,7 @@ import { useCallback, useRef, useState, type Dispatch, type SetStateAction } fro
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
-import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAndroidExportStatus, triggerDownload } from "@/components/project/exportClient";
+import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAsyncExportStatus, triggerDownload } from "@/components/project/exportClient";
 import { getExportFailureReasonFromStatus, isNetworkError, toExportFailureReason, type ExportFailureReason } from "@/lib/theme/export/failureReason";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
 import type { AccountState, ExportDownloadResult, ExportErrorResponse, ExportMode } from "@/components/project/exportModel";
@@ -203,7 +203,7 @@ export function useProjectExport({
         const queued = await readJsonResponse<{ exportJobId: string; exportNumber?: number; error?: string }>(response);
         setIsExportQueued(true);
         const stepLabels = getExportProgressSteps(exportMode);
-        const outcome = await pollAndroidExportStatus(queued.exportJobId, () => {
+        const outcome = await pollAsyncExportStatus(platform, queued.exportJobId, () => {
           setExportProgressStep((current) => Math.min(current + 1, stepLabels.length - 2));
         });
 
