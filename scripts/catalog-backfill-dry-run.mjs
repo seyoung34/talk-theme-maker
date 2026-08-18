@@ -115,7 +115,11 @@ function printReport(data) {
 
   console.log(`\n[DB 참조] 고유 경로 ${data.references.total}개`);
   for (const [table, rows] of Object.entries(data.references.tablesScanned)) {
-    console.log(`  ${table.padEnd(32)} 행 ${String(rows).padStart(4)}   참조 ${data.references.bySource[table] ?? 0}`);
+    console.log(`  ${table.padEnd(36)} 행 ${String(rows).padStart(4)}`);
+  }
+  console.log(`  참조원별:`);
+  for (const [source, count] of Object.entries(data.references.bySource)) {
+    console.log(`    ${source.padEnd(44)} ${count}`);
   }
 
   console.log(`\n[대조]`);
@@ -180,15 +184,27 @@ async function collectReferencedPaths() {
     for (const row of rows) add(table, row.storage_path);
   }
 
-  // system template의 업로드 참조는 jsonb 안에 있다. 슬롯별 배열이라 두 겹을 편다.
-  const variantRows = await selectRows("system_template_variants", "upload_refs");
+  // system template의 참조는 jsonb 두 곳에 나뉘어 있다.
+  const variantRows = await selectRows("system_template_variants", "upload_refs,preview_metadata");
   scanned.system_template_variants = variantRows.length;
   for (const row of variantRows) {
+    // 1) upload_refs — 슬롯별 배열이라 두 겹을 편다.
     for (const entries of Object.values(row.upload_refs ?? {})) {
       for (const entry of Array.isArray(entries) ? entries : []) {
-        add("system_template_variants", entry?.storagePath);
-        add("system_template_variants", entry?.imageEdit?.originalStoragePath);
+        add("system_template_variants.upload_refs", entry?.storagePath);
+        add("system_template_variants.upload_refs", entry?.imageEdit?.originalStoragePath);
       }
+    }
+
+    /**
+     * 2) preview_metadata.refs — 갤러리 카드를 그릴 때 쓰는 원본 참조다.
+     *
+     * `theme-assets` 경로를 담는다. 같은 컬럼의 `cardPreviewPath`와 `screenPreviews`는
+     * `theme-public` 버킷이라 여기서 세지 않는다. 버킷이 다른데 경로 문자열이 비슷해
+     * 섞기 쉬우므로 refs만 명시적으로 집는다.
+     */
+    for (const value of Object.values(row.preview_metadata?.refs ?? {})) {
+      add("system_template_variants.preview_metadata.refs", value);
     }
   }
 
