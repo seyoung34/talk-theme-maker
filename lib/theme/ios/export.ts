@@ -6,7 +6,7 @@ import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import { getAndroidNinePatchInnerSize, isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
+import { detectThemeImageSourceScale, getAndroidNinePatchInnerSize, isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
 import type { Insets, StretchPoint, ThemeResourceRole } from "@/lib/theme/types";
 
 type IosExportOptions = {
@@ -288,9 +288,9 @@ export function canUseServerAssetReference(slot: ThemeAssetSlot, assetUrl: strin
 
 function getIosSourceScale(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, allSlots: ThemeAssetSlot[]) {
   const uploadName = getSelectedUpload(slot, uploads, selections, allSlots)?.file.name;
-  return detectIosSourceScale(uploadName)
-    ?? detectIosSourceScale(selections[slot.id])
-    ?? detectIosSourceScale(slot.defaultAssetUrls?.[templateId])
+  return detectThemeImageSourceScale(uploadName)
+    ?? detectThemeImageSourceScale(selections[slot.id])
+    ?? detectThemeImageSourceScale(slot.defaultAssetUrls?.[templateId])
     ?? 3;
 }
 
@@ -758,12 +758,6 @@ function canvasToPngBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/png");
   });
-}
-
-function detectIosSourceScale(value: string | undefined) {
-  if (!value) return null;
-  const match = value.match(/@([23])x(?=\.[a-z0-9]+$|$)/i);
-  return match ? Number(match[1]) : null;
 }
 
 function stripScaleSuffix(path: string) {
