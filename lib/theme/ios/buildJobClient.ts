@@ -18,8 +18,8 @@ export type IosBuildBundle = {
 };
 
 export class IosBuildEnqueueError extends BuildEnqueueError {
-  constructor(code: string, message: string) {
-    super(code, message);
+  constructor(code: string, message: string, detail?: string) {
+    super(code, message, detail);
     this.name = "IosBuildEnqueueError";
   }
 }
@@ -32,7 +32,7 @@ export async function enqueueIosBuild(bundle: IosBuildBundle) {
   try {
     await enqueueBuild(bundle, { jobNameEnv: "GCP_IOS_BUILD_JOB_NAME" });
   } catch (error) {
-    if (error instanceof BuildEnqueueError) throw new IosBuildEnqueueError(error.code, error.message);
+    if (error instanceof BuildEnqueueError) throw new IosBuildEnqueueError(error.code, error.message, error.detail);
     throw error;
   }
 }

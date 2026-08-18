@@ -89,12 +89,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
     let refunded = false;
 
     if (userId && exportJobId) {
-      try {
-        await failExportJob({ userId, exportJobId, errorCode: failure.code, errorMessage: failure.message, durationMs });
-        refunded = true;
-      } catch (refundError) {
-        console.error(`[ios-export] ${JSON.stringify({ event: "refund_failed", exportJobId, error: safeErrorSummary(refundError) })}`);
-      }
+      refunded = await settleFailedExportJob({ userId, exportJobId, errorCode: failure.code, errorMessage: failure.message, durationMs });
     }
 
     console.error(`[ios-export] ${JSON.stringify({
@@ -107,6 +102,26 @@ export async function handleAsyncIosExportRequest(request: Request) {
     })}`);
     return NextResponse.json({ error: failure.message, reason: failure.code, ...(refunded ? { refunded: true } : {}) }, { status: failure.status });
   }
+}
+
+async function settleFailedExportJob(args: {
+  userId: string;
+  exportJobId: string;
+  errorCode: string;
+  errorMessage: string;
+  durationMs: number;
+}) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await failExportJob(args);
+      return true;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  console.error(`[ios-export] ${JSON.stringify({ event: "refund_failed", exportJobId: args.exportJobId, error: safeErrorSummary(lastError) })}`);
+  return false;
 }
 
 function classifyFailure(error: unknown) {

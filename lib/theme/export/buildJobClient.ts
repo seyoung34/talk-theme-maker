@@ -7,6 +7,8 @@ const GCP_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const defaultCloudflareSubject = "cloudflare-worker-prod";
 const oidcTokenTtlSeconds = 5 * 60;
 const uploadConcurrency = 8;
+const gcpRequestTimeoutMs = 30_000;
+const cloudRunRequestTimeoutMs = 15_000;
 
 type OidcPrivateJwk = JsonWebKey & { kid?: string; d?: string; n?: string; e?: string };
 
@@ -38,6 +40,7 @@ export class BuildEnqueueError extends Error {
   constructor(
     public readonly code: string,
     message: string,
+    public readonly detail?: string,
   ) {
     super(message);
     this.name = "BuildEnqueueError";
@@ -60,16 +63,16 @@ export type BuilderConfig = {
 export function readBuilderConfig(options: { jobNameEnv?: string } = {}): BuilderConfig {
   const projectId = requireEnv("GCP_PROJECT_ID");
   const projectNumber = requireEnv("GCP_PROJECT_NUMBER");
-  const poolId = process.env.GCP_WIF_POOL_ID ?? "vercel-pool";
-  const providerId = process.env.GCP_WIF_PROVIDER_ID ?? "cloudflare-provider";
+  const poolId = optionalEnv("GCP_WIF_POOL_ID") ?? "vercel-pool";
+  const providerId = optionalEnv("GCP_WIF_PROVIDER_ID") ?? "cloudflare-provider";
   const wifAudience =
-    process.env.GCP_WIF_AUDIENCE ??
+    optionalEnv("GCP_WIF_AUDIENCE") ??
     `//iam.googleapis.com/projects/${projectNumber}/locations/global/workloadIdentityPools/${poolId}/providers/${providerId}`;
   return {
     projectId,
     wifAudience,
     oidcIssuer: requireEnv("CLOUDFLARE_OIDC_ISSUER"),
-    oidcSubject: process.env.CLOUDFLARE_OIDC_SUBJECT ?? defaultCloudflareSubject,
+    oidcSubject: optionalEnv("CLOUDFLARE_OIDC_SUBJECT") ?? defaultCloudflareSubject,
     oidcPrivateJwk: readPrivateJwk(),
     builderServiceAccount: requireEnv("GCP_BUILDER_SA_EMAIL"),
     inputBucket: requireEnv("GCP_BUILD_INPUT_BUCKET"),
@@ -143,7 +146,7 @@ async function signCloudflareOidcToken(config: BuilderConfig) {
 }
 
 async function exchangeStsToken(audience: string, subjectToken: string) {
-  const response = await fetch("https://sts.googleapis.com/v1/token", {
+  const response = await fetchWithTimeout("https://sts.googleapis.com/v1/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -154,6 +157,10 @@ async function exchangeStsToken(audience: string, subjectToken: string) {
       subjectToken,
       subjectTokenType: "urn:ietf:params:oauth:token-type:jwt",
     }),
+  }, {
+    code: "sts_exchange_request_failed",
+    message: "GCP 토큰 교환 요청에 실패했습니다.",
+    timeoutMs: gcpRequestTimeoutMs,
   });
   const payload = (await response.json().catch(() => null)) as { access_token?: string } | null;
   if (!response.ok || !payload?.access_token) {
@@ -163,12 +170,17 @@ async function exchangeStsToken(audience: string, subjectToken: string) {
 }
 
 async function impersonateServiceAccount(serviceAccount: string, federatedToken: string) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(serviceAccount)}:generateAccessToken`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${federatedToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ scope: [GCP_SCOPE] }),
+    },
+    {
+      code: "impersonation_request_failed",
+      message: "빌더 서비스 계정 인증 요청에 실패했습니다.",
+      timeoutMs: gcpRequestTimeoutMs,
     },
   );
   const payload = (await response.json().catch(() => null)) as { accessToken?: string } | null;
@@ -180,19 +192,23 @@ async function impersonateServiceAccount(serviceAccount: string, federatedToken:
 
 export async function uploadObject(bucket: string, objectName: string, bytes: Uint8Array, contentType: string, accessToken: string) {
   const url = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": contentType },
     body: bytes as unknown as BodyInit,
+  }, {
+    code: "gcs_upload_request_failed",
+    message: "빌드 입력 업로드 요청에 실패했습니다.",
+    timeoutMs: gcpRequestTimeoutMs,
   });
   if (!response.ok) {
-    throw new BuildEnqueueError("gcs_upload_failed", "빌드 입력 업로드에 실패했습니다.");
+    throw new BuildEnqueueError("gcs_upload_failed", "빌드 입력 업로드에 실패했습니다.", `HTTP ${response.status}`);
   }
 }
 
 export async function runBuilderJob(config: BuilderConfig, accessToken: string, uris: { inputUri: string; outputUri: string }) {
-  const url = `https://${config.jobRegion}-run.googleapis.com/v2/projects/${config.projectId}/locations/${config.jobRegion}/jobs/${config.jobName}:run`;
-  const response = await fetch(url, {
+  const url = buildRunJobUrl(config);
+  const response = await fetchWithTimeout(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -207,16 +223,57 @@ export async function runBuilderJob(config: BuilderConfig, accessToken: string, 
         ],
       },
     }),
+  }, {
+    code: "job_run_request_failed",
+    message: "Cloud Run 작업 실행 요청에 실패했습니다.",
+    timeoutMs: cloudRunRequestTimeoutMs,
   });
   if (!response.ok) {
-    throw new BuildEnqueueError("job_run_failed", "빌드 작업 실행에 실패했습니다.");
+    throw new BuildEnqueueError("job_run_failed", "빌드 작업 실행에 실패했습니다.", `HTTP ${response.status}`);
   }
 }
 
 function requireEnv(name: string) {
-  const value = process.env[name];
+  const value = optionalEnv(name);
   if (!value) throw new BuildEnqueueError("missing_config", "빌드 서비스 설정이 완료되지 않았습니다.");
   return value;
+}
+
+function optionalEnv(name: string) {
+  const value = process.env[name]?.trim();
+  return value || undefined;
+}
+
+function buildRunJobUrl(config: Pick<BuilderConfig, "projectId" | "jobRegion" | "jobName">) {
+  const projectId = validatePathSegment(config.projectId, "GCP_PROJECT_ID");
+  const jobRegion = validatePathSegment(config.jobRegion, "GCP_BUILD_JOB_REGION");
+  const jobName = validatePathSegment(config.jobName, "GCP_IOS_BUILD_JOB_NAME");
+  return `https://${jobRegion}-run.googleapis.com/v2/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(jobRegion)}/jobs/${encodeURIComponent(jobName)}:run`;
+}
+
+function validatePathSegment(value: string, envName: string) {
+  const normalized = value.trim();
+  if (!normalized || /[\s/\\]/.test(normalized)) {
+    throw new BuildEnqueueError("invalid_config", `${envName} 설정이 올바르지 않습니다.`);
+  }
+  return normalized;
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  options: { code: string; message: string; timeoutMs: number },
+) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    throw new BuildEnqueueError(options.code, options.message, detail.slice(0, 240));
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function readPrivateJwk() {

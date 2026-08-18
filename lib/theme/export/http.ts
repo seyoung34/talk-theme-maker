@@ -8,7 +8,10 @@ export function elapsedMs(startedAt: number) {
 }
 
 export function safeErrorSummary(error: unknown) {
-  if (error instanceof Error) return `${error.name}: ${error.message}`.slice(0, 1000);
+  if (error instanceof Error) {
+    const detail = "detail" in error && typeof error.detail === "string" ? ` (${error.detail})` : "";
+    return `${error.name}: ${error.message}${detail}`.slice(0, 1000);
+  }
   if (typeof error === "object" && error !== null) {
     const details = Object.fromEntries(Object.entries(error).filter(([key]) => ["code", "message", "details", "hint"].includes(key)));
     return JSON.stringify(details).slice(0, 1000);
