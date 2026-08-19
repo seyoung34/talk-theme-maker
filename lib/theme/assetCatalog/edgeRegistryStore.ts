@@ -142,7 +142,9 @@ async function fetchWithTimeout(url: URL, operation: string, secretKey: string) 
       headers: {
         Accept: "application/json",
         apikey: secretKey,
-        Authorization: `Bearer ${secretKey}`,
+        // Supabase의 새 `sb_secret_*` key는 JWT가 아니므로 Authorization Bearer에 넣지 않는다.
+        // 브라우저 User-Agent로 오인되지 않도록 Worker 호출임을 명시한다.
+        "User-Agent": "talktheme-maker-worker",
       },
       signal: controller.signal,
     });

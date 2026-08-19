@@ -54,7 +54,8 @@ describe("edge registry store", () => {
     expect(request.pathname).toBe("/rest/v1/theme_asset_objects");
     expect(request.searchParams.get("status")).toBe("eq.active");
     expect(request.searchParams.get("or")).toContain(`logical_asset_id.eq."admin:${adminAssetId}"`);
-    expect(init.headers).toMatchObject({ apikey: secretKey, Authorization: `Bearer ${secretKey}` });
+    expect(init.headers).toMatchObject({ apikey: secretKey, "User-Agent": "talktheme-maker-worker" });
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
   });
 
   it("admin asset 정책을 중첩 relation과 함께 조회한다", async () => {
