@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { readJsonResponse } from "@/lib/shared/api/http";
+import { shadowPublishThemeAsset } from "@/lib/theme/assetCatalog/shadowPublishClient";
 import {
   getThemeAssetSignedUrls,
   sanitizeStoragePathPart,
@@ -150,6 +151,18 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
 
     await replaceAdminAssetTargets(id, payload.targets);
     await replaceAdminAssetBubbleSpec(id, payload.bubbleSpec);
+
+    /**
+     * catalog 병행 기록 (계획 §15 rollout 1단계 write shadow).
+     *
+     * 저장이 끝난 **뒤에** 부르고 실패는 삼킨다. 기존 Supabase 저장이 진짜이고 이건 그림자다.
+     * 이게 없으면 앞으로 추가되는 추천 에셋이 registry에 들어가지 않아 피커 썸네일 없이 남는다.
+     */
+    void shadowPublishThemeAsset({
+      kind: "admin",
+      sourceId: id,
+      canonical: new File([input.blob], input.fileName, { type: mimeType }),
+    });
 
     return getAdminAssetCandidate(id);
   } catch (error) {
