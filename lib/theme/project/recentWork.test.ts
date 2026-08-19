@@ -30,6 +30,6 @@ describe("recent work", () => {
       slot: [{ id: "same", file: hydrated, source: "template" }],
     });
 
-    expect(result.uploads.slot?.[0]?.file.name).toBe("new.png");
+    expect(result.uploads.slot?.[0]?.file?.name).toBe("new.png");
   });
 });

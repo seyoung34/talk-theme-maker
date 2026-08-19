@@ -3,7 +3,7 @@ import { centeredBubbleGeometry, flipBubbleGeometryHorizontally } from "@/lib/th
 import { exportSlotConcurrency, themeVersionName } from "@/lib/theme/exportRequest";
 import { themeColorToCssHex } from "@/lib/theme/color";
 import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
-import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, requireUploadFile, uploadEntryFileName, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import { detectThemeImageSourceScale, getAndroidNinePatchInnerSize, isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
@@ -148,9 +148,10 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
 
   const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
   if (selectedUpload) {
+    const uploadFile = requireUploadFile(selectedUpload, "iOS 내보내기");
     return {
-      blob: await normalizeIosImageBlob(slot, selectedUpload.file, selectedUpload.file.name),
-      sourceName: selectedUpload.file.name,
+      blob: await normalizeIosImageBlob(slot, uploadFile, uploadFile.name),
+      sourceName: uploadFile.name,
       sourceScale: getIosSourceScale(slot, uploads, selections, templateId, allSlots),
     };
   }
@@ -287,7 +288,9 @@ export function canUseServerAssetReference(slot: ThemeAssetSlot, assetUrl: strin
 }
 
 function getIosSourceScale(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, allSlots: ThemeAssetSlot[]) {
-  const uploadName = getSelectedUpload(slot, uploads, selections, allSlots)?.file.name;
+  const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
+  // catalog 참조만 있는 항목도 이름을 갖는다. 배율은 파일명에서 읽으므로 File 유무와 무관하다.
+  const uploadName = selectedUpload ? uploadEntryFileName(selectedUpload) : undefined;
   return detectThemeImageSourceScale(uploadName)
     ?? detectThemeImageSourceScale(selections[slot.id])
     ?? detectThemeImageSourceScale(slot.defaultAssetUrls?.[templateId])

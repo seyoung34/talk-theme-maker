@@ -2,6 +2,7 @@ import { normalizeThemeTemplateId, type ThemeAssetSlot, type ThemeSlotCandidate,
 import type { BubbleGeometry, BubbleSlot, Insets, Markers, StretchPoint, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { applyDerivedColorTransform, getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
+import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 import type { ImageEditMetadata } from "@/lib/theme/imageEdit";
 import { getUploadAssetKind } from "@/lib/theme/assetKind";
 
@@ -12,12 +13,78 @@ export { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 
 export type SlotUploadSource = "user" | "template" | "admin";
 
+/**
+ * 바이트를 브라우저로 내려받지 않은 업로드 항목의 출처 (계획 §9.1).
+ *
+ * catalog(GCS)에 원본이 있고 화면은 R2 파생물로 그린다. 실제 바이트가 필요한 순간
+ * (이미지 편집·썸네일 굽기 등)에만 `hydrate`로 받는다.
+ *
+ * `File`이 없어도 하류가 알아야 하는 값 — 이름·MIME·크기 — 을 함께 들고 다닌다. 이게 없으면
+ * 소비처마다 "파일이 없으니 건너뛴다"로 갈라져 슬롯이 조용히 비는 버그가 된다.
+ */
+export type CatalogUploadRef = {
+  readonly selection: CatalogAssetSelection;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly size: number;
+  /** R2 파생물 URL. File 없이 화면을 그릴 때 쓴다. */
+  readonly previewUrl?: string;
+};
+
+/**
+ * `file`과 `catalog` 중 **적어도 하나**는 있어야 한다.
+ *
+ * 타입으로 union을 강제하지 않은 이유는 두 값이 동시에 존재하는 상태가 정상이기 때문이다 —
+ * catalog 참조를 가진 항목을 편집기에서 hydrate하면 둘 다 갖는다. 대신 읽을 때는
+ * `uploadEntryFileName`/`uploadEntrySize` 같은 helper를 거쳐 분기를 한곳에 모은다.
+ */
 export type SlotUploadEntry = {
   id: string;
-  file: File;
+  file?: File;
+  catalog?: CatalogUploadRef;
   source?: SlotUploadSource;
   imageEdit?: ImageEditMetadata;
 };
+
+/** File이 있든 catalog 참조뿐이든 같은 이름을 준다. */
+export function uploadEntryFileName(entry: SlotUploadEntry): string | undefined {
+  return entry.file?.name ?? entry.catalog?.fileName;
+}
+
+export function uploadEntryMimeType(entry: SlotUploadEntry): string | undefined {
+  return entry.file?.type || entry.catalog?.mimeType;
+}
+
+export function uploadEntrySize(entry: SlotUploadEntry): number | undefined {
+  return entry.file?.size ?? entry.catalog?.size;
+}
+
+/**
+ * 브라우저에서 바이트가 반드시 필요한 경로에서 File을 꺼낸다.
+ *
+ * catalog 참조만 있는 항목이 여기 도달하면 **던진다.** 조용히 템플릿 기본값으로 떨어지면
+ * 사용자가 고른 것과 다른 그림이 결과물에 들어가고, 내보내기가 끝난 뒤에야 발견된다.
+ * 실패를 눈에 보이게 만드는 편이 낫다.
+ *
+ * catalog 참조를 바이트 없이 처리하는 경로는 export manifest 참조(계획 §9.2)다. 그 경로가
+ * 붙기 전까지 catalog 단독 항목을 만드는 곳이 없으므로 이 오류는 실제로 발생하지 않는다.
+ */
+export function requireUploadFile(entry: SlotUploadEntry, context: string): File {
+  if (entry.file) return entry.file;
+  throw new Error(
+    `${context}: 업로드 ${entry.id}에 로컬 파일이 없습니다. catalog 참조(${entry.catalog?.selection.assetId ?? "?"})는 이 경로에서 아직 처리할 수 없습니다.`,
+  );
+}
+
+/**
+ * 이 항목이 실제로 쓸 수 있는 원본을 가리키는가.
+ *
+ * File도 catalog 참조도 없는 항목은 아무것도 그릴 수 없다. 저장·복원 과정에서 생길 수 있으므로
+ * (예: IndexedDB에서 File이 깨진 채 돌아옴) 걸러 낼 자리가 필요하다.
+ */
+export function hasUploadSource(entry: SlotUploadEntry): boolean {
+  return Boolean(entry.file || entry.catalog);
+}
 
 export type SlotUploads = Record<string, SlotUploadEntry[] | undefined>;
 export type SlotColors = Record<string, string | undefined>;
@@ -626,7 +693,7 @@ export function slotStatusLabel(slot: ThemeAssetSlot, uploads: SlotUploads, colo
   // 파생 슬롯(탭 선택 아이콘 등)이 연동 중이면 기본 슬롯의 선택 상태를 그대로 표시한다.
   const sourceSlot = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots) ?? slot;
   const selectedUpload = getSelectedUpload(sourceSlot, uploads, selections, allSlots);
-  if (selectedUpload) return selectedUpload.file.name;
+  if (selectedUpload) return uploadEntryFileName(selectedUpload) ?? "업로드 이미지";
   const selected = getSelectedCandidate(sourceSlot, selections, templateId, template);
   if (selected?.label) return selected.label;
   if (slot.required) return "필수 파일 필요";

@@ -103,8 +103,10 @@ export {
   isSlotReady,
   planUploadRemoval,
   slotStatusLabel,
+  uploadEntryFileName,
 } from "@/lib/theme/project/state";
 export type { BubbleEditState, SlotCandidateSelections, SlotColors, SlotUploadEntry, SlotUploads } from "@/lib/theme/project/state";
+import { uploadEntryFileName } from "@/lib/theme/project/state";
 
 export function getSectionGroups(section: ThemeSection, slots: ThemeAssetSlot[]) {
   const groups = new Set(slots.filter((slot) => isSlotVisibleInSection(slot, section)).map((slot) => slot.group));
@@ -215,7 +217,7 @@ export function buildSlotCandidates(
     .map(({ ownerSlotId, entry }) => ({
       id: entry.id,
       title: "업로드 이미지",
-      status: entry.file.name,
+      status: uploadEntryFileName(entry) ?? "업로드 이미지",
       active: selectedUpload?.id === entry.id,
       selected: selectedUpload?.id === entry.id,
       source: "upload" as const,
@@ -238,7 +240,7 @@ export function buildSlotCandidates(
         title: matchingAdminAsset?.title ?? "템플릿 에셋",
         status: matchingAdminAsset
           ? `템플릿 포함 · ${matchingAdminAsset.assetKind ? getAdminAssetKindLabel(matchingAdminAsset.assetKind) : matchingAdminAsset.fileName}`
-          : entry.file.name,
+          : uploadEntryFileName(entry) ?? "템플릿 에셋",
         active: selectedUpload?.id === entry.id,
         selected: selectedUpload?.id === entry.id,
         source: "template" as const,

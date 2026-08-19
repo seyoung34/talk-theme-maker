@@ -729,6 +729,12 @@ function createUserTemplatePreviewUrls(record: UserTemplateRecord) {
   const urls: Record<string, string> = {};
   for (const entries of Object.values(record.uploads)) {
     for (const entry of entries ?? []) {
+      // catalog 참조만 있는 항목은 원격 preview URL을 그대로 쓴다. 이 값은 blob URL이 아니라
+      // `revokeObjectURL`이 무시하므로(blob store에 없는 주소는 no-op) 정리 경로를 건드리지 않는다.
+      if (!entry.file) {
+        if (entry.catalog?.previewUrl) urls[entry.id] = entry.catalog.previewUrl;
+        continue;
+      }
       urls[entry.id] = URL.createObjectURL(entry.file);
     }
   }

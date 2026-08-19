@@ -2,7 +2,7 @@ import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { exportNinePatch, flipCanvasHorizontally, loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { bubbleGeometryToAndroidMarkers, flipAndroidMarkersHorizontally, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency } from "@/lib/theme/exportRequest";
-import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, requireUploadFile, uploadEntryFileName, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -145,9 +145,11 @@ async function resolveAndroidSlotSource(
     // source 이름과 target `.9.png` 이름을 분리한다. 일반 PNG 업로드를 target 이름으로
     // 파싱하면 artwork의 바깥 1px을 marker border로 오인해 잘라 버린다.
     const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template, allSlots);
-    const sourceBlob = selectedUpload?.file ?? (await assetUrlToBlob(assetUrl));
+    // 업로드를 골라 뒀는데 바이트가 없으면 기본값으로 떨어뜨리지 않는다 — 사용자가 고른 것과
+    // 다른 말풍선이 조용히 들어간다.
+    const sourceBlob = selectedUpload ? requireUploadFile(selectedUpload, "Android 나인패치 내보내기") : await assetUrlToBlob(assetUrl);
     if (!sourceBlob) return null;
-    const sourceName = selectedUpload?.file.name ?? assetUrl ?? slot.fileName ?? `${slot.id}.9.png`;
+    const sourceName = (selectedUpload ? uploadEntryFileName(selectedUpload) : undefined) ?? assetUrl ?? slot.fileName ?? `${slot.id}.9.png`;
     const asset = await loadNinePatchBlob(sourceBlob, sourceName, slot.role.includes("_me_") ? "me" : "you");
     const markers = resolveAndroidNinePatchMarkers(bubbleEdit, asset.markers, asset.innerCanvas.width, asset.innerCanvas.height);
     // 픽셀은 여기서 한 번만 뒤집는다. marker는 이미 뒤집힌 좌표로 계산돼 있다.
@@ -156,7 +158,7 @@ async function resolveAndroidSlotSource(
     return { blob: await canvasToBlob(exportNinePatch(nextAsset), "image/png") };
   }
 
-  if (selectedUpload) return { blob: selectedUpload.file };
+  if (selectedUpload) return { blob: requireUploadFile(selectedUpload, "Android 내보내기") };
   const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template, allSlots);
   if (assetUrl) {
     if (canUseServerAssetReference(slot, assetUrl)) return { serverAsset: assetUrl };

@@ -3,7 +3,7 @@ import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, th
 import { createAdminThemeAssetSignedUrls } from "@/lib/theme/systemTemplates/adminSignedUrls";
 import { themeAssetCacheControl } from "@/lib/theme/themeAssetSigning";
 import { collectRemoteUploadPaths } from "@/lib/theme/systemTemplates/uploadRefPaths";
-import { getResolvedColor, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
+import { getResolvedColor, getSelectedSharedSlotEntry, requireUploadFile } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
@@ -356,10 +356,14 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
     if (!entries?.length) continue;
     refs[slotId] = [];
     for (const entry of entries) {
-      const fileName = sanitizeStoragePathPart(entry.file.name);
+      // catalog 참조만 있는 항목은 아직 여기 오지 않는다. 오면 조용히 건너뛰지 않고 던진다 —
+      // 건너뛰면 슬롯이 빈 채로 저장돼 템플릿이 반쯤 비어 발행된다.
+      // catalog ref를 Supabase 재업로드 없이 그대로 넘기는 분기는 §9.1 후속 작업이다.
+      const uploadFile = requireUploadFile(entry, "시스템 템플릿 저장");
+      const fileName = sanitizeStoragePathPart(uploadFile.name);
       const storagePath = `system-templates/${variantId}/${sanitizeStoragePathPart(slotId)}/${sanitizeStoragePathPart(entry.id)}-${fileName}`;
-      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, entry.file, {
-        contentType: entry.file.type || "application/octet-stream",
+      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, uploadFile, {
+        contentType: uploadFile.type || "application/octet-stream",
         cacheControl: themeAssetCacheControl,
         upsert: true,
       });
@@ -382,9 +386,9 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
         : undefined;
       refs[slotId]?.push({
         id: entry.id,
-        fileName: entry.file.name,
-        mimeType: entry.file.type || "application/octet-stream",
-        size: entry.file.size,
+        fileName: uploadFile.name,
+        mimeType: uploadFile.type || "application/octet-stream",
+        size: uploadFile.size,
         storagePath,
         ...(imageEdit ? { imageEdit } : {}),
       });

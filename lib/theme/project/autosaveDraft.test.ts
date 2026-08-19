@@ -45,7 +45,7 @@ describe("writeAutosaveDraft / readAutosaveDraft", () => {
     expect(record?.source.templateName).toBe("기본 테마");
     expect(record?.draft.colors["slot-b"]).toBe("#ff0000");
     expect(record?.draft.uploads["slot-a"]?.[0]?.id).toBe("slot-a:upload:1");
-    expect(record?.draft.uploads["slot-a"]?.[0]?.file.name).toBe("bg.png");
+    expect(record?.draft.uploads["slot-a"]?.[0]?.file?.name).toBe("bg.png");
     // 파일 바이트까지 그대로 살아 돌아오는지는 브라우저의 structured clone 보장이다.
     // fake-indexeddb는 File을 메타데이터만 가진 객체로 낮추므로 여기서는 검증할 수 없고, 실기기 QA로 남긴다.
   });

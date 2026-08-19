@@ -1,4 +1,4 @@
-import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload } from "@/lib/theme/project/state";
+import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload, uploadEntryFileName } from "@/lib/theme/project/state";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { drawBubble, getAutoBubbleSize } from "@/lib/theme/preview/bubbleCanvas";
 import type { BubbleEditState } from "@/lib/theme/project/state";
@@ -81,9 +81,23 @@ export async function generateSystemTemplateThumbnail(
     if (!slot) return { source: undefined, selectedUploadName: undefined };
     const overrideUrl = imageUrlByRole?.[role];
     const selectedUpload = overrideUrl ? undefined : getSelectedUpload(slot, uploads, selections, slots);
-    const source = overrideUrl ?? (selectedUpload ? URL.createObjectURL(selectedUpload.file) : getSelectedCandidate(slot, selections, input.baseTemplateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, uploads, selections, input.baseTemplateId, template, slots));
-    if (selectedUpload && source) objectUrls.push(source);
-    return { source, selectedUploadName: selectedUpload?.file.name };
+    // 업로드를 골랐으면 그것이 이긴다. File이 있으면 blob으로, catalog 참조뿐이면 R2 파생물로 굽는다.
+    // 둘 다 없으면 `undefined`를 주어 이 레이어를 건너뛴다 — 후보 기본값으로 대체하면 사용자가
+    // 고르지 않은 그림이 썸네일에 들어간다.
+    const uploadSource = selectedUpload
+      ? selectedUpload.file
+        ? { url: URL.createObjectURL(selectedUpload.file), owned: true }
+        : selectedUpload.catalog?.previewUrl
+          ? { url: selectedUpload.catalog.previewUrl, owned: false }
+          : undefined
+      : undefined;
+    const source = overrideUrl
+      ?? (selectedUpload
+        ? uploadSource?.url
+        : getSelectedCandidate(slot, selections, input.baseTemplateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, uploads, selections, input.baseTemplateId, template, slots));
+    // 우리가 만든 blob만 되돌린다. 원격 URL은 우리 소유가 아니다.
+    if (uploadSource?.owned && source === uploadSource.url) objectUrls.push(source);
+    return { source, selectedUploadName: selectedUpload ? uploadEntryFileName(selectedUpload) : undefined };
   };
 
   await Promise.all([
