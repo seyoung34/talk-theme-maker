@@ -13,6 +13,13 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "vars": {
+    // 관리자 저장의 catalog write-shadow는 기존 운영 동작을 유지한다.
+    "ASSET_CATALOG_WRITE_ENABLED": "1",
+    // catalog export canary는 Worker/producer 양쪽 모두 별도 승인 전까지 차단한다.
+    "ASSET_CATALOG_EXPORT_ENABLED_ANDROID": "0",
+    "ASSET_CATALOG_EXPORT_ENABLED_IOS": "0"
+  },
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
