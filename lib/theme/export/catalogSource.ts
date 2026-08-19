@@ -1,3 +1,5 @@
+import { isCatalogFastPathEligible } from "./catalogFastPath.js";
+
 /**
  * Builder가 GCS catalog 객체를 읽는 공통 계층 (계획 §9.4).
  *
@@ -33,7 +35,8 @@ export type CatalogManifestItem = {
 export type CatalogReadErrorCode =
   | "asset_source_missing"
   | "asset_hash_mismatch"
-  | "asset_source_invalid";
+  | "asset_source_invalid"
+  | "asset_transform_required";
 
 export class CatalogReadError extends Error {
   constructor(
@@ -80,6 +83,42 @@ export function isCatalogManifestItem(value: unknown): value is CatalogManifestI
     && typeof ref.sha256 === "string"
     && typeof ref.sizeBytes === "number"
     && typeof ref.mimeType === "string";
+}
+
+/**
+ * Builder에서 fast path 조건을 다시 본다 (계획 §9.5).
+ *
+ * Worker가 이미 걸렀지만 Builder는 `bundle.json`을 파일로 받는다. 그 파일이 어떻게 만들어졌는지
+ * Builder는 모르므로 같은 조건을 다시 확인한다 — 신뢰 경계는 프로세스마다 다시 긋는다.
+ *
+ * 변환이 필요한 항목이 여기까지 왔다는 것은 Worker 쪽 판정이 새고 있다는 뜻이라, 조용히
+ * 통과시키지 않고 실패시켜 드러낸다.
+ */
+export function assertCatalogFastPath(input: {
+  platform: "android" | "ios";
+  path: string;
+  ref: CatalogObjectRef;
+}) {
+  // fileName·sourceScale이 없는 옛 manifest는 판정할 수 없다. 그때는 막는다.
+  if (typeof input.ref.fileName !== "string" || typeof input.ref.sourceScale !== "number") {
+    throw new CatalogReadError(
+      "asset_transform_required",
+      "테마 에셋 변환 정보가 없습니다.",
+      `${input.path}: missing fileName/sourceScale`,
+    );
+  }
+  const verdict = isCatalogFastPathEligible({
+    platform: input.platform,
+    path: input.path,
+    source: { fileName: input.ref.fileName, sourceScale: input.ref.sourceScale, mimeType: input.ref.mimeType },
+  });
+  if (!verdict.eligible) {
+    throw new CatalogReadError(
+      "asset_transform_required",
+      "이 에셋은 변환이 필요해 그대로 사용할 수 없습니다.",
+      `${input.path}: ${verdict.reason}`,
+    );
+  }
 }
 
 /** GCS 읽기와 해시 계산을 주입받는다. Builder가 각자의 SDK로 채운다. */

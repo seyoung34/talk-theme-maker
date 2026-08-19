@@ -4,7 +4,7 @@ import { createTtlCache } from "@/lib/shared/ttlCache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAssetPlatformVariant, type AdminAssetCandidate, type AdminAssetKind, type AdminAssetTarget } from "@/lib/theme/adminAssets";
 import { adminLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
-import { buildPickerThumbnailUrls } from "@/lib/theme/assetCatalog/pickerThumbnails";
+import { buildPickerThumbnailIndex, selectPickerThumbnailUrl, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
 
 const bucketName = "theme-assets";
@@ -111,15 +111,27 @@ export async function GET(request: NextRequest) {
     const hasMore = cursorFiltered.length > limit;
     const signedUrls = await createSignedUrlMap(admin, page.map((item) => item.asset.variants.find((variant) => variant.platform === platform)?.storagePath ?? item.asset.storagePath));
     const signedUrlRecord = Object.fromEntries(signedUrls);
-    const thumbnailUrls = await readPickerThumbnailUrls(admin, page.map((item) => item.asset.id));
+    const thumbnailIndex = await readPickerThumbnailIndex(admin, page.map((item) => item.asset.id));
 
     const items: readonly RecommendedResponseItem[] = page.map((item) => {
-      const thumbnailUrl = thumbnailUrls[item.asset.id];
+      const candidate = canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord);
+      const withVariant = withAdminAssetPlatformVariant(candidate, platform);
+      /**
+       * 플랫폼 원본으로 바뀌었는지 본다.
+       *
+       * 바뀌었다면 canonical 썸네일은 **다른 그림**이다. 그대로 보여 주면 화면과 선택 결과가
+       * 어긋나므로, 대응하는 variant 썸네일이 없을 때는 `thumbnailUrl`을 주지 않고 같은 플랫폼의
+       * `previewUrl`로 떨어뜨린다.
+       */
+      const usesPlatformVariant = withVariant.storagePath !== candidate.storagePath;
+      const thumbnailUrl = selectPickerThumbnailUrl({
+        index: thumbnailIndex,
+        adminAssetId: item.asset.id,
+        platform,
+        usesPlatformVariant,
+      });
       return {
-        ...withAdminAssetPlatformVariant(
-          canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord),
-          platform,
-        ),
+        ...withVariant,
         target: item.target,
         matchRank: item.matchRank,
         ...(thumbnailUrl ? { thumbnailUrl } : {}),
@@ -178,10 +190,10 @@ function isSharedBackgroundRole(role: string): boolean {
  * registry 조회가 실패해도 목록 자체는 실패시키지 않는다. 썸네일이 없으면 화면이 기존
  * `previewUrl`로 그리므로, 전환 중 registry 문제로 피커가 통째로 안 뜨는 일이 없어야 한다.
  */
-async function readPickerThumbnailUrls(
+async function readPickerThumbnailIndex(
   admin: ReturnType<typeof createAdminClient>,
   adminAssetIds: readonly string[],
-): Promise<Record<string, string>> {
+): Promise<PickerThumbnailIndex> {
   if (!adminAssetIds.length || !getR2PreviewOrigin()) return {};
   try {
     const { data, error } = await admin
@@ -190,7 +202,7 @@ async function readPickerThumbnailUrls(
       .eq("status", "active")
       .in("logical_asset_id", adminAssetIds.map(adminLogicalAssetId));
     if (error) throw error;
-    return buildPickerThumbnailUrls(data ?? []);
+    return buildPickerThumbnailIndex(data ?? []);
   } catch (error) {
     console.warn("Picker thumbnail lookup failed; falling back to original preview URLs.", JSON.stringify(serializeError(error)));
     return {};

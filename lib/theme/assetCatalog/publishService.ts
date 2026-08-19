@@ -71,9 +71,41 @@ export async function publishThemeAsset(
     variantKey: input.variantKey,
   });
 
-  // 이미 끝난 publish의 재시도. 아무것도 다시 올리지 않는다.
+  /**
+   * 내용 비교가 상태 판단보다 **먼저**다.
+   *
+   * `active`라고 바로 돌려보내면 같은 revision에 다른 바이트를 보내도 성공처럼 응답한다. 호출자는
+   * 새 내용이 반영됐다고 오인하지만 객체는 그대로다. revision은 "내용의 이름"이므로 내용이 다르면
+   * 상태와 무관하게 거절해야 한다.
+   */
+  if (existing && existing.sha256 !== plan.sha256) {
+    throw new CatalogPublishError("REVISION_NOT_FORWARD", `revision ${input.revision} already exists with different bytes`);
+  }
+
+  /**
+   * 같은 내용의 active 재게시는 **preview 복구 기회**다.
+   *
+   * 최초 게시 때 R2 바인딩이 없었거나 일부 preset이 실패했으면 preview가 비어 있다. 여기서 바로
+   * 돌려보내면 영영 복구할 수 없다. canonical 업로드만 건너뛰고 누락된 preview는 채운다.
+   */
   if (existing?.status === "active") {
-    return { record: existing, status: "already-active", previewsSkipped: false, orphanCandidates: [] };
+    const { previews, previewsSkipped } = await uploadPreviews({
+      bucket: deps.previewBucket,
+      presets: missingPreviewPresets(existing.r2Previews, input.previews ?? []),
+      revision: input.revision,
+      purpose: input.previewPurpose ?? "asset",
+    });
+    if (Object.keys(previews).length) {
+      // 기존 preset을 보존하며 합친다. 다른 용도로 구워 둔 파생물을 지우지 않는다.
+      await deps.store.setPreviews(existing.id, { ...existing.r2Previews, ...previews });
+      const refreshed = await deps.store.findRevision({
+        logicalAssetId: input.logicalAssetId,
+        revision: input.revision,
+        variantKey: input.variantKey,
+      });
+      return { record: refreshed ?? existing, status: "already-active", previewsSkipped, orphanCandidates: [] };
+    }
+    return { record: existing, status: "already-active", previewsSkipped, orphanCandidates: [] };
   }
   /**
    * `failed`는 재시도할 수 있다.
@@ -87,10 +119,6 @@ export async function publishThemeAsset(
    */
   if (existing && existing.status !== "staged" && existing.status !== "failed") {
     throw new CatalogPublishError("REVISION_NOT_FORWARD", `revision ${input.revision} is ${existing.status}`);
-  }
-  // 같은 revision을 다른 바이트로 다시 올리는 것은 허용하지 않는다. revision이 곧 내용의 이름이다.
-  if (existing && existing.sha256 !== plan.sha256) {
-    throw new CatalogPublishError("REVISION_NOT_FORWARD", `revision ${input.revision} already staged with different bytes`);
   }
 
   /**
@@ -187,6 +215,19 @@ export class CatalogPublishFailure extends Error {
     super(cause instanceof Error ? cause.message : "catalog_publish_failed");
     this.name = "CatalogPublishFailure";
   }
+}
+
+/**
+ * 아직 registry에 기록되지 않은 preset만 남긴다.
+ *
+ * 이미 있는 preset은 다시 올리지 않는다 — 같은 바이트면 content-addressed 키가 같아 무의미하고,
+ * 다른 바이트면 그건 새 revision의 일이다.
+ */
+function missingPreviewPresets(
+  existing: Readonly<Record<string, ThemeAssetR2Preview>>,
+  presets: readonly PreviewPresetInput[],
+): PreviewPresetInput[] {
+  return presets.filter((preset) => !existing[preset.presetKey]?.objectKey);
 }
 
 async function uploadPreviews(input: {

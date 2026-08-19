@@ -134,8 +134,8 @@ describe("publishThemeAsset", () => {
     expect(statuses).toEqual(["1:retired", "2:active"]);
   });
 
-  /** 재시도가 이미 끝난 publish를 다시 올리면 안 된다. */
-  it("이미 active인 revision은 아무것도 다시 올리지 않는다", async () => {
+  /** 같은 내용 + 요청 preview 없음 → 완전한 no-op. */
+  it("active + 동일 canonical + preview 없음이면 아무것도 하지 않는다", async () => {
     const { store, calls } = fakeStore();
     await publishThemeAsset(input(), { store, uploadCatalogObject: uploader, previewBucket: null });
     calls.length = 0;
@@ -148,8 +148,61 @@ describe("publishThemeAsset", () => {
     expect(calls).toEqual([]);
   });
 
+  /**
+   * 내용 비교가 상태 판단보다 먼저다. active를 이유로 통과시키면 호출자는 새 내용이 반영됐다고
+   * 오인하지만 객체는 그대로다.
+   */
+  it("active + 다른 canonical은 거부한다", async () => {
+    const { store } = fakeStore();
+    const deps = { store, uploadCatalogObject: uploader, previewBucket: null };
+    await publishThemeAsset(input(), deps);
+
+    await expect(publishThemeAsset(
+      input({ canonical: { fileName: "other@3x.png", mimeType: "image/png", bytes: pngBytes(77, 77) } }),
+      deps,
+    )).rejects.toThrow(CatalogPublishError);
+  });
+
+  /**
+   * 최초 게시 때 R2 바인딩이 없었으면 preview가 비어 있다. 여기서 바로 돌려보내면 영영 복구할 수
+   * 없으므로, canonical 업로드는 건너뛰되 누락된 preview는 채운다.
+   */
+  it("active + 누락된 preview를 재게시로 복구한다", async () => {
+    const { store, rows } = fakeStore();
+    const previews = [{ presetKey: "card", bytes: new Uint8Array([1, 2]), contentType: "image/webp" as const }];
+
+    // 1차: 바인딩이 없어 preview를 건너뛴다.
+    const first = await publishThemeAsset(input({ previews }), { store, uploadCatalogObject: uploader, previewBucket: null });
+    expect(first.previewsSkipped).toBe(true);
+    expect([...rows.values()][0].r2Previews).toEqual({});
+
+    // 2차: 바인딩이 생긴 뒤 같은 내용으로 재게시.
+    const upload = vi.fn(async () => ({ generation: "17", sizeBytes: 24 }));
+    const second = await publishThemeAsset(input({ previews }), { store, uploadCatalogObject: upload, previewBucket: fakeBucket() });
+
+    expect(second.status).toBe("already-active");
+    expect(upload).not.toHaveBeenCalled(); // canonical은 다시 올리지 않는다
+    expect(second.record.r2Previews.card.objectKey).toMatch(/^preview\/v1\/asset\//);
+  });
+
+  /** 새 preset을 더해도 기존 preset은 보존한다. */
+  it("active + 새 preset은 기존 것을 보존하며 merge한다", async () => {
+    const { store } = fakeStore();
+    const deps = { store, uploadCatalogObject: uploader, previewBucket: fakeBucket() };
+    await publishThemeAsset(input({ previews: [{ presetKey: "card", bytes: new Uint8Array([1]), contentType: "image/webp" }] }), deps);
+
+    const result = await publishThemeAsset(input({
+      previews: [
+        { presetKey: "card", bytes: new Uint8Array([1]), contentType: "image/webp" },
+        { presetKey: "wide", bytes: new Uint8Array([2, 2]), contentType: "image/webp" },
+      ],
+    }), deps);
+
+    expect(Object.keys(result.record.r2Previews).sort()).toEqual(["card", "wide"]);
+  });
+
   // revision이 곧 내용의 이름이다. 같은 번호로 다른 그림이 들어오면 하류 캐시가 어긋난다.
-  it("같은 revision을 다른 바이트로 다시 올리지 않는다", async () => {
+  it("staged revision도 다른 바이트로 덮어쓰지 않는다", async () => {
     const { store } = fakeStore();
     const deps = { store, uploadCatalogObject: uploader, previewBucket: null };
     await store.insertStaged({

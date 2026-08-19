@@ -12,6 +12,7 @@ import {
 import { INPUT_ARCHIVE_FILE_NAME, readInputArchive } from "../../lib/theme/export/inputArchive.js";
 import { createStoredZipBytes } from "../../lib/theme/project/zip.js";
 import {
+  assertCatalogFastPath,
   createCatalogReader,
   isCatalogManifestItem,
   type CatalogManifestItem,
@@ -157,6 +158,8 @@ async function readInputEntries(bundle: LocalBundle, source: BuildSource, assets
     paths.add(normalizedPath);
 
     if ("catalogObject" in item) {
+      // Worker가 이미 걸렀지만 여기서 다시 본다. 신뢰 경계는 프로세스마다 다시 긋는다.
+      assertCatalogFastPath({ platform: "ios", path: normalizedPath, ref: item.catalogObject });
       // catalog reader가 자체 캐시를 갖는다. generation과 SHA-256 대조도 그 안에서 한다.
       entries.push({ path: normalizedPath, bytes: await readCatalogObject(item.catalogObject) });
       continue;

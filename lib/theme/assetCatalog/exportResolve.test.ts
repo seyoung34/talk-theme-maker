@@ -83,6 +83,7 @@ describe("resolveCatalogManifest", () => {
       ),
       records: [record()],
       uploadedInputBytes: 0,
+      platform: "android",
     });
 
     expect(result.resolved).toHaveLength(1);
@@ -100,6 +101,7 @@ describe("resolveCatalogManifest", () => {
       manifest: manifest({ path: "b.png", catalogAsset: { ...selection, bucket: "attacker", objectKey: "../secret.png" } }),
       records: [record()],
       uploadedInputBytes: 0,
+      platform: "android",
     });
     expect(result.resolved[0].catalogObject.objectKey).toBe(`catalog/v1/ab/${"a".repeat(64)}.png`);
     expect(JSON.stringify(result.resolved)).not.toContain("attacker");
@@ -114,6 +116,7 @@ describe("resolveCatalogManifest", () => {
       manifest: manifest({ path: "b.png", catalogAsset: { ...selection, revision: 1 } }),
       records: [record({ revision: 2 })],
       uploadedInputBytes: 0,
+      platform: "android",
     });
     expect(result.resolved).toHaveLength(0);
     expect(result.failures[0].reason).toBe("revision_mismatch");
@@ -124,6 +127,7 @@ describe("resolveCatalogManifest", () => {
       manifest: manifest({ path: "b.png", catalogAsset: selection }),
       records: [],
       uploadedInputBytes: 0,
+      platform: "android",
     });
     expect(result.failures[0].reason).toBe("not_found");
   });
@@ -137,6 +141,7 @@ describe("resolveCatalogManifest", () => {
       manifest: manifest({ path: "b.png", catalogAsset: selection }),
       records: [record(overrides)],
       uploadedInputBytes: 0,
+      platform: "android",
     });
     expect(result.failures[0].reason).toBe("not_exportable");
   });
@@ -153,6 +158,7 @@ describe("resolveCatalogManifest", () => {
       ),
       records: [record()],
       uploadedInputBytes: 0,
+      platform: "android",
     });
     expect(result.resolved).toHaveLength(2);
     expect(result.totals).toEqual({
@@ -169,12 +175,47 @@ describe("resolveCatalogManifest", () => {
       manifest: manifest({ path: "a.png", catalogAsset: selection }),
       records: [record({ size_bytes: maxReferencedAssetBytes })],
       uploadedInputBytes: 1,
+      platform: "android",
     })).toThrow(ThemeAssetRegistryError);
+  });
+
+  /**
+   * fast path는 바이트를 손대지 않고 복사한다. 변환이 필요한 항목이 통과하면 `@3x` 원본이 `@2x`
+   * 자리에 들어가거나 9-patch marker 테두리가 남는다. Builder 변환은 Phase 5이므로 그때까지는
+   * catalog를 쓰지 않고 기존 업로드 경로로 되돌린다.
+   */
+  it.each<[string, string, "android" | "ios", Record<string, unknown>]>([
+    ["iOS 배율 불일치(@3x 원본 → @2x 출력)", "Images/bg@2x.png", "ios", {}],
+    ["iOS 배율 불일치(@3x 원본 → 1x 출력)", "Images/bg.png", "ios", {}],
+    ["iOS 9-patch 원본", "Images/bubble@3x.png", "ios", { file_name: "bubble.9.png" }],
+    ["Android 9-patch 출력", "src/main/theme/drawable-xxhdpi/b.9.png", "android", {}],
+    ["Android 9-patch 원본", "src/main/theme/drawable-xxhdpi/b.png", "android", { file_name: "bubble.9.png" }],
+    ["PNG가 아닌 출력 확장자", "Images/bg.webp", "ios", { source_scale: 1 }],
+  ])("%s는 transform_required로 막는다", (_label, path, platform, overrides) => {
+    const result = resolveCatalogManifest({
+      manifest: manifest({ path, catalogAsset: selection }),
+      records: [record(overrides)],
+      uploadedInputBytes: 0,
+      platform,
+    });
+    expect(result.resolved).toHaveLength(0);
+    expect(result.failures[0].reason).toBe("transform_required");
+  });
+
+  it("iOS 배율이 맞으면 통과한다", () => {
+    const result = resolveCatalogManifest({
+      manifest: manifest({ path: "Images/bg@3x.png", catalogAsset: selection }),
+      records: [record()],
+      uploadedInputBytes: 0,
+      platform: "ios",
+    });
+    expect(result.resolved).toHaveLength(1);
+    expect(result.failures).toHaveLength(0);
   });
 
   it("catalog 항목이 없으면 전부 통과시킨다", () => {
     const items = manifest({ path: "a.png", field: "file-0" }, { path: "b.png", serverAsset: "/template-assets/x.png" });
-    const result = resolveCatalogManifest({ manifest: items, records: [], uploadedInputBytes: 100 });
+    const result = resolveCatalogManifest({ manifest: items, records: [], uploadedInputBytes: 100, platform: "android" });
     expect(result.resolved).toHaveLength(0);
     expect(result.passthrough).toEqual(items);
     expect(result.totals.referencedAssetBytes).toBe(0);
