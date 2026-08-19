@@ -21,7 +21,11 @@ export function createThemeDraftSignature(draft: ThemeDraft): string {
     // File 자체는 비교할 수 없다. 업로드 id는 슬롯·시각으로 새로 만들어지므로 추가·삭제·재편집을 모두 반영한다.
     uploads: collectUserAuthoredUploadIds(draft.uploads),
     // 어떤 원격 에셋을 쓰는지는 사용자 선택이다. 사용자가 직접 올리면 해당 슬롯의 ref가 제거된다.
-    remoteUploadRefs: mapRecord(draft.remoteUploadRefs, (entries) => entries.map((entry) => entry.id)),
+    // catalog ref는 id를 유지한 채 revision/variant만 바뀔 수 있어(재발행) id만으로는 못 잡는다.
+    // 여기서 놓치면 "바뀐 그림인데 저장되지 않은 변경 없음"이 되어 사용자가 작업을 잃는다.
+    remoteUploadRefs: mapRecord(draft.remoteUploadRefs, (entries) =>
+      entries.map((entry) => (entry.catalog ? `${entry.id}:${entry.catalog.revision}:${entry.catalog.variantKey}` : entry.id)),
+    ),
     // 자동 팔레트가 이미지 분석을 마친 뒤 값을 다시 써도 사용자 편집으로 세지 않는다.
     // 수동 색상은 자동 후보 연결이 끊기므로 그대로 서명에 남는다.
     colors: userAuthoredColors,

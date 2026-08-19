@@ -1,3 +1,4 @@
+import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { BaseTemplateId } from "@/lib/theme/templates";
@@ -64,6 +65,17 @@ export type RemoteUploadEntry = {
   mimeType: string;
   size: number;
   storagePath: string;
+  /**
+   * catalog(GCS) 원본 좌표 (계획 §9.1).
+   *
+   * 있으면 이 항목의 바이트를 브라우저로 내려받지 않고 export manifest에서 참조로 보낼 수 있다.
+   * 없으면 지금까지처럼 `storagePath`에서 받는다 — 이 필드는 **추가 정보일 뿐 대체가 아니다.**
+   *
+   * `storagePath`가 아직 필수인 이유: 이미지 편집기처럼 실제 바이트가 필요한 경로가 남아 있고,
+   * catalog 참조만 있는 항목은 아직 아무도 만들지 않는다. catalog 단독 ref를 만드는 시점에
+   * optional legacy fallback으로 바꾼다.
+   */
+  catalog?: CatalogAssetSelection;
   imageEdit?: {
     originalName: string;
     originalSize: number;
