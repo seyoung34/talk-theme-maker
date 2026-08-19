@@ -7,7 +7,7 @@ const safeRootFiles = new Set(["README-export.txt", "theme-export-report.json"])
 
 type UploadManifestItem = { field: string; path: string };
 type ServerAssetManifestItem = { path: string; serverAsset: string };
-type CatalogAssetManifestItem = { path: string; catalogAsset: unknown };
+type CatalogAssetManifestItem = { path: string; catalogAsset: unknown; resourceRole?: string };
 export type AndroidExportManifestItem = UploadManifestItem | ServerAssetManifestItem | CatalogAssetManifestItem;
 
 export type AndroidBundleUploadFile = { field: string; bytes: Uint8Array };
@@ -125,7 +125,7 @@ function isManifestItem(value: unknown): value is AndroidExportManifestItem {
   if ([hasField, hasServerAsset, hasCatalogAsset].filter(Boolean).length !== 1) return false;
   if (hasField) return typeof item.field === "string";
   if (hasServerAsset) return typeof item.serverAsset === "string";
-  return true;
+  return typeof item.resourceRole === "undefined" || typeof item.resourceRole === "string";
 }
 
 export function normalizeAndValidatePath(value: string) {

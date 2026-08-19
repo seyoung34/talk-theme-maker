@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { resolveCatalogManifestForExport } from "@/lib/theme/assetCatalog/workerResolve";
 import { mapThemeAssetObjectRow } from "@/lib/theme/assetCatalog/registry";
 
-const selection = { kind: "catalog" as const, assetId: "admin:asset-a", revision: 2, variantKey: "canonical" };
+const adminAssetId = "11111111-1111-4111-8111-111111111111";
+const selection = { kind: "catalog" as const, assetId: `admin:${adminAssetId}`, revision: 2, variantKey: "canonical" };
 
 function record() {
   return mapThemeAssetObjectRow({
     id: "object-a",
-    logical_asset_id: "admin:asset-a",
+    logical_asset_id: `admin:${adminAssetId}`,
     revision: 2,
     variant_key: "canonical",
     status: "active",
@@ -44,18 +45,29 @@ describe("resolveCatalogManifestForExport", () => {
 
   it("selection을 batch 조회해 Builder용 catalogObject로 치환한다", async () => {
     const findActiveByKeys = vi.fn(async (keys: readonly { logicalAssetId: string; variantKey: string }[]) => {
-      expect(keys).toEqual([{ logicalAssetId: "admin:asset-a", variantKey: "canonical" }]);
+      expect(keys).toEqual([{ logicalAssetId: `admin:${adminAssetId}`, variantKey: "canonical" }]);
       return [record()];
+    });
+    const findAdminAssetExportAccess = vi.fn(async (ids: readonly string[]) => {
+      expect(ids).toEqual([adminAssetId]);
+      return [{
+        id: adminAssetId,
+        enabled: true,
+        assetKind: "background" as const,
+        platform: "android" as const,
+        slotRole: "main_background" as const,
+        targets: [{ assetId: adminAssetId, platform: "android" as const, slotRole: "main_background" as const, targetKind: "exact_role" as const, priority: 0, enabled: true }],
+      }];
     });
 
     const result = await resolveCatalogManifestForExport({
       manifest: [
-        { path: "src/main/theme/drawable-xxhdpi/main.png", catalogAsset: selection },
+        { path: "src/main/theme/drawable-xxhdpi/main.png", catalogAsset: selection, resourceRole: "main_background" },
         { path: "src/main/theme/drawable-xxhdpi/other.png", field: "file-0" },
       ],
       uploadedInputBytes: 8,
       platform: "android",
-      store: { findActiveByKeys },
+      store: { findActiveByKeys, findAdminAssetExportAccess },
     });
 
     expect(result.manifest[0]).toMatchObject({
@@ -74,5 +86,29 @@ describe("resolveCatalogManifestForExport", () => {
       platform: "android",
       store: { findActiveByKeys: async () => [record()] },
     })).rejects.toMatchObject({ code: "catalog_asset_revision_mismatch", status: 409 });
+  });
+
+  it("admin asset 정책이 없으면 catalog ref를 enqueue하지 않는다", async () => {
+    await expect(resolveCatalogManifestForExport({
+      manifest: [{ path: "src/main/theme/drawable-xxhdpi/main.png", catalogAsset: selection, resourceRole: "main_background" }],
+      uploadedInputBytes: 0,
+      platform: "android",
+      store: {
+        findActiveByKeys: async () => [record()],
+        findAdminAssetExportAccess: async () => [],
+      },
+    })).rejects.toMatchObject({ code: "catalog_asset_not_allowed", status: 403 });
+  });
+
+  it("catalog ref에 resourceRole이 없으면 잘못된 요청으로 분류한다", async () => {
+    await expect(resolveCatalogManifestForExport({
+      manifest: [{ path: "src/main/theme/drawable-xxhdpi/main.png", catalogAsset: selection }],
+      uploadedInputBytes: 0,
+      platform: "android",
+      store: {
+        findActiveByKeys: async () => [record()],
+        findAdminAssetExportAccess: async () => [],
+      },
+    })).rejects.toMatchObject({ code: "invalid_catalog_asset", status: 400 });
   });
 });

@@ -50,6 +50,23 @@ describe("appendExportFilesToFormData", () => {
     expect([...formData.keys()]).toEqual([]);
   });
 
+  it("catalog ref에는 export 권한 검사용 resourceRole을 함께 싣는다", () => {
+    const formData = new FormData();
+    const manifest = appendExportFilesToFormData(formData, [
+      {
+        path: "Images/bg@3x.png",
+        catalogAsset: { kind: "catalog", assetId: "admin:asset-a", revision: 4, variantKey: "canonical" },
+        resourceRole: "main_background",
+      },
+    ]);
+
+    expect(manifest).toEqual([{
+      path: "Images/bg@3x.png",
+      catalogAsset: { kind: "catalog", assetId: "admin:asset-a", revision: 4, variantKey: "canonical" },
+      resourceRole: "main_background",
+    }]);
+  });
+
   it("manifest source가 두 개면 FormData 직전에 거부한다", () => {
     expect(() => assertExportManifestSource({
       path: "a.png",

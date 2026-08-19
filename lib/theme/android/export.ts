@@ -8,7 +8,7 @@ import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { Markers } from "@/lib/theme/types";
+import type { Markers, ThemeResourceRole } from "@/lib/theme/types";
 
 type AndroidExportOptions = {
   analysis: ThemeProjectAnalysis;
@@ -35,6 +35,7 @@ export type AndroidExportServerAssetFile = {
 export type AndroidExportCatalogAssetFile = {
   path: string;
   catalogAsset: CatalogAssetSelection;
+  resourceRole: ThemeResourceRole;
 };
 
 export type AndroidExportFile = AndroidExportBlobFile | AndroidExportServerAssetFile | AndroidExportCatalogAssetFile;
@@ -58,7 +59,7 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
     if (!source) return;
     for (const path of getAndroidSlotExportPaths(slot)) {
       if ("serverAsset" in source) files.push({ path, serverAsset: source.serverAsset });
-      else if ("catalogAsset" in source) files.push({ path, catalogAsset: source.catalogAsset });
+      else if ("catalogAsset" in source) files.push({ path, catalogAsset: source.catalogAsset, resourceRole: slot.role });
       else files.push({ path, blob: source.blob });
     }
   });

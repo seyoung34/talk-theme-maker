@@ -40,6 +40,7 @@ export const exportFailureReasons = [
   "catalog_asset_revision_mismatch",
   "catalog_asset_not_exportable",
   "catalog_asset_transform_required",
+  "catalog_asset_not_allowed",
   "catalog_payload_too_large",
   "invalid_export_mode",
   "unsupported_export_mode",

@@ -36,6 +36,7 @@ export type IosExportServerAssetFile = {
 export type IosExportCatalogAssetFile = {
   path: string;
   catalogAsset: CatalogAssetSelection;
+  resourceRole: ThemeResourceRole;
 };
 
 export type IosExportFile = IosExportBlobFile | IosExportServerAssetFile | IosExportCatalogAssetFile;
@@ -285,7 +286,7 @@ async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSo
       if (!canReuseIosCatalogAsset(targetScale, source.sourceScale)) {
         throw new Error(`iOS catalog 에셋은 변환 없이 사용할 수 없습니다: ${path}`);
       }
-      entries.push({ path, catalogAsset: source.catalogAsset });
+      entries.push({ path, catalogAsset: source.catalogAsset, resourceRole: slot.role });
       continue;
     }
     if (canReuseIosServerAsset(targetScale, source.sourceScale, Boolean(source.serverAsset)) && source.serverAsset) {

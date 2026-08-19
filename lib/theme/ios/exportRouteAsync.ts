@@ -42,7 +42,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
     const { entries: requestedEntries, inputBytes } = await readIosEntries(formData, manifestRaw, request.url);
     const manifestForResolve = requestedEntries.map((entry, index) =>
       "catalogAsset" in entry
-        ? { path: entry.path, catalogAsset: entry.catalogAsset }
+        ? { path: entry.path, catalogAsset: entry.catalogAsset, ...(entry.resourceRole ? { resourceRole: entry.resourceRole } : {}) }
         : { path: entry.path, field: `file-${index}` },
     );
     const resolved = await resolveCatalogManifestForExport({ manifest: manifestForResolve, uploadedInputBytes: inputBytes, platform: "ios" });

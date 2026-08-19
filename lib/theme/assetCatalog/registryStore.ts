@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { mapAdminAssetExportAccessRow, type AdminAssetExportAccess } from "@/lib/theme/assetCatalog/exportAccess";
 import { mapThemeAssetObjectRow, type ThemeAssetObjectRecord, type ThemeAssetR2Preview } from "@/lib/theme/assetCatalog/registry";
 
 /**
@@ -12,7 +13,10 @@ import { mapThemeAssetObjectRow, type ThemeAssetObjectRecord, type ThemeAssetR2P
 
 const registryTable = "theme_asset_objects";
 
-export type RegistryStore = ReturnType<typeof createRegistryStore>;
+/** 기존 publish 테스트/호출부가 필요한 registry 쓰기 계약. export 접근 조회는 점진적으로 붙인다. */
+export type RegistryStore = Omit<ReturnType<typeof createRegistryStore>, "findAdminAssetExportAccess"> & {
+  findAdminAssetExportAccess?: (adminAssetIds: readonly string[]) => Promise<AdminAssetExportAccess[]>;
+};
 
 export type StagedObjectInput = {
   logicalAssetId: string;
@@ -76,6 +80,17 @@ export function createRegistryStore(admin = createAdminClient()) {
         .or(clauses.join(","));
       if (error) throw error;
       return (data ?? []).map(mapThemeAssetObjectRow);
+    },
+
+    /** export 시점의 관리자 에셋 enabled/platform/target 정책을 읽는다. */
+    async findAdminAssetExportAccess(adminAssetIds: readonly string[]): Promise<AdminAssetExportAccess[]> {
+      if (!adminAssetIds.length) return [];
+      const { data, error } = await admin
+        .from("admin_assets")
+        .select("id,slot_role,platform,asset_kind,enabled,admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)")
+        .in("id", adminAssetIds);
+      if (error) throw error;
+      return (data ?? []).map(mapAdminAssetExportAccessRow);
     },
 
     async findActive(input: { logicalAssetId: string; variantKey: string }) {

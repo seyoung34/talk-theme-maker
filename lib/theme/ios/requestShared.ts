@@ -4,9 +4,9 @@ import { parseCatalogAssetSelection, type CatalogAssetSelection } from "@/lib/th
 
 type UploadManifestItem = { field: string; path: string };
 type ServerAssetManifestItem = { path: string; serverAsset: string };
-type CatalogAssetManifestItem = { path: string; catalogAsset: unknown };
+type CatalogAssetManifestItem = { path: string; catalogAsset: unknown; resourceRole?: string };
 export type IosManifestItem = UploadManifestItem | ServerAssetManifestItem | CatalogAssetManifestItem;
-export type IosRequestedEntry = IosPackageEntry | { path: string; catalogAsset: CatalogAssetSelection };
+export type IosRequestedEntry = IosPackageEntry | { path: string; catalogAsset: CatalogAssetSelection; resourceRole?: string };
 
 const maxIosExportFiles = 300;
 
@@ -31,7 +31,7 @@ export async function readIosEntries(formData: FormData, manifestRaw: string, re
         throw new IosExportRequestError("invalid_catalog_asset", "내보내기 에셋 참조가 올바르지 않습니다.");
       }
       paths.add(normalizedPath);
-      entries.push({ path: normalizedPath, catalogAsset: selection });
+      entries.push({ path: normalizedPath, catalogAsset: selection, ...(item.resourceRole ? { resourceRole: item.resourceRole } : {}) });
       continue;
     }
 
@@ -128,7 +128,7 @@ function isManifestItem(value: unknown): value is IosManifestItem {
   if ([hasField, hasServerAsset, hasCatalogAsset].filter(Boolean).length !== 1) return false;
   if (hasField) return typeof item.field === "string";
   if (hasServerAsset) return typeof item.serverAsset === "string";
-  return true;
+  return typeof item.resourceRole === "undefined" || typeof item.resourceRole === "string";
 }
 
 function addInputBytes(current: number, size: number) {

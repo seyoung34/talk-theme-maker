@@ -7,7 +7,9 @@ import {
   type CatalogResolutionFailure,
   type ExportManifestSourceItem,
 } from "@/lib/theme/assetCatalog/exportResolve";
+import { adminLogicalAssetId, parseLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { ThemeAssetRegistryError, type ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
+import type { AdminAssetExportAccess } from "@/lib/theme/assetCatalog/exportAccess";
 
 type PassthroughManifestItem =
   | { readonly path: string; readonly field: string }
@@ -23,6 +25,7 @@ export class CatalogExportResolutionError extends Error {
       | "catalog_asset_revision_mismatch"
       | "catalog_asset_not_exportable"
       | "catalog_asset_transform_required"
+      | "catalog_asset_not_allowed"
       | "catalog_payload_too_large",
     message: string,
     readonly status: number,
@@ -43,14 +46,14 @@ export async function resolveCatalogManifestForExport(input: {
   manifest: readonly ExportManifestSourceItem[];
   uploadedInputBytes: number;
   platform: "android" | "ios";
-  store?: Pick<RegistryStore, "findActiveByKeys">;
+  store?: Pick<RegistryStore, "findActiveByKeys"> & Partial<Pick<RegistryStore, "findAdminAssetExportAccess">>;
 }) {
   const collected = collectCatalogSelections(input.manifest);
   if (collected.failures.length) throw createCatalogResolutionError(collected.failures[0]);
   if (!collected.selections.length) {
     const manifest = input.manifest.map((item) => {
       if (hasCatalogAsset(item)) throw new Error(`catalog_manifest_unexpected:${item.path}`);
-      return item as PassthroughManifestItem;
+      return stripResourceRole(item);
     });
     return {
       manifest,
@@ -62,6 +65,7 @@ export async function resolveCatalogManifestForExport(input: {
 
   const store = input.store ?? createRegistryStore();
   const records = await store.findActiveByKeys(toRegistryLookupKeys(collected.selections));
+  const accessByAssetId = await readAdminAssetAccess(store, collected.selections);
   let resolution;
   try {
     resolution = resolveCatalogManifest({
@@ -69,6 +73,7 @@ export async function resolveCatalogManifestForExport(input: {
       records,
       uploadedInputBytes: input.uploadedInputBytes,
       platform: input.platform,
+      accessByAssetId,
     });
   } catch (error) {
     if (error instanceof ThemeAssetRegistryError && error.code === "REFERENCED_BYTES_EXCEEDED") {
@@ -85,7 +90,7 @@ export async function resolveCatalogManifestForExport(input: {
 
   const resolvedByPath = new Map(resolution.resolved.map((item) => [item.path, item]));
   const manifest = input.manifest.map((item) => {
-    if (!hasCatalogAsset(item)) return item as PassthroughManifestItem;
+    if (!hasCatalogAsset(item)) return stripResourceRole(item);
     const resolved = resolvedByPath.get(item.path);
     if (!resolved) throw new Error(`catalog_manifest_resolution_missing:${item.path}`);
     return resolved;
@@ -103,6 +108,11 @@ function createCatalogResolutionError(failure: CatalogResolutionFailure): Catalo
   switch (failure.reason) {
     case "invalid_selection":
       return new CatalogExportResolutionError("invalid_catalog_asset", "내보내기 에셋 참조가 올바르지 않습니다.", 400, failure.reason);
+    case "role_missing":
+    case "role_invalid":
+      return new CatalogExportResolutionError("invalid_catalog_asset", "내보내기 에셋의 슬롯 정보가 올바르지 않습니다.", 400, failure.reason);
+    case "not_allowed":
+      return new CatalogExportResolutionError("catalog_asset_not_allowed", "현재 내보내기 대상에서 사용할 수 없는 추천 에셋입니다.", 403, failure.reason);
     case "not_found":
       return new CatalogExportResolutionError("catalog_asset_not_found", "선택한 추천 에셋을 찾지 못했습니다. 편집기에서 다시 선택해 주세요.", 409, failure.reason);
     case "revision_mismatch":
@@ -112,4 +122,32 @@ function createCatalogResolutionError(failure: CatalogResolutionFailure): Catalo
     case "transform_required":
       return new CatalogExportResolutionError("catalog_asset_transform_required", "선택한 에셋은 변환이 필요해 현재 export 경로에서 사용할 수 없습니다.", 422, failure.reason);
   }
+}
+
+async function readAdminAssetAccess(
+  store: Pick<RegistryStore, "findActiveByKeys"> & Partial<Pick<RegistryStore, "findAdminAssetExportAccess">>,
+  selections: readonly { selection: { assetId: string } }[],
+) {
+  const sourceIds = new Set<string>();
+  for (const { selection } of selections) {
+    try {
+      const parsed = parseLogicalAssetId(selection.assetId);
+      if (parsed.kind === "admin" && isUuid(parsed.sourceId)) sourceIds.add(parsed.sourceId);
+    } catch {
+      // resolveCatalogManifest가 access map 누락을 not_allowed로 분류한다.
+    }
+  }
+  if (!sourceIds.size || !store.findAdminAssetExportAccess) return new Map<string, AdminAssetExportAccess>();
+  const records = await store.findAdminAssetExportAccess([...sourceIds]);
+  return new Map(records.map((record) => [adminLogicalAssetId(record.id), record]));
+}
+
+function stripResourceRole(item: ExportManifestSourceItem): PassthroughManifestItem {
+  if ("field" in item) return { path: item.path, field: item.field };
+  if ("serverAsset" in item) return { path: item.path, serverAsset: item.serverAsset };
+  throw new Error(`catalog_manifest_unexpected:${item.path}`);
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

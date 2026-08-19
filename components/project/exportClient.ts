@@ -3,6 +3,7 @@ import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { toExportFailureReason, type ExportFailureReason } from "@/lib/theme/export/failureReason";
 import type { AndroidExportPayloadOptions, ExportMode, ExportPayloadOptions, IosExportPayloadOptions } from "@/components/project/exportModel";
 import { parseCatalogAssetSelection, type CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
+import type { ThemeResourceRole } from "@/lib/theme/types";
 
 export async function createExportFormData(options: ExportPayloadOptions) {
   if (isIosExportMode(options.mode)) {
@@ -143,7 +144,7 @@ export function triggerDownload(blob: Blob, fileName: string) {
 export type ExportManifestSourceFile =
   | { path: string; blob: Blob }
   | { path: string; serverAsset: string }
-  | { path: string; catalogAsset: CatalogAssetSelection };
+  | { path: string; catalogAsset: CatalogAssetSelection; resourceRole?: ThemeResourceRole };
 
 // 스케일 타깃 때문에 같은 이미지가 여러 경로로 나간다(Android 슬롯 89개 중 23개).
 // Android는 동일한 blob의 field를 공유할 수 있지만, iOS manifest는 경로마다 고유한 field가 필요하다.
@@ -161,7 +162,13 @@ export function appendExportFilesToFormData(
     if ("serverAsset" in file) {
       return { path: file.path, serverAsset: file.serverAsset };
     }
-    if ("catalogAsset" in file) return { path: file.path, catalogAsset: parseCatalogAssetSelection(file.catalogAsset) };
+    if ("catalogAsset" in file) {
+      return {
+        path: file.path,
+        catalogAsset: parseCatalogAssetSelection(file.catalogAsset),
+        ...(file.resourceRole ? { resourceRole: file.resourceRole } : {}),
+      };
+    }
 
     const sharedField = shareBlobFields ? fieldByBlob.get(file.blob) : undefined;
     if (sharedField) return { field: sharedField, path: file.path };

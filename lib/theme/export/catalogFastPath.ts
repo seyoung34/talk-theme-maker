@@ -1,4 +1,4 @@
-import { isAndroidNinePatchSourceName } from "../sourceImage.js";
+import { isAndroidNinePatchSourceName } from "../sourceImage";
 
 /**
  * catalog 원본을 **변환 없이 그대로** 결과물에 넣어도 되는지 판정한다 (계획 §9.5).
