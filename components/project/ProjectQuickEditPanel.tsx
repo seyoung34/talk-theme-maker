@@ -640,8 +640,10 @@ function CandidatePreview({ candidate, layoutKind }: { candidate: SlotCandidate;
   if (candidate.colorValue) {
     return <ColorSwatch value={candidate.colorValue} className={`w-full rounded-xl ${aspectClassName}`} />;
   }
-  if (candidate.previewUrl) {
-    return <span className={`w-full overflow-hidden rounded-xl bg-[#f8fafc] bg-center bg-no-repeat ${layoutKind === "wallpaper" ? "bg-cover" : "bg-contain"} ${aspectClassName}`} style={{ backgroundImage: `url(${candidate.previewUrl})` }} />;
+  // 타일은 축소본을 우선한다. 원본은 편집기를 열 때만 받는다(`getEditableSourceUrl`).
+  const tileUrl = candidate.thumbnailUrl ?? candidate.previewUrl;
+  if (tileUrl) {
+    return <span className={`w-full overflow-hidden rounded-xl bg-[#f8fafc] bg-center bg-no-repeat ${layoutKind === "wallpaper" ? "bg-cover" : "bg-contain"} ${aspectClassName}`} style={{ backgroundImage: `url(${tileUrl})` }} />;
   }
   return <span className={`w-full overflow-hidden rounded-xl bg-[#e5e7eb] ${aspectClassName}`} />;
 }

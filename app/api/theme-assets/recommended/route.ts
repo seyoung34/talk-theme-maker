@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createTtlCache } from "@/lib/shared/ttlCache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAssetPlatformVariant, type AdminAssetCandidate, type AdminAssetKind, type AdminAssetTarget } from "@/lib/theme/adminAssets";
+import { adminLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
+import { buildPickerThumbnailUrls } from "@/lib/theme/assetCatalog/pickerThumbnails";
+import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
 
 const bucketName = "theme-assets";
 const allowedPlatforms = new Set(["android", "ios"]);
@@ -13,6 +16,16 @@ const recommendedPageCacheTtlSeconds = 30;
 type RecommendedResponseItem = AdminAssetCandidate & {
   readonly target: AdminAssetTarget;
   readonly matchRank: 0 | 1 | 2;
+  /**
+   * 피커 타일 전용 축소본(R2).
+   *
+   * `previewUrl`을 대체하지 않는다 — 그 필드는 이미지 편집기의 원본 소스이기도 해서, 축소본을
+   * 넣으면 추천 에셋을 골라 편집할 때 축소본을 편집하게 된다. 목록은 이 값만 내려받고 원본은
+   * 편집기를 열 때 그 한 장만 받는다.
+   *
+   * R2 origin이 없거나 아직 굽지 않은 에셋에는 없다. 그때 화면은 기존 `previewUrl`로 그린다.
+   */
+  readonly thumbnailUrl?: string;
 };
 
 type RankedAsset = {
@@ -98,15 +111,20 @@ export async function GET(request: NextRequest) {
     const hasMore = cursorFiltered.length > limit;
     const signedUrls = await createSignedUrlMap(admin, page.map((item) => item.asset.variants.find((variant) => variant.platform === platform)?.storagePath ?? item.asset.storagePath));
     const signedUrlRecord = Object.fromEntries(signedUrls);
+    const thumbnailUrls = await readPickerThumbnailUrls(admin, page.map((item) => item.asset.id));
 
-    const items: readonly RecommendedResponseItem[] = page.map((item) => ({
-      ...withAdminAssetPlatformVariant(
-        canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord),
-        platform,
-      ),
-      target: item.target,
-      matchRank: item.matchRank,
-    }));
+    const items: readonly RecommendedResponseItem[] = page.map((item) => {
+      const thumbnailUrl = thumbnailUrls[item.asset.id];
+      return {
+        ...withAdminAssetPlatformVariant(
+          canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord),
+          platform,
+        ),
+        target: item.target,
+        matchRank: item.matchRank,
+        ...(thumbnailUrl ? { thumbnailUrl } : {}),
+      };
+    });
     const last = page.at(-1);
     const payload: RecommendedPagePayload = { items, nextCursor: hasMore && last ? encodeCursor(last) : undefined };
 
@@ -152,6 +170,31 @@ function isCompatibleExactRole(assetKind: AdminAssetKind, targetRole: string, re
 
 function isSharedBackgroundRole(role: string): boolean {
   return role === "main_background" || role === "chat_background" || role === "tab_background_image";
+}
+
+/**
+ * 이 페이지에 실린 추천 에셋의 피커 썸네일 URL.
+ *
+ * registry 조회가 실패해도 목록 자체는 실패시키지 않는다. 썸네일이 없으면 화면이 기존
+ * `previewUrl`로 그리므로, 전환 중 registry 문제로 피커가 통째로 안 뜨는 일이 없어야 한다.
+ */
+async function readPickerThumbnailUrls(
+  admin: ReturnType<typeof createAdminClient>,
+  adminAssetIds: readonly string[],
+): Promise<Record<string, string>> {
+  if (!adminAssetIds.length || !getR2PreviewOrigin()) return {};
+  try {
+    const { data, error } = await admin
+      .from("theme_asset_objects")
+      .select("logical_asset_id,variant_key,r2_previews")
+      .eq("status", "active")
+      .in("logical_asset_id", adminAssetIds.map(adminLogicalAssetId));
+    if (error) throw error;
+    return buildPickerThumbnailUrls(data ?? []);
+  } catch (error) {
+    console.warn("Picker thumbnail lookup failed; falling back to original preview URLs.", JSON.stringify(serializeError(error)));
+    return {};
+  }
 }
 
 async function createSignedUrlMap(admin: ReturnType<typeof createAdminClient>, paths: readonly string[]): Promise<ReadonlyMap<string, string>> {
