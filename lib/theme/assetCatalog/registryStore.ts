@@ -30,6 +30,16 @@ export type StagedObjectInput = {
   pngSignatureVerified: boolean;
 };
 
+/**
+ * PostgREST `or()` 필터의 값 안에 들어갈 문자열을 안전하게 만든다.
+ *
+ * 논리 자산 id는 `admin-asset:1781680542261:xqcxdi`처럼 콜론과 하이픈을 포함한다. 큰따옴표로 감싸면
+ * 콤마·괄호가 필터 문법으로 해석되지 않지만, 값 안의 큰따옴표와 역슬래시는 직접 이스케이프해야 한다.
+ */
+function escapePostgrestValue(value: string) {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
 export function createRegistryStore(admin = createAdminClient()) {
   return {
     /** 같은 (logical, revision, variant) 레코드. 재시도가 이미 만든 것을 다시 쓰기 위해 먼저 본다. */
@@ -43,6 +53,29 @@ export function createRegistryStore(admin = createAdminClient()) {
         .maybeSingle();
       if (error) throw error;
       return data ? mapThemeAssetObjectRow(data) : null;
+    },
+
+    /**
+     * export 해석용 배치 조회.
+     *
+     * `active`만 읽는다 — `staged`/`retired`/`failed`를 가져와 호출부가 거르게 하면, 거르는 것을
+     * 잊은 경로가 생겼을 때 폐기된 revision이 결과물에 들어간다. 조회 단계에서 좁히는 것이 계약이다.
+     *
+     * PostgREST는 복합 키 `IN`을 직접 받지 못하므로 `or(and(...))`로 짝을 나열한다. manifest 상한이
+     * 300개이고 같은 자산은 `toRegistryLookupKeys()`가 이미 dedupe하므로 길이는 문제되지 않는다.
+     */
+    async findActiveByKeys(keys: readonly { logicalAssetId: string; variantKey: string }[]) {
+      if (!keys.length) return [];
+      const clauses = keys.map(({ logicalAssetId, variantKey }) =>
+        `and(logical_asset_id.eq."${escapePostgrestValue(logicalAssetId)}",variant_key.eq."${escapePostgrestValue(variantKey)}")`,
+      );
+      const { data, error } = await admin
+        .from(registryTable)
+        .select("*")
+        .eq("status", "active")
+        .or(clauses.join(","));
+      if (error) throw error;
+      return (data ?? []).map(mapThemeAssetObjectRow);
     },
 
     async findActive(input: { logicalAssetId: string; variantKey: string }) {

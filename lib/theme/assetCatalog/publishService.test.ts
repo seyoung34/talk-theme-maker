@@ -30,6 +30,11 @@ function fakeStore() {
     async findActive({ logicalAssetId, variantKey }) {
       return [...rows.values()].find((r) => r.logicalAssetId === logicalAssetId && r.variantKey === variantKey && r.status === "active") ?? null;
     },
+    // publish 흐름은 쓰지 않는다. export 해석 경로 전용이라 계약만 맞춘다.
+    async findActiveByKeys(keys) {
+      return [...rows.values()].filter((r) => r.status === "active"
+        && keys.some((k) => k.logicalAssetId === r.logicalAssetId && k.variantKey === r.variantKey));
+    },
     async insertStaged(input) {
       calls.push("insertStaged");
       const id = `obj-${nextId++}`;
