@@ -2,6 +2,7 @@ import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 import { inferLegacyThemeAssetKind, inferThemeAssetKind, type ThemeAssetKind } from "@/lib/theme/assetKind";
+import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 
 /**
  * 관리자 에셋의 종류. 사용자 업로드와 같은 어휘라 정의는 `assetKind.ts`에 있다.
@@ -58,6 +59,18 @@ export type AdminAssetPlatformVariant = {
   readonly previewUrl?: string;
 };
 
+/** 추천 API가 registry active revision과 함께 내려주는 browser-side export ref metadata. */
+export type AdminAssetCatalogRef = {
+  readonly selection: CatalogAssetSelection;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly size: number;
+  readonly sourceScale: 1 | 2 | 3;
+  readonly width: number;
+  readonly height: number;
+  readonly pngSignatureVerified: boolean;
+};
+
 export type AdminAssetBubbleDecoration = {
   readonly layerId: string;
   readonly storagePath: string;
@@ -92,6 +105,8 @@ export type AdminAssetCandidate = {
   readonly blob?: Blob;
   readonly file?: File;
   readonly previewUrl?: string;
+  /** active GCS catalog object가 후보 원본과 정확히 일치할 때만 추천 API가 붙인다. */
+  readonly catalog?: AdminAssetCatalogRef;
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly enabled: boolean;

@@ -1,5 +1,6 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { createInputArchive, INPUT_ARCHIVE_FILE_NAME } from "@/lib/theme/export/inputArchive";
+import type { ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
 
 // Cloudflare Worker → GCP를 Workload Identity Federation(OIDC)으로 인증하고,
 // 입력 번들을 GCS에 올린 뒤 Cloud Run Job 실행을 트리거한다. SA JSON 키는 사용하지 않는다.
@@ -15,7 +16,8 @@ type OidcPrivateJwk = JsonWebKey & { kid?: string; d?: string; n?: string; e?: s
 
 export type ExportManifestItem =
   | { path: string; field: string }
-  | { path: string; serverAsset: string };
+  | { path: string; serverAsset: string }
+  | ResolvedCatalogManifestItem;
 
 export type BuildInputFile = {
   field: string;

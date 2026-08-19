@@ -6,10 +6,9 @@ import { IosExportRequestError } from "@/lib/theme/ios/packageValidation";
 /**
  * 3트랙 에셋 저장소 계획의 Phase 0 golden fixture.
  *
- * export manifest는 브라우저·Worker·Builder가 공유하는 계약이다. Phase 4에서 세 번째 source인
- * `catalogObject`를 더할 때, 지금 통과하는 입력이 그대로 통과하고 거부되던 입력이 계속 거부되는지
- * 이 파일로 확인한다. v1에서 `catalogObject`가 **거부되는 것**도 함께 고정한다 — 계약이 넓어지는
- * 시점을 코드 변경으로 드러내기 위해서다.
+ * export manifest는 브라우저·Worker·Builder가 공유하는 계약이다. 세 번째 browser source인
+ * `catalogAsset`을 추가한 뒤에도 기존 입력과 source 상호 배타 규칙이 유지되는지 확인한다.
+ * `catalogObject`는 Worker가 해석한 내부 manifest라 브라우저 입력으로 받지 않는다.
  */
 
 const androidPath = "src/main/theme/drawable-xxhdpi/theme_main_bg.png";
@@ -41,9 +40,10 @@ describe("manifest v1 계약 — Android", () => {
     expect(androidManifest([{ path: androidPath }])).toThrow(AndroidExportRequestError);
   });
 
-  // Phase 4가 이 기대를 뒤집는다. 그때까지 catalogObject는 source 없는 항목과 같게 취급된다.
-  it("v1에서는 catalogObject source를 아직 받지 않는다", () => {
-    expect(androidManifest([{ path: androidPath, catalogObject: { objectKey: "catalog/v1/abc.png" } }])).toThrow(AndroidExportRequestError);
+  it("catalogAsset selection을 받는다", () => {
+    expect(androidManifest([{ path: androidPath, catalogAsset: { kind: "catalog", assetId: "admin:a", revision: 1, variantKey: "canonical" } }])()).toEqual([
+      { path: androidPath, catalogAsset: { kind: "catalog", assetId: "admin:a", revision: 1, variantKey: "canonical" } },
+    ]);
   });
 
   it("빈 manifest와 300개 초과를 거부한다", () => {
@@ -63,13 +63,15 @@ describe("manifest v1 계약 — iOS", () => {
     expect(iosManifest([{ path: "Images/a@3x.png" }])).toThrow(IosExportRequestError);
   });
 
-  it("v1에서는 catalogObject source를 아직 받지 않는다", () => {
-    expect(iosManifest([{ path: "Images/a@3x.png", catalogObject: { objectKey: "catalog/v1/abc.png" } }])).toThrow(IosExportRequestError);
+  it("catalogAsset selection을 받는다", () => {
+    expect(iosManifest([{ path: "Images/a@3x.png", catalogAsset: { kind: "catalog", assetId: "admin:a", revision: 1, variantKey: "canonical" } }])()).toEqual([
+      { path: "Images/a@3x.png", catalogAsset: { kind: "catalog", assetId: "admin:a", revision: 1, variantKey: "canonical" } },
+    ]);
   });
 });
 
 describe("readAndroidBundleUpload — source별 바이트 회계", () => {
-  function bundle(items: { path: string; field?: string; serverAsset?: string }[], files: Record<string, Uint8Array>) {
+  function bundle(items: { path: string; field?: string; serverAsset?: string; catalogAsset?: unknown }[], files: Record<string, Uint8Array>) {
     const formData = new FormData();
     for (const [field, bytes] of Object.entries(files)) formData.append(field, new File([bytes as BlobPart], `${field}.png`));
     return readAndroidBundleUpload(formData, JSON.stringify(items));
@@ -77,6 +79,15 @@ describe("readAndroidBundleUpload — source별 바이트 회계", () => {
 
   it("serverAsset은 inputBytes에 잡히지 않는다", async () => {
     const result = await bundle([{ path: androidPath, serverAsset }], {});
+    expect(result.files).toHaveLength(0);
+    expect(result.inputBytes).toBe(0);
+  });
+
+  it("catalogAsset은 inputBytes와 multipart 파일에 잡히지 않는다", async () => {
+    const result = await bundle([{
+      path: androidPath,
+      catalogAsset: { kind: "catalog", assetId: "admin:a", revision: 1, variantKey: "canonical" },
+    }], {});
     expect(result.files).toHaveLength(0);
     expect(result.inputBytes).toBe(0);
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendExportFilesToFormData, getExportPollIntervalMs, getExportWaitNotice, isLongRunningAndroidExportMode } from "@/components/project/exportClient";
+import { appendExportFilesToFormData, assertExportManifestSource, getExportPollIntervalMs, getExportWaitNotice, isLongRunningAndroidExportMode } from "@/components/project/exportClient";
 
 describe("appendExportFilesToFormData", () => {
   it("같은 blob을 쓰는 경로들은 하나의 field를 공유한다", () => {
@@ -31,6 +31,31 @@ describe("appendExportFilesToFormData", () => {
 
     expect(manifest).toEqual([{ path: "src/main/theme/drawable-xxhdpi/a.png", serverAsset: "/template-assets/basic/android/a.png" }]);
     expect([...formData.keys()]).toEqual([]);
+  });
+
+  it("catalog ref는 assetId·revision·variantKey만 manifest에 싣고 업로드하지 않는다", () => {
+    const formData = new FormData();
+
+    const manifest = appendExportFilesToFormData(formData, [
+      {
+        path: "src/main/theme/drawable-xxhdpi/a.png",
+        catalogAsset: { kind: "catalog", assetId: "admin:asset-a", revision: 4, variantKey: "canonical" },
+      },
+    ]);
+
+    expect(manifest).toEqual([{
+      path: "src/main/theme/drawable-xxhdpi/a.png",
+      catalogAsset: { kind: "catalog", assetId: "admin:asset-a", revision: 4, variantKey: "canonical" },
+    }]);
+    expect([...formData.keys()]).toEqual([]);
+  });
+
+  it("manifest source가 두 개면 FormData 직전에 거부한다", () => {
+    expect(() => assertExportManifestSource({
+      path: "a.png",
+      blob: new Blob([new Uint8Array([1])]),
+      serverAsset: "/template-assets/a.png",
+    } as never)).toThrow("source가 올바르지 않습니다");
   });
 
   it("field 공유를 끄면 같은 blob도 경로마다 고유한 field로 추가한다", () => {

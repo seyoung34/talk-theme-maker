@@ -35,19 +35,21 @@ export function createThemeProjectAnalysis(
 
     const imageDisabled = isImageSlotDisabled(slot, selections);
     let sourceSlot = slot;
-    let upload = imageDisabled ? undefined : getSelectedUpload(slot, uploads, selections, slots)?.file;
+    let selectedUpload = imageDisabled ? undefined : getSelectedUpload(slot, uploads, selections, slots);
+    let upload = selectedUpload?.file;
     let sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template, slots);
 
     // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯의 소스를 그대로 사용한다.
     const inheritedSource = imageDisabled ? undefined : getInheritedSourceSlot(slot, uploads, selections, template.id, template, slots);
     if (inheritedSource) {
       sourceSlot = inheritedSource;
-      upload = getSelectedUpload(inheritedSource, uploads, selections, slots)?.file;
+      selectedUpload = getSelectedUpload(inheritedSource, uploads, selections, slots);
+      upload = selectedUpload?.file;
       sourceUrl = getResolvedAssetUrl(inheritedSource, uploads, selections, template.id, template, slots);
     }
 
     if (!imageDisabled && slot.path && slot.fileName) {
-      const previewUrl = upload ? undefined : getSelectedCandidate(sourceSlot, selections, template.id, template)?.previewUrl;
+      const previewUrl = upload ? undefined : selectedUpload?.catalog?.previewUrl ?? getSelectedCandidate(sourceSlot, selections, template.id, template)?.previewUrl;
       files.push({
         path: slot.path,
         name: slot.fileName,
@@ -60,7 +62,7 @@ export function createThemeProjectAnalysis(
       resources.push({ id: slot.id, slotId: slot.id, platform, role: slot.role, screen: slot.screen, filePath: slot.path, exportMapping });
     }
 
-    if (slot.required && !upload && !sourceUrl && !(imageDisabled && canDisableImageSlot(slot))) {
+    if (slot.required && !upload && !sourceUrl && !selectedUpload?.catalog?.previewUrl && !(imageDisabled && canDisableImageSlot(slot))) {
       diagnostics.push({
         level: "warning",
         code: "missing-asset",

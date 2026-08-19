@@ -27,6 +27,13 @@ export type CatalogUploadRef = {
   readonly fileName: string;
   readonly mimeType: string;
   readonly size: number;
+  /** publish 시 registry에서 확정한 원본 배율·크기·PNG attestation. fast path 판정에 쓴다. */
+  readonly sourceScale: 1 | 2 | 3;
+  readonly width: number;
+  readonly height: number;
+  readonly pngSignatureVerified: boolean;
+  /** fast path를 탈 수 없는 편집/변환 순간에만 기존 Storage 원본을 지연 수화한다. */
+  readonly legacyStoragePath?: string;
   /** R2 파생물 URL. File 없이 화면을 그릴 때 쓴다. */
   readonly previewUrl?: string;
 };
@@ -66,8 +73,8 @@ export function uploadEntrySize(entry: SlotUploadEntry): number | undefined {
  * 사용자가 고른 것과 다른 그림이 결과물에 들어가고, 내보내기가 끝난 뒤에야 발견된다.
  * 실패를 눈에 보이게 만드는 편이 낫다.
  *
- * catalog 참조를 바이트 없이 처리하는 경로는 export manifest 참조(계획 §9.2)다. 그 경로가
- * 붙기 전까지 catalog 단독 항목을 만드는 곳이 없으므로 이 오류는 실제로 발생하지 않는다.
+ * catalog 참조를 바이트 없이 처리하는 경로는 export manifest 참조(계획 §9.2)다. 변환이 필요한
+ * 경우에는 각 플랫폼 export가 `legacyStoragePath`를 통해서만 지연 수화한다.
  */
 export function requireUploadFile(entry: SlotUploadEntry, context: string): File {
   if (entry.file) return entry.file;

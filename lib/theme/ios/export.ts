@@ -2,8 +2,10 @@ import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { centeredBubbleGeometry, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency, themeVersionName } from "@/lib/theme/exportRequest";
 import { themeColorToCssHex } from "@/lib/theme/color";
+import { storagePathToFile } from "@/lib/theme/remoteAssets";
 import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, requireUploadFile, uploadEntryFileName, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import { detectThemeImageSourceScale, getAndroidNinePatchInnerSize, isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
@@ -31,12 +33,19 @@ export type IosExportServerAssetFile = {
   serverAsset: string;
 };
 
-export type IosExportFile = IosExportBlobFile | IosExportServerAssetFile;
+export type IosExportCatalogAssetFile = {
+  path: string;
+  catalogAsset: CatalogAssetSelection;
+};
+
+export type IosExportFile = IosExportBlobFile | IosExportServerAssetFile | IosExportCatalogAssetFile;
 
 type IosSlotSource = {
   blob?: Blob;
   assetUrl?: string;
   serverAsset?: string;
+  catalogAsset?: CatalogAssetSelection;
+  fallbackStoragePath?: string;
   sourceName: string;
   sourceScale: number;
   sourceDimensions?: IosSourceDimensions;
@@ -148,6 +157,17 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
 
   const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
   if (selectedUpload) {
+    if (selectedUpload.catalog && !selectedUpload.file && !selectedUpload.imageEdit && slot.kind !== "ninepatch") {
+      return {
+        catalogAsset: selectedUpload.catalog.selection,
+        sourceName: selectedUpload.catalog.fileName,
+        sourceScale: selectedUpload.catalog.sourceScale,
+        fallbackStoragePath: selectedUpload.catalog.legacyStoragePath,
+        ...(isIosBubbleRole(slot.role)
+          ? { sourceDimensions: { width: selectedUpload.catalog.width, height: selectedUpload.catalog.height } }
+          : {}),
+      };
+    }
     const uploadFile = requireUploadFile(selectedUpload, "iOS 내보내기");
     return {
       blob: await normalizeIosImageBlob(slot, uploadFile, uploadFile.name),
@@ -198,6 +218,8 @@ async function flipIosSlotSource(slot: ThemeAssetSlot, source: IosSlotSource): P
     blob: await drawImageToPng(image, width, height, undefined, true),
     assetUrl: undefined,
     serverAsset: undefined,
+    catalogAsset: undefined,
+    fallbackStoragePath: undefined,
   };
 }
 
@@ -251,10 +273,21 @@ export function canReuseIosServerAsset(targetScale: number | undefined, sourceSc
   return targetScale === undefined || targetScale === sourceScale;
 }
 
+export function canReuseIosCatalogAsset(targetScale: number | undefined, sourceScale: number) {
+  return targetScale === undefined || targetScale === sourceScale;
+}
+
 async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosExportFile[]> {
   const entries: IosExportFile[] = [];
 
   for (const { path, targetScale } of getIosSlotExportTargets(slot)) {
+    if (source.catalogAsset) {
+      if (!canReuseIosCatalogAsset(targetScale, source.sourceScale)) {
+        throw new Error(`iOS catalog 에셋은 변환 없이 사용할 수 없습니다: ${path}`);
+      }
+      entries.push({ path, catalogAsset: source.catalogAsset });
+      continue;
+    }
     if (canReuseIosServerAsset(targetScale, source.sourceScale, Boolean(source.serverAsset)) && source.serverAsset) {
       entries.push({ path, serverAsset: source.serverAsset });
       continue;
@@ -272,8 +305,12 @@ async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSo
 
 async function getIosSourceBlob(slot: ThemeAssetSlot, source: IosSlotSource) {
   if (source.blob) return source.blob;
-  if (!source.assetUrl) throw new Error(`iOS 이미지 원본을 찾지 못했습니다: ${source.sourceName}`);
-  const blob = await fetchAssetBlob(source.assetUrl);
+  const blob = source.assetUrl
+    ? await fetchAssetBlob(source.assetUrl)
+    : source.fallbackStoragePath
+      ? await storagePathToFile(source.fallbackStoragePath, source.sourceName, "image/png")
+      : undefined;
+  if (!blob) throw new Error(`iOS 이미지 원본을 찾지 못했습니다: ${source.sourceName}`);
   source.blob = await normalizeIosImageBlob(slot, blob, source.sourceName);
   return source.blob;
 }

@@ -6,6 +6,8 @@ import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAss
 import { adminLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { buildPickerThumbnailIndex, selectPickerThumbnailUrl, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
+import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
+import type { ThemeAssetObjectRecord } from "@/lib/theme/assetCatalog/registry";
 
 const bucketName = "theme-assets";
 const allowedPlatforms = new Set(["android", "ios"]);
@@ -111,6 +113,7 @@ export async function GET(request: NextRequest) {
     const hasMore = cursorFiltered.length > limit;
     const signedUrls = await createSignedUrlMap(admin, page.map((item) => item.asset.variants.find((variant) => variant.platform === platform)?.storagePath ?? item.asset.storagePath));
     const signedUrlRecord = Object.fromEntries(signedUrls);
+    const catalogRecords = await readActiveAdminCatalogRecords(admin, page.map((item) => item.asset.id));
     const thumbnailIndex = await readPickerThumbnailIndex(admin, page.map((item) => item.asset.id));
 
     const items: readonly RecommendedResponseItem[] = page.map((item) => {
@@ -124,6 +127,7 @@ export async function GET(request: NextRequest) {
        * `previewUrl`로 떨어뜨린다.
        */
       const usesPlatformVariant = withVariant.storagePath !== candidate.storagePath;
+      const catalog = findMatchingCatalogRef(catalogRecords, withVariant, platform, usesPlatformVariant);
       const thumbnailUrl = selectPickerThumbnailUrl({
         index: thumbnailIndex,
         adminAssetId: item.asset.id,
@@ -132,6 +136,7 @@ export async function GET(request: NextRequest) {
       });
       return {
         ...withVariant,
+        ...(catalog ? { catalog } : {}),
         target: item.target,
         matchRank: item.matchRank,
         ...(thumbnailUrl ? { thumbnailUrl } : {}),
@@ -145,6 +150,57 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Recommended asset listing failed", JSON.stringify(serializeError(error)));
     return NextResponse.json({ error: "Failed to load recommended assets." }, { status: 500 });
+  }
+}
+
+/**
+ * 추천 후보와 registry object가 같은 원본인지 확인한다.
+ *
+ * registry에는 canonical object만 있을 수 있고 후보에는 플랫폼 variant가 선택돼 있을 수 있다.
+ * 파일명·MIME이 다르면 canonical object를 다른 그림에 붙이는 셈이므로 catalog ref를 생략해
+ * 기존 signed URL → field 경로로 남긴다.
+ */
+function findMatchingCatalogRef(
+  records: readonly ThemeAssetObjectRecord[],
+  candidate: AdminAssetCandidate,
+  platform: "android" | "ios",
+  usesPlatformVariant: boolean,
+) {
+  const matching = records.filter((item) =>
+    item.logicalAssetId === adminLogicalAssetId(candidate.id)
+    && item.fileName === candidate.fileName
+    && item.mimeType === candidate.mimeType,
+  );
+  const preferredVariantKeys = usesPlatformVariant ? [platform, "canonical"] : ["canonical", platform];
+  const record = preferredVariantKeys.map((variantKey) => matching.find((item) => item.variantKey === variantKey)).find(Boolean)
+    ?? matching[0];
+  if (!record) return undefined;
+  return {
+    selection: { kind: "catalog" as const, assetId: record.logicalAssetId, revision: record.revision, variantKey: record.variantKey },
+    fileName: record.fileName,
+    mimeType: record.mimeType,
+    size: record.sizeBytes,
+    sourceScale: record.sourceScale,
+    width: record.width,
+    height: record.height,
+    pngSignatureVerified: record.pngSignatureVerified,
+  };
+}
+
+async function readActiveAdminCatalogRecords(admin: ReturnType<typeof createAdminClient>, adminAssetIds: readonly string[]) {
+  if (!adminAssetIds.length) return [];
+  try {
+    const variantKeys = ["canonical", "android", "ios"];
+    return await createRegistryStore(admin).findActiveByKeys(
+      Array.from(new Set(adminAssetIds)).flatMap((id) =>
+        variantKeys.map((variantKey) => ({ logicalAssetId: adminLogicalAssetId(id), variantKey })),
+      ),
+    );
+  } catch (error) {
+    // registry는 export 최적화 metadata다. 조회가 잠시 실패해도 추천 목록을 막지 않고 기존
+    // signed URL/field 경로로 돌아간다. 실패는 thumbnail 조회와 같은 운영 로그에서 확인한다.
+    console.warn("Recommended catalog lookup failed; falling back to field uploads.", JSON.stringify(serializeError(error)));
+    return [];
   }
 }
 

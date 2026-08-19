@@ -20,6 +20,11 @@ const catalogRef = {
   fileName: "bg@3x.png",
   mimeType: "image/png",
   size: 2048,
+  sourceScale: 3 as const,
+  width: 1125,
+  height: 2436,
+  pngSignatureVerified: true,
+  legacyStoragePath: "admin-assets/a1b2/bg@3x.png",
   previewUrl: "https://cdn.example.com/preview/v1/asset/ab/abc.webp",
 };
 

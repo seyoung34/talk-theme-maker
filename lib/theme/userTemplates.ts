@@ -167,6 +167,10 @@ function normalizeCatalogUploadRef(value: SlotUploadEntry["catalog"]): CatalogUp
   if (typeof value.fileName !== "string" || !value.fileName) return undefined;
   if (typeof value.mimeType !== "string" || !value.mimeType) return undefined;
   if (typeof value.size !== "number" || !Number.isFinite(value.size) || value.size < 0) return undefined;
+  if (value.sourceScale !== 1 && value.sourceScale !== 2 && value.sourceScale !== 3) return undefined;
+  if (typeof value.width !== "number" || !Number.isSafeInteger(value.width) || value.width <= 0) return undefined;
+  if (typeof value.height !== "number" || !Number.isSafeInteger(value.height) || value.height <= 0) return undefined;
+  if (value.pngSignatureVerified !== true) return undefined;
   let selection;
   try {
     selection = parseCatalogAssetSelection(value.selection);
@@ -178,6 +182,11 @@ function normalizeCatalogUploadRef(value: SlotUploadEntry["catalog"]): CatalogUp
     fileName: value.fileName,
     mimeType: value.mimeType,
     size: value.size,
+    sourceScale: value.sourceScale,
+    width: value.width,
+    height: value.height,
+    pngSignatureVerified: true,
+    ...(typeof value.legacyStoragePath === "string" && value.legacyStoragePath ? { legacyStoragePath: value.legacyStoragePath } : {}),
     ...(typeof value.previewUrl === "string" && value.previewUrl ? { previewUrl: value.previewUrl } : {}),
   };
 }

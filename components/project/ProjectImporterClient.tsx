@@ -65,6 +65,7 @@ import {
   type BubbleEditState,
 } from "@/components/project/projectModel";
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { createAdminCatalogUploadRef } from "@/lib/theme/assetCatalog/clientRef";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getBubblePairRole, getSlotCandidates } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
@@ -1068,10 +1069,19 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const selectAdminAsset = async (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => {
-    const file = await adminAssetToFile(asset);
+    const catalog = createAdminCatalogUploadRef(slot, asset);
+    const file = catalog ? undefined : await adminAssetToFile(asset);
     setUploads((current) => {
       const entries = current[slot.id] ?? [];
-      const nextEntries = entries.some((entry) => entry.id === asset.id) ? entries : [...entries, { id: asset.id, file, source: "admin" as const }];
+      const nextEntry = {
+        id: asset.id,
+        ...(file ? { file } : {}),
+        ...(catalog ? { catalog } : {}),
+        source: "admin" as const,
+      };
+      const nextEntries = entries.some((entry) => entry.id === asset.id)
+        ? entries.map((entry) => entry.id === asset.id ? nextEntry : entry)
+        : [...entries, nextEntry];
       return { ...current, [slot.id]: nextEntries };
     });
     dropRemoteUploadRef(slot.id);
