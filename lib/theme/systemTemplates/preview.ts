@@ -1,6 +1,7 @@
 import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
-import { getPublicThemeAssetUrl, getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
+import { getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
+import { previewUrlOf } from "@/lib/theme/assetCatalog/previewUrl";
 import type { RemoteSlotUploads, SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, type ThemeAssetSlot, type ThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
@@ -172,7 +173,12 @@ export function createSystemTemplatePreviewVisual({
 
   return {
     platform,
-    cardPreviewImage: getPublicThemeAssetUrl(summary.previewMetadata.cardPreviewPath, summary.updatedAt),
+    // R2 키가 있으면 CDN에서, 없으면 기존 theme-public에서 받는다. 전환을 템플릿 단위로 쪼갠다.
+    cardPreviewImage: previewUrlOf({
+      r2ObjectKey: summary.previewMetadata.r2?.card?.objectKey,
+      legacyStoragePath: summary.previewMetadata.cardPreviewPath,
+      legacyVersion: summary.updatedAt,
+    }),
     chatBackgroundColor: resolveColor(slots, "chat_background_color", summary, templateId, template, template.defaults.chatBackground, summary.previewMetadata.colors?.chatBackground),
     mainBackgroundColor: resolveColor(slots, "main_background_color", summary, templateId, template, template.defaults.mainBackground, summary.previewMetadata.colors?.mainBackground),
     tabBackgroundColor: resolveColor(slots, "tab_background", summary, templateId, template, template.defaults.tabBackground, summary.previewMetadata.colors?.tabBackground),

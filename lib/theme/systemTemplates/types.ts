@@ -102,6 +102,25 @@ export type SystemTemplatePreviewMetadata = {
    * 굽기에 실패한 경우를 위해 그 폴백은 유지한다.
    */
   screenPreviews?: Partial<Record<PreviewScreenId, string>>;
+  /**
+   * R2로 옮긴 파생물의 객체 키.
+   *
+   * 템플릿 preview는 폰 화면을 canvas로 합성한 것이라 GCS catalog 원본이 없다. 그래서
+   * `theme_asset_objects`(원본이 있는 에셋의 registry)에 넣지 못하고 여기 둔다 — 계획 §8.1이
+   * `preview_metadata`를 대안으로 지정한 이유다.
+   *
+   * 기존 `cardPreviewPath`·`screenPreviews`(theme-public 경로)는 그대로 남긴다. R2 키가 없거나
+   * `NEXT_PUBLIC_R2_PREVIEW_ORIGIN`이 꺼져 있으면 그쪽으로 떨어진다.
+   */
+  r2?: {
+    card?: R2PreviewRef;
+    screens?: Partial<Record<PreviewScreenId, R2PreviewRef>>;
+  };
+};
+
+export type R2PreviewRef = {
+  readonly objectKey: string;
+  readonly sha256: string;
 };
 
 export type SystemTemplateSummary = Pick<SystemTemplateRecord, "id" | "bundleId" | "title" | "description" | "baseTemplateId" | "platform" | "status" | "visibility" | "pricingType" | "priceAmount" | "creditCost" | "tags" | "createdAt" | "updatedAt"> & {
