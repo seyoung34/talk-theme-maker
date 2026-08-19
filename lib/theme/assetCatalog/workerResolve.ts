@@ -1,4 +1,4 @@
-import { createRegistryStore, type RegistryStore } from "@/lib/theme/assetCatalog/registryStore";
+import { createEdgeRegistryStore, type EdgeRegistryStore } from "@/lib/theme/assetCatalog/edgeRegistryStore";
 import {
   collectCatalogSelections,
   hasCatalogAsset,
@@ -48,7 +48,7 @@ export async function resolveCatalogManifestForExport(input: {
   platform: "android" | "ios";
   /** auth.uid()에서 얻은 요청 사용자. template private/draft 소유권 확인에만 사용한다. */
   userId?: string;
-  store?: Pick<RegistryStore, "findActiveByKeys"> & Partial<Pick<RegistryStore, "findAdminAssetExportAccess" | "findTemplateAssetExportAccess">>;
+  store?: Pick<EdgeRegistryStore, "findActiveByKeys"> & Partial<Pick<EdgeRegistryStore, "findAdminAssetExportAccess" | "findTemplateAssetExportAccess">>;
 }) {
   const collected = collectCatalogSelections(input.manifest);
   if (collected.failures.length) throw createCatalogResolutionError(collected.failures[0]);
@@ -65,7 +65,7 @@ export async function resolveCatalogManifestForExport(input: {
     };
   }
 
-  const store = input.store ?? createRegistryStore();
+  const store = input.store ?? createEdgeRegistryStore();
   const records = await store.findActiveByKeys(toRegistryLookupKeys(collected.selections));
   const accessByAssetId = await readCatalogAssetAccess(store, collected.selections, input.userId);
   let resolution;
@@ -127,7 +127,7 @@ function createCatalogResolutionError(failure: CatalogResolutionFailure): Catalo
 }
 
 async function readCatalogAssetAccess(
-  store: Pick<RegistryStore, "findActiveByKeys"> & Partial<Pick<RegistryStore, "findAdminAssetExportAccess" | "findTemplateAssetExportAccess">>,
+  store: Pick<EdgeRegistryStore, "findActiveByKeys"> & Partial<Pick<EdgeRegistryStore, "findAdminAssetExportAccess" | "findTemplateAssetExportAccess">>,
   selections: readonly { selection: { assetId: string } }[],
   userId?: string,
 ) {
