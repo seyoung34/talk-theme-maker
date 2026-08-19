@@ -184,8 +184,19 @@ describe("publishThemeAsset", () => {
     );
 
     expect(result.previewsSkipped).toBe(false);
-    expect(result.record.r2Previews.card.objectKey).toMatch(/^preview\/v1\/[0-9a-f]{2}\/[0-9a-f]{64}\.webp$/);
+    // 기본 용도는 추천 에셋이라 `asset/` 아래로 간다.
+    expect(result.record.r2Previews.card.objectKey).toMatch(/^preview\/v1\/asset\/[0-9a-f]{2}\/[0-9a-f]{64}\.webp$/);
     expect(calls).toEqual(["insertStaged", "setPreviews", "activate"]);
+  });
+
+  // 템플릿 preview는 다른 prefix로 간다. 피커 썸네일과 바이트가 같아질 일이 없어 섞을 이유가 없다.
+  it("previewPurpose가 template이면 template prefix로 올린다", async () => {
+    const { store } = fakeStore();
+    const result = await publishThemeAsset(
+      input({ previews: [{ presetKey: "card", bytes: new Uint8Array([9]), contentType: "image/webp" }], previewPurpose: "template" }),
+      { store, uploadCatalogObject: uploader, previewBucket: fakeBucket() },
+    );
+    expect(result.record.r2Previews.card.objectKey).toMatch(/^preview\/v1\/template\/[0-9a-f]{2}\/[0-9a-f]{64}\.webp$/);
   });
 
   /**

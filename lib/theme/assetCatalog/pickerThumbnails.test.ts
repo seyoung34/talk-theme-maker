@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const key = "preview/v1/ab/" + "ab".padEnd(64, "c") + ".webp";
+const key = "preview/v1/asset/ab/" + "ab".padEnd(64, "c") + ".webp";
 
 async function load(r2Origin: string) {
   vi.resetModules();
@@ -71,7 +71,7 @@ describe("buildPickerThumbnailUrls", () => {
 
   it("여러 행을 한 표로 모은다", async () => {
     const { buildPickerThumbnailUrls } = await load("https://preview.example.com");
-    const other = "preview/v1/cd/" + "cd".padEnd(64, "e") + ".webp";
+    const other = "preview/v1/asset/cd/" + "cd".padEnd(64, "e") + ".webp";
     const result = buildPickerThumbnailUrls([
       row(),
       row({ logical_asset_id: "admin:other-id", r2_previews: { picker: { objectKey: other, sha256: "cd".padEnd(64, "e") } } }),

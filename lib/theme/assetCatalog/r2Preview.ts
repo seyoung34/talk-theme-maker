@@ -62,21 +62,41 @@ export function getPreviewBucket(): PreviewBucket | null {
 }
 
 /**
+ * 파생물의 **용도**. 경로를 이것으로 나눈다.
+ *
+ * - `asset`    — 추천 에셋 피커 썸네일 (단일 에셋을 축소한 것)
+ * - `template` — 템플릿 갤러리 카드·4화면 (폰 화면을 canvas로 합성한 것)
+ *
+ * 둘은 바이트가 같아질 일이 없어 한 네임스페이스로 묶어도 dedup 이득이 없다. 나누면 prefix로
+ * 용량·개수를 보고, Cache Rule을 따로 걸고, 규격 변경 시 재굽기 대상을 좁힐 수 있다.
+ *
+ * **에셋 kind(icon·bubble·background)로는 나누지 않는다.** kind는 `admin_assets.asset_kind`의
+ * 메타데이터이고 재저장으로 바뀔 수 있다(`saveAdminAssetCandidate`의 upsert). 변할 수 있는 분류를
+ * content-addressed 키에 섞으면 "같은 바이트 = 같은 키"가 깨지고, 바뀌지 않은 바이트 때문에
+ * 재업로드와 고아가 생긴다. 반면 용도는 파생물에 내재해 절대 바뀌지 않는다.
+ */
+export type PreviewPurpose = "asset" | "template";
+
+/**
  * content-addressed preview 키.
  *
  * 계획 §8.1이 `?v=` cache busting을 금지하므로 내용이 바뀌면 키 자체가 바뀌어야 한다. sha256을
- * 키에 넣으면 그것이 자동으로 성립하고, 같은 파생물이 여러 템플릿에서 나와도 객체는 하나다.
+ * 키에 넣으면 그것이 자동으로 성립하고, 같은 파생물이 여러 곳에서 나와도 객체는 하나다.
  */
-export function previewObjectKey(sha256: string, contentType: PreviewContentType) {
-  if (!/^[0-9a-f]{64}$/.test(sha256)) {
+export function previewObjectKey(input: { purpose: PreviewPurpose; sha256: string; contentType: PreviewContentType }) {
+  if (!/^[0-9a-f]{64}$/.test(input.sha256)) {
     throw new PreviewStorageError("invalid_preview_key", "미리보기 경로가 올바르지 않습니다.", "sha256");
   }
-  return `${previewKeyPrefix}/${sha256.slice(0, 2)}/${sha256}.${contentType === "image/png" ? "png" : "webp"}`;
+  const extension = input.contentType === "image/png" ? "png" : "webp";
+  return `${previewKeyPrefix}/${input.purpose}/${input.sha256.slice(0, 2)}/${input.sha256}.${extension}`;
 }
+
+/** 알려진 용도 prefix 안에만 쓴다. 새 용도가 생기면 여기에 더한다. */
+const allowedPreviewPrefixes: readonly string[] = ["asset", "template"].map((purpose) => `${previewKeyPrefix}/${purpose}/`);
 
 export function assertPreviewObjectKey(objectKey: string) {
   if (
-    !objectKey.startsWith(`${previewKeyPrefix}/`)
+    !allowedPreviewPrefixes.some((prefix) => objectKey.startsWith(prefix))
     || objectKey.includes("..")
     || objectKey.includes("//")
     || objectKey.includes("\\")

@@ -49,7 +49,7 @@ const assets = (await selectRows("admin_assets", "id,file_name,mime_type,storage
 console.log(`\n=== 추천 에셋 썸네일 ${apply ? "굽기" : "계획"} ===`);
 console.log(`  대상        : admin_assets ${assets.length}개`);
 console.log(`  목표 크기   : 긴 변 ${maxEdge}px WebP (quality ${quality})`);
-console.log(`  업로드 대상 : r2://${bucket}/preview/v1/...`);
+console.log(`  업로드 대상 : r2://${bucket}/preview/v1/asset/...`);
 console.log(`  원본은 그대로 둔다. 이 스크립트는 파생물만 만든다.`);
 
 if (!apply) {
@@ -75,7 +75,8 @@ try {
       thumbnailBytes += baked.byteLength;
 
       const sha256 = createHash("sha256").update(baked).digest("hex");
-      const objectKey = `preview/v1/${sha256.slice(0, 2)}/${sha256}.webp`;
+      // 용도별 prefix. lib/theme/assetCatalog/r2Preview.ts의 previewObjectKey와 같은 규칙이다.
+      const objectKey = `preview/v1/asset/${sha256.slice(0, 2)}/${sha256}.webp`;
       await putR2Object(objectKey, baked);
 
       manifest.thumbnails.push({

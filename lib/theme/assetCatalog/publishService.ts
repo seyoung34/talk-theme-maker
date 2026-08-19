@@ -7,7 +7,7 @@ import {
 } from "@/lib/theme/assetCatalog/publish";
 import type { ThemeAssetObjectRecord, ThemeAssetR2Preview } from "@/lib/theme/assetCatalog/registry";
 import type { RegistryStore } from "@/lib/theme/assetCatalog/registryStore";
-import { previewObjectKey, putPreviewObject, type PreviewBucket, type PreviewContentType } from "@/lib/theme/assetCatalog/r2Preview";
+import { previewObjectKey, putPreviewObject, type PreviewBucket, type PreviewContentType, type PreviewPurpose } from "@/lib/theme/assetCatalog/r2Preview";
 
 /**
  * 관리자 publish의 단일 진입점 (계획 §7.1).
@@ -37,6 +37,8 @@ export type PublishThemeAssetInput = {
   variantKey: string;
   canonical: CatalogSourceInput;
   previews?: readonly PreviewPresetInput[];
+  /** 파생물 경로를 나누는 용도. 한 publish의 preview는 모두 같은 용도다. 기본은 추천 에셋. */
+  previewPurpose?: PreviewPurpose;
 };
 
 export type PublishThemeAssetResult = {
@@ -149,6 +151,7 @@ export async function publishThemeAsset(
       bucket: deps.previewBucket,
       presets: input.previews ?? [],
       revision: input.revision,
+      purpose: input.previewPurpose ?? "asset",
     });
     if (Object.keys(previews).length) await deps.store.setPreviews(staged.id, previews);
 
@@ -190,6 +193,7 @@ async function uploadPreviews(input: {
   bucket: PreviewBucket | null;
   presets: readonly PreviewPresetInput[];
   revision: number;
+  purpose: PreviewPurpose;
 }) {
   if (!input.presets.length) return { previews: {}, previewsSkipped: false };
   // 바인딩이 없는 환경(`next dev`)에서는 preview만 건너뛰고 catalog publish는 계속한다.
@@ -199,7 +203,7 @@ async function uploadPreviews(input: {
   const previews: Record<string, ThemeAssetR2Preview> = {};
   for (const preset of input.presets) {
     const sha256 = await sha256Hex(preset.bytes);
-    const objectKey = previewObjectKey(sha256, preset.contentType);
+    const objectKey = previewObjectKey({ purpose: input.purpose, sha256, contentType: preset.contentType });
     await putPreviewObject({
       bucket: input.bucket,
       objectKey,

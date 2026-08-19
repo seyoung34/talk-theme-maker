@@ -15,7 +15,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-const objectKey = "preview/v1/ab/" + "ab".padEnd(64, "c") + ".webp";
+const objectKey = "preview/v1/asset/ab/" + "ab".padEnd(64, "c") + ".webp";
 const legacyPath = "system-templates/abc/preview/card.webp";
 
 describe("resolvePreviewUrl", () => {
@@ -76,7 +76,7 @@ describe("resolvePreviewUrl", () => {
 
   it("키 구간은 인코딩하되 슬래시는 경로로 남긴다", async () => {
     const { previewUrlOf } = await load("https://preview.example.com");
-    expect(previewUrlOf({ r2ObjectKey: "preview/v1/한 글/a b.webp" }))
-      .toBe("https://preview.example.com/preview/v1/%ED%95%9C%20%EA%B8%80/a%20b.webp");
+    expect(previewUrlOf({ r2ObjectKey: "preview/v1/asset/한 글/a b.webp" }))
+      .toBe("https://preview.example.com/preview/v1/asset/%ED%95%9C%20%EA%B8%80/a%20b.webp");
   });
 });
