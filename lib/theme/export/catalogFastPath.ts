@@ -1,5 +1,3 @@
-import { isAndroidNinePatchSourceName } from "../sourceImage.js";
-
 /**
  * catalog 원본을 **변환 없이 그대로** 결과물에 넣어도 되는지 판정한다 (계획 §9.5).
  *
@@ -100,6 +98,26 @@ function checkCommon(path: string, source: CatalogFastPathSource): CatalogFastPa
   // PNG로 나가야 하는 자리에 다른 확장자의 원본을 넣으면 확장자만 PNG인 파일이 된다.
   if (!path.toLowerCase().endsWith(".png")) return { eligible: false, reason: "extension_mismatch" };
   return eligible;
+}
+
+/**
+ * 이 파일은 Next/Webpack과 NodeNext로 컴파일되는 Builder가 함께 가져간다.
+ * `sourceImage.ts`의 `.js` specifier는 NodeNext에는 맞지만 Next의 Cloudflare 빌드에서는
+ * 해당 파일을 해석하지 못하므로, catalog fast path가 실제로 필요한 보수적 판정만 여기서
+ * 유지한다. 파일명 정규화 규칙은 sourceImage.ts와 동일하게 query/hash를 제거하고 복원한다.
+ */
+function isAndroidNinePatchSourceName(sourceName: string | undefined) {
+  if (!sourceName) return false;
+  const path = decodeSourcePath(sourceName.split(/[?#]/, 1)[0]).toLowerCase();
+  return path.endsWith(".9.png");
+}
+
+function decodeSourcePath(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
 }
 
 /** 플랫폼별 판정을 하나로 묶는다. 호출부가 플랫폼을 들고 있는 곳에서 쓴다. */
