@@ -10,6 +10,7 @@ import {
 import { adminLogicalAssetId, parseLogicalAssetId, templateLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { ThemeAssetRegistryError, type ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
 import type { CatalogAssetExportAccess } from "@/lib/theme/assetCatalog/exportAccess";
+import { isCatalogExportEnabled } from "@/lib/theme/assetCatalog/exportGate";
 
 type PassthroughManifestItem =
   | { readonly path: string; readonly field: string }
@@ -26,6 +27,7 @@ export class CatalogExportResolutionError extends Error {
       | "catalog_asset_not_exportable"
       | "catalog_asset_transform_required"
       | "catalog_asset_not_allowed"
+      | "catalog_export_disabled"
       | "catalog_payload_too_large",
     message: string,
     readonly status: number,
@@ -63,6 +65,15 @@ export async function resolveCatalogManifestForExport(input: {
       uniqueReferencedAssetBytes: 0,
       referencedAssetFileCount: 0,
     };
+  }
+
+  if (!isCatalogExportEnabled(input.platform)) {
+    throw new CatalogExportResolutionError(
+      "catalog_export_disabled",
+      "현재 catalog 내보내기는 준비 중입니다. 잠시 후 다시 시도해 주세요.",
+      503,
+      "not_exportable",
+    );
   }
 
   const store = input.store ?? createEdgeRegistryStore();

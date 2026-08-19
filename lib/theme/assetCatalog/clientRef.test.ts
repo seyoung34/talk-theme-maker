@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAdminCatalogUploadRef } from "@/lib/theme/assetCatalog/clientRef";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssetDomain";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
@@ -42,6 +42,15 @@ function slot(overrides: Partial<ThemeAssetSlot> = {}) {
 }
 
 describe("createAdminCatalogUploadRef", () => {
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_ASSET_CATALOG_EXPORT_ENABLED_ANDROID", "1");
+    vi.stubEnv("NEXT_PUBLIC_ASSET_CATALOG_EXPORT_ENABLED_IOS", "1");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("변환이 필요 없는 추천 에셋은 metadata를 가진 catalog ref로 바꾼다", () => {
     expect(createAdminCatalogUploadRef(slot(), asset)).toEqual({
       ...catalog,
@@ -63,5 +72,10 @@ describe("createAdminCatalogUploadRef", () => {
 
   it("nine-patch 슬롯은 marker 변환을 위해 catalog ref를 만들지 않는다", () => {
     expect(createAdminCatalogUploadRef(slot({ kind: "ninepatch" }), asset)).toBeUndefined();
+  });
+
+  it("producer flag가 꺼져 있으면 기존 File fallback을 선택한다", () => {
+    vi.stubEnv("NEXT_PUBLIC_ASSET_CATALOG_EXPORT_ENABLED_ANDROID", "0");
+    expect(createAdminCatalogUploadRef(slot(), asset)).toBeUndefined();
   });
 });

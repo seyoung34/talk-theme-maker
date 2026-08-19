@@ -3,6 +3,7 @@ import { exportNinePatch, flipCanvasHorizontally, loadNinePatchBlob } from "@/li
 import { bubbleGeometryToAndroidMarkers, flipAndroidMarkersHorizontally, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency } from "@/lib/theme/exportRequest";
 import { storagePathToFile } from "@/lib/theme/remoteAssets";
+import { isCatalogExportProducerEnabled } from "@/lib/theme/assetCatalog/exportGate";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, requireUploadFile, uploadEntryFileName, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
@@ -173,7 +174,12 @@ async function resolveAndroidSlotSource(
     return { blob: await canvasToBlob(exportNinePatch(nextAsset), "image/png") };
   }
 
-  if (selectedUpload?.catalog && !selectedUpload.file && !selectedUpload.imageEdit) return { catalogAsset: selectedUpload.catalog.selection };
+  if (selectedUpload?.catalog && !selectedUpload.file && !selectedUpload.imageEdit) {
+    if (isCatalogExportProducerEnabled("android")) return { catalogAsset: selectedUpload.catalog.selection };
+    if (selectedUpload.catalog.legacyStoragePath) {
+      return { blob: await storagePathToFile(selectedUpload.catalog.legacyStoragePath, selectedUpload.catalog.fileName, selectedUpload.catalog.mimeType) };
+    }
+  }
   if (selectedUpload) return { blob: requireUploadFile(selectedUpload, "Android 내보내기") };
   const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template, allSlots);
   if (assetUrl) {

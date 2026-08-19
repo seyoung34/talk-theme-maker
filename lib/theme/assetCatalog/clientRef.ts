@@ -1,6 +1,7 @@
 import { getAndroidSlotExportPaths } from "@/lib/theme/android/export";
 import { getIosSlotExportTargets } from "@/lib/theme/ios/export";
 import { isCatalogFastPathEligible } from "@/lib/theme/export/catalogFastPath";
+import { isCatalogExportProducerEnabled } from "@/lib/theme/assetCatalog/exportGate";
 import type { CatalogUploadRef } from "@/lib/theme/project/state";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
@@ -14,6 +15,7 @@ import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
  * 않게 하는 경계다.
  */
 export function createAdminCatalogUploadRef(slot: ThemeAssetSlot, asset: AdminAssetCandidate): CatalogUploadRef | undefined {
+  if (!isCatalogExportProducerEnabled(slot.platform)) return undefined;
   const catalog = asset.catalog;
   if (!catalog || slot.kind === "color" || slot.kind === "ninepatch" || !catalog.pngSignatureVerified) return undefined;
 

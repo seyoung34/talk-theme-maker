@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveCatalogManifestForExport } from "@/lib/theme/assetCatalog/workerResolve";
 import { mapThemeAssetObjectRow } from "@/lib/theme/assetCatalog/registry";
 
@@ -32,6 +32,15 @@ function record(overrides: Record<string, unknown> = {}) {
 }
 
 describe("resolveCatalogManifestForExport", () => {
+  beforeEach(() => {
+    vi.stubEnv("ASSET_CATALOG_EXPORT_ENABLED_ANDROID", "1");
+    vi.stubEnv("ASSET_CATALOG_EXPORT_ENABLED_IOS", "1");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("catalog가 없으면 registry 조회 없이 기존 manifest를 통과시킨다", async () => {
     const findActiveByKeys = vi.fn();
     const result = await resolveCatalogManifestForExport({
@@ -143,5 +152,18 @@ describe("resolveCatalogManifestForExport", () => {
         findTemplateAssetExportAccess: async () => [{ uploadEntryId: templateUploadEntryId, platform: "android" }],
       },
     })).rejects.toMatchObject({ code: "catalog_asset_not_allowed", status: 403 });
+  });
+
+  it("server catalog export flag가 꺼져 있으면 catalog ref만 일시 차단한다", async () => {
+    vi.stubEnv("ASSET_CATALOG_EXPORT_ENABLED_ANDROID", "0");
+    const findActiveByKeys = vi.fn();
+
+    await expect(resolveCatalogManifestForExport({
+      manifest: [{ path: "src/main/theme/drawable-xxhdpi/main.png", catalogAsset: selection, resourceRole: "main_background" }],
+      uploadedInputBytes: 0,
+      platform: "android",
+      store: { findActiveByKeys },
+    })).rejects.toMatchObject({ code: "catalog_export_disabled", status: 503 });
+    expect(findActiveByKeys).not.toHaveBeenCalled();
   });
 });

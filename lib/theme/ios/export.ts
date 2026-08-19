@@ -3,6 +3,7 @@ import { centeredBubbleGeometry, flipBubbleGeometryHorizontally } from "@/lib/th
 import { exportSlotConcurrency, themeVersionName } from "@/lib/theme/exportRequest";
 import { themeColorToCssHex } from "@/lib/theme/color";
 import { storagePathToFile } from "@/lib/theme/remoteAssets";
+import { isCatalogExportProducerEnabled } from "@/lib/theme/assetCatalog/exportGate";
 import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, requireUploadFile, uploadEntryFileName, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
@@ -159,6 +160,24 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
   const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
   if (selectedUpload) {
     if (selectedUpload.catalog && !selectedUpload.file && !selectedUpload.imageEdit && slot.kind !== "ninepatch") {
+      if (!isCatalogExportProducerEnabled("ios")) {
+        if (!selectedUpload.catalog.legacyStoragePath) {
+          const uploadFile = requireUploadFile(selectedUpload, "iOS 내보내기");
+          return {
+            blob: await normalizeIosImageBlob(slot, uploadFile, uploadFile.name),
+            sourceName: uploadFile.name,
+            sourceScale: getIosSourceScale(slot, uploads, selections, templateId, allSlots),
+          };
+        }
+        return {
+          sourceName: selectedUpload.catalog.fileName,
+          sourceScale: selectedUpload.catalog.sourceScale,
+          fallbackStoragePath: selectedUpload.catalog.legacyStoragePath,
+          ...(isIosBubbleRole(slot.role)
+            ? { sourceDimensions: { width: selectedUpload.catalog.width, height: selectedUpload.catalog.height } }
+            : {}),
+        };
+      }
       return {
         catalogAsset: selectedUpload.catalog.selection,
         sourceName: selectedUpload.catalog.fileName,
