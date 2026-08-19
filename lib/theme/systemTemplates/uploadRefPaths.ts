@@ -17,6 +17,7 @@ export function collectRemoteUploadPaths(uploadRefs: RemoteSlotUploads, slotIds?
     if (allowed && !allowed.has(slotId)) continue;
     for (const entry of entries ?? []) {
       if (entry.storagePath) paths.push(entry.storagePath);
+      if (entry.catalogMetadata?.legacyStoragePath) paths.push(entry.catalogMetadata.legacyStoragePath);
       if (entry.imageEdit?.originalStoragePath) paths.push(entry.imageEdit.originalStoragePath);
     }
   }

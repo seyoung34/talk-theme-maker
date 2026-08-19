@@ -258,7 +258,10 @@ function resolvePreviewUploadPath(slot: ThemeAssetSlot | undefined, uploadRefs: 
   if (!slot) return undefined;
   const entries = uploadRefs[slot.id] ?? [];
   const selectedUpload = getSelectedSharedSlotEntry(slot, uploadRefs, selections, getThemeSlots(slot.platform));
-  return selectedUpload?.entry.storagePath ?? entries[0]?.storagePath;
+  return selectedUpload?.entry.storagePath
+    ?? selectedUpload?.entry.catalogMetadata?.legacyStoragePath
+    ?? entries[0]?.storagePath
+    ?? entries[0]?.catalogMetadata?.legacyStoragePath;
 }
 
 function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {

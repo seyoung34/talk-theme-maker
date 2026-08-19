@@ -32,6 +32,23 @@ describe("collectRemoteUploadPaths", () => {
     alpha: [entry("a1", "system-templates/x/a1.png")],
     beta: [entry("b1", "system-templates/x/b1.png", "system-templates/x/b1-original.png")],
     gamma: [entry("g1", "system-templates/x/g1.png"), entry("g2", "system-templates/x/g2.png")],
+    catalog: [{
+      id: "catalog-1",
+      fileName: "catalog.png",
+      mimeType: "image/png",
+      size: 3,
+      catalog: { kind: "catalog", assetId: "admin:asset", revision: 1, variantKey: "canonical" },
+      catalogMetadata: {
+        fileName: "catalog.png",
+        mimeType: "image/png",
+        size: 3,
+        sourceScale: 3,
+        width: 90,
+        height: 90,
+        pngSignatureVerified: true,
+        legacyStoragePath: "system-templates/x/catalog.png",
+      },
+    }],
   } as unknown as RemoteSlotUploads;
 
   it("모든 슬롯의 storagePath를 모은다", () => {
@@ -41,6 +58,7 @@ describe("collectRemoteUploadPaths", () => {
         "system-templates/x/b1.png",
         "system-templates/x/g1.png",
         "system-templates/x/g2.png",
+        "system-templates/x/catalog.png",
       ]),
     );
   });
@@ -59,7 +77,7 @@ describe("collectRemoteUploadPaths", () => {
 
   it("slotIds가 비어 있으면 제한하지 않는다", () => {
     // hydrateUploads(uploadRefs) 처럼 슬롯을 지정하지 않는 호출과 같은 규칙이다.
-    expect(collectRemoteUploadPaths(uploadRefs, [])).toHaveLength(5);
+    expect(collectRemoteUploadPaths(uploadRefs, [])).toHaveLength(6);
   });
 
   it("알 수 없는 슬롯만 지정하면 빈 배열", () => {

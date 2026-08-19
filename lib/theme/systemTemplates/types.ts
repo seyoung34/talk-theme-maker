@@ -59,23 +59,39 @@ export type SystemTemplateSaveInput = Omit<SystemTemplateRecord, "id" | "created
   legacyTitle?: string;
 };
 
+/**
+ * storagePath 없이 보관하는 catalog ref의 검증된 메타데이터.
+ *
+ * signed URL은 만료되므로 시스템 템플릿 JSON에는 저장하지 않는다. 대신 legacyStoragePath가
+ * 있으면 편집기 미리보기·변환 fallback에서만 다시 서명한다.
+ */
+export type RemoteCatalogAssetMetadata = {
+  fileName: string;
+  mimeType: string;
+  size: number;
+  sourceScale: 1 | 2 | 3;
+  width: number;
+  height: number;
+  pngSignatureVerified: boolean;
+  legacyStoragePath?: string;
+};
+
 export type RemoteUploadEntry = {
   id: string;
   fileName: string;
   mimeType: string;
   size: number;
-  storagePath: string;
+  /** 기존 Supabase 원본 경로. catalog-only entry에는 없다. */
+  storagePath?: string;
   /**
    * catalog(GCS) 원본 좌표 (계획 §9.1).
    *
    * 있으면 이 항목의 바이트를 브라우저로 내려받지 않고 export manifest에서 참조로 보낼 수 있다.
-   * 없으면 지금까지처럼 `storagePath`에서 받는다 — 이 필드는 **추가 정보일 뿐 대체가 아니다.**
-   *
-   * `storagePath`가 아직 필수인 이유: 이미지 편집기처럼 실제 바이트가 필요한 경로가 남아 있고,
-   * catalog 참조만 있는 항목은 아직 아무도 만들지 않는다. catalog 단독 ref를 만드는 시점에
-   * optional legacy fallback으로 바꾼다.
+   * catalog-only entry에서는 `storagePath`가 비어 있고, 메타데이터의 legacy 경로는 필요한
+   * 순간에만 지연 수화한다.
    */
   catalog?: CatalogAssetSelection;
+  catalogMetadata?: RemoteCatalogAssetMetadata;
   imageEdit?: {
     originalName: string;
     originalSize: number;

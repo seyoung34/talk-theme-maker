@@ -259,4 +259,37 @@ describe("systemTemplateRepository.hydrateUploads 서명 요청 수", () => {
     expect(signedUrlRequests.length).toBeGreaterThan(1);
     expect(warn).toHaveBeenCalled();
   });
+
+  it("catalog-only ref는 원본 파일을 받지 않고 legacy 경로는 미리보기 URL에만 쓴다", async () => {
+    stubFetch();
+    const repository = await loadRepository();
+    const catalogRefs = {
+      background: [{
+        id: "catalog-1",
+        fileName: "background.png",
+        mimeType: "image/png",
+        size: 12,
+        catalog: { kind: "catalog", assetId: "admin:asset", revision: 2, variantKey: "canonical" },
+        catalogMetadata: {
+          fileName: "background.png",
+          mimeType: "image/png",
+          size: 12,
+          sourceScale: 3,
+          width: 120,
+          height: 80,
+          pngSignatureVerified: true,
+          legacyStoragePath: "system-templates/x/background.png",
+        },
+      }],
+    };
+
+    const uploads = await repository.hydrateUploads(catalogRefs as never);
+    const entry = uploads.background?.[0];
+    expect(entry?.file).toBeUndefined();
+    expect(entry?.catalog?.selection).toEqual(catalogRefs.background[0].catalog);
+    expect(entry?.catalog?.previewUrl).toBe("https://signed/system-templates/x/background.png");
+    expect(signedUrlRequests).toHaveLength(1);
+    expect(signedUrlRequests[0]).toEqual(["system-templates/x/background.png"]);
+    expect((fetch as ReturnType<typeof vi.fn>).mock.calls.some(([url]) => !String(url).includes("/api/theme-assets/signed-urls"))).toBe(false);
+  });
 });

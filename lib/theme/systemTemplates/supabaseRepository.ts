@@ -356,9 +356,36 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
     if (!entries?.length) continue;
     refs[slotId] = [];
     for (const entry of entries) {
-      // catalog 참조만 있는 항목은 아직 여기 오지 않는다. 오면 조용히 건너뛰지 않고 던진다 —
-      // 건너뛰면 슬롯이 빈 채로 저장돼 템플릿이 반쯤 비어 발행된다.
-      // catalog ref를 Supabase 재업로드 없이 그대로 넘기는 분기는 §9.1 후속 작업이다.
+      // 추천 catalog 에셋은 이미 GCS registry에 게시돼 있다. 같은 바이트를 Supabase Storage에
+      // 다시 올리면 catalog 전환의 이점이 사라지므로 선택과 검증 metadata만 보관한다.
+      // signed URL은 만료되므로 저장하지 않고, legacyStoragePath는 미리보기·변환 fallback에서만 쓴다.
+      if (entry.catalog && !entry.imageEdit && !entry.file) {
+        const metadata = entry.catalog;
+        if (!metadata.fileName || !metadata.mimeType || !metadata.size || !metadata.sourceScale || !metadata.width || !metadata.height || !metadata.pngSignatureVerified) {
+          throw new Error("시스템 템플릿 저장: catalog 에셋 메타데이터가 없습니다.");
+        }
+        refs[slotId]?.push({
+          id: entry.id,
+          fileName: metadata.fileName,
+          mimeType: metadata.mimeType,
+          size: metadata.size,
+          catalog: entry.catalog.selection,
+          catalogMetadata: {
+            fileName: metadata.fileName,
+            mimeType: metadata.mimeType,
+            size: metadata.size,
+            sourceScale: metadata.sourceScale,
+            width: metadata.width,
+            height: metadata.height,
+            pngSignatureVerified: true,
+            ...(metadata.legacyStoragePath ? { legacyStoragePath: metadata.legacyStoragePath } : {}),
+          },
+        });
+        continue;
+      }
+
+      // metadata가 빠진 오래된 catalog row나 변환된 항목은 legacy 경로를 통해 기존 방식으로
+      // 저장한다. 둘 다 없으면 조용히 누락시키지 않고 requireUploadFile에서 실패시킨다.
       const uploadFile = requireUploadFile(entry, "시스템 템플릿 저장");
       const fileName = sanitizeStoragePathPart(uploadFile.name);
       const storagePath = `system-templates/${variantId}/${sanitizeStoragePathPart(slotId)}/${sanitizeStoragePathPart(entry.id)}-${fileName}`;
@@ -526,11 +553,43 @@ async function remoteUploadsToSlotUploads(uploadRefs: RemoteSlotUploads, slotIds
   // 이 호출이 다룰 경로를 먼저 한 번에 서명한다. 이 함수를 거치는 모든 호출자
   // (편집기 부트스트랩·저장·내보내기)가 같은 이득을 본다.
   await prewarmRemoteUploadSignedUrls(uploadRefs, slotIds);
+  const legacyPreviewPaths = collectRemoteUploadPaths(uploadRefs, slotIds).filter((path, index, paths) => paths.indexOf(path) === index);
+  let previewUrlByPath: Record<string, string> = {};
+  if (legacyPreviewPaths.length) {
+    try {
+      previewUrlByPath = await getThemeAssetSignedUrls(legacyPreviewPaths);
+    } catch (error) {
+      // catalog export에는 preview URL이 필요 없다. 서명 실패는 편집기에서 이미지가 비어 보이는
+      // 정도로 제한하고, 실제 byte hydration이 필요한 legacy 항목은 아래에서 다시 실패시킨다.
+      console.warn("Catalog preview URL signing failed; export refs remain usable.", error);
+    }
+  }
   for (const [slotId, entries] of Object.entries(uploadRefs)) {
     if (allowed && !allowed.has(slotId)) continue;
     if (!entries?.length) continue;
     uploads[slotId] = await Promise.all(
       entries.map(async (entry) => {
+        if (entry.catalog && entry.catalogMetadata && !entry.imageEdit) {
+          const legacyStoragePath = entry.catalogMetadata.legacyStoragePath;
+          return {
+            id: entry.id,
+            catalog: {
+              selection: entry.catalog,
+              fileName: entry.catalogMetadata.fileName,
+              mimeType: entry.catalogMetadata.mimeType,
+              size: entry.catalogMetadata.size,
+              sourceScale: entry.catalogMetadata.sourceScale,
+              width: entry.catalogMetadata.width,
+              height: entry.catalogMetadata.height,
+              pngSignatureVerified: entry.catalogMetadata.pngSignatureVerified,
+              ...(legacyStoragePath ? { legacyStoragePath } : {}),
+              ...(legacyStoragePath && previewUrlByPath[legacyStoragePath] ? { previewUrl: previewUrlByPath[legacyStoragePath] } : {}),
+            },
+            source: "template" as const,
+          };
+        }
+
+        if (!entry.storagePath) throw new Error(`시스템 템플릿 에셋 경로가 없습니다: ${entry.id}`);
         const originalFile = entry.imageEdit?.originalStoragePath
           ? await storagePathToFile(entry.imageEdit.originalStoragePath, entry.imageEdit.originalName, entry.mimeType).catch(() => undefined)
           : undefined;
@@ -804,7 +863,10 @@ function resolvePreviewStoragePath(slots: ThemeAssetSlot[], role: ThemeResourceR
   if (!slot) return undefined;
   const entries = uploadRefs[slot.id] ?? [];
   const selected = getSelectedSharedSlotEntry(slot, uploadRefs, candidateSelections, slots);
-  return selected?.entry.storagePath ?? entries[0]?.storagePath;
+  return selected?.entry.storagePath
+    ?? selected?.entry.catalogMetadata?.legacyStoragePath
+    ?? entries[0]?.storagePath
+    ?? entries[0]?.catalogMetadata?.legacyStoragePath;
 }
 
 function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | undefined): SystemTemplatePreviewMetadata {
