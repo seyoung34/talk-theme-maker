@@ -73,7 +73,17 @@ export async function publishThemeAsset(
   if (existing?.status === "active") {
     return { record: existing, status: "already-active", previewsSkipped: false, orphanCandidates: [] };
   }
-  if (existing && existing.status !== "staged") {
+  /**
+   * `failed`는 재시도할 수 있다.
+   *
+   * R2 업로드나 DB 처리의 일시 오류로도 `failed`가 되는데, 그때마다 revision을 올리면 내용이 같은데
+   * 번호만 늘어난다. revision은 "내용의 이름"이므로 같은 바이트는 같은 번호로 다시 시도한다.
+   * 아래 sha256 검사가 다른 내용으로 덮어쓰는 요청을 막는다.
+   *
+   * `retired`는 재시도 대상이 아니다. 이미 다음 revision에 자리를 넘긴 상태이고, 되돌리는 것은
+   * publish가 아니라 rollback(active pointer 수동 복귀)의 일이다.
+   */
+  if (existing && existing.status !== "staged" && existing.status !== "failed") {
     throw new CatalogPublishError("REVISION_NOT_FORWARD", `revision ${input.revision} is ${existing.status}`);
   }
   // 같은 revision을 다른 바이트로 다시 올리는 것은 허용하지 않는다. revision이 곧 내용의 이름이다.
@@ -106,7 +116,19 @@ export async function publishThemeAsset(
     expectedSizeBytes: plan.source.sizeBytes,
   });
 
-  const staged = existing ?? await deps.store.insertStaged({
+  // 객체가 다시 올라간 것을 확인한 뒤에 되돌린다. 순서를 뒤집으면 업로드가 또 실패했을 때
+  // `staged`로 남아 "올라가 있다"고 오해하게 된다.
+  if (existing?.status === "failed") {
+    await deps.store.restageFailed(existing.id, plan.sha256);
+  }
+
+  // DB는 되돌렸지만 메모리의 레코드는 아직 `failed`다. 아래 `planCatalogActivation()`이 상태를
+  // 보고 판단하므로 여기서 맞춰 준다.
+  const restaged: ThemeAssetObjectRecord | null = existing?.status === "failed"
+    ? { ...existing, status: "staged" }
+    : existing;
+
+  const staged = restaged ?? await deps.store.insertStaged({
     logicalAssetId: input.logicalAssetId,
     revision: input.revision,
     variantKey: input.variantKey,

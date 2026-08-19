@@ -21,6 +21,7 @@ function fakeStore() {
   const rows = new Map<string, ThemeAssetObjectRecord>();
   const calls: string[] = [];
   let nextId = 1;
+  let failActivation = false;
 
   const store = {
     async findRevision({ logicalAssetId, revision, variantKey }) {
@@ -47,26 +48,40 @@ function fakeStore() {
       const row = rows.get(id);
       if (row) rows.set(id, { ...row, r2Previews: previews });
     },
+    /**
+     * 실제 구현은 RPC 한 번으로 두 UPDATE를 한 트랜잭션에 넣는다. 여기서도 원자적으로 흉내 내되,
+     * `failActivation`을 켜면 트랜잭션이 통째로 실패한 상황을 만든다 — 즉 이전 active가 그대로 남는다.
+     */
     async activate({ activateId, retireId }) {
       calls.push("activate");
+      if (failActivation) throw new Error("activation transaction failed");
+      const next = rows.get(activateId);
+      if (next?.status !== "staged") return;
       if (retireId) {
         const old = rows.get(retireId);
         if (old?.status === "active") rows.set(retireId, { ...old, status: "retired" });
       }
-      const next = rows.get(activateId);
-      if (next?.status === "staged") rows.set(activateId, { ...next, status: "active", activatedAt: "2026-08-19T00:01:00Z" });
+      rows.set(activateId, { ...next, status: "active", activatedAt: "2026-08-19T00:01:00Z" });
     },
     async markFailed(id) {
       calls.push("markFailed");
       const row = rows.get(id);
       if (row?.status === "staged") rows.set(id, { ...row, status: "failed" });
     },
+    async restageFailed(id, sha256) {
+      calls.push("restageFailed");
+      const row = rows.get(id);
+      if (!row) throw new Error("catalog_object_not_found");
+      if (row.sha256 !== sha256) throw new Error("catalog_object_hash_mismatch");
+      if (row.status !== "failed") throw new Error("catalog_object_not_failed");
+      rows.set(id, { ...row, status: "staged" });
+    },
     async countReferences(gcsObjectKey) {
       return [...rows.values()].filter((r) => r.gcsObjectKey === gcsObjectKey && r.status !== "failed").length;
     },
   } satisfies RegistryStore;
 
-  return { store, rows, calls };
+  return { store, rows, calls, setFailActivation: (value: boolean) => { failActivation = value; } };
 }
 
 function fakeBucket(overrides: Partial<PreviewBucket> = {}): PreviewBucket {
@@ -221,6 +236,89 @@ describe("publishThemeAsset", () => {
     expect(failure).toBeInstanceOf(CatalogPublishFailure);
     expect(failure.orphanCandidates).toHaveLength(1);
     expect(failure.orphanCandidates[0]).toMatch(/^catalog\/v1\//);
+  });
+
+  /**
+   * content-addressed 키의 목적이 "같은 바이트는 하나의 객체"다. 서로 다른 논리 에셋이 같은
+   * 객체를 가리키는 것이 정상 경로이고, 실측에서도 논리 에셋 126개가 객체 90개를 공유한다.
+   */
+  it("서로 다른 논리 에셋이 같은 GCS 객체를 공유할 수 있다", async () => {
+    const { store, rows } = fakeStore();
+    const bytes = pngBytes(64, 64);
+    const deps = { store, uploadCatalogObject: uploader, previewBucket: null };
+
+    const first = await publishThemeAsset(input({ logicalAssetId: "admin:a", canonical: { fileName: "x@3x.png", mimeType: "image/png", bytes } }), deps);
+    const second = await publishThemeAsset(input({ logicalAssetId: "tpl:b", canonical: { fileName: "x@3x.png", mimeType: "image/png", bytes } }), deps);
+
+    expect(second.record.gcsObjectKey).toBe(first.record.gcsObjectKey);
+    expect(second.record.status).toBe("active");
+    expect([...rows.values()].filter((row) => row.status === "active")).toHaveLength(2);
+  });
+
+  /**
+   * active 전환이 실패해도 기존 active가 남아야 한다. 두 UPDATE를 따로 보내면 이전 것만 내려간
+   * 채로 끊겨 active가 하나도 없는 창이 생긴다 — 그때 export가 에셋을 해석하지 못한다.
+   */
+  it("활성 전환이 실패해도 기존 active revision이 남는다", async () => {
+    const { store, rows, setFailActivation } = fakeStore();
+    const deps = { store, uploadCatalogObject: uploader, previewBucket: null };
+    await publishThemeAsset(input({ revision: 1 }), deps);
+
+    setFailActivation(true);
+    await expect(publishThemeAsset(
+      input({ revision: 2, canonical: { fileName: "b@3x.png", mimeType: "image/png", bytes: pngBytes(50, 50) } }),
+      deps,
+    )).rejects.toThrow(CatalogPublishFailure);
+
+    const byRevision = Object.fromEntries([...rows.values()].map((row) => [row.revision, row.status]));
+    expect(byRevision).toEqual({ 1: "active", 2: "failed" });
+  });
+
+  /**
+   * R2 일시 오류로 failed가 됐다고 revision을 올릴 이유는 없다. revision은 내용의 이름이라
+   * 같은 바이트는 같은 번호로 다시 시도해야 한다.
+   */
+  it("R2 일시 실패 뒤 같은 revision으로 재시도해 성공한다", async () => {
+    const { store, rows, calls } = fakeStore();
+    const previews = [{ presetKey: "card", bytes: new Uint8Array([1, 2]), contentType: "image/webp" as const }];
+    const broken = fakeBucket({ put: async () => { throw new Error("r2 down"); } });
+
+    await expect(publishThemeAsset(input({ previews }), { store, uploadCatalogObject: uploader, previewBucket: broken }))
+      .rejects.toThrow(CatalogPublishFailure);
+    expect([...rows.values()][0].status).toBe("failed");
+
+    calls.length = 0;
+    const retried = await publishThemeAsset(input({ previews }), { store, uploadCatalogObject: uploader, previewBucket: fakeBucket() });
+
+    expect(retried.status).toBe("published");
+    expect(retried.record.revision).toBe(1);
+    expect(rows.size).toBe(1);
+    expect(calls).toContain("restageFailed");
+    expect(calls).not.toContain("insertStaged");
+  });
+
+  it("failed revision을 다른 바이트로 덮어쓰지 못한다", async () => {
+    const { store } = fakeStore();
+    const previews = [{ presetKey: "card", bytes: new Uint8Array([1]), contentType: "image/webp" as const }];
+    const broken = fakeBucket({ put: async () => { throw new Error("r2 down"); } });
+    await expect(publishThemeAsset(input({ previews }), { store, uploadCatalogObject: uploader, previewBucket: broken }))
+      .rejects.toThrow(CatalogPublishFailure);
+
+    await expect(publishThemeAsset(
+      input({ canonical: { fileName: "other@3x.png", mimeType: "image/png", bytes: pngBytes(11, 11) } }),
+      { store, uploadCatalogObject: uploader, previewBucket: null },
+    )).rejects.toThrow(CatalogPublishError);
+  });
+
+  // retired는 이미 다음 revision에 자리를 넘긴 상태다. 되돌리는 것은 publish가 아니라 rollback의 일이다.
+  it("retired revision은 재시도 대상이 아니다", async () => {
+    const { store, rows } = fakeStore();
+    const deps = { store, uploadCatalogObject: uploader, previewBucket: null };
+    await publishThemeAsset(input({ revision: 1 }), deps);
+    await publishThemeAsset(input({ revision: 2, canonical: { fileName: "b@3x.png", mimeType: "image/png", bytes: pngBytes(50, 50) } }), deps);
+    expect([...rows.values()].find((row) => row.revision === 1)?.status).toBe("retired");
+
+    await expect(publishThemeAsset(input({ revision: 1 }), deps)).rejects.toThrow(CatalogPublishError);
   });
 
   it("PNG가 아닌 원본은 업로드 전에 거부한다", async () => {

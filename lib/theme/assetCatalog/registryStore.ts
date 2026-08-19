@@ -91,33 +91,35 @@ export function createRegistryStore(admin = createAdminClient()) {
     /**
      * active pointer 전환.
      *
-     * 이전 active를 먼저 내리고 새 것을 올린다. 순서를 뒤집으면
-     * `theme_asset_objects_active_revision_idx`(부분 unique)가 두 active를 거부해 전환이 실패한다.
+     * 부분 unique 인덱스(`theme_asset_objects_active_revision_idx`) 때문에 반드시 "이전 것을 내리고
+     * → 새 것을 올리는" 순서여야 한다. 두 UPDATE를 따로 보내면 사이에서 끊길 때 **active revision이
+     * 하나도 없는 상태**가 남고, 그때 export는 해당 에셋을 해석하지 못한다.
      *
-     * 두 문장이 한 트랜잭션이 아니므로 사이에서 끊기면 active가 잠깐 없다. export는 그때
-     * `asset_ref_resolution_failed`로 명시적으로 실패하며, 잘못된 다른 에셋을 쓰지는 않는다.
-     * 재시도가 같은 결과로 수렴하므로 이 창을 감수한다.
+     * 그래서 RPC로 넘긴다. plpgsql 본문은 한 트랜잭션이라 둘이 함께 커밋되거나 함께 롤백된다.
+     * 전제 조건 검사도 함수 안에 있어 stale한 상태로 재시도해도 잘못된 전환이 일어나지 않는다.
      */
     async activate(input: { activateId: string; retireId?: string }) {
-      if (input.retireId) {
-        const { error } = await admin
-          .from(registryTable)
-          .update({ status: "retired" })
-          .eq("id", input.retireId)
-          .eq("status", "active");
-        if (error) throw error;
-      }
-      const { error } = await admin
-        .from(registryTable)
-        .update({ status: "active", activated_at: new Date().toISOString() })
-        .eq("id", input.activateId)
-        .eq("status", "staged");
+      const { error } = await admin.rpc("activate_theme_asset_object", {
+        p_activate_id: input.activateId,
+        p_retire_id: input.retireId ?? null,
+      });
       if (error) throw error;
     },
 
     /** 실패한 staged를 남긴다. 지우지 않는 이유는 어떤 객체가 떠 있는지 GC가 알아야 하기 때문이다. */
     async markFailed(id: string) {
       const { error } = await admin.from(registryTable).update({ status: "failed" }).eq("id", id).eq("status", "staged");
+      if (error) throw error;
+    },
+
+    /**
+     * 일시 오류로 `failed`가 된 revision을 같은 내용으로 다시 올릴 수 있게 되돌린다.
+     *
+     * revision은 "내용의 이름"이라 같은 바이트에 새 번호를 붙이면 의미가 흐려진다. sha256이 같을
+     * 때만 되돌리므로 다른 내용으로 덮어쓰는 요청은 통과하지 못한다.
+     */
+    async restageFailed(id: string, sha256: string) {
+      const { error } = await admin.rpc("restage_failed_theme_asset_object", { p_id: id, p_sha256: sha256 });
       if (error) throw error;
     },
 
