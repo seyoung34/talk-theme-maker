@@ -7,9 +7,9 @@ import {
   type CatalogResolutionFailure,
   type ExportManifestSourceItem,
 } from "@/lib/theme/assetCatalog/exportResolve";
-import { adminLogicalAssetId, parseLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
+import { adminLogicalAssetId, parseLogicalAssetId, templateLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { ThemeAssetRegistryError, type ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
-import type { AdminAssetExportAccess } from "@/lib/theme/assetCatalog/exportAccess";
+import type { CatalogAssetExportAccess } from "@/lib/theme/assetCatalog/exportAccess";
 
 type PassthroughManifestItem =
   | { readonly path: string; readonly field: string }
@@ -46,7 +46,9 @@ export async function resolveCatalogManifestForExport(input: {
   manifest: readonly ExportManifestSourceItem[];
   uploadedInputBytes: number;
   platform: "android" | "ios";
-  store?: Pick<RegistryStore, "findActiveByKeys"> & Partial<Pick<RegistryStore, "findAdminAssetExportAccess">>;
+  /** auth.uid()에서 얻은 요청 사용자. template private/draft 소유권 확인에만 사용한다. */
+  userId?: string;
+  store?: Pick<RegistryStore, "findActiveByKeys"> & Partial<Pick<RegistryStore, "findAdminAssetExportAccess" | "findTemplateAssetExportAccess">>;
 }) {
   const collected = collectCatalogSelections(input.manifest);
   if (collected.failures.length) throw createCatalogResolutionError(collected.failures[0]);
@@ -65,7 +67,7 @@ export async function resolveCatalogManifestForExport(input: {
 
   const store = input.store ?? createRegistryStore();
   const records = await store.findActiveByKeys(toRegistryLookupKeys(collected.selections));
-  const accessByAssetId = await readAdminAssetAccess(store, collected.selections);
+  const accessByAssetId = await readCatalogAssetAccess(store, collected.selections, input.userId);
   let resolution;
   try {
     resolution = resolveCatalogManifest({
@@ -124,22 +126,44 @@ function createCatalogResolutionError(failure: CatalogResolutionFailure): Catalo
   }
 }
 
-async function readAdminAssetAccess(
-  store: Pick<RegistryStore, "findActiveByKeys"> & Partial<Pick<RegistryStore, "findAdminAssetExportAccess">>,
+async function readCatalogAssetAccess(
+  store: Pick<RegistryStore, "findActiveByKeys"> & Partial<Pick<RegistryStore, "findAdminAssetExportAccess" | "findTemplateAssetExportAccess">>,
   selections: readonly { selection: { assetId: string } }[],
+  userId?: string,
 ) {
-  const sourceIds = new Set<string>();
+  const adminSourceIds = new Set<string>();
+  const templateSourceIds = new Set<string>();
   for (const { selection } of selections) {
     try {
       const parsed = parseLogicalAssetId(selection.assetId);
-      if (parsed.kind === "admin" && isUuid(parsed.sourceId)) sourceIds.add(parsed.sourceId);
+      if (parsed.kind === "admin" && isUuid(parsed.sourceId)) adminSourceIds.add(parsed.sourceId);
+      if (parsed.kind === "template") templateSourceIds.add(parsed.sourceId);
     } catch {
       // resolveCatalogManifest가 access map 누락을 not_allowed로 분류한다.
     }
   }
-  if (!sourceIds.size || !store.findAdminAssetExportAccess) return new Map<string, AdminAssetExportAccess>();
-  const records = await store.findAdminAssetExportAccess([...sourceIds]);
-  return new Map(records.map((record) => [adminLogicalAssetId(record.id), record]));
+  const accessByAssetId = new Map<string, CatalogAssetExportAccess>();
+
+  if (adminSourceIds.size && store.findAdminAssetExportAccess) {
+    const records = await store.findAdminAssetExportAccess([...adminSourceIds]);
+    for (const record of records) accessByAssetId.set(adminLogicalAssetId(record.id), { kind: "admin", asset: record });
+  }
+
+  if (templateSourceIds.size && store.findTemplateAssetExportAccess) {
+    const records = await store.findTemplateAssetExportAccess({ uploadEntryIds: [...templateSourceIds], userId });
+    const platformsByAssetId = new Map<string, Set<"android" | "ios">>();
+    for (const record of records) {
+      const logicalAssetId = templateLogicalAssetId(record.uploadEntryId);
+      const platforms = platformsByAssetId.get(logicalAssetId) ?? new Set<"android" | "ios">();
+      platforms.add(record.platform);
+      platformsByAssetId.set(logicalAssetId, platforms);
+    }
+    for (const [logicalAssetId, platforms] of platformsByAssetId) {
+      accessByAssetId.set(logicalAssetId, { kind: "template", platforms: [...platforms] });
+    }
+  }
+
+  return accessByAssetId;
 }
 
 function stripResourceRole(item: ExportManifestSourceItem): PassthroughManifestItem {

@@ -45,7 +45,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
         ? { path: entry.path, catalogAsset: entry.catalogAsset, ...(entry.resourceRole ? { resourceRole: entry.resourceRole } : {}) }
         : { path: entry.path, field: `file-${index}` },
     );
-    const resolved = await resolveCatalogManifestForExport({ manifest: manifestForResolve, uploadedInputBytes: inputBytes, platform: "ios" });
+    const resolved = await resolveCatalogManifestForExport({ manifest: manifestForResolve, uploadedInputBytes: inputBytes, platform: "ios", userId });
 
     // CSS와 field 이미지는 Worker에서 검사하고, catalog 이미지는 registry의 PNG attestation을
     // 사용한다. 실제 바이트 대조는 Cloud Run Builder가 GCS object를 읽은 뒤 다시 수행한다.

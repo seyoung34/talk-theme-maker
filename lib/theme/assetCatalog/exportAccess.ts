@@ -25,6 +25,21 @@ export type AdminAssetExportAccess = {
   readonly targets: readonly AdminAssetTarget[];
 };
 
+/**
+ * 시스템 템플릿 upload_refs에 들어 있는 논리 에셋의 export 접근 정보.
+ *
+ * template logical id는 업로드 항목 id만 알고 있어도 variant의 upload_refs에서 찾을 수 있다.
+ * 같은 항목 id가 Android/iOS variant에 함께 있을 수 있으므로 platform별 행으로 보관한다.
+ */
+export type TemplateAssetExportAccess = {
+  readonly uploadEntryId: string;
+  readonly platform: ThemePlatform;
+};
+
+export type CatalogAssetExportAccess =
+  | { readonly kind: "admin"; readonly asset: AdminAssetExportAccess }
+  | { readonly kind: "template"; readonly platforms: readonly ThemePlatform[] };
+
 export class AdminAssetExportAccessError extends Error {
   constructor(readonly code: "INVALID_ADMIN_ASSET_ACCESS_ROW") {
     super(code);
@@ -112,6 +127,60 @@ export function isAdminAssetAllowedForExport(input: {
   ) !== undefined;
 }
 
+/** registry ref가 관리자 에셋인지 시스템 템플릿 에셋인지에 따라 export 접근을 판정한다. */
+export function isCatalogAssetAllowedForExport(input: {
+  access: CatalogAssetExportAccess;
+  platform: ThemePlatform;
+  resourceRole: ThemeResourceRole;
+}) {
+  if (input.access.kind === "template") return input.access.platforms.includes(input.platform);
+  return isAdminAssetAllowedForExport({
+    asset: input.access.asset,
+    platform: input.platform,
+    resourceRole: input.resourceRole,
+  });
+}
+
+/**
+ * service-role로 읽은 시스템 템플릿 variant를 upload entry id별 export 접근으로 좁힌다.
+ *
+ * 공개 템플릿은 published/public만, 그 외에는 요청 사용자가 bundle의 created_by와 같을 때만
+ * 결과에 넣는다. malformed row는 권한을 부여하지 않고 건너뛰어 fail-closed로 동작한다.
+ */
+export function mapTemplateAssetExportAccessRows(
+  rows: readonly unknown[],
+  input: { readonly uploadEntryIds: readonly string[]; readonly userId?: string },
+): TemplateAssetExportAccess[] {
+  const wanted = new Set(input.uploadEntryIds.filter((id) => typeof id === "string" && id.trim()));
+  const seen = new Set<string>();
+  const result: TemplateAssetExportAccess[] = [];
+
+  for (const row of rows) {
+    const record = readRecord(row);
+    if (!record) continue;
+    const platform = readThemePlatform(record.platform);
+    const bundle = readRecord(Array.isArray(record.system_template_bundles)
+      ? record.system_template_bundles[0]
+      : record.system_template_bundles);
+    if (!platform || !bundle) continue;
+
+    const isPublic = bundle.status === "published" && bundle.visibility === "public";
+    const isOwner = typeof input.userId === "string" && input.userId.length > 0 && bundle.created_by === input.userId;
+    if (!isPublic && !isOwner) continue;
+
+    const matchedIds = new Set<string>();
+    collectUploadEntryIds(record.upload_refs, wanted, matchedIds);
+    for (const uploadEntryId of matchedIds) {
+      const key = `${uploadEntryId}\u0000${platform}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push({ uploadEntryId, platform });
+    }
+  }
+
+  return result;
+}
+
 function mapTarget(value: unknown, assetId: string): AdminAssetTarget {
   const record = requireRecord(value);
   const targetKind = readTargetKind(record.target_kind);
@@ -182,4 +251,26 @@ function readBoolean(value: unknown, fallback: boolean) {
 function readInteger(value: unknown, fallback: number) {
   const parsed = typeof value === "string" ? Number(value) : value;
   return typeof parsed === "number" && Number.isSafeInteger(parsed) ? parsed : fallback;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function readThemePlatform(value: unknown): ThemePlatform | undefined {
+  return value === "android" || value === "ios" ? value : undefined;
+}
+
+function collectUploadEntryIds(value: unknown, wanted: ReadonlySet<string>, result: Set<string>) {
+  if (Array.isArray(value)) {
+    for (const item of value) collectUploadEntryIds(item, wanted, result);
+    return;
+  }
+  const record = readRecord(value);
+  if (!record) return;
+
+  if (typeof record.id === "string" && wanted.has(record.id)) result.add(record.id);
+  for (const child of Object.values(record)) collectUploadEntryIds(child, wanted, result);
 }

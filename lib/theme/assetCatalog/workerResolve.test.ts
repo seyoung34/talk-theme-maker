@@ -4,8 +4,10 @@ import { mapThemeAssetObjectRow } from "@/lib/theme/assetCatalog/registry";
 
 const adminAssetId = "11111111-1111-4111-8111-111111111111";
 const selection = { kind: "catalog" as const, assetId: `admin:${adminAssetId}`, revision: 2, variantKey: "canonical" };
+const templateUploadEntryId = "android-bubble-me-1:upload:1";
+const templateSelection = { kind: "catalog" as const, assetId: `tpl:${templateUploadEntryId}`, revision: 2, variantKey: "canonical" };
 
-function record() {
+function record(overrides: Record<string, unknown> = {}) {
   return mapThemeAssetObjectRow({
     id: "object-a",
     logical_asset_id: `admin:${adminAssetId}`,
@@ -25,6 +27,7 @@ function record() {
     r2_previews: {},
     created_at: "2026-08-19T00:00:00Z",
     activated_at: "2026-08-19T00:01:00Z",
+    ...overrides,
   });
 }
 
@@ -110,5 +113,35 @@ describe("resolveCatalogManifestForExport", () => {
         findAdminAssetExportAccess: async () => [],
       },
     })).rejects.toMatchObject({ code: "invalid_catalog_asset", status: 400 });
+  });
+
+  it("published/public 템플릿 ref를 요청 플랫폼에서만 해석한다", async () => {
+    const findActiveByKeys = vi.fn(async () => [record({ logical_asset_id: `tpl:${templateUploadEntryId}` })]);
+    const findTemplateAssetExportAccess = vi.fn(async (input: { uploadEntryIds: readonly string[]; userId?: string }) => {
+      expect(input).toEqual({ uploadEntryIds: [templateUploadEntryId], userId: "user-a" });
+      return [{ uploadEntryId: templateUploadEntryId, platform: "android" as const }];
+    });
+
+    const result = await resolveCatalogManifestForExport({
+      manifest: [{ path: "src/main/theme/drawable-xxhdpi/bubble.png", catalogAsset: templateSelection, resourceRole: "bubble_me_1" }],
+      uploadedInputBytes: 0,
+      platform: "android",
+      userId: "user-a",
+      store: { findActiveByKeys, findTemplateAssetExportAccess },
+    });
+
+    expect(result.manifest[0]).toHaveProperty("catalogObject.objectKey");
+  });
+
+  it("template ref의 platform 정책이 맞지 않으면 차단한다", async () => {
+    await expect(resolveCatalogManifestForExport({
+      manifest: [{ path: "Images/bubble@3x.png", catalogAsset: { ...templateSelection, variantKey: "canonical" }, resourceRole: "bubble_me_1" }],
+      uploadedInputBytes: 0,
+      platform: "ios",
+      store: {
+        findActiveByKeys: async () => [record({ logical_asset_id: `tpl:${templateUploadEntryId}` })],
+        findTemplateAssetExportAccess: async () => [{ uploadEntryId: templateUploadEntryId, platform: "android" }],
+      },
+    })).rejects.toMatchObject({ code: "catalog_asset_not_allowed", status: 403 });
   });
 });

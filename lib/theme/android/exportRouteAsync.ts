@@ -56,7 +56,7 @@ export async function handleAsyncAndroidExportRequest(
     const themeIdRaw = formData.get("themeId");
     const themeId = typeof themeIdRaw === "string" && themeIdRaw.trim() ? themeIdRaw.trim().slice(0, 120) : "unknown";
     const { manifest, files, inputBytes } = await readAndroidBundleUpload(formData, manifestRaw);
-    const resolved = await resolveCatalogManifestForExport({ manifest, uploadedInputBytes: inputBytes, platform: "android" });
+    const resolved = await resolveCatalogManifestForExport({ manifest, uploadedInputBytes: inputBytes, platform: "android", userId });
     const reservation = await reserveCreditForExport({
       userId,
       platform: "android",

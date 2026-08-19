@@ -1,5 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/server";
-import { mapAdminAssetExportAccessRow, type AdminAssetExportAccess } from "@/lib/theme/assetCatalog/exportAccess";
+import {
+  mapAdminAssetExportAccessRow,
+  mapTemplateAssetExportAccessRows,
+  type AdminAssetExportAccess,
+  type TemplateAssetExportAccess,
+} from "@/lib/theme/assetCatalog/exportAccess";
 import { mapThemeAssetObjectRow, type ThemeAssetObjectRecord, type ThemeAssetR2Preview } from "@/lib/theme/assetCatalog/registry";
 
 /**
@@ -14,8 +19,12 @@ import { mapThemeAssetObjectRow, type ThemeAssetObjectRecord, type ThemeAssetR2P
 const registryTable = "theme_asset_objects";
 
 /** 기존 publish 테스트/호출부가 필요한 registry 쓰기 계약. export 접근 조회는 점진적으로 붙인다. */
-export type RegistryStore = Omit<ReturnType<typeof createRegistryStore>, "findAdminAssetExportAccess"> & {
+export type RegistryStore = Omit<ReturnType<typeof createRegistryStore>, "findAdminAssetExportAccess" | "findTemplateAssetExportAccess"> & {
   findAdminAssetExportAccess?: (adminAssetIds: readonly string[]) => Promise<AdminAssetExportAccess[]>;
+  findTemplateAssetExportAccess?: (input: {
+    uploadEntryIds: readonly string[];
+    userId?: string;
+  }) => Promise<TemplateAssetExportAccess[]>;
 };
 
 export type StagedObjectInput = {
@@ -91,6 +100,37 @@ export function createRegistryStore(admin = createAdminClient()) {
         .in("id", adminAssetIds);
       if (error) throw error;
       return (data ?? []).map(mapAdminAssetExportAccessRow);
+    },
+
+    /** export 시점의 시스템 템플릿 published/public·소유권 정책을 읽는다. */
+    async findTemplateAssetExportAccess(input: {
+      uploadEntryIds: readonly string[];
+      userId?: string;
+    }): Promise<TemplateAssetExportAccess[]> {
+      const uploadEntryIds = [...new Set(input.uploadEntryIds.filter((id) => typeof id === "string" && id.trim()))];
+      if (!uploadEntryIds.length) return [];
+
+      const select = "id,platform,upload_refs,system_template_bundles!inner(status,visibility,created_by)";
+      const rows: unknown[] = [];
+
+      const { data: publicRows, error: publicError } = await admin
+        .from("system_template_variants")
+        .select(select)
+        .eq("system_template_bundles.status", "published")
+        .eq("system_template_bundles.visibility", "public");
+      if (publicError) throw publicError;
+      rows.push(...(publicRows ?? []));
+
+      if (input.userId) {
+        const { data: ownedRows, error: ownedError } = await admin
+          .from("system_template_variants")
+          .select(select)
+          .eq("system_template_bundles.created_by", input.userId);
+        if (ownedError) throw ownedError;
+        rows.push(...(ownedRows ?? []));
+      }
+
+      return mapTemplateAssetExportAccessRows(rows, { uploadEntryIds, userId: input.userId });
     },
 
     async findActive(input: { logicalAssetId: string; variantKey: string }) {

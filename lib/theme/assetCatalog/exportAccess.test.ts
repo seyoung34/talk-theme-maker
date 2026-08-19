@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isAdminAssetAllowedForExport, isCatalogExportResourceRole, mapAdminAssetExportAccessRow } from "@/lib/theme/assetCatalog/exportAccess";
+import {
+  isAdminAssetAllowedForExport,
+  isCatalogExportResourceRole,
+  mapAdminAssetExportAccessRow,
+  mapTemplateAssetExportAccessRows,
+} from "@/lib/theme/assetCatalog/exportAccess";
 
 const assetId = "11111111-1111-4111-8111-111111111111";
 
@@ -46,5 +51,42 @@ describe("catalog export access", () => {
       admin_asset_targets: [{ asset_id: assetId, platform: "all", slot_role: "bubble_me_1", target_kind: "exact_role", priority: 0, enabled: true }],
     });
     expect(isAdminAssetAllowedForExport({ asset: bubble, platform: "ios", resourceRole: "bubble_me_2" })).toBe(true);
+  });
+
+  it("published/public 템플릿의 upload entry를 export 접근으로 만든다", () => {
+    const uploadEntryId = "android-bubble-me-1:upload:1";
+    expect(mapTemplateAssetExportAccessRows([
+      {
+        platform: "android",
+        upload_refs: { bubble_me_1: [{ id: uploadEntryId, fileName: "bubble.png" }] },
+        system_template_bundles: { status: "published", visibility: "public", created_by: "owner-a" },
+      },
+    ], { uploadEntryIds: [uploadEntryId], userId: "other-user" })).toEqual([
+      { uploadEntryId, platform: "android" },
+    ]);
+  });
+
+  it("private/draft 템플릿은 bundle 소유자에게만 export 접근을 준다", () => {
+    const uploadEntryId = "ios-bubble-me-1:upload:1";
+    const row = {
+      platform: "ios",
+      upload_refs: { bubble_me_1: [{ id: uploadEntryId }] },
+      system_template_bundles: { status: "draft", visibility: "private", created_by: "owner-a" },
+    };
+    expect(mapTemplateAssetExportAccessRows([row], { uploadEntryIds: [uploadEntryId], userId: "other-user" })).toEqual([]);
+    expect(mapTemplateAssetExportAccessRows([row], { uploadEntryIds: [uploadEntryId], userId: "owner-a" })).toEqual([
+      { uploadEntryId, platform: "ios" },
+    ]);
+  });
+
+  it("서로 다른 플랫폼 variant의 같은 upload id를 각각 기록한다", () => {
+    const uploadEntryId = "shared:upload:1";
+    expect(mapTemplateAssetExportAccessRows([
+      { platform: "android", upload_refs: { a: [{ id: uploadEntryId }] }, system_template_bundles: { status: "published", visibility: "public" } },
+      { platform: "ios", upload_refs: { a: [{ id: uploadEntryId }] }, system_template_bundles: { status: "published", visibility: "public" } },
+    ], { uploadEntryIds: [uploadEntryId] })).toEqual([
+      { uploadEntryId, platform: "android" },
+      { uploadEntryId, platform: "ios" },
+    ]);
   });
 });
