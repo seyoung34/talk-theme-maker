@@ -67,11 +67,10 @@ export async function GET(request: NextRequest) {
     // 편집기에서 슬롯을 고를 때마다 호출되는 경로다. 응답은 사용자와 무관하게
     // enabled 에셋만 담으므로 짧게 재사용해 슬롯 클릭마다 200행 조인을 다시 읽지 않게 한다.
     const cacheKey = [platform, assetKind, slotRole ?? "", limit, cursor ? cursorParam : ""].join("|");
+    // catalog ref가 들어간 응답은 애초에 캐시에 넣지 않는다(아래 `set` 참조). 여기서 다시
+    // 거를 필요가 없다 — 조건을 남겨 두면 캐시가 catalog를 담을 수 있는 것처럼 읽힌다.
     const cached = recommendedPageCache.get(cacheKey);
-    // catalog ref가 들어간 응답은 현재 Supabase 바이트와 registry link가 맞는지 매번 다시
-    // 확인해야 한다. 저장 직후 30초 TTL payload가 예전 object id를 재사용하면 같은 Storage
-    // 경로의 새 이미지에 stale GCS object를 붙일 수 있으므로 catalog 응답은 캐시하지 않는다.
-    if (cached && !cached.items.some((item) => Boolean(item.catalog))) return jsonRecommendedPage(cached);
+    if (cached) return jsonRecommendedPage(cached);
 
     const admin = createAdminClient();
     const { data, error } = await admin
@@ -148,6 +147,13 @@ export async function GET(request: NextRequest) {
     const last = page.at(-1);
     const payload: RecommendedPagePayload = { items, nextCursor: hasMore && last ? encodeCursor(last) : undefined };
 
+    // catalog ref가 든 응답은 캐시하지 않는다. 관리자가 같은 Storage 경로에 새 이미지를 올린
+    // 직후 30초 동안 예전 object id를 재사용하면, 피커는 새 그림을 보여 주면서 export에는 옛
+    // 바이트를 가리키는 ref를 실어 보낸다.
+    //
+    // 대가는 성능이다 — 링크된 에셋이 늘수록 이 페이지는 캐시를 거의 못 쓰고 슬롯 클릭마다
+    // 200행 조인·서명 배치·registry 조회를 다시 돈다. 캐시를 되살리려면 payload를 registry
+    // 링크에 종속되는 키로 잡거나, 변하지 않는 부분만 캐시하고 catalog ref만 매번 붙여야 한다.
     if (!items.some((item) => Boolean(item.catalog))) recommendedPageCache.set(cacheKey, payload);
     return jsonRecommendedPage(payload);
   } catch (error) {

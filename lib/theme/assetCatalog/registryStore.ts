@@ -18,6 +18,20 @@ import { mapThemeAssetObjectRow, type ThemeAssetObjectRecord, type ThemeAssetR2P
 
 const registryTable = "theme_asset_objects";
 
+/**
+ * `upload_refs`는 슬롯 키가 동적인 jsonb라 "이 업로드 항목 id를 포함하는 variant"를 서버 필터로
+ * 표현할 수 없어, 후보 행을 받아 메모리에서 골라낸다. PostgREST는 `max_rows`를 넘으면 **조용히**
+ * 앞부분만 주므로, 찾는 variant가 그 뒤에 있으면 정상 사용 중인 템플릿에 권한 없음 403이 나간다.
+ * 조용히 틀린 답을 주는 대신 명확히 실패시킨다. `edgeRegistryStore`도 같은 규칙을 쓴다.
+ */
+const templateAccessRowLimit = 1000;
+
+function assertTemplateAccessNotTruncated(count: number, operation: string) {
+  if (count >= templateAccessRowLimit) {
+    throw new Error(`${operation} 후보가 상한(${templateAccessRowLimit})에 도달해 결과가 잘렸을 수 있습니다. 조회 범위를 좁혀야 합니다.`);
+  }
+}
+
 /** 기존 publish 테스트/호출부가 필요한 registry 쓰기 계약. export 접근 조회는 점진적으로 붙인다. */
 export type RegistryStore = Omit<ReturnType<typeof createRegistryStore>, "findAdminAssetExportAccess" | "findTemplateAssetExportAccess"> & {
   findAdminAssetExportAccess?: (adminAssetIds: readonly string[]) => Promise<AdminAssetExportAccess[]>;
@@ -117,16 +131,20 @@ export function createRegistryStore(admin = createAdminClient()) {
         .from("system_template_variants")
         .select(select)
         .eq("system_template_bundles.status", "published")
-        .eq("system_template_bundles.visibility", "public");
+        .eq("system_template_bundles.visibility", "public")
+        .limit(templateAccessRowLimit);
       if (publicError) throw publicError;
+      assertTemplateAccessNotTruncated(publicRows?.length ?? 0, "public template export access");
       rows.push(...(publicRows ?? []));
 
       if (input.userId) {
         const { data: ownedRows, error: ownedError } = await admin
           .from("system_template_variants")
           .select(select)
-          .eq("system_template_bundles.created_by", input.userId);
+          .eq("system_template_bundles.created_by", input.userId)
+          .limit(templateAccessRowLimit);
         if (ownedError) throw ownedError;
+        assertTemplateAccessNotTruncated(ownedRows?.length ?? 0, "owned template export access");
         rows.push(...(ownedRows ?? []));
       }
 

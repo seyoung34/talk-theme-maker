@@ -79,15 +79,17 @@ export function createEdgeRegistryStore(): EdgeRegistryStore {
 
       const select = "id,platform,upload_refs,system_template_bundles!inner(status,visibility,created_by)";
       const rows: unknown[] = [];
-      rows.push(...await readRows(buildRestUrl(config, templateVariantsTable, {
+      rows.push(...await readTemplateAccessRows(buildRestUrl(config, templateVariantsTable, {
         select,
+        limit: `${templateAccessRowLimit}`,
         "system_template_bundles.status": "eq.published",
         "system_template_bundles.visibility": "eq.public",
       }), "public template export access", config.secretKey));
 
       if (isUuid(input.userId)) {
-        rows.push(...await readRows(buildRestUrl(config, templateVariantsTable, {
+        rows.push(...await readTemplateAccessRows(buildRestUrl(config, templateVariantsTable, {
           select,
+          limit: `${templateAccessRowLimit}`,
           "system_template_bundles.created_by": `eq.${input.userId}`,
         }), "owned template export access", config.secretKey));
       }
@@ -111,6 +113,31 @@ function readSupabaseRestConfig(): SupabaseRestConfig {
   } catch {
     throw new EdgeRegistryStoreError("missing_supabase_config", "Supabase export registry 설정이 올바르지 않습니다.");
   }
+}
+
+/**
+ * `upload_refs`는 슬롯 키가 동적인 jsonb라 "이 업로드 항목 id를 포함하는 variant"를
+ * PostgREST 필터로 표현할 수 없다. 그래서 후보 행을 받아 온 뒤 메모리에서 골라낸다.
+ *
+ * 문제는 결과가 잘렸을 때다. PostgREST는 `max_rows`(현재 1000)를 넘으면 **조용히** 앞부분만
+ * 준다. 찾는 variant가 그 뒤에 있으면 접근 정보가 없는 것처럼 보여, 사용자가 정상적으로
+ * 소유·사용 중인 템플릿에 `catalog_asset_not_allowed` 403이 나간다. 권한 문제로 보이지만
+ * 실제로는 페이지네이션 문제라 추적이 어렵다.
+ *
+ * 그래서 상한을 명시하고, 상한에 닿으면 조용히 틀린 답을 주는 대신 명확히 실패한다.
+ * 근본 해결은 upload entry id를 조회 가능한 컬럼/인덱스로 승격하는 것이다.
+ */
+const templateAccessRowLimit = 1000;
+
+async function readTemplateAccessRows(url: URL, operation: string, secretKey: string): Promise<unknown[]> {
+  const rows = await readRows(url, operation, secretKey);
+  if (rows.length >= templateAccessRowLimit) {
+    throw new EdgeRegistryStoreError(
+      "registry_lookup_failed",
+      `${operation} 후보가 상한(${templateAccessRowLimit})에 도달해 결과가 잘렸을 수 있습니다. 조회 범위를 좁혀야 합니다.`,
+    );
+  }
+  return rows;
 }
 
 function buildRestUrl(config: SupabaseRestConfig, table: string, params: Record<string, string>) {
