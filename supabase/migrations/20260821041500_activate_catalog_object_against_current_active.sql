@@ -11,8 +11,13 @@
 --
 -- 기존 active가 사라지지는 않지만 **최신 게시가 실패한다.**
 --
--- 이제 지목받은 행이 아니라 같은 (logical_asset_id, variant_key)에서 **실제로 active인 행**을
--- 트랜잭션 안에서 잠그고 내린다. 잠근 뒤에 판정하므로 compare-and-swap이 성립한다.
+-- 이제 같은 (logical_asset_id, variant_key)의 활성화는 transaction advisory lock으로 먼저
+-- 직렬화한다. 그 뒤 **실제로 active인 행**을 조회하고 내리므로, 잠금 대기 중 active가 바뀌어도
+-- 새 명령 snapshot에서 최신 행을 볼 수 있다.
+--
+-- 행 잠금만으로는 충분하지 않다. 두 SELECT ... FOR UPDATE가 같은 옛 active에서 대기하면, 두 번째
+-- 명령은 먼저 기다리기 시작한 snapshot에 없던 새 active를 찾지 못하고 partial unique index에서
+-- 다시 실패할 수 있다. advisory lock은 active 조회 명령 자체가 앞선 활성화 커밋 뒤에 시작되게 한다.
 --
 -- 더불어 전진 전용 가드를 둔다. 오래된 revision이 새 revision을 덮어쓰면 조용한 다운그레이드가
 -- 된다. 이전 revision으로 되돌리는 것은 이 경로가 아니라 수동 rollback의 일이다
@@ -36,6 +41,21 @@ declare
   retired uuid;
 begin
   if p_activate_id is null then raise exception 'invalid_activate_id'; end if;
+
+  -- 먼저 잠금 key에 필요한 최소 identity만 읽는다. 이 조회에는 행 잠금을 걸지 않는다. 모든
+  -- 활성화가 advisory lock -> target row -> current active 순서로 잠가야 교차 호출이 deadlock을
+  -- 만들지 않는다. 잠금을 얻은 뒤 target을 다시 읽어 상태 변경·삭제를 검증한다.
+  select logical_asset_id, variant_key
+  into target
+  from public.theme_asset_objects
+  where id = p_activate_id;
+
+  if not found then raise exception 'catalog_object_not_found'; end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(
+    format('%s:%s:%s', length(target.logical_asset_id), target.logical_asset_id, target.variant_key),
+    0
+  ));
 
   select id, logical_asset_id, variant_key, status, revision
   into target
@@ -65,7 +85,8 @@ begin
     if not found then raise exception 'catalog_retire_target_mismatch'; end if;
   end if;
 
-  -- 지금 실제로 active인 행을 잠근다. 호출자가 읽은 시점 이후에 바뀌었을 수 있다.
+  -- 같은 자산의 활성화는 위 advisory lock으로 직렬화됐다. 따라서 이 명령은 앞선 활성화가
+  -- 커밋된 뒤 시작하며, 지금 실제로 active인 행을 snapshot에서 볼 수 있다.
   select id, revision
   into current_active
   from public.theme_asset_objects

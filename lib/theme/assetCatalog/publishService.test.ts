@@ -418,19 +418,14 @@ describe("publishThemeAsset", () => {
 });
 
 /**
- * 두 게시가 활성화 전에 같은 active를 읽는 경합.
- *
- * 예전 RPC는 **호출자가 지목한** 행을 내렸다. 먼저 커밋한 쪽이 그 행을 이미 retired로 만들어
- * 두면, 나중 쪽은 0행을 갱신하고 지나간 뒤 partial unique 인덱스에 걸려 실패했다. 기존 active가
- * 사라지지는 않지만 **최신 게시가 죽는다.** 이제 지목받은 행이 아니라 지금 실제로 active인 행을
- * 내린다. `supabase/migrations/20260821041500_*.sql`과 같은 규칙이다.
+ * fake store는 Postgres MVCC와 advisory lock 대기를 재현하지 않는다. 여기서는 RPC와 공유하는
+ * 전진 규칙만 확인한다. 실제 동시 트랜잭션은 migration 검증에서 별도 DB 세션으로 확인한다.
  */
-describe("동시 활성화", () => {
-  it("먼저 커밋한 게시가 active를 바꿔 놔도 최신 revision이 활성화된다", async () => {
+describe("활성화 전진 규칙", () => {
+  it("현재 active를 내리고 최신 revision을 활성화한다", async () => {
     const { store, rows } = fakeStore();
 
     await publishThemeAsset(input({ revision: 1 }), { store, uploadCatalogObject: uploader, previewBucket: null });
-    // rev2·rev3 모두 rev1을 active로 보고 출발한 상황을 만든다.
     await publishThemeAsset(input({ revision: 2, canonical: { fileName: "main@3x.png", mimeType: "image/png", bytes: pngBytes(101, 200) } }), {
       store, uploadCatalogObject: uploader, previewBucket: null,
     });
