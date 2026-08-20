@@ -336,6 +336,12 @@ async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSo
         entries.push({ path, catalogAsset: source.catalogAsset, resourceRole: slot.role });
         continue;
       }
+      // catalogAsset을 세팅하는 분기는 sourceDimensions도 함께 세팅한다. 없다면 그 불변식이
+      // 깨진 것이므로 여기서 멈춘다 — 값을 지어내면 Worker가 registry와 대조해
+      // `dimensions_mismatch` 422로 거부하고, 오류에는 어느 필드가 비었는지 남지 않는다.
+      if (!source.sourceDimensions) {
+        throw new Error(`iOS 내보내기: ${slot.id}의 catalog 원본 dimension이 없습니다.`);
+      }
       const transform: CatalogTransform = {
         kind: "ios-image",
         outputFormat: "png",
@@ -343,7 +349,7 @@ async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSo
         targetScale: outputScale,
         ...(source.catalogTransform?.stripNinePatchBorder ? { stripNinePatchBorder: true } : {}),
         ...(source.catalogTransform?.flipX ? { flipX: true } : {}),
-        sourceDimensions: source.sourceDimensions ?? { width: 1, height: 1 },
+        sourceDimensions: source.sourceDimensions,
       };
       entries.push({ path, catalogAsset: source.catalogAsset, resourceRole: slot.role, transform });
       continue;

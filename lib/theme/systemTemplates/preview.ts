@@ -257,11 +257,14 @@ function resolveImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary:
 function resolvePreviewUploadPath(slot: ThemeAssetSlot | undefined, uploadRefs: RemoteSlotUploads, selections: SystemTemplatePreviewSource["candidateSelections"]) {
   if (!slot) return undefined;
   const entries = uploadRefs[slot.id] ?? [];
+  // 선택된 항목이 있으면 그 항목만 본다. 경로가 없다고 다른 항목으로 넘어가면 운영자가 고른
+  // 것과 다른 그림이 카드/화면 미리보기에 구워져 그대로 발행된다. 선택이 아예 없을 때만
+  // 첫 항목으로 떨어진다.
   const selectedUpload = getSelectedSharedSlotEntry(slot, uploadRefs, selections, getThemeSlots(slot.platform));
-  return selectedUpload?.entry.storagePath
-    ?? selectedUpload?.entry.catalogMetadata?.legacyStoragePath
-    ?? entries[0]?.storagePath
-    ?? entries[0]?.catalogMetadata?.legacyStoragePath;
+  if (selectedUpload) {
+    return selectedUpload.entry.storagePath ?? selectedUpload.entry.catalogMetadata?.legacyStoragePath;
+  }
+  return entries[0]?.storagePath ?? entries[0]?.catalogMetadata?.legacyStoragePath;
 }
 
 function findSlotByRole(slots: ThemeAssetSlot[], role: ThemeResourceRole) {
