@@ -6,11 +6,10 @@ import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAss
 import { adminLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { buildPickerThumbnailIndex, selectPickerThumbnailUrl, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
+import { findMatchingCatalogRef } from "@/lib/theme/assetCatalog/recommendedCatalog";
 import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
-import type { ThemeAssetObjectRecord } from "@/lib/theme/assetCatalog/registry";
 
 const bucketName = "theme-assets";
-const allowedPlatforms = new Set(["android", "ios"]);
 const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"]);
 const maxSourceRows = 200;
 const recommendedPageCacheTtlSeconds = 30;
@@ -69,7 +68,10 @@ export async function GET(request: NextRequest) {
     // enabled 에셋만 담으므로 짧게 재사용해 슬롯 클릭마다 200행 조인을 다시 읽지 않게 한다.
     const cacheKey = [platform, assetKind, slotRole ?? "", limit, cursor ? cursorParam : ""].join("|");
     const cached = recommendedPageCache.get(cacheKey);
-    if (cached) return jsonRecommendedPage(cached);
+    // catalog ref가 들어간 응답은 현재 Supabase 바이트와 registry link가 맞는지 매번 다시
+    // 확인해야 한다. 저장 직후 30초 TTL payload가 예전 object id를 재사용하면 같은 Storage
+    // 경로의 새 이미지에 stale GCS object를 붙일 수 있으므로 catalog 응답은 캐시하지 않는다.
+    if (cached && !cached.items.some((item) => Boolean(item.catalog))) return jsonRecommendedPage(cached);
 
     const admin = createAdminClient();
     const { data, error } = await admin
@@ -88,12 +90,13 @@ export async function GET(request: NextRequest) {
           "file_name",
           "mime_type",
           "storage_path",
+          "asset_object_id",
           "enabled",
           "created_at",
           "updated_at",
            "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
            "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch,geometry)",
-           "admin_asset_variants(id,asset_id,platform,storage_path,file_name,mime_type,analysis)",
+           "admin_asset_variants(id,asset_id,platform,storage_path,asset_object_id,file_name,mime_type,analysis)",
         ].join(","),
       )
       .eq("enabled", true)
@@ -145,46 +148,12 @@ export async function GET(request: NextRequest) {
     const last = page.at(-1);
     const payload: RecommendedPagePayload = { items, nextCursor: hasMore && last ? encodeCursor(last) : undefined };
 
-    recommendedPageCache.set(cacheKey, payload);
+    if (!items.some((item) => Boolean(item.catalog))) recommendedPageCache.set(cacheKey, payload);
     return jsonRecommendedPage(payload);
   } catch (error) {
     console.error("Recommended asset listing failed", JSON.stringify(serializeError(error)));
     return NextResponse.json({ error: "Failed to load recommended assets." }, { status: 500 });
   }
-}
-
-/**
- * 추천 후보와 registry object가 같은 원본인지 확인한다.
- *
- * registry에는 canonical object만 있을 수 있고 후보에는 플랫폼 variant가 선택돼 있을 수 있다.
- * 파일명·MIME이 다르면 canonical object를 다른 그림에 붙이는 셈이므로 catalog ref를 생략해
- * 기존 signed URL → field 경로로 남긴다.
- */
-function findMatchingCatalogRef(
-  records: readonly ThemeAssetObjectRecord[],
-  candidate: AdminAssetCandidate,
-  platform: "android" | "ios",
-  usesPlatformVariant: boolean,
-) {
-  const matching = records.filter((item) =>
-    item.logicalAssetId === adminLogicalAssetId(candidate.id)
-    && item.fileName === candidate.fileName
-    && item.mimeType === candidate.mimeType,
-  );
-  const preferredVariantKeys = usesPlatformVariant ? [platform, "canonical"] : ["canonical", platform];
-  const record = preferredVariantKeys.map((variantKey) => matching.find((item) => item.variantKey === variantKey)).find(Boolean)
-    ?? matching[0];
-  if (!record) return undefined;
-  return {
-    selection: { kind: "catalog" as const, assetId: record.logicalAssetId, revision: record.revision, variantKey: record.variantKey },
-    fileName: record.fileName,
-    mimeType: record.mimeType,
-    size: record.sizeBytes,
-    sourceScale: record.sourceScale,
-    width: record.width,
-    height: record.height,
-    pngSignatureVerified: record.pngSignatureVerified,
-  };
 }
 
 async function readActiveAdminCatalogRecords(admin: ReturnType<typeof createAdminClient>, adminAssetIds: readonly string[]) {

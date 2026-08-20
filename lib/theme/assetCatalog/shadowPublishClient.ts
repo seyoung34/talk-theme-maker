@@ -17,6 +17,7 @@ export type ShadowPublishInput = {
   readonly kind: "admin" | "template";
   readonly sourceId: string;
   readonly revision?: number;
+  readonly variantKey?: "canonical" | "android" | "ios";
   readonly canonical: File;
 };
 
@@ -40,7 +41,8 @@ export async function shadowPublishThemeAsset(input: ShadowPublishInput): Promis
     const form = new FormData();
     form.append("kind", input.kind);
     form.append("sourceId", input.sourceId);
-    form.append("revision", String(input.revision ?? 1));
+    if (input.revision !== undefined) form.append("revision", String(input.revision));
+    if (input.variantKey) form.append("variantKey", input.variantKey);
     form.append("canonical", input.canonical);
 
     const thumbnail = await bakePickerThumbnail(input.canonical);

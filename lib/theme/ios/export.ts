@@ -322,12 +322,17 @@ export function canReuseIosCatalogAsset(targetScale: number | undefined, sourceS
   return targetScale === undefined || targetScale === sourceScale;
 }
 
+/** scale target이 없는 iOS 슬롯은 원본 픽셀 크기를 유지해야 한다. */
+export function resolveIosCatalogOutputScale(targetScale: number | undefined, sourceScale: 1 | 2 | 3): 1 | 2 | 3 {
+  return (targetScale ?? sourceScale) as 1 | 2 | 3;
+}
+
 async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosExportFile[]> {
   const entries: IosExportFile[] = [];
 
   for (const { path, targetScale } of getIosSlotExportTargets(slot)) {
     if (source.catalogAsset) {
-      const outputScale = (targetScale ?? 1) as 1 | 2 | 3;
+      const outputScale = resolveIosCatalogOutputScale(targetScale, source.sourceScale as 1 | 2 | 3);
       const needsTransform = outputScale !== source.sourceScale
         || Boolean(source.catalogTransform?.stripNinePatchBorder)
         || Boolean(source.catalogTransform?.flipX);

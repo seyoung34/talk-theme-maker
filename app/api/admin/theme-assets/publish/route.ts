@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getCurrentAdmin } from "@/lib/supabase/auth";
+import { createAdminClient } from "@/lib/supabase/server";
 import { CatalogPublishError } from "@/lib/theme/assetCatalog/publish";
 import { CatalogPublishFailure, publishThemeAsset, type PreviewPresetInput } from "@/lib/theme/assetCatalog/publishService";
 import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
@@ -53,12 +54,18 @@ export async function POST(request: Request) {
   const source = readSourceId(form);
   if (!source) return NextResponse.json({ error: "에셋 식별자가 올바르지 않습니다." }, { status: 400 });
 
+  const variantKey = readVariantKey(form);
+  if (!variantKey) return NextResponse.json({ error: "variantKey가 올바르지 않습니다." }, { status: 400 });
+
   const canonical = form.get("canonical");
   if (!(canonical instanceof File)) return NextResponse.json({ error: "원본 파일이 없습니다." }, { status: 400 });
   if (canonical.size > maxCatalogObjectBytes) return NextResponse.json({ error: "원본이 너무 큽니다." }, { status: 413 });
 
-  const revision = Number(form.get("revision") ?? 1);
-  if (!Number.isSafeInteger(revision) || revision < 1) {
+  const requestedRevision = form.get("revision");
+  const revision = requestedRevision === null
+    ? undefined
+    : Number(requestedRevision);
+  if (revision !== undefined && (!Number.isSafeInteger(revision) || revision < 1)) {
     return NextResponse.json({ error: "revision이 올바르지 않습니다." }, { status: 400 });
   }
 
@@ -77,11 +84,14 @@ export async function POST(request: Request) {
     const config = readCatalogStorageConfig();
     const accessToken = await getCatalogPublisherAccessToken(config);
 
+    const store = createRegistryStore();
+    const active = revision === undefined ? await store.findActive({ logicalAssetId: source.logicalAssetId, variantKey }) : null;
+    const nextRevision = revision ?? ((active?.revision ?? 0) + 1);
     const result = await publishThemeAsset(
       {
         logicalAssetId: source.logicalAssetId,
-        revision,
-        variantKey: canonicalVariantKey,
+        revision: nextRevision,
+        variantKey,
         canonical: {
           fileName: canonical.name,
           mimeType: canonical.type || "image/png",
@@ -90,7 +100,7 @@ export async function POST(request: Request) {
         previews,
       },
       {
-        store: createRegistryStore(),
+        store,
         previewBucket: getPreviewBucket(),
         uploadCatalogObject: async (input) => {
           const uploaded = await putCatalogObject({ config, accessToken, ...input });
@@ -98,6 +108,19 @@ export async function POST(request: Request) {
         },
       },
     );
+
+    if (source.kind === "admin") {
+      const admin = createAdminClient();
+      const table = variantKey === canonicalVariantKey ? "admin_assets" : "admin_asset_variants";
+      const query = admin
+        .from(table)
+        .update({ asset_object_id: result.record.id })
+        .eq(variantKey === canonicalVariantKey ? "id" : "asset_id", source.sourceId);
+      const linked = variantKey === canonicalVariantKey ? query : query.eq("platform", variantKey);
+      const { data: link, error: linkError } = await linked.select("id").maybeSingle();
+      if (linkError) throw linkError;
+      if (!link) throw new Error("Catalog object link target was not found.");
+    }
 
     return NextResponse.json({
       status: result.status,
@@ -115,6 +138,7 @@ export async function POST(request: Request) {
     console.error("Catalog write shadow failed", JSON.stringify({
       logicalAssetId: source.logicalAssetId,
       revision,
+      variantKey,
       orphanCandidates,
       error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
     }));
@@ -132,7 +156,13 @@ function readSourceId(form: FormData) {
   const kind = form.get("kind");
   const sourceId = form.get("sourceId");
   if (typeof sourceId !== "string" || !sourceId.trim()) return null;
-  if (kind === "admin") return { logicalAssetId: adminLogicalAssetId(sourceId.trim()) };
-  if (kind === "template") return { logicalAssetId: templateLogicalAssetId(sourceId.trim()) };
+  if (kind === "admin") return { kind, sourceId: sourceId.trim(), logicalAssetId: adminLogicalAssetId(sourceId.trim()) };
+  if (kind === "template") return { kind, sourceId: sourceId.trim(), logicalAssetId: templateLogicalAssetId(sourceId.trim()) };
   return null;
+}
+
+function readVariantKey(form: FormData): "canonical" | "android" | "ios" | null {
+  const value = form.get("variantKey");
+  if (value === null || value === "canonical") return canonicalVariantKey;
+  return value === "android" || value === "ios" ? value : null;
 }

@@ -4,13 +4,13 @@ import { createAdminThemeAssetSignedUrls } from "@/lib/theme/systemTemplates/adm
 import { themeAssetCacheControl } from "@/lib/theme/themeAssetSigning";
 import { collectRemoteUploadPaths } from "@/lib/theme/systemTemplates/uploadRefPaths";
 import { getResolvedColor, getSelectedSharedSlotEntry, requireUploadFile } from "@/lib/theme/project/state";
-import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
+import type { SlotCandidateSelections, SlotUploadEntry, SlotUploads } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
 import { createSystemTemplatePreviewVisual, previewRoles, tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
 import { findUnsignedPreviewAssets, generatePreviewScreens } from "@/lib/theme/systemTemplates/screenPreview";
-import type { PreviewScreenId } from "@/lib/theme/systemTemplates/previewScreenData";
+import { previewScreenIds, type PreviewScreenId } from "@/lib/theme/systemTemplates/previewScreenData";
 import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 import { assertValidTemplateName } from "@/lib/theme/templateName";
 import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
@@ -356,10 +356,11 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
     if (!entries?.length) continue;
     refs[slotId] = [];
     for (const entry of entries) {
-      // 추천 catalog 에셋은 이미 GCS registry에 게시돼 있다. 같은 바이트를 Supabase Storage에
-      // 다시 올리면 catalog 전환의 이점이 사라지므로 선택과 검증 metadata만 보관한다.
+      // 추천 catalog 에셋은 이미 GCS registry에 게시돼 있다. 선택 직후 편집기에서 쓰는
+      // fallback File이 함께 수화돼 있어도 같은 바이트를 Supabase Storage에 다시 올리면
+      // catalog 전환의 이점이 사라지므로 선택과 검증 metadata만 보관한다.
       // signed URL은 만료되므로 저장하지 않고, legacyStoragePath는 미리보기·변환 fallback에서만 쓴다.
-      if (entry.catalog && !entry.imageEdit && !entry.file) {
+      if (shouldPersistCatalogReference(entry)) {
         const metadata = entry.catalog;
         if (!metadata.fileName || !metadata.mimeType || !metadata.size || !metadata.sourceScale || !metadata.width || !metadata.height || !metadata.pngSignatureVerified) {
           throw new Error("시스템 템플릿 저장: catalog 에셋 메타데이터가 없습니다.");
@@ -423,6 +424,13 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
   }
 
   return refs;
+}
+
+export function shouldPersistCatalogReference(entry: SlotUploadEntry): entry is SlotUploadEntry & {
+  catalog: NonNullable<SlotUploadEntry["catalog"]>;
+  imageEdit?: undefined;
+} {
+  return Boolean(entry.catalog && !entry.imageEdit);
 }
 
 async function uploadOriginalImageEditFile({
@@ -869,7 +877,8 @@ function resolvePreviewStoragePath(slots: ThemeAssetSlot[], role: ThemeResourceR
     ?? entries[0]?.catalogMetadata?.legacyStoragePath;
 }
 
-function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | undefined): SystemTemplatePreviewMetadata {
+export function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | undefined): SystemTemplatePreviewMetadata {
+  const r2 = normalizeR2PreviewMetadata(value?.r2);
   return {
     cardPreviewPath: value?.cardPreviewPath,
     screenPreviews: value?.screenPreviews,
@@ -877,7 +886,36 @@ function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | 
     colors: value?.colors ?? {},
     refs: value?.refs ?? {},
     bubbles: value?.bubbles ?? {},
+    ...(r2 ? { r2 } : {}),
   };
+}
+
+function normalizeR2PreviewMetadata(value: unknown): SystemTemplatePreviewMetadata["r2"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const card = normalizeR2PreviewRef(value.card);
+  const screens: Partial<Record<PreviewScreenId, { objectKey: string; sha256: string }>> = {};
+  if (isRecord(value.screens)) {
+    for (const screenId of previewScreenIds) {
+      const ref = normalizeR2PreviewRef(value.screens[screenId]);
+      if (ref) screens[screenId] = ref;
+    }
+  }
+  if (!card && Object.keys(screens).length === 0) return undefined;
+  return {
+    ...(card ? { card } : {}),
+    ...(Object.keys(screens).length ? { screens } : {}),
+  };
+}
+
+function normalizeR2PreviewRef(value: unknown) {
+  if (!isRecord(value)) return undefined;
+  const objectKey = typeof value.objectKey === "string" && value.objectKey.trim() ? value.objectKey : undefined;
+  const sha256 = typeof value.sha256 === "string" && /^[0-9a-f]{64}$/.test(value.sha256) ? value.sha256 : undefined;
+  return objectKey && sha256 ? { objectKey, sha256 } : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function dateToMs(value?: string | null) {
