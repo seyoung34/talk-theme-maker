@@ -84,13 +84,13 @@ export function mapAdminAssetExportAccessRow(row: unknown): AdminAssetExportAcce
           slotRole,
           targetKind: "exact_role" as const,
           priority: 0,
-          enabled: readBoolean(record.enabled, true),
+          enabled: readEnabledFlag(record.enabled),
         },
       ];
 
   return {
     id,
-    enabled: readBoolean(record.enabled, true),
+    enabled: readEnabledFlag(record.enabled),
     ...(assetKind ? { assetKind } : {}),
     platform,
     slotRole,
@@ -197,7 +197,7 @@ function mapTarget(value: unknown, assetId: string): AdminAssetTarget {
     ...(slotRole ? { slotRole } : {}),
     targetKind,
     priority: readInteger(record.priority, 0),
-    enabled: readBoolean(record.enabled, true),
+    enabled: readEnabledFlag(record.enabled),
   };
 }
 
@@ -244,8 +244,16 @@ function readTargetKind(value: unknown): AdminAssetTargetKind {
   throw new AdminAssetExportAccessError("INVALID_ADMIN_ASSET_ACCESS_ROW");
 }
 
-function readBoolean(value: unknown, fallback: boolean) {
-  return typeof value === "boolean" ? value : fallback;
+/**
+ * 접근 허용 여부는 **명시적으로 `true`일 때만** 참이다.
+ *
+ * 값이 없거나 boolean이 아니면 거부한다. 예전에는 `true`로 기본값을 줬는데, 권한 경로에서
+ * 기본값이 허용이면 조회가 `enabled`를 빠뜨리는 순간(예: 성능 목적으로 select 목록을 줄일 때)
+ * 비활성 에셋이 조용히 통과한다. 지금은 컬럼이 `not null`이라 그런 일이 없지만, 그 사실에
+ * 기대는 대신 여기서 닫아 둔다.
+ */
+function readEnabledFlag(value: unknown) {
+  return value === true;
 }
 
 function readInteger(value: unknown, fallback: number) {

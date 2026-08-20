@@ -33,6 +33,13 @@ function isCatalogWriteEnabled() {
 }
 
 const maxPreviewBytes = 2 * 1024 * 1024;
+/** 경합 상대는 보통 하나다. 무한 재시도로 관리자 저장을 붙잡아 두지 않는다. */
+const maxRevisionConflictRetries = 3;
+
+/** Postgres unique_violation. Supabase JS는 `if (error) throw error`로 이 객체를 그대로 올린다. */
+function isUniqueViolation(error: unknown) {
+  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23505";
+}
 
 export async function POST(request: Request) {
   const adminAuth = await getCurrentAdmin();
@@ -88,18 +95,16 @@ export async function POST(request: Request) {
     const accessToken = await getCatalogPublisherAccessToken(config);
 
     const store = createRegistryStore();
-    const active = revision === undefined ? await store.findActive({ logicalAssetId: source.logicalAssetId, variantKey }) : null;
-    const nextRevision = revision ?? ((active?.revision ?? 0) + 1);
-    attemptedRevision = nextRevision;
-    const result = await publishThemeAsset(
+    const canonicalBytes = new Uint8Array(await canonical.arrayBuffer());
+    const publishOnce = (attempt: number) => publishThemeAsset(
       {
         logicalAssetId: source.logicalAssetId,
-        revision: nextRevision,
+        revision: attempt,
         variantKey,
         canonical: {
           fileName: canonical.name,
           mimeType: canonical.type || "image/png",
-          bytes: new Uint8Array(await canonical.arrayBuffer()),
+          bytes: canonicalBytes,
         },
         previews,
       },
@@ -112,6 +117,35 @@ export async function POST(request: Request) {
         },
       },
     );
+
+    /**
+     * revision 자동 증가는 read-modify-write라 동시 publish가 같은 값을 집을 수 있다.
+     * `unique (logical_asset_id, revision, variant_key)`가 두 번째 쓰기를 23505로 막는데,
+     * 그대로 두면 shadow write가 통째로 실패한다.
+     *
+     * 재시도는 안전하다 — 바이트 업로드는 `ifGenerationMatch=0`으로 걸고 412(이미 존재)를
+     * 재사용으로 처리하므로 같은 객체를 다시 올리지 않는다. 명시적 revision 요청은 재시도하지
+     * 않는다. 그 경우 충돌은 경합이 아니라 호출자가 이미 있는 revision을 지정한 것이다.
+     */
+    let result;
+    for (let attemptIndex = 0; ; attemptIndex += 1) {
+      const active = revision === undefined ? await store.findActive({ logicalAssetId: source.logicalAssetId, variantKey }) : null;
+      const nextRevision = revision ?? ((active?.revision ?? 0) + 1);
+      attemptedRevision = nextRevision;
+      try {
+        result = await publishOnce(nextRevision);
+        break;
+      } catch (error) {
+        const canRetry = revision === undefined && attemptIndex < maxRevisionConflictRetries && isUniqueViolation(error);
+        if (!canRetry) throw error;
+        console.warn("Catalog revision conflict; retrying", JSON.stringify({
+          logicalAssetId: source.logicalAssetId,
+          variantKey,
+          revision: nextRevision,
+          attempt: attemptIndex + 1,
+        }));
+      }
+    }
 
     if (source.kind === "admin") {
       const admin = createAdminClient();

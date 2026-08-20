@@ -113,9 +113,20 @@ function durableCatalogRef(catalog: CatalogUploadRef): CatalogUploadRef {
  * catalog 참조를 바이트 없이 처리하는 경로는 export manifest 참조(계획 §9.2)다. 변환이 필요한
  * 경우에는 각 플랫폼 export가 `legacyStoragePath`를 통해서만 지연 수화한다.
  */
+export class UploadSourceUnavailableError extends Error {
+  readonly reason = "preparation_failed" as const;
+
+  constructor(readonly detail: string) {
+    // `message`는 화면에 그대로 표시된다. 내부 식별자를 담으면 사용자에게 의미 없는 UUID가
+    // 노출되므로, 진단 정보는 `detail`에만 두고 콘솔 로그로 흘린다.
+    super("이 이미지의 원본을 불러오지 못했습니다. 이미지를 다시 선택하거나 직접 업로드해 주세요.");
+    this.name = "UploadSourceUnavailableError";
+  }
+}
+
 export function requireUploadFile(entry: SlotUploadEntry, context: string): File {
   if (entry.file) return entry.file;
-  throw new Error(
+  throw new UploadSourceUnavailableError(
     `${context}: 업로드 ${entry.id}에 로컬 파일이 없습니다. catalog 참조(${entry.catalog?.selection.assetId ?? "?"})는 이 경로에서 아직 처리할 수 없습니다.`,
   );
 }

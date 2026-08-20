@@ -90,3 +90,30 @@ describe("catalog export access", () => {
     ]);
   });
 });
+
+/**
+ * 권한 경로의 기본값은 거부다. 조회가 `enabled`를 빠뜨리면(성능 목적으로 select 목록을 줄이는
+ * 등) 비활성 에셋이 조용히 통과하는 일이 없어야 한다.
+ */
+describe("enabled 플래그는 fail-closed다", () => {
+  const base = {
+    id: "3f1a4b2c-0000-4000-8000-000000000001",
+    slot_role: "main_background",
+    platform: "android",
+    asset_kind: "background",
+  };
+
+  it("명시적 true만 허용한다", () => {
+    expect(mapAdminAssetExportAccessRow({ ...base, enabled: true }).enabled).toBe(true);
+  });
+
+  it.each([
+    ["필드 누락", {}],
+    ["null", { enabled: null }],
+    ["문자열 true", { enabled: "true" }],
+    ["숫자 1", { enabled: 1 }],
+    ["false", { enabled: false }],
+  ])("%s는 거부한다", (_label, overrides) => {
+    expect(mapAdminAssetExportAccessRow({ ...base, ...overrides }).enabled).toBe(false);
+  });
+});

@@ -6,6 +6,7 @@ import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAsyncExportStatus, triggerDownload } from "@/components/project/exportClient";
 import { getExportFailureReasonFromStatus, isNetworkError, toExportFailureReason, type ExportFailureReason } from "@/lib/theme/export/failureReason";
+import { UploadSourceUnavailableError } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
 import type { AccountState, ExportDownloadResult, ExportErrorResponse, ExportMode } from "@/components/project/exportModel";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
@@ -254,9 +255,14 @@ export function useProjectExport({
       trackAnalyticsEvent("export_completed", { platform, export_mode: exportMode });
       setNotice({ tone: "success", message: `${exportNumber ? `내보내기 #${exportNumber} · ` : ""}${fileName} 파일을 생성했습니다.` });
     } catch (error) {
-      console.error(error);
+      // 준비 단계 오류는 화면에 보일 수 없는 진단을 따로 들고 온다. 콘솔에는 그쪽을 남긴다.
+      console.error(error instanceof UploadSourceUnavailableError ? `${error.name}: ${error.detail}` : error);
       // fetch 자체가 실패한 경우(오프라인·중단)는 단계별 사유보다 네트워크 오류가 정확하다.
-      const reason = isNetworkError(error) ? "network_error" : failureReason;
+      const reason = isNetworkError(error)
+        ? "network_error"
+        : error instanceof UploadSourceUnavailableError
+          ? error.reason
+          : failureReason;
       if (!isCreditBlocked) trackAnalyticsEvent("export_failed", { platform, export_mode: exportMode, failure_reason: reason });
       setNotice({ tone: "error", message: error instanceof Error ? error.message : `${platform === "android" ? "Android" : "iOS"} 내보내기 중 오류가 발생했습니다.` });
     } finally {
