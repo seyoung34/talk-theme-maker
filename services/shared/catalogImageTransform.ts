@@ -46,13 +46,15 @@ async function transformIosImage(
   source: CatalogImageSource,
   transform: Extract<CatalogTransform, { kind: "ios-image" }>,
 ) {
-  const actual = await readRgbaImage(bytes);
+  // 여기서는 크기만 있으면 된다. 픽셀은 아래 pipeline이 다룬다 — 전체 raw 디코딩을 한 번 더
+  // 하면 같은 이미지를 두 번 펼치는 셈이다.
+  const actual = await readImageDimensions(bytes);
   assertSourceDimensions(actual.width, actual.height, source.width, source.height);
 
   const normalized = normalizedSourceDimensions(source);
   assertSourceDimensions(transform.sourceDimensions.width, transform.sourceDimensions.height, normalized.width, normalized.height);
 
-  let pipeline = sharp(Buffer.from(bytes), { failOn: "error" });
+  let pipeline = sharp(Buffer.from(bytes), { failOn: "error", limitInputPixels: maxImagePixels });
   if (transform.stripNinePatchBorder) {
     pipeline = pipeline.extract({ left: 1, top: 1, width: actual.width - 2, height: actual.height - 2 });
   }
@@ -134,10 +136,35 @@ function resolveMarkers(
   return transform.flipX ? flipMarkers(sourceMarkers, innerWidth) : sourceMarkers;
 }
 
-async function readRgbaImage(bytes: Uint8Array) {
+/**
+ * 헤더만 읽어 크기를 얻는다. 픽셀은 디코딩하지 않는다.
+ *
+ * 예산 검사를 raw 디코딩 **뒤에** 하면 막으려던 할당이 이미 끝난 상태라 가드가 아무 일도
+ * 하지 않는다. 20 MiB PNG도 압축을 풀면 수 GB가 될 수 있어(decompression bomb) Cloud Run이
+ * 깔끔한 오류 대신 OOM으로 죽는다. 그래서 크기는 항상 여기서 먼저 확인한다.
+ */
+export async function readImageDimensions(bytes: Uint8Array) {
   try {
-    const decoded = await sharp(Buffer.from(bytes), { failOn: "error" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-    assertRasterBudget(decoded.info.width, decoded.info.height);
+    const metadata = await sharp(Buffer.from(bytes), { failOn: "error", limitInputPixels: maxImagePixels }).metadata();
+    const width = metadata.width ?? 0;
+    const height = metadata.height ?? 0;
+    assertRasterBudget(width, height);
+    return { width, height };
+  } catch (error) {
+    if (error instanceof CatalogImageTransformError) throw error;
+    throw new CatalogImageTransformError(`catalog PNG 헤더를 읽지 못했습니다: ${formatError(error)}`);
+  }
+}
+
+async function readRgbaImage(bytes: Uint8Array) {
+  // 디코딩 전에 막는다. 이 호출이 실패하면 raw 버퍼는 만들어지지 않는다.
+  const { width, height } = await readImageDimensions(bytes);
+  try {
+    const decoded = await sharp(Buffer.from(bytes), { failOn: "error", limitInputPixels: maxImagePixels })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    assertSourceDimensions(decoded.info.width, decoded.info.height, width, height);
     return { data: new Uint8Array(decoded.data), width: decoded.info.width, height: decoded.info.height };
   } catch (error) {
     if (error instanceof CatalogImageTransformError) throw error;

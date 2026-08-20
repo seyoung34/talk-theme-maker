@@ -318,10 +318,6 @@ export function canReuseIosServerAsset(targetScale: number | undefined, sourceSc
   return targetScale === undefined || targetScale === sourceScale;
 }
 
-export function canReuseIosCatalogAsset(targetScale: number | undefined, sourceScale: number) {
-  return targetScale === undefined || targetScale === sourceScale;
-}
-
 /** scale target이 없는 iOS 슬롯은 원본 픽셀 크기를 유지해야 한다. */
 export function resolveIosCatalogOutputScale(targetScale: number | undefined, sourceScale: 1 | 2 | 3): 1 | 2 | 3 {
   return (targetScale ?? sourceScale) as 1 | 2 | 3;

@@ -43,7 +43,7 @@ export type CatalogUploadRef = {
  *
  * 타입으로 union을 강제하지 않은 이유는 두 값이 동시에 존재하는 상태가 정상이기 때문이다 —
  * catalog 참조를 가진 항목을 편집기에서 hydrate하면 둘 다 갖는다. 대신 읽을 때는
- * `uploadEntryFileName`/`uploadEntrySize` 같은 helper를 거쳐 분기를 한곳에 모은다.
+ * `uploadEntryFileName` 같은 helper를 거쳐 분기를 한곳에 모은다.
  */
 export type SlotUploadEntry = {
   id: string;
@@ -56,14 +56,6 @@ export type SlotUploadEntry = {
 /** File이 있든 catalog 참조뿐이든 같은 이름을 준다. */
 export function uploadEntryFileName(entry: SlotUploadEntry): string | undefined {
   return entry.file?.name ?? entry.catalog?.fileName;
-}
-
-export function uploadEntryMimeType(entry: SlotUploadEntry): string | undefined {
-  return entry.file?.type || entry.catalog?.mimeType;
-}
-
-export function uploadEntrySize(entry: SlotUploadEntry): number | undefined {
-  return entry.file?.size ?? entry.catalog?.size;
 }
 
 /**
@@ -126,16 +118,6 @@ export function requireUploadFile(entry: SlotUploadEntry, context: string): File
   throw new Error(
     `${context}: 업로드 ${entry.id}에 로컬 파일이 없습니다. catalog 참조(${entry.catalog?.selection.assetId ?? "?"})는 이 경로에서 아직 처리할 수 없습니다.`,
   );
-}
-
-/**
- * 이 항목이 실제로 쓸 수 있는 원본을 가리키는가.
- *
- * File도 catalog 참조도 없는 항목은 아무것도 그릴 수 없다. 저장·복원 과정에서 생길 수 있으므로
- * (예: IndexedDB에서 File이 깨진 채 돌아옴) 걸러 낼 자리가 필요하다.
- */
-export function hasUploadSource(entry: SlotUploadEntry): boolean {
-  return Boolean(entry.file || entry.catalog);
 }
 
 export type SlotUploads = Record<string, SlotUploadEntry[] | undefined>;
