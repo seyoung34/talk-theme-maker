@@ -27,7 +27,7 @@ describe("convertSystemTemplateOverridesByRole", () => {
     });
 
     expect(result.uploads[targetSlot.id]?.[0]?.file).toBe(file);
-    expect(result.uploads[targetSlot.id]?.[0]?.file.name).toBe("android-bubble.9.png");
+    expect(result.uploads[targetSlot.id]?.[0]?.file?.name).toBe("android-bubble.9.png");
     expect(result.candidateSelections[targetSlot.id]).toBe(upload.id);
   });
 

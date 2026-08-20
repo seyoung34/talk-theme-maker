@@ -2,11 +2,15 @@ import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { centeredBubbleGeometry, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency, themeVersionName } from "@/lib/theme/exportRequest";
 import { themeColorToCssHex } from "@/lib/theme/color";
+import { storagePathToFile } from "@/lib/theme/remoteAssets";
+import { isCatalogExportProducerEnabled } from "@/lib/theme/assetCatalog/exportGate";
 import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
-import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, requireUploadFile, uploadEntryFileName, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
+import { normalizedSourceDimensions, type CatalogTransform } from "@/lib/theme/export/catalogTransform";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import { getAndroidNinePatchInnerSize, isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
+import { detectThemeImageSourceScale, getAndroidNinePatchInnerSize, isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
 import type { Insets, StretchPoint, ThemeResourceRole } from "@/lib/theme/types";
 
 type IosExportOptions = {
@@ -19,6 +23,7 @@ type IosExportOptions = {
   colors: SlotColors;
   selections: SlotCandidateSelections;
   bubbleEditsBySlotId: Partial<Record<string, BubbleEditState>>;
+  catalogExportUserId?: string;
 };
 
 export type IosExportBlobFile = {
@@ -31,12 +36,25 @@ export type IosExportServerAssetFile = {
   serverAsset: string;
 };
 
-export type IosExportFile = IosExportBlobFile | IosExportServerAssetFile;
+export type IosExportCatalogAssetFile = {
+  path: string;
+  catalogAsset: CatalogAssetSelection;
+  resourceRole: ThemeResourceRole;
+  transform?: CatalogTransform;
+};
+
+export type IosExportFile = IosExportBlobFile | IosExportServerAssetFile | IosExportCatalogAssetFile;
 
 type IosSlotSource = {
   blob?: Blob;
   assetUrl?: string;
   serverAsset?: string;
+  catalogAsset?: CatalogAssetSelection;
+  catalogTransform?: {
+    stripNinePatchBorder: boolean;
+    flipX?: boolean;
+  };
+  fallbackStoragePath?: string;
   sourceName: string;
   sourceScale: number;
   sourceDimensions?: IosSourceDimensions;
@@ -92,7 +110,7 @@ const iosScaleTargetsByRole: Partial<Record<ThemeResourceRole, number[]>> = {
 };
 
 export async function buildIosThemeExportFiles(options: IosExportOptions): Promise<IosExportFile[]> {
-  const { analysis, template, templateId, exportName, slots, uploads, selections } = options;
+  const { analysis, template, templateId, exportName, slots, uploads, selections, catalogExportUserId } = options;
   const iosSlots = slots.filter((slot) => slot.platform === "ios");
   const files: IosExportFile[] = [];
   const imageMap: IosImageMap = {};
@@ -103,7 +121,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   // 슬롯 수만큼 누적되므로 동시 실행 수만 제한해 병렬로 처리한다.
   const imageSlots = iosSlots.filter((slot): slot is ThemeAssetSlot & { path: string } => slot.kind !== "color" && Boolean(slot.path));
   const resolved = await mapWithConcurrency(imageSlots, exportSlotConcurrency, async (slot) => {
-    const resolvedSource = await resolveIosSlotSource(slot, uploads, selections, templateId, template, iosSlots);
+    const resolvedSource = await resolveIosSlotSource(slot, uploads, selections, templateId, template, iosSlots, catalogExportUserId);
     if (!resolvedSource) return null;
     // 반전은 배율 target을 만들기 전에 한 번만 적용한다. 배율마다 뒤집으면 같은 일을 세 번 한다.
     const source = options.bubbleEditsBySlotId[slot.id]?.flipX ? await flipIosSlotSource(slot, resolvedSource) : resolvedSource;
@@ -141,16 +159,55 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   return files;
 }
 
-async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[]): Promise<IosSlotSource | null> {
+async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[], catalogExportUserId?: string): Promise<IosSlotSource | null> {
   // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯 소스를 그대로 사용한다.
   const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
-  if (inheritedSource) return resolveIosSlotSource(inheritedSource, uploads, selections, templateId, template, allSlots);
+  if (inheritedSource) return resolveIosSlotSource(inheritedSource, uploads, selections, templateId, template, allSlots, catalogExportUserId);
 
   const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
   if (selectedUpload) {
+    if (selectedUpload.catalog && !selectedUpload.imageEdit) {
+      if (!isCatalogExportProducerEnabled("ios", {
+        userId: catalogExportUserId,
+        assetIds: [selectedUpload.catalog.selection.assetId],
+      })) {
+        if (selectedUpload.file) {
+          return {
+            blob: await normalizeIosImageBlob(slot, selectedUpload.file, selectedUpload.file.name),
+            sourceName: selectedUpload.file.name,
+            sourceScale: getIosSourceScale(slot, uploads, selections, templateId, allSlots),
+          };
+        }
+        if (!selectedUpload.catalog.legacyStoragePath) {
+          const uploadFile = requireUploadFile(selectedUpload, "iOS 내보내기");
+          return {
+            blob: await normalizeIosImageBlob(slot, uploadFile, uploadFile.name),
+            sourceName: uploadFile.name,
+            sourceScale: getIosSourceScale(slot, uploads, selections, templateId, allSlots),
+          };
+        }
+        return {
+          sourceName: selectedUpload.catalog.fileName,
+          sourceScale: selectedUpload.catalog.sourceScale,
+          fallbackStoragePath: selectedUpload.catalog.legacyStoragePath,
+          sourceDimensions: normalizedSourceDimensions(selectedUpload.catalog),
+        };
+      }
+      return {
+        catalogAsset: selectedUpload.catalog.selection,
+        sourceName: selectedUpload.catalog.fileName,
+        sourceScale: selectedUpload.catalog.sourceScale,
+        fallbackStoragePath: selectedUpload.catalog.legacyStoragePath,
+        sourceDimensions: normalizedSourceDimensions(selectedUpload.catalog),
+        catalogTransform: {
+          stripNinePatchBorder: isAndroidNinePatchSourceName(selectedUpload.catalog.fileName),
+        },
+      };
+    }
+    const uploadFile = requireUploadFile(selectedUpload, "iOS 내보내기");
     return {
-      blob: await normalizeIosImageBlob(slot, selectedUpload.file, selectedUpload.file.name),
-      sourceName: selectedUpload.file.name,
+      blob: await normalizeIosImageBlob(slot, uploadFile, uploadFile.name),
+      sourceName: uploadFile.name,
       sourceScale: getIosSourceScale(slot, uploads, selections, templateId, allSlots),
     };
   }
@@ -161,7 +218,7 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
     const fallbackRole = getImageAssetFallbackRole(slot.role);
     const fallbackSlot = fallbackRole ? allSlots.find((candidate) => candidate.role === fallbackRole) : undefined;
     if (!fallbackSlot) return null;
-    return resolveIosSlotSource(fallbackSlot, uploads, selections, templateId, template, allSlots);
+    return resolveIosSlotSource(fallbackSlot, uploads, selections, templateId, template, allSlots, catalogExportUserId);
   }
   const sourceScale = getIosSourceScale(slot, uploads, selections, templateId, allSlots);
   if (canUseServerAssetReference(slot, assetUrl)) {
@@ -189,6 +246,15 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
  * 내보내 한 슬롯 안에서 방향이 갈린다.
  */
 async function flipIosSlotSource(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosSlotSource> {
+  if (source.catalogAsset) {
+    return {
+      ...source,
+      catalogTransform: {
+        stripNinePatchBorder: source.catalogTransform?.stripNinePatchBorder ?? isAndroidNinePatchSourceName(source.sourceName),
+        flipX: true,
+      },
+    };
+  }
   const blob = await getIosSourceBlob(slot, source);
   const image = await loadBlobImage(blob, source.sourceName);
   const { width, height } = getValidatedIosImageSize(image);
@@ -197,6 +263,8 @@ async function flipIosSlotSource(slot: ThemeAssetSlot, source: IosSlotSource): P
     blob: await drawImageToPng(image, width, height, undefined, true),
     assetUrl: undefined,
     serverAsset: undefined,
+    catalogAsset: undefined,
+    fallbackStoragePath: undefined,
   };
 }
 
@@ -250,10 +318,40 @@ export function canReuseIosServerAsset(targetScale: number | undefined, sourceSc
   return targetScale === undefined || targetScale === sourceScale;
 }
 
+export function canReuseIosCatalogAsset(targetScale: number | undefined, sourceScale: number) {
+  return targetScale === undefined || targetScale === sourceScale;
+}
+
+/** scale target이 없는 iOS 슬롯은 원본 픽셀 크기를 유지해야 한다. */
+export function resolveIosCatalogOutputScale(targetScale: number | undefined, sourceScale: 1 | 2 | 3): 1 | 2 | 3 {
+  return (targetScale ?? sourceScale) as 1 | 2 | 3;
+}
+
 async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSource): Promise<IosExportFile[]> {
   const entries: IosExportFile[] = [];
 
   for (const { path, targetScale } of getIosSlotExportTargets(slot)) {
+    if (source.catalogAsset) {
+      const outputScale = resolveIosCatalogOutputScale(targetScale, source.sourceScale as 1 | 2 | 3);
+      const needsTransform = outputScale !== source.sourceScale
+        || Boolean(source.catalogTransform?.stripNinePatchBorder)
+        || Boolean(source.catalogTransform?.flipX);
+      if (!needsTransform) {
+        entries.push({ path, catalogAsset: source.catalogAsset, resourceRole: slot.role });
+        continue;
+      }
+      const transform: CatalogTransform = {
+        kind: "ios-image",
+        outputFormat: "png",
+        sourceScale: source.sourceScale as 1 | 2 | 3,
+        targetScale: outputScale,
+        ...(source.catalogTransform?.stripNinePatchBorder ? { stripNinePatchBorder: true } : {}),
+        ...(source.catalogTransform?.flipX ? { flipX: true } : {}),
+        sourceDimensions: source.sourceDimensions ?? { width: 1, height: 1 },
+      };
+      entries.push({ path, catalogAsset: source.catalogAsset, resourceRole: slot.role, transform });
+      continue;
+    }
     if (canReuseIosServerAsset(targetScale, source.sourceScale, Boolean(source.serverAsset)) && source.serverAsset) {
       entries.push({ path, serverAsset: source.serverAsset });
       continue;
@@ -271,8 +369,12 @@ async function createIosImageExportFiles(slot: ThemeAssetSlot, source: IosSlotSo
 
 async function getIosSourceBlob(slot: ThemeAssetSlot, source: IosSlotSource) {
   if (source.blob) return source.blob;
-  if (!source.assetUrl) throw new Error(`iOS 이미지 원본을 찾지 못했습니다: ${source.sourceName}`);
-  const blob = await fetchAssetBlob(source.assetUrl);
+  const blob = source.assetUrl
+    ? await fetchAssetBlob(source.assetUrl)
+    : source.fallbackStoragePath
+      ? await storagePathToFile(source.fallbackStoragePath, source.sourceName, "image/png")
+      : undefined;
+  if (!blob) throw new Error(`iOS 이미지 원본을 찾지 못했습니다: ${source.sourceName}`);
   source.blob = await normalizeIosImageBlob(slot, blob, source.sourceName);
   return source.blob;
 }
@@ -287,10 +389,12 @@ export function canUseServerAssetReference(slot: ThemeAssetSlot, assetUrl: strin
 }
 
 function getIosSourceScale(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, allSlots: ThemeAssetSlot[]) {
-  const uploadName = getSelectedUpload(slot, uploads, selections, allSlots)?.file.name;
-  return detectIosSourceScale(uploadName)
-    ?? detectIosSourceScale(selections[slot.id])
-    ?? detectIosSourceScale(slot.defaultAssetUrls?.[templateId])
+  const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
+  // catalog 참조만 있는 항목도 이름을 갖는다. 배율은 파일명에서 읽으므로 File 유무와 무관하다.
+  const uploadName = selectedUpload ? uploadEntryFileName(selectedUpload) : undefined;
+  return detectThemeImageSourceScale(uploadName)
+    ?? detectThemeImageSourceScale(selections[slot.id])
+    ?? detectThemeImageSourceScale(slot.defaultAssetUrls?.[templateId])
     ?? 3;
 }
 
@@ -758,12 +862,6 @@ function canvasToPngBlob(canvas: HTMLCanvasElement) {
   return new Promise<Blob | null>((resolve) => {
     canvas.toBlob((blob) => resolve(blob), "image/png");
   });
-}
-
-function detectIosSourceScale(value: string | undefined) {
-  if (!value) return null;
-  const match = value.match(/@([23])x(?=\.[a-z0-9]+$|$)/i);
-  return match ? Number(match[1]) : null;
 }
 
 function stripScaleSuffix(path: string) {

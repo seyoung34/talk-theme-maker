@@ -1,4 +1,5 @@
-import type { SlotCandidateSelections, SlotColors, SlotUploadEntry, SlotUploadSource, SlotUploads } from "@/lib/theme/project/state";
+import type { CatalogUploadRef, SlotCandidateSelections, SlotColors, SlotUploadEntry, SlotUploadSource, SlotUploads } from "@/lib/theme/project/state";
+import { parseCatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 import { normalizeThemeTemplateId, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
@@ -123,11 +124,16 @@ function normalizeIndexedDbOnlyUploads(uploads: SlotUploads): SlotUploads {
 }
 
 function normalizeIndexedDbOnlyUploadEntry(entry: SlotUploadEntry): SlotUploadEntry | null {
-  if (!isFileLike(entry.file)) return null;
+  const file = isFileLike(entry.file) ? entry.file : undefined;
+  const catalog = normalizeCatalogUploadRef(entry.catalog);
+  // File도 catalog 참조도 없으면 그릴 것도 내보낼 것도 없다. 그때만 버린다.
+  // 예전에는 File만 봤기 때문에, catalog 참조뿐인 항목이 저장 한 번에 조용히 사라졌다.
+  if (!file && !catalog) return null;
 
   const normalized: SlotUploadEntry = {
     id: entry.id,
-    file: entry.file,
+    ...(file ? { file } : {}),
+    ...(catalog ? { catalog } : {}),
     ...(isSlotUploadSource(entry.source) ? { source: entry.source } : {}),
   };
 
@@ -147,6 +153,42 @@ function normalizeIndexedDbOnlyUploadEntry(entry: SlotUploadEntry): SlotUploadEn
 
 function isSlotUploadSource(value: unknown): value is SlotUploadSource {
   return value === "user" || value === "template" || value === "admin";
+}
+
+/**
+ * IndexedDB에서 돌아온 catalog 참조를 검증한다.
+ *
+ * 저장된 값은 우리가 쓴 것이지만 스키마가 바뀐 뒤의 옛 레코드일 수 있다. 깨진 참조를 그대로
+ * 살려 두면 나중에 export가 해석하지 못하는 항목이 되므로, 여기서 걸러 `null`을 준다 —
+ * 그러면 File이 있는 항목은 File만으로 계속 동작한다.
+ */
+function normalizeCatalogUploadRef(value: SlotUploadEntry["catalog"]): CatalogUploadRef | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  if (typeof value.fileName !== "string" || !value.fileName) return undefined;
+  if (typeof value.mimeType !== "string" || !value.mimeType) return undefined;
+  if (typeof value.size !== "number" || !Number.isFinite(value.size) || value.size < 0) return undefined;
+  if (value.sourceScale !== 1 && value.sourceScale !== 2 && value.sourceScale !== 3) return undefined;
+  if (typeof value.width !== "number" || !Number.isSafeInteger(value.width) || value.width <= 0) return undefined;
+  if (typeof value.height !== "number" || !Number.isSafeInteger(value.height) || value.height <= 0) return undefined;
+  if (value.pngSignatureVerified !== true) return undefined;
+  let selection;
+  try {
+    selection = parseCatalogAssetSelection(value.selection);
+  } catch {
+    return undefined;
+  }
+  return {
+    selection,
+    fileName: value.fileName,
+    mimeType: value.mimeType,
+    size: value.size,
+    sourceScale: value.sourceScale,
+    width: value.width,
+    height: value.height,
+    pngSignatureVerified: true,
+    ...(typeof value.legacyStoragePath === "string" && value.legacyStoragePath ? { legacyStoragePath: value.legacyStoragePath } : {}),
+    ...(typeof value.previewUrl === "string" && value.previewUrl ? { previewUrl: value.previewUrl } : {}),
+  };
 }
 
 function isFileLike(value: unknown): value is File {

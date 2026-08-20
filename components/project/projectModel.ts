@@ -26,6 +26,14 @@ export type SlotCandidate = {
   selected: boolean;
   source: "default" | "creator" | "upload" | "template" | "palette" | "admin";
   previewUrl?: string;
+  /**
+   * 목록 타일 전용 축소본. 있으면 타일은 이걸 그린다.
+   *
+   * `previewUrl`을 대체하지 않는다 — 그 필드는 이미지 편집기의 원본 소스이기도 해서
+   * (`getEditableSourceUrl`), 축소본을 넣으면 추천 에셋을 골라 편집할 때 축소본을 편집하게 된다.
+   * 목록은 이 값만 내려받고 원본은 편집기를 열 때 그 한 장만 받는다.
+   */
+  thumbnailUrl?: string;
   colorValue?: string;
   adminAsset?: AdminAssetCandidate;
   // 파생 슬롯(탭 선택 아이콘 등)이 기본 슬롯의 선택을 상속해 표시 중인 항목. 읽기 전용(연동 배지).
@@ -95,8 +103,10 @@ export {
   isSlotReady,
   planUploadRemoval,
   slotStatusLabel,
+  uploadEntryFileName,
 } from "@/lib/theme/project/state";
 export type { BubbleEditState, SlotCandidateSelections, SlotColors, SlotUploadEntry, SlotUploads } from "@/lib/theme/project/state";
+import { uploadEntryFileName } from "@/lib/theme/project/state";
 
 export function getSectionGroups(section: ThemeSection, slots: ThemeAssetSlot[]) {
   const groups = new Set(slots.filter((slot) => isSlotVisibleInSection(slot, section)).map((slot) => slot.group));
@@ -207,7 +217,7 @@ export function buildSlotCandidates(
     .map(({ ownerSlotId, entry }) => ({
       id: entry.id,
       title: "업로드 이미지",
-      status: entry.file.name,
+      status: uploadEntryFileName(entry) ?? "업로드 이미지",
       active: selectedUpload?.id === entry.id,
       selected: selectedUpload?.id === entry.id,
       source: "upload" as const,
@@ -230,7 +240,7 @@ export function buildSlotCandidates(
         title: matchingAdminAsset?.title ?? "템플릿 에셋",
         status: matchingAdminAsset
           ? `템플릿 포함 · ${matchingAdminAsset.assetKind ? getAdminAssetKindLabel(matchingAdminAsset.assetKind) : matchingAdminAsset.fileName}`
-          : entry.file.name,
+          : uploadEntryFileName(entry) ?? "템플릿 에셋",
         active: selectedUpload?.id === entry.id,
         selected: selectedUpload?.id === entry.id,
         source: "template" as const,
@@ -254,7 +264,7 @@ export function buildSlotCandidates(
   return allItems;
 }
 
-function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | undefined, adminAssets: Array<AdminAssetCandidate & { previewUrl?: string }>): SlotCandidate[] {
+function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | undefined, adminAssets: Array<AdminAssetCandidate & { previewUrl?: string; thumbnailUrl?: string }>): SlotCandidate[] {
   return adminAssets
     .filter((asset) => isAdminAssetRecommendedForSlot(slot, asset))
     .map((asset) => ({
@@ -265,6 +275,7 @@ function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | u
       selected: selectedUploadId === asset.id,
       source: "admin" as const,
       previewUrl: asset.previewUrl,
+      ...(asset.thumbnailUrl ? { thumbnailUrl: asset.thumbnailUrl } : {}),
       adminAsset: asset,
     }));
 }

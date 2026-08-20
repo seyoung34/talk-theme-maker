@@ -30,12 +30,23 @@ export async function reserveCreditForExport({
   mode,
   inputFileCount,
   inputBytes,
+  referencedAssetBytes = 0,
+  referencedAssetFileCount = 0,
 }: {
   userId: string;
   platform: ExportPlatform;
   mode: ExportMode;
+  /** Worker가 실제로 읽은 업로드 파일 수. catalog 참조는 여기에 포함하지 않는다. */
   inputFileCount: number;
+  /** Worker가 실제로 읽은 업로드 바이트. 50MiB 상한은 이 값에만 걸린다. */
   inputBytes: number;
+  /**
+   * GCS catalog 참조 바이트. 출력 경로마다 합산한다 — 같은 object를 여러 경로가 쓰면 결과물이
+   * 그만큼 커지기 때문이다. Worker를 통과하지 않으므로 `inputBytes`와 더해서 보지 않는다.
+   * DB가 `logical_input_bytes = input_bytes + referenced_asset_bytes`를 계산한다.
+   */
+  referencedAssetBytes?: number;
+  referencedAssetFileCount?: number;
 }) {
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("reserve_export_credit", {
@@ -44,6 +55,8 @@ export async function reserveCreditForExport({
     p_export_mode: mode,
     p_input_file_count: inputFileCount,
     p_input_bytes: inputBytes,
+    p_referenced_asset_bytes: referencedAssetBytes,
+    p_referenced_asset_file_count: referencedAssetFileCount,
   });
   if (error) throw error;
 

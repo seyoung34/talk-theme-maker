@@ -1,9 +1,13 @@
 import { getExportRequestTooLargePayload, maxExportRequestBytes } from "@/lib/theme/exportRequest";
-import { IosExportRequestError, normalizeIosPath, type IosPackageEntry, validateIosPackage } from "@/lib/theme/ios/packageValidation";
+import { IosExportRequestError, normalizeIosPath, type IosPackageEntry } from "@/lib/theme/ios/packageValidation";
+import { parseCatalogAssetSelection, type CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
+import { parseCatalogTransform } from "@/lib/theme/export/catalogTransform";
 
 type UploadManifestItem = { field: string; path: string };
 type ServerAssetManifestItem = { path: string; serverAsset: string };
-export type IosManifestItem = UploadManifestItem | ServerAssetManifestItem;
+type CatalogAssetManifestItem = { path: string; catalogAsset: unknown; resourceRole?: string; transform?: unknown };
+export type IosManifestItem = UploadManifestItem | ServerAssetManifestItem | CatalogAssetManifestItem;
+export type IosRequestedEntry = IosPackageEntry | { path: string; catalogAsset: CatalogAssetSelection; resourceRole?: string; transform?: import("@/lib/theme/export/catalogTransform").CatalogTransform };
 
 const maxIosExportFiles = 300;
 
@@ -11,13 +15,26 @@ export async function readIosEntries(formData: FormData, manifestRaw: string, re
   const parsed = parseIosManifest(manifestRaw);
   const fields = new Set<string>();
   const paths = new Set<string>();
-  const entries: IosPackageEntry[] = [];
+  const entries: IosRequestedEntry[] = [];
   let inputBytes = 0;
 
   for (const item of parsed) {
     const normalizedPath = normalizeIosPath(item.path);
     if (paths.has(normalizedPath)) {
       throw new IosExportRequestError("invalid_manifest", "중복되거나 올바르지 않은 내보내기 파일이 있습니다.");
+    }
+
+    if ("catalogAsset" in item) {
+      let selection: CatalogAssetSelection;
+      try {
+        selection = parseCatalogAssetSelection(item.catalogAsset);
+        const transform = item.transform === undefined ? undefined : parseCatalogTransform(item.transform);
+        paths.add(normalizedPath);
+        entries.push({ path: normalizedPath, catalogAsset: selection, ...(item.resourceRole ? { resourceRole: item.resourceRole } : {}), ...(transform ? { transform } : {}) });
+      } catch {
+        throw new IosExportRequestError("invalid_catalog_asset", "내보내기 에셋 참조가 올바르지 않습니다.");
+      }
+      continue;
     }
 
     if ("serverAsset" in item) {
@@ -39,7 +56,6 @@ export async function readIosEntries(formData: FormData, manifestRaw: string, re
     entries.push({ path: normalizedPath, bytes: new Uint8Array(await file.arrayBuffer()) });
   }
 
-  validateIosPackage(entries);
   return { entries, inputBytes };
 }
 
@@ -110,9 +126,11 @@ function isManifestItem(value: unknown): value is IosManifestItem {
   if (typeof item.path !== "string") return false;
   const hasField = typeof item.field !== "undefined";
   const hasServerAsset = typeof item.serverAsset !== "undefined";
-  if (hasField === hasServerAsset) return false;
+  const hasCatalogAsset = typeof item.catalogAsset !== "undefined";
+  if ([hasField, hasServerAsset, hasCatalogAsset].filter(Boolean).length !== 1) return false;
   if (hasField) return typeof item.field === "string";
-  return typeof item.serverAsset === "string";
+  if (hasServerAsset) return typeof item.serverAsset === "string";
+  return typeof item.resourceRole === "undefined" || typeof item.resourceRole === "string";
 }
 
 function addInputBytes(current: number, size: number) {

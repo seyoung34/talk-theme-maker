@@ -1,3 +1,4 @@
+import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import type { BaseTemplateId } from "@/lib/theme/templates";
@@ -58,12 +59,39 @@ export type SystemTemplateSaveInput = Omit<SystemTemplateRecord, "id" | "created
   legacyTitle?: string;
 };
 
+/**
+ * storagePath 없이 보관하는 catalog ref의 검증된 메타데이터.
+ *
+ * signed URL은 만료되므로 시스템 템플릿 JSON에는 저장하지 않는다. 대신 legacyStoragePath가
+ * 있으면 편집기 미리보기·변환 fallback에서만 다시 서명한다.
+ */
+export type RemoteCatalogAssetMetadata = {
+  fileName: string;
+  mimeType: string;
+  size: number;
+  sourceScale: 1 | 2 | 3;
+  width: number;
+  height: number;
+  pngSignatureVerified: boolean;
+  legacyStoragePath?: string;
+};
+
 export type RemoteUploadEntry = {
   id: string;
   fileName: string;
   mimeType: string;
   size: number;
-  storagePath: string;
+  /** 기존 Supabase 원본 경로. catalog-only entry에는 없다. */
+  storagePath?: string;
+  /**
+   * catalog(GCS) 원본 좌표 (계획 §9.1).
+   *
+   * 있으면 이 항목의 바이트를 브라우저로 내려받지 않고 export manifest에서 참조로 보낼 수 있다.
+   * catalog-only entry에서는 `storagePath`가 비어 있고, 메타데이터의 legacy 경로는 필요한
+   * 순간에만 지연 수화한다.
+   */
+  catalog?: CatalogAssetSelection;
+  catalogMetadata?: RemoteCatalogAssetMetadata;
   imageEdit?: {
     originalName: string;
     originalSize: number;
@@ -102,6 +130,25 @@ export type SystemTemplatePreviewMetadata = {
    * 굽기에 실패한 경우를 위해 그 폴백은 유지한다.
    */
   screenPreviews?: Partial<Record<PreviewScreenId, string>>;
+  /**
+   * R2로 옮긴 파생물의 객체 키.
+   *
+   * 템플릿 preview는 폰 화면을 canvas로 합성한 것이라 GCS catalog 원본이 없다. 그래서
+   * `theme_asset_objects`(원본이 있는 에셋의 registry)에 넣지 못하고 여기 둔다 — 계획 §8.1이
+   * `preview_metadata`를 대안으로 지정한 이유다.
+   *
+   * 기존 `cardPreviewPath`·`screenPreviews`(theme-public 경로)는 그대로 남긴다. R2 키가 없거나
+   * `NEXT_PUBLIC_R2_PREVIEW_ORIGIN`이 꺼져 있으면 그쪽으로 떨어진다.
+   */
+  r2?: {
+    card?: R2PreviewRef;
+    screens?: Partial<Record<PreviewScreenId, R2PreviewRef>>;
+  };
+};
+
+export type R2PreviewRef = {
+  readonly objectKey: string;
+  readonly sha256: string;
 };
 
 export type SystemTemplateSummary = Pick<SystemTemplateRecord, "id" | "bundleId" | "title" | "description" | "baseTemplateId" | "platform" | "status" | "visibility" | "pricingType" | "priceAmount" | "creditCost" | "tags" | "createdAt" | "updatedAt"> & {

@@ -65,6 +65,7 @@ import {
   type BubbleEditState,
 } from "@/components/project/projectModel";
 import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { getAdminCatalogUploadRef } from "@/lib/theme/assetCatalog/clientRef";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getBubblePairRole, getSlotCandidates } from "@/lib/theme/project/state";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
@@ -1068,10 +1069,22 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const selectAdminAsset = async (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => {
+    // canary 계정 여부는 export dialog에서 인증 상태를 확인한 뒤 확정된다. 선택 시에는
+    // metadata와 File을 함께 보존해 비-canary 사용자가 catalog ref를 보내지 않고 기존
+    // multipart 경로로 안전하게 fallback할 수 있게 한다.
+    const catalog = getAdminCatalogUploadRef(slot, asset);
     const file = await adminAssetToFile(asset);
     setUploads((current) => {
       const entries = current[slot.id] ?? [];
-      const nextEntries = entries.some((entry) => entry.id === asset.id) ? entries : [...entries, { id: asset.id, file, source: "admin" as const }];
+      const nextEntry = {
+        id: asset.id,
+        ...(file ? { file } : {}),
+        ...(catalog ? { catalog } : {}),
+        source: "admin" as const,
+      };
+      const nextEntries = entries.some((entry) => entry.id === asset.id)
+        ? entries.map((entry) => entry.id === asset.id ? nextEntry : entry)
+        : [...entries, nextEntry];
       return { ...current, [slot.id]: nextEntries };
     });
     dropRemoteUploadRef(slot.id);

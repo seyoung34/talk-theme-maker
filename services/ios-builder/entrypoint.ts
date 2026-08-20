@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Storage } from "@google-cloud/storage";
@@ -10,8 +11,18 @@ import {
 } from "../../lib/theme/ios/packageValidation.js";
 import { INPUT_ARCHIVE_FILE_NAME, readInputArchive } from "../../lib/theme/export/inputArchive.js";
 import { createStoredZipBytes } from "../../lib/theme/project/zip.js";
+import {
+  assertCatalogManifestSource,
+  createCatalogReader,
+  isCatalogManifestItem,
+  type CatalogManifestItem,
+} from "../../lib/theme/export/catalogSource.js";
+import { transformCatalogImage } from "../shared/catalogImageTransform.js";
 
-type BundleManifestItem = { path: string; field: string } | { path: string; serverAsset: string };
+type BundleManifestItem =
+  | { path: string; field: string }
+  | { path: string; serverAsset: string }
+  | CatalogManifestItem;
 type LocalBundle = {
   export_job_id?: string;
   user_id?: string;
@@ -132,6 +143,10 @@ async function readInputEntries(bundle: LocalBundle, source: BuildSource, assets
   const manifest = bundle.manifest ?? [];
   const paths = new Set<string>();
   const bytesBySource = new Map<string, Uint8Array>();
+  const readCatalogObject = await createCatalogReader({
+    download: ({ objectKey, generation }) => downloadCatalogObject(objectKey, generation),
+    sha256Hex: (bytes) => createHash("sha256").update(bytes).digest("hex"),
+  });
   const archiveByField =
     source.mode === "gcs" && bundle.files_archive
       ? readInputArchive(await downloadBytes(resolveGcsInputArchive(source)))
@@ -142,6 +157,23 @@ async function readInputEntries(bundle: LocalBundle, source: BuildSource, assets
     const normalizedPath = normalizeIosPath(item.path);
     if (paths.has(normalizedPath)) throw new Error("duplicate_export_path");
     paths.add(normalizedPath);
+
+    if ("catalogObject" in item) {
+      // Worker가 이미 걸렀지만 여기서 다시 본다. 신뢰 경계는 프로세스마다 다시 긋는다.
+      assertCatalogManifestSource({ platform: "ios", path: normalizedPath, ref: item.catalogObject, transform: item.transform });
+      // catalog reader가 자체 캐시를 갖는다. generation과 SHA-256 대조도 그 안에서 한다.
+      const catalogBytes = await readCatalogObject(item.catalogObject);
+      const bytes = item.transform
+        ? await transformCatalogImage(catalogBytes, {
+            fileName: item.catalogObject.fileName!,
+            sourceScale: item.catalogObject.sourceScale as 1 | 2 | 3,
+            width: item.catalogObject.width!,
+            height: item.catalogObject.height!,
+          }, item.transform)
+        : catalogBytes;
+      entries.push({ path: normalizedPath, bytes });
+      continue;
+    }
 
     if ("serverAsset" in item) {
       const cacheKey = `asset:${item.serverAsset}`;
@@ -233,10 +265,27 @@ function isManifestItem(value: unknown): value is BundleManifestItem {
   if (typeof value !== "object" || value === null) return false;
   const item = value as Record<string, unknown>;
   if (typeof item.path !== "string") return false;
-  const hasField = typeof item.field !== "undefined";
-  const hasServerAsset = typeof item.serverAsset !== "undefined";
-  if (hasField === hasServerAsset) return false;
-  return hasField ? typeof item.field === "string" : typeof item.serverAsset === "string";
+
+  // source는 정확히 하나여야 한다. 둘 이상이면 어느 것을 쓸지 모호해지고, 없으면 읽을 것이 없다.
+  const sources = [item.field, item.serverAsset, item.catalogObject].filter((source) => typeof source !== "undefined");
+  if (sources.length !== 1) return false;
+
+  if (typeof item.catalogObject !== "undefined") return isCatalogManifestItem(item);
+  if (typeof item.field !== "undefined") return typeof item.field === "string";
+  return typeof item.serverAsset === "string";
+}
+
+/**
+ * catalog 객체를 `generation`을 고정해 읽는다.
+ *
+ * generation을 지정하지 않으면 "지금 그 키에 있는 것"을 받는다. Worker가 manifest를 만든 뒤 객체가
+ * 교체되면 다른 그림이 결과물에 들어갈 수 있다. 버킷은 환경변수로 고정하고 manifest에서 받지 않는다.
+ */
+async function downloadCatalogObject(objectKey: string, generation: string) {
+  const bucket = process.env.GCP_THEME_ASSET_BUCKET?.trim();
+  if (!bucket) throw new Error("GCP_THEME_ASSET_BUCKET is not configured.");
+  const [bytes] = await storage.bucket(bucket).file(objectKey, { generation }).download();
+  return new Uint8Array(bytes);
 }
 
 function resolveInputFilePath(root: string, field: string) {

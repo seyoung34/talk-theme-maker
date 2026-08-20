@@ -146,6 +146,34 @@ describe("원격 에셋 hydration", () => {
     const after = { ...before, remoteUploadRefs: { "slot-a": [{ id: "remote:1", fileName: "a.png", mimeType: "image/png", size: 1, storagePath: "p/a.png" }] } };
     expect(createThemeDraftSignature(after)).not.toBe(createThemeDraftSignature(before));
   });
+
+  /**
+   * catalog ref는 재발행되면 id를 유지한 채 revision만 오른다. id만 비교하면 "그림은 바뀌었는데
+   * 저장되지 않은 변경 없음"이 되어 사용자가 작업을 잃는다.
+   */
+  it("catalog ref의 revision이 바뀌면 변경으로 잡는다", () => {
+    const ref = { id: "remote:1", fileName: "a.png", mimeType: "image/png", size: 1, storagePath: "p/a.png" };
+    const catalog = { kind: "catalog" as const, assetId: "admin:a", variantKey: "canonical" };
+    const before = { ...createEmptyThemeDraft(), remoteUploadRefs: { "slot-a": [{ ...ref, catalog: { ...catalog, revision: 1 } }] } };
+    const after = { ...before, remoteUploadRefs: { "slot-a": [{ ...ref, catalog: { ...catalog, revision: 2 } }] } };
+    expect(createThemeDraftSignature(after)).not.toBe(createThemeDraftSignature(before));
+  });
+
+  it("catalog ref의 variantKey가 바뀌면 변경으로 잡는다", () => {
+    const ref = { id: "remote:1", fileName: "a.png", mimeType: "image/png", size: 1, storagePath: "p/a.png" };
+    const catalog = { kind: "catalog" as const, assetId: "admin:a", revision: 1 };
+    const before = { ...createEmptyThemeDraft(), remoteUploadRefs: { "slot-a": [{ ...ref, catalog: { ...catalog, variantKey: "canonical" } }] } };
+    const after = { ...before, remoteUploadRefs: { "slot-a": [{ ...ref, catalog: { ...catalog, variantKey: "ios" } }] } };
+    expect(createThemeDraftSignature(after)).not.toBe(createThemeDraftSignature(before));
+  });
+
+  // catalog가 없는 기존 ref는 서명이 달라지지 않아야 한다 — 전환 전 저장본과 비교했을 때 오탐이 난다.
+  it("catalog가 없는 ref의 서명은 기존과 같다", () => {
+    const before = createEmptyThemeDraft();
+    const ref = { id: "remote:1", fileName: "a.png", mimeType: "image/png", size: 1, storagePath: "p/a.png" };
+    const after = { ...before, remoteUploadRefs: { "slot-a": [ref] } };
+    expect(createThemeDraftSignature(after)).toBe(createThemeDraftSignature({ ...before, remoteUploadRefs: { "slot-a": [{ ...ref }] } }));
+  });
 });
 
 describe("createEditorSignature", () => {

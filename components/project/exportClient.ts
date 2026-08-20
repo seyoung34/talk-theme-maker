@@ -2,6 +2,9 @@ import { buildAndroidThemeExportFiles } from "@/lib/theme/android/export";
 import { buildIosThemeExportFiles } from "@/lib/theme/ios/export";
 import { toExportFailureReason, type ExportFailureReason } from "@/lib/theme/export/failureReason";
 import type { AndroidExportPayloadOptions, ExportMode, ExportPayloadOptions, IosExportPayloadOptions } from "@/components/project/exportModel";
+import { parseCatalogAssetSelection, type CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
+import type { CatalogTransform } from "@/lib/theme/export/catalogTransform";
+import type { ThemeResourceRole } from "@/lib/theme/types";
 
 export async function createExportFormData(options: ExportPayloadOptions) {
   if (isIosExportMode(options.mode)) {
@@ -139,7 +142,10 @@ export function triggerDownload(blob: Blob, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(href), objectUrlReleaseDelayMs);
 }
 
-type ExportManifestSourceFile = { path: string; blob: Blob } | { path: string; serverAsset: string };
+export type ExportManifestSourceFile =
+  | { path: string; blob: Blob }
+  | { path: string; serverAsset: string }
+  | { path: string; catalogAsset: CatalogAssetSelection; resourceRole?: ThemeResourceRole; transform?: CatalogTransform };
 
 // 스케일 타깃 때문에 같은 이미지가 여러 경로로 나간다(Android 슬롯 89개 중 23개).
 // Android는 동일한 blob의 field를 공유할 수 있지만, iOS manifest는 경로마다 고유한 field가 필요하다.
@@ -153,8 +159,17 @@ export function appendExportFilesToFormData(
   let uploadIndex = 0;
 
   return exportFiles.map((file) => {
+    assertExportManifestSource(file);
     if ("serverAsset" in file) {
       return { path: file.path, serverAsset: file.serverAsset };
+    }
+    if ("catalogAsset" in file) {
+      return {
+        path: file.path,
+        catalogAsset: parseCatalogAssetSelection(file.catalogAsset),
+        ...(file.resourceRole ? { resourceRole: file.resourceRole } : {}),
+        ...(file.transform ? { transform: file.transform } : {}),
+      };
     }
 
     const sharedField = shareBlobFields ? fieldByBlob.get(file.blob) : undefined;
@@ -166,6 +181,15 @@ export function appendExportFilesToFormData(
     formData.append(field, new File([file.blob], file.path.split("/").at(-1) ?? `export-${index}`));
     return { field, path: file.path };
   });
+}
+
+/**
+ * source union은 TypeScript에서 보장하지만 FormData 직전은 외부 경계다. 향후 builder가 새 source를
+ * 추가해도 두 source가 동시에 실리는 payload를 서버로 보내지 않도록 런타임에서 한 번 더 확인한다.
+ */
+export function assertExportManifestSource(file: ExportManifestSourceFile) {
+  const sourceCount = ["blob", "serverAsset", "catalogAsset"].filter((key) => key in file).length;
+  if (sourceCount !== 1) throw new Error("내보내기 에셋 source가 올바르지 않습니다.");
 }
 
 async function createIosExportFormData({
@@ -183,6 +207,7 @@ async function createIosExportFormData({
   bubbleInsets,
   bubbleStretch,
   bubbleFlipX,
+  catalogExportUserId,
 }: IosExportPayloadOptions) {
   const bubbleEditsBySlotId = Object.fromEntries(
     slots.map((slot) => [
@@ -207,6 +232,7 @@ async function createIosExportFormData({
     colors,
     selections,
     bubbleEditsBySlotId,
+    catalogExportUserId,
   });
 
   const formData = new FormData();
@@ -234,6 +260,7 @@ async function createAndroidExportFormData({
   bubbleInsets,
   bubbleStretch,
   bubbleFlipX,
+  catalogExportUserId,
 }: AndroidExportPayloadOptions) {
   const bubbleEditsBySlotId = Object.fromEntries(
     slots.map((slot) => [
@@ -258,6 +285,7 @@ async function createAndroidExportFormData({
     colors,
     selections,
     bubbleEditsBySlotId,
+    catalogExportUserId,
   });
 
   const formData = new FormData();

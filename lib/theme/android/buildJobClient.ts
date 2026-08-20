@@ -1,15 +1,16 @@
-import type { AndroidBundleUploadFile, AndroidExportManifestItem } from "@/lib/theme/android/requestShared";
+import type { AndroidBundleUploadFile } from "@/lib/theme/android/requestShared";
 import {
   BuildEnqueueError,
   enqueueBuild,
 } from "@/lib/theme/export/buildJobClient";
+import type { ExportManifestItem } from "@/lib/theme/export/buildJobClient";
 
 export type AndroidBuildBundle = {
   exportJobId: string;
   userId: string;
   themeId: string;
   options: { mode: string; exportName: string; versionName?: string; applicationId?: string };
-  manifest: AndroidExportManifestItem[];
+  manifest: ExportManifestItem[];
   files: AndroidBundleUploadFile[];
 };
 

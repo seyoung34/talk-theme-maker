@@ -14,6 +14,7 @@ WORKDIR /workspace
 COPY package.json package-lock.json tsconfig.json ./
 COPY lib ./lib
 COPY services/ios-builder ./services/ios-builder
+COPY services/shared ./services/shared
 COPY public/template-assets ./public/template-assets
 
 RUN npm ci

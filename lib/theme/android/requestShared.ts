@@ -1,4 +1,6 @@
 import { maxExportRequestBytes } from "@/lib/theme/exportRequest";
+import { parseCatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
+import { parseCatalogTransform } from "@/lib/theme/export/catalogTransform";
 
 const maxAndroidExportFiles = 300;
 export const maxAndroidExportFileBytes = 20 * 1024 * 1024;
@@ -6,7 +8,8 @@ const safeRootFiles = new Set(["README-export.txt", "theme-export-report.json"])
 
 type UploadManifestItem = { field: string; path: string };
 type ServerAssetManifestItem = { path: string; serverAsset: string };
-export type AndroidExportManifestItem = UploadManifestItem | ServerAssetManifestItem;
+type CatalogAssetManifestItem = { path: string; catalogAsset: unknown; resourceRole?: string; transform?: unknown };
+export type AndroidExportManifestItem = UploadManifestItem | ServerAssetManifestItem | CatalogAssetManifestItem;
 
 export type AndroidBundleUploadFile = { field: string; bytes: Uint8Array };
 
@@ -34,6 +37,16 @@ export async function readAndroidBundleUpload(formData: FormData, manifestRaw: s
       throw new AndroidExportRequestError("duplicate_export_path", "중복된 Android 리소스 경로가 있습니다.");
     }
     paths.add(normalizedPath);
+
+    if ("catalogAsset" in item) {
+      try {
+        parseCatalogAssetSelection(item.catalogAsset);
+        if (item.transform !== undefined) parseCatalogTransform(item.transform);
+      } catch {
+        throw new AndroidExportRequestError("invalid_catalog_asset", "내보내기 에셋 참조가 올바르지 않습니다.");
+      }
+      continue;
+    }
 
     if ("serverAsset" in item) {
       validatePublicTemplateAssetRef(item.serverAsset);
@@ -110,9 +123,11 @@ function isManifestItem(value: unknown): value is AndroidExportManifestItem {
   if (typeof item.path !== "string") return false;
   const hasField = typeof item.field !== "undefined";
   const hasServerAsset = typeof item.serverAsset !== "undefined";
-  if (hasField === hasServerAsset) return false;
+  const hasCatalogAsset = typeof item.catalogAsset !== "undefined";
+  if ([hasField, hasServerAsset, hasCatalogAsset].filter(Boolean).length !== 1) return false;
   if (hasField) return typeof item.field === "string";
-  return typeof item.serverAsset === "string";
+  if (hasServerAsset) return typeof item.serverAsset === "string";
+  return typeof item.resourceRole === "undefined" || typeof item.resourceRole === "string";
 }
 
 export function normalizeAndValidatePath(value: string) {

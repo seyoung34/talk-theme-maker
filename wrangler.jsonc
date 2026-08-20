@@ -13,10 +13,28 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "vars": {
+    // 관리자 저장의 catalog write-shadow는 기존 운영 동작을 유지한다.
+    "ASSET_CATALOG_WRITE_ENABLED": "1",
+    // Phase 5 변환 canary. 범위 밖 logical asset은 기존 File/legacy 경로를 유지한다.
+    "ASSET_CATALOG_EXPORT_ENABLED_ANDROID": "1",
+    "ASSET_CATALOG_EXPORT_ENABLED_IOS": "1",
+    "ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST": "admin:de7633d1-e8fe-43e3-9e11-2ac929015d73",
+    "ASSET_CATALOG_EXPORT_IOS_ASSET_ALLOWLIST": "admin:de7633d1-e8fe-43e3-9e11-2ac929015d73"
+  },
   "services": [
     {
       "binding": "WORKER_SELF_REFERENCE",
       "service": "talk-theme-maker"
+    }
+  ],
+  // 공개 preview 파생물 전용. 원본은 GCS catalog에 남고 이 버킷에는 들어오지 않는다.
+  // 바인딩으로만 쓰므로 장기 R2 액세스 키를 만들지 않는다. `next dev`에는 바인딩이 없어
+  // 호출부가 기존 Supabase `theme-public` 경로로 fallback한다.
+  "r2_buckets": [
+    {
+      "binding": "THEME_PREVIEW_BUCKET",
+      "bucket_name": "talktheme-preview"
     }
   ],
   "observability": {

@@ -3,14 +3,14 @@ import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, th
 import { createAdminThemeAssetSignedUrls } from "@/lib/theme/systemTemplates/adminSignedUrls";
 import { themeAssetCacheControl } from "@/lib/theme/themeAssetSigning";
 import { collectRemoteUploadPaths } from "@/lib/theme/systemTemplates/uploadRefPaths";
-import { getResolvedColor, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
-import type { SlotCandidateSelections, SlotUploads } from "@/lib/theme/project/state";
+import { getResolvedColor, getSelectedSharedSlotEntry, requireUploadFile } from "@/lib/theme/project/state";
+import type { SlotCandidateSelections, SlotUploadEntry, SlotUploads } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
 import { createSystemTemplatePreviewVisual, previewRoles, tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
 import { findUnsignedPreviewAssets, generatePreviewScreens } from "@/lib/theme/systemTemplates/screenPreview";
-import type { PreviewScreenId } from "@/lib/theme/systemTemplates/previewScreenData";
+import { previewScreenIds, type PreviewScreenId } from "@/lib/theme/systemTemplates/previewScreenData";
 import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 import { assertValidTemplateName } from "@/lib/theme/templateName";
 import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
@@ -356,10 +356,42 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
     if (!entries?.length) continue;
     refs[slotId] = [];
     for (const entry of entries) {
-      const fileName = sanitizeStoragePathPart(entry.file.name);
+      // 추천 catalog 에셋은 이미 GCS registry에 게시돼 있다. 선택 직후 편집기에서 쓰는
+      // fallback File이 함께 수화돼 있어도 같은 바이트를 Supabase Storage에 다시 올리면
+      // catalog 전환의 이점이 사라지므로 선택과 검증 metadata만 보관한다.
+      // signed URL은 만료되므로 저장하지 않고, legacyStoragePath는 미리보기·변환 fallback에서만 쓴다.
+      if (shouldPersistCatalogReference(entry)) {
+        const metadata = entry.catalog;
+        if (!metadata.fileName || !metadata.mimeType || !metadata.size || !metadata.sourceScale || !metadata.width || !metadata.height || !metadata.pngSignatureVerified) {
+          throw new Error("시스템 템플릿 저장: catalog 에셋 메타데이터가 없습니다.");
+        }
+        refs[slotId]?.push({
+          id: entry.id,
+          fileName: metadata.fileName,
+          mimeType: metadata.mimeType,
+          size: metadata.size,
+          catalog: entry.catalog.selection,
+          catalogMetadata: {
+            fileName: metadata.fileName,
+            mimeType: metadata.mimeType,
+            size: metadata.size,
+            sourceScale: metadata.sourceScale,
+            width: metadata.width,
+            height: metadata.height,
+            pngSignatureVerified: true,
+            ...(metadata.legacyStoragePath ? { legacyStoragePath: metadata.legacyStoragePath } : {}),
+          },
+        });
+        continue;
+      }
+
+      // metadata가 빠진 오래된 catalog row나 변환된 항목은 legacy 경로를 통해 기존 방식으로
+      // 저장한다. 둘 다 없으면 조용히 누락시키지 않고 requireUploadFile에서 실패시킨다.
+      const uploadFile = requireUploadFile(entry, "시스템 템플릿 저장");
+      const fileName = sanitizeStoragePathPart(uploadFile.name);
       const storagePath = `system-templates/${variantId}/${sanitizeStoragePathPart(slotId)}/${sanitizeStoragePathPart(entry.id)}-${fileName}`;
-      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, entry.file, {
-        contentType: entry.file.type || "application/octet-stream",
+      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, uploadFile, {
+        contentType: uploadFile.type || "application/octet-stream",
         cacheControl: themeAssetCacheControl,
         upsert: true,
       });
@@ -382,9 +414,9 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
         : undefined;
       refs[slotId]?.push({
         id: entry.id,
-        fileName: entry.file.name,
-        mimeType: entry.file.type || "application/octet-stream",
-        size: entry.file.size,
+        fileName: uploadFile.name,
+        mimeType: uploadFile.type || "application/octet-stream",
+        size: uploadFile.size,
         storagePath,
         ...(imageEdit ? { imageEdit } : {}),
       });
@@ -392,6 +424,13 @@ async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads
   }
 
   return refs;
+}
+
+export function shouldPersistCatalogReference(entry: SlotUploadEntry): entry is SlotUploadEntry & {
+  catalog: NonNullable<SlotUploadEntry["catalog"]>;
+  imageEdit?: undefined;
+} {
+  return Boolean(entry.catalog && !entry.imageEdit);
 }
 
 async function uploadOriginalImageEditFile({
@@ -522,11 +561,43 @@ async function remoteUploadsToSlotUploads(uploadRefs: RemoteSlotUploads, slotIds
   // 이 호출이 다룰 경로를 먼저 한 번에 서명한다. 이 함수를 거치는 모든 호출자
   // (편집기 부트스트랩·저장·내보내기)가 같은 이득을 본다.
   await prewarmRemoteUploadSignedUrls(uploadRefs, slotIds);
+  const legacyPreviewPaths = collectRemoteUploadPaths(uploadRefs, slotIds).filter((path, index, paths) => paths.indexOf(path) === index);
+  let previewUrlByPath: Record<string, string> = {};
+  if (legacyPreviewPaths.length) {
+    try {
+      previewUrlByPath = await getThemeAssetSignedUrls(legacyPreviewPaths);
+    } catch (error) {
+      // catalog export에는 preview URL이 필요 없다. 서명 실패는 편집기에서 이미지가 비어 보이는
+      // 정도로 제한하고, 실제 byte hydration이 필요한 legacy 항목은 아래에서 다시 실패시킨다.
+      console.warn("Catalog preview URL signing failed; export refs remain usable.", error);
+    }
+  }
   for (const [slotId, entries] of Object.entries(uploadRefs)) {
     if (allowed && !allowed.has(slotId)) continue;
     if (!entries?.length) continue;
     uploads[slotId] = await Promise.all(
       entries.map(async (entry) => {
+        if (entry.catalog && entry.catalogMetadata && !entry.imageEdit) {
+          const legacyStoragePath = entry.catalogMetadata.legacyStoragePath;
+          return {
+            id: entry.id,
+            catalog: {
+              selection: entry.catalog,
+              fileName: entry.catalogMetadata.fileName,
+              mimeType: entry.catalogMetadata.mimeType,
+              size: entry.catalogMetadata.size,
+              sourceScale: entry.catalogMetadata.sourceScale,
+              width: entry.catalogMetadata.width,
+              height: entry.catalogMetadata.height,
+              pngSignatureVerified: entry.catalogMetadata.pngSignatureVerified,
+              ...(legacyStoragePath ? { legacyStoragePath } : {}),
+              ...(legacyStoragePath && previewUrlByPath[legacyStoragePath] ? { previewUrl: previewUrlByPath[legacyStoragePath] } : {}),
+            },
+            source: "template" as const,
+          };
+        }
+
+        if (!entry.storagePath) throw new Error(`시스템 템플릿 에셋 경로가 없습니다: ${entry.id}`);
         const originalFile = entry.imageEdit?.originalStoragePath
           ? await storagePathToFile(entry.imageEdit.originalStoragePath, entry.imageEdit.originalName, entry.mimeType).catch(() => undefined)
           : undefined;
@@ -800,10 +871,14 @@ function resolvePreviewStoragePath(slots: ThemeAssetSlot[], role: ThemeResourceR
   if (!slot) return undefined;
   const entries = uploadRefs[slot.id] ?? [];
   const selected = getSelectedSharedSlotEntry(slot, uploadRefs, candidateSelections, slots);
-  return selected?.entry.storagePath ?? entries[0]?.storagePath;
+  return selected?.entry.storagePath
+    ?? selected?.entry.catalogMetadata?.legacyStoragePath
+    ?? entries[0]?.storagePath
+    ?? entries[0]?.catalogMetadata?.legacyStoragePath;
 }
 
-function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | undefined): SystemTemplatePreviewMetadata {
+export function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | undefined): SystemTemplatePreviewMetadata {
+  const r2 = normalizeR2PreviewMetadata(value?.r2);
   return {
     cardPreviewPath: value?.cardPreviewPath,
     screenPreviews: value?.screenPreviews,
@@ -811,7 +886,36 @@ function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | 
     colors: value?.colors ?? {},
     refs: value?.refs ?? {},
     bubbles: value?.bubbles ?? {},
+    ...(r2 ? { r2 } : {}),
   };
+}
+
+function normalizeR2PreviewMetadata(value: unknown): SystemTemplatePreviewMetadata["r2"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const card = normalizeR2PreviewRef(value.card);
+  const screens: Partial<Record<PreviewScreenId, { objectKey: string; sha256: string }>> = {};
+  if (isRecord(value.screens)) {
+    for (const screenId of previewScreenIds) {
+      const ref = normalizeR2PreviewRef(value.screens[screenId]);
+      if (ref) screens[screenId] = ref;
+    }
+  }
+  if (!card && Object.keys(screens).length === 0) return undefined;
+  return {
+    ...(card ? { card } : {}),
+    ...(Object.keys(screens).length ? { screens } : {}),
+  };
+}
+
+function normalizeR2PreviewRef(value: unknown) {
+  if (!isRecord(value)) return undefined;
+  const objectKey = typeof value.objectKey === "string" && value.objectKey.trim() ? value.objectKey : undefined;
+  const sha256 = typeof value.sha256 === "string" && /^[0-9a-f]{64}$/.test(value.sha256) ? value.sha256 : undefined;
+  return objectKey && sha256 ? { objectKey, sha256 } : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function dateToMs(value?: string | null) {

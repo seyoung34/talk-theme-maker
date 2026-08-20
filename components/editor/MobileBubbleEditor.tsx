@@ -101,7 +101,9 @@ export function MobileBubbleEditor({
       }
       setLoading(true);
       try {
-        const response = await fetch(sourceUrl, { cache: "force-cache" });
+        // 추천 타일은 CSS background-image(no-cors)로 먼저 캐시될 수 있다. 그 응답을
+        // force-cache로 재사용하면 CORS 헤더가 없는 캐시 항목이 되어 편집용 fetch가 실패한다.
+        const response = await fetch(sourceUrl, { cache: "no-store", mode: "cors" });
         if (!response.ok) throw new Error("이미지를 불러오지 못했습니다.");
         const blob = await response.blob();
         if (!cancelled) setPreparedFile(new File([blob], slot.fileName ?? `${slot.id}.png`, { type: blob.type || "image/png" }));

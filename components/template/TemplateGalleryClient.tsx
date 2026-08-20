@@ -13,7 +13,7 @@ import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelecte
 import { resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { chatListPreviewRows, chatroomPreviewMessages, friendBirthdayRows, previewScreens, type PreviewScreenId, type PreviewTabKey } from "@/lib/theme/systemTemplates/previewScreenData";
-import { getPublicThemeAssetUrl } from "@/lib/theme/remoteAssets";
+import { previewUrlOf } from "@/lib/theme/assetCatalog/previewUrl";
 import { systemTemplateRepository, type SystemTemplateSummary } from "@/lib/theme/systemTemplates";
 import { isDefaultSystemTemplate } from "@/lib/theme/systemTemplates/types";
 import { getThemeSlots, templateStartStorageKey, themeTemplates, type ThemeAssetSlot, type ThemeTemplate } from "@/lib/theme/templates";
@@ -729,6 +729,12 @@ function createUserTemplatePreviewUrls(record: UserTemplateRecord) {
   const urls: Record<string, string> = {};
   for (const entries of Object.values(record.uploads)) {
     for (const entry of entries ?? []) {
+      // catalog 참조만 있는 항목은 원격 preview URL을 그대로 쓴다. 이 값은 blob URL이 아니라
+      // `revokeObjectURL`이 무시하므로(blob store에 없는 주소는 no-op) 정리 경로를 건드리지 않는다.
+      if (!entry.file) {
+        if (entry.catalog?.previewUrl) urls[entry.id] = entry.catalog.previewUrl;
+        continue;
+      }
       urls[entry.id] = URL.createObjectURL(entry.file);
     }
   }
@@ -897,10 +903,16 @@ function createGalleryTemplatePreviewModel(template: GalleryTemplateItem, onStar
  */
 function resolveScreenImages(summary: SystemTemplateSummary): Partial<Record<PreviewScreenId, string>> | undefined {
   const paths = summary.previewMetadata.screenPreviews;
-  if (!paths) return undefined;
+  const r2Screens = summary.previewMetadata.r2?.screens;
+  if (!paths && !r2Screens) return undefined;
 
+  // 화면별로 따로 떨어진다. 일부만 R2로 옮긴 상태에서도 나머지는 기존 경로로 그려진다.
   const entries = previewScreens
-    .map(({ id }) => [id, getPublicThemeAssetUrl(paths[id], summary.updatedAt)] as const)
+    .map(({ id }) => [id, previewUrlOf({
+      r2ObjectKey: r2Screens?.[id]?.objectKey,
+      legacyStoragePath: paths?.[id],
+      legacyVersion: summary.updatedAt,
+    })] as const)
     .filter((entry): entry is readonly [PreviewScreenId, string] => Boolean(entry[1]));
 
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;

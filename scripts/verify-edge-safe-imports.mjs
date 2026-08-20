@@ -20,6 +20,9 @@ const forbiddenNodeModules = new Set([
   "vm",
   "worker_threads",
 ]);
+const forbiddenEdgePackages = new Set([
+  "@google-cloud/storage",
+]);
 const builtins = new Set(module.builtinModules.map((name) => name.replace(/^node:/, "")));
 
 const entries = [
@@ -59,6 +62,10 @@ function walk(filePath, stack) {
 
   const source = fs.readFileSync(absolutePath, "utf8");
   for (const imported of findRuntimeImports(source)) {
+    if ([...forbiddenEdgePackages].some((packageName) => imported === packageName || imported.startsWith(`${packageName}/`))) {
+      violations.push({ imported, file: absolutePath, stack });
+      continue;
+    }
     const builtinName = getBuiltinName(imported);
     if (builtinName) {
       if (forbiddenNodeModules.has(builtinName)) {

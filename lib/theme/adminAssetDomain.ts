@@ -2,6 +2,7 @@ import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 import { inferLegacyThemeAssetKind, inferThemeAssetKind, type ThemeAssetKind } from "@/lib/theme/assetKind";
+import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 
 /**
  * 관리자 에셋의 종류. 사용자 업로드와 같은 어휘라 정의는 `assetKind.ts`에 있다.
@@ -50,12 +51,26 @@ export type AdminAssetTarget = {
 export type AdminAssetPlatformVariant = {
   readonly id?: string;
   readonly assetId?: string;
+  /** 현재 variant 바이트와 정확히 일치하는 active catalog object id. */
+  readonly assetObjectId?: string;
   readonly platform: ThemePlatform;
   readonly storagePath: string;
   readonly fileName: string;
   readonly mimeType: string;
   readonly analysis?: AdminAssetAnalysis;
   readonly previewUrl?: string;
+};
+
+/** 추천 API가 registry active revision과 함께 내려주는 browser-side export ref metadata. */
+export type AdminAssetCatalogRef = {
+  readonly selection: CatalogAssetSelection;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly size: number;
+  readonly sourceScale: 1 | 2 | 3;
+  readonly width: number;
+  readonly height: number;
+  readonly pngSignatureVerified: boolean;
 };
 
 export type AdminAssetBubbleDecoration = {
@@ -92,6 +107,10 @@ export type AdminAssetCandidate = {
   readonly blob?: Blob;
   readonly file?: File;
   readonly previewUrl?: string;
+  /** 현재 canonical 바이트와 정확히 일치하는 active catalog object id. */
+  readonly assetObjectId?: string;
+  /** active GCS catalog object가 후보 원본과 정확히 일치할 때만 추천 API가 붙인다. */
+  readonly catalog?: AdminAssetCatalogRef;
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly enabled: boolean;
@@ -131,6 +150,8 @@ export type AdminAssetListOptions = {
 
 export type CanonicalAdminAsset = {
   readonly id: string;
+  /** 현재 canonical 바이트와 정확히 일치하는 active catalog object id. */
+  readonly assetObjectId?: string;
   readonly assetKind?: AdminAssetKind;
   readonly analysis?: AdminAssetAnalysis;
   readonly bubbleSpec?: AdminBubbleSpec;
@@ -168,6 +189,8 @@ export type AdminAssetPersistencePayload = {
     readonly file_name: string;
     readonly mime_type: string;
     readonly storage_path: string;
+    /** 새 바이트 저장 뒤 이전 catalog 연결을 먼저 끊는다. publisher 성공 시 새 id를 기록한다. */
+    readonly asset_object_id: string | null;
     readonly enabled: boolean;
     readonly created_by?: string | null;
   };
@@ -228,6 +251,7 @@ export function createAdminAssetPersistencePayload(input: AdminAssetCandidateInp
       file_name: input.fileName,
       mime_type: input.mimeType || "application/octet-stream",
       storage_path: storagePath,
+      asset_object_id: null,
       enabled: input.enabled ?? true,
       created_by: createdBy ?? null,
     },
@@ -278,6 +302,7 @@ export function mapCanonicalAdminAssetRow(row: unknown): CanonicalAdminAsset {
     updatedAt: dateToMs(readOptionalString(record.updated_at)),
     targets,
     variants,
+    assetObjectId: readOptionalString(record.asset_object_id),
     bubbleDesign,
   };
 }
@@ -306,6 +331,7 @@ export function canonicalAdminAssetToCandidate(
     mimeType: asset.mimeType,
     storagePath: asset.storagePath,
     previewUrl,
+    assetObjectId: asset.assetObjectId,
     createdAt: asset.createdAt,
     updatedAt: asset.updatedAt,
     enabled: asset.enabled,
@@ -409,6 +435,7 @@ function parseVariants(value: unknown, assetId: string): readonly AdminAssetPlat
     return {
       id: readOptionalString(record.id),
       assetId: readOptionalString(record.asset_id) ?? assetId,
+      assetObjectId: readOptionalString(record.asset_object_id),
       platform: parseThemePlatform(record.platform),
       storagePath: requireString(record.storage_path),
       fileName: requireString(record.file_name),

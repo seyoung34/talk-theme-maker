@@ -5,6 +5,14 @@ import { inferAdminAssetKind, listRecommendedAssetCandidatePage, type AdminAsset
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { ThemePlatform } from "@/lib/theme/types";
 
+/**
+ * 추천 API 응답 항목.
+ *
+ * `thumbnailUrl`은 R2 축소본이 있을 때만 붙는다. 타일은 이걸 그리고, 원본(`previewUrl`)은
+ * 이미지 편집기를 열 때만 받는다. 없으면 화면이 기존대로 `previewUrl`로 그린다.
+ */
+type RecommendedAdminAsset = AdminAssetCandidate & { readonly thumbnailUrl?: string };
+
 type ProjectNotice = {
   tone: "info" | "success" | "warning" | "error";
   message: string;
@@ -17,7 +25,8 @@ type UseProjectAssetUploadsOptions = {
 };
 
 export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: UseProjectAssetUploadsOptions) {
-  const [adminAssets, setAdminAssets] = useState<AdminAssetCandidate[]>([]);
+    // thumbnailUrl은 추천 API가 R2 축소본이 있을 때만 붙인다. 없으면 화면이 previewUrl로 그린다.
+  const [adminAssets, setAdminAssets] = useState<RecommendedAdminAsset[]>([]);
   const [adminAssetCursor, setAdminAssetCursor] = useState<string>();
   const [isLoadingAdminAssets, setIsLoadingAdminAssets] = useState(false);
   /**

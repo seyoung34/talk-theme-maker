@@ -15,6 +15,7 @@ import { AndroidValidationError, validateAndroidApplicationId, validateAndroidVe
 import { settleFailedExportJob } from "@/lib/theme/export/asyncExportRoute";
 import { elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
+import { CatalogExportResolutionError, resolveCatalogManifestForExport } from "@/lib/theme/assetCatalog/workerResolve";
 
 type AndroidExportMode = Extract<ExportMode, "project" | "apk" | "apk-zip">;
 
@@ -55,7 +56,16 @@ export async function handleAsyncAndroidExportRequest(
     const themeIdRaw = formData.get("themeId");
     const themeId = typeof themeIdRaw === "string" && themeIdRaw.trim() ? themeIdRaw.trim().slice(0, 120) : "unknown";
     const { manifest, files, inputBytes } = await readAndroidBundleUpload(formData, manifestRaw);
-    const reservation = await reserveCreditForExport({ userId, platform: "android", mode, inputFileCount: files.length, inputBytes });
+    const resolved = await resolveCatalogManifestForExport({ manifest, uploadedInputBytes: inputBytes, platform: "android", userId });
+    const reservation = await reserveCreditForExport({
+      userId,
+      platform: "android",
+      mode,
+      inputFileCount: files.length,
+      inputBytes,
+      referencedAssetBytes: resolved.referencedAssetBytes,
+      referencedAssetFileCount: resolved.referencedAssetFileCount,
+    });
     exportJobId = reservation.exportJobId;
     await markExportJobBackend({ userId, exportJobId, backend: "cloud_run" });
 
@@ -69,7 +79,7 @@ export async function handleAsyncAndroidExportRequest(
       userId,
       themeId,
       options: { mode, exportName, versionName, applicationId: identity.applicationId },
-      manifest,
+      manifest: resolved.manifest,
       files,
     });
 
@@ -79,6 +89,10 @@ export async function handleAsyncAndroidExportRequest(
       mode,
       inputFileCount: files.length,
       inputBytes,
+      referencedAssetBytes: resolved.referencedAssetBytes,
+      referencedAssetFileCount: resolved.referencedAssetFileCount,
+      uniqueReferencedAssetBytes: resolved.uniqueReferencedAssetBytes,
+      logicalInputBytes: inputBytes + resolved.referencedAssetBytes,
       durationMs: elapsedMs(startedAt),
     });
     return NextResponse.json(
@@ -120,6 +134,7 @@ async function readFormData(request: Request) {
 function classifyFailure(error: unknown) {
   if (error instanceof AndroidExportRequestError) return { code: error.code, message: error.message, status: error.status };
   if (error instanceof AndroidValidationError) return { code: error.code, message: error.message, status: error.status };
+  if (error instanceof CatalogExportResolutionError) return { code: error.code, message: error.message, status: error.status };
   if (isInsufficientCreditsError(error)) return { code: "insufficient_credits", message: "크레딧이 부족합니다.", status: 402 };
   if (isExportAlreadyInProgressError(error)) {
     return { code: "export_already_in_progress", message: "이미 진행 중인 내보내기가 있습니다. 완료 후 다시 시도해 주세요.", status: 409 };

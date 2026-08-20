@@ -1,4 +1,9 @@
-export type IosPackageEntry = { path: string; bytes: Uint8Array };
+export type IosPackageEntry = {
+  path: string;
+  bytes: Uint8Array;
+  /** Worker가 catalog registry attestation으로 확인한 이미지에만 허용한다. */
+  pngSignatureVerified?: boolean;
+};
 
 export class IosExportRequestError extends Error {
   readonly code: string;
@@ -42,7 +47,7 @@ export function validateIosPackage(entries: IosPackageEntry[]) {
 
   const imagePaths = new Set(entries.filter((entry) => entry.path.startsWith("Images/")).map((entry) => entry.path.slice("Images/".length)));
   for (const entry of entries) {
-    if (entry.path.startsWith("Images/") && !hasPngSignature(entry.bytes)) {
+    if (entry.path.startsWith("Images/") && !hasPngSignature(entry.bytes) && entry.pngSignatureVerified !== true) {
       throw new IosExportRequestError("invalid_png_file", `실제 PNG 형식이 아닌 이미지가 포함되어 있습니다: ${entry.path}`);
     }
   }

@@ -490,7 +490,8 @@ function ImageControls({
   );
 
   const renderCandidateTile = (candidate: SlotCandidate, expanded: boolean) => {
-    const preview = candidate.previewUrl ?? (candidate.id.startsWith(slot.id) ? uploadPreviewUrls[candidate.id] : undefined);
+    // 타일은 축소본을 우선한다. 원본은 편집기를 열 때만 받는다(`editableSourceUrl`).
+    const preview = candidate.thumbnailUrl ?? candidate.previewUrl ?? (candidate.id.startsWith(slot.id) ? uploadPreviewUrls[candidate.id] : undefined);
     const removable = isRemovableUploadCandidate(candidate) && removableUploadIds.has(candidate.id);
     return (
       <div key={candidate.id} className={`relative min-w-0 ${expanded ? "h-full" : compactCardClassName}`}>

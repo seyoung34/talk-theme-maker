@@ -58,6 +58,14 @@ async function loadTsModule(path, fileName) {
     if (id === "@/lib/theme/themeAssetSigning") {
       return { themeAssetCacheControl: String(60 * 60 * 24 * 30) };
     }
+    /**
+     * catalog 병행 기록(write shadow)은 저장 성공 뒤에 부르는 부수 작업이고 실패를 삼킨다.
+     * 이 검사의 대상은 도메인 규칙이라 no-op으로 둔다 — 실제 동작은 shadowPublishClient의
+     * 호출 계약(throw하지 않음)이 보장한다.
+     */
+    if (id === "@/lib/theme/assetCatalog/shadowPublishClient") {
+      return { shadowPublishThemeAsset: async () => ({ status: "disabled" }) };
+    }
     throw new Error(`Unexpected import: ${id}`);
     },
   };

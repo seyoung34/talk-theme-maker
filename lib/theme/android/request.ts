@@ -32,6 +32,13 @@ export async function readAndroidBuildInputFiles(formData: FormData, manifestRaw
     }
     paths.add(normalizedPath);
 
+    if ("catalogAsset" in item) {
+      throw new AndroidExportRequestError(
+        "catalog_asset_requires_async_export",
+        "catalog 에셋은 비동기 export 경로에서만 사용할 수 있습니다.",
+      );
+    }
+
     if ("serverAsset" in item) {
       const cached = bytesByServerAsset.get(item.serverAsset);
       const bytes = cached ?? (await readPublicTemplateAsset(item.serverAsset));

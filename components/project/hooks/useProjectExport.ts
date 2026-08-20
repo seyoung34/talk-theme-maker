@@ -172,6 +172,7 @@ export function useProjectExport({
         bubbleInsets,
         bubbleStretch,
         bubbleFlipX,
+        catalogExportUserId: accountState?.user?.id,
       });
       setExportProgressStep(platform === "ios" ? 2 : 1);
 

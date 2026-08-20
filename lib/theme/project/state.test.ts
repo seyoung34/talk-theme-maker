@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getBubblePairRole, getImageAssetFallbackRole, getInheritedSourceSlot, getInitialSlotCandidateSelections, getResolvedAssetUrl, getSlotCandidates } from "@/lib/theme/project/state";
+import { getBubblePairRole, getImageAssetFallbackRole, getInheritedSourceSlot, getInitialSlotCandidateSelections, getResolvedAssetUrl, getSlotCandidates, type SlotUploads } from "@/lib/theme/project/state";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getThemeSlots, themeTemplates } from "@/lib/theme/templates";
 
@@ -115,5 +115,33 @@ describe("basic Android bubble asset separation", () => {
     expect(me1?.file).toBe(sharedFile);
     expect(me1?.sourceUrl).toBeUndefined();
     expect(analysis.diagnostics).not.toContainEqual(expect.objectContaining({ code: "missing-asset", slotId: me1Slot.id }));
+  });
+
+  it("catalog-only 업로드는 preview URL을 분석에도 전달하고 missing 진단을 만들지 않는다", () => {
+    const mainSlot = slots.find((slot) => slot.role === "main_background")!;
+    const selections = { ...getInitialSlotCandidateSelections(slots, template.id, template), [mainSlot.id]: "catalog-upload" };
+    const uploads: SlotUploads = {
+      [mainSlot.id]: [{
+        id: "catalog-upload",
+        catalog: {
+          selection: { kind: "catalog", assetId: "admin:asset-a", revision: 1, variantKey: "canonical" },
+          fileName: "main@3x.png",
+          mimeType: "image/png",
+          size: 1024,
+          sourceScale: 3,
+          width: 1125,
+          height: 2436,
+          pngSignatureVerified: true,
+          previewUrl: "https://cdn.example.com/main.webp",
+        },
+      }],
+    };
+
+    const analysis = createThemeProjectAnalysis(template, "android", slots, uploads, {}, selections);
+    const main = analysis.files.find((file) => file.path === mainSlot.path);
+
+    expect(main?.file).toBeUndefined();
+    expect(main?.previewUrl).toBe("https://cdn.example.com/main.webp");
+    expect(analysis.diagnostics).not.toContainEqual(expect.objectContaining({ code: "missing-asset", slotId: mainSlot.id }));
   });
 });

@@ -42,7 +42,8 @@
     "next": "^15.5.20",
     "react": "^19.0.0",
     "react-colorful": "^5.7.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",

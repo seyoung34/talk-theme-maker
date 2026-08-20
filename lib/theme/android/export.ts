@@ -2,11 +2,15 @@ import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { exportNinePatch, flipCanvasHorizontally, loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { bubbleGeometryToAndroidMarkers, flipAndroidMarkersHorizontally, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency } from "@/lib/theme/exportRequest";
-import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { storagePathToFile } from "@/lib/theme/remoteAssets";
+import { isCatalogExportProducerEnabled } from "@/lib/theme/assetCatalog/exportGate";
+import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, requireUploadFile, uploadEntryFileName, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
+import type { CatalogTransform } from "@/lib/theme/export/catalogTransform";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
 import type { ThemeProjectAnalysis } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { Markers } from "@/lib/theme/types";
+import type { Markers, ThemeResourceRole } from "@/lib/theme/types";
 
 type AndroidExportOptions = {
   analysis: ThemeProjectAnalysis;
@@ -18,6 +22,7 @@ type AndroidExportOptions = {
   colors: SlotColors;
   selections: SlotCandidateSelections;
   bubbleEditsBySlotId: Partial<Record<string, BubbleEditState>>;
+  catalogExportUserId?: string;
 };
 
 export type AndroidExportBlobFile = {
@@ -30,12 +35,19 @@ export type AndroidExportServerAssetFile = {
   serverAsset: string;
 };
 
-export type AndroidExportFile = AndroidExportBlobFile | AndroidExportServerAssetFile;
+export type AndroidExportCatalogAssetFile = {
+  path: string;
+  catalogAsset: CatalogAssetSelection;
+  resourceRole: ThemeResourceRole;
+  transform?: CatalogTransform;
+};
 
-type AndroidExportSource = { blob: Blob } | { serverAsset: string };
+export type AndroidExportFile = AndroidExportBlobFile | AndroidExportServerAssetFile | AndroidExportCatalogAssetFile;
+
+type AndroidExportSource = { blob: Blob } | { serverAsset: string } | { catalogAsset: CatalogAssetSelection; transform?: CatalogTransform };
 
 export async function buildAndroidThemeExportFiles(options: AndroidExportOptions): Promise<AndroidExportFile[]> {
-  const { analysis, template, templateId, exportName, slots, uploads, colors, selections, bubbleEditsBySlotId } = options;
+  const { analysis, template, templateId, exportName, slots, uploads, colors, selections, bubbleEditsBySlotId, catalogExportUserId } = options;
   const androidSlots = slots.filter((slot) => slot.platform === "android");
   const files: AndroidExportFile[] = [];
 
@@ -43,14 +55,16 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
   // 45개 남짓한 이미지 슬롯의 지연이 그대로 누적되므로 동시 실행 수만 제한해 병렬 처리한다.
   const imageSlots = androidSlots.filter((slot) => slot.kind !== "color" && Boolean(slot.path));
   const sources = await mapWithConcurrency(imageSlots, exportSlotConcurrency, (slot) =>
-    resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots),
+    resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots, catalogExportUserId),
   );
 
   imageSlots.forEach((slot, index) => {
     const source = sources[index];
     if (!source) return;
     for (const path of getAndroidSlotExportPaths(slot)) {
-      files.push("serverAsset" in source ? { path, serverAsset: source.serverAsset } : { path, blob: source.blob });
+      if ("serverAsset" in source) files.push({ path, serverAsset: source.serverAsset });
+      else if ("catalogAsset" in source) files.push({ path, catalogAsset: source.catalogAsset, resourceRole: slot.role, ...(source.transform ? { transform: source.transform } : {}) });
+      else files.push({ path, blob: source.blob });
     }
   });
 
@@ -120,7 +134,10 @@ export function resolveAndroidNinePatchMarkers(
 export async function exportAndroidThemePackage(options: AndroidExportOptions) {
   const { template } = options;
   const files = await buildAndroidThemeExportFiles(options);
-  const entries = await Promise.all(files.map(async (file) => blobFile(file.path, "serverAsset" in file ? await fetchAssetBlob(file.serverAsset) : file.blob)));
+  const entries = await Promise.all(files.map(async (file) => {
+    if ("catalogAsset" in file) throw new Error("catalogAsset은 비동기 export manifest에서만 처리할 수 있습니다.");
+    return blobFile(file.path, "serverAsset" in file ? await fetchAssetBlob(file.serverAsset) : file.blob);
+  }));
 
   const fileName = `${slugify(template.name)}-android-theme-resources.zip`;
   const blob = createStoredZip(entries);
@@ -135,19 +152,33 @@ async function resolveAndroidSlotSource(
   template: ThemeTemplate,
   bubbleEdit?: BubbleEditState,
   allSlots: ThemeAssetSlot[] = [],
+  catalogExportUserId?: string,
 ): Promise<AndroidExportSource | null> {
   // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯 소스를 그대로 사용한다.
   const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
-  if (inheritedSource) return resolveAndroidSlotSource(inheritedSource, uploads, selections, templateId, template, bubbleEdit, allSlots);
+  if (inheritedSource) return resolveAndroidSlotSource(inheritedSource, uploads, selections, templateId, template, bubbleEdit, allSlots, catalogExportUserId);
 
   const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
   if (slot.kind === "ninepatch") {
+    if (selectedUpload?.catalog && !selectedUpload.imageEdit && isCatalogExportProducerEnabled("android", {
+      userId: catalogExportUserId,
+      assetIds: [selectedUpload.catalog.selection.assetId],
+    })) {
+      return {
+        catalogAsset: selectedUpload.catalog.selection,
+        transform: createAndroidNinePatchCatalogTransform(bubbleEdit),
+      };
+    }
     // source 이름과 target `.9.png` 이름을 분리한다. 일반 PNG 업로드를 target 이름으로
     // 파싱하면 artwork의 바깥 1px을 marker border로 오인해 잘라 버린다.
     const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template, allSlots);
-    const sourceBlob = selectedUpload?.file ?? (await assetUrlToBlob(assetUrl));
+    // 업로드를 골라 뒀는데 바이트가 없으면 기본값으로 떨어뜨리지 않는다 — 사용자가 고른 것과
+    // 다른 말풍선이 조용히 들어간다.
+    const sourceBlob = selectedUpload
+      ? await resolveSelectedUploadFile(selectedUpload, "Android 나인패치 내보내기")
+      : await assetUrlToBlob(assetUrl);
     if (!sourceBlob) return null;
-    const sourceName = selectedUpload?.file.name ?? assetUrl ?? slot.fileName ?? `${slot.id}.9.png`;
+    const sourceName = (selectedUpload ? uploadEntryFileName(selectedUpload) : undefined) ?? assetUrl ?? slot.fileName ?? `${slot.id}.9.png`;
     const asset = await loadNinePatchBlob(sourceBlob, sourceName, slot.role.includes("_me_") ? "me" : "you");
     const markers = resolveAndroidNinePatchMarkers(bubbleEdit, asset.markers, asset.innerCanvas.width, asset.innerCanvas.height);
     // 픽셀은 여기서 한 번만 뒤집는다. marker는 이미 뒤집힌 좌표로 계산돼 있다.
@@ -156,7 +187,17 @@ async function resolveAndroidSlotSource(
     return { blob: await canvasToBlob(exportNinePatch(nextAsset), "image/png") };
   }
 
-  if (selectedUpload) return { blob: selectedUpload.file };
+  if (selectedUpload?.catalog && !selectedUpload.imageEdit) {
+    if (isCatalogExportProducerEnabled("android", {
+      userId: catalogExportUserId,
+      assetIds: [selectedUpload.catalog.selection.assetId],
+    })) return { catalogAsset: selectedUpload.catalog.selection };
+    if (selectedUpload.file) return { blob: selectedUpload.file };
+    if (selectedUpload.catalog.legacyStoragePath) {
+      return { blob: await storagePathToFile(selectedUpload.catalog.legacyStoragePath, selectedUpload.catalog.fileName, selectedUpload.catalog.mimeType) };
+    }
+  }
+  if (selectedUpload) return { blob: requireUploadFile(selectedUpload, "Android 내보내기") };
   const assetUrl = getResolvedAssetUrl(slot, uploads, selections, templateId, template, allSlots);
   if (assetUrl) {
     if (canUseServerAssetReference(slot, assetUrl)) return { serverAsset: assetUrl };
@@ -167,7 +208,21 @@ async function resolveAndroidSlotSource(
   const fallbackRole = getImageAssetFallbackRole(slot.role);
   const fallbackSlot = fallbackRole ? allSlots.find((candidate) => candidate.role === fallbackRole) : undefined;
   if (!fallbackSlot) return null;
-  return resolveAndroidSlotSource(fallbackSlot, uploads, selections, templateId, template, bubbleEdit, allSlots);
+  return resolveAndroidSlotSource(fallbackSlot, uploads, selections, templateId, template, bubbleEdit, allSlots, catalogExportUserId);
+}
+
+function createAndroidNinePatchCatalogTransform(bubbleEdit: BubbleEditState | undefined): CatalogTransform {
+  const ninePatch = bubbleEdit?.geometry
+    ? { geometry: bubbleEdit.geometry }
+    : bubbleEdit?.markers
+      ? { markers: bubbleEdit.markers }
+      : undefined;
+  return {
+    kind: "android-nine-patch",
+    outputFormat: "png",
+    ...(bubbleEdit?.flipX ? { flipX: true } : {}),
+    ...(ninePatch ? { ninePatch } : {}),
+  };
 }
 
 /**
@@ -195,6 +250,15 @@ async function normalizeAndroidImageBlob(slot: ThemeAssetSlot, blob: Blob, sourc
   const height = image.naturalHeight || image.height;
   if (!width || !height) throw new Error(`이미지 크기를 확인하지 못했습니다: ${sourceName}`);
   return drawImageToPng(image, width, height);
+}
+
+async function resolveSelectedUploadFile(entry: NonNullable<ReturnType<typeof getSelectedUpload>>, context: string) {
+  if (entry.file) return entry.file;
+  if (entry.imageEdit) return requireUploadFile(entry, context);
+  if (entry.catalog?.legacyStoragePath) {
+    return storagePathToFile(entry.catalog.legacyStoragePath, entry.catalog.fileName, entry.catalog.mimeType);
+  }
+  return requireUploadFile(entry, context);
 }
 
 async function loadBlobImage(blob: Blob, sourceName: string) {

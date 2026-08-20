@@ -1,5 +1,6 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { createInputArchive, INPUT_ARCHIVE_FILE_NAME } from "@/lib/theme/export/inputArchive";
+import type { ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
 
 // Cloudflare Worker → GCP를 Workload Identity Federation(OIDC)으로 인증하고,
 // 입력 번들을 GCS에 올린 뒤 Cloud Run Job 실행을 트리거한다. SA JSON 키는 사용하지 않는다.
@@ -15,7 +16,8 @@ type OidcPrivateJwk = JsonWebKey & { kid?: string; d?: string; n?: string; e?: s
 
 export type ExportManifestItem =
   | { path: string; field: string }
-  | { path: string; serverAsset: string };
+  | { path: string; serverAsset: string }
+  | ResolvedCatalogManifestItem;
 
 export type BuildInputFile = {
   field: string;
@@ -68,21 +70,39 @@ export function getBuilderJobNameEnv(platform: BuilderPlatform) {
   return platform === "ios" ? "GCP_IOS_BUILD_JOB_NAME" : "GCP_BUILD_JOB_NAME";
 }
 
-export function readBuilderConfig(options: { platform?: BuilderPlatform; jobNameEnv?: string } = {}): BuilderConfig {
-  const projectId = requireEnv("GCP_PROJECT_ID");
+/**
+ * Cloudflare Worker가 GCP 신원을 얻는 데 필요한 값만 모은 것.
+ *
+ * 빌드와 무관한 경로(예: catalog publish)도 같은 OIDC → STS → impersonation 체인을 쓴다.
+ * 체인을 복제하면 issuer·subject·audience 규칙이 갈라지므로 여기 하나로 둔다.
+ */
+export type GcpOidcConfig = {
+  wifAudience: string;
+  oidcIssuer: string;
+  oidcSubject: string;
+  oidcPrivateJwk: OidcPrivateJwk;
+};
+
+export function readGcpOidcConfig(): GcpOidcConfig {
   const projectNumber = requireEnv("GCP_PROJECT_NUMBER");
-  const jobNameEnv = options.jobNameEnv ?? (options.platform ? getBuilderJobNameEnv(options.platform) : "GCP_BUILD_JOB_NAME");
   const poolId = optionalEnv("GCP_WIF_POOL_ID") ?? "vercel-pool";
   const providerId = optionalEnv("GCP_WIF_PROVIDER_ID") ?? "cloudflare-provider";
-  const wifAudience =
-    optionalEnv("GCP_WIF_AUDIENCE") ??
-    `//iam.googleapis.com/projects/${projectNumber}/locations/global/workloadIdentityPools/${poolId}/providers/${providerId}`;
   return {
-    projectId,
-    wifAudience,
+    wifAudience:
+      optionalEnv("GCP_WIF_AUDIENCE") ??
+      `//iam.googleapis.com/projects/${projectNumber}/locations/global/workloadIdentityPools/${poolId}/providers/${providerId}`,
     oidcIssuer: requireEnv("CLOUDFLARE_OIDC_ISSUER"),
     oidcSubject: optionalEnv("CLOUDFLARE_OIDC_SUBJECT") ?? defaultCloudflareSubject,
     oidcPrivateJwk: readPrivateJwk(),
+  };
+}
+
+export function readBuilderConfig(options: { platform?: BuilderPlatform; jobNameEnv?: string } = {}): BuilderConfig {
+  const projectId = requireEnv("GCP_PROJECT_ID");
+  const jobNameEnv = options.jobNameEnv ?? (options.platform ? getBuilderJobNameEnv(options.platform) : "GCP_BUILD_JOB_NAME");
+  return {
+    projectId,
+    ...readGcpOidcConfig(),
     builderServiceAccount: requireEnv("GCP_BUILDER_SA_EMAIL"),
     inputBucket: requireEnv("GCP_BUILD_INPUT_BUCKET"),
     outputBucket: requireEnv("GCP_BUILD_OUTPUT_BUCKET"),
@@ -135,12 +155,22 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: { platfor
 
 // 자체 OIDC JWT → STS 토큰 교환 → 대상 SA impersonation 순으로 단명 액세스 토큰을 얻는다.
 export async function getBuilderAccessToken(config: BuilderConfig) {
-  const oidcToken = await signCloudflareOidcToken(config);
-  const federatedToken = await exchangeStsToken(config.wifAudience, oidcToken);
-  return impersonateServiceAccount(config.builderServiceAccount, federatedToken);
+  return getImpersonatedAccessToken(config.builderServiceAccount, config);
 }
 
-async function signCloudflareOidcToken(config: BuilderConfig) {
+/**
+ * 임의의 대상 SA로 impersonation한다.
+ *
+ * 대상 SA마다 WIF 주체(`principal://…/subject/cloudflare-worker-prod`)에
+ * `roles/iam.workloadIdentityUser`가 걸려 있어야 한다. 그 역할이 `getAccessToken`을 포함한다.
+ */
+export async function getImpersonatedAccessToken(serviceAccount: string, config: GcpOidcConfig) {
+  const oidcToken = await signCloudflareOidcToken(config);
+  const federatedToken = await exchangeStsToken(config.wifAudience, oidcToken);
+  return impersonateServiceAccount(serviceAccount, federatedToken);
+}
+
+async function signCloudflareOidcToken(config: GcpOidcConfig) {
   const now = Math.floor(Date.now() / 1000);
   const privateJwk = config.oidcPrivateJwk;
   const kid = readKeyId(privateJwk);

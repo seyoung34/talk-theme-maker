@@ -3,9 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createTtlCache } from "@/lib/shared/ttlCache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAssetPlatformVariant, type AdminAssetCandidate, type AdminAssetKind, type AdminAssetTarget } from "@/lib/theme/adminAssets";
+import { adminLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
+import { buildPickerThumbnailIndex, selectPickerThumbnailUrl, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
+import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
+import { findMatchingCatalogRef } from "@/lib/theme/assetCatalog/recommendedCatalog";
+import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
 
 const bucketName = "theme-assets";
-const allowedPlatforms = new Set(["android", "ios"]);
 const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"]);
 const maxSourceRows = 200;
 const recommendedPageCacheTtlSeconds = 30;
@@ -13,6 +17,16 @@ const recommendedPageCacheTtlSeconds = 30;
 type RecommendedResponseItem = AdminAssetCandidate & {
   readonly target: AdminAssetTarget;
   readonly matchRank: 0 | 1 | 2;
+  /**
+   * 피커 타일 전용 축소본(R2).
+   *
+   * `previewUrl`을 대체하지 않는다 — 그 필드는 이미지 편집기의 원본 소스이기도 해서, 축소본을
+   * 넣으면 추천 에셋을 골라 편집할 때 축소본을 편집하게 된다. 목록은 이 값만 내려받고 원본은
+   * 편집기를 열 때 그 한 장만 받는다.
+   *
+   * R2 origin이 없거나 아직 굽지 않은 에셋에는 없다. 그때 화면은 기존 `previewUrl`로 그린다.
+   */
+  readonly thumbnailUrl?: string;
 };
 
 type RankedAsset = {
@@ -54,7 +68,10 @@ export async function GET(request: NextRequest) {
     // enabled 에셋만 담으므로 짧게 재사용해 슬롯 클릭마다 200행 조인을 다시 읽지 않게 한다.
     const cacheKey = [platform, assetKind, slotRole ?? "", limit, cursor ? cursorParam : ""].join("|");
     const cached = recommendedPageCache.get(cacheKey);
-    if (cached) return jsonRecommendedPage(cached);
+    // catalog ref가 들어간 응답은 현재 Supabase 바이트와 registry link가 맞는지 매번 다시
+    // 확인해야 한다. 저장 직후 30초 TTL payload가 예전 object id를 재사용하면 같은 Storage
+    // 경로의 새 이미지에 stale GCS object를 붙일 수 있으므로 catalog 응답은 캐시하지 않는다.
+    if (cached && !cached.items.some((item) => Boolean(item.catalog))) return jsonRecommendedPage(cached);
 
     const admin = createAdminClient();
     const { data, error } = await admin
@@ -73,12 +90,13 @@ export async function GET(request: NextRequest) {
           "file_name",
           "mime_type",
           "storage_path",
+          "asset_object_id",
           "enabled",
           "created_at",
           "updated_at",
            "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
            "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch,geometry)",
-           "admin_asset_variants(id,asset_id,platform,storage_path,file_name,mime_type,analysis)",
+           "admin_asset_variants(id,asset_id,platform,storage_path,asset_object_id,file_name,mime_type,analysis)",
         ].join(","),
       )
       .eq("enabled", true)
@@ -98,23 +116,60 @@ export async function GET(request: NextRequest) {
     const hasMore = cursorFiltered.length > limit;
     const signedUrls = await createSignedUrlMap(admin, page.map((item) => item.asset.variants.find((variant) => variant.platform === platform)?.storagePath ?? item.asset.storagePath));
     const signedUrlRecord = Object.fromEntries(signedUrls);
+    const catalogRecords = await readActiveAdminCatalogRecords(admin, page.map((item) => item.asset.id));
+    const thumbnailIndex = await readPickerThumbnailIndex(admin, page.map((item) => item.asset.id));
 
-    const items: readonly RecommendedResponseItem[] = page.map((item) => ({
-      ...withAdminAssetPlatformVariant(
-        canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord),
+    const items: readonly RecommendedResponseItem[] = page.map((item) => {
+      const candidate = canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord);
+      const withVariant = withAdminAssetPlatformVariant(candidate, platform);
+      /**
+       * 플랫폼 원본으로 바뀌었는지 본다.
+       *
+       * 바뀌었다면 canonical 썸네일은 **다른 그림**이다. 그대로 보여 주면 화면과 선택 결과가
+       * 어긋나므로, 대응하는 variant 썸네일이 없을 때는 `thumbnailUrl`을 주지 않고 같은 플랫폼의
+       * `previewUrl`로 떨어뜨린다.
+       */
+      const usesPlatformVariant = withVariant.storagePath !== candidate.storagePath;
+      const catalog = findMatchingCatalogRef(catalogRecords, withVariant, platform, usesPlatformVariant);
+      const thumbnailUrl = selectPickerThumbnailUrl({
+        index: thumbnailIndex,
+        adminAssetId: item.asset.id,
         platform,
-      ),
-      target: item.target,
-      matchRank: item.matchRank,
-    }));
+        usesPlatformVariant,
+      });
+      return {
+        ...withVariant,
+        ...(catalog ? { catalog } : {}),
+        target: item.target,
+        matchRank: item.matchRank,
+        ...(thumbnailUrl ? { thumbnailUrl } : {}),
+      };
+    });
     const last = page.at(-1);
     const payload: RecommendedPagePayload = { items, nextCursor: hasMore && last ? encodeCursor(last) : undefined };
 
-    recommendedPageCache.set(cacheKey, payload);
+    if (!items.some((item) => Boolean(item.catalog))) recommendedPageCache.set(cacheKey, payload);
     return jsonRecommendedPage(payload);
   } catch (error) {
     console.error("Recommended asset listing failed", JSON.stringify(serializeError(error)));
     return NextResponse.json({ error: "Failed to load recommended assets." }, { status: 500 });
+  }
+}
+
+async function readActiveAdminCatalogRecords(admin: ReturnType<typeof createAdminClient>, adminAssetIds: readonly string[]) {
+  if (!adminAssetIds.length) return [];
+  try {
+    const variantKeys = ["canonical", "android", "ios"];
+    return await createRegistryStore(admin).findActiveByKeys(
+      Array.from(new Set(adminAssetIds)).flatMap((id) =>
+        variantKeys.map((variantKey) => ({ logicalAssetId: adminLogicalAssetId(id), variantKey })),
+      ),
+    );
+  } catch (error) {
+    // registry는 export 최적화 metadata다. 조회가 잠시 실패해도 추천 목록을 막지 않고 기존
+    // signed URL/field 경로로 돌아간다. 실패는 thumbnail 조회와 같은 운영 로그에서 확인한다.
+    console.warn("Recommended catalog lookup failed; falling back to field uploads.", JSON.stringify(serializeError(error)));
+    return [];
   }
 }
 
@@ -152,6 +207,31 @@ function isCompatibleExactRole(assetKind: AdminAssetKind, targetRole: string, re
 
 function isSharedBackgroundRole(role: string): boolean {
   return role === "main_background" || role === "chat_background" || role === "tab_background_image";
+}
+
+/**
+ * 이 페이지에 실린 추천 에셋의 피커 썸네일 URL.
+ *
+ * registry 조회가 실패해도 목록 자체는 실패시키지 않는다. 썸네일이 없으면 화면이 기존
+ * `previewUrl`로 그리므로, 전환 중 registry 문제로 피커가 통째로 안 뜨는 일이 없어야 한다.
+ */
+async function readPickerThumbnailIndex(
+  admin: ReturnType<typeof createAdminClient>,
+  adminAssetIds: readonly string[],
+): Promise<PickerThumbnailIndex> {
+  if (!adminAssetIds.length || !getR2PreviewOrigin()) return {};
+  try {
+    const { data, error } = await admin
+      .from("theme_asset_objects")
+      .select("logical_asset_id,variant_key,r2_previews")
+      .eq("status", "active")
+      .in("logical_asset_id", adminAssetIds.map(adminLogicalAssetId));
+    if (error) throw error;
+    return buildPickerThumbnailIndex(data ?? []);
+  } catch (error) {
+    console.warn("Picker thumbnail lookup failed; falling back to original preview URLs.", JSON.stringify(serializeError(error)));
+    return {};
+  }
 }
 
 async function createSignedUrlMap(admin: ReturnType<typeof createAdminClient>, paths: readonly string[]): Promise<ReadonlyMap<string, string>> {

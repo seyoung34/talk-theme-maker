@@ -5,6 +5,7 @@ import {
   getIosCssValues,
   getIosImageDrawPlan,
   getIosSlotExportTargets,
+  resolveIosCatalogOutputScale,
 } from "@/lib/theme/ios/export";
 import { flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { iosThemeSlots } from "@/lib/theme/templates";
@@ -220,6 +221,11 @@ describe("서버 에셋 우회 판정", () => {
   it("서버 에셋이 없으면 배율이 같아도 blob 경로로 간다", () => {
     expect(canReuseIosServerAsset(3, 3, false)).toBe(false);
     expect(canReuseIosServerAsset(undefined, 3, false)).toBe(false);
+  });
+
+  it("scale target이 없는 catalog 슬롯은 source scale을 그대로 사용한다", () => {
+    expect(resolveIosCatalogOutputScale(undefined, 3)).toBe(3);
+    expect(resolveIosCatalogOutputScale(2, 3)).toBe(2);
   });
 });
 

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { readJsonResponse } from "@/lib/shared/api/http";
+import { shadowPublishThemeAsset } from "@/lib/theme/assetCatalog/shadowPublishClient";
 import {
   getThemeAssetSignedUrls,
   sanitizeStoragePathPart,
@@ -71,12 +72,13 @@ const adminAssetSelect = [
   "file_name",
   "mime_type",
   "storage_path",
+  "asset_object_id",
   "enabled",
   "created_at",
   "updated_at",
   "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
   "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch,geometry)",
-  "admin_asset_variants(id,asset_id,platform,storage_path,file_name,mime_type,analysis)",
+  "admin_asset_variants(id,asset_id,platform,storage_path,asset_object_id,file_name,mime_type,analysis)",
   "admin_asset_bubble_designs!admin_asset_bubble_designs_asset_id_fkey(asset_id,recipe,geometry_mode,admin_asset_bubble_decorations(layer_id,storage_path,file_name,mime_type))",
 ].join(",");
 
@@ -150,6 +152,18 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
 
     await replaceAdminAssetTargets(id, payload.targets);
     await replaceAdminAssetBubbleSpec(id, payload.bubbleSpec);
+
+    /**
+     * catalog 병행 기록 (계획 §15 rollout 1단계 write shadow).
+     *
+     * 저장이 끝난 **뒤에** 부르고 실패는 삼킨다. 기존 Supabase 저장이 진짜이고 이건 그림자다.
+     * 이게 없으면 앞으로 추가되는 추천 에셋이 registry에 들어가지 않아 피커 썸네일 없이 남는다.
+     */
+    void shadowPublishThemeAsset({
+      kind: "admin",
+      sourceId: id,
+      canonical: new File([input.blob], input.fileName, { type: mimeType }),
+    });
 
     return getAdminAssetCandidate(id);
   } catch (error) {
@@ -321,6 +335,19 @@ export async function saveAdminBubbleBuilderCandidate(input: AdminBubbleBuilderC
     });
     if (error) throw error;
 
+    // 새 variant 바이트가 저장되면 이전 catalog object 연결은 즉시 끊는다. publisher가
+    // 성공하기 전까지 추천 API는 legacy field 경로로만 내려가야 stale object를 보낼 수 없다.
+    const { error: clearCanonicalLinkError } = await supabase
+      .from("admin_assets")
+      .update({ asset_object_id: null })
+      .eq("id", id);
+    if (clearCanonicalLinkError) throw clearCanonicalLinkError;
+    const { error: clearVariantLinkError } = await supabase
+      .from("admin_asset_variants")
+      .update({ asset_object_id: null })
+      .eq("asset_id", id);
+    if (clearVariantLinkError) throw clearVariantLinkError;
+
     const saved = await getAdminAssetCandidate(id);
     const stalePaths = previous
       ? [
@@ -329,6 +356,16 @@ export async function saveAdminBubbleBuilderCandidate(input: AdminBubbleBuilderC
         ].filter((path) => !uploadedPaths.includes(path))
       : [];
     if (stalePaths.length) await supabase.storage.from(themeAssetsBucketName).remove(stalePaths);
+
+    // 플랫폼 variant는 서로 다른 원본이므로 각각 독립된 registry revision으로 게시한다.
+    // 저장 응답을 막지 않는 write shadow이며, 실패하면 추천 API가 field 경로에 남는다.
+    void Promise.all(input.variants.map((variant) => shadowPublishThemeAsset({
+      kind: "admin",
+      sourceId: id,
+      variantKey: variant.platform,
+      canonical: variant.file,
+    })));
+
     return saved;
   } catch (error) {
     if (uploadedPaths.length) await supabase.storage.from(themeAssetsBucketName).remove(uploadedPaths);
@@ -342,6 +379,7 @@ export function withAdminAssetPlatformVariant(asset: AdminAssetCandidate, platfo
   return {
     ...asset,
     analysis: variant.analysis ?? asset.analysis,
+    assetObjectId: variant.assetObjectId,
     fileName: variant.fileName,
     mimeType: variant.mimeType,
     storagePath: variant.storagePath,
