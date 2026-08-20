@@ -59,6 +59,20 @@ export function uploadEntryFileName(entry: SlotUploadEntry): string | undefined 
 }
 
 /**
+ * 이 항목을 화면에 그릴 수 있는가.
+ *
+ * 타일과 미리보기는 `file`(blob) 아니면 `catalog.previewUrl`(R2/서명 URL)에서 그린다. 둘 다
+ * 없으면 참조는 멀쩡해서 **내보내기는 정확히 동작하지만** 화면에는 아무것도 안 나온다.
+ *
+ * 이 상태는 저장·복원을 거치면 실제로 생긴다. `previewUrl`은 만료되므로 저장하지 않는데
+ * (`stripVolatileUploadFields`), 복원된 항목은 id가 있어서 재수화 대상으로 잡히지 않기
+ * 때문이다. 그래서 "그릴 수 있는가"를 별도로 묻는 자리가 필요하다.
+ */
+export function canRenderUploadEntry(entry: SlotUploadEntry): boolean {
+  return Boolean(entry.file || entry.catalog?.previewUrl);
+}
+
+/**
  * 저장소에 넣기 전에 수명이 짧은 값을 떼어 낸다.
  *
  * `previewUrl`은 추천 API가 준 **10분짜리 Supabase 서명 URL**이다(`createSignedUrls(..., 60*10)`).

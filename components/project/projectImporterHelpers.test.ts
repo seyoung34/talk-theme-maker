@@ -89,3 +89,56 @@ describe("getSlotPaletteError", () => {
     }
   });
 });
+
+/**
+ * 저장 시 만료되는 `previewUrl`을 떼어 내므로(`stripVolatileUploadFields`), 복원된 catalog
+ * 항목은 id는 있지만 그릴 소스가 없다. id만 비교하면 그 슬롯은 "이미 있다"로 판정돼 영영
+ * 재수화되지 않고, 병합도 들어온 항목을 버려서 타일이 빈 채로 남는다.
+ *
+ * 내보내기는 참조로 정확히 동작하기 때문에 경고도 뜨지 않는다 — 화면만 조용히 빈다.
+ */
+describe("복원된 catalog 항목 재수화", () => {
+  const catalog = {
+    selection: { kind: "catalog" as const, assetId: "admin:a", revision: 1, variantKey: "canonical" },
+    fileName: "bg.png",
+    mimeType: "image/png",
+    size: 10,
+    sourceScale: 3 as const,
+    width: 9,
+    height: 9,
+    pngSignatureVerified: true,
+  };
+  const refs = { "slot-a": [{ id: "u1", fileName: "bg.png", mimeType: "image/png", size: 10 }] };
+
+  it("그릴 수 없는 항목이 있는 슬롯을 재수화 대상으로 잡는다", () => {
+    expect(getMissingRemoteUploadSlotIds(refs, { "slot-a": [{ id: "u1", catalog }] })).toEqual(["slot-a"]);
+  });
+
+  it("그릴 수 있는 항목만 있으면 재수화하지 않는다", () => {
+    const withPreview = { ...catalog, previewUrl: "https://cdn.example.com/p.webp" };
+    expect(getMissingRemoteUploadSlotIds(refs, { "slot-a": [{ id: "u1", catalog: withPreview }] })).toEqual([]);
+  });
+
+  it("병합이 그릴 소스를 채우되 사용자의 imageEdit은 지킨다", () => {
+    const imageEdit = { originalName: "bg.png", originalSize: 10, editedAt: 1, state: {} as never };
+    const merged = mergeSlotUploads(
+      { "slot-a": [{ id: "u1", catalog, imageEdit }] },
+      { "slot-a": [{ id: "u1", catalog: { ...catalog, previewUrl: "https://cdn.example.com/p.webp" } }] },
+    );
+
+    expect(merged["slot-a"]).toHaveLength(1);
+    expect(merged["slot-a"]?.[0]?.catalog?.previewUrl).toBe("https://cdn.example.com/p.webp");
+    expect(merged["slot-a"]?.[0]?.imageEdit).toBe(imageEdit);
+  });
+
+  it("이미 그릴 수 있는 항목은 들어온 값으로 덮지 않는다", () => {
+    const file = new File([new Uint8Array([1])], "kept.png", { type: "image/png" });
+    const merged = mergeSlotUploads(
+      { "slot-a": [{ id: "u1", file }] },
+      { "slot-a": [{ id: "u1", catalog: { ...catalog, previewUrl: "https://cdn.example.com/p.webp" } }] },
+    );
+
+    expect(merged["slot-a"]?.[0]?.file).toBe(file);
+    expect(merged["slot-a"]?.[0]?.catalog).toBeUndefined();
+  });
+});

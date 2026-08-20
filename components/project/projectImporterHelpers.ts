@@ -1,7 +1,7 @@
 import { getInitialSlotCandidateSelections, type getSelectedCandidate, type SlotUploads } from "@/components/project/projectModel";
 import { normalizeThemeColor, themeColorToCss } from "@/lib/theme/color";
 import type { ImageEditTarget } from "@/lib/theme/imageEdit";
-import { getImageColorFallbackRole } from "@/lib/theme/project/state";
+import { canRenderUploadEntry, getImageColorFallbackRole, type SlotUploadEntry } from "@/lib/theme/project/state";
 import type { RemoteSlotUploads } from "@/lib/theme/systemTemplates";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 
@@ -43,8 +43,11 @@ export function getMissingRemoteUploadSlotIds(uploadRefs: RemoteSlotUploads, upl
   return targetSlotIds.filter((slotId) => {
     const refs = uploadRefs[slotId] ?? [];
     if (!refs.length) return false;
-    const currentIds = new Set((uploads[slotId] ?? []).map((entry) => entry.id));
-    return refs.some((entry) => !currentIds.has(entry.id));
+    // 아직 없는 항목뿐 아니라, **그릴 수 없게 된** 항목도 다시 받아야 한다. 저장 시 만료되는
+    // `previewUrl`을 떼어 내므로 복원된 catalog 항목은 id는 있지만 그릴 소스가 없다. id만
+    // 비교하면 그 슬롯은 영영 재수화되지 않고 타일이 빈 채로 남는다.
+    const renderableIds = new Set((uploads[slotId] ?? []).filter(canRenderUploadEntry).map((entry) => entry.id));
+    return refs.some((entry) => !renderableIds.has(entry.id));
   });
 }
 
@@ -64,10 +67,33 @@ export function mergeSlotUploads(current: SlotUploads, incoming: SlotUploads): S
   for (const [slotId, entries] of Object.entries(incoming)) {
     if (!entries?.length) continue;
     const currentEntries = next[slotId] ?? [];
+    const incomingById = new Map(entries.map((entry) => [entry.id, entry]));
     const currentIds = new Set(currentEntries.map((entry) => entry.id));
-    next[slotId] = [...currentEntries, ...entries.filter((entry) => !currentIds.has(entry.id))];
+    next[slotId] = [
+      ...currentEntries.map((entry) => refreshRenderSource(entry, incomingById.get(entry.id))),
+      ...entries.filter((entry) => !currentIds.has(entry.id)),
+    ];
   }
   return next;
+}
+
+/**
+ * 같은 항목을 다시 받았을 때 **그릴 소스만** 새것으로 바꾼다.
+ *
+ * 예전에는 id가 겹치면 들어온 항목을 통째로 버렸다. 그래서 복원 뒤 `previewUrl`이 없는
+ * 항목은 재수화해도 그대로였다. 반대로 통째로 교체하면 사용자의 `imageEdit`이 날아간다.
+ * 그릴 수 있는 항목은 손대지 않고, 그릴 수 없는 항목에만 소스를 채운다.
+ */
+function refreshRenderSource(entry: SlotUploadEntry, incoming: SlotUploadEntry | undefined): SlotUploadEntry {
+  if (!incoming || canRenderUploadEntry(entry)) return entry;
+  const file = entry.file ?? incoming.file;
+  const previewUrl = entry.catalog?.previewUrl ?? incoming.catalog?.previewUrl;
+  if (!file && !previewUrl) return entry;
+  return {
+    ...entry,
+    ...(file ? { file } : {}),
+    ...(entry.catalog && previewUrl ? { catalog: { ...entry.catalog, previewUrl } } : {}),
+  };
 }
 
 // 아래 세 helper는 데스크톱/모바일 편집 패널이 함께 쓴다. 사본을 두면 한쪽만 고쳐져도
