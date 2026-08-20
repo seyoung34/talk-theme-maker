@@ -376,7 +376,9 @@ function getEditableSourceUrl(file: ThemeProjectFile | undefined, selectedPicker
 }
 
 async function imageUrlToEditableFile(url: string, fallbackName: string) {
-  const response = await fetch(url, { cache: "force-cache" });
+  // 추천 타일은 CSS background-image(no-cors)로 먼저 캐시될 수 있다. 그 응답을
+  // force-cache로 재사용하면 CORS 헤더가 없는 캐시 항목이 되어 편집용 fetch가 실패한다.
+  const response = await fetch(url, { cache: "no-store", mode: "cors" });
   if (!response.ok) throw new Error(`Image source could not be loaded: ${response.status}`);
 
   const blob = await response.blob();
