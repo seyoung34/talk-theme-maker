@@ -64,14 +64,23 @@ function fakeStore() {
      * 실제 구현은 RPC 한 번으로 두 UPDATE를 한 트랜잭션에 넣는다. 여기서도 원자적으로 흉내 내되,
      * `failActivation`을 켜면 트랜잭션이 통째로 실패한 상황을 만든다 — 즉 이전 active가 그대로 남는다.
      */
-    async activate({ activateId, retireId }) {
+    /**
+     * `activate_theme_asset_object` RPC와 같은 규칙을 따른다. 호출자가 넘긴 `retireId`가 아니라
+     * **지금 실제로 active인 행**을 내린다. 호출자는 바이트를 올리기 전에 읽은 active를 넘기므로
+     * 그 사이 다른 게시가 끼어들면 어긋나기 때문이다. 전진 전용 가드도 함께 흉내낸다.
+     */
+    async activate({ activateId }) {
       calls.push("activate");
       if (failActivation) throw new Error("activation transaction failed");
       const next = rows.get(activateId);
+      if (next?.status === "active") return;
       if (next?.status !== "staged") return;
-      if (retireId) {
-        const old = rows.get(retireId);
-        if (old?.status === "active") rows.set(retireId, { ...old, status: "retired" });
+
+      const current = [...rows.values()].find((r) => r.logicalAssetId === next.logicalAssetId
+        && r.variantKey === next.variantKey && r.status === "active");
+      if (current) {
+        if (current.revision > next.revision) throw new Error("catalog_activation_not_forward");
+        rows.set(current.id, { ...current, status: "retired" });
       }
       rows.set(activateId, { ...next, status: "active", activatedAt: "2026-08-19T00:01:00Z" });
     },
@@ -405,5 +414,43 @@ describe("publishThemeAsset", () => {
       { store, uploadCatalogObject: upload, previewBucket: null },
     )).rejects.toThrow(CatalogPublishError);
     expect(upload).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 두 게시가 활성화 전에 같은 active를 읽는 경합.
+ *
+ * 예전 RPC는 **호출자가 지목한** 행을 내렸다. 먼저 커밋한 쪽이 그 행을 이미 retired로 만들어
+ * 두면, 나중 쪽은 0행을 갱신하고 지나간 뒤 partial unique 인덱스에 걸려 실패했다. 기존 active가
+ * 사라지지는 않지만 **최신 게시가 죽는다.** 이제 지목받은 행이 아니라 지금 실제로 active인 행을
+ * 내린다. `supabase/migrations/20260821041500_*.sql`과 같은 규칙이다.
+ */
+describe("동시 활성화", () => {
+  it("먼저 커밋한 게시가 active를 바꿔 놔도 최신 revision이 활성화된다", async () => {
+    const { store, rows } = fakeStore();
+
+    await publishThemeAsset(input({ revision: 1 }), { store, uploadCatalogObject: uploader, previewBucket: null });
+    // rev2·rev3 모두 rev1을 active로 보고 출발한 상황을 만든다.
+    await publishThemeAsset(input({ revision: 2, canonical: { fileName: "main@3x.png", mimeType: "image/png", bytes: pngBytes(101, 200) } }), {
+      store, uploadCatalogObject: uploader, previewBucket: null,
+    });
+    await publishThemeAsset(input({ revision: 3, canonical: { fileName: "main@3x.png", mimeType: "image/png", bytes: pngBytes(102, 201) } }), {
+      store, uploadCatalogObject: uploader, previewBucket: null,
+    });
+
+    const byRevision = Object.fromEntries([...rows.values()].map((row) => [row.revision, row.status]));
+    expect(byRevision).toEqual({ 1: "retired", 2: "retired", 3: "active" });
+  });
+
+  it("오래된 revision은 최신 active를 덮지 못한다", async () => {
+    const { store, rows } = fakeStore();
+    await publishThemeAsset(input({ revision: 5 }), { store, uploadCatalogObject: uploader, previewBucket: null });
+
+    await expect(publishThemeAsset(
+      input({ revision: 4, canonical: { fileName: "main@3x.png", mimeType: "image/png", bytes: pngBytes(103, 202) } }),
+      { store, uploadCatalogObject: uploader, previewBucket: null },
+    )).rejects.toThrow();
+
+    expect([...rows.values()].find((row) => row.revision === 5)?.status).toBe("active");
   });
 });

@@ -36,9 +36,17 @@ const maxPreviewBytes = 2 * 1024 * 1024;
 /** 경합 상대는 보통 하나다. 무한 재시도로 관리자 저장을 붙잡아 두지 않는다. */
 const maxRevisionConflictRetries = 3;
 
-/** Postgres unique_violation. Supabase JS는 `if (error) throw error`로 이 객체를 그대로 올린다. */
-function isUniqueViolation(error: unknown) {
-  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23505";
+/**
+ * Postgres unique_violation. Supabase JS는 `if (error) throw error`로 이 객체를 그대로 올린다.
+ *
+ * `CatalogPublishFailure`가 원인을 `cause`로 감싸 올리므로 한 겹 들어가서 본다. 겉만 보면
+ * 재시도해야 할 경합을 그냥 실패로 흘려보낸다.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  if ((error as { code?: unknown }).code === "23505") return true;
+  const cause = (error as { cause?: unknown }).cause;
+  return cause !== undefined && cause !== error && isUniqueViolation(cause);
 }
 
 export async function POST(request: Request) {

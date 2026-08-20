@@ -148,12 +148,16 @@ export function useEditorBootstrap({
           const recovery = await readRecoveryDraft(mode, resumeToken);
           if (!active) return;
           if (recovery) {
+            // 복구 초안도 저장할 때 만료되는 preview URL을 떼어 낸다. 로그인·크레딧 처리를 거쳐
+            // 내보내기를 재개하는 경로라 여기서 채우지 않으면 타일과 미리보기가 빈 채로 열린다.
+            const recoveredUploads = await hydrateCatalogPreviewUrls(recovery.draft.uploads);
+            if (!active) return;
             setTemplateId(recovery.editor.templateId);
             setPlatform(recovery.editor.platform);
             setActiveSection(recovery.editor.activeSection);
             setActiveGroup(recovery.editor.activeGroup);
             setSelectedSlotId(recovery.editor.selectedSlotId);
-            replaceDraft(normalizeLegacyThemeDraft(recovery.editor.platform, recovery.editor.templateId, recovery.draft));
+            replaceDraft(normalizeLegacyThemeDraft(recovery.editor.platform, recovery.editor.templateId, { ...recovery.draft, uploads: recoveredUploads }));
             setActiveUserTemplate(recovery.editor.activeUserTemplate ?? null);
             setActiveSystemTemplate(recovery.editor.activeSystemTemplate ?? null);
             setSystemTemplateBundleId(recovery.editor.systemTemplateBundleId ?? recovery.editor.activeSystemTemplate?.bundleId ?? null);
