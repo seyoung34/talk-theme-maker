@@ -187,7 +187,9 @@ function normalizeCatalogUploadRef(value: SlotUploadEntry["catalog"]): CatalogUp
     height: value.height,
     pngSignatureVerified: true,
     ...(typeof value.legacyStoragePath === "string" && value.legacyStoragePath ? { legacyStoragePath: value.legacyStoragePath } : {}),
-    ...(typeof value.previewUrl === "string" && value.previewUrl ? { previewUrl: value.previewUrl } : {}),
+    // `previewUrl`은 10분짜리 Supabase 서명 URL이라 저장하지 않는다. 다시 열 때는
+    // `legacyStoragePath`로 새로 서명한다. 읽기 경로에서도 되살리지 않아, 예전에 저장된
+    // 레코드에 남아 있는 만료된 주소가 화면으로 올라오지 않는다.
   };
 }
 

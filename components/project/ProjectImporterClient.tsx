@@ -1082,8 +1082,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
         ...(catalog ? { catalog } : {}),
         source: "admin" as const,
       };
+      // 이미 편집한 항목은 손대지 않는다. `entry.file`이 편집이 구워진 바이트라 신선한 원본으로
+      // 갈아끼우면 사용자의 크롭·반전이 조용히 사라진다. catalog ref를 붙일 이유도 없다 —
+      // export는 `!selectedUpload.imageEdit`일 때만 catalog를 쓰므로 편집본은 어차피 File로 나간다.
       const nextEntries = entries.some((entry) => entry.id === asset.id)
-        ? entries.map((entry) => entry.id === asset.id ? nextEntry : entry)
+        ? entries.map((entry) => (entry.id === asset.id && !entry.imageEdit ? nextEntry : entry))
         : [...entries, nextEntry];
       return { ...current, [slot.id]: nextEntries };
     });

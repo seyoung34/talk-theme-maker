@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getBubblePairRole, getImageAssetFallbackRole, getInheritedSourceSlot, getInitialSlotCandidateSelections, getResolvedAssetUrl, getSlotCandidates, type SlotUploads } from "@/lib/theme/project/state";
+import { getBubblePairRole, getImageAssetFallbackRole, getInheritedSourceSlot, getInitialSlotCandidateSelections, getResolvedAssetUrl, getSlotCandidates, stripVolatileUploadFields, type SlotUploads } from "@/lib/theme/project/state";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getThemeSlots, themeTemplates } from "@/lib/theme/templates";
 
@@ -143,5 +143,87 @@ describe("basic Android bubble asset separation", () => {
     expect(main?.file).toBeUndefined();
     expect(main?.previewUrl).toBe("https://cdn.example.com/main.webp");
     expect(analysis.diagnostics).not.toContainEqual(expect.objectContaining({ code: "missing-asset", slotId: mainSlot.id }));
+  });
+});
+
+describe("stripVolatileUploadFields", () => {
+  const catalog = {
+    selection: { kind: "catalog" as const, assetId: "admin:a", revision: 1, variantKey: "canonical" },
+    fileName: "bg.png",
+    mimeType: "image/png",
+    size: 10,
+    sourceScale: 3 as const,
+    width: 9,
+    height: 9,
+    pngSignatureVerified: true,
+    legacyStoragePath: "admin-assets/a/bg.png",
+  };
+
+  /**
+   * `previewUrl`은 10분짜리 서명 URL이다. IndexedDB에 들어가면 다음 세션에서 만료된 주소를
+   * `<img>`에 넘겨 슬롯이 조용히 빈다.
+   */
+  it("previewUrl을 떼어 내고 나머지는 보존한다", () => {
+    const result = stripVolatileUploadFields({
+      "slot-a": [{ id: "u1", catalog: { ...catalog, previewUrl: "https://signed.example/x?token=abc" } }],
+    });
+    expect(result["slot-a"]?.[0]?.catalog).toEqual(catalog);
+  });
+
+  it("previewUrl이 없으면 같은 객체를 그대로 돌려준다", () => {
+    const uploads = { "slot-a": [{ id: "u1", catalog }] };
+    expect(stripVolatileUploadFields(uploads)).toBe(uploads);
+  });
+
+  it("catalog 없는 항목과 빈 슬롯을 건드리지 않는다", () => {
+    const file = new File([new Uint8Array([1])], "a.png", { type: "image/png" });
+    const uploads = { "slot-a": [{ id: "u1", file }], "slot-b": undefined };
+    expect(stripVolatileUploadFields(uploads)).toBe(uploads);
+  });
+});
+
+/**
+ * catalog 참조만 있는 항목은 File이 없다. 슬롯이 채워졌는지는 참조의 존재로 판정해야 하고,
+ * 화면용 파생물(`previewUrl`)로 판정하면 안 된다 — 서명이 만료되거나 실패하면 정상적으로
+ * 내보내지는 슬롯에 "필수 파일 필요" 경고가 뜬다.
+ */
+describe("createThemeProjectAnalysis catalog 참조 진단", () => {
+  const template = themeTemplates.find((item) => item.id === "basic")!;
+  const slots = getThemeSlots("android");
+  const slot = slots.find((item) => item.id === "android-main-background")!;
+  const catalogEntry = (previewUrl?: string) => ({
+    id: "u1",
+    source: "admin" as const,
+    catalog: {
+      selection: { kind: "catalog" as const, assetId: "admin:a", revision: 1, variantKey: "canonical" },
+      fileName: "bg.png",
+      mimeType: "image/png",
+      size: 10,
+      sourceScale: 3 as const,
+      width: 9,
+      height: 9,
+      pngSignatureVerified: true,
+      ...(previewUrl ? { previewUrl } : {}),
+    },
+  });
+
+  function missingAssetCodes(previewUrl?: string) {
+    const selections = { ...getInitialSlotCandidateSelections(slots, template.id, template), [slot.id]: "u1" };
+    const analysis = createThemeProjectAnalysis(template, "android", slots, { [slot.id]: [catalogEntry(previewUrl)] }, {}, selections);
+    return analysis.diagnostics.filter((item) => item.code === "missing-asset" && item.slotId === slot.id);
+  }
+
+  it("previewUrl이 없어도 필수 파일 경고를 내지 않는다", () => {
+    expect(missingAssetCodes()).toHaveLength(0);
+  });
+
+  it("previewUrl이 있을 때와 없을 때 판정이 같다", () => {
+    expect(missingAssetCodes("https://signed.example/x?token=abc")).toHaveLength(0);
+  });
+
+  it("catalog 참조도 File도 없으면 여전히 경고한다", () => {
+    const selections = { ...getInitialSlotCandidateSelections(slots, template.id, template), [slot.id]: "u1" };
+    const analysis = createThemeProjectAnalysis(template, "android", slots, { [slot.id]: [{ id: "u1", source: "admin" as const }] }, {}, selections);
+    expect(analysis.diagnostics.filter((item) => item.code === "missing-asset" && item.slotId === slot.id)).toHaveLength(1);
   });
 });

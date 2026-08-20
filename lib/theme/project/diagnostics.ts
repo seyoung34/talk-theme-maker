@@ -62,7 +62,10 @@ export function createThemeProjectAnalysis(
       resources.push({ id: slot.id, slotId: slot.id, platform, role: slot.role, screen: slot.screen, filePath: slot.path, exportMapping });
     }
 
-    if (slot.required && !upload && !sourceUrl && !selectedUpload?.catalog?.previewUrl && !(imageDisabled && canDisableImageSlot(slot))) {
+    // catalog 참조가 있으면 export가 registry에서 바이트를 가져오므로 슬롯은 채워진 것이다.
+    // `previewUrl`로 판정하면 안 된다 — 그 값은 만료되거나 서명에 실패하면 사라지는 화면용
+    // 파생물이라, 정상적으로 내보내지는 슬롯에 "파일 필요" 경고가 뜬다.
+    if (slot.required && !upload && !sourceUrl && !selectedUpload?.catalog && !(imageDisabled && canDisableImageSlot(slot))) {
       diagnostics.push({
         level: "warning",
         code: "missing-asset",

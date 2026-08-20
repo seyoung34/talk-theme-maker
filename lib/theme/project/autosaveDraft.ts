@@ -1,4 +1,5 @@
 import { themeDatabaseStores, withThemeDatabaseStore, withThemeDatabaseTransaction } from "@/lib/theme/localDatabase";
+import { stripVolatileUploadFields } from "@/lib/theme/project/state";
 import type {
   EditorActiveSystemTemplate,
   EditorActiveUserTemplate,
@@ -94,6 +95,8 @@ export async function writeAutosaveDraft(
   const now = Date.now();
   const record: EditorAutosaveDraft = {
     ...input,
+    // 만료되는 서명 URL은 저장하지 않는다. 다음 세션에서 죽은 주소를 그리게 된다.
+    draft: { ...input.draft, uploads: stripVolatileUploadFields(input.draft.uploads) },
     id: autosaveDraftId(input.mode),
     version: 1,
     createdAt: now,

@@ -1,4 +1,5 @@
 import { normalizeSystemTemplateVisibility, type RemoteSlotUploads } from "@/lib/theme/systemTemplates";
+import { stripVolatileUploadFields } from "@/lib/theme/project/state";
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
 import type { EditorActiveSystemTemplate, EditorActiveUserTemplate, EditorMode } from "@/lib/theme/project/draft";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/lib/theme/project/state";
@@ -69,6 +70,8 @@ export async function saveRecoveryDraft(input: RecoveryDraftInput) {
   const now = Date.now();
   const record: EditorRecoveryDraft = {
     ...input,
+    // 만료되는 서명 URL은 저장하지 않는다. 복구 draft는 TTL이 7일이라 특히 오래 남는다.
+    draft: { ...input.draft, uploads: stripVolatileUploadFields(input.draft.uploads) },
     id: recoveryId(input.editor.mode),
     version: 1,
     createdAt: now,

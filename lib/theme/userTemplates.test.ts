@@ -50,9 +50,21 @@ describe("saveUserTemplate 업로드 정규화", () => {
 
     const reloaded = await getUserTemplate(saved.id);
     const entry = reloaded?.uploads["slot-a"]?.[0];
-    expect(entry?.catalog).toEqual(catalogRef);
+    expect(entry?.catalog).toEqual({ ...catalogRef, previewUrl: undefined });
     expect(entry?.file).toBeUndefined();
     expect(entry?.source).toBe("admin");
+  });
+
+  /**
+   * `previewUrl`은 10분짜리 Supabase 서명 URL이다. 저장하면 다음 세션에서 만료된 주소를
+   * `<img>`에 넘겨 슬롯이 조용히 빈다. `legacyStoragePath`는 만료되지 않으므로 남긴다.
+   */
+  it("만료되는 previewUrl은 저장하지 않는다", async () => {
+    const saved = await saveUserTemplate(baseRecord({ "slot-a": [{ id: "u1", catalog: catalogRef }] }));
+
+    const entry = (await getUserTemplate(saved.id))?.uploads["slot-a"]?.[0];
+    expect(entry?.catalog?.previewUrl).toBeUndefined();
+    expect(entry?.catalog?.legacyStoragePath).toBe(catalogRef.legacyStoragePath);
   });
 
   it("File과 catalog 참조를 함께 가진 항목은 둘 다 보존한다", async () => {

@@ -67,6 +67,51 @@ export function uploadEntrySize(entry: SlotUploadEntry): number | undefined {
 }
 
 /**
+ * 저장소에 넣기 전에 수명이 짧은 값을 떼어 낸다.
+ *
+ * `previewUrl`은 추천 API가 준 **10분짜리 Supabase 서명 URL**이다(`createSignedUrls(..., 60*10)`).
+ * 이 값을 IndexedDB에 넣으면 다음 세션에서 이미 만료된 주소를 `<img>`에 넘겨 슬롯이 조용히
+ * 빈다. 시스템 템플릿 경로는 같은 이유로 서명 URL을 JSON에 저장하지 않는다 — 사용자 템플릿·
+ * 자동 저장·복구 draft도 같은 규칙을 따른다.
+ *
+ * `legacyStoragePath`는 만료되지 않는 경로 문자열이라 그대로 남긴다. 다시 열 때 필요한 순간에
+ * 이 경로로 서명을 새로 받는다.
+ */
+export function stripVolatileUploadFields(uploads: SlotUploads): SlotUploads {
+  let changed = false;
+  const next: SlotUploads = {};
+
+  for (const [slotId, entries] of Object.entries(uploads)) {
+    if (!entries?.length) {
+      next[slotId] = entries;
+      continue;
+    }
+    next[slotId] = entries.map((entry) => {
+      if (!entry.catalog?.previewUrl) return entry;
+      changed = true;
+      return { ...entry, catalog: durableCatalogRef(entry.catalog) };
+    });
+  }
+
+  return changed ? next : uploads;
+}
+
+/** 만료되는 필드를 뺀 catalog 참조. 필드를 추가하면 여기에도 실어야 저장에서 살아남는다. */
+function durableCatalogRef(catalog: CatalogUploadRef): CatalogUploadRef {
+  return {
+    selection: catalog.selection,
+    fileName: catalog.fileName,
+    mimeType: catalog.mimeType,
+    size: catalog.size,
+    sourceScale: catalog.sourceScale,
+    width: catalog.width,
+    height: catalog.height,
+    pngSignatureVerified: catalog.pngSignatureVerified,
+    ...(catalog.legacyStoragePath ? { legacyStoragePath: catalog.legacyStoragePath } : {}),
+  };
+}
+
+/**
  * 브라우저에서 바이트가 반드시 필요한 경로에서 File을 꺼낸다.
  *
  * catalog 참조만 있는 항목이 여기 도달하면 **던진다.** 조용히 템플릿 기본값으로 떨어지면
