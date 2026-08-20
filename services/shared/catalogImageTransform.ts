@@ -4,7 +4,14 @@ import {
   normalizedSourceDimensions,
   type CatalogTransform,
 } from "../../lib/theme/export/catalogTransform.js";
-import type { BubbleGeometry, Markers } from "../../lib/theme/types.js";
+import type { Markers } from "../../lib/theme/types.js";
+// 말풍선 marker 계산은 브라우저와 **같은 구현**을 써야 한다. 복사해 두면 한쪽만 고쳐졌을 때
+// catalog 경로로만 다른 나인패치가 나가고, e2e parity 스펙을 돌리기 전에는 드러나지 않는다.
+import {
+  bubbleGeometryToAndroidMarkers,
+  flipAndroidMarkersHorizontally,
+  flipBubbleGeometryHorizontally,
+} from "../../lib/theme/bubbleGeometry.js";
 
 const maxImageDimension = 8192;
 const maxImagePixels = 32_000_000;
@@ -129,11 +136,11 @@ function resolveMarkers(
 ): Markers {
   const ninePatch = transform.ninePatch;
   if (ninePatch?.geometry) {
-    const geometry = transform.flipX ? flipGeometry(ninePatch.geometry, innerWidth) : ninePatch.geometry;
-    return geometryToMarkers(geometry, innerWidth, innerHeight);
+    const geometry = transform.flipX ? flipBubbleGeometryHorizontally(ninePatch.geometry, innerWidth) : ninePatch.geometry;
+    return bubbleGeometryToAndroidMarkers(geometry, innerWidth, innerHeight);
   }
-  if (ninePatch?.markers) return transform.flipX ? flipMarkers(ninePatch.markers, innerWidth) : ninePatch.markers;
-  return transform.flipX ? flipMarkers(sourceMarkers, innerWidth) : sourceMarkers;
+  if (ninePatch?.markers) return transform.flipX ? flipAndroidMarkersHorizontally(ninePatch.markers, innerWidth) : ninePatch.markers;
+  return transform.flipX ? flipAndroidMarkersHorizontally(sourceMarkers, innerWidth) : sourceMarkers;
 }
 
 /**
@@ -237,59 +244,10 @@ function offsetRange(range: { start: number; end: number }, max: number) {
   return { start: clamp(range.start + 1, 1, max), end: clamp(range.end + 1, 1, max) };
 }
 
-function geometryToMarkers(geometry: BubbleGeometry, width: number, height: number): Markers {
-  const safe = normalizeGeometry(geometry, width, height);
-  return {
-    top: pointToMarkerRange(safe.stretch.x, width, 2),
-    left: pointToMarkerRange(safe.stretch.y, height, 2),
-    bottom: { start: safe.contentInsets.left + 1, end: width - safe.contentInsets.right + 1 },
-    right: { start: safe.contentInsets.top + 1, end: height - safe.contentInsets.bottom + 1 },
-  };
-}
 
-function normalizeGeometry(geometry: BubbleGeometry, width: number, height: number): BubbleGeometry {
-  const safeWidth = Math.max(1, Math.round(width));
-  const safeHeight = Math.max(1, Math.round(height));
-  const left = clamp(Math.round(geometry.contentInsets.left), 0, safeWidth - 1);
-  const right = clamp(Math.round(geometry.contentInsets.right), 0, safeWidth - left - 1);
-  const top = clamp(Math.round(geometry.contentInsets.top), 0, safeHeight - 1);
-  const bottom = clamp(Math.round(geometry.contentInsets.bottom), 0, safeHeight - top - 1);
-  return {
-    stretch: {
-      x: clamp(Math.round(geometry.stretch.x), 0, safeWidth - 1),
-      y: clamp(Math.round(geometry.stretch.y), 0, safeHeight - 1),
-    },
-    contentInsets: { top, right, bottom, left },
-  };
-}
 
-function pointToMarkerRange(point: number, max: number, requestedSpan: number) {
-  const safeMax = Math.max(1, Math.round(max));
-  const span = clamp(Math.round(requestedSpan), 1, safeMax);
-  const start = clamp(Math.round(point), 0, safeMax - span);
-  return { start: start + 1, end: start + span + 1 };
-}
 
-function flipGeometry(geometry: BubbleGeometry, width: number): BubbleGeometry {
-  const safe = normalizeGeometry(geometry, width, Number.MAX_SAFE_INTEGER);
-  return {
-    stretch: { ...safe.stretch, x: Math.max(0, Math.round(width) - 1) - safe.stretch.x },
-    contentInsets: {
-      ...safe.contentInsets,
-      left: safe.contentInsets.right,
-      right: safe.contentInsets.left,
-    },
-  };
-}
 
-function flipMarkers(markers: Markers, innerWidth: number): Markers {
-  const width = Math.max(1, Math.round(innerWidth));
-  const flipRange = (range: { start: number; end: number }) => ({
-    start: width - Math.round(range.end) + 2,
-    end: width - Math.round(range.start) + 2,
-  });
-  return { ...markers, top: flipRange(markers.top), bottom: flipRange(markers.bottom) };
-}
 
 function drawHorizontalMarker(data: Uint8Array, width: number, y: number, start: number, end: number) {
   for (let x = start; x < Math.max(start + 1, end); x += 1) setBlackPixel(data, width, x, y);

@@ -102,9 +102,13 @@ function checkCommon(path: string, source: CatalogFastPathSource): CatalogFastPa
 
 /**
  * 이 파일은 Next/Webpack과 NodeNext로 컴파일되는 Builder가 함께 가져간다.
- * `sourceImage.ts`의 `.js` specifier는 NodeNext에는 맞지만 Next의 Cloudflare 빌드에서는
- * 해당 파일을 해석하지 못하므로, catalog fast path가 실제로 필요한 보수적 판정만 여기서
- * 유지한다. 파일명 정규화 규칙은 sourceImage.ts와 동일하게 query/hash를 제거하고 복원한다.
+ * `sourceImage.ts`의 `.js` specifier는 NodeNext에는 맞지만 Next의 webpack 빌드는 **값**
+ * import를 해석하지 못한다(타입 전용 import는 소거되어 문제없다 — `catalogTransform.ts` 참조).
+ * 실제로 되돌려 시도했고 `Build failed because of webpack errors`로 확인했다.
+ *
+ * 그래서 catalog fast path가 실제로 필요한 보수적 판정만 여기서 유지한다. 파일명 정규화 규칙은
+ * sourceImage.ts와 동일하게 query/hash를 제거하고 복원하며, 두 구현이 갈라지지 않는지는
+ * `catalogFastPath.test.ts`가 공개 API를 통해 대조한다.
  */
 function isAndroidNinePatchSourceName(sourceName: string | undefined) {
   if (!sourceName) return false;

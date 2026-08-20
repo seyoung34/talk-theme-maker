@@ -1,4 +1,6 @@
-import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
+// Builder(NodeNext)도 이 모듈을 가져간다. `@/` alias는 builder tsconfig(`paths: {}`)에서 풀리지
+// 않으므로 상대 경로를 쓴다. 타입 전용이라 번들에서 소거되어 앱 빌드에는 영향이 없다.
+import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "./types.js";
 
 export const androidStretchSpan = 2;
 
