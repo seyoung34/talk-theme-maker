@@ -18,7 +18,7 @@
     "ASSET_CATALOG_WRITE_ENABLED": "1",
     // Android catalog export를 전역 활성화한다. allowlist가 비어 있어 모든 계정/논리 자산에 적용된다.
     "ASSET_CATALOG_EXPORT_ENABLED_ANDROID": "1",
-    "ASSET_CATALOG_EXPORT_ENABLED_IOS": "0"
+    "ASSET_CATALOG_EXPORT_ENABLED_IOS": "1"
   },
   "services": [
     {
