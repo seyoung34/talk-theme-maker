@@ -133,6 +133,50 @@ describe("resolveCatalogManifestForExport", () => {
     expect(result.manifest[0]).toHaveProperty("catalogObject.objectKey");
   });
 
+  /**
+   * 템플릿 멤버십 조회는 발행된 variant의 upload_refs를 통째로 훑는다(슬롯 키가 동적인 jsonb라
+   * 서버 필터를 걸 수 없다). 정책이 통과하는 정상 export마다 그 비용을 치르면 안 된다.
+   */
+  it("admin 정책이 통과하면 템플릿 멤버십을 조회하지 않는다", async () => {
+    const findTemplateAssetExportAccess = vi.fn(async () => []);
+    const result = await resolveCatalogManifestForExport({
+      manifest: [{ path: "src/main/theme/drawable-xxhdpi/main.png", catalogAsset: selection, resourceRole: "main_background" }],
+      uploadedInputBytes: 0,
+      platform: "android",
+      store: {
+        findActiveByKeys: async () => [record()],
+        findAdminAssetExportAccess: async () => [{
+          id: adminAssetId,
+          enabled: true,
+          assetKind: "background" as const,
+          platform: "android" as const,
+          slotRole: "main_background" as const,
+          targets: [{ assetId: adminAssetId, platform: "android" as const, slotRole: "main_background" as const, targetKind: "exact_role" as const, priority: 0, enabled: true }],
+        }],
+        findTemplateAssetExportAccess,
+      },
+    });
+
+    expect(result.manifest[0]).toHaveProperty("catalogObject.objectKey");
+    expect(findTemplateAssetExportAccess).not.toHaveBeenCalled();
+  });
+
+  it("거부된 admin ref만 골라 템플릿 멤버십을 조회한다", async () => {
+    const findTemplateAssetExportAccess = vi.fn(async (input: { uploadEntryIds: readonly string[]; catalogAssetIds?: readonly string[]; userId?: string }) => {
+      expect(input).toEqual({ uploadEntryIds: [], catalogAssetIds: [selection.assetId], userId: undefined });
+      return [{ logicalAssetId: selection.assetId, platform: "android" as const }];
+    });
+
+    await resolveCatalogManifestForExport({
+      manifest: [{ path: "src/main/theme/drawable-xxhdpi/main.png", catalogAsset: selection, resourceRole: "main_background" }],
+      uploadedInputBytes: 0,
+      platform: "android",
+      store: { findActiveByKeys: async () => [record()], findAdminAssetExportAccess: async () => [], findTemplateAssetExportAccess },
+    });
+
+    expect(findTemplateAssetExportAccess).toHaveBeenCalledTimes(1);
+  });
+
   // 템플릿 멤버십도 플랫폼 단위다. Android 템플릿에만 있는 자산을 iOS 내보내기가 쓰지 못한다.
   it("템플릿 멤버십이 다른 플랫폼이면 여전히 막는다", async () => {
     await expect(resolveCatalogManifestForExport({
@@ -162,7 +206,7 @@ describe("resolveCatalogManifestForExport", () => {
   it("published/public 템플릿 ref를 요청 플랫폼에서만 해석한다", async () => {
     const findActiveByKeys = vi.fn(async () => [record({ logical_asset_id: `tpl:${templateUploadEntryId}` })]);
     const findTemplateAssetExportAccess = vi.fn(async (input: { uploadEntryIds: readonly string[]; catalogAssetIds?: readonly string[]; userId?: string }) => {
-      expect(input).toEqual({ uploadEntryIds: [templateUploadEntryId], catalogAssetIds: [], userId: "user-a" });
+      expect(input).toEqual({ uploadEntryIds: [templateUploadEntryId], userId: "user-a" });
       return [{ logicalAssetId: `tpl:${templateUploadEntryId}`, platform: "android" as const }];
     });
 

@@ -1,3 +1,4 @@
+import type { TemplateAssetExportAccess } from "@/lib/theme/assetCatalog/exportAccess";
 import { createEdgeRegistryStore, type EdgeRegistryStore } from "@/lib/theme/assetCatalog/edgeRegistryStore";
 import {
   collectCatalogSelections,
@@ -83,14 +84,45 @@ export async function resolveCatalogManifestForExport(input: {
   const records = await store.findActiveByKeys(toRegistryLookupKeys(collected.selections));
   const accessByAssetId = await readCatalogAssetAccess(store, collected.selections, input.userId);
   let resolution;
+  const resolve = () => resolveCatalogManifest({
+    manifest: input.manifest,
+    records,
+    uploadedInputBytes: input.uploadedInputBytes,
+    platform: input.platform,
+    accessByAssetId,
+  });
   try {
-    resolution = resolveCatalogManifest({
-      manifest: input.manifest,
-      records,
-      uploadedInputBytes: input.uploadedInputBytes,
-      platform: input.platform,
-      accessByAssetId,
-    });
+    resolution = resolve();
+    /**
+     * 관리자 정책이 막은 admin ref만 골라 템플릿 멤버십을 한 번 더 본다.
+     *
+     * 발행된 시스템 템플릿은 자기 내용물의 권한 근거다. 운영자가 추천 에셋을 지우거나
+     * (하드 삭제라 Supabase 바이트까지 사라진다) 타겟을 바꿔도, 그 템플릿을 쓰는 사용자의
+     * 내보내기는 계속 동작해야 한다 — catalog 도입 전에는 템플릿이 자기 사본을 들고 있어
+     * 애초에 영향받지 않던 경로다. GCS catalog 객체는 admin_assets 삭제에 연쇄되지 않으므로
+     * 결과물은 예전과 동일하다.
+     *
+     * 이 조회를 **거부된 뒤에만** 하는 이유는 비용이다. 템플릿 멤버십 조회는 발행된 variant의
+     * upload_refs를 통째로 훑는다(슬롯 키가 동적인 jsonb라 서버 필터를 걸 수 없다). 정상적인
+     * export마다 그 비용을 치를 이유가 없다 — 정책이 통과하면 결과가 같기 때문이다.
+     *
+     * 라이선스 문제 등으로 에셋을 정말 회수해야 하면 템플릿에서 빼고 다시 발행해야 한다.
+     * 삭제 버튼의 부수효과로 이미 팔린 템플릿이 깨지는 쪽이 더 위험하다.
+     */
+    const deniedAdminIds = collectDeniedAdminAssetIds(resolution.failures);
+    if (deniedAdminIds.length && store.findTemplateAssetExportAccess) {
+      const records = await store.findTemplateAssetExportAccess({
+        uploadEntryIds: [],
+        catalogAssetIds: deniedAdminIds,
+        userId: input.userId,
+      });
+      if (records.length) {
+        for (const [logicalAssetId, platforms] of groupPlatformsByAssetId(records)) {
+          accessByAssetId.set(logicalAssetId, { kind: "template", platforms: [...platforms] });
+        }
+        resolution = resolve();
+      }
+    }
   } catch (error) {
     if (error instanceof ThemeAssetRegistryError && error.code === "REFERENCED_BYTES_EXCEEDED") {
       throw new CatalogExportResolutionError(
@@ -140,6 +172,30 @@ function createCatalogResolutionError(failure: CatalogResolutionFailure): Catalo
   }
 }
 
+/** `not_allowed`로 막힌 admin 논리 자산 id만 추린다. */
+function collectDeniedAdminAssetIds(failures: readonly CatalogResolutionFailure[]): string[] {
+  const ids = new Set<string>();
+  for (const failure of failures) {
+    if (failure.reason !== "not_allowed" || !failure.assetId) continue;
+    try {
+      if (parseLogicalAssetId(failure.assetId).kind === "admin") ids.add(failure.assetId);
+    } catch {
+      // 형식이 깨진 id는 이미 invalid_selection으로 분류된다.
+    }
+  }
+  return [...ids];
+}
+
+function groupPlatformsByAssetId(records: readonly TemplateAssetExportAccess[]) {
+  const platformsByAssetId = new Map<string, Set<"android" | "ios">>();
+  for (const record of records) {
+    const platforms = platformsByAssetId.get(record.logicalAssetId) ?? new Set<"android" | "ios">();
+    platforms.add(record.platform);
+    platformsByAssetId.set(record.logicalAssetId, platforms);
+  }
+  return platformsByAssetId;
+}
+
 async function readCatalogAssetAccess(
   store: Pick<EdgeRegistryStore, "findActiveByKeys"> & Partial<Pick<EdgeRegistryStore, "findAdminAssetExportAccess" | "findTemplateAssetExportAccess">>,
   selections: readonly { selection: { assetId: string } }[],
@@ -163,32 +219,9 @@ async function readCatalogAssetAccess(
     for (const record of records) accessByAssetId.set(adminLogicalAssetId(record.id), { kind: "admin", asset: record });
   }
 
-  const adminLogicalIds = [...adminSourceIds].map((sourceId) => adminLogicalAssetId(sourceId));
-  if ((templateSourceIds.size || adminLogicalIds.length) && store.findTemplateAssetExportAccess) {
-    const records = await store.findTemplateAssetExportAccess({
-      uploadEntryIds: [...templateSourceIds],
-      catalogAssetIds: adminLogicalIds,
-      userId,
-    });
-    const platformsByAssetId = new Map<string, Set<"android" | "ios">>();
-    for (const record of records) {
-      const platforms = platformsByAssetId.get(record.logicalAssetId) ?? new Set<"android" | "ios">();
-      platforms.add(record.platform);
-      platformsByAssetId.set(record.logicalAssetId, platforms);
-    }
-    /**
-     * 템플릿 멤버십은 관리자 정책을 **덮어쓴다.**
-     *
-     * 발행된 시스템 템플릿은 자기 내용물의 권한 근거다. 운영자가 추천 에셋을 지우거나
-     * (하드 삭제라 Supabase 바이트까지 사라진다) 타겟을 바꿔도, 그 템플릿을 쓰는 사용자의
-     * 내보내기는 계속 동작해야 한다 — catalog 도입 전에는 템플릿이 자기 사본을 들고 있어
-     * 애초에 영향받지 않던 경로다. GCS catalog 객체는 admin_assets 삭제에 연쇄되지 않으므로
-     * 결과물은 예전과 동일하다.
-     *
-     * 라이선스 문제 등으로 에셋을 정말 회수해야 하면 템플릿에서 빼고 다시 발행해야 한다.
-     * 삭제 버튼의 부수효과로 이미 팔린 템플릿이 깨지는 쪽이 더 위험하다.
-     */
-    for (const [logicalAssetId, platforms] of platformsByAssetId) {
+  if (templateSourceIds.size && store.findTemplateAssetExportAccess) {
+    const records = await store.findTemplateAssetExportAccess({ uploadEntryIds: [...templateSourceIds], userId });
+    for (const [logicalAssetId, platforms] of groupPlatformsByAssetId(records)) {
       accessByAssetId.set(logicalAssetId, { kind: "template", platforms: [...platforms] });
     }
   }
