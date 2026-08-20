@@ -7,6 +7,7 @@ import {
   type AdminAssetTargetKind,
 } from "@/lib/theme/adminAssetDomain";
 import { templateLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
+import { getImageAssetFallbackRole, getUserUploadShareGroup } from "@/lib/theme/project/state";
 import { getThemeSlots } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -43,11 +44,18 @@ export type AdminAssetExportAccess = {
 export type TemplateAssetExportAccess = {
   readonly logicalAssetId: string;
   readonly platform: ThemePlatform;
+  /**
+   * 이 자산이 **그 템플릿에서 실제로 놓여 있던** 슬롯의 role.
+   *
+   * 이게 없으면 템플릿 멤버십이 관리자 ACL을 통째로 대체해 버린다. 말풍선 전용으로 허용된
+   * 에셋을 아는 클라이언트가 같은 플랫폼의 탭 바나 배경 슬롯에 넣어 내보낼 수 있다.
+   */
+  readonly resourceRoles: readonly ThemeResourceRole[];
 };
 
 export type CatalogAssetExportAccess =
   | { readonly kind: "admin"; readonly asset: AdminAssetExportAccess }
-  | { readonly kind: "template"; readonly platforms: readonly ThemePlatform[] };
+  | { readonly kind: "template"; readonly rolesByPlatform: Partial<Record<ThemePlatform, readonly ThemeResourceRole[]>> };
 
 export class AdminAssetExportAccessError extends Error {
   constructor(readonly code: "INVALID_ADMIN_ASSET_ACCESS_ROW") {
@@ -75,6 +83,39 @@ const allowedAssetKinds = new Set<AdminAssetKind>([
   "passcode",
   "passcode_indicator",
 ]);
+
+/**
+ * 템플릿이 보증하는 role인지 본다.
+ *
+ * 기록된 role과 정확히 같으면 당연히 허용한다. 여기에 두 가지를 더 연다.
+ *
+ *   - **공유 그룹**: 사용자 업로드는 말풍선 4칸·전체 배경 3칸·탭 아이콘끼리 공유된다
+ *     (`getSharedUploadPeers`). 템플릿이 말풍선 하나에 넣어 둔 에셋을 짝 말풍선에서 쓰는 것은
+ *     정상 동작이라, 여기서 막으면 멀쩡한 내보내기가 깨진다.
+ *   - **상속**: `profile_image_full_1`은 `profile_image_1`을, focused 탭 아이콘은 기본 아이콘을
+ *     상속한다(`getImageAssetFallbackRole`). 이때 manifest에는 상속받는 쪽 role이 실린다.
+ *
+ * 그 밖의 슬롯은 막는다. 말풍선용 에셋이 탭 바로 넘어가는 경로를 닫는 것이 이 함수의 목적이다.
+ */
+function isTemplateRoleAllowed(
+  recorded: readonly ThemeResourceRole[] | undefined,
+  platform: ThemePlatform,
+  requested: ThemeResourceRole,
+) {
+  if (!recorded?.length) return false;
+  if (recorded.includes(requested)) return true;
+
+  const inherited = getImageAssetFallbackRole(requested);
+  if (inherited && recorded.includes(inherited)) return true;
+
+  const group = shareGroupOfRole(platform, requested);
+  if (!group) return false;
+  return recorded.some((role) => shareGroupOfRole(platform, role) === group);
+}
+
+function shareGroupOfRole(platform: ThemePlatform, role: ThemeResourceRole) {
+  return getUserUploadShareGroup(getThemeSlots(platform).find((slot) => slot.role === role));
+}
 
 /** service-role query 결과를 export 접근 정책의 최소 계약으로 좁힌다. */
 export function mapAdminAssetExportAccessRow(row: unknown): AdminAssetExportAccess {
@@ -142,7 +183,9 @@ export function isCatalogAssetAllowedForExport(input: {
   platform: ThemePlatform;
   resourceRole: ThemeResourceRole;
 }) {
-  if (input.access.kind === "template") return input.access.platforms.includes(input.platform);
+  if (input.access.kind === "template") {
+    return isTemplateRoleAllowed(input.access.rolesByPlatform[input.platform], input.platform, input.resourceRole);
+  }
   return isAdminAssetAllowedForExport({
     asset: input.access.asset,
     platform: input.platform,
@@ -183,17 +226,35 @@ export function mapTemplateAssetExportAccessRows(
     const isOwner = typeof input.userId === "string" && input.userId.length > 0 && bundle.created_by === input.userId;
     if (!isPublic && !isOwner) continue;
 
-    const matchedIds = new Set<string>();
-    collectLogicalAssetIds(record.upload_refs, wantedEntryIds, wantedCatalogIds, matchedIds);
-    for (const logicalAssetId of matchedIds) {
+    // upload_refs는 슬롯 id로 나뉘어 있다. 그 키가 곧 "이 에셋이 어느 자리에 놓였는가"이므로
+    // 슬롯별로 훑어 role provenance를 함께 기록한다.
+    const refsBySlot = readRecord(record.upload_refs) ?? {};
+    const rolesByAssetId = new Map<string, Set<ThemeResourceRole>>();
+    for (const [slotId, slotValue] of Object.entries(refsBySlot)) {
+      const role = slotRoleById(platform, slotId);
+      if (!role) continue;
+      const matchedIds = new Set<string>();
+      collectLogicalAssetIds(slotValue, wantedEntryIds, wantedCatalogIds, matchedIds);
+      for (const logicalAssetId of matchedIds) {
+        const roles = rolesByAssetId.get(logicalAssetId) ?? new Set<ThemeResourceRole>();
+        roles.add(role);
+        rolesByAssetId.set(logicalAssetId, roles);
+      }
+    }
+
+    for (const [logicalAssetId, roles] of rolesByAssetId) {
       const key = `${logicalAssetId}\u0000${platform}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      result.push({ logicalAssetId, platform });
+      result.push({ logicalAssetId, platform, resourceRoles: [...roles] });
     }
   }
 
   return result;
+}
+
+function slotRoleById(platform: ThemePlatform, slotId: string): ThemeResourceRole | undefined {
+  return getThemeSlots(platform).find((slot) => slot.id === slotId)?.role;
 }
 
 function mapTarget(value: unknown, assetId: string): AdminAssetTarget {

@@ -95,12 +95,12 @@ describe("edge registry store", () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse([{
         platform: "android",
-        upload_refs: { bubble_me_1: [{ id: uploadEntryId }] },
+        upload_refs: { "android-bubble-me-1": [{ id: uploadEntryId }] },
         system_template_bundles: { status: "published", visibility: "public", created_by: "33333333-3333-4333-8333-333333333333" },
       }]))
       .mockResolvedValueOnce(jsonResponse([{
         platform: "ios",
-        upload_refs: { bubble_me_1: [{ id: uploadEntryId }] },
+        upload_refs: { "ios-bubble-me-1": [{ id: uploadEntryId }] },
         system_template_bundles: { status: "draft", visibility: "private", created_by: ownerId },
       }]));
     vi.stubGlobal("fetch", fetchMock);
@@ -111,8 +111,8 @@ describe("edge registry store", () => {
     });
 
     expect(result).toEqual([
-      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "android" },
-      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "ios" },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "android", resourceRoles: ["bubble_me_1"] },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "ios", resourceRoles: ["bubble_me_1"] },
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect((fetchMock.mock.calls[0][0] as URL).searchParams.get("system_template_bundles.status")).toBe("eq.published");

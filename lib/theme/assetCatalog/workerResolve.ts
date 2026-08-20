@@ -11,6 +11,7 @@ import {
 import { adminLogicalAssetId, parseLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { ThemeAssetRegistryError, type ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
 import type { CatalogAssetExportAccess } from "@/lib/theme/assetCatalog/exportAccess";
+import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 import { isCatalogExportEnabled } from "@/lib/theme/assetCatalog/exportGate";
 
 type PassthroughManifestItem =
@@ -117,8 +118,8 @@ export async function resolveCatalogManifestForExport(input: {
         userId: input.userId,
       });
       if (records.length) {
-        for (const [logicalAssetId, platforms] of groupPlatformsByAssetId(records)) {
-          accessByAssetId.set(logicalAssetId, { kind: "template", platforms: [...platforms] });
+        for (const [logicalAssetId, rolesByPlatform] of groupRolesByAssetId(records)) {
+          accessByAssetId.set(logicalAssetId, { kind: "template", rolesByPlatform });
         }
         resolution = resolve();
       }
@@ -186,14 +187,19 @@ function collectDeniedAdminAssetIds(failures: readonly CatalogResolutionFailure[
   return [...ids];
 }
 
-function groupPlatformsByAssetId(records: readonly TemplateAssetExportAccess[]) {
-  const platformsByAssetId = new Map<string, Set<"android" | "ios">>();
+/** 논리 자산별로 "어느 플랫폼의 어느 role에 놓여 있었는지"를 모은다. */
+function groupRolesByAssetId(records: readonly TemplateAssetExportAccess[]) {
+  const byAssetId = new Map<string, Partial<Record<ThemePlatform, ThemeResourceRole[]>>>();
   for (const record of records) {
-    const platforms = platformsByAssetId.get(record.logicalAssetId) ?? new Set<"android" | "ios">();
-    platforms.add(record.platform);
-    platformsByAssetId.set(record.logicalAssetId, platforms);
+    const rolesByPlatform = byAssetId.get(record.logicalAssetId) ?? {};
+    const roles = rolesByPlatform[record.platform] ?? [];
+    for (const role of record.resourceRoles) {
+      if (!roles.includes(role)) roles.push(role);
+    }
+    rolesByPlatform[record.platform] = roles;
+    byAssetId.set(record.logicalAssetId, rolesByPlatform);
   }
-  return platformsByAssetId;
+  return byAssetId;
 }
 
 async function readCatalogAssetAccess(
@@ -221,8 +227,8 @@ async function readCatalogAssetAccess(
 
   if (templateSourceIds.size && store.findTemplateAssetExportAccess) {
     const records = await store.findTemplateAssetExportAccess({ uploadEntryIds: [...templateSourceIds], userId });
-    for (const [logicalAssetId, platforms] of groupPlatformsByAssetId(records)) {
-      accessByAssetId.set(logicalAssetId, { kind: "template", platforms: [...platforms] });
+    for (const [logicalAssetId, rolesByPlatform] of groupRolesByAssetId(records)) {
+      accessByAssetId.set(logicalAssetId, { kind: "template", rolesByPlatform });
     }
   }
 

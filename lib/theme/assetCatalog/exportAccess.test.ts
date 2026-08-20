@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isAdminAssetAllowedForExport,
   isCatalogExportResourceRole,
+  isCatalogAssetAllowedForExport,
   mapAdminAssetExportAccessRow,
   mapTemplateAssetExportAccessRows,
 } from "@/lib/theme/assetCatalog/exportAccess";
@@ -58,11 +59,11 @@ describe("catalog export access", () => {
     expect(mapTemplateAssetExportAccessRows([
       {
         platform: "android",
-        upload_refs: { bubble_me_1: [{ id: uploadEntryId, fileName: "bubble.png" }] },
+        upload_refs: { "android-bubble-me-1": [{ id: uploadEntryId, fileName: "bubble.png" }] },
         system_template_bundles: { status: "published", visibility: "public", created_by: "owner-a" },
       },
     ], { uploadEntryIds: [uploadEntryId], userId: "other-user" })).toEqual([
-      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "android" },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "android", resourceRoles: ["bubble_me_1"] },
     ]);
   });
 
@@ -70,23 +71,23 @@ describe("catalog export access", () => {
     const uploadEntryId = "ios-bubble-me-1:upload:1";
     const row = {
       platform: "ios",
-      upload_refs: { bubble_me_1: [{ id: uploadEntryId }] },
+      upload_refs: { "ios-bubble-me-1": [{ id: uploadEntryId }] },
       system_template_bundles: { status: "draft", visibility: "private", created_by: "owner-a" },
     };
     expect(mapTemplateAssetExportAccessRows([row], { uploadEntryIds: [uploadEntryId], userId: "other-user" })).toEqual([]);
     expect(mapTemplateAssetExportAccessRows([row], { uploadEntryIds: [uploadEntryId], userId: "owner-a" })).toEqual([
-      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "ios" },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "ios", resourceRoles: ["bubble_me_1"] },
     ]);
   });
 
   it("서로 다른 플랫폼 variant의 같은 upload id를 각각 기록한다", () => {
     const uploadEntryId = "shared:upload:1";
     expect(mapTemplateAssetExportAccessRows([
-      { platform: "android", upload_refs: { a: [{ id: uploadEntryId }] }, system_template_bundles: { status: "published", visibility: "public" } },
-      { platform: "ios", upload_refs: { a: [{ id: uploadEntryId }] }, system_template_bundles: { status: "published", visibility: "public" } },
+      { platform: "android", upload_refs: { "android-bubble-me-1": [{ id: uploadEntryId }] }, system_template_bundles: { status: "published", visibility: "public" } },
+      { platform: "ios", upload_refs: { "ios-bubble-me-1": [{ id: uploadEntryId }] }, system_template_bundles: { status: "published", visibility: "public" } },
     ], { uploadEntryIds: [uploadEntryId] })).toEqual([
-      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "android" },
-      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "ios" },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "android", resourceRoles: ["bubble_me_1"] },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "ios", resourceRoles: ["bubble_me_1"] },
     ]);
   });
 });
@@ -129,11 +130,13 @@ describe("enabled 플래그는 fail-closed다", () => {
 describe("템플릿에 박힌 admin catalog ref", () => {
   const adminLogicalId = "admin:3f1a4b2c-0000-4000-8000-000000000001";
 
-  function templateRow(overrides: Record<string, unknown> = {}) {
+  // upload_refs의 키는 슬롯 id다. 플랫폼마다 id가 다르므로 함께 바꾼다.
+  function templateRow(platform: "android" | "ios" = "android", overrides: Record<string, unknown> = {}) {
+    const slotId = platform === "android" ? "android-main-background" : "ios-main-background-image";
     return {
-      platform: "android",
+      platform,
       upload_refs: {
-        main_background: [{
+        [slotId]: [{
           id: "android-main-background:upload:1",
           fileName: "bg.png",
           catalog: { kind: "catalog", assetId: adminLogicalId, revision: 2, variantKey: "canonical" },
@@ -149,7 +152,7 @@ describe("템플릿에 박힌 admin catalog ref", () => {
       uploadEntryIds: [],
       catalogAssetIds: [adminLogicalId],
       userId: "other-user",
-    })).toEqual([{ logicalAssetId: adminLogicalId, platform: "android" }]);
+    })).toEqual([{ logicalAssetId: adminLogicalId, platform: "android", resourceRoles: ["main_background"] }]);
   });
 
   it("요청하지 않은 admin ref는 돌려주지 않는다", () => {
@@ -163,17 +166,64 @@ describe("템플릿에 박힌 admin catalog ref", () => {
   // 접근 근거는 어디까지나 "이 사용자가 볼 수 있는 템플릿"이다. 비공개 초안까지 열어 주지 않는다.
   it("남의 비공개 초안 안에 있으면 접근을 주지 않는다", () => {
     expect(mapTemplateAssetExportAccessRows([
-      templateRow({ system_template_bundles: { status: "draft", visibility: "private", created_by: "owner-a" } }),
+      templateRow("android", { system_template_bundles: { status: "draft", visibility: "private", created_by: "owner-a" } }),
     ], { uploadEntryIds: [], catalogAssetIds: [adminLogicalId], userId: "other-user" })).toEqual([]);
   });
 
   it("같은 자산이 Android/iOS 템플릿에 함께 있으면 플랫폼별로 준다", () => {
     expect(mapTemplateAssetExportAccessRows([
       templateRow(),
-      templateRow({ platform: "ios" }),
+      templateRow("ios"),
     ], { uploadEntryIds: [], catalogAssetIds: [adminLogicalId], userId: "u" })).toEqual([
-      { logicalAssetId: adminLogicalId, platform: "android" },
-      { logicalAssetId: adminLogicalId, platform: "ios" },
+      { logicalAssetId: adminLogicalId, platform: "android", resourceRoles: ["main_background"] },
+      { logicalAssetId: adminLogicalId, platform: "ios", resourceRoles: ["main_background"] },
     ]);
+  });
+});
+
+/**
+ * 템플릿 멤버십이 관리자 ACL을 통째로 대체하면 권한 우회가 된다. 말풍선 전용으로 허용된
+ * 에셋을 아는 클라이언트가 같은 플랫폼의 탭 바나 배경 슬롯에 넣어 내보낼 수 있기 때문이다.
+ * 멤버십은 **그 템플릿에서 실제로 놓여 있던 자리**만 보증한다.
+ */
+describe("템플릿 멤버십의 role 경계", () => {
+  const bubbleAccess = {
+    kind: "template" as const,
+    rolesByPlatform: { android: ["bubble_me_1"] as const },
+  };
+
+  function allows(resourceRole: string) {
+    return isCatalogAssetAllowedForExport({
+      access: bubbleAccess,
+      platform: "android",
+      resourceRole: resourceRole as never,
+    });
+  }
+
+  it("놓여 있던 자리는 허용한다", () => {
+    expect(allows("bubble_me_1")).toBe(true);
+  });
+
+  // 말풍선 4칸·전체 배경 3칸·탭 아이콘은 사용자 업로드를 공유한다. 여기서 막으면 정상 동작이 깨진다.
+  it("같은 공유 그룹의 슬롯은 허용한다", () => {
+    expect(allows("bubble_me_2")).toBe(true);
+    expect(allows("bubble_you_1")).toBe(true);
+  });
+
+  it("다른 슬롯으로는 넘어가지 못한다", () => {
+    expect(allows("main_background")).toBe(false);
+    expect(allows("tab_icon_friends")).toBe(false);
+    expect(allows("splash_image")).toBe(false);
+  });
+
+  // `profile_image_full_1`은 `profile_image_1`을, focused 탭 아이콘은 기본 아이콘을 상속한다.
+  it("상속받는 슬롯은 원본 role의 보증으로 허용한다", () => {
+    const profileAccess = { kind: "template" as const, rolesByPlatform: { android: ["profile_image_1"] as const } };
+    expect(isCatalogAssetAllowedForExport({ access: profileAccess, platform: "android", resourceRole: "profile_image_full_1" })).toBe(true);
+    expect(isCatalogAssetAllowedForExport({ access: profileAccess, platform: "android", resourceRole: "main_background" })).toBe(false);
+  });
+
+  it("다른 플랫폼에는 보증이 없다", () => {
+    expect(isCatalogAssetAllowedForExport({ access: bubbleAccess, platform: "ios", resourceRole: "bubble_me_1" })).toBe(false);
   });
 });

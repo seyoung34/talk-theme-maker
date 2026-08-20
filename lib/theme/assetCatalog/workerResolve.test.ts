@@ -126,7 +126,7 @@ describe("resolveCatalogManifestForExport", () => {
         findActiveByKeys: async () => [record()],
         // 삭제됐거나 비활성이라 정책 행이 없다.
         findAdminAssetExportAccess: async () => [],
-        findTemplateAssetExportAccess: async () => [{ logicalAssetId: selection.assetId, platform: "android" as const }],
+        findTemplateAssetExportAccess: async () => [{ logicalAssetId: selection.assetId, platform: "android" as const, resourceRoles: ["main_background" as const] }],
       },
     });
 
@@ -164,7 +164,7 @@ describe("resolveCatalogManifestForExport", () => {
   it("거부된 admin ref만 골라 템플릿 멤버십을 조회한다", async () => {
     const findTemplateAssetExportAccess = vi.fn(async (input: { uploadEntryIds: readonly string[]; catalogAssetIds?: readonly string[]; userId?: string }) => {
       expect(input).toEqual({ uploadEntryIds: [], catalogAssetIds: [selection.assetId], userId: undefined });
-      return [{ logicalAssetId: selection.assetId, platform: "android" as const }];
+      return [{ logicalAssetId: selection.assetId, platform: "android" as const, resourceRoles: ["main_background" as const] }];
     });
 
     await resolveCatalogManifestForExport({
@@ -186,7 +186,7 @@ describe("resolveCatalogManifestForExport", () => {
       store: {
         findActiveByKeys: async () => [record()],
         findAdminAssetExportAccess: async () => [],
-        findTemplateAssetExportAccess: async () => [{ logicalAssetId: selection.assetId, platform: "android" as const }],
+        findTemplateAssetExportAccess: async () => [{ logicalAssetId: selection.assetId, platform: "android" as const, resourceRoles: ["main_background" as const] }],
       },
     })).rejects.toMatchObject({ code: "catalog_asset_not_allowed", status: 403 });
   });
@@ -207,7 +207,7 @@ describe("resolveCatalogManifestForExport", () => {
     const findActiveByKeys = vi.fn(async () => [record({ logical_asset_id: `tpl:${templateUploadEntryId}` })]);
     const findTemplateAssetExportAccess = vi.fn(async (input: { uploadEntryIds: readonly string[]; catalogAssetIds?: readonly string[]; userId?: string }) => {
       expect(input).toEqual({ uploadEntryIds: [templateUploadEntryId], userId: "user-a" });
-      return [{ logicalAssetId: `tpl:${templateUploadEntryId}`, platform: "android" as const }];
+      return [{ logicalAssetId: `tpl:${templateUploadEntryId}`, platform: "android" as const, resourceRoles: ["bubble_me_1" as const] }];
     });
 
     const result = await resolveCatalogManifestForExport({
@@ -228,7 +228,7 @@ describe("resolveCatalogManifestForExport", () => {
       platform: "ios",
       store: {
         findActiveByKeys: async () => [record({ logical_asset_id: `tpl:${templateUploadEntryId}` })],
-        findTemplateAssetExportAccess: async () => [{ logicalAssetId: `tpl:${templateUploadEntryId}`, platform: "android" as const }],
+        findTemplateAssetExportAccess: async () => [{ logicalAssetId: `tpl:${templateUploadEntryId}`, platform: "android" as const, resourceRoles: ["bubble_me_1" as const] }],
       },
     })).rejects.toMatchObject({ code: "catalog_asset_not_allowed", status: 403 });
   });
