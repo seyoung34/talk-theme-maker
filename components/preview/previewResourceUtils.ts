@@ -81,9 +81,9 @@ export async function blobForThemeFile(file: ThemeProjectFile): Promise<Blob | n
 
 export async function blobForThemePreview(file: ThemeProjectFile): Promise<Blob | null> {
   if (file.previewUrl) {
-    // 미리보기 타일의 no-cors 캐시 항목을 재사용하면 CORS 헤더가 없는 응답이
-    // 되어 blob 변환이 실패할 수 있다. 바이트를 읽는 경로는 항상 CORS 요청으로 연다.
-    const response = await fetch(file.previewUrl, { cache: "no-store", mode: "cors" });
+    // 미리보기 타일의 no-cors 캐시 항목을 재사용하면 blob 변환이 실패할 수 있다.
+    // `reload`로 캐시를 건너뛰어 받아 오고, 그 응답으로 캐시 항목을 교체한다.
+    const response = await fetch(file.previewUrl, { cache: "reload", mode: "cors" });
     if (!response.ok) return null;
     return response.blob();
   }

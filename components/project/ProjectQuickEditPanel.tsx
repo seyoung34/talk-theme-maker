@@ -376,9 +376,10 @@ function getEditableSourceUrl(file: ThemeProjectFile | undefined, selectedPicker
 }
 
 async function imageUrlToEditableFile(url: string, fallbackName: string) {
-  // 추천 타일은 CSS background-image(no-cors)로 먼저 캐시될 수 있다. 그 응답을
-  // force-cache로 재사용하면 CORS 헤더가 없는 캐시 항목이 되어 편집용 fetch가 실패한다.
-  const response = await fetch(url, { cache: "no-store", mode: "cors" });
+  // 추천 타일은 CSS background-image(no-cors)로 먼저 캐시될 수 있다. 그 항목을 재사용하면
+  // CORS 헤더가 없어 편집용 fetch가 실패한다. `reload`는 캐시를 읽지 않고 받아 오되 받은
+  // 응답으로 캐시를 덮어써, 오염된 항목을 CORS 응답으로 교체한다.
+  const response = await fetch(url, { cache: "reload", mode: "cors" });
   if (!response.ok) throw new Error(`Image source could not be loaded: ${response.status}`);
 
   const blob = await response.blob();

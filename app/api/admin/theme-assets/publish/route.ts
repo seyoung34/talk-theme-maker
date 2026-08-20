@@ -80,6 +80,9 @@ export async function POST(request: Request) {
     });
   }
 
+  // 실패 로그에서도 실제로 시도한 revision을 봐야 한다. 자동 증가일 때 `revision`은
+  // undefined라, 그 값을 찍으면 운영자가 어느 revision이 실패했는지 알 수 없다.
+  let attemptedRevision = revision;
   try {
     const config = readCatalogStorageConfig();
     const accessToken = await getCatalogPublisherAccessToken(config);
@@ -87,6 +90,7 @@ export async function POST(request: Request) {
     const store = createRegistryStore();
     const active = revision === undefined ? await store.findActive({ logicalAssetId: source.logicalAssetId, variantKey }) : null;
     const nextRevision = revision ?? ((active?.revision ?? 0) + 1);
+    attemptedRevision = nextRevision;
     const result = await publishThemeAsset(
       {
         logicalAssetId: source.logicalAssetId,
@@ -137,7 +141,7 @@ export async function POST(request: Request) {
     const orphanCandidates = error instanceof CatalogPublishFailure ? error.orphanCandidates : [];
     console.error("Catalog write shadow failed", JSON.stringify({
       logicalAssetId: source.logicalAssetId,
-      revision,
+      revision: attemptedRevision,
       variantKey,
       orphanCandidates,
       error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
