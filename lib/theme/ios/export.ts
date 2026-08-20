@@ -22,6 +22,7 @@ type IosExportOptions = {
   colors: SlotColors;
   selections: SlotCandidateSelections;
   bubbleEditsBySlotId: Partial<Record<string, BubbleEditState>>;
+  catalogExportUserId?: string;
 };
 
 export type IosExportBlobFile = {
@@ -103,7 +104,7 @@ const iosScaleTargetsByRole: Partial<Record<ThemeResourceRole, number[]>> = {
 };
 
 export async function buildIosThemeExportFiles(options: IosExportOptions): Promise<IosExportFile[]> {
-  const { analysis, template, templateId, exportName, slots, uploads, selections } = options;
+  const { analysis, template, templateId, exportName, slots, uploads, selections, catalogExportUserId } = options;
   const iosSlots = slots.filter((slot) => slot.platform === "ios");
   const files: IosExportFile[] = [];
   const imageMap: IosImageMap = {};
@@ -114,7 +115,7 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   // 슬롯 수만큼 누적되므로 동시 실행 수만 제한해 병렬로 처리한다.
   const imageSlots = iosSlots.filter((slot): slot is ThemeAssetSlot & { path: string } => slot.kind !== "color" && Boolean(slot.path));
   const resolved = await mapWithConcurrency(imageSlots, exportSlotConcurrency, async (slot) => {
-    const resolvedSource = await resolveIosSlotSource(slot, uploads, selections, templateId, template, iosSlots);
+    const resolvedSource = await resolveIosSlotSource(slot, uploads, selections, templateId, template, iosSlots, catalogExportUserId);
     if (!resolvedSource) return null;
     // 반전은 배율 target을 만들기 전에 한 번만 적용한다. 배율마다 뒤집으면 같은 일을 세 번 한다.
     const source = options.bubbleEditsBySlotId[slot.id]?.flipX ? await flipIosSlotSource(slot, resolvedSource) : resolvedSource;
@@ -152,15 +153,25 @@ export async function buildIosThemeExportFiles(options: IosExportOptions): Promi
   return files;
 }
 
-async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[]): Promise<IosSlotSource | null> {
+async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, selections: SlotCandidateSelections, templateId: ThemeTemplateId, template: ThemeTemplate, allSlots: ThemeAssetSlot[], catalogExportUserId?: string): Promise<IosSlotSource | null> {
   // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯 소스를 그대로 사용한다.
   const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
-  if (inheritedSource) return resolveIosSlotSource(inheritedSource, uploads, selections, templateId, template, allSlots);
+  if (inheritedSource) return resolveIosSlotSource(inheritedSource, uploads, selections, templateId, template, allSlots, catalogExportUserId);
 
   const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
   if (selectedUpload) {
-    if (selectedUpload.catalog && !selectedUpload.file && !selectedUpload.imageEdit && slot.kind !== "ninepatch") {
-      if (!isCatalogExportProducerEnabled("ios")) {
+    if (selectedUpload.catalog && !selectedUpload.imageEdit && slot.kind !== "ninepatch") {
+      if (!isCatalogExportProducerEnabled("ios", {
+        userId: catalogExportUserId,
+        assetIds: [selectedUpload.catalog.selection.assetId],
+      })) {
+        if (selectedUpload.file) {
+          return {
+            blob: await normalizeIosImageBlob(slot, selectedUpload.file, selectedUpload.file.name),
+            sourceName: selectedUpload.file.name,
+            sourceScale: getIosSourceScale(slot, uploads, selections, templateId, allSlots),
+          };
+        }
         if (!selectedUpload.catalog.legacyStoragePath) {
           const uploadFile = requireUploadFile(selectedUpload, "iOS 내보내기");
           return {
@@ -202,7 +213,7 @@ async function resolveIosSlotSource(slot: ThemeAssetSlot, uploads: SlotUploads, 
     const fallbackRole = getImageAssetFallbackRole(slot.role);
     const fallbackSlot = fallbackRole ? allSlots.find((candidate) => candidate.role === fallbackRole) : undefined;
     if (!fallbackSlot) return null;
-    return resolveIosSlotSource(fallbackSlot, uploads, selections, templateId, template, allSlots);
+    return resolveIosSlotSource(fallbackSlot, uploads, selections, templateId, template, allSlots, catalogExportUserId);
   }
   const sourceScale = getIosSourceScale(slot, uploads, selections, templateId, allSlots);
   if (canUseServerAssetReference(slot, assetUrl)) {

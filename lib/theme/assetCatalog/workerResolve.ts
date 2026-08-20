@@ -67,7 +67,10 @@ export async function resolveCatalogManifestForExport(input: {
     };
   }
 
-  if (!isCatalogExportEnabled(input.platform)) {
+  if (!isCatalogExportEnabled(input.platform, {
+    userId: input.userId,
+    assetIds: collected.selections.map(({ selection }) => selection.assetId),
+  })) {
     throw new CatalogExportResolutionError(
       "catalog_export_disabled",
       "현재 catalog 내보내기는 준비 중입니다. 잠시 후 다시 시도해 주세요.",

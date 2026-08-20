@@ -1,7 +1,7 @@
 import { getAndroidSlotExportPaths } from "@/lib/theme/android/export";
 import { getIosSlotExportTargets } from "@/lib/theme/ios/export";
 import { isCatalogFastPathEligible } from "@/lib/theme/export/catalogFastPath";
-import { isCatalogExportProducerEnabled } from "@/lib/theme/assetCatalog/exportGate";
+import { isCatalogExportProducerEnabled, type CatalogExportScope } from "@/lib/theme/assetCatalog/exportGate";
 import type { CatalogUploadRef } from "@/lib/theme/project/state";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
@@ -14,8 +14,23 @@ import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
  * 기존 `adminAssetToFile` 경로를 사용한다 — 선택은 유지하되 export 결과가 조용히 달라지지
  * 않게 하는 경계다.
  */
-export function createAdminCatalogUploadRef(slot: ThemeAssetSlot, asset: AdminAssetCandidate): CatalogUploadRef | undefined {
-  if (!isCatalogExportProducerEnabled(slot.platform)) return undefined;
+export function createAdminCatalogUploadRef(slot: ThemeAssetSlot, asset: AdminAssetCandidate, scope: CatalogExportScope = {}): CatalogUploadRef | undefined {
+  const catalog = getAdminCatalogUploadRef(slot, asset);
+  if (!catalog || !isCatalogExportProducerEnabled(slot.platform, {
+    ...scope,
+    assetIds: [catalog.selection.assetId],
+  })) return undefined;
+  return catalog;
+}
+
+/**
+ * 추천 에셋을 catalog metadata로 표현할 수 있는지 판정한다.
+ *
+ * 이 함수는 rollout flag를 보지 않는다. 편집기는 canary 계정인지 export 시점에야 확정할 수
+ * 있으므로, 선택 시에는 File과 metadata를 함께 보존하고 실제 export에서 user/asset allowlist를
+ * 통과한 경우에만 File 업로드를 catalog ref로 줄인다.
+ */
+export function getAdminCatalogUploadRef(slot: ThemeAssetSlot, asset: AdminAssetCandidate): CatalogUploadRef | undefined {
   const catalog = asset.catalog;
   if (!catalog || slot.kind === "color" || slot.kind === "ninepatch" || !catalog.pngSignatureVerified) return undefined;
 

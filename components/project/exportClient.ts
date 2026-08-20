@@ -205,6 +205,7 @@ async function createIosExportFormData({
   bubbleInsets,
   bubbleStretch,
   bubbleFlipX,
+  catalogExportUserId,
 }: IosExportPayloadOptions) {
   const bubbleEditsBySlotId = Object.fromEntries(
     slots.map((slot) => [
@@ -229,6 +230,7 @@ async function createIosExportFormData({
     colors,
     selections,
     bubbleEditsBySlotId,
+    catalogExportUserId,
   });
 
   const formData = new FormData();
@@ -256,6 +258,7 @@ async function createAndroidExportFormData({
   bubbleInsets,
   bubbleStretch,
   bubbleFlipX,
+  catalogExportUserId,
 }: AndroidExportPayloadOptions) {
   const bubbleEditsBySlotId = Object.fromEntries(
     slots.map((slot) => [
@@ -280,6 +283,7 @@ async function createAndroidExportFormData({
     colors,
     selections,
     bubbleEditsBySlotId,
+    catalogExportUserId,
   });
 
   const formData = new FormData();

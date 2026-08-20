@@ -39,6 +39,8 @@ export type AndroidExportPayloadOptions = {
   bubbleInsets: Partial<Record<string, Insets>>;
   bubbleStretch: Partial<Record<string, StretchPoint>>;
   bubbleFlipX: Partial<Record<string, boolean>>;
+  /** export dialog에서 확인한 계정으로 catalog canary 범위를 판정한다. */
+  catalogExportUserId?: string;
 };
 
 export type IosExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {

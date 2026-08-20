@@ -21,6 +21,7 @@ type AndroidExportOptions = {
   colors: SlotColors;
   selections: SlotCandidateSelections;
   bubbleEditsBySlotId: Partial<Record<string, BubbleEditState>>;
+  catalogExportUserId?: string;
 };
 
 export type AndroidExportBlobFile = {
@@ -44,7 +45,7 @@ export type AndroidExportFile = AndroidExportBlobFile | AndroidExportServerAsset
 type AndroidExportSource = { blob: Blob } | { serverAsset: string } | { catalogAsset: CatalogAssetSelection };
 
 export async function buildAndroidThemeExportFiles(options: AndroidExportOptions): Promise<AndroidExportFile[]> {
-  const { analysis, template, templateId, exportName, slots, uploads, colors, selections, bubbleEditsBySlotId } = options;
+  const { analysis, template, templateId, exportName, slots, uploads, colors, selections, bubbleEditsBySlotId, catalogExportUserId } = options;
   const androidSlots = slots.filter((slot) => slot.platform === "android");
   const files: AndroidExportFile[] = [];
 
@@ -52,7 +53,7 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
   // 45개 남짓한 이미지 슬롯의 지연이 그대로 누적되므로 동시 실행 수만 제한해 병렬 처리한다.
   const imageSlots = androidSlots.filter((slot) => slot.kind !== "color" && Boolean(slot.path));
   const sources = await mapWithConcurrency(imageSlots, exportSlotConcurrency, (slot) =>
-    resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots),
+    resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots, catalogExportUserId),
   );
 
   imageSlots.forEach((slot, index) => {
@@ -149,10 +150,11 @@ async function resolveAndroidSlotSource(
   template: ThemeTemplate,
   bubbleEdit?: BubbleEditState,
   allSlots: ThemeAssetSlot[] = [],
+  catalogExportUserId?: string,
 ): Promise<AndroidExportSource | null> {
   // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯 소스를 그대로 사용한다.
   const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
-  if (inheritedSource) return resolveAndroidSlotSource(inheritedSource, uploads, selections, templateId, template, bubbleEdit, allSlots);
+  if (inheritedSource) return resolveAndroidSlotSource(inheritedSource, uploads, selections, templateId, template, bubbleEdit, allSlots, catalogExportUserId);
 
   const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
   if (slot.kind === "ninepatch") {
@@ -174,8 +176,12 @@ async function resolveAndroidSlotSource(
     return { blob: await canvasToBlob(exportNinePatch(nextAsset), "image/png") };
   }
 
-  if (selectedUpload?.catalog && !selectedUpload.file && !selectedUpload.imageEdit) {
-    if (isCatalogExportProducerEnabled("android")) return { catalogAsset: selectedUpload.catalog.selection };
+  if (selectedUpload?.catalog && !selectedUpload.imageEdit) {
+    if (isCatalogExportProducerEnabled("android", {
+      userId: catalogExportUserId,
+      assetIds: [selectedUpload.catalog.selection.assetId],
+    })) return { catalogAsset: selectedUpload.catalog.selection };
+    if (selectedUpload.file) return { blob: selectedUpload.file };
     if (selectedUpload.catalog.legacyStoragePath) {
       return { blob: await storagePathToFile(selectedUpload.catalog.legacyStoragePath, selectedUpload.catalog.fileName, selectedUpload.catalog.mimeType) };
     }
@@ -191,7 +197,7 @@ async function resolveAndroidSlotSource(
   const fallbackRole = getImageAssetFallbackRole(slot.role);
   const fallbackSlot = fallbackRole ? allSlots.find((candidate) => candidate.role === fallbackRole) : undefined;
   if (!fallbackSlot) return null;
-  return resolveAndroidSlotSource(fallbackSlot, uploads, selections, templateId, template, bubbleEdit, allSlots);
+  return resolveAndroidSlotSource(fallbackSlot, uploads, selections, templateId, template, bubbleEdit, allSlots, catalogExportUserId);
 }
 
 /**

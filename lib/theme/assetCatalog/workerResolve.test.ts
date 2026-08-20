@@ -166,4 +166,19 @@ describe("resolveCatalogManifestForExport", () => {
     })).rejects.toMatchObject({ code: "catalog_export_disabled", status: 503 });
     expect(findActiveByKeys).not.toHaveBeenCalled();
   });
+
+  it("server canary allowlist 밖의 계정·asset ref는 registry 조회 전에 차단한다", async () => {
+    vi.stubEnv("ASSET_CATALOG_EXPORT_ANDROID_USER_ALLOWLIST", "user-canary");
+    vi.stubEnv("ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST", `admin:${adminAssetId}`);
+    const findActiveByKeys = vi.fn();
+
+    await expect(resolveCatalogManifestForExport({
+      manifest: [{ path: "src/main/theme/drawable-xxhdpi/main.png", catalogAsset: selection, resourceRole: "main_background" }],
+      uploadedInputBytes: 0,
+      platform: "android",
+      userId: "user-other",
+      store: { findActiveByKeys },
+    })).rejects.toMatchObject({ code: "catalog_export_disabled", status: 503 });
+    expect(findActiveByKeys).not.toHaveBeenCalled();
+  });
 });
