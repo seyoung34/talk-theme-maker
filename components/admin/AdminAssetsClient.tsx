@@ -11,6 +11,7 @@ import { BubbleBuilderEditor } from "@/components/editor/BubbleBuilderDialog";
 import AdminBubbleTextPreview from "@/components/admin/AdminBubbleTextPreview";
 import {
   deleteAdminAssetCandidate,
+  findSystemTemplatesUsingAdminAsset,
   adminAssetToFile,
   adminAssetBubbleDecorationToFile,
   bubbleAdjustmentToSpec,
@@ -99,6 +100,8 @@ export default function AdminAssetsClient() {
   const [notice, setNotice] = useState<string | null>(null);
   const [editingAsset, setEditingAsset] = useState<AdminAssetCandidate | null>(null);
   const [assetPendingDelete, setAssetPendingDelete] = useState<AdminAssetCandidate | null>(null);
+  // 삭제 확인 창에 "이 에셋을 쓰는 템플릿"을 보여 준다. `null`은 아직 조회 중이라는 뜻이다.
+  const [templatesUsingPendingDelete, setTemplatesUsingPendingDelete] = useState<string[] | null>(null);
   const [assetCursor, setAssetCursor] = useState<string>();
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
   const [isSavingAsset, setIsSavingAsset] = useState(false);
@@ -428,6 +431,19 @@ export default function AdminAssetsClient() {
       setIsSavingAsset(false);
     }
   };
+
+  useEffect(() => {
+    if (!assetPendingDelete) {
+      setTemplatesUsingPendingDelete(null);
+      return;
+    }
+    let cancelled = false;
+    setTemplatesUsingPendingDelete(null);
+    void findSystemTemplatesUsingAdminAsset(assetPendingDelete.id).then((titles) => {
+      if (!cancelled) setTemplatesUsingPendingDelete(titles);
+    });
+    return () => { cancelled = true; };
+  }, [assetPendingDelete]);
 
   const remove = async (asset: AdminAssetCandidate) => {
     if (deletingAssetId) return;
@@ -1107,6 +1123,13 @@ export default function AdminAssetsClient() {
             <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
               &ldquo;{assetPendingDelete?.title}&rdquo; 후보와 저장된 이미지가 영구히 삭제됩니다. 되돌릴 수 없습니다.
             </Dialog.Description>
+            {templatesUsingPendingDelete && templatesUsingPendingDelete.length > 0 ? (
+              <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2.5 text-xs font-semibold leading-5 text-amber-900">
+                시스템 템플릿 {templatesUsingPendingDelete.length}개가 이 에셋을 쓰고 있습니다 ({templatesUsingPendingDelete.slice(0, 3).join(", ")}
+                {templatesUsingPendingDelete.length > 3 ? ` 외 ${templatesUsingPendingDelete.length - 3}개` : ""}).
+                {" "}이미 발행된 템플릿의 내보내기는 계속 동작하지만, 이 에셋은 피커에서 사라집니다.
+              </p>
+            ) : null}
             <div className="mt-5 grid grid-cols-2 gap-2">
               <Dialog.Close asChild>
                 <button type="button" className="min-h-11 rounded-xl border border-[var(--color-outline-variant)] px-4 py-2.5 text-sm font-extrabold text-[var(--color-on-surface-variant)] focus-visible:outline-2 focus-visible:outline-[var(--color-secondary)] disabled:opacity-55" disabled={Boolean(deletingAssetId)}>취소</button>

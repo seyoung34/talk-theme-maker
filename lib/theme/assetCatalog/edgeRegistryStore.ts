@@ -18,6 +18,8 @@ export type EdgeRegistryStore = {
   findAdminAssetExportAccess(adminAssetIds: readonly string[]): Promise<AdminAssetExportAccess[]>;
   findTemplateAssetExportAccess(input: {
     uploadEntryIds: readonly string[];
+    /** 템플릿 안에 박힌 `admin:` 논리 자산 id. 발행된 템플릿이 자기 내용물을 보증한다. */
+    catalogAssetIds?: readonly string[];
     userId?: string;
   }): Promise<TemplateAssetExportAccess[]>;
 };
@@ -75,7 +77,8 @@ export function createEdgeRegistryStore(): EdgeRegistryStore {
 
     async findTemplateAssetExportAccess(input) {
       const uploadEntryIds = [...new Set(input.uploadEntryIds.filter((id) => typeof id === "string" && id.trim()))];
-      if (!uploadEntryIds.length) return [];
+      const catalogAssetIds = [...new Set((input.catalogAssetIds ?? []).filter((id) => typeof id === "string" && id.trim()))];
+      if (!uploadEntryIds.length && !catalogAssetIds.length) return [];
 
       const select = "id,platform,upload_refs,system_template_bundles!inner(status,visibility,created_by)";
       const rows: unknown[] = [];
@@ -94,7 +97,7 @@ export function createEdgeRegistryStore(): EdgeRegistryStore {
         }), "owned template export access", config.secretKey));
       }
 
-      return mapTemplateAssetExportAccessRows(rows, { uploadEntryIds, userId: input.userId });
+      return mapTemplateAssetExportAccessRows(rows, { uploadEntryIds, catalogAssetIds, userId: input.userId });
     },
   };
 }

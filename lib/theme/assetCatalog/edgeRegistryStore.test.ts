@@ -111,8 +111,8 @@ describe("edge registry store", () => {
     });
 
     expect(result).toEqual([
-      { uploadEntryId, platform: "android" },
-      { uploadEntryId, platform: "ios" },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "android" },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "ios" },
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect((fetchMock.mock.calls[0][0] as URL).searchParams.get("system_template_bundles.status")).toBe("eq.published");

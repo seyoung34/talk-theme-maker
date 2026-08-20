@@ -62,7 +62,7 @@ describe("catalog export access", () => {
         system_template_bundles: { status: "published", visibility: "public", created_by: "owner-a" },
       },
     ], { uploadEntryIds: [uploadEntryId], userId: "other-user" })).toEqual([
-      { uploadEntryId, platform: "android" },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "android" },
     ]);
   });
 
@@ -75,7 +75,7 @@ describe("catalog export access", () => {
     };
     expect(mapTemplateAssetExportAccessRows([row], { uploadEntryIds: [uploadEntryId], userId: "other-user" })).toEqual([]);
     expect(mapTemplateAssetExportAccessRows([row], { uploadEntryIds: [uploadEntryId], userId: "owner-a" })).toEqual([
-      { uploadEntryId, platform: "ios" },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "ios" },
     ]);
   });
 
@@ -85,8 +85,8 @@ describe("catalog export access", () => {
       { platform: "android", upload_refs: { a: [{ id: uploadEntryId }] }, system_template_bundles: { status: "published", visibility: "public" } },
       { platform: "ios", upload_refs: { a: [{ id: uploadEntryId }] }, system_template_bundles: { status: "published", visibility: "public" } },
     ], { uploadEntryIds: [uploadEntryId] })).toEqual([
-      { uploadEntryId, platform: "android" },
-      { uploadEntryId, platform: "ios" },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "android" },
+      { logicalAssetId: `tpl:${uploadEntryId}`, platform: "ios" },
     ]);
   });
 });
@@ -115,5 +115,65 @@ describe("enabled 플래그는 fail-closed다", () => {
     ["false", { enabled: false }],
   ])("%s는 거부한다", (_label, overrides) => {
     expect(mapAdminAssetExportAccessRow({ ...base, ...overrides }).enabled).toBe(false);
+  });
+});
+
+/**
+ * 발행된 시스템 템플릿은 자기 내용물의 권한 근거다.
+ *
+ * catalog 도입 전에는 템플릿이 추천 에셋의 **자기 사본**(`system-templates/…`)을 들고 있어서,
+ * 운영자가 그 에셋을 지워도 템플릿은 멀쩡했다. 지금은 중복 제거를 위해 `admin:<uuid>`를
+ * 참조만 하므로, 라이브러리 정책을 그대로 적용하면 삭제·타겟 변경 한 번에 이미 팔린 템플릿의
+ * 내보내기가 403이 된다. 관리자 삭제는 하드 삭제라 Supabase 바이트까지 사라진다.
+ */
+describe("템플릿에 박힌 admin catalog ref", () => {
+  const adminLogicalId = "admin:3f1a4b2c-0000-4000-8000-000000000001";
+
+  function templateRow(overrides: Record<string, unknown> = {}) {
+    return {
+      platform: "android",
+      upload_refs: {
+        main_background: [{
+          id: "android-main-background:upload:1",
+          fileName: "bg.png",
+          catalog: { kind: "catalog", assetId: adminLogicalId, revision: 2, variantKey: "canonical" },
+        }],
+      },
+      system_template_bundles: { status: "published", visibility: "public", created_by: "owner-a" },
+      ...overrides,
+    };
+  }
+
+  it("발행된 공개 템플릿 안의 admin ref에 접근을 준다", () => {
+    expect(mapTemplateAssetExportAccessRows([templateRow()], {
+      uploadEntryIds: [],
+      catalogAssetIds: [adminLogicalId],
+      userId: "other-user",
+    })).toEqual([{ logicalAssetId: adminLogicalId, platform: "android" }]);
+  });
+
+  it("요청하지 않은 admin ref는 돌려주지 않는다", () => {
+    expect(mapTemplateAssetExportAccessRows([templateRow()], {
+      uploadEntryIds: [],
+      catalogAssetIds: ["admin:3f1a4b2c-0000-4000-8000-0000000000ff"],
+      userId: "other-user",
+    })).toEqual([]);
+  });
+
+  // 접근 근거는 어디까지나 "이 사용자가 볼 수 있는 템플릿"이다. 비공개 초안까지 열어 주지 않는다.
+  it("남의 비공개 초안 안에 있으면 접근을 주지 않는다", () => {
+    expect(mapTemplateAssetExportAccessRows([
+      templateRow({ system_template_bundles: { status: "draft", visibility: "private", created_by: "owner-a" } }),
+    ], { uploadEntryIds: [], catalogAssetIds: [adminLogicalId], userId: "other-user" })).toEqual([]);
+  });
+
+  it("같은 자산이 Android/iOS 템플릿에 함께 있으면 플랫폼별로 준다", () => {
+    expect(mapTemplateAssetExportAccessRows([
+      templateRow(),
+      templateRow({ platform: "ios" }),
+    ], { uploadEntryIds: [], catalogAssetIds: [adminLogicalId], userId: "u" })).toEqual([
+      { logicalAssetId: adminLogicalId, platform: "android" },
+      { logicalAssetId: adminLogicalId, platform: "ios" },
+    ]);
   });
 });

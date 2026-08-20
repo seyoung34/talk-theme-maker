@@ -7,7 +7,7 @@ import {
   type CatalogResolutionFailure,
   type ExportManifestSourceItem,
 } from "@/lib/theme/assetCatalog/exportResolve";
-import { adminLogicalAssetId, parseLogicalAssetId, templateLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
+import { adminLogicalAssetId, parseLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { ThemeAssetRegistryError, type ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
 import type { CatalogAssetExportAccess } from "@/lib/theme/assetCatalog/exportAccess";
 import { isCatalogExportEnabled } from "@/lib/theme/assetCatalog/exportGate";
@@ -163,15 +163,31 @@ async function readCatalogAssetAccess(
     for (const record of records) accessByAssetId.set(adminLogicalAssetId(record.id), { kind: "admin", asset: record });
   }
 
-  if (templateSourceIds.size && store.findTemplateAssetExportAccess) {
-    const records = await store.findTemplateAssetExportAccess({ uploadEntryIds: [...templateSourceIds], userId });
+  const adminLogicalIds = [...adminSourceIds].map((sourceId) => adminLogicalAssetId(sourceId));
+  if ((templateSourceIds.size || adminLogicalIds.length) && store.findTemplateAssetExportAccess) {
+    const records = await store.findTemplateAssetExportAccess({
+      uploadEntryIds: [...templateSourceIds],
+      catalogAssetIds: adminLogicalIds,
+      userId,
+    });
     const platformsByAssetId = new Map<string, Set<"android" | "ios">>();
     for (const record of records) {
-      const logicalAssetId = templateLogicalAssetId(record.uploadEntryId);
-      const platforms = platformsByAssetId.get(logicalAssetId) ?? new Set<"android" | "ios">();
+      const platforms = platformsByAssetId.get(record.logicalAssetId) ?? new Set<"android" | "ios">();
       platforms.add(record.platform);
-      platformsByAssetId.set(logicalAssetId, platforms);
+      platformsByAssetId.set(record.logicalAssetId, platforms);
     }
+    /**
+     * 템플릿 멤버십은 관리자 정책을 **덮어쓴다.**
+     *
+     * 발행된 시스템 템플릿은 자기 내용물의 권한 근거다. 운영자가 추천 에셋을 지우거나
+     * (하드 삭제라 Supabase 바이트까지 사라진다) 타겟을 바꿔도, 그 템플릿을 쓰는 사용자의
+     * 내보내기는 계속 동작해야 한다 — catalog 도입 전에는 템플릿이 자기 사본을 들고 있어
+     * 애초에 영향받지 않던 경로다. GCS catalog 객체는 admin_assets 삭제에 연쇄되지 않으므로
+     * 결과물은 예전과 동일하다.
+     *
+     * 라이선스 문제 등으로 에셋을 정말 회수해야 하면 템플릿에서 빼고 다시 발행해야 한다.
+     * 삭제 버튼의 부수효과로 이미 팔린 템플릿이 깨지는 쪽이 더 위험하다.
+     */
     for (const [logicalAssetId, platforms] of platformsByAssetId) {
       accessByAssetId.set(logicalAssetId, { kind: "template", platforms: [...platforms] });
     }

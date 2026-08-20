@@ -112,6 +112,41 @@ describe("resolveCatalogManifestForExport", () => {
     })).rejects.toMatchObject({ code: "catalog_asset_not_allowed", status: 403 });
   });
 
+  /**
+   * 관리자가 추천 에셋을 지우거나 비활성화해도, 그 에셋이 들어 있는 **발행된 템플릿**을 쓰는
+   * 사용자의 내보내기는 계속 동작해야 한다. 삭제는 하드 삭제라 Supabase 바이트까지 사라지지만
+   * GCS catalog 객체는 연쇄되지 않으므로 결과물은 예전과 같다.
+   */
+  it("admin 정책이 막아도 발행된 템플릿 안에 있으면 통과시킨다", async () => {
+    const result = await resolveCatalogManifestForExport({
+      manifest: [{ path: "src/main/theme/drawable-xxhdpi/main.png", catalogAsset: selection, resourceRole: "main_background" }],
+      uploadedInputBytes: 0,
+      platform: "android",
+      store: {
+        findActiveByKeys: async () => [record()],
+        // 삭제됐거나 비활성이라 정책 행이 없다.
+        findAdminAssetExportAccess: async () => [],
+        findTemplateAssetExportAccess: async () => [{ logicalAssetId: selection.assetId, platform: "android" as const }],
+      },
+    });
+
+    expect(result.manifest[0]).toHaveProperty("catalogObject.objectKey");
+  });
+
+  // 템플릿 멤버십도 플랫폼 단위다. Android 템플릿에만 있는 자산을 iOS 내보내기가 쓰지 못한다.
+  it("템플릿 멤버십이 다른 플랫폼이면 여전히 막는다", async () => {
+    await expect(resolveCatalogManifestForExport({
+      manifest: [{ path: "Images/main@3x.png", catalogAsset: selection, resourceRole: "main_background" }],
+      uploadedInputBytes: 0,
+      platform: "ios",
+      store: {
+        findActiveByKeys: async () => [record()],
+        findAdminAssetExportAccess: async () => [],
+        findTemplateAssetExportAccess: async () => [{ logicalAssetId: selection.assetId, platform: "android" as const }],
+      },
+    })).rejects.toMatchObject({ code: "catalog_asset_not_allowed", status: 403 });
+  });
+
   it("catalog ref에 resourceRole이 없으면 잘못된 요청으로 분류한다", async () => {
     await expect(resolveCatalogManifestForExport({
       manifest: [{ path: "src/main/theme/drawable-xxhdpi/main.png", catalogAsset: selection }],
@@ -126,9 +161,9 @@ describe("resolveCatalogManifestForExport", () => {
 
   it("published/public 템플릿 ref를 요청 플랫폼에서만 해석한다", async () => {
     const findActiveByKeys = vi.fn(async () => [record({ logical_asset_id: `tpl:${templateUploadEntryId}` })]);
-    const findTemplateAssetExportAccess = vi.fn(async (input: { uploadEntryIds: readonly string[]; userId?: string }) => {
-      expect(input).toEqual({ uploadEntryIds: [templateUploadEntryId], userId: "user-a" });
-      return [{ uploadEntryId: templateUploadEntryId, platform: "android" as const }];
+    const findTemplateAssetExportAccess = vi.fn(async (input: { uploadEntryIds: readonly string[]; catalogAssetIds?: readonly string[]; userId?: string }) => {
+      expect(input).toEqual({ uploadEntryIds: [templateUploadEntryId], catalogAssetIds: [], userId: "user-a" });
+      return [{ logicalAssetId: `tpl:${templateUploadEntryId}`, platform: "android" as const }];
     });
 
     const result = await resolveCatalogManifestForExport({
@@ -149,7 +184,7 @@ describe("resolveCatalogManifestForExport", () => {
       platform: "ios",
       store: {
         findActiveByKeys: async () => [record({ logical_asset_id: `tpl:${templateUploadEntryId}` })],
-        findTemplateAssetExportAccess: async () => [{ uploadEntryId: templateUploadEntryId, platform: "android" }],
+        findTemplateAssetExportAccess: async () => [{ logicalAssetId: `tpl:${templateUploadEntryId}`, platform: "android" as const }],
       },
     })).rejects.toMatchObject({ code: "catalog_asset_not_allowed", status: 403 });
   });

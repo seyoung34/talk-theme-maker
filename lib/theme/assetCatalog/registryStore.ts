@@ -37,6 +37,7 @@ export type RegistryStore = Omit<ReturnType<typeof createRegistryStore>, "findAd
   findAdminAssetExportAccess?: (adminAssetIds: readonly string[]) => Promise<AdminAssetExportAccess[]>;
   findTemplateAssetExportAccess?: (input: {
     uploadEntryIds: readonly string[];
+    catalogAssetIds?: readonly string[];
     userId?: string;
   }) => Promise<TemplateAssetExportAccess[]>;
 };
@@ -119,10 +120,12 @@ export function createRegistryStore(admin = createAdminClient()) {
     /** export 시점의 시스템 템플릿 published/public·소유권 정책을 읽는다. */
     async findTemplateAssetExportAccess(input: {
       uploadEntryIds: readonly string[];
+      catalogAssetIds?: readonly string[];
       userId?: string;
     }): Promise<TemplateAssetExportAccess[]> {
       const uploadEntryIds = [...new Set(input.uploadEntryIds.filter((id) => typeof id === "string" && id.trim()))];
-      if (!uploadEntryIds.length) return [];
+      const catalogAssetIds = [...new Set((input.catalogAssetIds ?? []).filter((id) => typeof id === "string" && id.trim()))];
+      if (!uploadEntryIds.length && !catalogAssetIds.length) return [];
 
       const select = "id,platform,upload_refs,system_template_bundles!inner(status,visibility,created_by)";
       const rows: unknown[] = [];
@@ -148,7 +151,7 @@ export function createRegistryStore(admin = createAdminClient()) {
         rows.push(...(ownedRows ?? []));
       }
 
-      return mapTemplateAssetExportAccessRows(rows, { uploadEntryIds, userId: input.userId });
+      return mapTemplateAssetExportAccessRows(rows, { uploadEntryIds, catalogAssetIds, userId: input.userId });
     },
 
     async findActive(input: { logicalAssetId: string; variantKey: string }) {
