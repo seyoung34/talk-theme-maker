@@ -1,5 +1,6 @@
 import { maxExportRequestBytes } from "@/lib/theme/exportRequest";
 import { parseCatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
+import { parseCatalogTransform } from "@/lib/theme/export/catalogTransform";
 
 const maxAndroidExportFiles = 300;
 export const maxAndroidExportFileBytes = 20 * 1024 * 1024;
@@ -7,7 +8,7 @@ const safeRootFiles = new Set(["README-export.txt", "theme-export-report.json"])
 
 type UploadManifestItem = { field: string; path: string };
 type ServerAssetManifestItem = { path: string; serverAsset: string };
-type CatalogAssetManifestItem = { path: string; catalogAsset: unknown; resourceRole?: string };
+type CatalogAssetManifestItem = { path: string; catalogAsset: unknown; resourceRole?: string; transform?: unknown };
 export type AndroidExportManifestItem = UploadManifestItem | ServerAssetManifestItem | CatalogAssetManifestItem;
 
 export type AndroidBundleUploadFile = { field: string; bytes: Uint8Array };
@@ -40,6 +41,7 @@ export async function readAndroidBundleUpload(formData: FormData, manifestRaw: s
     if ("catalogAsset" in item) {
       try {
         parseCatalogAssetSelection(item.catalogAsset);
+        if (item.transform !== undefined) parseCatalogTransform(item.transform);
       } catch {
         throw new AndroidExportRequestError("invalid_catalog_asset", "내보내기 에셋 참조가 올바르지 않습니다.");
       }

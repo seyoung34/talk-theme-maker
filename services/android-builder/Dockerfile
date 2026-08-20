@@ -26,6 +26,7 @@ WORKDIR /workspace
 COPY package.json package-lock.json tsconfig.json ./
 COPY lib ./lib
 COPY services/android-builder ./services/android-builder
+COPY services/shared ./services/shared
 COPY android-sample-theme/apeach-26.1.0-source ./android-sample-theme/apeach-26.1.0-source
 COPY public/template-assets ./public/template-assets
 

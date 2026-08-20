@@ -1,4 +1,5 @@
 import { isCatalogFastPathEligible } from "./catalogFastPath.js";
+import { parseCatalogTransform, validateCatalogTransform, type CatalogTransform } from "./catalogTransform.js";
 
 /**
  * Builder가 GCS catalog 객체를 읽는 공통 계층 (계획 §9.4).
@@ -29,6 +30,7 @@ export type CatalogObjectRef = {
 export type CatalogManifestItem = {
   readonly path: string;
   readonly catalogObject: CatalogObjectRef;
+  readonly transform?: CatalogTransform;
 };
 
 /** 실패 사유. `result.json`에 그대로 실려 상태 API가 사용자 문구로 바꾼다. */
@@ -78,11 +80,18 @@ export function isCatalogManifestItem(value: unknown): value is CatalogManifestI
   const object = item.catalogObject;
   if (typeof object !== "object" || object === null) return false;
   const ref = object as Record<string, unknown>;
-  return typeof ref.objectKey === "string"
+  if (!(typeof ref.objectKey === "string"
     && typeof ref.generation === "string"
     && typeof ref.sha256 === "string"
     && typeof ref.sizeBytes === "number"
-    && typeof ref.mimeType === "string";
+    && typeof ref.mimeType === "string")) return false;
+  if (item.transform === undefined) return true;
+  try {
+    parseCatalogTransform(item.transform);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -119,6 +128,42 @@ export function assertCatalogFastPath(input: {
       `${input.path}: ${verdict.reason}`,
     );
   }
+}
+
+/**
+ * Builder가 catalog 원본을 그대로 복사하거나 descriptor에 따라 변환할 수 있는지 확인한다.
+ * Worker가 만든 bundle도 파일 입력과 같은 외부 경계이므로, 여기서 registry metadata와 다시
+ * 대조한다.
+ */
+export function assertCatalogManifestSource(input: {
+  platform: "android" | "ios";
+  path: string;
+  ref: CatalogObjectRef;
+  transform?: CatalogTransform;
+}) {
+  if (input.transform) {
+    if (input.ref.pngSignatureVerified !== true || typeof input.ref.fileName !== "string" || typeof input.ref.sourceScale !== "number" || typeof input.ref.width !== "number" || typeof input.ref.height !== "number") {
+      throw new CatalogReadError("asset_transform_required", "테마 에셋 변환 정보가 없습니다.", `${input.path}: missing source metadata`);
+    }
+    const verdict = validateCatalogTransform({
+      platform: input.platform,
+      path: input.path,
+      source: {
+        fileName: input.ref.fileName,
+        mimeType: input.ref.mimeType,
+        sourceScale: input.ref.sourceScale as 1 | 2 | 3,
+        width: input.ref.width,
+        height: input.ref.height,
+      },
+      transform: input.transform,
+    });
+    if (!verdict.valid) {
+      throw new CatalogReadError("asset_transform_required", "테마 에셋 변환 계약이 올바르지 않습니다.", `${input.path}: ${verdict.reason}`);
+    }
+    return;
+  }
+
+  assertCatalogFastPath({ platform: input.platform, path: input.path, ref: input.ref });
 }
 
 /** GCS 읽기와 해시 계산을 주입받는다. Builder가 각자의 SDK로 채운다. */

@@ -1,5 +1,7 @@
 import type { ThemePlatform } from "@/lib/theme/types";
 
+import type { CatalogTransform } from "@/lib/theme/export/catalogTransform";
+
 /**
  * catalog registry(`public.theme_asset_objects`)의 애플리케이션 계약.
  *
@@ -58,6 +60,8 @@ export type CatalogAssetSelection = {
 /** 권한 확인 뒤 Worker가 Builder에게 넘기는 항목. */
 export type ResolvedCatalogManifestItem = {
   readonly path: string;
+  /** Builder가 catalog 원본을 결과물용 PNG로 바꿔야 할 때만 존재한다. */
+  readonly transform?: CatalogTransform;
   readonly catalogObject: {
     readonly objectKey: string;
     readonly generation: string;
@@ -176,9 +180,10 @@ export function assertReferencedAssetBudget(totals: {
   }
 }
 
-export function toResolvedCatalogManifestItem(path: string, record: ThemeAssetObjectRecord): ResolvedCatalogManifestItem {
+export function toResolvedCatalogManifestItem(path: string, record: ThemeAssetObjectRecord, transform?: CatalogTransform): ResolvedCatalogManifestItem {
   return {
     path,
+    ...(transform ? { transform } : {}),
     catalogObject: {
       objectKey: record.gcsObjectKey,
       generation: record.gcsGeneration,

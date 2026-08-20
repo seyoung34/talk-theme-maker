@@ -9,10 +9,9 @@ import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 /**
  * 추천 후보를 편집기 업로드 상태의 catalog ref로 바꿀 수 있는지 판정한다.
  *
- * catalog ref는 브라우저에 원본 바이트가 없다는 뜻이므로, 이 함수는 변환 없는 모든 출력
- * 경로가 fast path 조건을 만족할 때만 ref를 만든다. 조건이 하나라도 어긋나면 호출부가
- * 기존 `adminAssetToFile` 경로를 사용한다 — 선택은 유지하되 export 결과가 조용히 달라지지
- * 않게 하는 경계다.
+ * catalog ref는 브라우저에 원본 바이트가 없을 수 있다는 뜻이다. Phase 5 변환을 지원하는
+ * Android nine-patch와 iOS PNG는 fast path 조건이 아니어도 metadata를 보존한다. 그 외의
+ * 변환은 아직 브라우저 File fallback으로 남겨 결과가 조용히 달라지지 않게 한다.
  */
 export function createAdminCatalogUploadRef(slot: ThemeAssetSlot, asset: AdminAssetCandidate, scope: CatalogExportScope = {}): CatalogUploadRef | undefined {
   const catalog = getAdminCatalogUploadRef(slot, asset);
@@ -32,7 +31,7 @@ export function createAdminCatalogUploadRef(slot: ThemeAssetSlot, asset: AdminAs
  */
 export function getAdminCatalogUploadRef(slot: ThemeAssetSlot, asset: AdminAssetCandidate): CatalogUploadRef | undefined {
   const catalog = asset.catalog;
-  if (!catalog || slot.kind === "color" || slot.kind === "ninepatch" || !catalog.pngSignatureVerified) return undefined;
+  if (!catalog || slot.kind === "color" || !catalog.pngSignatureVerified || catalog.mimeType !== "image/png") return undefined;
 
   const paths = slot.platform === "android"
     ? getAndroidSlotExportPaths(slot)
@@ -44,7 +43,10 @@ export function getAdminCatalogUploadRef(slot: ThemeAssetSlot, asset: AdminAsset
     sourceScale: catalog.sourceScale,
     mimeType: catalog.mimeType,
   };
-  if (!paths.every((path) => isCatalogFastPathEligible({ platform: slot.platform, path, source }).eligible)) return undefined;
+  const fastPathEligible = paths.every((path) => isCatalogFastPathEligible({ platform: slot.platform, path, source }).eligible);
+  const builderTransformSupported = slot.platform === "ios"
+    || (slot.kind === "ninepatch" && paths.every((path) => path.toLowerCase().endsWith(".9.png")));
+  if (!fastPathEligible && !builderTransformSupported) return undefined;
 
   return {
     selection: catalog.selection,

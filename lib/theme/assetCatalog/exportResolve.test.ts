@@ -213,6 +213,42 @@ describe("resolveCatalogManifest", () => {
     expect(result.failures).toHaveLength(0);
   });
 
+  it("Android nine-patch는 검증된 transform descriptor와 함께 통과한다", () => {
+    const result = resolveCatalogManifest({
+      manifest: manifest({
+        path: "src/main/theme/drawable-xxhdpi/b.9.png",
+        catalogAsset: selection,
+        transform: { kind: "android-nine-patch", outputFormat: "png" },
+      }),
+      records: [record({ file_name: "bubble.png", width: 120, height: 80 })],
+      uploadedInputBytes: 0,
+      platform: "android",
+    });
+    expect(result.resolved).toHaveLength(1);
+    expect(result.resolved[0].transform).toEqual({ kind: "android-nine-patch", outputFormat: "png" });
+  });
+
+  it("iOS scale mismatch는 descriptor dimension까지 검증해 통과한다", () => {
+    const result = resolveCatalogManifest({
+      manifest: manifest({
+        path: "Images/bg@2x.png",
+        catalogAsset: selection,
+        transform: {
+          kind: "ios-image",
+          outputFormat: "png",
+          sourceScale: 3,
+          targetScale: 2,
+          sourceDimensions: { width: 1125, height: 2436 },
+        },
+      }),
+      records: [record()],
+      uploadedInputBytes: 0,
+      platform: "ios",
+    });
+    expect(result.resolved).toHaveLength(1);
+    expect(result.resolved[0].transform).toMatchObject({ kind: "ios-image", targetScale: 2 });
+  });
+
   it("catalog 항목이 없으면 전부 통과시킨다", () => {
     const items = manifest({ path: "a.png", field: "file-0" }, { path: "b.png", serverAsset: "/template-assets/x.png" });
     const result = resolveCatalogManifest({ manifest: items, records: [], uploadedInputBytes: 100, platform: "android" });

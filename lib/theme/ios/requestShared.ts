@@ -1,12 +1,13 @@
 import { getExportRequestTooLargePayload, maxExportRequestBytes } from "@/lib/theme/exportRequest";
 import { IosExportRequestError, normalizeIosPath, type IosPackageEntry } from "@/lib/theme/ios/packageValidation";
 import { parseCatalogAssetSelection, type CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
+import { parseCatalogTransform } from "@/lib/theme/export/catalogTransform";
 
 type UploadManifestItem = { field: string; path: string };
 type ServerAssetManifestItem = { path: string; serverAsset: string };
-type CatalogAssetManifestItem = { path: string; catalogAsset: unknown; resourceRole?: string };
+type CatalogAssetManifestItem = { path: string; catalogAsset: unknown; resourceRole?: string; transform?: unknown };
 export type IosManifestItem = UploadManifestItem | ServerAssetManifestItem | CatalogAssetManifestItem;
-export type IosRequestedEntry = IosPackageEntry | { path: string; catalogAsset: CatalogAssetSelection; resourceRole?: string };
+export type IosRequestedEntry = IosPackageEntry | { path: string; catalogAsset: CatalogAssetSelection; resourceRole?: string; transform?: import("@/lib/theme/export/catalogTransform").CatalogTransform };
 
 const maxIosExportFiles = 300;
 
@@ -27,11 +28,12 @@ export async function readIosEntries(formData: FormData, manifestRaw: string, re
       let selection: CatalogAssetSelection;
       try {
         selection = parseCatalogAssetSelection(item.catalogAsset);
+        const transform = item.transform === undefined ? undefined : parseCatalogTransform(item.transform);
+        paths.add(normalizedPath);
+        entries.push({ path: normalizedPath, catalogAsset: selection, ...(item.resourceRole ? { resourceRole: item.resourceRole } : {}), ...(transform ? { transform } : {}) });
       } catch {
         throw new IosExportRequestError("invalid_catalog_asset", "내보내기 에셋 참조가 올바르지 않습니다.");
       }
-      paths.add(normalizedPath);
-      entries.push({ path: normalizedPath, catalogAsset: selection, ...(item.resourceRole ? { resourceRole: item.resourceRole } : {}) });
       continue;
     }
 

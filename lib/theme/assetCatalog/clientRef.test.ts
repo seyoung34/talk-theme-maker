@@ -59,7 +59,7 @@ describe("createAdminCatalogUploadRef", () => {
     });
   });
 
-  it("iOS target 배율이 다르면 기존 File fallback을 선택한다", () => {
+  it("iOS target 배율이 달라도 Builder 변환용 metadata를 보존한다", () => {
     const iosAsset = { ...asset, catalog: { ...catalog, sourceScale: 2 as const } };
     const iosSlot = slot({
       id: "ios-main-background",
@@ -67,11 +67,17 @@ describe("createAdminCatalogUploadRef", () => {
       path: "Images/main@3x.png",
     });
 
-    expect(createAdminCatalogUploadRef(iosSlot, iosAsset)).toBeUndefined();
+    expect(createAdminCatalogUploadRef(iosSlot, iosAsset)).toMatchObject({
+      ...iosAsset.catalog,
+      legacyStoragePath: iosAsset.storagePath,
+    });
   });
 
-  it("nine-patch 슬롯은 marker 변환을 위해 catalog ref를 만들지 않는다", () => {
-    expect(createAdminCatalogUploadRef(slot({ kind: "ninepatch" }), asset)).toBeUndefined();
+  it("nine-patch 슬롯은 Builder marker 변환용 metadata를 보존한다", () => {
+    expect(createAdminCatalogUploadRef(slot({ kind: "ninepatch", path: "src/main/theme/drawable-xxhdpi/chat.9.png" }), asset)).toMatchObject({
+      ...catalog,
+      legacyStoragePath: asset.storagePath,
+    });
   });
 
   it("producer flag가 꺼져 있으면 기존 File fallback을 선택한다", () => {
