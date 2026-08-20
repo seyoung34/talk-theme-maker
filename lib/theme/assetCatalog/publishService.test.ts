@@ -27,6 +27,13 @@ function fakeStore() {
     async findRevision({ logicalAssetId, revision, variantKey }) {
       return [...rows.values()].find((r) => r.logicalAssetId === logicalAssetId && r.revision === revision && r.variantKey === variantKey) ?? null;
     },
+    async findLatestRevision({ logicalAssetId, variantKey }) {
+      // staged/failed/retired까지 센다. 실제 store와 같은 규칙이어야 경합 테스트가 의미를 갖는다.
+      const revisions = [...rows.values()]
+        .filter((r) => r.logicalAssetId === logicalAssetId && r.variantKey === variantKey)
+        .map((r) => r.revision);
+      return revisions.length ? Math.max(...revisions) : 0;
+    },
     async findActive({ logicalAssetId, variantKey }) {
       return [...rows.values()].find((r) => r.logicalAssetId === logicalAssetId && r.variantKey === variantKey && r.status === "active") ?? null;
     },

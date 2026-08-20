@@ -129,8 +129,12 @@ export async function POST(request: Request) {
      */
     let result;
     for (let attemptIndex = 0; ; attemptIndex += 1) {
-      const active = revision === undefined ? await store.findActive({ logicalAssetId: source.logicalAssetId, variantKey }) : null;
-      const nextRevision = revision ?? ((active?.revision ?? 0) + 1);
+      // 상태와 무관한 최대 revision을 본다. active만 보면 다른 publish가 만들어 둔 staged 행이
+      // 보이지 않아 같은 번호를 다시 집고, 재시도가 영원히 같은 충돌을 반복한다.
+      const latestRevision = revision === undefined
+        ? await store.findLatestRevision({ logicalAssetId: source.logicalAssetId, variantKey })
+        : 0;
+      const nextRevision = revision ?? (latestRevision + 1);
       attemptedRevision = nextRevision;
       try {
         result = await publishOnce(nextRevision);

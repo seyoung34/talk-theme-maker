@@ -14,6 +14,7 @@ import { normalizeLegacyColorOverrides, normalizeLegacyThemeDraft } from "@/lib/
 import { clearRecoveryDraft, readRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 import { getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import { getUserTemplate } from "@/lib/theme/userTemplates";
+import { hydrateCatalogPreviewUrls } from "@/lib/theme/project/catalogPreviewHydration";
 import { getThemeSlots, getThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
@@ -89,14 +90,18 @@ export function useEditorBootstrap({
     let autosaveExpectedUpdatedAt: number | null = null;
     let deferredReplacement = false;
 
-    const applyAutosave = (record: EditorAutosaveDraft) => {
+    const applyAutosave = async (record: EditorAutosaveDraft) => {
+      // 자동 저장은 만료되는 preview URL을 떼고 저장한다. 시스템 템플릿은 `remoteUploadRefs`로
+      // 다시 수화되지만 일반 프로젝트에는 그 경로가 없어, 여기서 채우지 않으면 이어하기 직후
+      // catalog 타일이 빈 채로 열린다.
+      const uploads = await hydrateCatalogPreviewUrls(record.draft.uploads);
       skipDefaultSelectionReset();
       setTemplateId(record.source.templateId);
       setPlatform(record.source.platform);
       setActiveSection(record.editor.activeSection);
       setActiveGroup(record.editor.activeGroup);
       setSelectedSlotId(record.editor.selectedSlotId);
-      replaceDraft(normalizeLegacyThemeDraft(record.source.platform, record.source.templateId, record.draft));
+      replaceDraft(normalizeLegacyThemeDraft(record.source.platform, record.source.templateId, { ...record.draft, uploads }));
       setActiveUserTemplate(record.source.activeUserTemplate ?? null);
       setActiveSystemTemplate(record.source.activeSystemTemplate ?? null);
       setSystemTemplateBundleId(record.source.systemTemplateBundleId ?? record.source.activeSystemTemplate?.bundleId ?? null);
@@ -192,7 +197,7 @@ export function useEditorBootstrap({
         // navigation entry가 /template → /edit 이동 뒤에도 "reload"로 남아 있을 수 있다.
         // 새 템플릿을 명시적으로 고른 payload가 있으면 그 선택이 항상 자동 저장보다 우선한다.
         if (payload?.autosaveAction === "resume" || (!payload && resumedAfterReload)) {
-          applyAutosave(autosave);
+          await applyAutosave(autosave);
           autosaveExpectedUpdatedAt = autosave.updatedAt;
           return;
         }
@@ -206,7 +211,7 @@ export function useEditorBootstrap({
           const decision = await requestAutosaveDecision(autosave);
           if (!active) return;
           if (decision === "resume") {
-            applyAutosave(autosave);
+            await applyAutosave(autosave);
             autosaveExpectedUpdatedAt = autosave.updatedAt;
             return;
           }
@@ -354,8 +359,13 @@ export function useEditorBootstrap({
         });
         setTemplateId(savedTemplate.templateId);
         setPlatform(savedTemplate.platform);
+        // catalog 참조만 있는 항목은 저장 시 만료되는 preview URL을 떼어 낸다. 사용자 템플릿에는
+        // 시스템 템플릿 같은 재수화 경로가 없으므로(`remoteUploadRefs`가 비어 있다) 여기서
+        // `legacyStoragePath`를 다시 서명해 채운다. 없으면 타일과 미리보기가 빈 채로 열린다.
+        const uploads = await hydrateCatalogPreviewUrls(savedTemplate.uploads);
+        if (!active) return;
         replaceDraft({
-          uploads: savedTemplate.uploads,
+          uploads,
           remoteUploadRefs: {},
           colors: normalizedOverrides.colors,
           candidateSelections: normalizedOverrides.candidateSelections,

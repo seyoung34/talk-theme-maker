@@ -61,6 +61,13 @@ export function isCatalogExportScopeAllowed(
  * 서버가 범위를 판정한다. 범위 밖 자산은 ref 없이 내려가 기존 File 업로드 경로로 동작한다.
  */
 export function isCatalogExportAssetAllowed(platform: ThemePlatform, logicalAssetId: string) {
+  // 서버 flag가 꺼져 있으면 ref 자체를 내보내지 않는다. 내보내면 브라우저가 원본 File 없이
+  // reference-only manifest를 만들고, Worker는 그 flag 때문에 503으로 거절한다. 폴백할 바이트가
+  // 없으므로 export가 통째로 죽는다. ref를 나눠 줄지 말지는 서버 설정 하나로 결정한다.
+  if (!readFlag(platform === "android"
+    ? process.env.ASSET_CATALOG_EXPORT_ENABLED_ANDROID
+    : process.env.ASSET_CATALOG_EXPORT_ENABLED_IOS)) return false;
+
   const allowed = readAllowlist(platform === "android"
     ? process.env.ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST
     : process.env.ASSET_CATALOG_EXPORT_IOS_ASSET_ALLOWLIST);
@@ -80,6 +87,18 @@ export function warnOnCatalogExportScopeDrift(platform: ThemePlatform) {
   const server = readScopeEnvironment(platform, "server");
   const client = readScopeEnvironment(platform, "client");
   const drift: string[] = [];
+
+  // 플래그 자체가 어긋나는 쪽이 더 위험하다. producer만 켜져 있으면 브라우저가 원본 File 없이
+  // reference-only manifest를 만들고 Worker가 503으로 거절한다.
+  const serverFlag = readFlag(platform === "android"
+    ? process.env.ASSET_CATALOG_EXPORT_ENABLED_ANDROID
+    : process.env.ASSET_CATALOG_EXPORT_ENABLED_IOS);
+  const clientFlag = readFlag(platform === "android"
+    ? process.env.NEXT_PUBLIC_ASSET_CATALOG_EXPORT_ENABLED_ANDROID
+    : process.env.NEXT_PUBLIC_ASSET_CATALOG_EXPORT_ENABLED_IOS);
+  if (clientFlag && !serverFlag) drift.push("producer flag on with server flag off");
+  if (serverFlag && !clientFlag) drift.push("server flag on with producer flag off");
+
   if (isBroader(readAllowlist(client.users), readAllowlist(server.users))) drift.push("user allowlist");
   if (isBroader(readAllowlist(client.assets), readAllowlist(server.assets))) drift.push("asset allowlist");
   if (!drift.length) return;
@@ -87,7 +106,7 @@ export function warnOnCatalogExportScopeDrift(platform: ThemePlatform) {
   console.warn("Catalog export scope drift", JSON.stringify({
     platform,
     broaderOnClient: drift,
-    hint: "NEXT_PUBLIC_ASSET_CATALOG_EXPORT_* 값이 서버 allowlist보다 넓습니다. 범위 밖 자산은 export에서 거절됩니다.",
+    hint: "NEXT_PUBLIC_ASSET_CATALOG_EXPORT_* 값이 서버 설정과 어긋납니다. 플랫폼별로 같은 값을 배포해야 합니다.",
   }));
 }
 

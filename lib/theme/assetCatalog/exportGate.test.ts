@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isCatalogExportAssetAllowed, isCatalogExportEnabled, isCatalogExportProducerEnabled, isCatalogExportScopeAllowed } from "@/lib/theme/assetCatalog/exportGate";
+import { isCatalogExportAssetAllowed, isCatalogExportEnabled, warnOnCatalogExportScopeDrift, isCatalogExportProducerEnabled, isCatalogExportScopeAllowed } from "@/lib/theme/assetCatalog/exportGate";
 
 describe("catalog export rollout scope", () => {
   beforeEach(() => {
@@ -61,6 +61,12 @@ describe("catalog export rollout scope", () => {
 describe("isCatalogExportAssetAllowed", () => {
   afterEach(() => vi.unstubAllEnvs());
 
+  // ref 노출은 서버 flag가 먼저 결정한다. allowlist 동작만 보려면 flag를 켜 둔다.
+  beforeEach(() => {
+    vi.stubEnv("ASSET_CATALOG_EXPORT_ENABLED_ANDROID", "1");
+    vi.stubEnv("ASSET_CATALOG_EXPORT_ENABLED_IOS", "1");
+  });
+
   it("allowlist가 비어 있으면 제한하지 않는다", () => {
     vi.stubEnv("ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST", "");
     expect(isCatalogExportAssetAllowed("android", "admin:a")).toBe(true);
@@ -77,5 +83,46 @@ describe("isCatalogExportAssetAllowed", () => {
     vi.stubEnv("ASSET_CATALOG_EXPORT_IOS_ASSET_ALLOWLIST", "admin:b");
     expect(isCatalogExportAssetAllowed("ios", "admin:a")).toBe(false);
     expect(isCatalogExportAssetAllowed("ios", "admin:b")).toBe(true);
+  });
+});
+
+/**
+ * client/server 플래그 조합 4가지.
+ *
+ * 가장 위험한 조합은 producer만 켜진 경우다. 추천 API가 ref를 내주면 브라우저는 원본 File 없이
+ * reference-only manifest를 만들고, Worker는 서버 flag가 꺼져 있어 503으로 거절한다. 폴백할
+ * 바이트가 없으므로 export가 통째로 죽는다. 그래서 ref 노출 여부는 서버 flag가 결정한다.
+ */
+describe("client/server flag matrix", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  function setFlags(server: string, client: string) {
+    vi.stubEnv("ASSET_CATALOG_EXPORT_ENABLED_ANDROID", server);
+    vi.stubEnv("NEXT_PUBLIC_ASSET_CATALOG_EXPORT_ENABLED_ANDROID", client);
+    vi.stubEnv("ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST", "");
+    vi.stubEnv("NEXT_PUBLIC_ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST", "");
+  }
+
+  it.each([
+    ["둘 다 꺼짐", "0", "0", false],
+    ["서버만 켜짐", "1", "0", true],
+    ["producer만 켜짐", "0", "1", false],
+    ["둘 다 켜짐", "1", "1", true],
+  ])("%s → ref 노출 %s", (_label, server, client, exposed) => {
+    setFlags(server, client);
+    expect(isCatalogExportAssetAllowed("android", "admin:a")).toBe(exposed);
+  });
+
+  it("producer만 켜지면 drift로 기록한다", () => {
+    setFlags("0", "1");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    warnOnCatalogExportScopeDrift("ios");
+    expect(warn).not.toHaveBeenCalled();
+
+    vi.stubEnv("ASSET_CATALOG_EXPORT_ENABLED_IOS", "0");
+    vi.stubEnv("NEXT_PUBLIC_ASSET_CATALOG_EXPORT_ENABLED_IOS", "1");
+    warnOnCatalogExportScopeDrift("android");
+    expect(warn).toHaveBeenCalledWith("Catalog export scope drift", expect.stringContaining("producer flag on with server flag off"));
+    warn.mockRestore();
   });
 });

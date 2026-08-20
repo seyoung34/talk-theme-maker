@@ -154,6 +154,29 @@ export function createRegistryStore(admin = createAdminClient()) {
       return mapTemplateAssetExportAccessRows(rows, { uploadEntryIds, catalogAssetIds, userId: input.userId });
     },
 
+    /**
+     * 상태와 무관한 최대 revision. 다음 revision 번호를 정할 때 쓴다.
+     *
+     * `findActive`로 정하면 안 된다 — 다른 publish가 만들어 둔 `staged` 행이 보이지 않아 같은
+     * 번호를 다시 집는다. 그러면 `unique (logical_asset_id, revision, variant_key)`에 걸리거나,
+     * 바이트가 다를 때는 `REVISION_NOT_FORWARD`로 끝나 재시도조차 걸리지 않는다.
+     *
+     * `staged`뿐 아니라 `failed`·`retired`도 센다. 이미 쓰인 번호는 재사용할 수 없다.
+     */
+    async findLatestRevision(input: { logicalAssetId: string; variantKey: string }) {
+      const { data, error } = await admin
+        .from(registryTable)
+        .select("revision")
+        .eq("logical_asset_id", input.logicalAssetId)
+        .eq("variant_key", input.variantKey)
+        .order("revision", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      const revision = (data as { revision?: unknown } | null)?.revision;
+      return typeof revision === "number" && Number.isSafeInteger(revision) ? revision : 0;
+    },
+
     async findActive(input: { logicalAssetId: string; variantKey: string }) {
       const { data, error } = await admin
         .from(registryTable)
