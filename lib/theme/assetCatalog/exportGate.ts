@@ -49,6 +49,57 @@ export function isCatalogExportScopeAllowed(
   return true;
 }
 
+/**
+ * 이 논리 자산 하나가 서버 asset allowlist 범위 안인지 본다.
+ *
+ * `isCatalogExportScopeAllowed`와 달리 user allowlist를 보지 않는다. 호출자(추천 API)는
+ * 요청 사용자를 모르고, 사용자 범위는 export 시점에 Worker가 다시 확인한다.
+ *
+ * 이 검사가 필요한 이유: 브라우저는 `NEXT_PUBLIC_*` 값만 볼 수 있어 서버 allowlist를 알 수
+ * 없다. 두 목록이 어긋나 브라우저가 범위 밖 자산에 ref를 만들면, Worker가 manifest 전체를
+ * 503으로 거절하고 바이트는 업로드된 적이 없어 폴백도 없다. 그래서 **ref를 나눠 주는 쪽**인
+ * 서버가 범위를 판정한다. 범위 밖 자산은 ref 없이 내려가 기존 File 업로드 경로로 동작한다.
+ */
+export function isCatalogExportAssetAllowed(platform: ThemePlatform, logicalAssetId: string) {
+  const allowed = readAllowlist(platform === "android"
+    ? process.env.ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST
+    : process.env.ASSET_CATALOG_EXPORT_IOS_ASSET_ALLOWLIST);
+  return allowed.length === 0 || allowed.includes(logicalAssetId);
+}
+
+/**
+ * client/server allowlist가 어긋났는지 서버에서 한 번 확인해 로그로 남긴다.
+ *
+ * 위 `isCatalogExportAssetAllowed`가 asset 축의 불일치는 구조적으로 없애지만, user 축과
+ * 플래그 자체는 여전히 두 곳에 손으로 적는다. 어긋나도 조용하면 운영자가 알 방법이 없다.
+ */
+export function warnOnCatalogExportScopeDrift(platform: ThemePlatform) {
+  if (driftWarned.has(platform)) return;
+  driftWarned.add(platform);
+
+  const server = readScopeEnvironment(platform, "server");
+  const client = readScopeEnvironment(platform, "client");
+  const drift: string[] = [];
+  if (isBroader(readAllowlist(client.users), readAllowlist(server.users))) drift.push("user allowlist");
+  if (isBroader(readAllowlist(client.assets), readAllowlist(server.assets))) drift.push("asset allowlist");
+  if (!drift.length) return;
+
+  console.warn("Catalog export scope drift", JSON.stringify({
+    platform,
+    broaderOnClient: drift,
+    hint: "NEXT_PUBLIC_ASSET_CATALOG_EXPORT_* 값이 서버 allowlist보다 넓습니다. 범위 밖 자산은 export에서 거절됩니다.",
+  }));
+}
+
+const driftWarned = new Set<ThemePlatform>();
+
+/** 빈 목록은 "제한 없음"이라 가장 넓다. */
+function isBroader(client: readonly string[], server: readonly string[]) {
+  if (!server.length) return false;
+  if (!client.length) return true;
+  return client.some((value) => !server.includes(value));
+}
+
 function readFlag(value: string | undefined) {
   return value?.trim() === "1";
 }

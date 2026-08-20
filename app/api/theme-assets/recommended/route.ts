@@ -6,6 +6,7 @@ import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAss
 import { adminLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { buildPickerThumbnailIndex, selectPickerThumbnailUrl, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
+import { isCatalogExportAssetAllowed, warnOnCatalogExportScopeDrift } from "@/lib/theme/assetCatalog/exportGate";
 import { findMatchingCatalogRef } from "@/lib/theme/assetCatalog/recommendedCatalog";
 import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
 
@@ -47,7 +48,29 @@ type RecommendedPagePayload = {
   readonly nextCursor?: string;
 };
 
-const recommendedPageCache = createTtlCache<RecommendedPagePayload>({ ttlMs: recommendedPageCacheTtlSeconds * 1000, maxEntries: 128 });
+/**
+ * 캐시에 담는 것은 **catalog ref를 뺀** 페이지다.
+ *
+ * 비싼 부분(200행 조인·랭킹·서명 URL 배치·썸네일 색인)은 30초 재사용해도 안전하다. 서명 URL은
+ * TTL이 10분이라 이 창보다 훨씬 길고, 썸네일은 화면에만 쓰인다.
+ *
+ * catalog ref만 매 요청 다시 읽는다. 그 값은 export가 어떤 **바이트**를 가져올지 정하므로,
+ * 관리자가 같은 Storage 경로에 새 이미지를 올린 직후 30초 동안 예전 object id를 물려주면
+ * 피커는 새 그림을 보여 주면서 결과물에는 옛 그림이 들어간다.
+ */
+type RecommendedPageBase = {
+  readonly entries: readonly {
+    readonly assetId: string;
+    readonly candidate: AdminAssetCandidate;
+    readonly usesPlatformVariant: boolean;
+    readonly target: AdminAssetTarget;
+    readonly matchRank: 0 | 1 | 2;
+    readonly thumbnailUrl?: string;
+  }[];
+  readonly nextCursor?: string;
+};
+
+const recommendedPageCache = createTtlCache<RecommendedPageBase>({ ttlMs: recommendedPageCacheTtlSeconds * 1000, maxEntries: 128 });
 
 export const dynamic = "force-dynamic";
 
@@ -67,12 +90,10 @@ export async function GET(request: NextRequest) {
     // 편집기에서 슬롯을 고를 때마다 호출되는 경로다. 응답은 사용자와 무관하게
     // enabled 에셋만 담으므로 짧게 재사용해 슬롯 클릭마다 200행 조인을 다시 읽지 않게 한다.
     const cacheKey = [platform, assetKind, slotRole ?? "", limit, cursor ? cursorParam : ""].join("|");
-    // catalog ref가 들어간 응답은 애초에 캐시에 넣지 않는다(아래 `set` 참조). 여기서 다시
-    // 거를 필요가 없다 — 조건을 남겨 두면 캐시가 catalog를 담을 수 있는 것처럼 읽힌다.
-    const cached = recommendedPageCache.get(cacheKey);
-    if (cached) return jsonRecommendedPage(cached);
-
     const admin = createAdminClient();
+    const cached = recommendedPageCache.get(cacheKey);
+    if (cached) return jsonRecommendedPage(await attachCatalogRefs(admin, cached, platform));
+
     const { data, error } = await admin
       .from("admin_assets")
       .select(
@@ -115,10 +136,9 @@ export async function GET(request: NextRequest) {
     const hasMore = cursorFiltered.length > limit;
     const signedUrls = await createSignedUrlMap(admin, page.map((item) => item.asset.variants.find((variant) => variant.platform === platform)?.storagePath ?? item.asset.storagePath));
     const signedUrlRecord = Object.fromEntries(signedUrls);
-    const catalogRecords = await readActiveAdminCatalogRecords(admin, page.map((item) => item.asset.id));
     const thumbnailIndex = await readPickerThumbnailIndex(admin, page.map((item) => item.asset.id));
 
-    const items: readonly RecommendedResponseItem[] = page.map((item) => {
+    const entries = page.map((item) => {
       const candidate = canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord);
       const withVariant = withAdminAssetPlatformVariant(candidate, platform);
       /**
@@ -129,7 +149,6 @@ export async function GET(request: NextRequest) {
        * `previewUrl`로 떨어뜨린다.
        */
       const usesPlatformVariant = withVariant.storagePath !== candidate.storagePath;
-      const catalog = findMatchingCatalogRef(catalogRecords, withVariant, platform, usesPlatformVariant);
       const thumbnailUrl = selectPickerThumbnailUrl({
         index: thumbnailIndex,
         adminAssetId: item.asset.id,
@@ -137,25 +156,19 @@ export async function GET(request: NextRequest) {
         usesPlatformVariant,
       });
       return {
-        ...withVariant,
-        ...(catalog ? { catalog } : {}),
+        assetId: item.asset.id,
+        candidate: withVariant,
+        usesPlatformVariant,
         target: item.target,
         matchRank: item.matchRank,
         ...(thumbnailUrl ? { thumbnailUrl } : {}),
       };
     });
     const last = page.at(-1);
-    const payload: RecommendedPagePayload = { items, nextCursor: hasMore && last ? encodeCursor(last) : undefined };
+    const base: RecommendedPageBase = { entries, nextCursor: hasMore && last ? encodeCursor(last) : undefined };
 
-    // catalog ref가 든 응답은 캐시하지 않는다. 관리자가 같은 Storage 경로에 새 이미지를 올린
-    // 직후 30초 동안 예전 object id를 재사용하면, 피커는 새 그림을 보여 주면서 export에는 옛
-    // 바이트를 가리키는 ref를 실어 보낸다.
-    //
-    // 대가는 성능이다 — 링크된 에셋이 늘수록 이 페이지는 캐시를 거의 못 쓰고 슬롯 클릭마다
-    // 200행 조인·서명 배치·registry 조회를 다시 돈다. 캐시를 되살리려면 payload를 registry
-    // 링크에 종속되는 키로 잡거나, 변하지 않는 부분만 캐시하고 catalog ref만 매번 붙여야 한다.
-    if (!items.some((item) => Boolean(item.catalog))) recommendedPageCache.set(cacheKey, payload);
-    return jsonRecommendedPage(payload);
+    recommendedPageCache.set(cacheKey, base);
+    return jsonRecommendedPage(await attachCatalogRefs(admin, base, platform));
   } catch (error) {
     console.error("Recommended asset listing failed", JSON.stringify(serializeError(error)));
     return NextResponse.json({ error: "Failed to load recommended assets." }, { status: 500 });
@@ -177,6 +190,38 @@ async function readActiveAdminCatalogRecords(admin: ReturnType<typeof createAdmi
     console.warn("Recommended catalog lookup failed; falling back to field uploads.", JSON.stringify(serializeError(error)));
     return [];
   }
+}
+
+/**
+ * 캐시된 페이지에 **현재** catalog ref를 붙인다.
+ *
+ * registry 조회만 매 요청 다시 도는 이유는 이 값이 화면이 아니라 export가 가져올 바이트를
+ * 정하기 때문이다. 관리자가 같은 Storage 경로에 새 이미지를 올린 직후 예전 object id를
+ * 물려주면, 피커는 새 그림을 보여 주면서 결과물에는 옛 그림이 들어간다.
+ */
+async function attachCatalogRefs(
+  admin: ReturnType<typeof createAdminClient>,
+  base: RecommendedPageBase,
+  platform: "android" | "ios",
+): Promise<RecommendedPagePayload> {
+  warnOnCatalogExportScopeDrift(platform);
+  const catalogRecords = await readActiveAdminCatalogRecords(admin, base.entries.map((entry) => entry.assetId));
+  const items: readonly RecommendedResponseItem[] = base.entries.map((entry) => {
+    // 범위 판정은 ref를 나눠 주는 서버가 한다. 브라우저는 서버 allowlist를 볼 수 없어, 두
+    // 목록이 어긋나면 범위 밖 ref를 만들고 export 전체가 503이 된다. 여기서 빼면 그 자산은
+    // 기존 File 업로드 경로로 조용히 동작한다.
+    const catalog = isCatalogExportAssetAllowed(platform, adminLogicalAssetId(entry.assetId))
+      ? findMatchingCatalogRef(catalogRecords, entry.candidate, platform, entry.usesPlatformVariant)
+      : undefined;
+    return {
+      ...entry.candidate,
+      ...(catalog ? { catalog } : {}),
+      target: entry.target,
+      matchRank: entry.matchRank,
+      ...(entry.thumbnailUrl ? { thumbnailUrl: entry.thumbnailUrl } : {}),
+    };
+  });
+  return { items, ...(base.nextCursor ? { nextCursor: base.nextCursor } : {}) };
 }
 
 // 서명 URL TTL(10분)보다 훨씬 짧게 잡아, 캐시된 응답의 URL이 만료된 채 나가지 않게 한다.
