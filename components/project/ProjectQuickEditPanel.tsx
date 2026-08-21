@@ -30,6 +30,7 @@ export function ProjectQuickEditPanel({
   adminAssets,
   hasMoreAdminAssets,
   isLoadingAdminAssets,
+  allowTemplateAssetRemoval,
   templateId,
   template,
   platform,
@@ -79,6 +80,7 @@ export function ProjectQuickEditPanel({
   adminAssets: Array<AdminAssetCandidate & { previewUrl?: string }>;
   hasMoreAdminAssets: boolean;
   isLoadingAdminAssets: boolean;
+  allowTemplateAssetRemoval: boolean;
   templateId: ThemeTemplateId;
   template: ThemeTemplate;
   platform: ThemePlatform;
@@ -233,6 +235,7 @@ export function ProjectQuickEditPanel({
         isLoadingAdminAssets={isLoadingAdminAssets}
         onLoadMoreAdminAssets={onLoadMoreAdminAssets}
         removableUploadIds={removableUploadIds}
+        allowTemplateAssetRemoval={allowTemplateAssetRemoval}
         onRemoveUpload={(uploadId) => onRemoveUpload(slot, uploadId)}
       />
 
@@ -410,6 +413,7 @@ function CandidatePicker({
   onToggle,
   onApplyCandidate,
   removableUploadIds,
+  allowTemplateAssetRemoval,
   onRemoveUpload,
   hasMoreAdminAssets,
   isLoadingAdminAssets,
@@ -422,6 +426,7 @@ function CandidatePicker({
   onToggle: () => void;
   onApplyCandidate: (candidate: SlotCandidate) => void;
   removableUploadIds: Set<string>;
+  allowTemplateAssetRemoval: boolean;
   onRemoveUpload: (uploadId: string) => void;
   hasMoreAdminAssets: boolean;
   isLoadingAdminAssets: boolean;
@@ -522,7 +527,7 @@ function CandidatePicker({
                 candidate={candidate}
                 layoutKind={layoutKind}
                 onApply={onApplyCandidate}
-                onRemove={isRemovableUploadCandidate(candidate) && removableUploadIds.has(candidate.id) ? onRemoveUpload : undefined}
+                onRemove={isRemovableUploadCandidate(candidate, { allowTemplateAssetRemoval }) && removableUploadIds.has(candidate.id) ? onRemoveUpload : undefined}
               />
             )) : activeGroup.key === "admin" && !isLoadingAdminAssets ? (
               <AdminAssetPlaceholderCard layoutKind={layoutKind} />

@@ -124,8 +124,8 @@ export function isSlotVisibleInGroup(slot: ThemeAssetSlot, group: ThemeSlotGroup
 /**
  * 사용자가 지울 수 있는 후보인가.
  *
- * `upload`은 이번 편집에서 올린 것, `template`은 저장된 시스템 템플릿을 열 때 원격 ref에서
- * hydrate되어 돌아온 것이다. 둘 다 이 프로젝트가 소유한 에셋이므로 지울 수 있어야 한다.
+ * `upload`은 이번 편집에서 올린 것이다. `template`은 저장된 시스템 템플릿을 열 때 원격 ref에서
+ * hydrate되어 돌아온 것으로, 일반 편집에서는 보호하고 관리자 시스템 템플릿 편집에서만 지울 수 있다.
  * `admin`은 공용 라이브러리라 슬롯에서 빼는 것과 삭제가 다른 의미이므로 제외한다.
  * `inherited` 후보는 원본 슬롯의 선택을 읽기 전용으로 보여 주는 것이므로 파생 슬롯에서
  * 삭제할 수 없다. 삭제 버튼을 노출하면 파생 슬롯에는 owner entry가 없어 아무 동작도 하지 않는다.
@@ -134,8 +134,13 @@ export function isSlotVisibleInGroup(slot: ThemeAssetSlot, group: ThemeSlotGroup
  * 이 함수는 "삭제 버튼을 보여줄 종류인가"만 답한다. 데스크톱·모바일 두 패널이 같은 기준을
  * 쓰도록 여기 한 곳에 둔다.
  */
-export function isRemovableUploadCandidate(candidate: Pick<SlotCandidate, "source" | "inherited">) {
-  return !candidate.inherited && (candidate.source === "upload" || candidate.source === "template");
+export function isRemovableUploadCandidate(
+  candidate: Pick<SlotCandidate, "source" | "inherited">,
+  { allowTemplateAssetRemoval = false }: { allowTemplateAssetRemoval?: boolean } = {},
+) {
+  if (candidate.inherited) return false;
+  if (candidate.source === "upload") return true;
+  return candidate.source === "template" && allowTemplateAssetRemoval;
 }
 
 export function getSlotFile(slot: ThemeAssetSlot | undefined, files: ThemeProjectFile[]) {

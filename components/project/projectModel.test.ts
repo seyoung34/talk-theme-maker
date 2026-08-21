@@ -7,13 +7,18 @@ import { getDefaultColor, getInitialSlotCandidateSelections } from "@/lib/theme/
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
 
 describe("isRemovableUploadCandidate", () => {
-  it("직접 소유한 사용자 업로드와 hydrate된 템플릿 업로드는 삭제할 수 있다", () => {
+  it("직접 소유한 사용자 업로드는 삭제할 수 있다", () => {
     expect(isRemovableUploadCandidate({ source: "upload" })).toBe(true);
-    expect(isRemovableUploadCandidate({ source: "template" })).toBe(true);
+  });
+
+  it("템플릿 에셋은 관리자 편집에서만 삭제할 수 있다", () => {
+    expect(isRemovableUploadCandidate({ source: "template" })).toBe(false);
+    expect(isRemovableUploadCandidate({ source: "template" }, { allowTemplateAssetRemoval: true })).toBe(true);
   });
 
   it("상속된 업로드 후보는 원본 슬롯 소유이므로 삭제할 수 없다", () => {
     expect(isRemovableUploadCandidate({ source: "template", inherited: true })).toBe(false);
+    expect(isRemovableUploadCandidate({ source: "template", inherited: true }, { allowTemplateAssetRemoval: true })).toBe(false);
     expect(isRemovableUploadCandidate({ source: "upload", inherited: true })).toBe(false);
   });
 
@@ -152,7 +157,7 @@ describe("시스템 템플릿과 추천 에셋 후보 병합", () => {
       previewUrl: "blob:template-preview",
       selected: true,
     });
-    expect(isRemovableUploadCandidate(matching[0])).toBe(true);
+    expect(isRemovableUploadCandidate(matching[0], { allowTemplateAssetRemoval: true })).toBe(true);
   });
 
   it("ID가 다른 추천 에셋은 별도 후보로 유지한다", () => {

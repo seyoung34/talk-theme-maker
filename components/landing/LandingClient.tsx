@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   ArrowRight,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -330,7 +329,7 @@ export default function LandingClient() {
               <Link
                 href="/template"
                 onClick={preserveUtmNavigation}
-                className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#fee500] px-8 py-4 text-base font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8]"
+                className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#fee500] px-8 py-4 text-base font-black text-[#191600] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] hover:shadow-[0_10px_24px_rgba(47,107,191,0.14)] focus:outline-none focus:ring-4 focus:ring-[#fff2a8]"
               >
                 내 테마 만들기
                 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -701,7 +700,7 @@ function ShowcaseSection() {
           <Link
             href="/template"
             onClick={preserveUtmNavigation}
-            className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#fee500] px-7 py-4 text-base font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8]"
+            className="group inline-flex items-center justify-center gap-2 rounded-full bg-[#fee500] px-7 py-4 text-base font-black text-[#191600] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] hover:shadow-[0_10px_24px_rgba(47,107,191,0.14)] focus:outline-none focus:ring-4 focus:ring-[#fff2a8]"
           >
             나도 이렇게 만들기
             <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -790,7 +789,7 @@ function HeroActions({ viewportGroup }: { viewportGroup: "mobile" | "desktop" })
           preserveUtmNavigation(event);
           trackAnalyticsEvent("landing_primary_cta_clicked", { viewport_group: viewportGroup, destination: "template" });
         }}
-        className="group inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[#fee500] px-2 py-3.5 text-[14px] font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:gap-2 sm:px-4 sm:text-[15px] lg:flex-none lg:px-6 lg:py-4 lg:text-base"
+        className="group inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[#fee500] px-2 py-3.5 text-[14px] font-black text-[#191600] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] hover:shadow-[0_10px_24px_rgba(47,107,191,0.14)] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:gap-2 sm:px-4 sm:text-[15px] lg:flex-none lg:px-6 lg:py-4 lg:text-base"
       >
         무료로 시작하기
         <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -822,28 +821,36 @@ function preserveUtmNavigation(event: MouseEvent<HTMLAnchorElement>, destination
  * 히어로 CTA는 "만들기 시작"이고, 이 섹션의 CTA는 "가입"이라 목적이 겹치지 않는다.
  */
 function SignupOfferSection() {
-  const support = [
-    { icon: Smartphone, title: "Android · iPhone", body: "APK · .ktheme 지원" },
-    { icon: MessageCircle, title: "카카오톡 적용용", body: "받은 파일로 적용" },
-    { icon: CheckCircle2, title: "받기 전 미리보기", body: "채팅방 화면 확인" },
-  ];
-
   return (
     <section className="relative">
       {/* 아래 최종 CTA와 이어지는 구간이라 아래 여백은 줄여 둘을 한 덩어리로 읽히게 한다 */}
       <div className="px-5 pt-10 pb-6 mx-auto max-w-5xl md:px-8 md:pt-20 md:pb-8">
         <Reveal>
-          <div className="overflow-hidden rounded-[28px] border border-[#f2df86] bg-[#fffdf0] p-6 shadow-[0_24px_60px_rgba(242,183,5,0.14)] sm:rounded-[36px] sm:p-10">
+          {/*
+            카드는 페이지 공통인 흰/하늘 베이스를 쓰고, 옐로우는 배지·제목 하이라이트·주 버튼에만 남긴다.
+            패널 전체를 노랗게 칠하면 바로 위 파스텔 카드 섹션과 색이 부딪힌다.
+          */}
+          <div className="overflow-hidden rounded-[28px] border border-[#e3ecf7] bg-white/85 p-6 shadow-[0_24px_60px_rgba(47,107,191,0.08)] backdrop-blur sm:rounded-[36px] sm:p-10">
             <div className="text-center">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fee500] px-3 py-1.5 text-[12px] font-black text-[#191600]">
                 <Gift className="h-3.5 w-3.5" aria-hidden="true" />
                 가입 혜택
               </span>
-              <h2 className="mt-4 text-[26px] font-black leading-tight text-[#4d3f00] sm:text-[40px]">
-                가입하면 1크레딧,
+              <h2 className="mt-4 text-[26px] font-black leading-tight sm:text-[40px]">
+                가입하면{" "}
+                {/* 히어로 제목과 같은 손그림 하이라이트로 브랜드 톤을 잇는다 */}
+                <span className="relative inline-block align-baseline">
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-[-0.14em] bottom-[0.06em] z-0 h-[0.4em] -rotate-2 rounded-[0.32em] bg-[rgba(254,229,0,0.62)]"
+                    style={{ transformOrigin: "left center" }}
+                  />
+                  <span className="relative text-[#2f6bbf]">1크레딧</span>
+                </span>
+                ,
                 <br />첫 테마 파일은 무료예요
               </h2>
-              <p className="mx-auto mt-3 max-w-xl text-[14px] font-semibold leading-7 text-[#7c6c34] sm:mt-4 sm:text-[16px] sm:leading-8">
+              <p className="mx-auto mt-3 max-w-xl text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
                 카카오나 이메일로 가입하면 1크레딧이 바로 지급됩니다. 이후 테마 파일은 1크레딧부터이고,
                 결제는 크레딧을 충전할 때만 발생해요.
               </p>
@@ -856,7 +863,7 @@ function SignupOfferSection() {
                   preserveUtmNavigation(event, "/login");
                   trackAnalyticsEvent("landing_signup_cta_clicked", { destination: "login" });
                 }}
-                className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#191600] px-7 py-4 text-base font-black text-white shadow-[0_16px_32px_rgba(25,22,0,0.24)] transition hover:-translate-y-0.5 hover:bg-[#2b2600] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:w-auto"
+                className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#fee500] px-7 py-4 text-base font-black text-[#191600] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] hover:shadow-[0_10px_24px_rgba(47,107,191,0.14)] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:w-auto"
               >
                 무료로 가입하고 1크레딧 받기
                 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
@@ -864,24 +871,10 @@ function SignupOfferSection() {
               {/* 보조 동선이므로 주 버튼보다 한 단계 낮은 무게로 둔다 */}
               <Link
                 href="/credits"
-                className="inline-flex w-full items-center justify-center rounded-full border border-[#e5d287] bg-white/70 px-6 py-3 text-[15px] font-black text-[#7c6c34] transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:w-auto"
+                className="inline-flex w-full items-center justify-center rounded-full border border-[#cfe0ff] bg-white/85 px-6 py-3 text-[15px] font-black text-[#2f6bbf] transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus:ring-4 focus:ring-[#dcebff] sm:w-auto"
               >
                 가격 보기
               </Link>
-            </div>
-
-            <div className="grid gap-3 mt-8 border-t border-[#f0e3ac] pt-6 sm:grid-cols-3">
-              {support.map(({ icon: Icon, title, body }) => (
-                <div key={title} className="flex items-center gap-2.5 text-[12px] sm:justify-center">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-white text-[#c9a227]">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0">
-                    <strong className="block font-black text-[#5f5120]">{title}</strong>
-                    <span className="mt-0.5 block font-semibold text-[#96854a]">{body}</span>
-                  </span>
-                </div>
-              ))}
             </div>
           </div>
         </Reveal>

@@ -98,3 +98,26 @@ Testing/lint setup: Vitest (`vitest.config.ts`, happy-dom env, `@/` alias, setup
 Next 15 uses `./.next/types/routes.d.ts` for generated route types in this project; keep `next-env.d.ts` on that path.
 
 `npm run build` may show existing Turbopack/NFT warnings around the Android sample project. Treat warnings as pre-existing unless the current change clearly introduced them.
+
+## Agent Control Layer (MVP)
+
+- `docs/control/STATUS.md` is a local-only operational snapshot. The `docs/` directory is intentionally ignored by Git; never force-add this file to the application repository. It is a convenience for the coordinator/operator, not the source of truth for code review or deployment state.
+- Update `STATUS.md` only at meaningful checkpoints: when a Normal-or-larger task starts, when it completes, when it is blocked, or when a user Decision Gate is needed. Simple tasks do not require a status update.
+- Keep the existing `docs/plans/` structure as the detailed plan queue. Do not create an Initiative, Decision database, or Review file for every task. Add those only when repeated work shows a real need.
+- Use Orca messages for cross-agent handoff and review instead of copying full conversations or creating a per-task artifact by default. A handoff should contain only:
+
+  ```text
+  Task
+  Goal
+  Scope
+  Changed
+  Validation
+  Risks / Open Questions
+  Review Request
+  ```
+
+- A review response should state `Verdict` (`approve`, `changes_requested`, or `blocked`), list findings by severity, report validation performed, and identify any user Decision Gate. The reviewer reads the task, relevant scoped `AGENTS.md`, current code, Git diff, and handoff; it should not reread the full prior conversation.
+- Default routing is adaptive: Simple = one agent; Normal = Builder then Reviewer; Complex = Coordinator with explicit Orca tasks and a reviewer; Strategy = Product/Growth analysis plus technical feasibility review when useful. Claude and Codex are not assigned permanent Builder/Reviewer identities.
+- Use one writer per worktree and run review sequentially after the writer's changes are stable. Use separate worktrees when multiple agents must write concurrently.
+- Agents may prepare branches, commits, PRs, and scoped verification. Explicit user approval is required before production deployment, data deletion, irreversible database migrations, high-cost actions, or security-risk changes. A passing CI check is not product approval.
+- The Coordinator should surface only unresolved product/UX/behavior changes and the approval boundaries above. Technical disagreements should receive one evidence-based peer review attempt before becoming a user Decision Gate.
