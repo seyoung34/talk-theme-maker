@@ -19,6 +19,7 @@
     "docs:backup:dry-run": "node scripts/backup-private-docs.mjs --dry-run",
     "assets:landing": "node scripts/optimize-landing-images.mjs",
     "assets:guide": "node scripts/optimize-guide-images.mjs",
+    "capture": "node scripts/capture/run.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
