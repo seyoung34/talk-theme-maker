@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
+import { claimSignupBonusWithClient, isSignupBonusUnavailableError } from "@/lib/billing/credits";
 import { readMinimumAgeConfirmationFromSearchParams, readPolicyConsentFromSearchParams, recordCurrentPolicyConsents, recordMinimumAgeConfirmation } from "@/lib/policies/consent";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/supabase/config";
@@ -26,11 +27,21 @@ export async function GET(request: NextRequest) {
     if (error) return redirectToLogin(next, "인증 링크가 만료됐거나 이미 사용됐습니다. 인증 메일을 다시 요청해 주세요.");
     if (policyConsentSource) await recordCurrentPolicyConsents(supabase, policyConsentSource);
     else if (minimumAgeConfirmationSource) await recordMinimumAgeConfirmation(supabase, minimumAgeConfirmationSource);
+    await claimSignupBonusAfterAuth(supabase);
   } catch {
     return redirectToLogin(next, "인증을 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }
 
   return NextResponse.redirect(new URL(next, getSiteUrl()));
+}
+
+async function claimSignupBonusAfterAuth(supabase: Awaited<ReturnType<typeof createClient>>) {
+  try {
+    await claimSignupBonusWithClient(supabase);
+  } catch (error) {
+    // 이미 지급된 계정·중지된 캠페인·기존 계정은 인증 자체를 실패시키지 않는다.
+    if (!isSignupBonusUnavailableError(error)) console.error("Signup bonus claim after auth callback failed.", error);
+  }
 }
 
 function redirectToLogin(next: string, message: string) {

@@ -60,7 +60,7 @@ test.describe("모바일 편집기", () => {
       }));
       expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
 
-      const cta = page.getByRole("link", { name: "내 테마 만들기" }).first();
+      const cta = page.getByRole("link", { name: /무료로 시작하기/ }).first();
       const box = await cta.boundingBox();
       expect(box).not.toBeNull();
       expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -68,19 +68,23 @@ test.describe("모바일 편집기", () => {
     }
   });
 
-  test("랜딩은 오프닝 뒤에 타이틀, 목업, CTA 순서로 보여 준다", async ({ page }) => {
+  test("랜딩은 핵심 콘텐츠를 초기 DOM에 렌더링하고 모바일 오프닝을 생략한다", async ({ page }) => {
     await page.goto("/");
     const opening = page.getByTestId("hero-opening");
-    await expect(opening).toBeVisible();
+    await expect(opening).toHaveCount(1);
+    await expect(opening).toBeHidden();
 
     const title = page.getByRole("heading", { level: 1 });
     await expect(title).toBeVisible();
-    await expect(opening).toHaveCount(0);
 
     const mockup = page.getByTestId("hero-mockup");
-    const cta = page.getByRole("link", { name: "내 테마 만들기" }).first();
+    const cta = page.getByRole("link", { name: /무료로 시작하기/ }).first();
     await expect(cta).toBeVisible();
     await expect(mockup).toBeVisible();
+    await page.waitForFunction(() => {
+      const image = document.querySelector('[data-testid="hero-mockup"]');
+      return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0;
+    });
 
     const [titleBox, mockupBox, ctaBox] = await Promise.all([
       title.boundingBox(),
@@ -98,9 +102,10 @@ test.describe("모바일 편집기", () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
 
-    await expect(page.getByTestId("hero-opening")).toHaveCount(0);
+    await expect(page.getByTestId("hero-opening")).toHaveCount(1);
+    await expect(page.getByTestId("hero-opening")).toBeHidden();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.getByTestId("hero-mockup")).toBeVisible();
-    await expect(page.getByRole("link", { name: "내 테마 만들기" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /무료로 시작하기/ }).first()).toBeVisible();
   });
 });

@@ -158,6 +158,6 @@ test.describe("마이페이지 내보내기 결과 복구", () => {
     await page.goto("/account");
 
     await expect(page.getByRole("heading", { level: 1, name: "마이페이지" })).toBeVisible();
-    await expect(page.getByText("아직 내보내기 이력이 없습니다.")).toBeVisible();
+    await expect(page.getByText("아직 받은 테마 파일이 없습니다.")).toBeVisible();
   });
 });

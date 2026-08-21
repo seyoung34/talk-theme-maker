@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   ArrowRight,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -166,7 +167,6 @@ function useReveal<T extends HTMLElement>(): [React.RefObject<T | null>, boolean
 export default function LandingClient() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const [heroStage, setHeroStage] = useState<"opening" | "leaving" | "content">("opening");
   const active = subjects[activeIndex];
 
   useEffect(() => {
@@ -186,22 +186,9 @@ export default function LandingClient() {
     return () => media.removeEventListener("change", update);
   }, []);
 
-  useEffect(() => {
-    if (prefersReducedMotion) {
-      setHeroStage("content");
-      return;
-    }
-
-    const leaveTimer = window.setTimeout(() => setHeroStage("leaving"), 900);
-    const contentTimer = window.setTimeout(() => setHeroStage("content"), 1220);
-    return () => {
-      window.clearTimeout(leaveTimer);
-      window.clearTimeout(contentTimer);
-    };
-  }, [prefersReducedMotion]);
-
+  // 한국어를 어절 단위로 끊어 좁은 화면에서도 낱글자 단위로 잘리지 않게 한다.
   return (
-    <main className="relative min-h-screen overflow-x-hidden bg-[linear-gradient(180deg,#e8f1ff_0%,#f4f9ff_16%,#ffffff_40%,#f7fbff_66%,#e9f2ff_100%)] text-[var(--color-on-background)]">
+    <main className="relative min-h-screen overflow-x-hidden break-keep bg-[linear-gradient(180deg,#e8f1ff_0%,#f4f9ff_16%,#ffffff_40%,#f7fbff_66%,#e9f2ff_100%)] text-[var(--color-on-background)]">
       {/* 페이지 전체를 덮는 단일 배경 레이어 — 섹션 경계에 걸리지 않아 구분선이 생기지 않는다 */}
       {/* <div aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute left-[-8rem] top-[2%] h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle,rgba(147,197,253,0.42),transparent_68%)] blur-3xl outline outline-red-500" />
@@ -216,90 +203,100 @@ export default function LandingClient() {
       {/* ===================== HERO ===================== */}
       <section className="relative">
         {/* 손그림 두들 */}
-        <Star className="pointer-events-none absolute left-[6%] top-[18%] z-0 h-6 w-6 rotate-12 text-[#fee500] drop-shadow-sm md:h-8 md:w-8" />
+        {/* 히어로가 짧아지면서 배지와 겹치던 위치를 제목 왼쪽으로 내렸다. 좁은 화면은 여백이 없어 두들을 숨긴다. */}
+        <Star className="pointer-events-none absolute left-[5%] top-[30%] z-0 hidden h-6 w-6 rotate-12 text-[#fee500] drop-shadow-sm md:block md:h-8 md:w-8" />
         <MessageCircle className="pointer-events-none absolute left-[2%] top-[52%] -z-0 hidden h-9 w-9 -rotate-6 text-[#8fc0ff] md:block" />
         <Heart className="pointer-events-none absolute bottom-[16%] left-[44%] -z-0 hidden h-7 w-7 rotate-6 fill-[#ffd6df] text-[#ffb3c2] lg:block" />
         <Star className="pointer-events-none absolute right-[46%] top-[10%] -z-0 hidden h-6 w-6 fill-[#fee500] text-[#fee500] lg:block" />
 
-        {heroStage === "content" ? (
-          <div className="mx-auto grid w-full max-w-7xl items-center gap-6 px-5 py-8 md:gap-8 md:px-8 md:py-12 lg:min-h-[calc(100svh-73px)] lg:grid-cols-[minmax(0,0.94fr)_minmax(420px,1.06fr)] lg:py-14">
-            <div className="relative z-10 max-w-3xl text-center motion-safe:animate-[hero-title-in_620ms_cubic-bezier(0.22,1,0.36,1)_both] lg:text-left">
-              <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-1.5 text-[12px] font-black text-[#3d7bd6] shadow-sm backdrop-blur">
-                <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
-                세상에 하나뿐인 카카오톡 테마
-              </span>
+        <div className="mx-auto grid w-full max-w-7xl items-center gap-6 px-5 py-8 md:gap-8 md:px-8 md:py-12 lg:min-h-[calc(100svh-73px)] lg:grid-cols-[minmax(0,0.94fr)_minmax(420px,1.06fr)] lg:py-14">
+          <div className="hero-anim hero-anim-title relative z-10 max-w-3xl text-center lg:text-left">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-1.5 text-[12px] font-black text-[#3d7bd6] shadow-sm backdrop-blur">
+              <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
+              세상에 하나뿐인 카카오톡 테마
+            </span>
 
-              <h1 className="mt-4 text-[34px] font-black leading-[1.14] text-[var(--color-on-background)] sm:mt-5 sm:text-[58px] lg:text-[74px]">
-                <span className="block">내가 좋아하는</span>
-                <span className="block mt-1">
-                  <span className="relative inline-block align-baseline">
-                    <span
-                      aria-hidden="true"
-                      className="absolute inset-x-[-0.14em] bottom-[0.08em] z-0 h-[0.42em] -rotate-2 rounded-[0.32em] bg-[rgba(254,229,0,0.62)]"
-                      style={{ transformOrigin: "left center" }}
-                    />
-                    <span
-                      key={active.keyword}
-                      className="relative text-[#2f6bbf] motion-safe:animate-[word-pop_520ms_cubic-bezier(0.34,1.56,0.64,1)]"
-                    >
-                      {active.keyword}
-                    </span>
+            <h1 className="mt-4 text-[34px] font-black leading-[1.14] text-[var(--color-on-background)] sm:mt-5 sm:text-[58px] lg:text-[74px]">
+              <span className="block">내가 좋아하는</span>
+              <span className="mt-1 block">
+                <span className="relative inline-block align-baseline">
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-[-0.14em] bottom-[0.08em] z-0 h-[0.42em] -rotate-2 rounded-[0.32em] bg-[rgba(254,229,0,0.62)]"
+                    style={{ transformOrigin: "left center" }}
+                  />
+                  <span
+                    key={active.keyword}
+                    className="relative text-[#2f6bbf] motion-safe:animate-[word-pop_520ms_cubic-bezier(0.34,1.56,0.64,1)]"
+                  >
+                    {active.keyword}
                   </span>
-                  으로
                 </span>
-                {/* 자동 줄바꿈에 맡기면 끊기는 위치가 화면 폭마다 달라져 "카카오톡 테마를 / 만들어보세요"로 고정한다 */}
-                <span className="block mt-1">
-                  카카오톡 테마를
-                  <br />
-                  만들어보세요
-                </span>
-              </h1>
+                으로
+              </span>
+              {/* 자동 줄바꿈에 맡기면 끊기는 위치가 화면 폭마다 달라져 "카카오톡 테마를 / 만들어보세요"로 고정한다 */}
+              <span className="mt-1 block">
+                카카오톡 테마를
+                <br />
+                만들어보세요
+              </span>
+            </h1>
 
-              <div className="mt-8 hidden gap-5 motion-safe:animate-[hero-cta-in_520ms_cubic-bezier(0.22,1,0.36,1)_360ms_both] lg:grid">
-                <HeroActions viewportGroup="desktop" />
-                <HeroBadges />
-              </div>
-            </div>
-
-            <div className="motion-safe:animate-[hero-mockup-in_700ms_cubic-bezier(0.22,1,0.36,1)_140ms_both]">
-              <HeroMockup active={active} />
-            </div>
-
-            <div className="grid gap-5 text-center motion-safe:animate-[hero-cta-in_520ms_cubic-bezier(0.22,1,0.36,1)_360ms_both] lg:hidden">
-              <div className="w-full max-w-xl">
-                <HeroActions viewportGroup="mobile" />
-              </div>
-              <HeroBadges />
-            </div>
-          </div>
-        ) : (
-          <div className="mx-auto flex min-h-[calc(100svh-73px)] max-w-4xl items-center justify-center px-5 py-8 text-center md:px-8">
-            <p
-              data-testid="hero-opening"
-              aria-hidden="true"
-              className={`text-[30px] font-black leading-[1.25] tracking-[-0.045em] text-[#2f6bbf] sm:text-[52px] lg:text-[68px] ${heroStage === "leaving" ? "motion-safe:animate-[hero-opening-out_320ms_cubic-bezier(0.55,0,1,0.45)_both]" : "motion-safe:animate-[hero-opening-in_560ms_cubic-bezier(0.22,1,0.36,1)_both]"}`}
-            >
-              <span className="block">세상에 하나뿐인</span>
-              <span className="mt-1 block">나만의 카톡 테마</span>
+            {/*
+              히어로는 제목·목업·CTA만 남긴다. 가입 혜택과 지원 환경은 하단 SignupOfferSection이 맡는다.
+            */}
+            <p className="mx-auto mt-5 max-w-xl text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:text-[17px] sm:leading-8 lg:mx-0">
+              좋아하는 사진을 고르고 미리보면서, 카카오톡에 그대로 적용할 테마를 만들어보세요.
             </p>
-          </div>
-        )}
-      </section>
 
-      {/* ===================== USE CASES ===================== */}
-      <UseCaseSection />
+            <div className="hero-anim hero-anim-cta mt-8 hidden lg:block">
+              <HeroActions viewportGroup="desktop" />
+            </div>
+          </div>
+
+          <div className="hero-anim hero-anim-mockup">
+            <HeroMockup active={active} />
+          </div>
+
+          <div className="hero-anim hero-anim-cta w-full max-w-xl mx-auto lg:hidden">
+            <HeroActions viewportGroup="mobile" />
+          </div>
+        </div>
+
+        {/*
+          콘텐츠는 초기 DOM에 존재하고, 오프닝은 데스크톱에서만 잠깐 덮는 장식 레이어로 동작한다.
+          반투명이면 뒤 히어로가 비쳐 두 화면이 겹쳐 보이므로 배경은 불투명하게 깔고,
+          페이지 배경 그라디언트와 같은 색으로 시작해 걷힐 때 이음매가 보이지 않게 한다.
+        */}
+        <div
+          data-testid="hero-opening"
+          aria-hidden="true"
+          className="hero-opening pointer-events-none absolute inset-x-0 top-0 z-20 hidden h-[calc(100svh-73px)] items-center justify-center bg-[linear-gradient(180deg,#e8f1ff_0%,#f2f8ff_60%,#ffffff_100%)] px-5 text-center motion-reduce:hidden lg:flex"
+        >
+          <p className="hero-opening-copy text-[30px] font-black leading-[1.25] tracking-[-0.045em] text-[#2f6bbf] sm:text-[52px] lg:text-[68px]">
+            <span className="block">세상에 하나뿐인</span>
+            <span className="mt-1 block">나만의 카톡 테마</span>
+          </p>
+        </div>
+      </section>
 
       {/* ===================== SHOWCASE ===================== */}
       <ShowcaseSection />
 
+      {/* ===================== USE CASES ===================== */}
+      <UseCaseSection />
+
       {/* ===================== FLOW ===================== */}
       <FlowSection />
+
+      {/* ===================== SIGNUP OFFER ===================== */}
+      <SignupOfferSection />
 
       {/* ===================== FINAL CTA ===================== */}
       <section className="relative">
         <Sparkles className="pointer-events-none absolute left-[12%] top-[24%] z-0 hidden h-7 w-7 rotate-12 text-[#fee500] lg:block" />
         <Heart className="pointer-events-none absolute right-[14%] bottom-[24%] -z-0 hidden h-6 w-6 rotate-6 fill-[#ffd6df] text-[#ffb3c2] lg:block" />
-        <div className="max-w-4xl px-5 py-12 mx-auto text-center md:px-8 md:py-28">
+        <div className="max-w-4xl px-5 pt-6 pb-12 mx-auto text-center md:px-8 md:pt-12 md:pb-24">
           <Reveal>
             <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-1.5 text-[12px] font-black text-[#3d7bd6] shadow-sm backdrop-blur">
               <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
@@ -373,24 +370,30 @@ export default function LandingClient() {
             transform: none;
           }
         }
-        @keyframes hero-opening-in {
-          0% {
-            opacity: 0;
-            transform: translateY(0.4em);
+        @keyframes hero-opening-overlay-out {
+          0%,
+          52% {
+            opacity: 1;
+            visibility: visible;
           }
           100% {
-            opacity: 1;
-            transform: translateY(0);
+            opacity: 0;
+            visibility: hidden;
           }
         }
-        @keyframes hero-opening-out {
+        @keyframes hero-opening-copy-out {
           0% {
+            opacity: 0;
+            transform: translateY(16px) scale(0.96);
+          }
+          26%,
+          52% {
             opacity: 1;
-            transform: translateY(0);
+            transform: none;
           }
           100% {
             opacity: 0;
-            transform: translateY(-0.32em);
+            transform: translateY(-14px) scale(0.985);
           }
         }
         @keyframes hero-title-in {
@@ -431,6 +434,50 @@ export default function LandingClient() {
           }
           22% {
             transform: translateY(-0.24em);
+          }
+        }
+        /*
+          오프닝과 히어로 등장 순서를 한곳에서 맞춘다. 오프닝은 lg 이상에서만 뜨므로
+          그 아래 화면에서는 지연 없이 곧바로 콘텐츠가 등장한다.
+        */
+        .hero-opening {
+          animation: hero-opening-overlay-out 980ms ease-in-out both;
+        }
+        .hero-opening-copy {
+          animation: hero-opening-copy-out 980ms ease-in-out both;
+        }
+        .hero-anim {
+          animation-fill-mode: both;
+          animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .hero-anim-title {
+          animation-name: hero-title-in;
+          animation-duration: 620ms;
+        }
+        .hero-anim-mockup {
+          animation-name: hero-mockup-in;
+          animation-duration: 700ms;
+          animation-delay: 140ms;
+        }
+        .hero-anim-cta {
+          animation-name: hero-cta-in;
+          animation-duration: 520ms;
+          animation-delay: 320ms;
+        }
+        @media (min-width: 1024px) {
+          .hero-anim-title {
+            animation-delay: 520ms;
+          }
+          .hero-anim-mockup {
+            animation-delay: 600ms;
+          }
+          .hero-anim-cta {
+            animation-delay: 760ms;
+          }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .hero-anim {
+            animation: none !important;
           }
         }
         .reveal-item {
@@ -483,17 +530,17 @@ function UseCaseSection() {
       <Sparkles className="pointer-events-none absolute right-[8%] top-[12%] -z-0 hidden h-7 w-7 rotate-12 text-[#fee500] lg:block" />
       <MessageCircle className="pointer-events-none absolute left-[6%] bottom-[14%] -z-0 hidden h-8 w-8 -rotate-6 text-[#8fc0ff] lg:block" />
 
-      <div className="px-5 py-10 mx-auto max-w-7xl md:px-8 md:py-24">
+      <div className="px-5 py-10 mx-auto max-w-7xl md:px-8 md:py-20">
         <Reveal className="max-w-2xl mx-auto text-center">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#3d7bd6]">
             Why TalkTheme
           </p>
           <h2 className="mt-3 text-balance text-[26px] font-black leading-tight sm:text-[44px]">
-            이런 순간에, 톡테마
+            내 취향을 담고, 카카오톡에서 써요
           </h2>
           <p className="mt-3 text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
-            세상에 하나뿐인 나만의 테마,
-            선물하기 좋아요.
+            사진·색상·말풍선을 바꾸는 재미부터 Android·iPhone용 파일로 받는 과정까지,
+            한 곳에서 이어집니다.
           </p>
         </Reveal>
 
@@ -503,7 +550,11 @@ function UseCaseSection() {
             const Icon = item.icon;
             return (
               <Reveal key={item.title} delay={(index % 4) * 90}>
-                <article className="group relative h-full overflow-hidden rounded-[20px] border border-[#e3ecf7] bg-white p-4 shadow-[0_18px_42px_rgba(47,107,191,0.06)] transition hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(47,107,191,0.14)] sm:rounded-[28px] sm:p-6">
+                {/* 카드 자체에 파스텔 톤을 입혀, 뒤따르는 흐름 섹션과 화면 인상이 겹치지 않게 한다 */}
+                <article
+                  className="group relative h-full overflow-hidden rounded-[20px] border border-white p-4 shadow-[0_18px_42px_rgba(47,107,191,0.06)] transition hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(47,107,191,0.14)] sm:rounded-[28px] sm:p-6"
+                  style={{ background: item.tint }}
+                >
                   <span
                     className="absolute text-lg transition right-3 top-3 opacity-90 group-hover:scale-110 sm:right-4 sm:top-4 sm:text-2xl"
                     aria-hidden="true"
@@ -511,8 +562,8 @@ function UseCaseSection() {
                     {item.emoji}
                   </span>
                   <span
-                    className="grid h-10 w-10 place-items-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl"
-                    style={{ background: item.tint, color: item.accent }}
+                    className="grid h-10 w-10 place-items-center rounded-xl bg-white/85 sm:h-12 sm:w-12 sm:rounded-2xl"
+                    style={{ color: item.accent }}
                   >
                     <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
                   </span>
@@ -538,7 +589,7 @@ function ShowcaseSection() {
   return (
     <section className="relative">
 
-      <div className="py-10 mx-auto max-w-7xl md:py-24">
+      <div className="py-10 mx-auto max-w-7xl md:py-20">
         <Reveal className="max-w-2xl px-5 mx-auto text-center md:px-8">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]">
             Real Result
@@ -664,13 +715,16 @@ function ShowcaseSection() {
 function FlowSection() {
   return (
     <section className="relative">
-      <div className="mx-auto grid max-w-7xl gap-6 px-5 py-10 md:gap-8 md:px-8 md:py-24 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+      <div className="mx-auto grid max-w-7xl gap-8 px-5 py-10 md:px-8 md:py-20 lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:gap-16">
         <Reveal>
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]">
             Simple Flow
           </p>
-          <h2 className="mt-3 max-w-lg text-balance text-[26px] font-black leading-tight sm:text-[44px]">
-            고르고 바꾸면, 바로 보여요
+          {/* 폭에 따라 "고르고 바꾸 / 면,"으로 끊기지 않도록 줄바꿈 위치를 고정한다 */}
+          <h2 className="mt-3 text-[26px] font-black leading-tight sm:text-[44px]">
+            고르고 바꾸면,
+            <br />
+            바로 보여요
           </h2>
           <p className="mt-3 max-w-md text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
             템플릿을 고르고 이미지를 교체하면 미리보기에서 바로 결과가 보입니다. 마음에 들면 그대로
@@ -678,35 +732,49 @@ function FlowSection() {
           </p>
         </Reveal>
 
-        <div className="grid grid-cols-2 gap-3">
-          {steps.map((step, index) => {
-            const Icon = step.icon;
-            return (
-              <Reveal key={step.title} delay={(index % 2) * 90}>
-                <article className="h-full rounded-[20px] border border-[var(--color-outline-variant)] bg-white/80 p-4 shadow-[0_18px_42px_rgba(27,28,25,0.05)] transition hover:-translate-y-1 hover:shadow-[0_24px_54px_rgba(27,28,25,0.1)] sm:rounded-[28px] sm:p-5">
-                  <div className="flex items-center justify-between">
-                    <span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)] sm:h-11 sm:w-11 sm:rounded-2xl">
-                      <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-                    </span>
-                    <span className="text-[12px] font-black text-[var(--color-outline)] sm:text-[13px]">
-                      0{index + 1}
-                    </span>
-                  </div>
-                  <h3 className="mt-3 text-[15px] font-black sm:mt-5 sm:text-xl">{step.title}</h3>
-                  <p className="mt-1.5 line-clamp-3 text-[13px] font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:mt-2 sm:line-clamp-none sm:text-sm sm:leading-7">
-                    {step.body}
-                  </p>
-                </article>
-              </Reveal>
-            );
-          })}
+        {/*
+          바로 앞 섹션이 카드 그리드라 여기서도 카드를 깔면 같은 화면이 두 번 반복된다.
+          네 단계는 순서가 핵심이므로 세로 타임라인으로 보여 리듬을 바꾼다.
+        */}
+        <div className="relative">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-8 left-[19px] top-8 w-px bg-[linear-gradient(180deg,rgba(207,224,255,0),#cfe0ff_14%,#cfe0ff_80%,rgba(207,224,255,0))] sm:left-[23px]"
+          />
+          <ol className="relative space-y-5 sm:space-y-7">
+            {steps.map((step, index) => {
+              const Icon = step.icon;
+              return (
+                <li key={step.title}>
+                  <Reveal delay={index * 80}>
+                    <div className="flex items-start gap-4 sm:gap-5">
+                      <span className="relative z-10 grid size-10 shrink-0 place-items-center rounded-full border border-[#dbe8fb] bg-white text-[#2f6bbf] shadow-[0_8px_18px_rgba(47,107,191,0.12)] sm:size-12">
+                        <Icon className="size-4 sm:size-5" />
+                      </span>
+                      <div className="min-w-0 pt-1 sm:pt-1.5">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-[11px] font-black tracking-[0.08em] text-[#9fb4d0] sm:text-[12px]">
+                            0{index + 1}
+                          </span>
+                          <h3 className="text-[15px] font-black sm:text-xl">{step.title}</h3>
+                        </div>
+                        <p className="mt-1 max-w-md text-[13px] font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:mt-1.5 sm:text-sm sm:leading-7">
+                          {step.body}
+                        </p>
+                      </div>
+                    </div>
+                  </Reveal>
+                </li>
+              );
+            })}
+          </ol>
         </div>
       </div>
     </section>
   );
 }
 
-// "만드는 법 보기"가 왼쪽, "내 테마 만들기"가 오른쪽.
+// "만드는 법 보기"가 왼쪽, 첫 테마 혜택 CTA가 오른쪽.
 function HeroActions({ viewportGroup }: { viewportGroup: "mobile" | "desktop" }) {
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:flex lg:justify-start">
@@ -724,7 +792,7 @@ function HeroActions({ viewportGroup }: { viewportGroup: "mobile" | "desktop" })
         }}
         className="group inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[#fee500] px-2 py-3.5 text-[14px] font-black text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.44)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:gap-2 sm:px-4 sm:text-[15px] lg:flex-none lg:px-6 lg:py-4 lg:text-base"
       >
-        내 테마 만들기
+        무료로 시작하기
         <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
       </Link>
     </div>
@@ -732,10 +800,10 @@ function HeroActions({ viewportGroup }: { viewportGroup: "mobile" | "desktop" })
 }
 
 /**
- * `/r/*`가 첫 랜딩에서 붙인 UTM을 템플릿 선택 화면까지 이어 간다.
+ * `/r/*`가 첫 랜딩에서 붙인 UTM을 다음 화면까지 이어 간다.
  * 현재 주소를 새로 만들기 때문에 외부 브라우저 안내에서도 같은 유입 정보를 유지할 수 있다.
  */
-function preserveUtmNavigation(event: MouseEvent<HTMLAnchorElement>) {
+function preserveUtmNavigation(event: MouseEvent<HTMLAnchorElement>, destination = "/template") {
   if (typeof window === "undefined") return;
   const current = new URL(window.location.href);
   const query = new URLSearchParams();
@@ -746,25 +814,79 @@ function preserveUtmNavigation(event: MouseEvent<HTMLAnchorElement>) {
   const value = query.toString();
   if (!value) return;
   event.preventDefault();
-  window.location.assign(`/template?${value}`);
+  window.location.assign(`${destination}?${value}`);
 }
 
-function HeroBadges() {
+/**
+ * 가입 혜택은 히어로에서 빼고 여기 한 곳에 모은다.
+ * 히어로 CTA는 "만들기 시작"이고, 이 섹션의 CTA는 "가입"이라 목적이 겹치지 않는다.
+ */
+function SignupOfferSection() {
+  const support = [
+    { icon: Smartphone, title: "Android · iPhone", body: "APK · .ktheme 지원" },
+    { icon: MessageCircle, title: "카카오톡 적용용", body: "받은 파일로 적용" },
+    { icon: CheckCircle2, title: "받기 전 미리보기", body: "채팅방 화면 확인" },
+  ];
+
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1.5 text-[12px] font-bold text-[var(--color-on-surface-variant)] lg:justify-start lg:gap-x-5 lg:gap-y-2 lg:text-[13px]">
-      <span className="inline-flex items-center gap-1.5">
-        <Star className="h-4 w-4 fill-[#fee500] text-[#fee500]" />
-        나만 가질 수 있는 하나뿐인 테마
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <Gift className="h-4 w-4 text-[#ff9db0]" />
-        기억에 남는 선물
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <Laugh className="h-4 w-4 text-[#5b9bff]" />
-        친구랑 웃긴 테마로 놀기
-      </span>
-    </div>
+    <section className="relative">
+      {/* 아래 최종 CTA와 이어지는 구간이라 아래 여백은 줄여 둘을 한 덩어리로 읽히게 한다 */}
+      <div className="px-5 pt-10 pb-6 mx-auto max-w-5xl md:px-8 md:pt-20 md:pb-8">
+        <Reveal>
+          <div className="overflow-hidden rounded-[28px] border border-[#f2df86] bg-[#fffdf0] p-6 shadow-[0_24px_60px_rgba(242,183,5,0.14)] sm:rounded-[36px] sm:p-10">
+            <div className="text-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fee500] px-3 py-1.5 text-[12px] font-black text-[#191600]">
+                <Gift className="h-3.5 w-3.5" aria-hidden="true" />
+                가입 혜택
+              </span>
+              <h2 className="mt-4 text-[26px] font-black leading-tight text-[#4d3f00] sm:text-[40px]">
+                가입하면 1크레딧,
+                <br />첫 테마 파일은 무료예요
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-[14px] font-semibold leading-7 text-[#7c6c34] sm:mt-4 sm:text-[16px] sm:leading-8">
+                카카오나 이메일로 가입하면 1크레딧이 바로 지급됩니다. 이후 테마 파일은 1크레딧부터이고,
+                결제는 크레딧을 충전할 때만 발생해요.
+              </p>
+            </div>
+
+            <div className="flex flex-col items-center justify-center gap-3 mt-7 sm:flex-row">
+              <Link
+                href="/login"
+                onClick={(event) => {
+                  preserveUtmNavigation(event, "/login");
+                  trackAnalyticsEvent("landing_signup_cta_clicked", { destination: "login" });
+                }}
+                className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#191600] px-7 py-4 text-base font-black text-white shadow-[0_16px_32px_rgba(25,22,0,0.24)] transition hover:-translate-y-0.5 hover:bg-[#2b2600] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:w-auto"
+              >
+                무료로 가입하고 1크레딧 받기
+                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+              </Link>
+              {/* 보조 동선이므로 주 버튼보다 한 단계 낮은 무게로 둔다 */}
+              <Link
+                href="/credits"
+                className="inline-flex w-full items-center justify-center rounded-full border border-[#e5d287] bg-white/70 px-6 py-3 text-[15px] font-black text-[#7c6c34] transition hover:-translate-y-0.5 hover:bg-white focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:w-auto"
+              >
+                가격 보기
+              </Link>
+            </div>
+
+            <div className="grid gap-3 mt-8 border-t border-[#f0e3ac] pt-6 sm:grid-cols-3">
+              {support.map(({ icon: Icon, title, body }) => (
+                <div key={title} className="flex items-center gap-2.5 text-[12px] sm:justify-center">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-white text-[#c9a227]">
+                    <Icon className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0">
+                    <strong className="block font-black text-[#5f5120]">{title}</strong>
+                    <span className="mt-0.5 block font-semibold text-[#96854a]">{body}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Reveal>
+      </div>
+    </section>
   );
 }
 

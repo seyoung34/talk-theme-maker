@@ -8,6 +8,8 @@ import type { AccountExportDto, AccountMeResponse, ExportDownloadLinkResponse } 
 import { getExportDownloadState } from "@/lib/theme/android/outputRetention";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createClient } from "@/lib/supabase/client";
+import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
+import { claimSignupBonusFromClient } from "@/lib/billing/signupBonusClient";
 import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 import { deleteLocalUserThemeData } from "@/lib/theme/project/deleteLocalUserData";
 
@@ -23,6 +25,10 @@ export default function AccountClient() {
   const refreshMe = useCallback(async () => {
     setAccountError(null);
     try {
+      const bonusClaim = await claimSignupBonusFromClient().catch(() => null);
+      if (bonusClaim?.granted && bonusClaim.campaignKey) {
+        trackAnalyticsEvent("signup_bonus_granted", { campaign_key: bonusClaim.campaignKey, credits_granted: bonusClaim.creditsGranted ?? 0 });
+      }
       const response = await fetch("/api/me", { cache: "no-store" });
       const payload = await readJsonResponse<AccountMeResponse>(response);
       if (!response.ok) throw new Error(payload.error);
@@ -114,10 +120,10 @@ export default function AccountClient() {
             마이페이지
           </h1>
           <p className="mt-1.5 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:hidden">
-            계정·크레딧·내보내기를 한곳에서 관리합니다.
+            계정·크레딧·테마 파일을 한곳에서 관리합니다.
           </p>
           <p className="mt-2 hidden text-sm font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:block">
-            계정 정보와 보유 크레딧, 최근 내보내기 이력을 한곳에서 확인합니다. 편집 프로젝트는 계정이 아니라 현재 브라우저에 저장됩니다.
+            계정 정보와 보유 크레딧, 최근 테마 파일을 한곳에서 확인합니다. 편집 프로젝트는 계정이 아니라 현재 브라우저에 저장됩니다.
           </p>
           {isLoading ? <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-[#3d7bd6]" role="status"><LoaderCircle className="animate-spin" size={15} aria-hidden="true" />계정 정보를 불러오는 중입니다.</p> : null}
         </header>
@@ -144,7 +150,7 @@ export default function AccountClient() {
                   <div className="col-span-2 min-w-0 rounded-2xl border border-[#e3ecf7] bg-[#f7fbff] p-3 sm:rounded-[22px] sm:p-4"><dt className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[#3d7bd6] sm:text-xs">이메일</dt><dd className="truncate text-sm font-extrabold sm:text-[15px]" title={me.user.email || me.profile?.email || undefined}>{me.user.email || me.profile?.email || "등록된 이메일 없음"}</dd></div>
                 </dl>
               ) : (
-                <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold leading-5 text-[var(--color-on-surface-variant)]">로그인하고 계정과 내보내기 이력을 확인하세요.</p><Link href="/login?returnTo=%2Faccount" className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-[#2f6bbf] px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_12px_24px_rgba(47,107,191,0.2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">로그인</Link></div>
+                <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold leading-5 text-[var(--color-on-surface-variant)]">로그인하고 계정과 테마 파일 기록을 확인하세요.</p><Link href="/login?returnTo=%2Faccount" className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-[#2f6bbf] px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_12px_24px_rgba(47,107,191,0.2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">로그인</Link></div>
               )}
             </section>
 
@@ -153,7 +159,8 @@ export default function AccountClient() {
                 <div>
                   <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--color-on-surface-variant)]"><Coins size={18} aria-hidden="true" /><h2 id="credit-balance-title">보유 크레딧</h2></div>
                   <div className="mt-1.5 flex items-end gap-2 sm:mt-3"><strong className="font-[var(--font-display)] text-4xl font-semibold tracking-[-0.05em] text-[#2f6bbf] sm:text-5xl">{isLoading ? "—" : me?.credits ?? 0}</strong><span className="pb-1 text-sm font-bold text-[var(--color-on-surface-variant)] sm:pb-1.5">크레딧</span></div>
-                  <p className="mt-1 text-[11px] font-semibold leading-5 text-[var(--color-on-surface-variant)] sm:mt-3 sm:text-xs">내보내기 1회당 1크레딧을 사용합니다.</p>
+                  <p className="mt-1 text-[11px] font-semibold leading-5 text-[var(--color-on-surface-variant)] sm:mt-3 sm:text-xs">테마 파일 1개를 받을 때 1크레딧을 사용합니다.</p>
+                  {me?.signupBonus ? <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-[#f6df75] bg-[#fff9d9] px-2.5 py-1.5 text-[11px] font-extrabold leading-4 text-[#695600]"><Sparkles size={13} aria-hidden="true" />가입 혜택 {me.signupBonus.creditsGranted}크레딧을 받았어요.</p> : null}
                 </div>
                 <Link href={me?.user ? "/credits" : "/login?returnTo=%2Fcredits&reason=billing"} className="flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-[#fee500] px-4 py-2.5 text-sm font-extrabold text-[#191600] shadow-[0_12px_24px_rgba(254,229,0,0.3)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] lg:hidden">
                   충전<ArrowRight size={16} aria-hidden="true" />
@@ -209,10 +216,10 @@ export default function AccountClient() {
           <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6 lg:col-start-1 lg:row-start-3" aria-labelledby="export-history-title">
             <div className="mb-3 flex items-center gap-3 sm:mb-5">
               <span className="grid size-10 place-items-center rounded-[14px] bg-[#eafaf1] text-[#34c98a] sm:size-11 sm:rounded-2xl"><Download size={20} aria-hidden="true" /></span>
-              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 내보내기</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">최근 10개 · 완료된 Android·iOS 결과는 최대 7일간 다시 받을 수 있습니다.</p></div>
+              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 테마 파일</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">최근 10개 · 완료된 Android·iOS 파일은 최대 7일간 다시 받을 수 있습니다.</p></div>
             </div>
             {pendingExportKey ? <div className="mb-3 flex items-start gap-2 rounded-2xl border border-[#cfe0ff] bg-[#f4f9ff] px-3.5 py-3 text-[11px] font-semibold leading-5 text-[#36577f]" role="status" aria-live="polite"><RefreshCw className="mt-0.5 shrink-0 text-[#2f6bbf]" size={15} aria-hidden="true" /><span><strong className="font-extrabold text-[#2f6bbf]">백그라운드에서 생성 중입니다.</strong> 이 페이지는 10초마다 상태를 확인하며, 창을 닫아도 작업은 계속됩니다.</span></div> : null}
-            {(me?.exports ?? []).length === 0 ? <div className="rounded-[18px] bg-[#f7fbff] px-4 py-5 text-center text-sm font-semibold text-[var(--color-on-surface-variant)] sm:rounded-[24px] sm:py-8">아직 내보내기 이력이 없습니다.</div> : (
+            {(me?.exports ?? []).length === 0 ? <div className="rounded-[18px] bg-[#f7fbff] px-4 py-5 text-center text-sm font-semibold text-[var(--color-on-surface-variant)] sm:rounded-[24px] sm:py-8">아직 받은 테마 파일이 없습니다.</div> : (
               <div className="divide-y divide-[var(--color-outline-variant)] overflow-hidden rounded-[18px] border border-[#e3ecf7] bg-[#fcfdff] sm:rounded-[24px]">
                 {(me?.exports ?? []).map((item) => <ExportRow key={item.id} item={item} onRefreshed={() => void refreshMe()} />)}
               </div>
@@ -226,7 +233,7 @@ export default function AccountClient() {
                 ) : (
                   <form className="ml-auto grid max-w-md gap-2 rounded-2xl border border-[#f3d4d0] bg-[#fffaf9] p-3 text-left" onSubmit={deleteAccount} noValidate>
                     <p id="account-deletion-title" className="text-xs font-bold leading-5 text-[var(--color-on-surface-variant)]">
-                      계정 정보·업로드 이미지·브라우저 프로젝트·내보내기 이력과 남은 크레딧은 모두 삭제되며 복구할 수 없습니다. 관계 법령에 따라 결제·환불 기록과 문의 내역의 최소 항목은 일반 회원정보와 분리해 일정 기간 보관합니다. 계속하려면 <strong className="text-[var(--color-error)]">탈퇴</strong>를 입력해 주세요.
+                      계정 정보·업로드 이미지·브라우저 프로젝트·테마 파일 기록과 남은 크레딧은 모두 삭제되며 복구할 수 없습니다. 관계 법령에 따라 결제·환불 기록과 문의 내역의 최소 항목은 일반 회원정보와 분리해 일정 기간 보관합니다. 계속하려면 <strong className="text-[var(--color-error)]">탈퇴</strong>를 입력해 주세요.
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <input className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-outline-variant)] bg-white px-3 text-sm font-semibold outline-none focus:border-[var(--color-error)] focus:ring-2 focus:ring-[var(--color-error-container)]" value={deletionConfirmation} onChange={(event) => setDeletionConfirmation(event.currentTarget.value)} autoComplete="off" disabled={isDeleting} aria-label="회원탈퇴 확인 문구" />

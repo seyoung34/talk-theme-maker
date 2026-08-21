@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
+import { claimSignupBonusFromClient } from "@/lib/billing/signupBonusClient";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAsyncExportStatus, triggerDownload } from "@/components/project/exportClient";
 import { getExportFailureReasonFromStatus, isNetworkError, toExportFailureReason, type ExportFailureReason } from "@/lib/theme/export/failureReason";
@@ -73,9 +74,18 @@ export function useProjectExport({
   const refreshAccountState = useCallback(async () => {
     setIsAccountLoading(true);
     try {
+      const bonusClaim = await claimSignupBonusFromClient().catch(() => null);
+      if (bonusClaim?.granted && bonusClaim.campaignKey) {
+        trackAnalyticsEvent("signup_bonus_granted", { campaign_key: bonusClaim.campaignKey, credits_granted: bonusClaim.creditsGranted ?? 0 });
+      }
       const response = await fetch("/api/me", { cache: "no-store" });
       const payload = await readJsonResponse<AccountState>(response);
-      const next = { user: payload.user, credits: payload.credits ?? 0, isAdmin: payload.isAdmin ?? false };
+      const next = {
+        user: payload.user,
+        credits: payload.credits ?? 0,
+        isAdmin: payload.isAdmin ?? false,
+        signupBonus: payload.signupBonus ?? null,
+      };
       setAccountState(next);
       return next;
     } finally {
@@ -248,6 +258,7 @@ export function useProjectExport({
         user: current?.user ?? accountState?.user ?? null,
         credits: remainingCredits,
         isAdmin: current?.isAdmin ?? accountState?.isAdmin ?? false,
+        signupBonus: current?.signupBonus ?? accountState?.signupBonus ?? null,
       }));
       const exportNumber = response.headers.get("X-Export-Number");
       await onExportCompleted?.();
@@ -274,6 +285,7 @@ export function useProjectExport({
   }, [
     accountState?.credits,
     accountState?.isAdmin,
+    accountState?.signupBonus,
     accountState?.user,
     activeTemplate,
     bubbleGeometry,

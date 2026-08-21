@@ -82,10 +82,12 @@ type FunnelContext = Partial<Record<"template_key" | "template_source" | "platfo
 type AnalyticsEventMap = {
   page_view: { page_path: string } & AcquisitionContext;
   landing_primary_cta_clicked: { viewport_group: "mobile" | "desktop"; destination: "template" };
+  landing_signup_cta_clicked: { destination: "login" };
   auth_prompt_viewed: { reason: "export" | "general"; mode: "signin" | "signup" };
   signup_started: { provider: "email" | "kakao" };
   signup_completed: { provider: "email" | "kakao" };
   signup_failed: { provider: "email" | "kakao"; reason: "auth_error" };
+  signup_bonus_granted: { campaign_key: string; credits_granted: number };
   login_started: { provider: "email" | "kakao" };
   login_completed: { provider: "email" | "kakao" };
   login_failed: { provider: "email" | "kakao"; reason: "auth_error" };

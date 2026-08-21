@@ -19,6 +19,35 @@ export type AccountExportDto = {
   completed_at?: string | null;
 };
 
+export type SignupBonusDto = {
+  campaignKey: string;
+  creditsGranted: number;
+  claimedAt: string;
+};
+
+export type SignupBonusClaimResponse = {
+  campaignKey?: string;
+  creditsGranted?: number;
+  balance?: number;
+  alreadyClaimed?: boolean;
+  granted?: boolean;
+  reason?: string;
+  error?: string;
+};
+
+export type SignupBonusCampaignDto = {
+  campaignKey: string;
+  name: string;
+  credits: number;
+  status: "active" | "inactive";
+  startsAt: string;
+  expiresAt: string | null;
+  maxGrants: number | null;
+  grantCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ExportDownloadLinkResponse = {
   downloadUrl?: string;
   fileName?: string;
@@ -30,6 +59,7 @@ export type AccountMeResponse = {
   user: { id: string; email?: string } | null;
   profile?: { email?: string; display_name?: string | null; avatar_url?: string | null; provider?: string | null } | null;
   credits: number;
+  signupBonus?: SignupBonusDto | null;
   isAdmin?: boolean;
   exports?: AccountExportDto[];
   error?: string;

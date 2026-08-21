@@ -10,6 +10,7 @@ import { creditProducts, type CreditProductId } from "@/lib/billing/products";
 import { getKnownCampaignKey, trackAnalyticsEvent, trackPurchaseOnce } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { getSafeBillingReturnTo } from "@/lib/billing/returnTo";
+import { claimSignupBonusFromClient } from "@/lib/billing/signupBonusClient";
 
 type PaymentOutcome = { status: PaymentStatus | "checking"; credits?: number; message: string } | null;
 type ChargePhase = "idle" | "preparing" | "redirecting";
@@ -63,6 +64,10 @@ export default function CreditsClient() {
   const refreshMe = useCallback(async () => {
     setPageError(null);
     try {
+      const bonusClaim = await claimSignupBonusFromClient().catch(() => null);
+      if (bonusClaim?.granted && bonusClaim.campaignKey) {
+        trackAnalyticsEvent("signup_bonus_granted", { campaign_key: bonusClaim.campaignKey, credits_granted: bonusClaim.creditsGranted ?? 0 });
+      }
       const response = await fetch("/api/me", { cache: "no-store" });
       const payload = await readJsonResponse<AccountMeResponse>(response);
       if (!response.ok) throw new Error();

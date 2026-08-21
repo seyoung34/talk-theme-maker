@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
 import { addPolicyConsentToCallbackUrl, recordCurrentPolicyConsents } from "@/lib/policies/consent";
+import { claimSignupBonusFromClient } from "@/lib/billing/signupBonusClient";
 import { createClient } from "@/lib/supabase/client";
 import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
@@ -27,6 +28,16 @@ function getAuthErrorMessage(error: unknown) {
   if (message.includes("rate limit") || message.includes("too many")) return "요청이 많습니다. 잠시 후 다시 시도해 주세요.";
   if (message.includes("network") || message.includes("fetch")) return "네트워크 연결을 확인하고 다시 시도해 주세요.";
   return "인증을 완료하지 못했습니다. 입력 내용을 확인하고 다시 시도해 주세요.";
+}
+
+async function claimSignupBonusAfterSignup() {
+  const claim = await claimSignupBonusFromClient().catch(() => null);
+  if (claim?.granted) {
+    trackAnalyticsEvent("signup_bonus_granted", {
+      campaign_key: claim.campaignKey ?? "signup_bonus_v1",
+      credits_granted: claim.creditsGranted ?? 0,
+    });
+  }
 }
 
 export default function LoginClient() {
@@ -65,10 +76,12 @@ export default function LoginClient() {
   }, [mode, reason]);
 
   const context = useMemo(() => {
-    if (reason === "export" && mode === "signin") {
+    if (reason === "export") {
       return {
-        title: "내보내기를 계속하려면 로그인해 주세요",
-        description: "로그인 후 편집 화면으로 돌아가 현재 작업을 이어갈 수 있습니다. 테마 내보내기에는 1크레딧이 사용됩니다.",
+        title: mode === "signup" ? "첫 테마 파일을 무료로 받아보세요" : "테마 파일을 받으려면 로그인해 주세요",
+        description: mode === "signup"
+          ? "카카오 또는 이메일로 가입하면 첫 테마 파일을 만들 때 사용할 가입 혜택 1크레딧을 드립니다."
+          : "로그인 후 편집 화면으로 돌아가 현재 작업을 이어갈 수 있습니다. 신규 가입자는 첫 테마 파일을 무료로 받을 수 있습니다.",
         destination: "인증을 마치면 편집 화면으로 돌아갑니다.",
       };
     }
@@ -124,6 +137,7 @@ export default function LoginClient() {
       if (result.error) throw result.error;
       if (mode === "signup" && result.data.session) {
         await recordCurrentPolicyConsents(supabase, "email_signup");
+        await claimSignupBonusAfterSignup();
       }
       if (mode === "signup" && !result.data.session) {
         setStage("check-email");
@@ -182,6 +196,7 @@ export default function LoginClient() {
       });
       if (error) throw error;
       await recordCurrentPolicyConsents(supabase, "email_signup").catch(() => undefined);
+      await claimSignupBonusAfterSignup();
       trackAnalyticsEvent("signup_completed", { provider: "email" });
       router.replace(returnTo);
       router.refresh();
@@ -254,7 +269,7 @@ export default function LoginClient() {
             이어가세요.
           </h2>
           <p className="mt-5 max-w-xl text-[16px] font-semibold leading-8 text-[var(--color-on-surface-variant)] sm:text-[18px]">
-            카카오 로그인이나 이메일 계정으로 접속하면 결제한 크레딧과 내보내기 이력을 한곳에서
+            카카오 로그인이나 이메일 계정으로 접속하면 결제한 크레딧과 테마 파일 기록을 한곳에서
             정리할 수 있습니다. 작업을 멈췄다가 다시 돌아와도 흐름이 끊기지 않습니다.
           </p>
 
@@ -262,7 +277,7 @@ export default function LoginClient() {
             {[
               "카카오 계정으로 빠르게 시작",
               "결제한 크레딧과 사용 내역 확인",
-              "내보내기 기록을 기기와 상관없이 관리",
+              "테마 파일 기록을 기기와 상관없이 관리",
             ].map((item, index) => (
               <li
                 key={item}

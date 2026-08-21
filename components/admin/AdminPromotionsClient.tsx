@@ -5,6 +5,7 @@ import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertCircle, ArrowLeft, Check, Clipboard, Gift, LoaderCircle, Plus, RefreshCw, X } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
+import SignupBonusControl from "@/components/admin/SignupBonusControl";
 
 type GrantCode = {
   id: string;
@@ -125,6 +126,8 @@ export default function AdminPromotionsClient() {
           <h1 className="mt-1 font-[var(--font-display)] text-3xl font-semibold">크레딧 지급 코드</h1>
           <p className="mt-2 text-sm font-semibold text-[var(--color-on-surface-variant)]">캠페인 코드를 생성하고 사용량과 운영 상태를 관리합니다.</p>
         </header>
+
+        <SignupBonusControl />
 
         <section className="grid gap-3 sm:grid-cols-3" aria-label="지급 코드 요약">
           <Summary label="전체 코드" value={summary.total} /><Summary label="현재 사용 가능" value={summary.active} /><Summary label="누적 사용" value={summary.redemptions} />

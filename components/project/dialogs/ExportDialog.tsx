@@ -25,7 +25,7 @@ export function ExportDialog({
   const isLoggedIn = Boolean(accountState?.user);
   const credits = accountState?.credits ?? 0;
   const hasCredits = credits >= 1;
-  const ctaLabel = !isLoggedIn ? "로그인 후 다운로드" : !hasCredits ? "크레딧 충전" : "다운로드 시작";
+  const ctaLabel = !isLoggedIn ? "로그인·가입 후 받기" : !hasCredits ? "크레딧 충전" : "테마 파일 받기";
   const canCloseWhileExporting = !isExporting || isExportQueued;
   const waitNotice = getExportWaitNotice(exportMode);
   const dialogTitle = isPreparingExport
@@ -34,14 +34,14 @@ export function ExportDialog({
       ? "다운로드를 시작했어요"
       : isExportQueued
         ? "다운로드 작업이 접수됐어요"
-        : platform === "android" ? "Android 다운로드" : "iOS 다운로드";
+        : platform === "android" ? "Android 테마 파일 받기" : "iPhone 테마 파일 받기";
   const dialogDescription = isPreparingExport
     ? "버전 정보와 계정 상태를 확인하고 있습니다."
     : downloadResult
       ? "파일을 받은 뒤 아래 순서로 설치하거나 공유해 주세요."
       : isExportQueued
         ? "파일은 백그라운드에서 생성됩니다. 이 창을 닫으면 마이페이지에서 결과를 확인할 수 있습니다."
-        : "완성된 테마 파일을 다운로드합니다.";
+    : "완성된 테마 파일을 받아 카카오톡에 적용합니다.";
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open && canCloseWhileExporting) onClose(); }}>
@@ -75,7 +75,7 @@ export function ExportDialog({
                   <ModeButton selected={exportMode === "apk-zip"} onClick={() => onModeChange("apk-zip")} disabled={isExporting} label="카카오톡으로 공유하기 쉬운 파일" description=".apk를 한 번 압축한 .zip · 받은 뒤 압축 해제" icon={<Archive size={16} aria-hidden="true" />} />
                 </>}
               </div>
-              <div className="mt-4 grid gap-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="font-semibold text-[#475569]">비용 <strong className="ml-1 text-[#0f172a]">1크레딧</strong></span><span className="font-semibold text-[#475569]">보유 <strong className={`ml-1 ${hasCredits ? "text-emerald-700" : "text-rose-700"}`}>{isAccountLoading ? "확인 중" : `${credits}크레딧`}</strong></span></div></div>
+              <div className="mt-4 grid gap-2 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="font-semibold text-[#475569]">필요 크레딧 <strong className="ml-1 text-[#0f172a]">1개</strong></span><span className="font-semibold text-[#475569]">보유 <strong className={`ml-1 ${hasCredits ? "text-emerald-700" : "text-rose-700"}`}>{isAccountLoading ? "확인 중" : `${credits}크레딧`}</strong></span></div>{accountState?.signupBonus ? <p className="text-xs font-semibold leading-5 text-[#695600]">가입 혜택 지급 내역은 마이페이지에서 확인할 수 있어요.</p> : null}</div>
               <p className="mt-3 text-xs font-medium leading-5 text-[#64748b]">{persistenceNotice.browserDetailed} {persistenceNotice.exportTemporary} <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2563eb] underline underline-offset-2">자세히 보기</Link></p>
             </>}
           </div>

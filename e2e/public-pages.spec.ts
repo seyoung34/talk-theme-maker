@@ -11,7 +11,7 @@ test.describe("공개 페이지", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-    await page.getByRole("link", { name: "내 테마 만들기" }).first().click();
+    await page.getByRole("link", { name: /무료로 시작하기/ }).first().click();
 
     await expect(page).toHaveURL(/\/template$/);
     await expect(page.getByRole("heading", { level: 1, name: /원하는 템플릿을 골라/ })).toBeVisible();
@@ -22,15 +22,56 @@ test.describe("공개 페이지", () => {
     await page.goto("/");
 
     const title = page.getByRole("heading", { level: 1 });
-    const cta = page.getByRole("link", { name: "내 테마 만들기" }).first();
+    const cta = page.getByRole("link", { name: /무료로 시작하기/ }).first();
     await expect(title).toBeVisible();
     await expect(cta).toBeVisible();
+    // 가입 혜택과 지원 환경은 히어로에서 빼 하단 섹션으로 옮겼다. 첫 화면은 제목·목업·CTA만 검증한다.
+    await expect(page.getByTestId("hero-mockup")).toBeVisible();
 
     const [titleBox, ctaBox] = await Promise.all([title.boundingBox(), cta.boundingBox()]);
     expect(titleBox).not.toBeNull();
     expect(ctaBox).not.toBeNull();
     expect(ctaBox!.y).toBeGreaterThanOrEqual(titleBox!.y + titleBox!.height);
     expect(ctaBox!.y + ctaBox!.height).toBeLessThanOrEqual(900);
+  });
+
+  test("랜딩 Hero 바로 아래에 실제 결과 예시를 보여 준다", async ({ page }) => {
+    await page.goto("/");
+
+    const title = page.getByRole("heading", { level: 1 });
+    const result = page.getByRole("heading", { level: 2, name: "매일 여는 카톡이 달라져요" });
+    await expect(title).toBeVisible();
+    await expect(result).toBeVisible();
+
+    const [titleBox, resultBox] = await Promise.all([title.boundingBox(), result.boundingBox()]);
+    expect(titleBox).not.toBeNull();
+    expect(resultBox).not.toBeNull();
+    expect(resultBox!.y).toBeGreaterThan(titleBox!.y + titleBox!.height);
+  });
+
+  test("가입 혜택은 히어로가 아니라 하단 전용 섹션에서 안내한다", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+
+    const signupCta = page.getByRole("link", { name: /무료로 가입하고 1크레딧 받기/ });
+    await signupCta.scrollIntoViewIfNeeded();
+    await expect(signupCta).toBeVisible();
+    await expect(signupCta).toHaveAttribute("href", "/login");
+
+    const hero = page.getByRole("heading", { level: 1 });
+    const [heroBox, signupBox] = await Promise.all([hero.boundingBox(), signupCta.boundingBox()]);
+    expect(heroBox).not.toBeNull();
+    expect(signupBox).not.toBeNull();
+    // 문서 순서상 히어로보다 아래에 있어야 한다(스크롤 후 좌표 대신 DOM 위치로 확인).
+    const heroIsBefore = await page.evaluate(() => {
+      const h1 = document.querySelector("h1");
+      const link = [...document.querySelectorAll("a")].find((a) =>
+        a.textContent?.includes("무료로 가입하고 1크레딧 받기"),
+      );
+      if (!h1 || !link) return false;
+      return Boolean(h1.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    expect(heroIsBefore).toBe(true);
   });
 
   test("가이드와 정책 페이지가 열린다", async ({ page }) => {

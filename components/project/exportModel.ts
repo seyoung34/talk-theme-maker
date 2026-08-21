@@ -1,4 +1,5 @@
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
+import type { SignupBonusDto } from "@/lib/billing/apiTypes";
 import type { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint } from "@/lib/theme/types";
@@ -15,6 +16,7 @@ export type AccountState = {
   user: { id: string; email?: string } | null;
   credits: number;
   isAdmin: boolean;
+  signupBonus?: SignupBonusDto | null;
   error?: string;
 };
 

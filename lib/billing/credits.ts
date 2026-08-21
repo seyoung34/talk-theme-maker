@@ -1,6 +1,16 @@
 import { createAdminClient, createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const exportCreditCost = 1;
+export const signupBonusCampaignKey = "signup_bonus_v1";
+export type SignupBonusCampaignStatus = "active" | "inactive";
+
+export type SignupBonusClaimResult = {
+  campaignKey: string;
+  creditsGranted: number;
+  balance: number;
+  alreadyClaimed: boolean;
+};
 
 export type ExportPlatform = "android" | "ios";
 export type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
@@ -22,6 +32,54 @@ export async function getCreditBalance(userId: string) {
   const { data, error } = await admin.from("credit_balances").select("balance").eq("user_id", userId).maybeSingle();
   if (error) throw error;
   return data?.balance ?? 0;
+}
+
+/**
+ * 인증을 마친 신규 계정의 가입 혜택을 한 번만 claim한다.
+ *
+ * 이 함수는 세션 클라이언트로 RPC를 호출해야 `auth.uid()`가 현재 사용자로 해석된다.
+ * 잔액 증가와 claim/ledger 기록은 DB 함수 하나의 트랜잭션 안에서 처리한다.
+ */
+export async function claimSignupBonusForCurrentUser(): Promise<SignupBonusClaimResult> {
+  const supabase = await createClient();
+  return claimSignupBonusWithClient(supabase);
+}
+
+/**
+ * 이미 인증 세션을 교환한 callback에서 같은 클라이언트로 claim한다.
+ * 새 클라이언트를 만들면 callback 요청 안에서 갱신된 세션 쿠키를 다시 읽지 못할 수 있다.
+ */
+export async function claimSignupBonusWithClient(supabase: SupabaseClient): Promise<SignupBonusClaimResult> {
+  const { data, error } = await supabase.rpc("claim_signup_bonus", { p_campaign_key: signupBonusCampaignKey });
+  if (error) throw error;
+
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    campaign_key?: string;
+    credits_granted?: number;
+    balance?: number;
+    already_claimed?: boolean;
+  } | null;
+
+  if (!row?.campaign_key) throw new Error("signup_bonus_claim_failed");
+  return {
+    campaignKey: row.campaign_key,
+    creditsGranted: Number(row.credits_granted ?? 0),
+    balance: Number(row.balance ?? 0),
+    alreadyClaimed: Boolean(row.already_claimed),
+  };
+}
+
+export function isSignupBonusUnavailableError(error: unknown) {
+  return [
+    "invalid_signup_bonus_campaign",
+    "promotion_not_found",
+    "promotion_inactive",
+    "promotion_not_started",
+    "promotion_expired",
+    "signup_bonus_not_eligible",
+    "signup_bonus_verification_required",
+    "promotion_limit_reached",
+  ].some((value) => hasErrorMessage(error, value));
 }
 
 export async function reserveCreditForExport({
