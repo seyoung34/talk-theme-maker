@@ -49,15 +49,35 @@ export type EasyAnnotation = {
  * 가이드를 여는 사람 상당수가 테마를 적용하려는 모바일 데이터 환경이다. 렌더러가
  * `preload="none"`으로 실제로 본 스텝만 받게 하지만, 그건 상한을 대신하지 못한다.
  */
-export type EasyStepMedia =
-  | { type: "image"; src: string }
-  | { type: "video"; src: string; poster: string };
+export type EasyStepMedia = ({ type: "image"; src: string } | { type: "video"; src: string; poster: string }) & {
+  /**
+   * CSS `aspect-ratio` 값. 기본은 데스크톱 편집기 규격인 `"16 / 9"`다.
+   *
+   * 카드가 `object-cover`로 그리므로 **소스 비율과 어긋나면 오류 없이 잘리기만 한다.** 세로 자료를
+   * 16:9 칸에 넣으면 위아래가 통째로 사라지는데 아무도 알려주지 않는다. 그래서 자료가 자기 비율을
+   * 들고 다니게 하고, 카드는 그 값을 따른다.
+   */
+  aspect?: string;
+  /**
+   * 이 화면 자료에 붙는 주석. 좌표가 0~1 상대값이라 **자료가 바뀌면 의미가 없어진다** —
+   * 데스크톱에서 오른쪽 위였던 버튼이 모바일에서는 아래쪽 시트 안에 있다. 그래서 스텝이 아니라
+   * 자료에 붙인다.
+   */
+  annotations?: EasyAnnotation[];
+};
 
 export type EasyStep = {
   title: string;
   caption: string;
+  /** 넓은 화면(데스크톱)에서 쓰는 자료. */
   media?: EasyStepMedia;
-  annotations?: EasyAnnotation[];
+  /**
+   * 좁은 화면에서 대신 쓰는 자료. 없으면 `media`를 그대로 쓴다.
+   *
+   * 폰으로 가이드를 보는 사람은 대개 **폰으로 편집도 한다.** 데스크톱 편집기 화면을 390px 폭
+   * 카드에 넣으면 글자를 읽을 수 없고, 읽었더라도 자기 화면에 없는 UI라 따라 할 수가 없다.
+   */
+  mobileMedia?: EasyStepMedia;
   hardStep?: boolean;
 };
 
@@ -82,37 +102,47 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       {
         title: "마음에 드는 템플릿 고르기",
         caption: "연인·캐릭터·반려동물처럼 원하는 분위기를 골라요. 처음부터 만들지 않아도 돼요.",
-        media: { type: "image", src: "/guide/android/01-template-gallery.webp" },
-        annotations: [
-          { kind: "highlight", x: 0.175, y: 0.4, w: 0.205, h: 0.52, label: "원하는 템플릿을 눌러 시작" },
-        ],
+        media: {
+          type: "image",
+          src: "/guide/android/01-template-gallery.webp",
+          annotations: [{ kind: "highlight", x: 0.175, y: 0.4, w: 0.205, h: 0.52, label: "원하는 템플릿을 눌러 시작" }],
+        },
       },
       {
         title: "배경을 내 사진으로 바꾸기",
         caption: "‘추천 에셋’에서 배경을 고르거나 내 사진을 올리면 오른쪽 미리보기에 바로 보여요.",
-        media: { type: "image", src: "/guide/android/02-edit-background.webp" },
-        annotations: [
-          { kind: "highlight", x: 0.355, y: 0.135, w: 0.09, h: 0.055, label: "추천 에셋에서 고르기" },
-          { kind: "pin", x: 0.9, y: 0.32, label: "미리보기에 바로 반영" },
-        ],
+        media: {
+          type: "image",
+          src: "/guide/android/02-edit-background.webp",
+          annotations: [
+            { kind: "highlight", x: 0.355, y: 0.135, w: 0.09, h: 0.055, label: "추천 에셋에서 고르기" },
+            { kind: "pin", x: 0.9, y: 0.32, label: "미리보기에 바로 반영" },
+          ],
+        },
       },
       {
         title: "말풍선까지 내 취향으로",
         caption: "내 말풍선·상대 말풍선을 바꿔요. 미리보기로 실제 채팅 화면을 보며 조정할 수 있어요.",
-        media: { type: "image", src: "/guide/android/03-edit-bubble.webp" },
-        annotations: [
-          { kind: "highlight", x: 0.355, y: 0.14, w: 0.09, h: 0.055, label: "말풍선 이미지 고르기" },
-          { kind: "pin", x: 0.9, y: 0.27, label: "채팅방 미리보기" },
-        ],
+        media: {
+          type: "image",
+          src: "/guide/android/03-edit-bubble.webp",
+          annotations: [
+            { kind: "highlight", x: 0.355, y: 0.14, w: 0.09, h: 0.055, label: "말풍선 이미지 고르기" },
+            { kind: "pin", x: 0.9, y: 0.27, label: "채팅방 미리보기" },
+          ],
+        },
       },
       {
         title: "APK 파일로 내려받기",
         caption: "‘내보내기’를 눌러 이름과 버전을 확인하고 Android APK를 만들어요.",
-        media: { type: "image", src: "/guide/android/04-export.webp" },
-        annotations: [
-          { kind: "highlight", x: 0.5, y: 0.49, w: 0.19, h: 0.1, label: "Android APK 선택" },
-          { kind: "highlight", x: 0.588, y: 0.735, w: 0.088, h: 0.06, label: "APK 내보내기" },
-        ],
+        media: {
+          type: "image",
+          src: "/guide/android/04-export.webp",
+          annotations: [
+            { kind: "highlight", x: 0.5, y: 0.49, w: 0.19, h: 0.1, label: "Android APK 선택" },
+            { kind: "highlight", x: 0.588, y: 0.735, w: 0.088, h: 0.06, label: "APK 내보내기" },
+          ],
+        },
       },
       {
         title: "설치하고 카톡에 적용하기",

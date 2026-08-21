@@ -1,4 +1,4 @@
-import { settle, waitForEditorReady } from "./shared.mjs";
+import { settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
 
 /**
  * `/guide` 쉬운 모드의 스텝에 꽂을 짧은 클립들.
@@ -71,6 +71,73 @@ export const guideChangeColor = {
 
     // 팔레트 스와치는 색상 코드가 그대로 접근성 이름이다. 직접 고르는 편이 색상 코드를
     // 타이핑하는 것보다 실제 사용에 가깝고, 누르는 순간이 화면에 남는다.
+    const palette = page.getByRole("button", { name: "#1F2937" }).first();
+    await palette.waitFor({ state: "visible", timeout: 20_000 });
+    await click(palette);
+    await hold(1.6);
+  },
+};
+
+/**
+ * 같은 스텝의 모바일 판.
+ *
+ * 씬 id가 데스크톱과 같다(`choose-screen`, `change-color`). 프로필이 다르므로 파일명이
+ * `guide-mobile-*`로 갈리고, `content.ts`에서 같은 스텝의 `media`와 `mobileMedia`로 짝이 된다.
+ *
+ * 화살표 커서는 그리지 않는다 — 손가락으로 누르는 화면이다. `ctx.click`이 모바일 프로필에서는
+ * 파문만 남긴다.
+ */
+async function openMobileEditor({ page, baseURL, dismissNotices, offCamera }) {
+  await offCamera(async () => {
+    await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
+    await waitForMobileEditorReady(page);
+    await dismissNotices();
+    await settle(page);
+  });
+}
+
+export const guideMobileChooseScreen = {
+  id: "choose-screen",
+  title: "바꿀 화면 고르기",
+  description: "화면을 고르면 미리보기가 따라 바뀝니다",
+
+  async run(ctx) {
+    const { page, click, hold } = ctx;
+
+    await openMobileEditor(ctx);
+    await hold(0.5);
+
+    // 시트가 접힌 상태에서도 섹션 칩은 보인다. 그래서 펼치지 않고 바로 고를 수 있다.
+    for (const section of ["채팅방", "친구·메인"]) {
+      await click(page.getByRole("button", { name: section, exact: true }).first());
+      await hold(1.2);
+    }
+  },
+};
+
+export const guideMobileChangeColor = {
+  id: "change-color",
+  title: "색 바꾸기",
+  description: "팔레트에서 고르면 미리보기가 바로 다시 칠해집니다",
+
+  async run(ctx) {
+    const { page, click, hold } = ctx;
+
+    await openMobileEditor(ctx);
+    await hold(0.4);
+
+    // 모바일은 편집 패널이 접혀 시작한다. 펼쳐야 그룹과 색상 탭이 나온다.
+    await click(page.getByRole("button", { name: "편집 패널 펼치기" }));
+    await page.getByRole("button", { name: "배경", exact: true }).first().waitFor({ state: "visible", timeout: 20_000 });
+    await hold(0.6);
+
+    await click(page.getByRole("button", { name: "배경", exact: true }).first());
+    await hold(0.6);
+
+    // 모바일 패널은 색상과 이미지를 탭으로 나눈다. 색상 쪽에만 팔레트가 있다.
+    await click(page.getByRole("button", { name: "색상으로 설정" }).first());
+    await hold(0.7);
+
     const palette = page.getByRole("button", { name: "#1F2937" }).first();
     await palette.waitFor({ state: "visible", timeout: 20_000 });
     await click(palette);

@@ -90,7 +90,7 @@ if (typeof args["tone-down"] === "string") profile.toneDown = Number(args["tone-
 // 백엔드는 해상도와 연출 수단을 함께 결정한다. 가이드를 규격(1920x1080)으로 올리려면
 // screenshot으로 바꾸면 되지만 커서·클릭 강조를 잃는다. 어느 쪽이 나은지는 눈으로 보고 정한다.
 if (typeof args.backend === "string") profile.backend = args.backend;
-const scenes = selectScenes(sceneIds);
+const scenes = selectScenes(sceneIds, profile.id);
 const outDir = resolveOutDir(args, profile.id);
 
 let server = null;

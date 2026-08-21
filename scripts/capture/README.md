@@ -12,7 +12,7 @@ node scripts/capture/run.mjs --profile=guide --server=http://127.0.0.1:3311 --sc
 
 | 인자 | 뜻 |
 |---|---|
-| `--profile=guide\|reel` | 촬영 규격. 기본 `guide` |
+| `--profile=guide\|guide-mobile\|reel` | 촬영 규격. 기본 `guide` |
 | `--scenes=a,b` | 찍을 씬. 기본은 mock 환경에서도 도는 구성 |
 | `--server=<url>` | 이미 떠 있는 서버 사용. 빌드·기동을 건너뛴다 |
 | `--out=<dir>` | 출력 경로. 기본 `E:\TalkTheme-자료\촬영본\<profile>` |
@@ -73,6 +73,25 @@ screencast는 1280×720이 상한이기 때문이다. 커서를 자막과 같은
 - **모바일 프로필에서는 화살표를 그리지 않는다.** 손가락으로 누르는 화면에 마우스 커서가 있으면
   안 된다. 파문만 남는다.
 - `showActions`가 있는 백엔드에서는 그리지 않는다 — 커서가 두 개로 보인다.
+
+## 가이드는 데스크톱·모바일 두 벌
+
+폰으로 가이드를 보는 사람은 대개 **폰으로 편집도 합니다.** 데스크톱 편집기 화면을 390px 폭 카드에
+넣으면 글자를 읽을 수 없고, 읽었더라도 자기 화면에 없는 UI라 따라 할 수가 없습니다.
+
+```powershell
+npm run capture -- --profile=guide          # 1920x1080, 화살표 커서
+npm run capture -- --profile=guide-mobile   # 1080x1920, 파문만 (폰에 마우스는 없다)
+```
+
+씬 id가 두 프로필에서 같습니다(`choose-screen`, `change-color`). 파일명은 프로필이 갈라 주고,
+`content.ts`에서 같은 스텝의 `media`(데스크톱)와 `mobileMedia`(모바일)로 짝이 됩니다.
+
+가이드 페이지는 **편집기와 같은 기준(1024px)** 으로 자료를 고릅니다. 기준이 어긋나면 화면에 없는
+UI를 따라 하라고 시키게 됩니다.
+
+**비율은 자료가 들고 다닙니다.** 카드가 `object-cover`라 비율이 어긋나면 오류 없이 잘리기만 하므로,
+`content.ts`의 `media.aspect`를 프로필의 `aspect`와 같은 값으로 적습니다(`16 / 9` · `9 / 16`).
 
 ## 씬마다 파일 따로 (`splitScenes`)
 

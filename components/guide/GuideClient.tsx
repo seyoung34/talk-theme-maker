@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
-import { AlertTriangle, Apple, Check, CircleAlert, FileText, Images, MapPin, Smartphone } from "lucide-react";
+import { AlertTriangle, Apple, Check, CircleAlert, FileText, Images, Smartphone } from "lucide-react";
 import { guideContent, type EasyStep, type GuideMode, type GuidePlatform, type GuideSection } from "@/lib/guide/content";
 import { EasyStepMediaFrame } from "@/components/guide/EasyStepMedia";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
@@ -143,21 +143,7 @@ function EasyStepCard({ step, index, platformLabel }: { step: EasyStep; index: n
       <div className="grid gap-0 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <div className="relative order-2 bg-[#eef5ff] md:order-1">
           {step.media ? (
-            <div className="relative aspect-[16/9] w-full">
-              <EasyStepMediaFrame media={step.media} label={`${platformLabel} ${step.title} 화면`} />
-              {step.annotations?.map((a, i) =>
-                a.kind === "highlight" ? (
-                  <div key={i} className="pointer-events-none absolute" style={{ left: `${a.x * 100}%`, top: `${a.y * 100}%`, width: `${(a.w ?? 0.1) * 100}%`, height: `${(a.h ?? 0.06) * 100}%` }}>
-                    <span className="absolute inset-0 rounded-[10px] border-[2.5px] border-[#fbbf24] bg-[#fee500]/10" />
-                    {a.label ? <span className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-[#191600] px-2.5 py-1 text-[11px] font-black text-[#fee500] shadow-sm">{a.label}</span> : null}
-                  </div>
-                ) : (
-                  <div key={i} className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${a.x * 100}%`, top: `${a.y * 100}%` }}>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#2f6bbf] px-2.5 py-1 text-[11px] font-black text-white shadow-[0_6px_16px_rgba(47,107,191,0.3)]"><MapPin size={12} aria-hidden="true" />{a.label}</span>
-                  </div>
-                ),
-              )}
-            </div>
+            <EasyStepMediaFrame step={step} label={`${platformLabel} ${step.title} 화면`} />
           ) : (
             <div className="grid aspect-[16/9] w-full place-items-center bg-[#f7fbff] px-6 text-center">
               <div className="grid gap-2">

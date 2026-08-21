@@ -47,7 +47,40 @@ export const profiles = {
     chapters: false,
     // 스텝마다 별도 파일이 필요하다. `EasyStep.media.src`가 파일 하나를 가리키기 때문이다.
     splitScenes: true,
-    outputs: ["webm", "mp4", "poster"],
+    // screenshot 백엔드는 프레임에서 바로 mp4를 만든다. webm 경로는 없다.
+    outputs: ["mp4", "poster"],
+    // content.ts의 `media.aspect` 기본값과 같은 값. 어긋나면 카드가 조용히 잘라낸다.
+    aspect: "16 / 9",
+  },
+
+  "guide-mobile": {
+    id: "guide-mobile",
+    label: "가이드 모바일 9:16",
+    /**
+     * 모바일 편집기를 세로로 찍는다.
+     *
+     * 폰으로 가이드를 보는 사람은 대개 폰으로 편집도 한다. 데스크톱 편집기 화면을 390px 폭
+     * 카드에 넣으면 글자를 읽을 수 없고, 읽었더라도 자기 화면에 없는 UI라 따라 할 수가 없다.
+     * `EasyStep.mobileMedia`가 이 클립을 받고, 카드는 아래 비율을 그대로 따른다.
+     */
+    backend: /** @type {CaptureBackend} */ ("screenshot"),
+    // 432 x 2.5 = 1080, 768 x 2.5 = 1920. 릴스와 같은 뷰포트라 변수를 하나 줄인다.
+    viewport: { width: 432, height: 768 },
+    deviceScaleFactor: 2.5,
+    capture: { width: 1080, height: 1920 },
+    spec: { width: 1080, height: 1920 },
+    fps: 30,
+    isMobile: true,
+    slowdown: 1.6,
+    // 가이드는 색을 만지지 않는다. 제품 화면과 다르면 사용자가 자기 화면에서 같은 곳을 못 찾는다.
+    toneDown: 0,
+    // 스텝 제목·설명은 가이드 페이지가 DOM으로 그린다. 영상에 또 얹지 않는다.
+    captions: false,
+    chapters: false,
+    splitScenes: true,
+    outputs: ["mp4", "poster"],
+    // content.ts의 `mobileMedia.aspect`에 그대로 적을 값.
+    aspect: "9 / 16",
   },
 
   reel: {
