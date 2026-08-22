@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "dev:local": "node scripts/with-env.mjs supabase-local next dev",
+    "build:local": "node scripts/with-env.mjs supabase-local next build",
+    "start:local": "node scripts/with-env.mjs supabase-local next start",
     "check:text": "node scripts/check-text-encoding.mjs",
     "check:ios-slots": "node scripts/verify-ios-slot-metadata.mjs",
     "check:android-colors": "node scripts/verify-android-color-slots.mjs",
