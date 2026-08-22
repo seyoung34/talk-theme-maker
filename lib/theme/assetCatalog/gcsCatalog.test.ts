@@ -14,6 +14,11 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
+async function sha256Hex(bytes: Uint8Array) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes as unknown as ArrayBufferView<ArrayBuffer>);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -69,17 +74,41 @@ describe("putCatalogObject", () => {
    * 재시도가 몇 번 돌아도 같은 결과여야 한다.
    */
   it("이미 존재하면 기존 metadata를 재사용한다", async () => {
+    const bytes = new Uint8Array(24);
+    const sha256 = await sha256Hex(bytes);
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response("", { status: 412 }))
-      .mockResolvedValueOnce(jsonResponse({ generation: "9", size: "24" }));
+      .mockResolvedValueOnce(jsonResponse({ generation: "9", size: "24" }))
+      .mockResolvedValueOnce(new Response(bytes, { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await putCatalogObject({
-      config, accessToken: "token", objectKey, bytes: new Uint8Array(24), contentType: "image/png", expectedSizeBytes: 24,
+      config, accessToken: "token", objectKey, sha256, bytes, contentType: "image/png", expectedSizeBytes: 24,
     });
 
     expect(result).toEqual({ objectKey, generation: "9", sizeBytes: 24, created: false });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain("alt=media");
+  });
+
+  it("이미 존재하는 키의 바이트 해시가 다르면 실패한다", async () => {
+    const sourceBytes = new Uint8Array(24);
+    const objectBytes = new Uint8Array(24).fill(7);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response("", { status: 412 }))
+      .mockResolvedValueOnce(jsonResponse({ generation: "9", size: "24" }))
+      .mockResolvedValueOnce(new Response(objectBytes, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(putCatalogObject({
+      config,
+      accessToken: "token",
+      objectKey,
+      sha256: await sha256Hex(sourceBytes),
+      bytes: sourceBytes,
+      contentType: "image/png",
+      expectedSizeBytes: 24,
+    })).rejects.toThrow(CatalogStorageError);
   });
 
   // 크기가 어긋나면 registry가 잘못된 size_bytes를 갖게 되고, export가 그 값을 믿는다.

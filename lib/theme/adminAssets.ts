@@ -90,25 +90,56 @@ export async function listAdminAssetCandidatePage(options: AdminAssetListOptions
   const supabase = createClient();
   const limit = Math.min(50, Math.max(1, options.limit ?? 24));
   const cursor = decodeCursor(options.cursor);
-  let query = supabase
-    .from("admin_assets")
-    .select(adminAssetSelect)
-    .order("updated_at", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(limit + 1);
+  const targetFiltered = Boolean(options.platform || options.slotRole);
+  const allRows: unknown[] = [];
 
-  if (options.assetKind) query = query.eq("asset_kind", options.assetKind);
-  if (options.enabledOnly) query = query.eq("enabled", true);
-  if (cursor) query = query.or(`updated_at.lt.${cursor.updatedAt},and(updated_at.eq.${cursor.updatedAt},id.lt.${cursor.id})`);
+  if (targetFiltered) {
+    // Platform/role lives in a child target table. Filtering the first
+    // `limit + 1` parent rows in JavaScript loses matching assets whenever a
+    // page contains unrelated targets. Walk ordered parent rows in batches,
+    // then apply the cursor and target filter before taking the page.
+    const batchSize = 100;
+    let offset = 0;
+    while (allRows.length < limit + 1) {
+      let query = supabase
+        .from("admin_assets")
+        .select(adminAssetSelect)
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + batchSize - 1);
+      if (options.assetKind) query = query.eq("asset_kind", options.assetKind);
+      if (options.enabledOnly) query = query.eq("enabled", true);
 
-  const { data, error } = await query;
-  if (error) throw error;
+      const { data, error } = await query;
+      if (error) throw error;
+      const rows = Array.isArray(data) ? data : [];
+      for (const row of rows) {
+        if (cursor && !rowIsAfterCursor(row, cursor)) continue;
+        if (!rowMatchesListOptions(row, options)) continue;
+        allRows.push(row);
+        if (allRows.length >= limit + 1) break;
+      }
+      if (rows.length < batchSize) break;
+      offset += rows.length;
+    }
+  } else {
+    let query = supabase
+      .from("admin_assets")
+      .select(adminAssetSelect)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(limit + 1);
+    if (options.assetKind) query = query.eq("asset_kind", options.assetKind);
+    if (options.enabledOnly) query = query.eq("enabled", true);
+    if (cursor) query = query.or(`updated_at.lt.${cursor.updatedAt},and(updated_at.eq.${cursor.updatedAt},id.lt.${cursor.id})`);
 
-  const allRows = Array.isArray(data) ? data : [];
-  const platform = options.platform;
-  const platformRows = platform ? allRows.filter((row) => rowMatchesPlatform(row, platform)) : allRows;
-  const hasMore = platformRows.length > limit;
-  const pageRows = hasMore ? platformRows.slice(0, limit) : platformRows;
+    const { data, error } = await query;
+    if (error) throw error;
+    allRows.push(...(Array.isArray(data) ? data : []));
+  }
+
+  const hasMore = allRows.length > limit;
+  const pageRows = hasMore ? allRows.slice(0, limit) : allRows;
   const canonicalAssets = pageRows.map(mapCanonicalAdminAssetRow);
   const previewUrls = await getThemeAssetSignedUrls(canonicalAssets.flatMap((asset) => [asset.storagePath, ...asset.variants.map((variant) => variant.storagePath)]));
   const items = canonicalAssets.map((asset) => canonicalAdminAssetToCandidate(asset, previewUrls[asset.storagePath], previewUrls));
@@ -134,24 +165,39 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
   assertValidAdminAssetCandidateInput(input);
   const supabase = createClient();
   const id = input.id ?? crypto.randomUUID();
-  const storagePath = `admin-assets/${id}/${sanitizeStoragePathPart(input.fileName)}`;
+  // 기존 후보의 바이트를 교체할 때 같은 Storage 경로를 upsert하면 DB 저장이 실패한 순간에도
+  // 기존 row가 새 바이트를 바라보게 된다. revision 경로를 써야 실패 시 이전 후보를 보존할 수 있다.
+  const storagePath = input.id
+    ? `admin-assets/${id}/revisions/${crypto.randomUUID()}/${sanitizeStoragePathPart(input.fileName)}`
+    : `admin-assets/${id}/${sanitizeStoragePathPart(input.fileName)}`;
   const mimeType = input.mimeType || "application/octet-stream";
 
   const { error: uploadError } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, input.blob, {
     contentType: mimeType,
     cacheControl: themeAssetCacheControl,
-    upsert: true,
+    upsert: !input.id,
   });
   if (uploadError) throw uploadError;
 
+  let persisted = false;
   try {
     const { data: userData } = await supabase.auth.getUser();
     const payload = createAdminAssetPersistencePayload(input, id, storagePath, userData.user?.id ?? null);
     const { error } = await supabase.from("admin_assets").upsert(payload.asset).select(adminAssetSelect).single();
     if (error) throw error;
+    persisted = true;
 
     await replaceAdminAssetTargets(id, payload.targets);
     await replaceAdminAssetBubbleSpec(id, payload.bubbleSpec);
+
+    // `input.id`가 있는 재저장도 지원하므로, 새 Supabase Storage 바이트가 publisher에
+    // 반영되기 전에는 이전 catalog object를 export에 사용할 수 없게 한다. 새 에셋에서는
+    // null이므로 no-op에 가깝고, 기존 에셋에서는 stale pointer를 legacy 경로로 되돌린다.
+    const { error: clearCatalogLinkError } = await supabase
+      .from("admin_assets")
+      .update({ asset_object_id: null })
+      .eq("id", id);
+    if (clearCatalogLinkError) throw clearCatalogLinkError;
 
     /**
      * catalog 병행 기록 (계획 §15 rollout 1단계 write shadow).
@@ -167,10 +213,10 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
 
     return getAdminAssetCandidate(id);
   } catch (error) {
-    if (!input.id) {
+    if (!input.id && persisted) {
       await supabase.from("admin_assets").delete().eq("id", id);
     }
-    await supabase.storage.from(themeAssetsBucketName).remove([storagePath]);
+    if (!input.id || !persisted) await supabase.storage.from(themeAssetsBucketName).remove([storagePath]);
     throw error;
   }
 }
@@ -257,6 +303,7 @@ export async function saveAdminBubbleBuilderCandidate(input: AdminBubbleBuilderC
   const previous = input.id ? await getAdminAssetCandidate(input.id) : undefined;
   const revision = crypto.randomUUID();
   const uploadedPaths: string[] = [];
+  let persisted = false;
   const variantRows = input.variants.map((variant) => ({
     platform: variant.platform,
     storage_path: `admin-assets/${id}/revisions/${revision}/${variant.platform}/${sanitizeStoragePathPart(variant.file.name)}`,
@@ -334,6 +381,10 @@ export async function saveAdminBubbleBuilderCandidate(input: AdminBubbleBuilderC
       })),
     });
     if (error) throw error;
+    // The RPC commits the DB bundle atomically. Any failure after this point
+    // must retain the new files; deleting them would leave DB rows pointing at
+    // missing storage objects.
+    persisted = true;
 
     // 새 variant 바이트가 저장되면 이전 catalog object 연결은 즉시 끊는다. publisher가
     // 성공하기 전까지 추천 API는 legacy field 경로로만 내려가야 stale object를 보낼 수 없다.
@@ -368,7 +419,7 @@ export async function saveAdminBubbleBuilderCandidate(input: AdminBubbleBuilderC
 
     return saved;
   } catch (error) {
-    if (uploadedPaths.length) await supabase.storage.from(themeAssetsBucketName).remove(uploadedPaths);
+    if (uploadedPaths.length && !persisted) await supabase.storage.from(themeAssetsBucketName).remove(uploadedPaths);
     throw error;
   }
 }
@@ -535,16 +586,39 @@ type AdminBubbleSpecRow = {
   readonly geometry: AdminBubbleSpec["geometry"] | null;
 };
 
-function rowMatchesPlatform(row: unknown, platform: ThemePlatform): boolean {
+function rowMatchesListOptions(row: unknown, options: AdminAssetListOptions): boolean {
   const record = requireObject(row);
+  const platform = options.platform;
+  const slotRole = options.slotRole;
+  if (!platform && !slotRole) return true;
   const targets = record.admin_asset_targets;
-  if (Array.isArray(targets)) {
+  if (Array.isArray(targets) && targets.length > 0) {
     return targets.some((target) => {
       const targetRecord = requireObject(target);
-      return targetRecord.platform === platform || targetRecord.platform === "all";
+      if (targetRecord.enabled === false) return false;
+      if (platform && targetRecord.platform !== platform && targetRecord.platform !== "all") return false;
+      if (!slotRole) return true;
+      return targetRecord.target_kind !== "exact_role" || targetRecord.slot_role === slotRole;
     });
   }
-  return record.platform === platform || record.platform === "all";
+
+  // Legacy rows may not have child targets yet. Keep them visible when their
+  // denormalized parent metadata matches the requested slot.
+  const parentPlatform = record.platform;
+  const parentRole = record.slot_role;
+  return (
+    (!platform || parentPlatform === platform || parentPlatform === "all") &&
+    (!slotRole || parentRole === slotRole)
+  );
+}
+
+function rowIsAfterCursor(row: unknown, cursor: { readonly updatedAt: string; readonly id: string }): boolean {
+  const record = requireObject(row);
+  const rowUpdatedAt = typeof record.updated_at === "string" ? Date.parse(record.updated_at) : Number.NaN;
+  const cursorUpdatedAt = Date.parse(cursor.updatedAt);
+  if (!Number.isFinite(rowUpdatedAt) || !Number.isFinite(cursorUpdatedAt)) return false;
+  const rowId = typeof record.id === "string" ? record.id : "";
+  return rowUpdatedAt < cursorUpdatedAt || (rowUpdatedAt === cursorUpdatedAt && rowId < cursor.id);
 }
 
 function requireObject(value: unknown): Record<string, unknown> {

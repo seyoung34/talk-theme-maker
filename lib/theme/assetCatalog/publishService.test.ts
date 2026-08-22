@@ -89,13 +89,13 @@ function fakeStore() {
       const row = rows.get(id);
       if (row?.status === "staged") rows.set(id, { ...row, status: "failed" });
     },
-    async restageFailed(id, sha256) {
+    async restageFailed(id, sha256, gcsGeneration, sizeBytes) {
       calls.push("restageFailed");
       const row = rows.get(id);
       if (!row) throw new Error("catalog_object_not_found");
       if (row.sha256 !== sha256) throw new Error("catalog_object_hash_mismatch");
       if (row.status !== "failed") throw new Error("catalog_object_not_failed");
-      rows.set(id, { ...row, status: "staged" });
+      rows.set(id, { ...row, status: "staged", gcsGeneration, sizeBytes });
     },
     async countReferences(gcsObjectKey) {
       return [...rows.values()].filter((r) => r.gcsObjectKey === gcsObjectKey && r.status !== "failed").length;
@@ -367,17 +367,21 @@ describe("publishThemeAsset", () => {
     const { store, rows, calls } = fakeStore();
     const previews = [{ presetKey: "card", bytes: new Uint8Array([1, 2]), contentType: "image/webp" as const }];
     const broken = fakeBucket({ put: async () => { throw new Error("r2 down"); } });
+    const retryUploader = vi.fn()
+      .mockResolvedValueOnce({ generation: "17", sizeBytes: 24 })
+      .mockResolvedValueOnce({ generation: "42", sizeBytes: 24 });
 
-    await expect(publishThemeAsset(input({ previews }), { store, uploadCatalogObject: uploader, previewBucket: broken }))
+    await expect(publishThemeAsset(input({ previews }), { store, uploadCatalogObject: retryUploader, previewBucket: broken }))
       .rejects.toThrow(CatalogPublishFailure);
     expect([...rows.values()][0].status).toBe("failed");
 
     calls.length = 0;
-    const retried = await publishThemeAsset(input({ previews }), { store, uploadCatalogObject: uploader, previewBucket: fakeBucket() });
+    const retried = await publishThemeAsset(input({ previews }), { store, uploadCatalogObject: retryUploader, previewBucket: fakeBucket() });
 
     expect(retried.status).toBe("published");
     expect(retried.record.revision).toBe(1);
     expect(rows.size).toBe(1);
+    expect([...rows.values()][0].gcsGeneration).toBe("42");
     expect(calls).toContain("restageFailed");
     expect(calls).not.toContain("insertStaged");
   });

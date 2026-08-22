@@ -20,6 +20,7 @@ import { previewObjectKey, putPreviewObject, type PreviewBucket, type PreviewCon
 
 export type CatalogObjectUploader = (input: {
   objectKey: string;
+  sha256: string;
   bytes: Uint8Array;
   contentType: string;
   expectedSizeBytes: number;
@@ -141,6 +142,7 @@ export async function publishThemeAsset(
 
   const uploaded = await deps.uploadCatalogObject({
     objectKey: plan.objectKey,
+    sha256: plan.sha256,
     bytes: input.canonical.bytes,
     contentType: plan.source.mimeType,
     expectedSizeBytes: plan.source.sizeBytes,
@@ -149,13 +151,13 @@ export async function publishThemeAsset(
   // 객체가 다시 올라간 것을 확인한 뒤에 되돌린다. 순서를 뒤집으면 업로드가 또 실패했을 때
   // `staged`로 남아 "올라가 있다"고 오해하게 된다.
   if (existing?.status === "failed") {
-    await deps.store.restageFailed(existing.id, plan.sha256);
+    await deps.store.restageFailed(existing.id, plan.sha256, uploaded.generation, uploaded.sizeBytes);
   }
 
   // DB는 되돌렸지만 메모리의 레코드는 아직 `failed`다. 아래 `planCatalogActivation()`이 상태를
-  // 보고 판단하므로 여기서 맞춰 준다.
+  // 보고 판단하므로 여기서 상태와 새 GCS 메타데이터를 함께 맞춰 준다.
   const restaged: ThemeAssetObjectRecord | null = existing?.status === "failed"
-    ? { ...existing, status: "staged" }
+    ? { ...existing, status: "staged", gcsGeneration: uploaded.generation, sizeBytes: uploaded.sizeBytes }
     : existing;
 
   const staged = restaged ?? await deps.store.insertStaged({

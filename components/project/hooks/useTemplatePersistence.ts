@@ -118,7 +118,9 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
         title: titleValidation.value,
         legacyTitle: options.activeSystemTemplate?.title,
         description: options.systemDescription.trim() || undefined,
-        baseTemplateId: "basic",
+        // Keep the system variant tied to the template the editor actually
+        // loaded. Hard-coding "basic" silently corrupts future base templates.
+        baseTemplateId: options.templateId,
         platform: options.platform,
         status: options.systemStatus,
         visibility: options.systemVisibility,

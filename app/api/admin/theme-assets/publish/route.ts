@@ -72,6 +72,25 @@ export async function POST(request: Request) {
   const variantKey = readVariantKey(form);
   if (!variantKey) return NextResponse.json({ error: "variantKey가 올바르지 않습니다." }, { status: 400 });
 
+  // 이 write-shadow는 현재 추천 관리자 에셋만 지원한다. 시스템 템플릿 upload_refs는
+  // GCS publisher가 catalog ref와 DB bundle을 함께 갱신해야 하므로, 여기서 registry만 만들면
+  // 권한 근거가 없는 tpl:* active row가 남는다. 별도 publisher가 생길 때까지 명시적으로 막는다.
+  if (source.kind === "template") {
+    return NextResponse.json({ error: "시스템 템플릿 에셋 게시 경로는 아직 지원하지 않습니다." }, { status: 409 });
+  }
+
+  if (!isUuid(source.sourceId)) {
+    return NextResponse.json({ error: "관리자 에셋 식별자가 올바르지 않습니다." }, { status: 400 });
+  }
+
+  try {
+    const sourceExists = await adminPublishSourceExists(createAdminClient(), source.sourceId, variantKey);
+    if (!sourceExists) return NextResponse.json({ error: "관리자 에셋 또는 플랫폼 variant를 찾을 수 없습니다." }, { status: 404 });
+  } catch (error) {
+    console.error("Catalog publish source lookup failed", error);
+    return NextResponse.json({ error: "관리자 에셋을 확인하지 못했습니다." }, { status: 500 });
+  }
+
   const canonical = form.get("canonical");
   if (!(canonical instanceof File)) return NextResponse.json({ error: "원본 파일이 없습니다." }, { status: 400 });
   if (canonical.size > maxCatalogObjectBytes) return NextResponse.json({ error: "원본이 너무 큽니다." }, { status: 413 });
@@ -209,6 +228,33 @@ function readSourceId(form: FormData) {
   if (kind === "admin") return { kind, sourceId: sourceId.trim(), logicalAssetId: adminLogicalAssetId(sourceId.trim()) };
   if (kind === "template") return { kind, sourceId: sourceId.trim(), logicalAssetId: templateLogicalAssetId(sourceId.trim()) };
   return null;
+}
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(value: string) {
+  return uuidPattern.test(value);
+}
+
+async function adminPublishSourceExists(
+  admin: ReturnType<typeof createAdminClient>,
+  sourceId: string,
+  variantKey: "canonical" | "android" | "ios",
+) {
+  if (variantKey === canonicalVariantKey) {
+    const { data, error } = await admin.from("admin_assets").select("id").eq("id", sourceId).maybeSingle();
+    if (error) throw error;
+    return Boolean(data);
+  }
+
+  const { data, error } = await admin
+    .from("admin_asset_variants")
+    .select("id")
+    .eq("asset_id", sourceId)
+    .eq("platform", variantKey)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
 }
 
 function readVariantKey(form: FormData): "canonical" | "android" | "ios" | null {

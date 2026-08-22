@@ -143,11 +143,6 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       created_by: userData.user?.id ?? null,
     };
 
-    const { data: bundle, error: bundleError } = bundleId
-      ? await supabase.from("system_template_bundles").update(bundlePayload).eq("id", bundleId).select("*").single()
-      : await supabase.from("system_template_bundles").insert(bundlePayload).select("*").single();
-    if (bundleError) throw bundleError;
-
     const resolvedVariantId = variantId ?? crypto.randomUUID();
     const uploadRefs = await uploadSystemTemplateFiles(resolvedVariantId, input.overrides.uploads);
     const cardPreviewPath = await createAndUploadTemplateThumbnail(resolvedVariantId, input);
@@ -158,8 +153,8 @@ export const systemTemplateRepository: SystemTemplateRepository = {
     const slots = getThemeSlots(input.platform);
     const pathByRole = collectPreviewPathsByRole(slots, uploadRefs, input.overrides.candidateSelections);
     const expectedPaths = Array.from(new Set(pathByRole.values()));
-    // 서명이 실패해도 저장 자체는 되돌리지 않는다. 에셋 업로드와 DB 반영은 이미 끝났고,
-    // 미리보기를 못 구운 것은 모달 폴백으로 감당할 수 있다. 대신 아래에서 굽기를 건너뛴다.
+    // 서명이 실패해도 저장 자체는 되돌리지 않는다. 미리보기를 못 구운 것은 모달
+    // 폴백으로 감당할 수 있다. 대신 아래에서 굽기를 건너뛴다.
     const signedUrlByPath = expectedPaths.length > 0
       ? await createAdminThemeAssetSignedUrls(supabase, expectedPaths).catch((signingError) => {
           console.warn("Preview asset signing failed; screen previews are skipped for this save.", signingError);
@@ -180,16 +175,32 @@ export const systemTemplateRepository: SystemTemplateRepository = {
       expectedPaths,
     });
 
-    const previewMetadata = buildPreviewMetadata({
-      baseTemplateId: input.baseTemplateId,
-      platform: input.platform,
-      colors: input.overrides.colors,
-      candidateSelections: input.overrides.candidateSelections,
-      bubbleEdits: input.overrides.bubbleEdits,
-      uploadRefs,
-      cardPreviewPath,
-      screenPreviews,
-    });
+    let previewMetadata: SystemTemplatePreviewMetadata;
+    try {
+      previewMetadata = buildPreviewMetadata({
+        baseTemplateId: input.baseTemplateId,
+        platform: input.platform,
+        colors: input.overrides.colors,
+        candidateSelections: input.overrides.candidateSelections,
+        bubbleEdits: input.overrides.bubbleEdits,
+        uploadRefs,
+        cardPreviewPath,
+        screenPreviews,
+      });
+    } catch (error) {
+      if (!variantId) await removeNewSystemTemplateVariantStorage(supabase, resolvedVariantId, uploadRefs);
+      throw error;
+    }
+    // Storage 업로드와 미리보기 준비가 끝난 뒤에만 DB를 변경한다. 업로드가 중간에
+    // 실패하면 기존 시스템 템플릿의 번들 메타데이터를 앞서 바꾸지 않는다.
+    const { data: bundle, error: bundleError } = bundleId
+      ? await supabase.from("system_template_bundles").update(bundlePayload).eq("id", bundleId).select("*").single()
+      : await supabase.from("system_template_bundles").insert(bundlePayload).select("*").single();
+    if (bundleError) {
+      if (!variantId) await removeNewSystemTemplateVariantStorage(supabase, resolvedVariantId, uploadRefs);
+      throw bundleError;
+    }
+
     const variantPayload = {
       id: resolvedVariantId,
       bundle_id: bundle.id,
@@ -203,7 +214,16 @@ export const systemTemplateRepository: SystemTemplateRepository = {
     };
 
     const { data: variant, error: variantError } = await supabase.from("system_template_variants").upsert(variantPayload).select("*").single();
-    if (variantError) throw variantError;
+    if (variantError) {
+      if (!variantId) {
+        await removeNewSystemTemplateVariantStorage(supabase, resolvedVariantId, uploadRefs);
+        if (!bundleId) {
+          const { error: bundleCleanupError } = await supabase.from("system_template_bundles").delete().eq("id", bundle.id);
+          if (bundleCleanupError) console.warn("New system template bundle cleanup failed.", bundleCleanupError);
+        }
+      }
+      throw variantError;
+    }
 
     return {
       id: variant.id,
@@ -351,76 +371,87 @@ export const systemTemplateRepository: SystemTemplateRepository = {
 async function uploadSystemTemplateFiles(variantId: string, uploads: SlotUploads): Promise<RemoteSlotUploads> {
   const supabase = createClient();
   const refs: RemoteSlotUploads = {};
+  const uploadedPaths: string[] = [];
 
-  for (const [slotId, entries] of Object.entries(uploads)) {
-    if (!entries?.length) continue;
-    refs[slotId] = [];
-    for (const entry of entries) {
-      // 추천 catalog 에셋은 이미 GCS registry에 게시돼 있다. 선택 직후 편집기에서 쓰는
-      // fallback File이 함께 수화돼 있어도 같은 바이트를 Supabase Storage에 다시 올리면
-      // catalog 전환의 이점이 사라지므로 선택과 검증 metadata만 보관한다.
-      // signed URL은 만료되므로 저장하지 않고, legacyStoragePath는 미리보기·변환 fallback에서만 쓴다.
-      if (shouldPersistCatalogReference(entry)) {
-        const metadata = entry.catalog;
-        if (!metadata.fileName || !metadata.mimeType || !metadata.size || !metadata.sourceScale || !metadata.width || !metadata.height || !metadata.pngSignatureVerified) {
-          throw new Error("시스템 템플릿 저장: catalog 에셋 메타데이터가 없습니다.");
-        }
-        refs[slotId]?.push({
-          id: entry.id,
-          fileName: metadata.fileName,
-          mimeType: metadata.mimeType,
-          size: metadata.size,
-          catalog: entry.catalog.selection,
-          catalogMetadata: {
+  try {
+    for (const [slotId, entries] of Object.entries(uploads)) {
+      if (!entries?.length) continue;
+      refs[slotId] = [];
+      for (const entry of entries) {
+        // 추천 catalog 에셋은 이미 GCS registry에 게시돼 있다. 선택 직후 편집기에서 쓰는
+        // fallback File이 함께 수화돼 있어도 같은 바이트를 Supabase Storage에 다시 올리면
+        // catalog 전환의 이점이 사라지므로 선택과 검증 metadata만 보관한다.
+        // signed URL은 만료되므로 저장하지 않고, legacyStoragePath는 미리보기·변환 fallback에서만 쓴다.
+        if (shouldPersistCatalogReference(entry)) {
+          const metadata = entry.catalog;
+          if (!metadata.fileName || !metadata.mimeType || !metadata.size || !metadata.sourceScale || !metadata.width || !metadata.height || !metadata.pngSignatureVerified) {
+            throw new Error("시스템 템플릿 저장: catalog 에셋 메타데이터가 없습니다.");
+          }
+          refs[slotId]?.push({
+            id: entry.id,
             fileName: metadata.fileName,
             mimeType: metadata.mimeType,
             size: metadata.size,
-            sourceScale: metadata.sourceScale,
-            width: metadata.width,
-            height: metadata.height,
-            pngSignatureVerified: true,
-            ...(metadata.legacyStoragePath ? { legacyStoragePath: metadata.legacyStoragePath } : {}),
-          },
-        });
-        continue;
-      }
+            catalog: entry.catalog.selection,
+            catalogMetadata: {
+              fileName: metadata.fileName,
+              mimeType: metadata.mimeType,
+              size: metadata.size,
+              sourceScale: metadata.sourceScale,
+              width: metadata.width,
+              height: metadata.height,
+              pngSignatureVerified: true,
+              ...(metadata.legacyStoragePath ? { legacyStoragePath: metadata.legacyStoragePath } : {}),
+            },
+          });
+          continue;
+        }
 
-      // metadata가 빠진 오래된 catalog row나 변환된 항목은 legacy 경로를 통해 기존 방식으로
-      // 저장한다. 둘 다 없으면 조용히 누락시키지 않고 requireUploadFile에서 실패시킨다.
-      const uploadFile = requireUploadFile(entry, "시스템 템플릿 저장");
-      const fileName = sanitizeStoragePathPart(uploadFile.name);
-      const storagePath = `system-templates/${variantId}/${sanitizeStoragePathPart(slotId)}/${sanitizeStoragePathPart(entry.id)}-${fileName}`;
-      const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, uploadFile, {
-        contentType: uploadFile.type || "application/octet-stream",
-        cacheControl: themeAssetCacheControl,
-        upsert: true,
-      });
-      if (error) throw error;
-      const imageEdit = entry.imageEdit
-        ? {
-            originalName: entry.imageEdit.originalName,
-            originalSize: entry.imageEdit.originalSize,
-            originalStoragePath: await uploadOriginalImageEditFile({
-              supabase,
-              variantId,
-              slotId,
-              entryId: entry.id,
-              originalFile: entry.imageEdit.originalFile,
-            }),
-            editedAt: entry.imageEdit.editedAt,
-            state: entry.imageEdit.state,
-            ...(entry.imageEdit.target ? { target: entry.imageEdit.target } : {}),
-          }
-        : undefined;
-      refs[slotId]?.push({
-        id: entry.id,
-        fileName: uploadFile.name,
-        mimeType: uploadFile.type || "application/octet-stream",
-        size: uploadFile.size,
-        storagePath,
-        ...(imageEdit ? { imageEdit } : {}),
-      });
+        // metadata가 빠진 오래된 catalog row나 변환된 항목은 legacy 경로를 통해 기존 방식으로
+        // 저장한다. 둘 다 없으면 조용히 누락시키지 않고 requireUploadFile에서 실패시킨다.
+        const uploadFile = requireUploadFile(entry, "시스템 템플릿 저장");
+        const fileName = sanitizeStoragePathPart(uploadFile.name);
+        const storagePath = `system-templates/${variantId}/${sanitizeStoragePathPart(slotId)}/${sanitizeStoragePathPart(entry.id)}-${fileName}`;
+        const { error } = await supabase.storage.from(themeAssetsBucketName).upload(storagePath, uploadFile, {
+          contentType: uploadFile.type || "application/octet-stream",
+          cacheControl: themeAssetCacheControl,
+          upsert: true,
+        });
+        if (error) throw error;
+        uploadedPaths.push(storagePath);
+        const imageEdit = entry.imageEdit
+          ? {
+              originalName: entry.imageEdit.originalName,
+              originalSize: entry.imageEdit.originalSize,
+              originalStoragePath: await uploadOriginalImageEditFile({
+                supabase,
+                variantId,
+                slotId,
+                entryId: entry.id,
+                originalFile: entry.imageEdit.originalFile,
+              }),
+              editedAt: entry.imageEdit.editedAt,
+              state: entry.imageEdit.state,
+              ...(entry.imageEdit.target ? { target: entry.imageEdit.target } : {}),
+            }
+          : undefined;
+        if (imageEdit?.originalStoragePath) uploadedPaths.push(imageEdit.originalStoragePath);
+        refs[slotId]?.push({
+          id: entry.id,
+          fileName: uploadFile.name,
+          mimeType: uploadFile.type || "application/octet-stream",
+          size: uploadFile.size,
+          storagePath,
+          ...(imageEdit ? { imageEdit } : {}),
+        });
+      }
     }
+  } catch (error) {
+    if (uploadedPaths.length) {
+      const { error: cleanupError } = await supabase.storage.from(themeAssetsBucketName).remove(uploadedPaths);
+      if (cleanupError) console.warn("System template asset cleanup failed.", cleanupError);
+    }
+    throw error;
   }
 
   return refs;
@@ -431,6 +462,31 @@ export function shouldPersistCatalogReference(entry: SlotUploadEntry): entry is 
   imageEdit?: undefined;
 } {
   return Boolean(entry.catalog && !entry.imageEdit);
+}
+
+async function removeNewSystemTemplateVariantStorage(
+  supabase: ReturnType<typeof createClient>,
+  variantId: string,
+  uploadRefs: RemoteSlotUploads,
+) {
+  const prefix = `system-templates/${variantId}/`;
+  const privatePaths = [...new Set(collectRemoteUploadPaths(uploadRefs).filter((path) => path.startsWith(prefix)))];
+  const publicPaths = [
+    `${prefix}preview/card.webp`,
+    ...previewScreenIds.map((screenId) => `${prefix}preview/${screenId}.webp`),
+  ];
+
+  try {
+    const removals = [
+      ...(privatePaths.length ? [supabase.storage.from(themeAssetsBucketName).remove(privatePaths)] : []),
+      supabase.storage.from(themePublicBucketName).remove(publicPaths),
+    ];
+    const results = await Promise.all(removals);
+    const cleanupError = results.find((result) => result.error)?.error;
+    if (cleanupError) console.warn("New system template preview cleanup failed.", cleanupError);
+  } catch (error) {
+    console.warn("New system template storage cleanup failed.", error);
+  }
 }
 
 async function uploadOriginalImageEditFile({

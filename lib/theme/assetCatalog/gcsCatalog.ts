@@ -75,12 +75,14 @@ export function assertCatalogObjectKey(objectKey: string) {
  * 객체를 올린다. content-addressed 키라 같은 키면 내용이 같으므로, 이미 있으면 그대로 재사용한다.
  *
  * `ifGenerationMatch=0`은 "없을 때만 생성"이다. 412는 오류가 아니라 "다른 publish가 이미 올렸다"는
- * 뜻이므로 기존 metadata를 읽어 돌려준다. 재시도가 몇 번 돌아도 결과가 같다.
+ * 뜻이므로 기존 metadata와 실제 바이트 해시를 확인한 뒤 재사용한다. 재시도가 몇 번 돌아도 결과가 같다.
  */
 export async function putCatalogObject(input: {
   config: CatalogStorageConfig;
   accessToken: string;
   objectKey: string;
+  /** publishService가 이미 계산한 content hash. 직접 호출하는 legacy 테스트/도구는 키에서 복원한다. */
+  sha256?: string;
   bytes: Uint8Array;
   contentType: string;
   expectedSizeBytes: number;
@@ -102,6 +104,14 @@ export async function putCatalogObject(input: {
       throw new CatalogStorageError("catalog_upload_failed", "테마 에셋 업로드에 실패했습니다.", "precondition failed but object missing");
     }
     assertSizeMatches(existing, input.expectedSizeBytes);
+    await assertContentMatches({
+      config: input.config,
+      accessToken: input.accessToken,
+      objectKey,
+      generation: existing.generation,
+      expectedSha256: input.sha256 ?? sha256FromCatalogObjectKey(objectKey),
+      expectedSizeBytes: existing.sizeBytes,
+    });
     return { ...existing, created: false };
   }
 
@@ -134,6 +144,51 @@ export async function headCatalogObject(input: {
     throw new CatalogStorageError("catalog_lookup_failed", "테마 에셋을 확인하지 못했습니다.", `HTTP ${response.status}`);
   }
   return parseObjectMetadata(objectKey, await response.json().catch(() => null));
+}
+
+async function assertContentMatches(input: {
+  config: CatalogStorageConfig;
+  accessToken: string;
+  objectKey: string;
+  generation: string;
+  expectedSha256: string;
+  expectedSizeBytes: number;
+}) {
+  const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(input.config.bucket)}/o/${encodeURIComponent(input.objectKey)}`
+    + `?alt=media&generation=${encodeURIComponent(input.generation)}`;
+  const response = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${input.accessToken}` },
+  }, "catalog_lookup_failed", "테마 에셋을 확인하지 못했습니다.");
+  if (!response.ok) {
+    await response.arrayBuffer();
+    throw new CatalogStorageError("catalog_lookup_failed", "테마 에셋을 확인하지 못했습니다.", `HTTP ${response.status}`);
+  }
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength !== input.expectedSizeBytes) {
+    throw new CatalogStorageError(
+      "catalog_object_mismatch",
+      "테마 에셋 크기가 기록과 일치하지 않습니다.",
+      `expected ${input.expectedSizeBytes}, got ${bytes.byteLength}`,
+    );
+  }
+  const digest = await crypto.subtle.digest("SHA-256", bytes as unknown as ArrayBufferView<ArrayBuffer>);
+  const actualSha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  if (actualSha256 !== input.expectedSha256) {
+    throw new CatalogStorageError(
+      "catalog_object_mismatch",
+      "테마 에셋 해시가 기록과 일치하지 않습니다.",
+      `expected ${input.expectedSha256}, got ${actualSha256}`,
+    );
+  }
+}
+
+function sha256FromCatalogObjectKey(objectKey: string) {
+  const fileName = objectKey.slice(objectKey.lastIndexOf("/") + 1);
+  const match = /^([0-9a-f]{64})\.png$/i.exec(fileName);
+  if (!match) throw new CatalogStorageError("invalid_object_key", "테마 에셋 경로가 올바르지 않습니다.", objectKey.slice(0, 80));
+  return match[1]!.toLowerCase();
 }
 
 function assertSizeMatches(metadata: CatalogObjectMetadata, expectedSizeBytes: number) {

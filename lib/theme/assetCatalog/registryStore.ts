@@ -250,8 +250,13 @@ export function createRegistryStore(admin = createAdminClient()) {
      * revision은 "내용의 이름"이라 같은 바이트에 새 번호를 붙이면 의미가 흐려진다. sha256이 같을
      * 때만 되돌리므로 다른 내용으로 덮어쓰는 요청은 통과하지 못한다.
      */
-    async restageFailed(id: string, sha256: string) {
-      const { error } = await admin.rpc("restage_failed_theme_asset_object", { p_id: id, p_sha256: sha256 });
+    async restageFailed(id: string, sha256: string, gcsGeneration: string, sizeBytes: number) {
+      const { error } = await admin.rpc("restage_failed_theme_asset_object", {
+        p_id: id,
+        p_sha256: sha256,
+        p_gcs_generation: gcsGeneration,
+        p_size_bytes: sizeBytes,
+      });
       if (error) throw error;
     },
 

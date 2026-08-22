@@ -303,7 +303,14 @@ export default function AdminAssetsClient() {
     const seq = ++assetRequestSeqRef.current;
     try {
       setIsLoadingAssets(true);
-      const page = await listAdminAssetCandidatePage({ assetKind: inferAdminAssetKind(selectedSlot), cursor, limit: 24 });
+      const page = await listAdminAssetCandidatePage({
+        assetKind: inferAdminAssetKind(selectedSlot),
+        platform: selectedSlot.platform,
+        slotRole: selectedSlot.role,
+        cursor,
+        limit: 24,
+        enabledOnly: true,
+      });
       if (seq !== assetRequestSeqRef.current) return;
       setAssets((current) => append ? [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))] : page.items);
       setAssetCursor(page.nextCursor);
@@ -1347,13 +1354,33 @@ function formatAdminAssetTargets(asset: AdminAssetCandidate) {
 }
 
 function isExactAdminAssetTarget(slot: ThemeAssetSlot, asset: AdminAssetCandidate) {
-  return (asset.targets ?? []).some((target) => target.targetKind === "exact_role" && target.slotRole === slot.role);
+  return (asset.targets ?? []).some(
+    (target) =>
+      target.enabled &&
+      (target.platform === slot.platform || target.platform === "all") &&
+      target.targetKind === "exact_role" &&
+      target.slotRole === slot.role,
+  );
 }
 
 function isAdminAssetVisibleForAdminSlot(slot: ThemeAssetSlot, asset: AdminAssetCandidate) {
   if (!asset.enabled) return false;
+  const targets = asset.targets ?? [];
+  if (
+    targets.length > 0 &&
+    !targets.some((target) => target.enabled && (target.platform === slot.platform || target.platform === "all"))
+  ) {
+    return false;
+  }
   if (isExactAdminAssetTarget(slot, asset)) return true;
-  if ((asset.targets ?? []).some((target) => target.enabled && target.targetKind === "asset_kind")) return true;
+  if (
+    targets.some(
+      (target) =>
+        target.enabled &&
+        (target.platform === slot.platform || target.platform === "all") &&
+        target.targetKind === "asset_kind",
+    )
+  ) return true;
   return isAdminAssetRecommendedForSlot(slot, { ...asset, platform: "all" });
 }
 

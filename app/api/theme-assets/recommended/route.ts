@@ -12,8 +12,31 @@ import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
 
 const bucketName = "theme-assets";
 const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"]);
-const maxSourceRows = 200;
+/** 한 번의 PostgREST 요청 크기. 추천 결과를 정확히 정렬하려면 모든 enabled source를 읽어야 한다. */
+const sourceBatchSize = 200;
 const recommendedPageCacheTtlSeconds = 30;
+
+const recommendedAssetSelect = [
+  "id",
+  "slot_role",
+  "platform",
+  "asset_kind",
+  "analysis",
+  "bubble_adjustment",
+  "title",
+  "note",
+  "tags",
+  "file_name",
+  "mime_type",
+  "storage_path",
+  "asset_object_id",
+  "enabled",
+  "created_at",
+  "updated_at",
+  "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
+  "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch,geometry)",
+  "admin_asset_variants(id,asset_id,platform,storage_path,asset_object_id,file_name,mime_type,analysis)",
+].join(",");
 
 type RecommendedResponseItem = AdminAssetCandidate & {
   readonly target: AdminAssetTarget;
@@ -51,7 +74,7 @@ type RecommendedPagePayload = {
 /**
  * 캐시에 담는 것은 **catalog ref를 뺀** 페이지다.
  *
- * 비싼 부분(200행 조인·랭킹·서명 URL 배치·썸네일 색인)은 30초 재사용해도 안전하다. 서명 URL은
+ * 비싼 부분(원본 배치 조회·랭킹·서명 URL 배치·썸네일 색인)은 30초 재사용해도 안전하다. 서명 URL은
  * TTL이 10분이라 이 창보다 훨씬 길고, 썸네일은 화면에만 쓰인다.
  *
  * catalog ref만 매 요청 다시 읽는다. 그 값은 export가 어떤 **바이트**를 가져올지 정하므로,
@@ -88,49 +111,18 @@ export async function GET(request: NextRequest) {
     }
 
     // 편집기에서 슬롯을 고를 때마다 호출되는 경로다. 응답은 사용자와 무관하게
-    // enabled 에셋만 담으므로 짧게 재사용해 슬롯 클릭마다 200행 조인을 다시 읽지 않게 한다.
+    // enabled 에셋만 담으므로 짧게 재사용해 슬롯 클릭마다 원본 전체를 다시 읽지 않게 한다.
     const cacheKey = [platform, assetKind, slotRole ?? "", limit, cursor ? cursorParam : ""].join("|");
     const admin = createAdminClient();
     const cached = recommendedPageCache.get(cacheKey);
     if (cached) return jsonRecommendedPage(await attachCatalogRefs(admin, cached, platform));
 
-    const { data, error } = await admin
-      .from("admin_assets")
-      .select(
-        [
-          "id",
-          "slot_role",
-          "platform",
-          "asset_kind",
-          "analysis",
-          "bubble_adjustment",
-          "title",
-          "note",
-          "tags",
-          "file_name",
-          "mime_type",
-          "storage_path",
-          "asset_object_id",
-          "enabled",
-          "created_at",
-          "updated_at",
-           "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
-           "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch,geometry)",
-           "admin_asset_variants(id,asset_id,platform,storage_path,asset_object_id,file_name,mime_type,analysis)",
-        ].join(","),
-      )
-      .eq("enabled", true)
-      .eq("asset_kind", assetKind)
-      .order("updated_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(maxSourceRows);
+    const data = await readRecommendedSourceRows(admin, assetKind);
 
-    if (error) throw error;
-
-    const ranked = (data ?? [])
+    const ranked = uniqueRankedAssets((data)
       .map((row: unknown) => mapCanonicalAdminAssetRow(row))
       .flatMap((asset) => matchingTargets(asset, platform, slotRole, assetKind))
-      .sort(compareRankedAssets);
+      .sort(compareRankedAssets));
     const cursorFiltered = cursor ? ranked.filter((item) => compareRankedAssetToCursor(item, cursor) > 0) : ranked;
     const page = cursorFiltered.slice(0, limit);
     const hasMore = cursorFiltered.length > limit;
@@ -173,6 +165,38 @@ export async function GET(request: NextRequest) {
     console.error("Recommended asset listing failed", JSON.stringify(serializeError(error)));
     return NextResponse.json({ error: "Failed to load recommended assets." }, { status: 500 });
   }
+}
+
+/**
+ * 추천 API는 target match rank를 메모리에서 계산한다. 첫 200개 source만 읽으면 뒤쪽의 exact target이
+ * 누락되어 `nextCursor`가 없는데도 더 좋은 후보가 존재하는 상황이 생긴다. source만 배치로 모두 읽고,
+ * 그 뒤에 전역 정렬·페이지 절단을 적용한다.
+ */
+async function readRecommendedSourceRows(
+  admin: ReturnType<typeof createAdminClient>,
+  assetKind: AdminAssetKind,
+): Promise<unknown[]> {
+  const rows: unknown[] = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await admin
+      .from("admin_assets")
+      .select(recommendedAssetSelect)
+      .eq("enabled", true)
+      .eq("asset_kind", assetKind)
+      .order("updated_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + sourceBatchSize - 1);
+
+    if (error) throw error;
+    const batch = Array.isArray(data) ? data : [];
+    rows.push(...batch);
+    if (batch.length < sourceBatchSize) break;
+    offset += batch.length;
+  }
+
+  return rows;
 }
 
 async function readActiveAdminCatalogRecords(admin: ReturnType<typeof createAdminClient>, adminAssetIds: readonly string[]) {
@@ -248,6 +272,16 @@ function matchingTargets(asset: ReturnType<typeof mapCanonicalAdminAssetRow>, pl
   return matches;
 }
 
+/** 한 에셋이 여러 target과 일치해도 피커에는 가장 좋은 target 하나만 노출한다. */
+function uniqueRankedAssets(ranked: readonly RankedAsset[]): RankedAsset[] {
+  const seen = new Set<string>();
+  return ranked.filter((item) => {
+    if (seen.has(item.asset.id)) return false;
+    seen.add(item.asset.id);
+    return true;
+  });
+}
+
 function isCompatibleExactRole(assetKind: AdminAssetKind, targetRole: string, requestedRole: string): boolean {
   if (assetKind === "bubble") return targetRole.startsWith("bubble_") && requestedRole.startsWith("bubble_");
   if (assetKind === "background") return isSharedBackgroundRole(targetRole) && isSharedBackgroundRole(requestedRole);
@@ -302,7 +336,8 @@ function compareRankedAssets(left: RankedAsset, right: RankedAsset): number {
     left.matchRank - right.matchRank ||
     right.target.priority - left.target.priority ||
     right.asset.updatedAt - left.asset.updatedAt ||
-    right.asset.id.localeCompare(left.asset.id)
+    right.asset.id.localeCompare(left.asset.id) ||
+    (right.target.id ?? "").localeCompare(left.target.id ?? "")
   );
 }
 
