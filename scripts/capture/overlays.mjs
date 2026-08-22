@@ -73,26 +73,40 @@ export function installCaptureOverlay({ safeTop, safeBottom }) {
     },
 
     /**
-     * 마우스 커서. 가이드 영상의 핵심이다 — 어디를 누르는지 보이지 않으면 따라 할 수가 없다.
+     * 누를 지점을 따라다니는 표시. 가이드 영상의 핵심이다 — 어디를 누르는지 보이지 않으면
+     * 보는 사람이 자기 화면에서 같은 곳을 찾을 수 없다.
      *
      * `showActions`(screencast 전용)와 같은 역할을 DOM으로 한다. 그래야 해상도를 지키는
-     * screenshot 백엔드에서도 커서가 나온다.
+     * screenshot 백엔드에서도 표시가 나온다.
      *
-     * 흰 채움 + 검은 테두리 + 그림자로 그린다. 이 앱은 배경이 밝은 화면과 어두운 미리보기가
-     * 한 프레임에 같이 나오므로 한쪽 색만으로는 반드시 어딘가에서 묻힌다.
+     * **두 가지 모양을 쓴다.**
+     * - `pointer`: 데스크톱. 마우스 화살표.
+     * - `touch`: 모바일. 손끝 크기의 원. 폰 화면에 마우스 화살표를 그리면 실제로 존재하지 않는
+     *   입력 장치를 가르치는 셈이 된다.
+     *
+     * 어느 쪽이든 밝은 채움 + 어두운 테두리 + 그림자로 그린다. 이 앱은 밝은 편집 화면과 어두운
+     * 미리보기가 한 프레임에 같이 나오므로 한쪽 색만으로는 반드시 어딘가에서 묻힌다.
      */
-    cursor({ x, y, size = 26 }) {
+    cursor({ x, y, kind = "pointer", size }) {
       const node = slot("cursor");
-      if (!node.firstChild) {
+      const px = size ?? (kind === "touch" ? 44 : 26);
+      if (node.dataset.kind !== kind) {
+        node.dataset.kind = kind;
         node.style.cssText = "position:absolute;left:0;top:0;will-change:transform";
         node.innerHTML =
-          `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="display:block;` +
-          `filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45))">` +
-          `<path d="M5 2.5 L5 19.5 L9.4 15.4 L12.2 21.4 L15.1 20 L12.3 14.2 L18.4 14.2 Z" ` +
-          `fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+          kind === "touch"
+            ? `<div style="width:${px}px;height:${px}px;border-radius:50%;box-sizing:border-box;` +
+              `background:rgba(255,255,255,0.42);border:3px solid rgba(17,17,17,0.72);` +
+              `box-shadow:0 2px 6px rgba(0,0,0,0.35)"></div>`
+            : `<svg width="${px}" height="${px}" viewBox="0 0 24 24" style="display:block;` +
+              `filter:drop-shadow(0 2px 3px rgba(0,0,0,0.45))">` +
+              `<path d="M5 2.5 L5 19.5 L9.4 15.4 L12.2 21.4 L15.1 20 L12.3 14.2 L18.4 14.2 Z" ` +
+              `fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
       }
+      // 화살표는 뾰족한 끝이 지점을 가리키고, 손끝 원은 지점을 가운데 둔다.
+      const offset = kind === "touch" ? px / 2 : 0;
       // transform으로 옮긴다. left/top을 쓰면 매 프레임 레이아웃이 다시 계산된다.
-      node.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+      node.style.transform = `translate3d(${x - offset}px, ${y - offset}px, 0)`;
     },
 
     cursorHide() {

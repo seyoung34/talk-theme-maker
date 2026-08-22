@@ -105,9 +105,12 @@ export async function runCapture({
   /** 커서를 목표 지점까지 **프레임 단위로** 옮긴다. 마지막에 실제 좌표를 기억한다. */
   async function moveCursor(to, frames) {
     const from = cursorAt;
+    // 폰 화면에 마우스 화살표를 그리면 실제로 없는 입력 장치를 가르치게 된다. 모양만 바꾸고
+    // 움직임은 똑같이 준다 — 누르기 전에 어디로 가는지 보이는 것이 요점이기 때문이다.
+    const kind = profile.isMobile ? "touch" : "pointer";
     await frameStep(frames, (index, count) => {
       const progress = easeInOut((index + 1) / count);
-      const at = { x: from.x + (to.x - from.x) * progress, y: from.y + (to.y - from.y) * progress };
+      const at = { x: from.x + (to.x - from.x) * progress, y: from.y + (to.y - from.y) * progress, kind };
       return page.evaluate((pos) => window.__capture?.cursor(pos), at);
     });
     cursorAt = to;
@@ -171,12 +174,9 @@ export async function runCapture({
         return;
       }
       const target = await centerOf(locator);
-      // 모바일 화면에는 마우스 화살표가 있을 수 없다. 손가락으로 누르는 화면이므로 파문만 찍는다.
-      if (!profile.isMobile) {
-        // 움직임은 프레임으로 나눈다 — 부드러움은 프레임 개수가 정하기 때문이다. 길이가 촬영
-        // 속도에 따라 조금 흔들리지만 0.5초짜리라 티가 나지 않는다.
-        await moveCursor(target, Math.max(2, Math.round(moveSeconds * profile.fps)));
-      }
+      // 움직임은 프레임으로 나눈다 — 부드러움은 프레임 개수가 정하기 때문이다. 길이가 촬영
+      // 속도에 따라 조금 흔들리지만 0.5초짜리라 티가 나지 않는다.
+      await moveCursor(target, Math.max(2, Math.round(moveSeconds * profile.fps)));
       await page.evaluate((pos) => window.__capture?.ripple(pos.x, pos.y), target);
       await locator.click();
       // 누른 결과가 화면에 나타날 시간을 준다. 바로 다음 동작으로 넘어가면 무엇이 바뀌었는지 안 보인다.
@@ -185,7 +185,7 @@ export async function runCapture({
 
     /** 누르지 않고 가리키기만 한다. 어디를 볼지 안내할 때. */
     async point(locator, { moveSeconds = 0.5 } = {}) {
-      if (backend.drawsCursor || profile.isMobile) return;
+      if (backend.drawsCursor) return;
       await moveCursor(await centerOf(locator), Math.max(2, Math.round(moveSeconds * profile.fps)));
     },
 
