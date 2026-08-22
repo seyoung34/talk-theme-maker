@@ -149,7 +149,8 @@ function EasyStepCard({ step, index, platformLabel }: { step: EasyStep; index: n
               <div className="grid gap-2">
                 <span className="mx-auto grid size-11 place-items-center rounded-2xl bg-[#eef5ff] text-[#2f6bbf]"><AlertTriangle size={20} aria-hidden="true" /></span>
                 <p className="text-xs font-black tracking-[0.14em] text-[#94a3b8]">SCREEN COMING SOON</p>
-                <p className="text-sm font-semibold text-[var(--color-on-surface-variant)]">설치·적용 과정은 곧 짧은 영상으로 안내해요.</p>
+                {/* 화면 자료가 아직 없다는 안내다. 무엇을 해야 하는지는 옆 칸의 순서가 이미 알려준다. */}
+                <p className="text-sm font-semibold text-[var(--color-on-surface-variant)]">화면 사진은 준비 중이에요. 옆의 순서를 그대로 따라 하면 돼요.</p>
               </div>
             </div>
           )}
@@ -164,6 +165,20 @@ function EasyStepCard({ step, index, platformLabel }: { step: EasyStep; index: n
             <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#fff8e1] px-3 py-1 text-[11px] font-black text-[#8a6a10]"><AlertTriangle size={12} aria-hidden="true" />가장 헷갈리는 곳</span>
           ) : null}
           <p className="text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{step.caption}</p>
+          {/*
+            순서가 곧 내용인 스텝만 여기까지 온다. 번호를 보이게 그리는 이유는, 설치 허용처럼
+            건너뛰면 다음이 진행되지 않는 동작이 섞여 있어서 "몇 번째까지 했는지"가 중요하기 때문이다.
+          */}
+          {step.actions?.length ? (
+            <ol className="mt-1 grid gap-2">
+              {step.actions.map((action, actionIndex) => (
+                <li key={action} className="grid grid-cols-[20px_minmax(0,1fr)] items-start gap-2.5">
+                  <span className="mt-0.5 grid size-5 place-items-center rounded-full bg-[#eef5ff] font-mono text-[10px] font-bold text-[#2f6bbf]">{actionIndex + 1}</span>
+                  <span className="text-sm font-medium leading-6 text-[var(--color-on-surface-variant)]">{action}</span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
         </div>
       </div>
     </li>

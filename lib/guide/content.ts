@@ -69,6 +69,14 @@ export type EasyStepMedia = ({ type: "image"; src: string } | { type: "video"; s
 export type EasyStep = {
   title: string;
   caption: string;
+  /**
+   * 순서대로 따라 해야 하는 하위 동작.
+   *
+   * 대부분의 스텝은 동작 하나라 `caption` 한두 줄이면 끝난다. 그런데 설치·적용처럼 **순서가
+   * 곧 내용인** 스텝이 있다 — 설치 허용을 건너뛰면 다음이 진행되지 않는다. 그걸 한 문단에
+   * 욱여넣으면 순서가 사라지고, 화면 밖 지식이 필요한 구간에서 가장 필요한 것이 순서다.
+   */
+  actions?: string[];
   /** 넓은 화면(데스크톱)에서 쓰는 자료. */
   media?: EasyStepMedia;
   /**
@@ -178,7 +186,13 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       },
       {
         title: "설치하고 카톡에 적용하기",
-        caption: "APK를 설치할 때 뜨는 ‘설치 허용’ 팝업과 테마 앱의 적용 과정은 곧 짧은 영상으로 안내할 예정이에요.",
+        caption: "받은 파일을 열어 설치한 뒤, 테마 앱에서 ‘테마 적용하기’를 누르면 끝이에요.",
+        actions: [
+          "APK 파일을 열어요. APK ZIP을 받았다면 먼저 압축을 풀고 안에 있는 APK를 찾아요.",
+          "‘알 수 없는 앱 설치’를 허용해 달라는 팝업이 뜨면 허용해요. 파일을 연 앱에만 잠깐 허용하면 돼요.",
+          "설치가 끝나면 새로 생긴 테마 앱을 열고 아래쪽 ‘테마 적용하기’를 눌러요.",
+          "카카오톡 테마 설정이 열리면 새 테마를 골라 적용하고 화면을 확인해요.",
+        ],
         hardStep: true,
       },
     ],
