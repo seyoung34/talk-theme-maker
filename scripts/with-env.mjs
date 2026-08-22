@@ -13,11 +13,9 @@
 // **PowerShell에는 `VAR=x cmd` 인라인 문법이 없다.** cross-env 같은 의존성을 새로 들이는 대신
 // 이미 있는 Node로 처리한다.
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+import { projectRoot, readEnvOverlay } from "./envFile.mjs";
+
 const [overlayName, ...command] = process.argv.slice(2);
 
 if (!overlayName || command.length === 0) {
@@ -26,28 +24,14 @@ if (!overlayName || command.length === 0) {
   process.exit(1);
 }
 
-const overlayPath = path.join(projectRoot, `.env.${overlayName}`);
-if (!existsSync(overlayPath)) {
-  console.error(`오버레이 파일이 없습니다: ${path.relative(projectRoot, overlayPath)}`);
+let overlay;
+try {
+  overlay = readEnvOverlay(overlayName);
+} catch (error) {
+  console.error(error.message);
   process.exit(1);
 }
 
-/** `KEY=value` 만 읽는다. 주석·빈 줄·감싼 따옴표·`export ` 접두사를 걷어낸다. */
-function parseEnvFile(contents) {
-  const entries = {};
-  for (const line of contents.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(trimmed);
-    if (!match) continue;
-    const [, key, rawValue] = match;
-    const unquoted = /^(['"])(.*)\1$/.exec(rawValue);
-    entries[key] = unquoted ? unquoted[2] : rawValue.trim();
-  }
-  return entries;
-}
-
-const overlay = parseEnvFile(readFileSync(overlayPath, "utf8"));
 const env = { ...process.env };
 const applied = [];
 for (const [key, value] of Object.entries(overlay)) {

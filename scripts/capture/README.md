@@ -14,6 +14,7 @@ node scripts/capture/run.mjs --profile=guide --server=http://127.0.0.1:3311 --sc
 |---|---|
 | `--profile=guide\|guide-mobile\|reel` | 촬영 규격. 기본 `guide` |
 | `--scenes=a,b` | 찍을 씬. 기본은 mock 환경에서도 도는 구성 |
+| `--env=mock\|local` | 촬영 백엔드. 기본 `mock` |
 | `--server=<url>` | 이미 떠 있는 서버 사용. 빌드·기동을 건너뛴다 |
 | `--out=<dir>` | 출력 경로. 기본 `E:\TalkTheme-자료\촬영본\<profile>` |
 | `--backend=screencast\|screenshot` | 프로필 기본 백엔드를 덮는다 |
@@ -21,6 +22,34 @@ node scripts/capture/run.mjs --profile=guide --server=http://127.0.0.1:3311 --sc
 | `--safe-guides` | 인스타·틱톡 안전영역 가늠자를 그린다 (확인용) |
 | `--keep-frames` | 중간 프레임을 지우지 않는다 (다시 인코딩할 때) |
 | `--no-build` | 빌드를 건너뛴다. **아래 주의 참고** |
+
+## 촬영 환경 두 가지
+
+```powershell
+npm run capture -- --profile=guide                # mock (기본)
+npm run capture -- --profile=guide --env=local    # 로컬 Supabase
+```
+
+| | `mock` | `local` |
+|---|---|---|
+| Supabase | 비움 | 로컬 스택 |
+| 시스템 템플릿·추천 에셋 | **안 보임** | 보임 |
+| 결정론 | 완전 | fixture에 의존 |
+| 쓰는 씬 | 편집기만 보여 주는 씬 | 갤러리·추천 에셋·말풍선 |
+
+`local`은 `npm run dev:local`과 **같은 `.env.supabase-local`을 읽습니다.** 두 곳이 다른 값을 쓰면
+"개발에서는 보이는데 촬영에는 안 나오는" 차이가 생깁니다.
+
+`local`로 찍기 전 준비:
+
+```powershell
+npx supabase start
+node scripts/seed-local-users.mjs
+node scripts/capture-fixtures.mjs seed
+```
+
+스택이 꺼져 있으면 **촬영을 시작하기 전에** 위 명령을 안내하며 멈춥니다. 갤러리가 빈 채로 찍히는
+실패는 촬영이 끝난 뒤에야 드러나기 때문입니다.
 
 ## 왜 Supabase를 비우고 찍나
 
