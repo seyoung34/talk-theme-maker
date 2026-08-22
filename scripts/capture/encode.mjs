@@ -156,8 +156,12 @@ export async function framesToVideo(frames, target, { fps, slowdown, framesDir }
   for (let i = 0; i < frames.length; i += 1) {
     // 마지막 프레임은 다음 시각이 없다. 직전 간격을 그대로 쓴다.
     const next = frames[i + 1]?.t ?? frames[i].t + (frames[i].t - frames[i - 1].t);
+    // 0 이하의 길이는 ffmpeg가 파일 전체를 거부하는 사유가 된다("Invalid data found").
+    // 시각이 뒤로 밀리는 원인은 백엔드에서 막았지만, 여기서도 한 프레임 시간으로 받쳐 둔다 —
+    // 한 장 때문에 촬영분 전체를 잃는 실패는 값이 너무 비싸다.
+    const seconds = Math.max((next - frames[i].t) / slowdown, 1 / (fps * 4));
     lines.push(`file '${path.basename(frames[i].file)}'`);
-    lines.push(`duration ${((next - frames[i].t) / slowdown).toFixed(6)}`);
+    lines.push(`duration ${seconds.toFixed(6)}`);
   }
   // concat 디먹서는 마지막 항목의 duration을 무시한다. 파일을 한 번 더 적어야 그 길이가 살아난다.
   lines.push(`file '${path.basename(frames[frames.length - 1].file)}'`);

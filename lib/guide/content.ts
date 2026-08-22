@@ -109,6 +109,38 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
         },
       },
       {
+        title: "바꿀 화면 고르기",
+        caption: "화면을 고르면 미리보기가 그 화면으로 바뀌어요. 친구 목록, 채팅방, 잠금화면을 따로따로 꾸밀 수 있어요.",
+        media: {
+          type: "video",
+          src: "/guide/editor/choose-screen.mp4",
+          poster: "/guide/editor/choose-screen-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/choose-screen-mobile.mp4",
+          poster: "/guide/editor/choose-screen-mobile-poster.webp",
+          aspect: "9 / 16",
+        },
+      },
+      {
+        title: "색을 골라 바꾸기",
+        caption: "팔레트에서 색을 고르면 미리보기가 바로 다시 칠해져요. 마음에 들 때까지 눌러 보면 돼요.",
+        media: {
+          type: "video",
+          src: "/guide/editor/change-color.mp4",
+          poster: "/guide/editor/change-color-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/change-color-mobile.mp4",
+          poster: "/guide/editor/change-color-mobile-poster.webp",
+          aspect: "9 / 16",
+        },
+      },
+      {
         title: "배경을 내 사진으로 바꾸기",
         caption: "‘추천 에셋’에서 배경을 고르거나 내 사진을 올리면 오른쪽 미리보기에 바로 보여요.",
         media: {

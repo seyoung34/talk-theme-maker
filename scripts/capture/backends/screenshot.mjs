@@ -65,6 +65,17 @@ export function createScreenshotBackend({ profile, page, outDir }) {
           }
           const buffer = await page.screenshot({ type: "jpeg", quality: 92 }).catch(() => null);
           if (!buffer) continue;
+          /**
+           * 찍는 도중에 카메라가 내려갔으면 이 장은 버린다.
+           *
+           * 한 장 찍는 데 ~50ms가 걸리는데 그 사이에 `pause()`가 걸리면, 이 장의 시각은 정지가
+           * 시작된 뒤까지 포함해 계산된다. 그 구간은 `resume()`에서 정지 시간으로 빠지므로
+           * **다음 장의 시각이 이 장보다 앞서게 되고**, 인코딩에 음수 길이가 넘어가 ffmpeg가
+           * 통째로 거부한다(실제로 겪었다: `duration -0.026875`).
+           *
+           * 어차피 카메라를 내린 구간의 화면이라 남길 이유도 없다.
+           */
+          if (paused) continue;
           const t = stamp();
           const file = path.join(framesDir, `frame-${String(frames.length).padStart(6, "0")}.jpg`);
           await writeFile(file, buffer);
