@@ -57,6 +57,26 @@ export async function settle(page, ms = 400) {
 }
 
 /**
+ * 모바일 슬롯 목록을 편다. 이미 펴져 있으면 아무것도 하지 않는다.
+ *
+ * **모바일 패널의 슬롯 목록은 접힌다.** 슬롯을 고르면 목록이 닫히고 고른 슬롯 하나만 토글로
+ * 남는다. 그래서 데스크톱 씬처럼 슬롯을 연달아 누르면 **세 번째부터 대상이 DOM에 없다** —
+ * `edit-bubble` 모바일이 `상대 말풍선 1`에서 30초를 기다리다 죽은 것이 이것이었다.
+ * `pick-icons` 모바일이 통과한 것은 슬롯을 둘만 짚어서다(첫 번째가 목록을 펴고 두 번째가 고른다).
+ * 우연히 맞은 것이지 맞게 짠 것이 아니다.
+ *
+ * 토글은 `aria-expanded="false"`이면서 글자를 가진 버튼이다. `편집 패널 접기`와 `편집 도움말`도
+ * `aria-expanded`를 갖지만 아이콘뿐이라 글자가 없다 — 실측으로 확인했다.
+ */
+export async function expandMobileSlotList(page) {
+  const toggle = page.locator('button[aria-expanded="false"]').filter({ hasText: /\S/ }).first();
+  if (!(await toggle.count())) return false;
+  await toggle.click();
+  await page.waitForTimeout(350);
+  return true;
+}
+
+/**
  * 모바일 편집기 준비 대기.
  *
  * 데스크톱용 `waitForEditorReady`를 그대로 쓰면 안 된다. 모바일 패널은 색상/이미지를 탭으로
