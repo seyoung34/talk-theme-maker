@@ -182,13 +182,51 @@ export const guideEditBubbleMobile = {
 
     await click(page.getByRole("button", { name: "말풍선", exact: true }).first());
     await hold(0.7);
-    for (const slot of [/내 말풍선 1/, /내 말풍선 2/, /상대 말풍선 1/, /상대 말풍선 2/]) {
+
+    /*
+     * 데스크톱은 넷을 짚지만 모바일은 둘만 짚는다.
+     *
+     * 모바일은 슬롯을 고를 때마다 목록이 접혀서 한 슬롯에 두 번 눌러야 한다. 넷을 짚으면 여덟 번이
+     * 되고 클립이 20초를 넘겼다 — 스텝 하나에 6~10초를 두는 가이드에서 혼자 두 배다.
+     *
+     * 넷이 있다는 사실은 **목록을 편 순간 화면에 이미 다 나온다.** 네 이름이 한 프레임에 같이
+     * 보이므로, 짚어 가며 세지 않아도 종류의 개수는 전달된다. 옆의 순서 목록도 넷을 그대로 적는다.
+     *
+     * 남길 둘로 내 말풍선 1·2를 고른다. 내 것과 상대 것이 다르다는 건 미리보기만 봐도 알지만,
+     * **첫 말풍선과 이어지는 말풍선이 따로라는 것은 눌러 봐야 안다.** 모르고 하나만 바꾸면
+     * 연속으로 보낸 말풍선이 예전 모양으로 남는, 이 스텝이 막으려는 바로 그 실수가 난다.
+     */
+    for (const slot of [/내 말풍선 1/, /내 말풍선 2/]) {
       await expandMobileSlotList(ctx);
       await click(page.getByRole("button", { name: slot }).first());
-      await hold(0.9);
+      await hold(1.1);
     }
   },
 };
+
+/**
+ * 배경 스텝이 우선으로 고를 에셋.
+ *
+ * 이 스텝은 "고르면 미리보기가 바로 바뀐다"를 보여주는 것이라 **바뀌는 것이 눈에 보여야**
+ * 성립한다. 목록 첫 후보를 집었더니 파스텔 톤이라 기본 배경과 겹쳐, 첫 프레임과 끝 프레임의
+ * 차이가 1%였다 — 끝까지 만들어 놓고 재생해 봐야 아는 종류의 실패다.
+ *
+ * 어느 에셋을 쓰느냐는 기술이 아니라 **캐스팅 문제**다. 그래서 목록 순서에 맡기지 않고 여기서
+ * 이름으로 고른다. 없으면 첫 후보로 돌아가되, 그때는 대비를 보장할 수 없다.
+ */
+const preferredBackgroundTitles = ["메론소다", "딸기우유"];
+
+/** 우선 후보가 보이면 그것을 누르고 true를 돌려준다. */
+async function clickPreferredCandidate({ page, click, hold }, titles) {
+  for (const title of titles) {
+    const card = page.getByRole("button", { name: title, exact: true }).first();
+    if (!(await card.count())) continue;
+    await hold(0.5);
+    await click(card);
+    return true;
+  }
+  return false;
+}
 
 /**
  * 추천 에셋 목록에서 첫 후보를 고른다.
@@ -200,8 +238,11 @@ export const guideEditBubbleMobile = {
  * **남는 것이 없으면 던진다.** `mock` 환경에서 조용히 지나가면 "슬롯만 눌렀다 마는" 영상이
  * 끝까지 만들어지고, 재생해 봐야 알게 된다(§2.6 1번과 같은 실패 방식).
  */
-async function pickFirstRecommendedAsset({ page, click, hold }) {
+async function pickFirstRecommendedAsset(ctx) {
+  const { page, click, hold } = ctx;
   await page.getByRole("button", { name: "추천 에셋" }).first().waitFor({ state: "visible", timeout: 20_000 });
+
+  if (await clickPreferredCandidate(ctx, preferredBackgroundTitles)) return;
 
   const fixedLabels = ["추천 에셋", "이미지 사용 안 함", "이미지 편집", "전체 보기"];
   const candidate = page
@@ -267,6 +308,7 @@ async function pickFirstCandidateMobile({ page, click, hold }) {
     );
   }
 
+  const preferred = preferredBackgroundTitles.find((title) => titles.includes(title));
   await hold(0.5);
-  await click(page.getByRole("button", { name: titles[0], exact: true }).first());
+  await click(page.getByRole("button", { name: preferred ?? titles[0], exact: true }).first());
 }

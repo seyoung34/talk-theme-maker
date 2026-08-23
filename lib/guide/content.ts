@@ -152,12 +152,16 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
         title: "배경 고르기",
         caption: "‘추천 에셋’에서 마음에 드는 배경을 고르면 미리보기에 바로 보여요. 내 사진을 올릴 수도 있어요.",
         media: {
-          type: "image",
-          src: "/guide/android/02-edit-background.webp",
-          annotations: [
-            { kind: "highlight", x: 0.355, y: 0.135, w: 0.09, h: 0.055, label: "추천 에셋에서 고르기" },
-            { kind: "pin", x: 0.9, y: 0.32, label: "미리보기에 바로 반영" },
-          ],
+          type: "video",
+          src: "/guide/editor/pick-background.mp4",
+          poster: "/guide/editor/pick-background-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/pick-background-mobile.mp4",
+          poster: "/guide/editor/pick-background-mobile-poster.webp",
+          aspect: "9 / 16",
         },
       },
       {
