@@ -63,6 +63,15 @@ export function createScreenshotBackend({ profile, page, outDir }) {
             await new Promise((resolve) => setTimeout(resolve, 30));
             continue;
           }
+          /**
+           * 시각은 **찍기 전에** 잡는다. 이 장에 담기는 화면은 지금 이 순간의 것이기 때문이다.
+           *
+           * 찍은 뒤에 잡으면 한 장에 걸린 시간만큼 시각이 뒤로 밀린다. 평소 50ms면 티가 안
+           * 나지만, 화면이 무거워 한 장에 1초 넘게 걸리면 그 장의 화면과 시각이 1초 어긋난다.
+           * 그러면 씬 경계에서 **직전 상태의 화면이 다음 씬 첫 장으로 넘어간다** — 챕터 카드가
+           * 지워진 뒤에 찍힌 것으로 기록돼 가이드 클립 앞머리에 남는 식이다.
+           */
+          const t = stamp();
           const buffer = await page.screenshot({ type: "jpeg", quality: 92 }).catch(() => null);
           if (!buffer) continue;
           /**
@@ -76,7 +85,6 @@ export function createScreenshotBackend({ profile, page, outDir }) {
            * 어차피 카메라를 내린 구간의 화면이라 남길 이유도 없다.
            */
           if (paused) continue;
-          const t = stamp();
           const file = path.join(framesDir, `frame-${String(frames.length).padStart(6, "0")}.jpg`);
           await writeFile(file, buffer);
           frames.push({ file, t });

@@ -159,7 +159,10 @@ export async function runCapture({
         if (!backend.dropsPausedFrames) deadSpans.push([from, backend.now()]);
       }
     },
-    caption: (text) => page.evaluate((value) => window.__capture?.caption(value), text ?? null),
+    // 프로필이 자막을 끄면 씬이 불러도 아무것도 그리지 않는다. 끄고 켜는 판단을 씬마다 하게
+    // 두면 프로필 설정이 있으나 마나 해진다.
+    caption: (text) =>
+      profile.captions ? page.evaluate((value) => window.__capture?.caption(value), text ?? null) : Promise.resolve(),
 
     /**
      * 커서를 보여주며 누른다. **가이드 영상의 핵심 동작이다** — 어디를 누르는지 보이지 않으면
@@ -221,7 +224,17 @@ export async function runCapture({
 
   try {
     for (const scene of scenes) {
-      await backend.chapter(scene.title, scene.description);
+      /**
+       * 챕터 카드는 프로필이 켠 경우에만 그린다.
+       *
+       * 이 조건이 없어서 가이드 클립 앞머리에 제목 카드가 구워졌다. 가이드 프로필은 스텝
+       * 제목·설명을 가이드 페이지가 DOM으로 그리므로 `chapters: false`로 꺼 두는데, 러너가
+       * 프로필을 보지 않고 항상 불렀다. 같은 말이 영상과 카드에 두 번 나오고, 문구를 고칠
+       * 때마다 영상을 다시 찍어야 하는 상태였다.
+       *
+       * 켜져 있을 때만 부르면 배속만큼 기다리는 2.5초도 함께 사라진다.
+       */
+      if (profile.chapters) await backend.chapter(scene.title, scene.description);
 
       deadSpans = [];
       const startSec = elapsed();
