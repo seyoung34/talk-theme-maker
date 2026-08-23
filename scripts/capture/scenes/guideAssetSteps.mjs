@@ -82,7 +82,8 @@ export const guidePickIcons = {
     await click(page.getByRole("button", { name: "탭 아이콘", exact: true }).first());
     await hold(0.7);
 
-    // 같은 탭의 기본/선택 두 슬롯을 차례로 짚는다. 짝이라는 것이 이 스텝의 내용이다.
+    // 같은 탭의 기본/선택 두 슬롯을 차례로 짚는다. 짝이라는 것이 이 스텝의 내용이고,
+    // 선택 슬롯 카드에 "기본 이미지와 연결됨"이 이미 적혀 있어 화면만으로도 관계가 드러난다.
     for (const slot of [/친구 탭 아이콘/, /친구 탭 선택 아이콘/]) {
       await click(page.getByRole("button", { name: slot }).first());
       await hold(1.2);
@@ -190,17 +191,25 @@ export const guideEditBubbleMobile = {
 /**
  * 추천 에셋 목록에서 첫 후보를 고른다.
  *
- * **목록이 비어 있으면 던진다.** `mock` 환경에서 조용히 지나가면 "슬롯만 눌렀다 마는" 영상이
+ * 후보 카드의 접근성 이름은 **에셋 제목**이라(실측: "파스텔 글라스") 고정 문자열로 못 찾는다.
+ * 대신 패널에 함께 있는 고정 버튼들("추천 에셋" 머리말, "이미지 사용 안 함", "이미지 편집")을
+ * 빼고 남는 것을 후보로 본다.
+ *
+ * **남는 것이 없으면 던진다.** `mock` 환경에서 조용히 지나가면 "슬롯만 눌렀다 마는" 영상이
  * 끝까지 만들어지고, 재생해 봐야 알게 된다(§2.6 1번과 같은 실패 방식).
  */
 async function pickFirstRecommendedAsset({ page, click, hold }) {
-  const panel = page.getByRole("button", { name: /추천 에셋|에셋 후보/ }).first();
-  await panel.waitFor({ state: "visible", timeout: 20_000 }).catch(() => {});
+  await page.getByRole("button", { name: "추천 에셋" }).first().waitFor({ state: "visible", timeout: 20_000 });
 
-  // 후보 카드는 슬롯 패널 안의 이미지 버튼이다. 정확한 이름은 에셋 제목이라 고정할 수 없다.
-  const candidates = page.locator('[data-candidate], button:has(img)');
-  const count = await candidates.count();
-  if (count === 0) {
+  const fixedLabels = ["추천 에셋", "이미지 사용 안 함", "이미지 편집", "전체 보기"];
+  const candidate = page
+    .getByRole("button")
+    .filter({ hasNotText: new RegExp(fixedLabels.join("|")) })
+    .locator("visible=true")
+    .filter({ has: page.locator("img, [style*='background-image']") })
+    .first();
+
+  if ((await candidate.count()) === 0) {
     throw new Error(
       [
         "추천 에셋 후보가 없어 이 씬을 찍을 수 없습니다.",
@@ -212,5 +221,5 @@ async function pickFirstRecommendedAsset({ page, click, hold }) {
     );
   }
   await hold(0.5);
-  await click(candidates.first());
+  await click(candidate);
 }

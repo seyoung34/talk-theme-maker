@@ -124,7 +124,25 @@ async function startServer(serverEnv) {
     stdio: "ignore",
   });
   await waitForServer(baseURL);
-  return { baseURL, stop: () => child.kill() };
+  return { baseURL, stop: () => stopTree(child) };
+}
+
+/**
+ * 촬영 서버를 자식까지 함께 내린다.
+ *
+ * `shell: true`로 띄우면 `child`는 셸이고 실제 `next start`는 그 손자다. `child.kill()`은 셸만
+ * 죽이고 서버는 포트를 쥔 채 남는다. 그러면 다음 실행이 **이전 빌드를 서빙하는 유령 서버**에
+ * 붙어, 방금 고친 코드가 반영되지 않은 화면을 찍는다. 실제로 그 상태로 한참 헤맸다.
+ */
+function stopTree(child) {
+  if (!child.pid) return;
+  if (process.platform === "win32") {
+    // /T 자식까지, /F 강제. 이미 죽었으면 조용히 넘어간다.
+    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", shell: false })
+      .on("error", () => {});
+    return;
+  }
+  child.kill("SIGTERM");
 }
 
 const args = parseArgs(process.argv.slice(2));
