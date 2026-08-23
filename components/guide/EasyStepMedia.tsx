@@ -8,6 +8,31 @@ import type { EasyStep, EasyStepMedia } from "@/lib/guide/content";
 const stepMediaClassName = "h-full w-full object-cover object-top";
 
 /**
+ * 자료가 화면 높이를 넘지 않도록 **폭을 높이로부터 거꾸로 정한다.**
+ *
+ * 세로 배치로 바꾸면서 자료가 카드 폭을 전부 쓴다. 그런데 비율이 고정이라 폭이 넓어지면 높이도
+ * 같이 커진다 — 1216px 폭의 16:9는 684px 높이다. 노트북 화면에서는 제목이 위로 밀려 나가고
+ * 무슨 단계를 보고 있는지 모르는 채 화면만 남는다.
+ *
+ * 그래서 폭 대신 **뷰포트 높이**를 기준으로 잡는다. 모니터가 크면 자료도 커지고, 작으면 제목과
+ * 함께 보이는 크기까지 줄어든다. 가로 자료가 세로보다 여유가 적은 이유는 같은 높이에서 폭을
+ * 훨씬 많이 쓰기 때문이다.
+ *
+ * `vh`가 아니라 `svh`인 것은 모바일 주소창이 접혔다 펴질 때 자료 크기가 출렁이지 않게 하려는
+ * 것이다. 가이드를 보는 사람 상당수가 폰으로 스크롤하며 읽는다.
+ */
+const heightCapSvh = { landscape: 68, portrait: 72 };
+
+function frameStyle(aspect: string | undefined) {
+  const value = aspect ?? "16 / 9";
+  const [width, height] = value.split("/").map((part) => Number(part.trim()));
+  const ratio = Number.isFinite(width) && Number.isFinite(height) && height > 0 ? width / height : 16 / 9;
+  const cap = ratio >= 1 ? heightCapSvh.landscape : heightCapSvh.portrait;
+  // 카드가 좁으면 카드가 이기고, 화면이 낮으면 높이 제한이 이긴다.
+  return { aspectRatio: value, width: `min(100%, calc(${cap}svh * ${ratio.toFixed(4)}))` };
+}
+
+/**
  * 스텝 카드의 화면 자료 칸. 비율·자료 선택·주석을 함께 책임진다.
  *
  * 셋을 한곳에 두는 이유는 **셋이 같이 움직이기 때문**이다. 좁은 화면에서 다른 자료를 고르면
@@ -26,8 +51,10 @@ export function EasyStepMediaFrame({ step, label }: { step: EasyStep; label: str
   const media = viewport === "mobile" && step.mobileMedia ? step.mobileMedia : step.media;
   if (!media) return null;
 
+  // `w-full`을 함께 두는 것은 폴백이다. `svh`를 모르는 브라우저는 인라인 width를 통째로 버리는데,
+  // 그때 폭이 auto가 되면 안쪽 `w-full` 자료와 서로를 참조해 크기가 무너진다.
   return (
-    <div className="relative w-full" style={{ aspectRatio: media.aspect ?? "16 / 9" }}>
+    <div className="relative mx-auto w-full overflow-hidden rounded-2xl" style={frameStyle(media.aspect)}>
       <StepMedia media={media} label={label} />
       {media.annotations?.map((annotation, index) =>
         annotation.kind === "highlight" ? (

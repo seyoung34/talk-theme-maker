@@ -140,47 +140,59 @@ function EasyGuide({ platform, onSeeDetailed }: { platform: GuidePlatform; onSee
 function EasyStepCard({ step, index, platformLabel }: { step: EasyStep; index: number; platformLabel: string }) {
   return (
     <li className="overflow-hidden rounded-[28px] border border-[#e3ecf7] bg-white shadow-[0_18px_42px_rgba(47,107,191,0.06)]">
-      <div className="grid gap-0 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-        <div className="relative order-2 bg-[#eef5ff] md:order-1">
-          {step.media ? (
-            <EasyStepMediaFrame step={step} label={`${platformLabel} ${step.title} 화면`} />
-          ) : (
-            <div className="grid aspect-[16/9] w-full place-items-center bg-[#f7fbff] px-6 text-center">
-              <div className="grid gap-2">
-                <span className="mx-auto grid size-11 place-items-center rounded-2xl bg-[#eef5ff] text-[#2f6bbf]"><AlertTriangle size={20} aria-hidden="true" /></span>
-                <p className="text-xs font-black tracking-[0.14em] text-[#94a3b8]">SCREEN COMING SOON</p>
-                {/* 화면 자료가 아직 없다는 안내다. 무엇을 해야 하는지는 옆 칸의 순서가 이미 알려준다. */}
-                <p className="text-sm font-semibold text-[var(--color-on-surface-variant)]">화면 사진은 준비 중이에요. 옆의 순서를 그대로 따라 하면 돼요.</p>
-              </div>
-            </div>
-          )}
-        </div>
+      {/*
+        가로 2단이 아니라 세로로 쌓는다. 편집기 화면을 절반 폭 칸에 넣으면 1920으로 찍은 자료가
+        698px로 줄어(2.75배 버림) 슬롯 이름 같은 작은 글자를 읽을 수 없다. 세로로 쌓으면 같은
+        자료가 카드 폭을 그대로 쓴다.
 
-        <div className="order-1 flex flex-col justify-center gap-2 p-5 sm:p-7 md:order-2">
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-8 place-items-center rounded-full bg-[#2f6bbf] text-sm font-black text-white">{index + 1}</span>
-            <h3 className="text-lg font-black tracking-[-0.01em] text-[var(--color-on-background)] sm:text-xl">{step.title}</h3>
-          </div>
-          {step.hardStep ? (
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#fff8e1] px-3 py-1 text-[11px] font-black text-[#8a6a10]"><AlertTriangle size={12} aria-hidden="true" />가장 헷갈리는 곳</span>
-          ) : null}
-          <p className="text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{step.caption}</p>
-          {/*
-            순서가 곧 내용인 스텝만 여기까지 온다. 번호를 보이게 그리는 이유는, 설치 허용처럼
-            건너뛰면 다음이 진행되지 않는 동작이 섞여 있어서 "몇 번째까지 했는지"가 중요하기 때문이다.
-          */}
-          {step.actions?.length ? (
-            <ol className="mt-1 grid gap-2">
-              {step.actions.map((action, actionIndex) => (
-                <li key={action} className="grid grid-cols-[20px_minmax(0,1fr)] items-start gap-2.5">
-                  <span className="mt-0.5 grid size-5 place-items-center rounded-full bg-[#eef5ff] font-mono text-[10px] font-bold text-[#2f6bbf]">{actionIndex + 1}</span>
-                  <span className="text-sm font-medium leading-6 text-[var(--color-on-surface-variant)]">{action}</span>
-                </li>
-              ))}
-            </ol>
-          ) : null}
+        곁들여 좁은 화면 문제도 사라진다. 예전 구조는 카드가 768px에서 2단이 되는데 자료는
+        1024px까지 세로(9:16)라, 그 사이 구간에서 세로 영상이 좁은 칸에 들어가 카드 높이가
+        800px을 넘었다. 단이 하나면 두 기준이 어긋날 자리가 없다.
+      */}
+      <div className="flex flex-col gap-2 p-5 sm:p-7">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-8 place-items-center rounded-full bg-[#2f6bbf] text-sm font-black text-white">{index + 1}</span>
+          <h3 className="text-lg font-black tracking-[-0.01em] text-[var(--color-on-background)] sm:text-xl">{step.title}</h3>
         </div>
+        {step.hardStep ? (
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-[#fff8e1] px-3 py-1 text-[11px] font-black text-[#8a6a10]"><AlertTriangle size={12} aria-hidden="true" />가장 헷갈리는 곳</span>
+        ) : null}
+        <p className="text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{step.caption}</p>
       </div>
+
+      {/* 자료는 화면 높이에 맞춰 줄어들 수 있어 카드보다 좁아진다. 남는 자리를 띠로 채워 가운데 정렬이 의도로 보이게 한다. */}
+      <div className="border-y border-[#e3ecf7] bg-[#eef5ff] px-5 py-5 sm:px-7 sm:py-6">
+        {step.media ? (
+          <EasyStepMediaFrame step={step} label={`${platformLabel} ${step.title} 화면`} />
+        ) : (
+          <div className="mx-auto grid aspect-[16/9] w-full max-w-md place-items-center rounded-2xl bg-[#f7fbff] px-6 text-center">
+            <div className="grid gap-2">
+              <span className="mx-auto grid size-11 place-items-center rounded-2xl bg-[#eef5ff] text-[#2f6bbf]"><AlertTriangle size={20} aria-hidden="true" /></span>
+              <p className="text-xs font-black tracking-[0.14em] text-[#94a3b8]">SCREEN COMING SOON</p>
+              {/* 화면 자료가 아직 없다는 안내다. 무엇을 해야 하는지는 아래 순서가 이미 알려준다. */}
+              <p className="text-sm font-semibold text-[var(--color-on-surface-variant)]">화면 사진은 준비 중이에요. 아래 순서를 그대로 따라 하면 돼요.</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/*
+        순서가 곧 내용인 스텝만 여기까지 온다. 번호를 보이게 그리는 이유는, 설치 허용처럼
+        건너뛰면 다음이 진행되지 않는 동작이 섞여 있어서 "몇 번째까지 했는지"가 중요하기 때문이다.
+
+        카드 폭을 다 쓰면 한 줄이 너무 길어 읽는 눈이 되돌아올 자리를 놓친다. 폭을 제한하고
+        왼쪽에 붙여 위쪽 제목과 같은 선에서 시작하게 한다.
+      */}
+      {step.actions?.length ? (
+        <ol className="grid max-w-3xl gap-2 p-5 sm:p-7">
+          {step.actions.map((action, actionIndex) => (
+            <li key={action} className="grid grid-cols-[20px_minmax(0,1fr)] items-start gap-2.5">
+              <span className="mt-0.5 grid size-5 place-items-center rounded-full bg-[#eef5ff] font-mono text-[10px] font-bold text-[#2f6bbf]">{actionIndex + 1}</span>
+              <span className="text-sm font-medium leading-6 text-[var(--color-on-surface-variant)]">{action}</span>
+            </li>
+          ))}
+        </ol>
+      ) : null}
     </li>
   );
 }
