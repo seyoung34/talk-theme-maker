@@ -139,7 +139,7 @@ export const guidePickBackgroundMobile = {
     await click(page.getByRole("button", { name: "이미지로 설정" }).first());
     await hold(0.7);
 
-    await pickFirstRecommendedAsset(ctx);
+    await pickFirstCandidateMobile(ctx);
     await hold(1.6);
   },
 };
@@ -224,4 +224,49 @@ async function pickFirstRecommendedAsset({ page, click, hold }) {
   }
   await hold(0.5);
   await click(candidate);
+}
+
+/**
+ * 모바일 판 후보 선택.
+ *
+ * **데스크톱 함수를 쓸 수 없다.** 그쪽은 "추천 에셋" 머리말을 기다리는데 그 라벨은
+ * `ProjectQuickEditPanel`에만 있다. 모바일 패널은 후보를 한 그리드에 바로 그리므로 머리말이
+ * 없고, 그대로 재사용한 씬이 20초를 기다리다 죽었다.
+ *
+ * 대신 후보 카드가 스스로 밝히는 것을 쓴다 — **`aria-pressed`와 에셋 제목 `aria-label`을 함께
+ * 가진 버튼은 후보뿐이다.** 카드가 88~96px라 제목을 화면에 적을 자리가 없어 접근성 이름에
+ * 넣어 둔 덕이다(`getCandidateAccessibleName`). 실측한 이웃들은 이렇게 갈린다:
+ *
+ *   업로드           aria-pressed 없음
+ *   후보 펼쳐 보기    aria-pressed 있음, 라벨이 고정 문구
+ *   이미지로 설정     aria-pressed 있음, aria-label 없음
+ *   파스텔 글라스     aria-pressed 있음, aria-label이 에셋 제목   ← 후보
+ *
+ * 색상 탭의 견본은 `#RRGGBB`가 라벨이라 함께 걸러낸다.
+ */
+async function pickFirstCandidateMobile({ page, click, hold }) {
+  const fixed = /^(후보 펼쳐 보기|기본값|업로드|이미지 편집|이미지 사용 안 함)$/;
+  const titles = await page
+    .locator("button[aria-pressed][aria-label]")
+    .evaluateAll((nodes) =>
+      nodes
+        .filter((node) => node.getBoundingClientRect().width > 0)
+        .map((node) => node.getAttribute("aria-label") ?? ""),
+    )
+    .then((labels) => labels.filter((label) => label && !fixed.test(label) && !label.startsWith("#")));
+
+  if (!titles.length) {
+    throw new Error(
+      [
+        "모바일 후보가 없어 이 씬을 찍을 수 없습니다.",
+        "  --env=local 로 실행하고, 로컬 스택에 fixture가 심어져 있어야 합니다:",
+        "    npx supabase start",
+        "    node scripts/seed-local-users.mjs",
+        "    node scripts/capture-fixtures.mjs seed",
+      ].join("\n"),
+    );
+  }
+
+  await hold(0.5);
+  await click(page.getByRole("button", { name: titles[0], exact: true }).first());
 }
