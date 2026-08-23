@@ -168,6 +168,12 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
           "친구·채팅·Now·쇼핑·더보기처럼 바꾸고 싶은 탭을 골라요.",
           "평소 모습과 선택된 모습을 각각 넣어요. 배경이 비치는 PNG가 가장 잘 어울려요.",
         ],
+        media: {
+          type: "video",
+          src: "/guide/editor/pick-icons.mp4",
+          poster: "/guide/editor/pick-icons-poster.webp",
+          aspect: "16 / 9",
+        },
       },
       {
         title: "말풍선까지 내 취향으로",
@@ -178,13 +184,13 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
           "상대 말풍선도 같은 방식으로 두 종류를 넣어요.",
           "오른쪽 채팅방 미리보기로 실제로 어떻게 보이는지 확인해요.",
         ],
+        // 주석 달린 정지 화면을 대신한다. 좌표 주석은 그 스크린샷에 맞춰 손으로 맞춘 값이라
+        // 화면이 바뀌면 조용히 엉뚱한 곳을 가리키는데, 영상은 커서가 직접 짚어 그 문제가 없다.
         media: {
-          type: "image",
-          src: "/guide/android/03-edit-bubble.webp",
-          annotations: [
-            { kind: "highlight", x: 0.355, y: 0.14, w: 0.09, h: 0.055, label: "말풍선 이미지 고르기" },
-            { kind: "pin", x: 0.9, y: 0.27, label: "채팅방 미리보기" },
-          ],
+          type: "video",
+          src: "/guide/editor/edit-bubble.mp4",
+          poster: "/guide/editor/edit-bubble-poster.webp",
+          aspect: "16 / 9",
         },
       },
       {
