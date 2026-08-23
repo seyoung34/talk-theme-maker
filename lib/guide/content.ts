@@ -149,8 +149,8 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
         },
       },
       {
-        title: "배경을 내 사진으로 바꾸기",
-        caption: "‘추천 에셋’에서 배경을 고르거나 내 사진을 올리면 오른쪽 미리보기에 바로 보여요.",
+        title: "배경 고르기",
+        caption: "‘추천 에셋’에서 마음에 드는 배경을 고르면 미리보기에 바로 보여요. 내 사진을 올릴 수도 있어요.",
         media: {
           type: "image",
           src: "/guide/android/02-edit-background.webp",
@@ -159,6 +159,15 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
             { kind: "pin", x: 0.9, y: 0.32, label: "미리보기에 바로 반영" },
           ],
         },
+      },
+      {
+        title: "탭 아이콘 바꾸기",
+        caption: "아래쪽 탭 아이콘도 바꿀 수 있어요. 탭 하나에 평소 모습과 눌렀을 때 모습, 두 장이 짝을 이뤄요.",
+        actions: [
+          "‘채팅·탭바’ 화면에서 아이콘 그룹을 열어요.",
+          "친구·채팅·Now·쇼핑·더보기처럼 바꾸고 싶은 탭을 골라요.",
+          "평소 모습과 선택된 모습을 각각 넣어요. 배경이 비치는 PNG가 가장 잘 어울려요.",
+        ],
       },
       {
         title: "말풍선까지 내 취향으로",
@@ -173,8 +182,14 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
         },
       },
       {
-        title: "APK 파일로 내려받기",
-        caption: "‘내보내기’를 눌러 이름과 버전을 확인하고 Android APK를 만들어요.",
+        title: "테마 파일 만들기",
+        caption: "‘내보내기’에서 이름을 확인하고 만들기를 눌러요. 바로 받아지는 게 아니라 서버가 잠깐 만들어 줘요.",
+        actions: [
+          "‘내보내기’를 눌러 테마 이름과 버전을 확인해요.",
+          "Android APK를 고르고 만들기를 눌러요.",
+          "‘파일을 백그라운드에서 만들고 있어요’가 뜨면 기다려요. 다 되면 받을 수 있어요.",
+          "만든 파일은 7일 동안 보관돼요. 내 계정에서 다시 받을 수 있어요.",
+        ],
         media: {
           type: "image",
           src: "/guide/android/04-export.webp",
