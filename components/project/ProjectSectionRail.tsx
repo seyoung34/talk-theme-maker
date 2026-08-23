@@ -39,7 +39,7 @@ export function ProjectSectionRail({
   }
 
   return (
-    <aside className="grid h-full min-h-0 w-full shrink-0 content-start gap-3 rounded-2xl border border-[#d9dee7] bg-white/92 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm  lg:w-[170px]">
+    <aside className="grid h-full min-h-0 w-full shrink-0 content-start gap-3 rounded-2xl border border-[#d9dee7] bg-white/92 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.09)] backdrop-blur-sm  lg:w-[170px]">
       <div className="rounded-xl border border-[#e5e7eb] bg-[#f8fafc] px-3 py-3">
         <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#2563eb]">화면 탐색</span>
         <strong className="mt-1 block text-[13px] font-bold leading-snug text-[#0f172a]">편집할 화면을 선택하세요</strong>

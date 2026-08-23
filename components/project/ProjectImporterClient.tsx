@@ -1356,7 +1356,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   if (editorTabLockStatus === "blocked") {
     return (
-      <main className="grid min-h-[100dvh] place-items-center bg-[#f8fafc] p-5 text-[#0f172a]">
+      <main className="grid min-h-[100dvh] place-items-center bg-[#eef1f5] p-5 text-[#0f172a]">
         <section className="w-full max-w-md rounded-[28px] border border-[#dbe3ed] bg-white p-6 text-center shadow-[0_24px_72px_rgba(15,23,42,0.12)]">
           <h1 className="text-xl font-black">다른 탭에서 편집 중입니다.</h1>
           <p className="mt-3 text-sm font-semibold leading-6 text-[#64748b]">
@@ -1372,18 +1372,27 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   if (editorTabLockStatus === "pending") {
     return (
-      <main className="grid min-h-[100dvh] place-items-center bg-[#f8fafc] p-5 text-[#0f172a]">
+      <main className="grid min-h-[100dvh] place-items-center bg-[#eef1f5] p-5 text-[#0f172a]">
         <p className="text-sm font-bold text-[#64748b]">편집기를 준비하는 중입니다.</p>
       </main>
     );
   }
 
-  // `bg-[#f8fafc]`는 비워 두면 안 된다. 비면 `body`의 `--color-background`(#e8f1ff, 채도 9%)가 그대로
+  // 배경을 비워 두면 안 된다. 비면 `body`의 `--color-background`(#e8f1ff, 채도 9%)가 그대로
   // 비치는데, 프리뷰 패널에도 배경이 없어 사용자가 자기 테마 색을 판단하는 자리가 파란 면에 둘러싸인다.
   // 그러면 안쪽 색이 동시대비로 반대편(주황·붉은 쪽)으로 밀려 보여, 색을 고르는 화면에서 특히 나쁘다.
   // 값은 위 로딩·오류 상태와 같게 맞춰 진입할 때 배경이 튀지 않게 한다.
+  //
+  // 채도를 피하는 것이지 밝기를 좇는 것이 아니다. #f8fafc(휘도 250)일 때는 흰 패널과 6단계밖에
+  // 차이가 나지 않아, 면을 나누는 일이 사실상 1px 테두리 하나에 걸려 있었다. 가이드 영상에서
+  // 그 한계가 드러났다 — 1920으로 찍어 1148px로 줄여 보여주면 1px이 양옆과 섞여 테두리 대비가
+  // 절반(26 → 14)으로 깎이고, 패널이 배경에 녹는다. 화면이 작거나 밝은 곳에서 보는 사용자도
+  // 같은 것을 본다.
+  //
+  // #eef1f5는 휘도 241로 패널과 14단계를 벌리면서 채도는 2.7%다 — 위에서 경계한 #e8f1ff의
+  // 1/3이라 색상 밀림은 일어나지 않는다. 면끼리의 차이라 축소에도 그대로 남는다.
   return (
-    <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto bg-[#f8fafc] px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
+    <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto bg-[#eef1f5] px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
       {selectedSlot && selectedBubbleSlot && selectedBubbleVariant ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} variant={selectedBubbleVariant} slotLabel={selectedSlot.label} platform={platform} initialSpec={selectedBubbleDesign} initialDecorationFiles={bubbleDecorationSources} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleDesign} /> : null}
       {notice ? <HeaderNotice notice={notice} onDismiss={dismissNotice} /> : null}
       {pendingAutosave ? (
@@ -1532,7 +1541,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       {initialLoadState.status === "ready" ? (
         <div className={viewportMode === "mobile" ? "flex h-[calc(100dvh-1.5rem)] min-h-0 min-w-0 w-full flex-col overflow-hidden" : "grid h-[calc(100dvh-1.5rem)] min-h-full min-w-0 w-full grid-rows-[auto_1fr] gap-3 md:h-[calc(100dvh-2rem)] md:gap-4 lg:h-full lg:grid-rows-[auto_minmax(0,1fr)]"}>
           {viewportMode === "desktop" ? (
-            <header className="grid min-h-[56px] min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 px-3 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-4 md:px-4">
+            <header className="grid min-h-[56px] min-w-0 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 px-3 py-2.5 shadow-[0_12px_28px_rgba(15,23,42,0.09)] backdrop-blur-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] md:gap-4 md:px-4">
               <div className="flex items-center min-w-0 gap-2 justify-self-start md:gap-4">
                 <button
                   type="button"
@@ -1689,7 +1698,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 />
               </div>
 
-              <section className="order-3 grid min-h-0 min-w-0 grid-cols-1 gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)] backdrop-blur-sm md:grid-cols-[224px_minmax(0,1fr)] md:gap-0 lg:order-none xl:grid-cols-[248px_minmax(0,1fr)]">
+              <section className="order-3 grid min-h-0 min-w-0 grid-cols-1 gap-3 overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white/95 p-3 shadow-[0_12px_28px_rgba(15,23,42,0.09)] backdrop-blur-sm md:grid-cols-[224px_minmax(0,1fr)] md:gap-0 lg:order-none xl:grid-cols-[248px_minmax(0,1fr)]">
                 <ProjectGroupRail
                   groups={groups}
                   activeGroup={activeGroup}
