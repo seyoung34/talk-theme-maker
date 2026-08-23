@@ -111,9 +111,16 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
         title: "마음에 드는 템플릿 고르기",
         caption: "연인·캐릭터·반려동물처럼 원하는 분위기를 골라요. 처음부터 만들지 않아도 돼요.",
         media: {
-          type: "image",
-          src: "/guide/android/01-template-gallery.webp",
-          annotations: [{ kind: "highlight", x: 0.175, y: 0.4, w: 0.205, h: 0.52, label: "원하는 템플릿을 눌러 시작" }],
+          type: "video",
+          src: "/guide/editor/template-gallery.mp4",
+          poster: "/guide/editor/template-gallery-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/template-gallery-mobile.mp4",
+          poster: "/guide/editor/template-gallery-mobile-poster.webp",
+          aspect: "9 / 16",
         },
       },
       {
@@ -213,20 +220,26 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       },
       {
         title: "테마 파일 만들기",
-        caption: "‘내보내기’에서 이름을 확인하고 만들기를 눌러요. 바로 받아지는 게 아니라 서버가 잠깐 만들어 줘요.",
+        caption: "‘다운로드’를 누르면 앱 이름과 파일 종류를 고르는 창이 열려요. 바로 받아지는 게 아니라 서버가 잠깐 만들어 줘요.",
         actions: [
-          "‘내보내기’를 눌러 테마 이름과 버전을 확인해요.",
-          "Android APK를 고르고 만들기를 눌러요.",
-          "‘파일을 백그라운드에서 만들고 있어요’가 뜨면 기다려요. 다 되면 받을 수 있어요.",
+          "오른쪽 위 ‘다운로드’를 눌러요. 앱 이름과 필요한 크레딧을 확인하는 창이 열려요.",
+          "파일 종류를 골라요. ‘내가 바로 설치’는 .apk, ‘카카오톡으로 공유하기 쉬운 파일’은 .zip이에요.",
+          "‘테마 파일 받기’를 누르면 서버가 만들기 시작해요. 창을 닫아도 계속 진행돼요.",
           "만든 파일은 7일 동안 보관돼요. 내 계정에서 다시 받을 수 있어요.",
         ],
+        // 영상은 창을 열어 무엇을 고르는지까지만 보여주고 취소로 닫는다. 확인 버튼은 크레딧을 쓰고
+        // 실제 빌드를 시작하므로 촬영이 누를 수 없다 — 그 다음은 위 순서가 글로 적는다.
         media: {
-          type: "image",
-          src: "/guide/android/04-export.webp",
-          annotations: [
-            { kind: "highlight", x: 0.5, y: 0.49, w: 0.19, h: 0.1, label: "Android APK 선택" },
-            { kind: "highlight", x: 0.588, y: 0.735, w: 0.088, h: 0.06, label: "APK 내보내기" },
-          ],
+          type: "video",
+          src: "/guide/editor/export-dialog.mp4",
+          poster: "/guide/editor/export-dialog-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/export-dialog-mobile.mp4",
+          poster: "/guide/editor/export-dialog-mobile-poster.webp",
+          aspect: "9 / 16",
         },
       },
       {
