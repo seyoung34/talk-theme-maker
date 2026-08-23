@@ -3,6 +3,14 @@
 // 클립을 통짜로 찍지 않고 씬으로 끊는 이유는 편집기 UI가 바뀌었을 때 바뀐 씬만 다시 찍기
 // 위해서다(계획서 §5). manifest에 씬 경계 시각이 남으므로 합성 쪽에서 잘라 쓸 수 있다.
 import { editorTour } from "./editorTour.mjs";
+import {
+  guideEditBubble,
+  guideEditBubbleMobile,
+  guidePickBackground,
+  guidePickBackgroundMobile,
+  guidePickIcons,
+  guidePickIconsMobile,
+} from "./guideAssetSteps.mjs";
 import { guideChangeColor, guideChooseScreen, guideMobileChangeColor, guideMobileChooseScreen } from "./guideSteps.mjs";
 import { mobileEdit } from "./mobileEdit.mjs";
 import { templateGallery } from "./templateGallery.mjs";
@@ -12,8 +20,8 @@ import { templateGallery } from "./templateGallery.mjs";
  * 일부러 같은 id를 쓴다 — 파일명은 프로필이 갈라 주고, content.ts에서 media/mobileMedia로 짝이 된다.
  */
 const scenesByProfile = {
-  guide: [guideChooseScreen, guideChangeColor],
-  "guide-mobile": [guideMobileChooseScreen, guideMobileChangeColor],
+  guide: [guideChooseScreen, guideChangeColor, guidePickBackground, guidePickIcons, guideEditBubble],
+  "guide-mobile": [guideMobileChooseScreen, guideMobileChangeColor, guidePickBackgroundMobile, guidePickIconsMobile, guideEditBubbleMobile],
   reel: [mobileEdit],
 };
 

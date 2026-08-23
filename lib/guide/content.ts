@@ -171,7 +171,13 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       },
       {
         title: "말풍선까지 내 취향으로",
-        caption: "내 말풍선·상대 말풍선을 바꿔요. 미리보기로 실제 채팅 화면을 보며 조정할 수 있어요.",
+        caption: "내 말풍선과 상대 말풍선을 바꿔요. 각각 첫 말풍선과 이어지는 말풍선이 따로라 모두 네 종류예요.",
+        actions: [
+          "‘채팅방’ 화면에서 말풍선 그룹을 열어요.",
+          "‘내 말풍선 1’은 첫 번째 말풍선, ‘내 말풍선 2’는 이어서 보내는 말풍선이에요.",
+          "상대 말풍선도 같은 방식으로 두 종류를 넣어요.",
+          "오른쪽 채팅방 미리보기로 실제로 어떻게 보이는지 확인해요.",
+        ],
         media: {
           type: "image",
           src: "/guide/android/03-edit-bubble.webp",
