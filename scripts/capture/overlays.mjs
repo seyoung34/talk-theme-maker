@@ -114,6 +114,37 @@ export function installCaptureOverlay({ safeTop, safeBottom }) {
     },
 
     /**
+     * 다음에 누를 곳을 사각형으로 감싼다. `null`이면 지운다.
+     *
+     * **커서와 역할이 겹치지 않는다.** 커서는 도착해야 어디인지 알 수 있고 가리키는 것이 한 점인데,
+     * 박스는 커서가 출발하기 전에 미리 시선을 끌고 "이 목록 전체"처럼 영역을 가리킬 수 있다.
+     *
+     * 좌표는 **촬영이 클릭 직전에 잰 `boundingBox()`**다. 손으로 적지 않는 것이 요점이다 —
+     * 가이드 페이지의 `EasyAnnotation`은 스크린샷 한 장에 맞춰 손으로 맞춘 상대 좌표라 편집기가
+     * 바뀌면 조용히 엉뚱한 요소를 감쌌고, 실제로 그래서 스텝 4·6의 주석을 걷어냈다.
+     *
+     * 색은 가이드 페이지의 `EasyAnnotation` 강조와 같은 앰버다. 영상과 페이지가 같은 것을
+     * 다른 색으로 가리키면 둘이 다른 뜻으로 보인다. 어두운 미리보기 위에서도 묻히지 않도록
+     * 밝은 테두리 바깥에 어두운 실선을 한 겹 깐다 — 커서와 같은 이유다.
+     */
+    highlight(rect) {
+      const node = slot("highlight");
+      if (!rect) {
+        node.innerHTML = "";
+        return;
+      }
+      // 대상에 딱 붙이면 테두리가 내용과 겹쳐 읽기 나빠진다. 조금 띄운다.
+      const pad = 6;
+      node.style.cssText = "position:absolute;inset:0";
+      node.innerHTML =
+        `<div style="position:absolute;left:${rect.x - pad}px;top:${rect.y - pad}px;` +
+        `width:${rect.width + pad * 2}px;height:${rect.height + pad * 2}px;box-sizing:border-box;` +
+        "border-radius:14px;border:3px solid #fbbf24;background:rgba(254,229,0,0.10);" +
+        "box-shadow:0 0 0 1.5px rgba(17,17,17,0.45),0 0 0 7px rgba(251,191,36,0.18)," +
+        '0 8px 20px rgba(0,0,0,0.22)"></div>';
+    },
+
+    /**
      * 클릭 파문. 커서만 있으면 "언제 눌렀는지"가 안 보인다.
      *
      * CSS 애니메이션으로 그린다. 배속 촬영 중에는 CDP가 이것도 함께 늦추고 인코딩이 시간축을

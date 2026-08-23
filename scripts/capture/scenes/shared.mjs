@@ -6,6 +6,54 @@
 // 새로 들여야 해서 골격 단계에서는 미뤘다.
 
 /**
+ * 촬영이 쓰는 로컬 QA 계정. `scripts/seed-local-users.mjs`가 만드는 것과 같아야 한다.
+ *
+ * 여기와 seed가 갈리면 "seed는 돌았는데 촬영만 로그인이 안 되는" 상태가 되고, 증상은 내보내기
+ * 창이 로그인 안내로 뜨는 것이라 원인에서 한참 떨어져 보인다.
+ */
+export const localCaptureAccount = { email: "user@local.test", password: "password123!" };
+
+/**
+ * 로컬 계정으로 로그인한다. 이미 되어 있으면 아무것도 하지 않는다.
+ *
+ * **내보내기 스텝 때문에 필요하다.** 비로그인 상태로 다운로드 창을 열면 "로그인해 주세요"가
+ * 뜨고, 크레딧이 0이면 "크레딧 구매"가 뜬다. 어느 쪽도 그 스텝이 가르쳐야 할 화면이 아니다 —
+ * 결제가 아니라 "이름을 확인하고 만들면 서버가 만들어 준다"를 보여줘야 한다.
+ *
+ * 세션은 브라우저 컨텍스트에 남으므로 촬영 시작에 한 번만 부르면 모든 씬이 로그인 상태가 된다.
+ * 부수 효과로 헤더도 실제 사용자가 보는 모습이 된다.
+ *
+ * 선택자는 폼 구조가 아니라 입력 종류로 잡는다. `autocomplete`는 브라우저 자동완성을 위한
+ * 값이라 문구를 다듬을 때 같이 바뀌지 않는다.
+ */
+export async function signInLocalUser(page, baseURL, account = localCaptureAccount) {
+  await page.goto(`${baseURL}/login`, { waitUntil: "load" });
+
+  /*
+   * `isVisible()`이 아니라 `waitFor()`다. **`isVisible`은 기다리지 않는다** — `timeout`을 넘겨도
+   * 그 순간의 상태를 즉시 돌려준다. 하이드레이션 전에 물으면 항상 false라, 로그인은 매번 조용히
+   * 건너뛰어지고 촬영은 "비로그인 상태로 촬영합니다" 한 줄만 남긴 채 끝까지 돌았다.
+   * 증상은 한참 뒤 내보내기 창이 "보유 0크레딧 / 로그인·가입 후 받기"로 찍힌 것이었다.
+   */
+  const email = page.locator('input[type="email"]').first();
+  const appeared = await email
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false);
+  // 이미 로그인돼 있으면 로그인 화면이 아예 뜨지 않고 되돌려 보낸다.
+  if (!appeared) return false;
+
+  await email.fill(account.email);
+  await page.locator('input[autocomplete="current-password"]').first().fill(account.password);
+  await page.locator('button[type="submit"]').first().click();
+
+  // 로그인 성공은 로그인 폼이 사라지는 것으로 판정한다. 이동 경로는 `next` 파라미터에 따라 달라진다.
+  await email.waitFor({ state: "detached", timeout: 30_000 }).catch(() => {});
+  await settle(page);
+  return true;
+}
+
+/**
  * 자동 저장 복구 다이얼로그를 걷어낸다.
  *
  * **씬들이 브라우저 컨텍스트를 공유한다.** 앞 씬이 실제로 편집을 하면(에셋 선택 등) 자동 저장이

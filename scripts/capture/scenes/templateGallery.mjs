@@ -1,4 +1,4 @@
-import { settle, waitForEditorReady } from "./shared.mjs";
+import { settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
 
 /**
  * 템플릿 갤러리에서 카드를 골라 편집기로 들어가는 씬. §2.6의 1·2번 함정이 사는 곳이다.
@@ -15,7 +15,8 @@ export const templateGallery = {
   title: "템플릿 고르기",
   description: "마음에 드는 분위기를 고르면 바로 편집기로 들어갑니다",
 
-  async run({ page, baseURL, hold, dismissNotices, offCamera }) {
+  async run(ctx) {
+    const { page, baseURL, hold, click, dismissNotices, offCamera } = ctx;
     await offCamera(async () => {
       await page.goto(`${baseURL}/template`, { waitUntil: "load" });
       await settle(page);
@@ -35,21 +36,58 @@ export const templateGallery = {
       );
     }
 
-    const card = cards.first();
-    await card.scrollIntoViewIfNeeded();
+    // **`ctx.click`으로 누른다.** 이 씬은 커서를 들이기 전에 쓰여서 원시 클릭을 쓰고 있었다.
+    // 그러면 카드가 저절로 열리는 것처럼 보여, 어디를 눌러야 하는지 알려주지 못한다.
     await hold(0.7);
-    await card.click();
+    await click(cards.first());
 
     // 상세 모달. 여기서 한 번 더 눌러야 편집기로 간다.
     const start = page.getByRole("button", { name: "Android로 시작" });
     await start.waitFor({ state: "visible", timeout: 15_000 });
-    await hold(0.9);
-    await start.click();
+    await hold(0.6);
+    await click(start);
 
     // 편집기 부트스트랩은 길다. 도착했다는 사실만 보여주고 대기는 카메라 밖에서 끝낸다.
     await offCamera(async () => {
       await page.waitForURL(/\/edit$/, { timeout: 60_000 });
       await waitForEditorReady(page);
+      await dismissNotices();
+    });
+    await hold(0.8);
+  },
+};
+
+/**
+ * 모바일 판. 흐름은 같고 카드가 한 줄에 하나씩 온다.
+ *
+ * 갤러리는 편집기와 달리 접히는 패널이 없어 데스크톱 씬을 그대로 쓸 수 있다. 그래도 따로 두는
+ * 이유는 `hold` 길이다 — 좁은 화면은 카드 하나가 화면을 채워 훑어볼 시간이 덜 필요하다.
+ */
+export const templateGalleryMobile = {
+  ...templateGallery,
+  async run(ctx) {
+    const { page, baseURL, hold, click, dismissNotices, offCamera } = ctx;
+    await offCamera(async () => {
+      await page.goto(`${baseURL}/template`, { waitUntil: "load" });
+      await settle(page);
+    });
+
+    const cards = page.locator("article");
+    if ((await cards.count()) === 0) {
+      throw new Error("템플릿 갤러리가 비어 있어 이 씬을 찍을 수 없습니다. --env=local 로 실행하세요.");
+    }
+
+    await hold(0.5);
+    await click(cards.first());
+
+    const start = page.getByRole("button", { name: "Android로 시작" });
+    await start.waitFor({ state: "visible", timeout: 15_000 });
+    await hold(0.6);
+    await click(start);
+
+    await offCamera(async () => {
+      await page.waitForURL(/\/edit$/, { timeout: 60_000 });
+      await waitForMobileEditorReady(page);
       await dismissNotices();
     });
     await hold(0.8);

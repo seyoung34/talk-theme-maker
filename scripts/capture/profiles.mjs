@@ -59,10 +59,21 @@ export const profiles = {
     slowdown: 1.6,
     // 가이드는 색을 만지지 않는다. 제품 화면과 다르면 사용자가 자기 화면에서 같은 곳을 못 찾는다.
     toneDown: 0,
-    // 자막과 챕터를 영상에 굽지 않는다. 가이드 페이지가 스텝 제목·설명·`EasyAnnotation`을 DOM으로
-    // 그리므로 영상에 또 얹으면 같은 말이 두 번 나오고, 문구를 고칠 때마다 다시 찍어야 한다.
+    // 자막과 챕터를 영상에 굽지 않는다. 가이드 페이지가 스텝 제목·설명을 DOM으로 그리므로
+    // 영상에 또 얹으면 같은 말이 두 번 나오고, 문구를 고칠 때마다 다시 찍어야 한다.
     captions: false,
     chapters: false,
+    /**
+     * 누를 곳을 사각형으로 감싼다. **글자와 달리 박스는 구워도 된다.**
+     *
+     * 문구는 자주 다듬지만 박스는 프레임 좌표에 묶여 있어 영상 밖으로 뺄 수가 없다. 페이지에서
+     * 덧그리려면 재생 시각마다 좌표를 따라가야 하는데, 그 좌표의 출처는 결국 이 촬영이다.
+     *
+     * 좌표를 손으로 적지 않는 것이 요점이다. `ctx.click`이 누르기 직전에 잰 `boundingBox()`를
+     * 그대로 쓰므로 편집기가 바뀌면 다음 촬영에서 박스도 따라 움직인다. 손으로 맞춘 좌표는
+     * 화면이 바뀌어도 아무 소리 없이 엉뚱한 곳을 감쌌다(스텝 4·6의 주석을 그래서 걷어냈다).
+     */
+    highlights: true,
     // 스텝마다 별도 파일이 필요하다. `EasyStep.media.src`가 파일 하나를 가리키기 때문이다.
     splitScenes: true,
     // screenshot 백엔드는 프레임에서 바로 mp4를 만든다. webm 경로는 없다.
@@ -95,6 +106,8 @@ export const profiles = {
     // 스텝 제목·설명은 가이드 페이지가 DOM으로 그린다. 영상에 또 얹지 않는다.
     captions: false,
     chapters: false,
+    // 폰 화면은 좁아 누를 곳이 서로 붙어 있다. 박스가 데스크톱보다 더 필요하다.
+    highlights: true,
     splitScenes: true,
     outputs: ["mp4", "poster"],
     // content.ts의 `mobileMedia.aspect`에 그대로 적을 값.
@@ -122,6 +135,8 @@ export const profiles = {
     toneDown: 0,
     captions: true,
     chapters: true,
+    // 홍보 릴스는 따라 하라는 영상이 아니다. 조작 위치를 짚으면 설명서처럼 보인다.
+    highlights: false,
     // 릴스는 한 편으로 이어 붙여 내보낸다. 씬 경계는 manifest가 알려준다.
     splitScenes: false,
     outputs: ["mp4"],

@@ -26,6 +26,32 @@ const accounts = [
 
 const headers = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" };
 
+/**
+ * QA 계정에 얹어 두는 크레딧.
+ *
+ * 크레딧이 0이면 내보내기 창이 "크레딧 구매" 상태로 뜬다. 그 화면으로는 내보내기를 QA 할 수도,
+ * 가이드 영상에 담을 수도 없다 — 스텝 7이 가르쳐야 할 것은 결제가 아니라 "이름 확인하고 만들면
+ * 서버가 만들어 준다"이기 때문이다.
+ *
+ * 넉넉히 두는 이유는 촬영과 QA가 같은 계정을 반복해서 쓰기 때문이다. 로컬 전용이고 위 주소
+ * 검사를 통과해야만 여기까지 온다.
+ */
+const seedCredits = 50;
+
+async function grantCredits(userId, email) {
+  const { execFileSync } = await import("node:child_process");
+  // 잔액과 원장을 함께 넣는다. 잔액만 올리면 마이페이지 내역이 비어 실제와 다른 화면이 된다.
+  // `type`은 `credit_ledger_type_check`가 purchase·export·promotion만 허용한다. 지급이므로 promotion이다.
+  execFileSync("docker", [
+    "exec", dbContainer, "psql", "-U", "postgres", "-d", "postgres", "-c",
+    `insert into public.credit_balances (user_id, balance) values ('${userId}', ${seedCredits}) ` +
+      `on conflict (user_id) do update set balance = greatest(public.credit_balances.balance, ${seedCredits}), updated_at = now();` +
+      `insert into public.credit_ledger (user_id, amount, type, reason) ` +
+      `select '${userId}', ${seedCredits}, 'promotion', '로컬 QA seed (${email})' ` +
+      `where not exists (select 1 from public.credit_ledger where user_id = '${userId}' and reason like '로컬 QA seed%');`,
+  ], { stdio: "pipe" });
+}
+
 async function findUser(email) {
   const res = await fetch(`${API}/auth/v1/admin/users?per_page=200`, { headers });
   if (!res.ok) throw new Error(`사용자 조회 실패: ${res.status} ${await res.text()}`);
@@ -55,7 +81,8 @@ for (const account of accounts) {
     ], { stdio: "pipe" });
   }
 
-  console.log(`${account.admin ? "관리자" : "일반"}  ${account.email}  ${user.id}`);
+  await grantCredits(user.id, account.email);
+  console.log(`${account.admin ? "관리자" : "일반"}  ${account.email}  ${user.id}  크레딧 ${seedCredits}`);
 }
 
 console.log(`\n비밀번호: ${password}`);

@@ -10,6 +10,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { analyticsConsentDenied, assertCleanChrome, hideCaptureChromeCss } from "./pageSetup.mjs";
+import { signInLocalUser } from "./scenes/shared.mjs";
 import { applyToneDown, buildToneDownTokens, installCaptureOverlay, safeArea } from "./overlays.mjs";
 import { framesToVideo, posterWebp, probeVideo, toMp4, trimVideo } from "./encode.mjs";
 import { createScreencastBackend } from "./backends/screencast.mjs";
@@ -116,13 +117,38 @@ export async function runCapture({
     cursorAt = to;
   }
 
-  /** 요소의 중앙. 화면 밖이면 먼저 굴려 올린다. */
-  async function centerOf(locator) {
+  /** 요소의 사각형. 화면 밖이면 먼저 굴려 올린다. */
+  async function rectOf(locator) {
     await locator.scrollIntoViewIfNeeded().catch(() => {});
     const box = await locator.boundingBox();
     if (!box) throw new Error("클릭 대상의 위치를 잡지 못했습니다. 화면에 보이는 요소인지 확인하세요.");
-    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    return box;
   }
+
+  const centerOfRect = (box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+
+  /**
+   * 강조 박스를 씌우고 커서를 그 위로 옮긴다.
+   *
+   * 박스를 **커서보다 먼저** 그린다. 커서가 도착한 뒤에 그리면 이미 다 본 자리를 뒤늦게 감싸는
+   * 꼴이라, 시선을 이끈다는 목적이 사라진다.
+   */
+  async function leadTo(locator, moveSeconds) {
+    const box = await rectOf(locator);
+    if (profile.highlights) {
+      await page.evaluate((rect) => window.__capture?.highlight(rect), {
+        x: box.x, y: box.y, width: box.width, height: box.height,
+      });
+      // 박스가 먼저 눈에 들어올 틈. 이것이 없으면 커서와 동시에 나타나 앞서 알리는 값이 없다.
+      await page.waitForTimeout(180 * backend.slowdown);
+    }
+    const target = centerOfRect(box);
+    await moveCursor(target, Math.max(2, Math.round(moveSeconds * profile.fps)));
+    return target;
+  }
+
+  const clearHighlight = () =>
+    profile.highlights ? page.evaluate(() => window.__capture?.highlight(null)) : Promise.resolve();
 
   const ctx = {
     page,
@@ -176,21 +202,25 @@ export async function runCapture({
         await locator.click();
         return;
       }
-      const target = await centerOf(locator);
       // 움직임은 프레임으로 나눈다 — 부드러움은 프레임 개수가 정하기 때문이다. 길이가 촬영
       // 속도에 따라 조금 흔들리지만 0.5초짜리라 티가 나지 않는다.
-      await moveCursor(target, Math.max(2, Math.round(moveSeconds * profile.fps)));
+      const target = await leadTo(locator, moveSeconds);
       await page.evaluate((pos) => window.__capture?.ripple(pos.x, pos.y), target);
       await locator.click();
       // 누른 결과가 화면에 나타날 시간을 준다. 바로 다음 동작으로 넘어가면 무엇이 바뀌었는지 안 보인다.
       await page.waitForTimeout(settleSeconds * 1000 * backend.slowdown);
+      // 누른 뒤에도 박스가 남으면 다음 화면의 엉뚱한 자리를 감싼다. 결과를 보여줄 자리이기도 하다.
+      await clearHighlight();
     },
 
     /** 누르지 않고 가리키기만 한다. 어디를 볼지 안내할 때. */
     async point(locator, { moveSeconds = 0.5 } = {}) {
       if (backend.drawsCursor) return;
-      await moveCursor(await centerOf(locator), Math.max(2, Math.round(moveSeconds * profile.fps)));
+      await leadTo(locator, moveSeconds);
     },
+
+    /** 가리키던 박스를 지운다. 누르지 않고 짚기만 한 뒤 넘어갈 때 쓴다. */
+    unpoint: () => clearHighlight(),
 
     /**
      * 스크롤을 **캡처된 프레임 단위로** 굴린다(§2.6 5번).
@@ -214,6 +244,23 @@ export async function runCapture({
       });
     },
   };
+
+  /**
+   * 로컬 환경에서는 촬영 전에 로그인해 둔다.
+   *
+   * 카메라를 켜기 **전에** 한다. 로그인 화면은 어느 스텝의 내용도 아니고, 세션은 컨텍스트에
+   * 남으므로 한 번이면 모든 씬이 로그인 상태로 돈다. `mock`은 Supabase를 비워 두므로 건너뛴다.
+   *
+   * 실패해도 촬영은 계속한다. 로그인이 꼭 필요한 씬(내보내기)은 스스로 던지고, 나머지 씬은
+   * 비로그인으로도 성립한다 — 여기서 멈추면 멀쩡히 찍을 수 있는 것까지 못 찍는다.
+   */
+  if (captureEnv === "local") {
+    const signedIn = await signInLocalUser(page, baseURL).catch((error) => {
+      console.warn(`! 로그인하지 못했습니다: ${error.message.split(/\r?\n/)[0]}`);
+      return false;
+    });
+    console.log(signedIn ? "· 로컬 계정으로 로그인함" : "! 비로그인 상태로 촬영합니다");
+  }
 
   await backend.start();
   // 벽시계가 아니라 백엔드가 세는 촬영 시각이다. offCamera로 멈춘 구간이 빠져 있어야
@@ -244,8 +291,9 @@ export async function runCapture({
       // 함정들은 조용히 실패한다 — 배너가 찍혀도 촬영은 끝까지 돈다. 씬마다 확인해서 못 쓰는
       // 영상을 끝까지 만들지 않는다.
       await assertCleanChrome(page, scene.id);
-      // 자막이 다음 씬으로 새지 않게 한다.
+      // 자막과 강조 박스가 다음 씬으로 새지 않게 한다.
       await ctx.caption(null);
+      await clearHighlight();
 
       clips.push({ scene: scene.id, title: scene.title, startSec, endSec, skip: deadSpans });
       console.log(`  ✓ ${scene.id.padEnd(20)} ${startSec.toFixed(1)}s → ${endSec.toFixed(1)}s`);
