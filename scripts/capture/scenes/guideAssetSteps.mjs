@@ -160,7 +160,7 @@ export const guidePickIconsMobile = {
     await click(page.getByRole("button", { name: "탭 아이콘", exact: true }).first());
     await hold(0.7);
     for (const slot of [/친구 탭 아이콘/, /친구 탭 선택 아이콘/]) {
-      await expandMobileSlotList(page);
+      await expandMobileSlotList(ctx);
       await click(page.getByRole("button", { name: slot }).first());
       await hold(1.2);
     }
@@ -183,7 +183,7 @@ export const guideEditBubbleMobile = {
     await click(page.getByRole("button", { name: "말풍선", exact: true }).first());
     await hold(0.7);
     for (const slot of [/내 말풍선 1/, /내 말풍선 2/, /상대 말풍선 1/, /상대 말풍선 2/]) {
-      await expandMobileSlotList(page);
+      await expandMobileSlotList(ctx);
       await click(page.getByRole("button", { name: slot }).first());
       await hold(0.9);
     }

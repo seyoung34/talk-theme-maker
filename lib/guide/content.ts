@@ -174,6 +174,12 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
           poster: "/guide/editor/pick-icons-poster.webp",
           aspect: "16 / 9",
         },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/pick-icons-mobile.mp4",
+          poster: "/guide/editor/pick-icons-mobile-poster.webp",
+          aspect: "9 / 16",
+        },
       },
       {
         title: "말풍선까지 내 취향으로",
@@ -191,6 +197,14 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
           src: "/guide/editor/edit-bubble.mp4",
           poster: "/guide/editor/edit-bubble-poster.webp",
           aspect: "16 / 9",
+        },
+        // 모바일이 데스크톱의 갑절 길이인 것은 연출이 아니라 화면 구조다. 모바일 패널은 슬롯을
+        // 고를 때마다 목록이 접혀서, 데스크톱이 네 번 누르는 일을 여덟 번 눌러야 한다.
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/edit-bubble-mobile.mp4",
+          poster: "/guide/editor/edit-bubble-mobile-poster.webp",
+          aspect: "9 / 16",
         },
       },
       {

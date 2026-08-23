@@ -68,11 +68,14 @@ export async function settle(page, ms = 400) {
  * 토글은 `aria-expanded="false"`이면서 글자를 가진 버튼이다. `편집 패널 접기`와 `편집 도움말`도
  * `aria-expanded`를 갖지만 아이콘뿐이라 글자가 없다 — 실측으로 확인했다.
  */
-export async function expandMobileSlotList(page) {
+export async function expandMobileSlotList({ page, click }) {
   const toggle = page.locator('button[aria-expanded="false"]').filter({ hasText: /\S/ }).first();
   if (!(await toggle.count())) return false;
-  await toggle.click();
-  await page.waitForTimeout(350);
+  // **`ctx.click`으로 누른다.** 원시 클릭이면 손끝 표시가 앞 동작 자리에 남은 채 목록만 저절로
+  // 열려, 보는 사람이 자기 화면에서 무엇을 눌러야 할지 알 수 없다. 목록을 여는 것도 따라 해야
+  // 하는 동작이라 다른 탭과 똑같이 보여야 한다.
+  await click(toggle);
+  await page.waitForTimeout(250);
   return true;
 }
 
