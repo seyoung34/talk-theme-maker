@@ -54,6 +54,40 @@ export async function signInLocalUser(page, baseURL, account = localCaptureAccou
 }
 
 /**
+ * 편집기가 지난 작업을 복원하는 데 쓰는 저장소 키. `lib/theme/project`의 상수와 같아야 한다.
+ *
+ * 스크립트가 .mjs라 그쪽 TypeScript를 그대로 가져올 수 없어 이름을 두 벌 적는다.
+ * 키가 바뀌면 여기도 바꿔야 하는데, 어긋나면 씬이 앞 씬의 템플릿을 물려받는 것으로만 드러난다.
+ */
+const editorSessionKeys = [
+  "kakaotalk-theme-maker:project-state:v1",
+  "kakaotalk-theme-maker:template-start:v1",
+  "kakaotalk-theme-maker:editor-session:user:v1",
+  "kakaotalk-theme-maker:editor-lock:user:v1",
+];
+
+/**
+ * 편집기를 **알려진 시작 상태**로 되돌린다.
+ *
+ * 씬들이 브라우저 컨텍스트를 공유해서, 앞 씬이 무엇을 했느냐가 뒤 씬의 시작 화면을 정한다.
+ * 실제로 스텝 1(갤러리에서 템플릿 고르기)을 추가하자 뒤 씬 전부가 그 템플릿을 물려받았고,
+ * 배경이 이미 그 템플릿 색이라 **"배경을 고르면 미리보기가 바뀐다"를 보여주는 스텝의 화면 변화가
+ * 0%가 됐다.** 길이는 정상이라 촬영도 검사도 통과했고, 재생해 봐야 알 수 있었다.
+ *
+ * "새로 시작" 다이얼로그만으로는 부족하다. 그것은 자동 저장 초안을 버릴 뿐, 어느 템플릿에서
+ * 시작할지는 세션이 따로 기억한다.
+ */
+export async function resetEditorSession(page, baseURL) {
+  // 저장소는 출처에 묶여 있다. 앱 주소에 한 번 가야 지울 수 있다.
+  if (!page.url().startsWith(baseURL)) await page.goto(`${baseURL}/`, { waitUntil: "domcontentloaded" });
+  await page.evaluate((keys) => {
+    for (const key of keys) {
+      try { window.localStorage.removeItem(key); } catch { /* 저장소를 막아 둔 컨텍스트 */ }
+    }
+  }, editorSessionKeys);
+}
+
+/**
  * 자동 저장 복구 다이얼로그를 걷어낸다.
  *
  * **씬들이 브라우저 컨텍스트를 공유한다.** 앞 씬이 실제로 편집을 하면(에셋 선택 등) 자동 저장이

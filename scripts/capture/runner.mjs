@@ -13,6 +13,7 @@ import { analyticsConsentDenied, assertCleanChrome, hideCaptureChromeCss } from 
 import { signInLocalUser } from "./scenes/shared.mjs";
 import { applyToneDown, buildToneDownTokens, installCaptureOverlay, safeArea } from "./overlays.mjs";
 import { framesToVideo, posterWebp, probeVideo, toMp4, trimVideo } from "./encode.mjs";
+import { assertSceneExpectation } from "./verify.mjs";
 import { createScreencastBackend } from "./backends/screencast.mjs";
 import { createScreenshotBackend } from "./backends/screenshot.mjs";
 
@@ -207,10 +208,16 @@ export async function runCapture({
       const target = await leadTo(locator, moveSeconds);
       await page.evaluate((pos) => window.__capture?.ripple(pos.x, pos.y), target);
       await locator.click();
+      /*
+       * 박스는 **누른 즉시** 지운다.
+       *
+       * 대기 뒤에 지우면 결과가 나타나는 자리를 박스가 0.35초(약 10프레임) 더 덮고 있다가
+       * 사라진다. 눌렀다는 사실은 파문이 이미 표시했으므로 박스가 더 남을 이유가 없고,
+       * 남아 있으면 바뀐 화면을 가린 채 뒤늦게 걷히는 것으로 보인다.
+       */
+      await clearHighlight();
       // 누른 결과가 화면에 나타날 시간을 준다. 바로 다음 동작으로 넘어가면 무엇이 바뀌었는지 안 보인다.
       await page.waitForTimeout(settleSeconds * 1000 * backend.slowdown);
-      // 누른 뒤에도 박스가 남으면 다음 화면의 엉뚱한 자리를 감싼다. 결과를 보여줄 자리이기도 하다.
-      await clearHighlight();
     },
 
     /** 누르지 않고 가리키기만 한다. 어디를 볼지 안내할 때. */
@@ -295,7 +302,8 @@ export async function runCapture({
       await ctx.caption(null);
       await clearHighlight();
 
-      clips.push({ scene: scene.id, title: scene.title, startSec, endSec, skip: deadSpans });
+      // `expect`를 클립에 실어 보낸다. 인코딩 뒤에 검사해야 배포될 파일 그 자체를 재게 된다.
+      clips.push({ scene: scene.id, title: scene.title, startSec, endSec, skip: deadSpans, expect: scene.expect });
       console.log(`  ✓ ${scene.id.padEnd(20)} ${startSec.toFixed(1)}s → ${endSec.toFixed(1)}s`);
     }
   } finally {
@@ -378,8 +386,12 @@ async function materialize(captured, { profile, outDir, keepFrames, clips }) {
       if (profile.outputs.includes("poster")) {
         own.poster = path.basename(await posterWebp(target, path.join(outDir, `${name}-poster.webp`), { atSec: 0.2 }));
       }
+      // 씬이 "무엇이 보여야 하는가"를 선언했으면 여기서 확인한다. 인코딩이 끝난 **배포될 그
+      // 파일**을 재야 한다 — 중간 산출물을 재면 실제로 나가는 것과 다른 것을 검사하게 된다.
+      const observed = await assertSceneExpectation(clip.expect, clip.scene, target, own.measured);
       clipOutputs.push(own);
-      console.log(`  · ${own.path.padEnd(34)} ${own.measured.width}x${own.measured.height} ${own.measured.durationSec}초`);
+      const changeNote = observed === null ? "" : `  변화 ${(observed * 100).toFixed(0)}%`;
+      console.log(`  · ${own.path.padEnd(34)} ${own.measured.width}x${own.measured.height} ${own.measured.durationSec}초${changeNote}`);
     }
 
     await cleanupFrames(captured, keepFrames);

@@ -1,4 +1,4 @@
-import { settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
+import { resetEditorSession, settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
 
 /**
  * `/guide` 쉬운 모드의 스텝에 꽂을 짧은 클립들.
@@ -15,6 +15,7 @@ import { settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.m
 /** 각 씬이 같은 자리에서 시작하도록 편집기를 연다. 대기는 전부 카메라 밖에서 끝낸다. */
 async function openEditor({ page, baseURL, dismissNotices, offCamera }) {
   await offCamera(async () => {
+    await resetEditorSession(page, baseURL);
     await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
     await waitForEditorReady(page);
     await dismissNotices();
@@ -32,6 +33,9 @@ export const guideChooseScreen = {
   id: "choose-screen",
   title: "바꿀 화면 고르기",
   description: "왼쪽에서 화면을 고르면 오른쪽 미리보기가 따라 바뀝니다",
+  // 채팅방으로 갔다가 돌아오는 왕복이라 **끝은 처음과 같다.** 도중에 미리보기가 통째로 갈리는
+  // 것을 봐야 하므로, 첫 프레임 대비 최대 변화로 재는 검사가 여기서 특히 필요하다.
+  expect: { minChange: 0.05, because: "화면을 고르면 미리보기가 그 화면으로 바뀌어야 합니다." },
 
   async run(ctx) {
     const { page, click, hold } = ctx;
@@ -56,6 +60,7 @@ export const guideChangeColor = {
   id: "change-color",
   title: "색 바꾸기",
   description: "팔레트에서 고르면 미리보기가 바로 다시 칠해집니다",
+  expect: { minChange: 0.05, because: "고른 색이 미리보기에 칠해지는 것이 이 스텝의 전부입니다." },
 
   async run(ctx) {
     const { page, click, hold } = ctx;
@@ -89,6 +94,7 @@ export const guideChangeColor = {
  */
 async function openMobileEditor({ page, baseURL, dismissNotices, offCamera }) {
   await offCamera(async () => {
+    await resetEditorSession(page, baseURL);
     await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
     await waitForMobileEditorReady(page);
     await dismissNotices();
@@ -100,6 +106,8 @@ export const guideMobileChooseScreen = {
   id: "choose-screen",
   title: "바꿀 화면 고르기",
   description: "화면을 고르면 미리보기가 따라 바뀝니다",
+  // 데스크톱 씬과 별개 객체라 `expect`를 물려받지 못한다. 폰은 미리보기가 화면 전체라 변화가 크다.
+  expect: { minChange: 0.1, because: "화면을 고르면 미리보기가 그 화면으로 바뀌어야 합니다." },
 
   async run(ctx) {
     const { page, click, hold } = ctx;
@@ -119,6 +127,7 @@ export const guideMobileChangeColor = {
   id: "change-color",
   title: "색 바꾸기",
   description: "팔레트에서 고르면 미리보기가 바로 다시 칠해집니다",
+  expect: { minChange: 0.1, because: "고른 색이 미리보기에 칠해지는 것이 이 스텝의 전부입니다." },
 
   async run(ctx) {
     const { page, click, hold } = ctx;

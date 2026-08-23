@@ -1,4 +1,4 @@
-import { settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
+import { resetEditorSession, settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
 
 /**
  * 스텝 7 — 테마 파일 만들기.
@@ -30,8 +30,10 @@ async function openExportDialog(ctx, { downloadName }) {
   await hold(0.6);
   await click(download);
 
+  // `isVisible()`은 `timeout`을 줘도 기다리지 않는다. 창이 그려지기 전에 물으면 항상 false다.
   const formats = exportFormatGroup(page);
-  if (!(await formats.isVisible({ timeout: 20_000 }).catch(() => false))) {
+  const opened = await formats.waitFor({ state: "visible", timeout: 20_000 }).then(() => true).catch(() => false);
+  if (!opened) {
     throw new Error(
       [
         "다운로드 창이 열리지 않았습니다.",
@@ -79,11 +81,14 @@ export const guideExportDialog = {
   id: "export-dialog",
   title: "테마 파일 만들기",
   description: "다운로드를 누르면 형식과 크레딧을 확인하는 창이 열립니다",
+  // 창이 화면 가운데를 덮으므로 변화가 크다. 창이 안 열리면 여기서 걸린다.
+  expect: { minChange: 0.15, because: "다운로드 창이 열리는 것이 이 스텝의 내용입니다." },
 
   async run(ctx) {
     const { page, baseURL, hold, dismissNotices, offCamera } = ctx;
     await offCamera(async () => {
-      await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
+      await resetEditorSession(page, baseURL);
+    await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
       await waitForEditorReady(page);
       await dismissNotices();
       await settle(page);
@@ -104,7 +109,8 @@ export const guideExportDialogMobile = {
   async run(ctx) {
     const { page, baseURL, hold, dismissNotices, offCamera } = ctx;
     await offCamera(async () => {
-      await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
+      await resetEditorSession(page, baseURL);
+    await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
       await waitForMobileEditorReady(page);
       await dismissNotices();
       await settle(page);

@@ -14,6 +14,8 @@ export const templateGallery = {
   id: "template-gallery",
   title: "템플릿 고르기",
   description: "마음에 드는 분위기를 고르면 바로 편집기로 들어갑니다",
+  // 갤러리 → 상세 모달 → 편집기까지 화면이 통째로 두 번 갈린다.
+  expect: { minChange: 0.3, because: "카드를 고르면 편집기로 들어가는 것이 이 스텝입니다." },
 
   async run(ctx) {
     const { page, baseURL, hold, click, dismissNotices, offCamera } = ctx;

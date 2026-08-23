@@ -1,4 +1,4 @@
-import { expandMobileSlotList, openSection, settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
+import { expandMobileSlotList, openSection, resetEditorSession, settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
 
 /**
  * 에셋을 고르는 가이드 스텝들 — 배경·탭 아이콘·말풍선.
@@ -15,6 +15,7 @@ import { expandMobileSlotList, openSection, settle, waitForEditorReady, waitForM
 /** 데스크톱 편집기를 연다. 대기는 전부 카메라 밖에서 끝낸다. */
 async function openEditor({ page, baseURL, dismissNotices, offCamera }) {
   await offCamera(async () => {
+    await resetEditorSession(page, baseURL);
     await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
     await waitForEditorReady(page);
     await dismissNotices();
@@ -24,6 +25,7 @@ async function openEditor({ page, baseURL, dismissNotices, offCamera }) {
 
 async function openMobileEditor({ page, baseURL, dismissNotices, offCamera }) {
   await offCamera(async () => {
+    await resetEditorSession(page, baseURL);
     await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
     await waitForMobileEditorReady(page);
     await dismissNotices();
@@ -41,6 +43,8 @@ export const guidePickBackground = {
   id: "pick-background",
   title: "배경 고르기",
   description: "추천 에셋에서 배경을 고르면 미리보기가 바로 바뀝니다",
+  // 미리보기 배경이 통째로 갈리는 씬이라 크게 잡는다. 실측 13%.
+  expect: { minChange: 0.06, because: "고른 배경이 미리보기에 반영되는 것이 이 스텝의 전부입니다." },
 
   async run(ctx) {
     const { page, click, hold } = ctx;
@@ -69,6 +73,8 @@ export const guidePickIcons = {
   id: "pick-icons",
   title: "탭 아이콘 바꾸기",
   description: "탭마다 평소 모습과 눌렀을 때 모습, 두 장이 짝을 이룹니다",
+  // 슬롯을 짚으면 가운데 패널이 그 슬롯 것으로 갈린다. 미리보기까지는 안 바뀌므로 낮게 잡는다.
+  expect: { minChange: 0.03, because: "슬롯을 고르면 편집 패널이 그 슬롯 내용으로 바뀌어야 합니다." },
 
   async run(ctx) {
     const { page, click, hold } = ctx;
@@ -102,6 +108,7 @@ export const guideEditBubble = {
   id: "edit-bubble",
   title: "말풍선까지 내 취향으로",
   description: "첫 말풍선과 이어지는 말풍선이 따로라 모두 네 종류입니다",
+  expect: { minChange: 0.03, because: "말풍선 슬롯을 옮겨 다니는 것이 보여야 합니다." },
 
   async run(ctx) {
     const { page, click, hold } = ctx;
