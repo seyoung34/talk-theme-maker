@@ -5,7 +5,7 @@
 //
 // 기본 동작은 **Supabase 설정을 비운 채로 빌드하고 기동**하는 것이다(계획서 §2.7). e2e 하네스와
 // 같은 이유다 — 크레딧이 소모되지 않고, 같은 명령이 같은 화면을 낸다.
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -117,6 +117,25 @@ async function waitForServer(url, timeoutMs = 120_000) {
 async function startServer(serverEnv) {
   const env = { ...process.env, ...serverEnv };
   const baseURL = serverEnv.NEXT_PUBLIC_SITE_URL;
+
+  /**
+   * 포트가 이미 잡혀 있으면 **찍기 전에** 멈춘다.
+   *
+   * 그냥 두면 새 서버는 포트를 못 잡고 죽는데, 아래 `waitForServer`는 먼저 있던 쪽이 응답하니
+   * 성공으로 본다. 그러면 이번 촬영이 남의 빌드를 찍는다 — 그것도 조용히. 방금 고친 코드가
+   * 화면에 없는 이유를 찾느라 한참 헤맨 실패가 정확히 이것이었다.
+   */
+  if (await fetch(baseURL).then(() => true).catch(() => false)) {
+    throw new Error(
+      [
+        `${baseURL}를 이미 누가 쓰고 있습니다. 이전 촬영이 남긴 서버일 수 있습니다.`,
+        "  이대로 찍으면 그 서버의 빌드가 찍히므로 중단합니다.",
+        `  정리: Get-NetTCPConnection -LocalPort ${capturePort} -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`,
+        "  일부러 쓰는 서버라면 --server= 로 넘기세요.",
+      ].join("\n"),
+    );
+  }
+
   const child = spawn("npx", ["next", "start", "--port", String(capturePort), "--hostname", "127.0.0.1"], {
     cwd: projectRoot,
     shell: true,
@@ -133,13 +152,20 @@ async function startServer(serverEnv) {
  * `shell: true`로 띄우면 `child`는 셸이고 실제 `next start`는 그 손자다. `child.kill()`은 셸만
  * 죽이고 서버는 포트를 쥔 채 남는다. 그러면 다음 실행이 **이전 빌드를 서빙하는 유령 서버**에
  * 붙어, 방금 고친 코드가 반영되지 않은 화면을 찍는다. 실제로 그 상태로 한참 헤맸다.
+ *
+ * **동기로 죽인다.** 비동기로 띄우면 씬이 예외를 던졌을 때 Node가 그 예외로 곧장 종료하면서
+ * 아직 시작도 못 한 taskkill을 데리고 나간다. 서버는 그대로 남는다 — 촬영이 실패할 때마다
+ * 유령이 하나씩 쌓이는 셈이라, 정작 실패했을 때 가장 필요한 정리가 그때만 동작하지 않았다.
  */
 function stopTree(child) {
   if (!child.pid) return;
   if (process.platform === "win32") {
-    // /T 자식까지, /F 강제. 이미 죽었으면 조용히 넘어간다.
-    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", shell: false })
-      .on("error", () => {});
+    // /T 자식까지, /F 강제. 이미 죽었으면 taskkill이 실패 코드를 내므로 삼킨다.
+    try {
+      execFileSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+    } catch {
+      // 이미 없는 프로세스다. 목적은 달성됐다.
+    }
     return;
   }
   child.kill("SIGTERM");
@@ -166,7 +192,22 @@ try {
   if (!baseURL) {
     if (args["no-build"]) {
       console.warn("! --no-build: 이전 빌드를 그대로 씁니다. 운영 Supabase 키가 번들에 구워져 있을 수 있습니다.");
-      if (!existsSync(path.join(projectRoot, ".next"))) throw new Error(".next가 없습니다. --no-build를 빼고 다시 실행하세요.");
+      /**
+       * `.next`가 있는지가 아니라 **프로덕션 빌드인지**를 본다.
+       *
+       * `npm run dev`가 같은 자리를 쓰면서 `BUILD_ID`를 남기지 않는다. 디렉터리 존재만 확인하면
+       * dev가 덮어쓴 뒤에도 통과하고, `next start`가 조용히 죽은 채 "서버가 120초 안에 뜨지
+       * 않았습니다"만 남는다 — 원인과 한참 떨어진 증상이라 찾는 데 시간이 걸린다.
+       */
+      if (!existsSync(path.join(projectRoot, ".next", "BUILD_ID"))) {
+        throw new Error(
+          [
+            "프로덕션 빌드가 없습니다(.next/BUILD_ID 없음).",
+            "  `npm run dev`가 같은 자리를 덮어썼을 수 있습니다.",
+            "  --no-build를 빼고 다시 실행하세요.",
+          ].join("\n"),
+        );
+      }
     } else {
       console.log(`· ${captureEnv} 환경으로 빌드합니다 (몇 분 걸립니다. 이미 빌드했다면 --no-build)`);
       await run("npx", ["next", "build"], { env: { ...process.env, ...serverEnv } });
