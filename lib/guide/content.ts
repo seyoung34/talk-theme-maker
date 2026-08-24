@@ -358,6 +358,190 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
     sourcePath: "samples/ios/apeach-25.8.0",
     intro: "이미지와 CSS 설정을 하나의 .ktheme 패키지로 만들고, iPhone에서 카카오톡으로 열어 적용합니다.",
     output: ".ktheme · Theme ZIP",
+    /*
+     * iOS는 9스텝이다. Android보다 하나 많은 것은 연출이 아니라 **파일이 거치는 곳이 하나 더
+     * 많기 때문**이다. Android는 APK를 받아 바로 설치하지만, iOS는 받은 파일을 카카오톡으로
+     * 보내야 열 수 있다.
+     *
+     * ①~⑥은 **Android와 같은 클립을 쓴다.** 편집기가 플랫폼 공용이라 화면이 같고, 같은 화면을
+     * 두 번 찍으면 한쪽만 낡는다. 갈리는 것은 ⑦부터다.
+     *
+     * ⑦⑧⑨는 실기기 스크린샷을 이어 붙인 클립이다(`scripts/capture/stills.mjs`). Safari의
+     * 다운로드 메뉴와 카카오톡 앱은 촬영으로 담을 수 없다 — 촬영은 페이지 안쪽만 본다.
+     */
+    easySteps: [
+      {
+        title: "마음에 드는 템플릿 고르기",
+        caption: "연인·캐릭터·반려동물처럼 원하는 분위기를 골라요. 처음부터 만들지 않아도 돼요.",
+        media: {
+          type: "video",
+          src: "/guide/editor/template-gallery.mp4",
+          poster: "/guide/editor/template-gallery-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/template-gallery-mobile.mp4",
+          poster: "/guide/editor/template-gallery-mobile-poster.webp",
+          aspect: "9 / 16",
+        },
+      },
+      {
+        title: "바꿀 화면 고르기",
+        caption: "화면을 고르면 미리보기가 그 화면으로 바뀌어요. 친구 목록, 채팅방, 잠금화면을 따로따로 꾸밀 수 있어요.",
+        media: {
+          type: "video",
+          src: "/guide/editor/choose-screen.mp4",
+          poster: "/guide/editor/choose-screen-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/choose-screen-mobile.mp4",
+          poster: "/guide/editor/choose-screen-mobile-poster.webp",
+          aspect: "9 / 16",
+        },
+      },
+      {
+        title: "색을 골라 바꾸기",
+        caption: "팔레트에서 색을 고르면 미리보기가 바로 다시 칠해져요. 마음에 들 때까지 눌러 보면 돼요.",
+        media: {
+          type: "video",
+          src: "/guide/editor/change-color.mp4",
+          poster: "/guide/editor/change-color-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/change-color-mobile.mp4",
+          poster: "/guide/editor/change-color-mobile-poster.webp",
+          aspect: "9 / 16",
+        },
+      },
+      {
+        title: "배경 고르기",
+        caption: "‘추천 에셋’에서 마음에 드는 배경을 고르면 미리보기에 바로 보여요. 내 사진을 올릴 수도 있어요.",
+        actions: [
+          "‘배경’ 그룹에서 바꾸고 싶은 배경을 골라요. 메인과 채팅방을 따로 정할 수 있어요.",
+          "‘추천 에셋’에 이미 고를 수 있는 배경이 있어요. 내 사진을 꼭 올리지 않아도 돼요.",
+          "배경을 색으로만 채우고 싶다면 이미지를 ‘이미지 사용 안 함’으로 먼저 바꿔요. 이미지가 깔려 있으면 색이 가려져요.",
+        ],
+        media: {
+          type: "video",
+          src: "/guide/editor/pick-background.mp4",
+          poster: "/guide/editor/pick-background-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/pick-background-mobile.mp4",
+          poster: "/guide/editor/pick-background-mobile-poster.webp",
+          aspect: "9 / 16",
+        },
+      },
+      {
+        title: "탭 아이콘 바꾸기",
+        caption: "아래쪽 탭 아이콘도 바꿀 수 있어요. 탭 하나에 평소 모습과 눌렀을 때 모습, 두 장이 짝을 이뤄요.",
+        actions: [
+          "‘채팅·탭바’ 화면에서 아이콘 그룹을 열어요.",
+          "친구·채팅·Now·쇼핑·더보기처럼 바꾸고 싶은 탭을 골라요.",
+          "평소 모습과 선택된 모습을 각각 넣어요. 배경이 비치는 PNG가 가장 잘 어울려요.",
+        ],
+        media: {
+          type: "video",
+          src: "/guide/editor/pick-icons.mp4",
+          poster: "/guide/editor/pick-icons-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/pick-icons-mobile.mp4",
+          poster: "/guide/editor/pick-icons-mobile-poster.webp",
+          aspect: "9 / 16",
+        },
+      },
+      {
+        title: "말풍선까지 내 취향으로",
+        caption: "내 말풍선과 상대 말풍선을 바꿔요. 각각 첫 말풍선과 이어지는 말풍선이 따로라 모두 네 종류예요.",
+        actions: [
+          "‘채팅방’ 화면에서 말풍선 그룹을 열어요.",
+          "‘내 말풍선 1’은 첫 번째 말풍선, ‘내 말풍선 2’는 이어서 보내는 말풍선이에요.",
+          "상대 말풍선도 같은 방식으로 두 종류를 넣어요.",
+          "모서리가 늘어나거나 글자가 말풍선 밖으로 나오면 아래 ‘말풍선을 더 다듬고 싶다면’을 펼쳐 보세요.",
+          "오른쪽 채팅방 미리보기로 실제로 어떻게 보이는지 확인해요.",
+        ],
+        media: {
+          type: "video",
+          src: "/guide/editor/edit-bubble.mp4",
+          poster: "/guide/editor/edit-bubble-poster.webp",
+          aspect: "16 / 9",
+        },
+        mobileMedia: {
+          type: "video",
+          src: "/guide/editor/edit-bubble-mobile.mp4",
+          poster: "/guide/editor/edit-bubble-mobile-poster.webp",
+          aspect: "9 / 16",
+        },
+      },
+      {
+        title: "테마 파일 만들기",
+        caption: "‘다운로드’를 누르면 이름과 크레딧을 확인하는 창이 열려요. 파일이 만들어질 때까지 창을 그대로 두세요.",
+        actions: [
+          "오른쪽 위 ‘다운로드’를 눌러요. 테마 이름과 필요한 크레딧을 확인하는 창이 열려요.",
+          "‘다운로드 시작’을 누르면 서버가 .ktheme 파일을 만들기 시작해요.",
+          "만드는 데 몇 초 걸려요. iOS는 이 창을 닫으면 파일을 받지 못하니 끝날 때까지 열어 두세요.",
+        ],
+        /*
+         * 여기까지가 우리 화면이다. 실기기 스크린샷을 쓰는 이유는 다음 두 스텝과 형태를 맞추기
+         * 위해서이기도 하지만, "생성 중" 화면이 실제 빌드를 돌려야 나오기 때문이기도 하다 —
+         * 촬영이 그 버튼을 누르면 매번 크레딧이 나간다.
+         *
+         * 폰 화면을 찍은 것이라 데스크톱에서도 세로로 보여준다. `mobileMedia`를 따로 두지 않는다.
+         */
+        media: {
+          type: "video",
+          src: "/guide/editor/ios-make-file.mp4",
+          poster: "/guide/editor/ios-make-file-poster.webp",
+          aspect: "1206 / 2432",
+        },
+      },
+      {
+        title: "받은 파일 찾기",
+        caption: "Safari가 받은 파일은 화면에 남지 않아요. 주소창 옆 ‘⋯’ 메뉴 안 ‘다운로드’에 들어 있어요.",
+        actions: [
+          "‘다운로드하겠습니까?’가 뜨면 ‘다운로드’를 눌러요. 이 확인을 놓치면 파일이 받아지지 않아요.",
+          "받아지면 주소창 왼쪽에 아래 화살표 표시가 생겨요.",
+          "주소창 오른쪽 ‘⋯’을 누르고 목록에서 ‘다운로드’를 골라요.",
+          "받은 ‘파스텔-글라스’ 파일이 보이면 눌러서 엽니다.",
+        ],
+        // iOS에서 가장 막히는 곳이라 `hardStep`을 준다. 받았다는 안내는 나오는데 파일이 어디
+        // 있는지는 화면에 없어서, 경로를 모르면 여기서 멈춘다.
+        hardStep: true,
+        media: {
+          type: "video",
+          src: "/guide/editor/ios-download-file.mp4",
+          poster: "/guide/editor/ios-download-file-poster.webp",
+          aspect: "1206 / 2432",
+        },
+      },
+      {
+        title: "카카오톡으로 보내 적용하기",
+        caption: "받은 파일을 카카오톡으로 보낸 뒤 그 파일을 열면 테마를 적용할 수 있어요. 친구에게 보낼 필요 없이 ‘나에게’ 보내면 돼요.",
+        actions: [
+          "파일 화면 아래 ‘카카오톡’을 눌러요. 공유 목록에서 골라도 돼요.",
+          "보낼 곳을 고르는 화면에서 맨 아래 ‘나에게’를 골라요.",
+          "카카오톡 대화방에 온 파일의 ‘열기’를 눌러요.",
+          "‘테마 적용하기’를 누르면 끝나요. ‘테마 목록보기’에서 나중에 다시 고를 수도 있어요.",
+        ],
+        hardStep: true,
+        media: {
+          type: "video",
+          src: "/guide/editor/ios-apply-theme.mp4",
+          poster: "/guide/editor/ios-apply-theme-poster.webp",
+          aspect: "1206 / 2432",
+        },
+      },
+    ],
     sections: [
       {
         id: "ios-edit",
