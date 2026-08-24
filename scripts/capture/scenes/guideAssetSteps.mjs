@@ -41,6 +41,7 @@ async function openMobileEditor({ page, baseURL, dismissNotices, offCamera }) {
  */
 export const guidePickBackground = {
   id: "pick-background",
+  requiresLocal: true,
   title: "배경 고르기",
   description: "추천 에셋에서 배경을 고르면 미리보기가 바로 바뀝니다",
   // 미리보기 배경이 통째로 갈리는 씬이라 크게 잡는다. 실측 13%.
@@ -71,6 +72,7 @@ export const guidePickBackground = {
  */
 export const guidePickIcons = {
   id: "pick-icons",
+  requiresLocal: true,
   title: "탭 아이콘 바꾸기",
   description: "탭마다 평소 모습과 눌렀을 때 모습, 두 장이 짝을 이룹니다",
   // 슬롯을 짚으면 가운데 패널이 그 슬롯 것으로 갈린다. 미리보기까지는 안 바뀌므로 낮게 잡는다.

@@ -19,6 +19,15 @@
 - Preserve admin/system template persistence separately from user-local template persistence.
 - Keep focused changes focused. Avoid broad reformatting and large TSX rewrites unless the task requires it.
 
+## Git Branching and Release
+
+- Treat `main` as the service and deployment branch. Do not develop new application code, tests, migrations, or configuration changes directly on `main`.
+- Start every change from an up-to-date `main` in a descriptive `feature/*`, `fix/*`, or `chore/*` branch. Confirm the current branch before editing, committing, merging, or pushing.
+- Keep commits focused, include relevant tests with behavior changes, and run the smallest useful verification set before requesting review or merging.
+- Merge work back into `main` only after review and CI (or the repository's documented equivalent) pass. Do not push unreviewed work directly to `main`.
+- Direct commits to `main` are reserved for explicitly approved release or maintenance actions. Urgent hotfixes should still be developed on a branch and merged promptly.
+- Never force-update or delete `main`.
+
 ## System Theme Asset Production
 
 - Visual planning, generation runs, prompts, provenance, and asset-level QA now live in the standalone `E:\TalkTheme-Factory` repository. Do not start or store factory runs in this application repository.

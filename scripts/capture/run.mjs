@@ -173,7 +173,12 @@ function stopTree(child) {
 
 const args = parseArgs(process.argv.slice(2));
 const profile = getProfile(typeof args.profile === "string" ? args.profile : "guide");
-const sceneIds = typeof args.scenes === "string" ? args.scenes.split(",").map((s) => s.trim()) : defaultSceneIds(profile.id);
+// `--env=mock`는 Supabase를 비운 촬영이다. 외부 서버는 어떤 백엔드인지 알 수 없으므로
+// 명시적인 씬을 주지 않은 경우 모든 씬을 남긴다.
+const captureEnv = typeof args.server === "string" ? "external" : (typeof args.env === "string" ? args.env : "mock");
+const sceneIds = typeof args.scenes === "string"
+  ? args.scenes.split(",").map((s) => s.trim())
+  : defaultSceneIds(profile.id, captureEnv);
 // 배경 톤다운은 육안 QA로 값을 정하는 항목이라 프로필 기본값을 인자로 덮을 수 있게 둔다.
 if (typeof args["tone-down"] === "string") profile.toneDown = Number(args["tone-down"]);
 // 백엔드는 해상도와 연출 수단을 함께 결정한다. 가이드를 규격(1920x1080)으로 올리려면
@@ -185,7 +190,6 @@ const outDir = resolveOutDir(args, profile.id);
 let server = null;
 let baseURL = typeof args.server === "string" ? args.server.replace(/\/$/, "") : null;
 // `--server=`로 이미 떠 있는 서버를 쓰면 그 서버가 무엇을 보는지 여기서 알 수 없다.
-const captureEnv = baseURL ? "external" : (typeof args.env === "string" ? args.env : "mock");
 const serverEnv = baseURL ? null : buildServerEnv(captureEnv);
 
 try {

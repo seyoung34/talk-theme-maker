@@ -119,7 +119,7 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
                 </button>
               </Popover.Trigger>
               <Popover.Portal>
-                <Popover.Content align="end" sideOffset={10} collisionPadding={16} className="radix-popover-content z-50 w-[min(300px,calc(100vw-40px))] overflow-hidden rounded-[20px] border border-[#cfe0ff] bg-white shadow-[0_20px_50px_rgba(47,107,191,0.22)] outline-none" aria-label="계정 메뉴">
+                <Popover.Content align="end" sideOffset={10} collisionPadding={16} className="radix-popover-content z-50 w-[min(260px,calc(100vw-32px))] overflow-hidden rounded-[20px] border border-[#cfe0ff] bg-white shadow-[0_20px_50px_rgba(47,107,191,0.22)] outline-none sm:w-[min(300px,calc(100vw-40px))]" aria-label="계정 메뉴">
                   {session === null ? (
                     <div className="flex items-center gap-2 px-4 py-5 text-sm font-semibold text-[#5b6b82]" role="status"><LoaderCircle className="animate-spin text-[#3d7bd6]" size={17} aria-hidden="true" />계정 확인 중</div>
                   ) : session.user ? (

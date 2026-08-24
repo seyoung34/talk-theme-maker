@@ -12,6 +12,7 @@ import { settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.m
  */
 export const templateGallery = {
   id: "template-gallery",
+  requiresLocal: true,
   title: "템플릿 고르기",
   description: "마음에 드는 분위기를 고르면 바로 편집기로 들어갑니다",
   // 갤러리 → 상세 모달 → 편집기까지 화면이 통째로 두 번 갈린다.

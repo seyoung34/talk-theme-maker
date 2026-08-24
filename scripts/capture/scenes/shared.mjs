@@ -48,7 +48,15 @@ export async function signInLocalUser(page, baseURL, account = localCaptureAccou
   await page.locator('button[type="submit"]').first().click();
 
   // 로그인 성공은 로그인 폼이 사라지는 것으로 판정한다. 이동 경로는 `next` 파라미터에 따라 달라진다.
-  await email.waitFor({ state: "detached", timeout: 30_000 }).catch(() => {});
+  const disappeared = await email
+    .waitFor({ state: "detached", timeout: 30_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!disappeared) {
+    const alert = await page.locator('[role="alert"]').allTextContents().catch(() => []);
+    const message = alert.map((text) => text.trim()).filter(Boolean).join(" ");
+    throw new Error(message ? `로컬 로그인 실패: ${message}` : "로컬 로그인 실패: 로그인 폼이 닫히지 않았습니다.");
+  }
   await settle(page);
   return true;
 }

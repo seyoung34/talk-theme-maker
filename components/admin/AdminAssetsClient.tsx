@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertTriangle, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
@@ -18,7 +18,6 @@ import {
   describeAdminAssetAnalysis,
   getAdminAssetKindLabel,
   inferAdminAssetKind,
-  isAdminAssetRecommendedForSlot,
   listAdminAssetCandidatePage,
   saveAdminAssetCandidate,
   saveAdminBubbleBuilderCandidate,
@@ -74,17 +73,53 @@ type AdminBubblePreviewEdit = {
   stretch: StretchPoint;
 };
 
-function pickValidImageFile(files: FileList | File[] | null | undefined): { file: File } | { error: string } {
-  const file = Array.from(files ?? []).find((item) => item.type.startsWith("image/"));
-  if (!file) return { error: "이미지 파일만 추가할 수 있습니다." };
-  if (!ACCEPTED_IMAGE_MIME_TYPES.includes(file.type)) return { error: "PNG, JPEG, WebP 이미지만 지원합니다." };
-  if (file.size > MAX_IMAGE_BYTES) return { error: "이미지 용량은 20MB 이하만 추가할 수 있습니다." };
-  return { file };
+type PendingAdminAssetFileStatus = "queued" | "uploading" | "success" | "error";
+type PendingAdminAssetFile = {
+  readonly id: string;
+  readonly file: File;
+  readonly previewUrl: string;
+  readonly status: PendingAdminAssetFileStatus;
+  readonly error?: string;
+};
+type AdminAssetUploadProgress = {
+  readonly total: number;
+  readonly completed: number;
+  readonly succeeded: number;
+  readonly failed: number;
+  readonly activeFileName?: string;
+};
+
+function pickValidImageFiles(files: FileList | File[] | null | undefined): { files: File[]; rejected: string[] } {
+  const validFiles: File[] = [];
+  const rejected: string[] = [];
+  for (const file of Array.from(files ?? [])) {
+    if (!file.type.startsWith("image/")) {
+      rejected.push(`${file.name}: 이미지 파일만 추가할 수 있습니다.`);
+      continue;
+    }
+    if (!ACCEPTED_IMAGE_MIME_TYPES.includes(file.type)) {
+      rejected.push(`${file.name}: PNG, JPEG, WebP 이미지만 지원합니다.`);
+      continue;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      rejected.push(`${file.name}: 이미지 용량은 20MB 이하만 추가할 수 있습니다.`);
+      continue;
+    }
+    validFiles.push(file);
+  }
+  return { files: validFiles, rejected };
+}
+
+function createPendingAdminAssetFile(file: File): PendingAdminAssetFile {
+  return { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file), status: "queued" };
+}
+
+function getAdminAssetFileKey(file: File) {
+  return `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
 }
 
 export default function AdminAssetsClient() {
   const bubblePreviewPlatform: ThemePlatform = "android";
-  const [selectedSlotId, setSelectedSlotId] = useState("");
   const [assets, setAssets] = useState<AdminAssetCandidate[]>([]);
   const [title, setTitle] = useState("");
   const [assetKind, setAssetKind] = useState<AdminAssetKind>("background");
@@ -95,6 +130,7 @@ export default function AdminAssetsClient() {
   const [bubbleVariantFiles, setBubbleVariantFiles] = useState<Partial<Record<ThemePlatform, File>>>({});
   const [bubblePreviewText, setBubblePreviewText] = useState("안녕하세요! 말풍선 텍스트가 이렇게 보여요.");
   const [file, setFile] = useState<File | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<PendingAdminAssetFile[]>([]);
   const [filePreviewUrl, setFilePreviewUrl] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -106,6 +142,7 @@ export default function AdminAssetsClient() {
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
   const [isSavingAsset, setIsSavingAsset] = useState(false);
   const [isLoadingEditAsset, setIsLoadingEditAsset] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<AdminAssetUploadProgress | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [imageEditOpen, setImageEditOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
@@ -120,13 +157,24 @@ export default function AdminAssetsClient() {
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(272);
   const [rightSidebarWidth, setRightSidebarWidth] = useState(400);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingFilesRef = useRef<PendingAdminAssetFile[]>([]);
   const assetRequestSeqRef = useRef(0);
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
+
+  useEffect(() => {
+    pendingFilesRef.current = pendingFiles;
+  }, [pendingFiles]);
+
+  useEffect(() => () => {
+    for (const pending of pendingFilesRef.current) URL.revokeObjectURL(pending.previewUrl);
+  }, []);
 
   const slots = useMemo(getUnifiedAdminAssetSlots, []);
   const slotGroups = useMemo(() => groupSlotsByAssetKind(slots), [slots]);
   const activeKindSlots = useMemo(() => slots.filter((slot) => inferAdminAssetKind(slot) === assetKind), [assetKind, slots]);
-  const selectedSlot = activeKindSlots.find((slot) => slot.id === selectedSlotId) ?? activeKindSlots[0] ?? slots[0];
+  // 등록 화면에서는 슬롯을 선택하지 않는다. 기존 저장 계약(slot_role)과 말풍선 편집기의
+  // 기준 크기를 위해 kind별 첫 슬롯만 내부 대표값으로 사용한다.
+  const selectedSlot = activeKindSlots[0];
   // 말풍선 편집은 Android 9-patch 원본을 우선 기준으로 삼고, iOS 전용 원본만 있을 때만 iOS를 사용한다.
   // 저장 데이터에는 두 플랫폼의 geometry를 계속 보관하되, 화면에서 플랫폼을 번갈아 선택하게 하지 않는다.
   const bubbleEditorPlatform: ThemePlatform = bubbleVariantFiles.android ? "android" : bubbleVariantFiles.ios ? "ios" : "android";
@@ -138,7 +186,7 @@ export default function AdminAssetsClient() {
   );
   const selectedSaveTargets = useMemo(() => {
     if (!selectedSlot) return [];
-    return bubbleBuilderDraft ? getAdminBubbleBuilderTargets(selectedSlot) : getAdminAssetSaveTargets(selectedSlot, assetKind);
+    return bubbleBuilderDraft ? getAdminBubbleBuilderTargets(selectedSlot) : getAdminAssetSaveTargets(assetKind);
   }, [assetKind, bubbleBuilderDraft, selectedSlot]);
   const effectiveBubbleAdjustment = useMemo<AdminBubbleAdjustment>(() => ({
     markers: bubblePreviewEdits.android?.markers ?? bubbleAdjustment.markers,
@@ -163,23 +211,28 @@ export default function AdminAssetsClient() {
     insets: effectiveBubbleAdjustment.insets,
     stretch: effectiveBubbleAdjustment.stretch,
   }), [bubbleEditorPlatform, effectiveBubbleAdjustment, effectiveBubbleGeometry]);
+  const uploadableFiles = useMemo(() => pendingFiles.filter((pending) => pending.status !== "success"), [pendingFiles]);
+  const uploadTotal = uploadProgress?.total ?? pendingFiles.length;
+  const uploadCompleted = uploadProgress?.completed ?? 0;
+  const uploadPercent = uploadTotal > 0 ? Math.min(100, Math.round((uploadCompleted / uploadTotal) * 100)) : 0;
+  const showUploadProgress = pendingFiles.length > 1 || Boolean(uploadProgress);
   const canSaveAsset = Boolean(
     selectedSlot &&
       !isSavingAsset &&
-      (editingAsset ? title.trim() : file) &&
+      (editingAsset ? title.trim() : bubbleBuilderDraft ? file : uploadableFiles.length > 0) &&
       (editingAsset || selectedSaveTargets.length > 0) &&
       (assetKind !== "bubble" || bubbleSpec),
   );
   const visibleAssets = useMemo(
-    () => assets.filter((asset) => selectedSlot && isAdminAssetVisibleForAdminSlot(selectedSlot, asset)),
-    [assets, selectedSlot],
+    () => assets.filter((asset) => asset.enabled && asset.assetKind === assetKind),
+    [assetKind, assets],
   );
   const filteredAssets = useMemo(() => {
     const query = assetSearch.trim().toLowerCase();
     return visibleAssets
       .map((asset) => ({
         asset,
-        warnings: getAdminAssetGuidance(selectedSlot, asset.assetKind ?? assetKind, asset.analysis ?? null),
+        warnings: getAdminAssetGuidanceForSlots(activeKindSlots, asset.assetKind ?? assetKind, asset.analysis ?? null),
       }))
       .filter(({ asset, warnings }) => {
         const matchesQuery =
@@ -189,18 +242,13 @@ export default function AdminAssetsClient() {
           asset.slotRole.toLowerCase().includes(query);
         const matchesFilter =
           assetListFilter === "all" ||
-          (assetListFilter === "exact" && selectedSlot && isExactAdminAssetTarget(selectedSlot, asset)) ||
+          (assetListFilter === "exact" && isExactAdminAssetTarget(asset)) ||
           (assetListFilter === "review" && warnings.length > 0) ||
           (assetListFilter === "bubble" && Boolean(asset.bubbleAdjustment));
         return matchesQuery && matchesFilter;
       });
-  }, [assetKind, assetListFilter, assetSearch, selectedSlot, visibleAssets]);
-  const guidanceItems = useMemo(() => getAdminAssetGuidance(selectedSlot, assetKind, analysis), [analysis, assetKind, selectedSlot]);
-
-  useEffect(() => {
-    const nextSlot = activeKindSlots.find((slot) => slot.id === selectedSlotId) ?? activeKindSlots[0] ?? slots[0];
-    setSelectedSlotId(nextSlot?.id ?? "");
-  }, [activeKindSlots, selectedSlotId, slots]);
+  }, [activeKindSlots, assetKind, assetListFilter, assetSearch, visibleAssets]);
+  const guidanceItems = useMemo(() => getAdminAssetGuidanceForSlots(activeKindSlots, assetKind, analysis), [activeKindSlots, analysis, assetKind]);
 
   useEffect(() => {
     if (assetKind !== "bubble" || !analysis) return;
@@ -232,7 +280,7 @@ export default function AdminAssetsClient() {
 
   useEffect(() => {
     void refreshAssets(undefined, false);
-  }, [assetKind, selectedSlot?.role]);
+  }, [assetKind]);
 
   useEffect(() => {
     setBubbleBuilderDraft(null);
@@ -280,17 +328,22 @@ export default function AdminAssetsClient() {
       const hasImage = Array.from(event.clipboardData?.files ?? []).some((item) => item.type.startsWith("image/"));
       if (!hasImage) return;
       event.preventDefault();
-      const result = pickValidImageFile(event.clipboardData?.files);
-      if ("error" in result) {
-        setNotice(result.error);
+      const result = pickValidImageFiles(event.clipboardData?.files);
+      const file = result.files[0];
+      if (!file) {
+        setNotice(result.rejected[0] ?? "이미지 파일만 추가할 수 있습니다.");
         return;
       }
+      for (const pending of pendingFilesRef.current) URL.revokeObjectURL(pending.previewUrl);
+      const pending = createPendingAdminAssetFile(file);
       setAnalysis(null);
       setBubbleAdjustment({});
       setBubbleGeometry({});
       setBubblePreviewEdits({});
-      setBubbleVariantFiles({ android: result.file, ios: result.file });
-      setFile(result.file);
+      setBubbleVariantFiles({ android: file, ios: file });
+      setPendingFiles([pending]);
+      setUploadProgress(null);
+      setFile(file);
       setNotice("클립보드 이미지를 추가했습니다.");
     };
 
@@ -299,14 +352,12 @@ export default function AdminAssetsClient() {
   }, []);
 
   const refreshAssets = async (cursor?: string, append = false) => {
-    if (!selectedSlot) return;
+    if (!assetKind) return;
     const seq = ++assetRequestSeqRef.current;
     try {
       setIsLoadingAssets(true);
       const page = await listAdminAssetCandidatePage({
-        assetKind: inferAdminAssetKind(selectedSlot),
-        platform: selectedSlot.platform,
-        slotRole: selectedSlot.role,
+        assetKind,
         cursor,
         limit: 24,
         enabledOnly: true,
@@ -336,7 +387,7 @@ export default function AdminAssetsClient() {
   };
 
   const submit = async () => {
-    if (!selectedSlot || isSavingAsset || (!editingAsset && !file)) return;
+    if (!selectedSlot || isSavingAsset || (!editingAsset && !bubbleBuilderDraft && uploadableFiles.length === 0 && !file)) return;
     if (editingAsset && bubbleBuilderDraft) {
       try {
         setIsSavingAsset(true);
@@ -355,6 +406,9 @@ export default function AdminAssetsClient() {
         setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? updatedAsset : asset)));
         setEditingAsset(updatedAsset);
         setBubbleBuilderDraft(null);
+        for (const pending of pendingFiles) URL.revokeObjectURL(pending.previewUrl);
+        setPendingFiles([]);
+        setUploadProgress(null);
         setBubbleBuilderInitial({ recipe: updatedAsset.bubbleDesign?.recipe ?? bubbleBuilderDraft.recipe, decorations: bubbleBuilderDraft.decorations });
         setNotice("빌더 말풍선을 다시 생성했습니다.");
       } catch (error) {
@@ -384,10 +438,9 @@ export default function AdminAssetsClient() {
       }
       return;
     }
-    if (!file) return;
     const saveTargets = selectedSaveTargets;
     if (saveTargets.length === 0) {
-      setNotice("적용할 플랫폼 슬롯을 찾지 못했습니다.");
+      setNotice("적용되는 슬롯을 찾지 못했습니다.");
       return;
     }
 
@@ -395,42 +448,103 @@ export default function AdminAssetsClient() {
       setIsSavingAsset(true);
       const representativeTarget = saveTargets[0];
       if (!representativeTarget) throw new Error("INVALID_ASSET_TARGET");
-      const savedAsset = bubbleBuilderDraft
-        ? await saveAdminBubbleBuilderCandidate({
-            title: title.trim() || `${selectedSlot.label} 빌더 말풍선`,
-            slotRole: selectedSlot.role,
+      if (bubbleBuilderDraft) {
+        const savedAsset = await saveAdminBubbleBuilderCandidate({
+          title: title.trim() || "말풍선 빌더 후보",
+          slotRole: selectedSlot.role,
+          targets: saveTargets,
+          variants: bubbleBuilderDraft.variants.map((result) => ({ platform: result.asset.platform, file: result.asset.file, analysis: analysis ?? undefined })),
+          bubbleSpec: bubbleSpec ?? bubbleBuilderDraft.bubbleSpec,
+          recipe: bubbleBuilderDraft.recipe,
+          decorations: bubbleBuilderDraft.decorations,
+          geometryMode: bubbleGeometryMode,
+        });
+        setTitle("");
+        setFile(null);
+        setBubbleGeometry({});
+        setBubblePreviewEdits({});
+        setBubbleVariantFiles({});
+        setBubbleGeometryMode("manual");
+        setAnalysis(null);
+        setBubbleBuilderDraft(null);
+        for (const pending of pendingFiles) URL.revokeObjectURL(pending.previewUrl);
+        setPendingFiles([]);
+        setUploadProgress(null);
+        setNotice("관리 후보를 추가했습니다.");
+        setAssets((current) => [savedAsset, ...current.filter((item) => item.id !== savedAsset.id)]);
+        return;
+      }
+
+      const filesToSave = uploadableFiles;
+      if (filesToSave.length === 0) return;
+      setUploadProgress({ total: filesToSave.length, completed: 0, succeeded: 0, failed: 0 });
+      setPendingFiles((current) => current.map((pending) => filesToSave.some((item) => item.id === pending.id) ? { ...pending, status: "queued", error: undefined } : pending));
+
+      const savedAssets: AdminAssetCandidate[] = [];
+      const failedItems: PendingAdminAssetFile[] = [];
+      for (const pending of filesToSave) {
+        setPendingFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: "uploading", error: undefined } : item));
+        setUploadProgress((current) => current ? { ...current, activeFileName: pending.file.name } : current);
+        try {
+          const itemAnalysis = pending.file === file && analysis
+            ? analysis
+            : await analyzeImageFile(pending.file).catch(() => ({ shapes: inferShapesFromFileName(pending.file.name) }));
+          const savedAsset = await saveAdminAssetCandidate({
+            slotRole: representativeTarget.slotRole ?? selectedSlot.role,
+            platform: representativeTarget.platform,
+            assetKind,
+            analysis: itemAnalysis,
+            bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined,
+            bubbleSpec: assetKind === "bubble" ? bubbleSpec : undefined,
+            title: title.trim() || pending.file.name,
+            note: getAdminAssetKindLabel(assetKind),
+            tags: [],
+            fileName: pending.file.name,
+            mimeType: pending.file.type || "application/octet-stream",
+            blob: pending.file,
             targets: saveTargets,
-            variants: bubbleBuilderDraft.variants.map((result) => ({ platform: result.asset.platform, file: result.asset.file, analysis: analysis ?? undefined })),
-            bubbleSpec: bubbleSpec ?? bubbleBuilderDraft.bubbleSpec,
-            recipe: bubbleBuilderDraft.recipe,
-            decorations: bubbleBuilderDraft.decorations,
-            geometryMode: bubbleGeometryMode,
-          })
-        : await saveAdminAssetCandidate({
-        slotRole: representativeTarget.slotRole ?? selectedSlot.role,
-        platform: representativeTarget.platform,
-        assetKind,
-        analysis: analysis ?? { shapes: inferShapesFromFileName(file.name) },
-        bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined,
-        bubbleSpec: assetKind === "bubble" ? bubbleSpec : undefined,
-        title: title.trim() || file.name,
-        note: selectedSlot.label,
-        tags: [],
-        fileName: file.name,
-        mimeType: file.type || "application/octet-stream",
-        blob: file,
-        targets: saveTargets,
-      });
-      setTitle("");
-      setFile(null);
-      setBubbleGeometry({});
-      setBubblePreviewEdits({});
-      setBubbleVariantFiles({});
-      setBubbleGeometryMode("manual");
-      setAnalysis(null);
-      setBubbleBuilderDraft(null);
-      setNotice("플랫폼 공통 관리 후보를 추가했습니다.");
-      setAssets((current) => [savedAsset, ...current.filter((item) => item.id !== savedAsset.id)]);
+          });
+          savedAssets.push(savedAsset);
+          setPendingFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: "success", error: undefined } : item));
+          setUploadProgress((current) => current ? { ...current, completed: current.completed + 1, succeeded: current.succeeded + 1, activeFileName: undefined } : current);
+        } catch (error) {
+          console.error(error);
+          const message = error instanceof Error && error.message ? error.message : "저장하지 못했습니다.";
+          failedItems.push({ ...pending, status: "error", error: message });
+          setPendingFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: "error", error: message } : item));
+          setUploadProgress((current) => current ? { ...current, completed: current.completed + 1, failed: current.failed + 1, activeFileName: undefined } : current);
+        }
+      }
+
+      if (savedAssets.length > 0) {
+        setAssets((current) => [...savedAssets.slice().reverse(), ...current.filter((item) => !savedAssets.some((saved) => saved.id === item.id))]);
+      }
+
+      if (failedItems.length === 0) {
+        for (const pending of pendingFiles) URL.revokeObjectURL(pending.previewUrl);
+        setTitle("");
+        setPendingFiles([]);
+        setFile(null);
+        setBubbleGeometry({});
+        setBubblePreviewEdits({});
+        setBubbleVariantFiles({});
+        setBubbleGeometryMode("manual");
+        setAnalysis(null);
+        setBubbleBuilderDraft(null);
+        setUploadProgress(null);
+        setNotice(`${savedAssets.length}개 관리 후보를 추가했습니다.`);
+      } else {
+        const failedIds = new Set(failedItems.map((item) => item.id));
+        for (const pending of filesToSave) {
+          if (!failedIds.has(pending.id)) URL.revokeObjectURL(pending.previewUrl);
+        }
+        const retryFile = failedItems[0]?.file ?? null;
+        setPendingFiles(failedItems);
+        setFile(retryFile);
+        setBubbleVariantFiles(retryFile ? { android: retryFile, ios: retryFile } : {});
+        setAnalysis(null);
+        setNotice(`${savedAssets.length}개 저장 완료 · ${failedItems.length}개 저장 실패. 실패한 파일을 다시 저장할 수 있습니다.`);
+      }
     } catch (error) {
       console.error(error);
       setNotice("관리 후보를 저장하지 못했습니다.");
@@ -476,23 +590,63 @@ export default function AdminAssetsClient() {
     }
   };
 
-  const applyDroppedFile = (files: FileList | null) => {
-    const result = pickValidImageFile(files);
-    if ("error" in result) {
-      setNotice(result.error);
+  const applyDroppedFiles = (files: FileList | File[] | null) => {
+    const result = pickValidImageFiles(files);
+    if (result.files.length === 0) {
+      setNotice(result.rejected[0] ?? "이미지 파일만 추가할 수 있습니다.");
       return;
+    }
+    const selectedFiles = assetKind === "bubble" ? result.files.slice(0, 1) : result.files;
+    const append = !editingAsset && assetKind !== "bubble";
+    const existingFiles = append ? pendingFiles.filter((pending) => pending.status !== "success") : [];
+    const existingKeys = new Set(existingFiles.map((pending) => getAdminAssetFileKey(pending.file)));
+    const nextFiles = selectedFiles.filter((item) => !existingKeys.has(getAdminAssetFileKey(item)));
+    const nextPendingFiles = append
+      ? [...existingFiles, ...nextFiles.map(createPendingAdminAssetFile)]
+      : nextFiles.map(createPendingAdminAssetFile);
+
+    if (!append) {
+      for (const pending of pendingFiles) URL.revokeObjectURL(pending.previewUrl);
     }
     if (editingAsset) {
       setEditingAsset(null);
       setTitle("");
       setNotice("기존 후보 원본은 바꾸지 않습니다. 새 후보 등록으로 전환했습니다.");
     }
+    setBubbleBuilderDraft(null);
     setAnalysis(null);
     setBubbleAdjustment({});
     setBubbleGeometry({});
     setBubblePreviewEdits({});
-    setBubbleVariantFiles({ android: result.file, ios: result.file });
-    setFile(result.file);
+    setBubbleVariantFiles(nextPendingFiles[0] ? { android: nextPendingFiles[0].file, ios: nextPendingFiles[0].file } : {});
+    setPendingFiles(nextPendingFiles);
+    setUploadProgress(null);
+    setFile(nextPendingFiles[0]?.file ?? null);
+
+    const notices: string[] = [];
+    if (result.rejected.length > 0) notices.push(`${result.rejected.length}개 파일을 제외했습니다.`);
+    if (assetKind === "bubble" && result.files.length > 1) notices.push("말풍선은 한 번에 한 장만 등록할 수 있습니다.");
+    if (notices.length === 0) notices.push(`${nextPendingFiles.length}개 이미지를 등록 대기열에 추가했습니다.`);
+    setNotice(notices.join(" "));
+  };
+
+  const removePendingFile = (id: string) => {
+    if (isSavingAsset) return;
+    const removed = pendingFiles.find((pending) => pending.id === id);
+    if (!removed) return;
+    URL.revokeObjectURL(removed.previewUrl);
+    const nextPendingFiles = pendingFiles.filter((pending) => pending.id !== id);
+    const nextFile = nextPendingFiles[0]?.file ?? null;
+    setPendingFiles(nextPendingFiles);
+    setUploadProgress(null);
+    setFile(nextFile);
+    setBubbleVariantFiles(nextFile ? { android: nextFile, ios: nextFile } : {});
+    setAnalysis(null);
+    if (!nextFile) {
+      setBubbleBuilderDraft(null);
+      setBubbleGeometry({});
+      setBubblePreviewEdits({});
+    }
   };
 
   const applyRecommendedBubbleAdjustment = () => {
@@ -507,8 +661,11 @@ export default function AdminAssetsClient() {
     if (filePreviewUrl) {
       URL.revokeObjectURL(filePreviewUrl);
     }
+    for (const pending of pendingFiles) URL.revokeObjectURL(pending.previewUrl);
 
     setFile(null);
+    setPendingFiles([]);
+    setUploadProgress(null);
     setBubbleBuilderDraft(null);
     setBubbleGeometry({});
     setBubblePreviewEdits({});
@@ -603,8 +760,11 @@ export default function AdminAssetsClient() {
       setBubblePreviewEdits({});
       setBubbleVariantFiles({ android: android.file, ios: ios.file });
       setBubbleGeometryMode("generated");
+      for (const pending of pendingFiles) URL.revokeObjectURL(pending.previewUrl);
+      setPendingFiles([]);
+      setUploadProgress(null);
       setFile(android.file);
-      setTitle((current) => current || `${selectedSlot.label} 빌더 말풍선`);
+      setTitle((current) => current || "말풍선 빌더 후보");
       setBubbleWorkspaceMode("adjust");
       setNotice("Android/iOS 말풍선 결과를 만들었습니다. 저장하면 하나의 관리 후보로 등록됩니다.");
     } catch (error) {
@@ -630,12 +790,12 @@ export default function AdminAssetsClient() {
         </div>
       </header>
 
-      <div className="min-h-0 overflow-y-auto lg:overflow-hidden">
+      <div className="min-h-0 overflow-y-auto overscroll-y-contain [overflow-anchor:none] lg:overflow-hidden">
       <div className="grid min-h-full gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[var(--admin-left)_minmax(0,1fr)_var(--admin-right)]" style={{ "--admin-left": isLeftSidebarCollapsed ? "0px" : `${leftSidebarWidth}px`, "--admin-right": `${rightSidebarWidth}px` } as CSSProperties}>
         <section className="grid min-h-0 gap-0 lg:contents">
-          <aside className={`relative grid min-w-0 content-start gap-0 border-b border-[var(--color-outline-variant)] bg-white transition-[opacity] duration-200 lg:col-start-1 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-r ${isLeftSidebarCollapsed ? "lg:pointer-events-none lg:border-r-0 lg:opacity-0" : ""}`}>
+          <aside className={`relative grid min-h-0 min-w-0 content-start gap-0 border-b border-[var(--color-outline-variant)] bg-white transition-[opacity] duration-200 [overflow-anchor:none] lg:col-start-1 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:overscroll-y-contain lg:[scrollbar-gutter:stable] lg:border-b-0 lg:border-r ${isLeftSidebarCollapsed ? "lg:pointer-events-none lg:border-r-0 lg:opacity-0" : ""}`}>
             <div className="grid gap-2 border-b border-[var(--color-outline-variant)] p-4">
-              <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">에셋 종류</span>
+              <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">에셋 분류</span>
               {slotGroups.map((group) => (
                 <button
                   key={group.kind}
@@ -650,31 +810,28 @@ export default function AdminAssetsClient() {
               ))}
             </div>
 
-            <div className="grid max-h-[42dvh] gap-2 overflow-auto p-4 [scrollbar-width:thin] lg:max-h-none">
-              <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">대표 슬롯</span>
-              {activeKindSlots.map((slot) => (
-                <button
-                  key={slot.id}
-                  type="button"
-                  className={`rounded-2xl border px-3 py-3 text-left transition ${selectedSlot?.id === slot.id ? "border-[var(--color-info)] bg-[var(--color-info-container)]" : "border-[var(--color-outline-variant)] bg-white hover:bg-[var(--color-surface-low)]"}`}
-                  onClick={() => setSelectedSlotId(slot.id)}
-                >
-                  <span className="block text-sm font-black text-[var(--color-on-surface)]">{slot.label}</span>
-                  <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{slot.fileName ?? slot.role}</span>
-                </button>
-              ))}
+            <div className="grid gap-2 p-4">
+              <span className="text-xs font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">적용되는 슬롯</span>
+              <div className="rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-3 py-3">
+                <p className="text-xs font-bold leading-5 text-[var(--color-on-surface-variant)]">
+                  {formatAdminAssetScope(activeKindSlots)}
+                </p>
+                <p className="mt-1 text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)]">
+                  종류를 선택하면 해당 분류의 슬롯 전체에 후보로 등록됩니다.
+                </p>
+              </div>
             </div>
             {!isLeftSidebarCollapsed ? <button type="button" aria-label="좌측 패널 너비 조절" title="드래그하여 좌측 패널 너비 조절" onPointerDown={(event) => startSidebarResize("left", event)} className="group absolute inset-y-0 right-0 z-40 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition hover:bg-blue-500/30 lg:block"><span className="absolute left-1/2 top-1/2 h-10 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-300 opacity-0 transition group-hover:opacity-100" /></button> : null}
           </aside>
 
           <section className="grid min-w-0 content-start gap-0 lg:contents">
-            <div className="relative min-w-0 overflow-hidden border-b border-[var(--color-outline-variant)] bg-white lg:col-start-3 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:border-b-0 lg:border-l">
+            <div className="relative min-h-0 min-w-0 overflow-hidden border-b border-[var(--color-outline-variant)] bg-white [overflow-anchor:none] lg:col-start-3 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:overscroll-y-contain lg:[scrollbar-gutter:stable] lg:border-b-0 lg:border-l">
               <button type="button" aria-label="우측 패널 너비 조절" title="드래그하여 우측 패널 너비 조절" onPointerDown={(event) => startSidebarResize("right", event)} className="absolute inset-y-0 left-0 z-40 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition hover:bg-blue-500/30 lg:block" />
               <div className="border-b border-[var(--color-outline-variant)] px-4 py-4">
-                <span className="min-w-0">
-                  <span className="block text-sm font-black text-[var(--color-on-surface)]">에셋 등록</span>
-                  <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">
-                    {file ? file.name : `${getAdminAssetKindLabel(assetKind)} · ${selectedSlot?.label ?? "대표 슬롯"}`}
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black text-[var(--color-on-surface)]">에셋 등록</span>
+                    <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">
+                    {pendingFiles.length > 1 ? `${pendingFiles.length}개 이미지 선택됨` : file ? file.name : `${getAdminAssetKindLabel(assetKind)} · ${formatAdminAssetScope(activeKindSlots)}`}
                   </span>
                 </span>
               </div>
@@ -690,16 +847,16 @@ export default function AdminAssetsClient() {
                     <div className="absolute inset-0 z-10 grid place-items-center bg-white/72 backdrop-blur-[1px]" role="status" aria-live="polite">
                       <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-4 py-2 text-sm font-black text-[var(--color-info-strong)] shadow-sm">
                         <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
-                        {selectedSaveTargets.length > 1 ? `${selectedSaveTargets.length}개 target 저장 중` : "관리 후보 저장 중"}
+                        {uploadTotal > 1 ? `${uploadCompleted}/${uploadTotal}개 완료` : selectedSaveTargets.length > 1 ? `${selectedSaveTargets.length}개 슬롯 저장 중` : "관리 후보 저장 중"}
                       </div>
                     </div>
                   ) : null}
               <label className="grid gap-2">
                 <span className="text-sm font-black text-[var(--color-on-surface)]">후보 이름</span>
-                <input className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={file?.name ?? "예: 심플 말풍선"} />
+                <input className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={pendingFiles.length > 1 ? "예: 여름 테마" : file?.name ?? "예: 심플 말풍선"} />
               </label>
               <label className="grid gap-2">
-                <span className="text-sm font-black text-[var(--color-on-surface)]">에셋 종류</span>
+                <span className="text-sm font-black text-[var(--color-on-surface)]">에셋 분류</span>
                 <select className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none" value={assetKind} onChange={(event) => setAssetKind(event.currentTarget.value as AdminAssetKind)}>
                   {assetKindOrder.map((kind) => (
                     <option key={kind} value={kind}>
@@ -716,7 +873,7 @@ export default function AdminAssetsClient() {
                 <div
                   role="button"
                   tabIndex={0}
-                  aria-label="이미지 파일 선택 또는 끌어놓기"
+                  aria-label="이미지 파일 여러 개 선택 또는 끌어놓기"
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
@@ -743,22 +900,44 @@ export default function AdminAssetsClient() {
                   onDrop={(event) => {
                     event.preventDefault();
                     setDragActive(false);
-                    applyDroppedFile(event.dataTransfer.files);
+                    applyDroppedFiles(event.dataTransfer.files);
                   }}
                 >
                   <strong className="text-sm font-black text-[var(--color-on-surface)]">
                     {dragActive
                       ? "여기에 놓으면 추가됩니다."
-                      : file
+                      : pendingFiles.length > 1
+                        ? `${pendingFiles.length}개 이미지 선택됨`
+                        : file
                         ? file.name
                         : "이미지를 끌어오거나 선택하세요."}
                   </strong>
 
                   <span className="text-xs font-semibold text-[var(--color-on-surface-variant)]">
-                    PNG, JPEG, WebP · Ctrl+V 붙여넣기 지원
+                    PNG, JPEG, WebP · 여러 장 선택 · Ctrl+V 붙여넣기 지원
                   </span>
 
-                  {filePreviewUrl ? (
+                  {pendingFiles.length > 0 ? (
+                    <div className="mt-2 grid max-h-72 gap-2 overflow-y-auto overscroll-y-contain [overflow-anchor:none] pr-1">
+                      {pendingFiles.map((pending) => (
+                        <div key={pending.id} className="flex items-center gap-2 rounded-xl border border-[var(--color-outline-variant)] bg-white p-2">
+                          <div className="size-12 shrink-0 overflow-hidden rounded-lg border border-[var(--color-outline-variant)]" style={TRANSPARENCY_CHECKER_STYLE}>
+                            <div className="size-full bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${pending.previewUrl})` }} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-black text-[var(--color-on-surface)]">{pending.file.name}</p>
+                            <p className={`mt-0.5 inline-flex items-center gap-1 text-[11px] font-bold ${pending.status === "error" ? "text-red-600" : pending.status === "success" ? "text-emerald-700" : "text-[var(--color-on-surface-variant)]"}`}>
+                              {pending.status === "uploading" ? <LoaderCircle size={11} className="animate-spin" aria-hidden="true" /> : pending.status === "success" ? <Check size={11} aria-hidden="true" /> : pending.status === "error" ? <AlertTriangle size={11} aria-hidden="true" /> : null}
+                              {pending.status === "uploading" ? "저장 중" : pending.status === "success" ? "저장 완료" : pending.status === "error" ? "저장 실패" : "저장 대기"}
+                            </p>
+                          </div>
+                          <button type="button" aria-label={`${pending.file.name} 제거`} disabled={isSavingAsset} onClick={() => removePendingFile(pending.id)} className="grid size-8 shrink-0 place-items-center rounded-lg text-[var(--color-on-surface-variant)] transition hover:bg-red-50 hover:text-red-600 disabled:pointer-events-none disabled:opacity-40">
+                            <X size={15} aria-hidden="true" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : filePreviewUrl ? (
                     <div
                       className="mt-2 aspect-[4/3] max-h-64 overflow-hidden rounded-2xl border border-[var(--color-outline-variant)]"
                       style={TRANSPARENCY_CHECKER_STYLE}
@@ -774,11 +953,12 @@ export default function AdminAssetsClient() {
                     ref={fileInputRef}
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
+                    multiple={assetKind !== "bubble"}
                     className="hidden"
                     onChange={(event) => {
                       const files = event.currentTarget.files;
                       event.currentTarget.value = "";
-                      applyDroppedFile(files);
+                      applyDroppedFiles(files);
                     }}
                   />
 
@@ -799,7 +979,7 @@ export default function AdminAssetsClient() {
                     <button
                       type="button"
                       className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 text-xs font-black text-[var(--color-on-surface-variant)] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--color-info-outline)] hover:bg-[var(--color-info-container)] hover:text-[var(--color-info-strong)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
-                      disabled={!file}
+                      disabled={!file || pendingFiles.length > 1}
                       onClick={() => setImageEditOpen(true)}
                     >
                       <Edit3 size={15} aria-hidden="true" />
@@ -808,7 +988,7 @@ export default function AdminAssetsClient() {
 
                     <button
                       type="button"
-                      disabled={!file}
+                      disabled={!file && pendingFiles.length === 0}
                       onClick={clearFile}
                       className="inline-flex min-h-10 items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 text-xs font-black text-red-600 transition duration-200 hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-100 hover:text-red-700 active:translate-y-0 disabled:pointer-events-none disabled:opacity-40"
                     >
@@ -818,6 +998,18 @@ export default function AdminAssetsClient() {
                   </div>
                 </div>
               </div>
+              {showUploadProgress ? (
+                <section className="grid gap-2 rounded-2xl border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-4 py-3" role="status" aria-live="polite">
+                  <div className="flex items-center justify-between gap-3 text-xs font-black text-[var(--color-info-strong)]">
+                    <span>{uploadProgress ? `${uploadCompleted}/${uploadTotal}개 처리됨` : `${pendingFiles.length}개 선택됨`}</span>
+                    {uploadProgress ? <span>성공 {uploadProgress.succeeded} · 실패 {uploadProgress.failed}</span> : <span>저장하면 파일별 후보로 등록됩니다.</span>}
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-white/80" role="progressbar" aria-label="에셋 업로드 진행률" aria-valuemin={0} aria-valuemax={uploadTotal || 1} aria-valuenow={uploadCompleted}>
+                    <div className="h-full rounded-full bg-[var(--color-info)] transition-[width] duration-300" style={{ width: `${uploadPercent}%` }} />
+                  </div>
+                  {isSavingAsset && uploadProgress?.activeFileName ? <p className="truncate text-[11px] font-semibold text-[var(--color-on-info-container)]">현재 저장 중: {uploadProgress.activeFileName}</p> : null}
+                </section>
+              ) : null}
               {file ? (
                 <div className="rounded-2xl bg-[var(--color-surface-low)] px-4 py-3 text-xs font-bold text-[var(--color-on-surface-variant)]">
                   자동 분석: {describeAdminAssetAnalysis(analysis ?? { shapes: inferShapesFromFileName(file.name) })}
@@ -843,20 +1035,21 @@ export default function AdminAssetsClient() {
                 </div>
               ) : null}
               <div className="grid gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3">
-                <span className="text-sm font-black text-[var(--color-on-surface)]">자동 적용 대상</span>
+                <span className="text-sm font-black text-[var(--color-on-surface)]">적용되는 슬롯</span>
                 <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
-                  저장 시 파일 1개와 target {selectedSaveTargets.length || 0}개를 생성합니다
-                  {selectedSaveTargets.length > 0 ? ` · ${selectedSaveTargets.map(formatAdminAssetTargetInput).join(" / ")}` : ""}.
+                  {editingAsset
+                    ? formatAdminAssetTargets(editingAsset, slots)
+                    : `${formatAdminAssetScope(activeKindSlots)}에 후보로 등록됩니다.`}
                 </p>
               </div>
               <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={requestSave}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
-                {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : "관리 후보 저장"}
+                {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : pendingFiles.length > 1 ? `${pendingFiles.length}개 후보 저장` : "관리 후보 저장"}
               </button>
               </div>
             </div>
 
-            <section className="relative grid min-w-0 content-start gap-4 bg-[var(--color-background)] p-4 lg:col-start-2 lg:row-start-1 lg:h-full lg:overflow-y-auto">
+            <section className="relative grid min-h-0 min-w-0 content-start gap-4 bg-[var(--color-background)] p-4 [overflow-anchor:none] lg:col-start-2 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:overscroll-y-contain lg:[scrollbar-gutter:stable]">
               {assetKind === "bubble" ? (
                 <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2">
                   <div className="pointer-events-auto inline-flex rounded-full border border-blue-200 bg-white/95 p-1 shadow-[0_8px_24px_rgba(37,99,235,0.16)] backdrop-blur">
@@ -870,14 +1063,14 @@ export default function AdminAssetsClient() {
                   <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-outline-variant)] pb-3">
                     <div>
                       <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Bubble workbench</span>
-                      <h2 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">{bubbleWorkspaceMode === "builder" ? "나만의 말풍선 만들기" : selectedSlot?.label ?? "말풍선 편집"}</h2>
+                      <h2 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">{bubbleWorkspaceMode === "builder" ? "나만의 말풍선 만들기" : "말풍선 편집"}</h2>
                     </div>
                   </header>
                   {bubbleWorkspaceMode === "builder" ? (
                     <BubbleBuilderEditor
                       side={selectedBubbleSlot}
                       variant={bubbleVariantFromRole(selectedSlot?.role ?? "") ?? "first"}
-                      slotLabel={selectedSlot?.label ?? "말풍선"}
+                      slotLabel="말풍선"
                       platform={bubblePreviewPlatform}
                       initialSpec={bubbleBuilderDraft?.recipe ?? bubbleBuilderInitial?.recipe}
                       initialDecorationFiles={bubbleBuilderDraft?.decorations ?? bubbleBuilderInitial?.decorations}
@@ -952,7 +1145,7 @@ export default function AdminAssetsClient() {
                 <div>
                   <h2 className="text-lg font-black text-[var(--color-on-surface)]">등록된 관리 후보</h2>
                   <p className="mt-1 text-xs font-semibold text-[var(--color-on-surface-variant)]">
-                    {selectedSlot?.label ?? "선택 슬롯"} 기준 · {filteredAssets.length}/{visibleAssets.length}개 표시
+                    {getAdminAssetKindLabel(assetKind)} · {formatAdminAssetScope(activeKindSlots)} · {filteredAssets.length}/{visibleAssets.length}개 표시
                   </p>
                 </div>
                 <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
@@ -961,7 +1154,7 @@ export default function AdminAssetsClient() {
                     type="search"
                     value={assetSearch}
                     onChange={(event) => setAssetSearch(event.currentTarget.value)}
-                    placeholder="이름, 파일명, role 검색"
+                    placeholder="이름, 파일명 검색"
                     className="h-11 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-sm font-semibold outline-none transition focus:border-[var(--color-info-outline-strong)] focus:bg-white focus:ring-3 focus:ring-[var(--color-info-container-high)]"
                     aria-label="관리 후보 검색"
                   />
@@ -1014,7 +1207,7 @@ export default function AdminAssetsClient() {
               ) : filteredAssets.length > 0 ? (
                 <div className={`grid gap-3 sm:grid-cols-2 ${assetGridColumns === 3 ? "xl:grid-cols-3" : assetGridColumns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
                   {filteredAssets.map(({ asset, warnings }) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slot={selectedSlot} warnings={warnings} deleting={deletingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />
+                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} deleting={deletingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />
                   ))}
                 </div>
               ) : (
@@ -1022,7 +1215,7 @@ export default function AdminAssetsClient() {
                   <div>
                     <strong className="text-sm font-black text-[var(--color-on-surface)]">표시할 관리 후보가 없습니다.</strong>
                     <p className="mt-2 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
-                      검색어 또는 필터를 지우거나, 현재 슬롯에 맞는 후보를 새로 추가하세요.
+                      검색어 또는 필터를 지우거나, 현재 분류에 맞는 후보를 새로 추가하세요.
                     </p>
                   </div>
                 </div>
@@ -1039,8 +1232,8 @@ export default function AdminAssetsClient() {
             <aside className="hidden">
               <div>
                 <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Inspector</span>
-                <h2 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">{selectedSlot?.label ?? "슬롯 선택"}</h2>
-                <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{getAdminAssetKindLabel(assetKind)} · {selectedSlot?.role ?? "대표 슬롯"}</p>
+                <h2 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">{getAdminAssetKindLabel(assetKind)}</h2>
+                <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{formatAdminAssetScope(activeKindSlots)}</p>
               </div>
               {editingAsset ? <div className="flex items-center justify-between gap-2 rounded-2xl border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-3 py-2.5"><span className="min-w-0 truncate text-xs font-black text-[var(--color-info-strong)]">편집 중 · {editingAsset.title}</span><button type="button" disabled={isSavingAsset} onClick={exitInPlaceEdit} className="rounded-lg bg-white px-2 py-1 text-[10px] font-black text-[var(--color-on-surface-variant)] disabled:opacity-50">새로 만들기</button></div> : null}
               {isLoadingEditAsset ? <div className="inline-flex items-center gap-2 text-xs font-bold text-[var(--color-on-surface-variant)]"><LoaderCircle size={14} className="animate-spin" /> 원본 불러오는 중</div> : null}
@@ -1049,8 +1242,8 @@ export default function AdminAssetsClient() {
                 <input className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none focus:border-[var(--color-info)]" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={file?.name ?? "예: 심플 말풍선"} />
               </label>
               <section className="grid gap-2 rounded-2xl bg-[var(--color-surface-low)] p-3">
-                <span className="text-xs font-black text-[var(--color-on-surface)]">적용 대상</span>
-                <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{selectedSaveTargets.length > 0 ? selectedSaveTargets.map(formatAdminAssetTargetInput).join(" / ") : "저장할 대상이 없습니다."}</p>
+                <span className="text-xs font-black text-[var(--color-on-surface)]">적용되는 슬롯</span>
+                <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{editingAsset ? formatAdminAssetTargets(editingAsset, slots) : formatAdminAssetTargetsFromInputs(selectedSaveTargets, slots, assetKind)}</p>
               </section>
               {file ? <section className="grid gap-2 rounded-2xl bg-[var(--color-surface-low)] p-3"><span className="text-xs font-black text-[var(--color-on-surface)]">자동 분석</span><p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{describeAdminAssetAnalysis(analysis ?? { shapes: inferShapesFromFileName(file.name) })}</p></section> : null}
               {guidanceItems.length > 0 ? <section className="grid gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3"><span className="inline-flex items-center gap-1.5 text-xs font-black text-amber-950"><AlertTriangle size={14} /> 저장 전 확인</span><ul className="grid gap-1.5">{guidanceItems.map((item) => <li key={item} className="text-xs font-semibold leading-5 text-amber-900">{item}</li>)}</ul></section> : null}
@@ -1062,14 +1255,14 @@ export default function AdminAssetsClient() {
           </section>
           <section className="hidden">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0"><span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Library</span><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{selectedSlot?.label ?? "선택 슬롯"} · {filteredAssets.length}/{visibleAssets.length}개</p></div>
+              <div className="min-w-0"><span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Library</span><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{getAdminAssetKindLabel(assetKind)} · {filteredAssets.length}/{visibleAssets.length}개</p></div>
               <div className="relative min-w-[220px] flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" /><input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.currentTarget.value)} placeholder="후보 검색" className="h-10 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-xs font-semibold outline-none focus:bg-white" aria-label="관리 후보 검색" /></div>
               <div className="flex flex-wrap gap-1">{([["all", "전체"], ["exact", "정확"], ["review", "확인"], ["bubble", "말풍선"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setAssetListFilter(value)} aria-pressed={assetListFilter === value} className={`rounded-full px-2.5 py-1.5 text-[11px] font-black ${assetListFilter === value ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{label}</button>)}</div>
             </div>
             <div className="flex min-h-[132px] gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
               {isLoadingAssets && assets.length === 0 ? <span className="grid min-w-48 place-items-center rounded-2xl bg-[var(--color-surface-low)] text-xs font-bold text-[var(--color-on-surface-variant)]">후보를 불러오는 중</span> : null}
               {!isLoadingAssets && filteredAssets.length === 0 ? <span className="grid min-w-64 place-items-center rounded-2xl border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 text-center text-xs font-bold text-[var(--color-on-surface-variant)]">표시할 관리 후보가 없습니다.</span> : null}
-              {filteredAssets.map(({ asset, warnings }) => <AdminAssetDockCard key={asset.id} asset={asset} warnings={warnings} selectedSlot={selectedSlot} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />)}
+              {filteredAssets.map(({ asset, warnings }) => <AdminAssetDockCard key={asset.id} asset={asset} slots={slots} warnings={warnings} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />)}
               {assetCursor ? <button type="button" className="min-h-[132px] min-w-28 rounded-2xl border border-dashed border-[var(--color-outline-variant)] px-3 text-xs font-black text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)] disabled:opacity-50" disabled={isLoadingAssets} onClick={() => void refreshAssets(assetCursor, true)}>{isLoadingAssets ? "불러오는 중" : "더 보기"}</button> : null}
             </div>
           </section>
@@ -1079,29 +1272,39 @@ export default function AdminAssetsClient() {
       <ImageEditDialog
         open={imageEditOpen}
         sourceFile={adminBubbleSourceFile}
-        slotLabel={selectedSlot?.label ?? "관리 에셋"}
+        slotLabel={`${getAdminAssetKindLabel(assetKind)} 에셋`}
         onOpenChange={setImageEditOpen}
         onApply={(editedFile) => {
           // 작업대가 보는 원본은 `bubbleVariantFiles`가 먼저다. `file`만 갈면 편집기와 텍스트
           // 미리보기가 편집 전 비트맵을 계속 그리는데, 업로드되는 건 편집된 파일이라
           // 저장된 geometry가 저장된 이미지와 어긋난다. 편집기 자체의 onApply와 같은 규칙을 쓴다.
           setBubbleVariantFiles((current) => (current[bubbleEditorPlatform] ? { ...current, [bubbleEditorPlatform]: editedFile } : current));
-          if (bubbleEditorPlatform === "android") setFile(editedFile);
+          if (bubbleEditorPlatform === "android") {
+            setFile(editedFile);
+            if (pendingFiles.length === 1) {
+              const current = pendingFiles[0];
+              if (current) {
+                URL.revokeObjectURL(current.previewUrl);
+                setPendingFiles([{ ...current, file: editedFile, previewUrl: URL.createObjectURL(editedFile), status: "queued", error: undefined }]);
+              }
+            }
+          }
           setNotice("편집된 이미지를 적용했습니다.");
         }}
       />
-      <AdminAssetEditDialog asset={null} onClose={() => undefined} onSaved={() => undefined} />
+      <AdminAssetEditDialog asset={null} slots={slots} onClose={() => undefined} onSaved={() => undefined} />
       <Dialog.Root open={isSaveConfirmOpen} onOpenChange={(open) => { if (!isSavingAsset) setIsSaveConfirmOpen(open); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[60] bg-slate-950/35 backdrop-blur-[2px]" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-[61] w-[calc(100%-40px)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-blue-100 bg-white p-5 shadow-[0_24px_72px_rgba(15,23,42,0.22)] outline-none">
             <span className="mb-4 grid size-10 place-items-center rounded-xl bg-blue-50 text-blue-700"><Save size={20} aria-hidden="true" /></span>
             <Dialog.Title className="text-xl font-extrabold text-slate-950">관리 후보를 저장할까요?</Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-slate-600">아래 정보를 확인한 뒤 저장하세요. 저장 후 후보는 현재 슬롯의 관리 라이브러리에 표시됩니다.</Dialog.Description>
+            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-slate-600">아래 정보를 확인한 뒤 저장하세요. 여러 파일을 선택하면 파일마다 하나의 관리 후보로 등록됩니다.</Dialog.Description>
             <dl className="mt-4 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
-              <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">후보 이름</dt><dd className="max-w-[65%] text-right font-black text-slate-900">{title.trim() || file?.name || selectedSlot?.label || "새 관리 후보"}</dd></div>
-              <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">에셋 종류</dt><dd className="text-right font-black text-slate-900">{getAdminAssetKindLabel(assetKind)}</dd></div>
-              <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">적용 대상</dt><dd className="max-w-[65%] text-right font-black leading-5 text-slate-900">{selectedSaveTargets.map(formatAdminAssetTargetInput).join(" / ") || "없음"}</dd></div>
+              <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">후보 이름</dt><dd className="max-w-[65%] text-right font-black text-slate-900">{title.trim() || (pendingFiles.length > 1 ? `${pendingFiles.length}개 이미지` : file?.name) || getAdminAssetKindLabel(assetKind)}</dd></div>
+              {pendingFiles.length > 1 ? <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">등록 파일</dt><dd className="text-right font-black text-slate-900">{pendingFiles.length}개</dd></div> : null}
+              <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">에셋 분류</dt><dd className="text-right font-black text-slate-900">{getAdminAssetKindLabel(assetKind)}</dd></div>
+              <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">적용되는 슬롯</dt><dd className="max-w-[65%] text-right font-black leading-5 text-slate-900">{editingAsset ? formatAdminAssetTargets(editingAsset, slots) : formatAdminAssetTargetsFromInputs(selectedSaveTargets, slots, assetKind)}</dd></div>
               {bubbleBuilderDraft ? <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">생성 방식</dt><dd className="text-right font-black text-blue-700">Android/iOS 빌더 결과</dd></div> : null}
             </dl>
             <div className="mt-5 grid grid-cols-2 gap-2">
@@ -1110,7 +1313,7 @@ export default function AdminAssetsClient() {
               </Dialog.Close>
               <button type="button" className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:opacity-55" disabled={isSavingAsset} onClick={() => { setIsSaveConfirmOpen(false); void submit(); }}>
                 {isSavingAsset ? <LoaderCircle className="animate-spin" size={17} aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
-                {isSavingAsset ? "저장 중" : "저장하기"}
+                {isSavingAsset ? "저장 중" : pendingFiles.length > 1 ? `${pendingFiles.length}개 저장하기` : "저장하기"}
               </button>
             </div>
           </Dialog.Content>
@@ -1178,18 +1381,11 @@ function getUnifiedAdminAssetSlots(): ThemeAssetSlot[] {
     });
 }
 
-function getAdminAssetSaveTargets(slot: ThemeAssetSlot, assetKind: AdminAssetKind): AdminAssetTargetInput[] {
-  if (assetKind === "bubble") {
-    return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }];
-  }
-  const platformSlots = (["android", "ios"] as const).flatMap((platform) => {
-    const platformSlot = findAdminAssetSaveSlot(slot, platform, assetKind);
-    return platformSlot ? [{ platform, slot: platformSlot }] : [];
-  });
-  if (platformSlots.length > 1 && platformSlots.every((target) => target.slot.role === platformSlots[0]?.slot.role)) {
-    return [{ platform: "all", slotRole: platformSlots[0].slot.role, targetKind: "exact_role", priority: 0, enabled: true }];
-  }
-  return platformSlots.map((target) => ({ platform: target.platform, slotRole: target.slot.role, targetKind: "exact_role", priority: 0, enabled: true }));
+function getAdminAssetSaveTargets(assetKind: AdminAssetKind): AdminAssetTargetInput[] {
+  // 후보 등록은 특정 슬롯에 고정하지 않는다. 실제 템플릿에서 슬롯을 고르는 일은
+  // admin/edit가 담당하고, 여기서는 kind 전체에 추천되는 후보로 저장한다.
+  void assetKind;
+  return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }];
 }
 
 /**
@@ -1208,19 +1404,7 @@ function bubbleVariantFromRole(role: string): "first" | "group" | null {
 }
 
 function getSharedAdminAssetTargets(asset: AdminAssetCandidate): AdminAssetTargetInput[] {
-  if (asset.assetKind === "bubble" || asset.slotRole.startsWith("bubble_")) {
-    return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: asset.enabled }];
-  }
-  return [{ platform: "all", slotRole: asset.slotRole, targetKind: "exact_role", priority: 0, enabled: asset.enabled }];
-}
-
-function findAdminAssetSaveSlot(sourceSlot: ThemeAssetSlot, platform: ThemePlatform, assetKind: AdminAssetKind) {
-  const platformSlots = getThemeSlots(platform).filter((slot) => inferAdminAssetKind(slot) === assetKind);
-  return (
-    platformSlots.find((slot) => slot.role === sourceSlot.role) ??
-    platformSlots.find((slot) => sourceSlot.fileName && slot.fileName === sourceSlot.fileName) ??
-    platformSlots.find((slot) => slot.label === sourceSlot.label)
-  );
+  return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: asset.enabled }];
 }
 
 function getAdminAssetGuidance(slot: ThemeAssetSlot | undefined, assetKind: AdminAssetKind, analysis: AdminAssetAnalysis | null) {
@@ -1262,6 +1446,10 @@ function getAdminAssetGuidance(slot: ThemeAssetSlot | undefined, assetKind: Admi
   }
 
   return Array.from(new Set(items));
+}
+
+function getAdminAssetGuidanceForSlots(slots: readonly ThemeAssetSlot[], assetKind: AdminAssetKind, analysis: AdminAssetAnalysis | null) {
+  return Array.from(new Set(slots.flatMap((slot) => getAdminAssetGuidance(slot, assetKind, analysis))));
 }
 
 function BubblePlatformSummary({
@@ -1342,58 +1530,55 @@ function formatPlatformLabel(platform: "all" | ThemePlatform) {
   return platform === "all" ? "Android+iOS" : platform === "android" ? "Android" : "iOS";
 }
 
-function formatAdminAssetTargetInput(target: AdminAssetTargetInput) {
+function formatAdminAssetScope(slots: readonly ThemeAssetSlot[]) {
+  const labels = Array.from(new Set(slots.map((slot) => slot.label)));
+  if (labels.length === 0) return "적용 슬롯 없음";
+  if (labels.length <= 3) return labels.join(" · ");
+  return `${labels.slice(0, 2).join(" · ")} 외 ${labels.length - 2}개`;
+}
+
+function getAdminAssetSlotLabel(role: string, slots: readonly ThemeAssetSlot[]) {
+  return slots.find((slot) => slot.role === role)?.label ?? role;
+}
+
+function formatAdminAssetTargetInput(target: AdminAssetTargetInput, slots: readonly ThemeAssetSlot[], assetKind?: AdminAssetKind) {
   const platformLabel = formatPlatformLabel(target.platform);
-  return target.slotRole ? `${platformLabel} · ${target.slotRole}` : `${platformLabel} · ${target.targetKind}`;
+  if (target.slotRole) return `${platformLabel} · ${getAdminAssetSlotLabel(target.slotRole, slots)}`;
+  if (target.targetKind === "asset_kind") return `${platformLabel} · ${assetKind ? getAdminAssetKindLabel(assetKind) : "해당 분류"} 전체`;
+  if (target.targetKind === "shape_rule") return `${platformLabel} · 조건에 맞는 슬롯`;
+  return `${platformLabel} · 적용 슬롯`;
 }
 
-function formatAdminAssetTargets(asset: AdminAssetCandidate) {
+function formatAdminAssetTargetsFromInputs(targets: readonly AdminAssetTargetInput[], slots: readonly ThemeAssetSlot[], assetKind?: AdminAssetKind) {
+  if (targets.length < 1) return "적용 슬롯 없음";
+  return targets.map((target) => formatAdminAssetTargetInput(target, slots, assetKind)).join(" / ");
+}
+
+function formatAdminAssetTargets(asset: AdminAssetCandidate, slots: readonly ThemeAssetSlot[]) {
   const targets = asset.targets ?? [];
-  if (targets.length < 1) return formatPlatformLabel(asset.platform);
-  return targets.map(formatAdminAssetTargetInput).join(" / ");
+  if (targets.length < 1) return `${formatPlatformLabel(asset.platform)} · ${getAdminAssetSlotLabel(asset.slotRole, slots)}`;
+  return targets.map((target) => formatAdminAssetTargetInput(target, slots, asset.assetKind)).join(" / ");
 }
 
-function isExactAdminAssetTarget(slot: ThemeAssetSlot, asset: AdminAssetCandidate) {
+function isExactAdminAssetTarget(asset: AdminAssetCandidate) {
   return (asset.targets ?? []).some(
     (target) =>
       target.enabled &&
-      (target.platform === slot.platform || target.platform === "all") &&
       target.targetKind === "exact_role" &&
-      target.slotRole === slot.role,
+      Boolean(target.slotRole),
   );
-}
-
-function isAdminAssetVisibleForAdminSlot(slot: ThemeAssetSlot, asset: AdminAssetCandidate) {
-  if (!asset.enabled) return false;
-  const targets = asset.targets ?? [];
-  if (
-    targets.length > 0 &&
-    !targets.some((target) => target.enabled && (target.platform === slot.platform || target.platform === "all"))
-  ) {
-    return false;
-  }
-  if (isExactAdminAssetTarget(slot, asset)) return true;
-  if (
-    targets.some(
-      (target) =>
-        target.enabled &&
-        (target.platform === slot.platform || target.platform === "all") &&
-        target.targetKind === "asset_kind",
-    )
-  ) return true;
-  return isAdminAssetRecommendedForSlot(slot, { ...asset, platform: "all" });
 }
 
 function AdminAssetCard({
   asset,
-  slot,
+  slots,
   warnings,
   deleting,
   onEdit,
   onDelete,
 }: {
   asset: AdminAssetCandidate;
-  slot?: ThemeAssetSlot;
+  slots: readonly ThemeAssetSlot[];
   warnings: string[];
   deleting: boolean;
   onEdit: () => void;
@@ -1414,18 +1599,17 @@ function AdminAssetCard({
       </div>
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap gap-1.5">
-          <span className="rounded-full bg-[var(--color-inverse-surface)] px-2 py-0.5 text-[10px] font-black uppercase text-[var(--color-inverse-on-surface)]">{asset.targets?.some((target) => target.platform === "all") ? "공통" : "target"}</span>
+          <span className="rounded-full bg-[var(--color-inverse-surface)] px-2 py-0.5 text-[10px] font-black text-[var(--color-inverse-on-surface)]">{asset.targets?.some((target) => target.platform === "all") ? "공통 적용" : "슬롯 지정"}</span>
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${asset.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{asset.enabled ? "사용 중" : "비활성"}</span>
           {warnings.length > 0 ? <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800"><AlertTriangle size={11} aria-hidden="true" />확인 {warnings.length}</span> : null}
         </div>
         <strong className="block truncate text-sm font-black text-[var(--color-on-surface)]">{asset.title}</strong>
-        <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : slot?.label ?? asset.slotRole}</span>
-        <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{formatAdminAssetTargets(asset)}</span>
+        <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : getAdminAssetSlotLabel(asset.slotRole, slots)}</span>
+        <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{formatAdminAssetTargets(asset, slots)}</span>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{describeAdminAssetAnalysis(asset.analysis)}</span>
         {asset.bubbleAdjustment ? <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">말풍선 조정값 저장됨</span> : null}
         {warnings[0] ? <span className="mt-2 block rounded-xl bg-amber-50 px-2.5 py-2 text-[11px] font-semibold leading-4 text-amber-900">{warnings[0]}</span> : null}
       </div>
-      {slot && asset.slotRole !== slot.role ? <span className="w-fit rounded-full bg-[var(--color-surface-low)] px-2 py-1 text-[11px] font-bold text-[var(--color-on-surface-variant)]">유사 슬롯 추천</span> : null}
       <div className="grid grid-cols-2 gap-2">
         <button type="button" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" disabled={deleting} onClick={onEdit}>
           <Pencil size={14} aria-hidden="true" /> 수정
@@ -1441,14 +1625,14 @@ function AdminAssetCard({
 
 function AdminAssetDockCard({
   asset,
+  slots,
   warnings,
-  selectedSlot,
   onEdit,
   onDelete,
 }: {
   asset: AdminAssetCandidate;
+  slots: readonly ThemeAssetSlot[];
   warnings: string[];
-  selectedSlot?: ThemeAssetSlot;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -1458,7 +1642,7 @@ function AdminAssetDockCard({
         <span className="absolute inset-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} aria-hidden="true" />
         {warnings.length > 0 ? <span className="absolute right-1.5 top-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-800">확인 {warnings.length}</span> : null}
       </button>
-      <div className="min-w-0"><button type="button" onClick={onEdit} className="block w-full truncate text-left text-xs font-black text-[var(--color-on-surface)] hover:underline">{asset.title}</button><span className="mt-0.5 block truncate text-[10px] font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : asset.slotRole}{selectedSlot && asset.slotRole !== selectedSlot.role ? " · 유사" : ""}</span><div className="mt-2 flex gap-1"><button type="button" onClick={onEdit} className="rounded-lg bg-[var(--color-surface-low)] px-2 py-1 text-[10px] font-black text-[var(--color-on-surface-variant)]">수정</button><button type="button" onClick={onDelete} className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-700">삭제</button></div></div>
+      <div className="min-w-0"><button type="button" onClick={onEdit} className="block w-full truncate text-left text-xs font-black text-[var(--color-on-surface)] hover:underline">{asset.title}</button><span className="mt-0.5 block truncate text-[10px] font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : getAdminAssetSlotLabel(asset.slotRole, slots)}</span><div className="mt-2 flex gap-1"><button type="button" onClick={onEdit} className="rounded-lg bg-[var(--color-surface-low)] px-2 py-1 text-[10px] font-black text-[var(--color-on-surface-variant)]">수정</button><button type="button" onClick={onDelete} className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-700">삭제</button></div></div>
     </article>
   );
 }
@@ -1480,10 +1664,12 @@ function AdminAssetSkeletonGrid({ columns = 3 }: { columns?: 3 | 4 | 5 }) {
 
 function AdminAssetEditDialog({
   asset,
+  slots,
   onClose,
   onSaved,
 }: {
   asset: AdminAssetCandidate | null;
+  slots: readonly ThemeAssetSlot[];
   onClose: () => void;
   onSaved: (asset: AdminAssetCandidate) => void;
 }) {
@@ -1602,8 +1788,8 @@ function AdminAssetEditDialog({
             {asset ? (
               <section className="grid gap-3 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3" aria-labelledby="asset-target-heading">
                 <div>
-                  <h3 id="asset-target-heading" className="text-sm font-black text-[var(--color-on-surface)]">적용 대상</h3>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{formatAdminAssetTargets(asset)}</p>
+                  <h3 id="asset-target-heading" className="text-sm font-black text-[var(--color-on-surface)]">적용되는 슬롯</h3>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{formatAdminAssetTargets(asset, slots)}</p>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button
@@ -1622,7 +1808,7 @@ function AdminAssetEditDialog({
                     onClick={() => setTargetMode("shared")}
                     className={`rounded-2xl border px-4 py-3 text-left text-xs font-bold leading-5 transition hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-45 ${targetMode === "shared" ? "border-[var(--color-info)] bg-[var(--color-info-container)] text-[var(--color-info-strong)]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)]"}`}
                   >
-                    {isBubble ? "말풍선 네 슬롯 공유 후보로 정리" : "Android+iOS 공통 대상으로 정리"}
+                    {isBubble ? "말풍선 전체에 적용" : "해당 분류 전체에 적용"}
                   </button>
                 </div>
               </section>

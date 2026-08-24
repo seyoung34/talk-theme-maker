@@ -242,7 +242,7 @@ export default function LoginClient() {
 
   return (
     <main className="min-h-screen overflow-x-clip bg-[linear-gradient(180deg,#e8f1ff_0%,#f4f9ff_18%,#ffffff_42%,#f7fbff_70%,#e9f2ff_100%)] text-[var(--color-on-background)]">
-      <div className="hidden lg:block">
+      <div>
         <SiteHeader currentPath="/login" />
       </div>
       <div className="relative mx-auto grid min-h-dvh w-full max-w-7xl items-center gap-10 px-0 py-0 sm:px-6 sm:py-8 lg:min-h-[calc(100dvh-73px)] lg:grid-cols-[minmax(0,0.98fr)_minmax(390px,0.72fr)] lg:px-8 lg:py-14">
@@ -367,7 +367,7 @@ export default function LoginClient() {
             </div>
           ) : (
             <>
-              <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting}>
+              <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#FEE500] px-4 py-3 text-sm font-extrabold text-[#191919] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#191919] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void signInWithKakao()} disabled={isSubmitting}>
                 {isSubmitting ? <LoaderCircle className="animate-spin" size={18} aria-hidden="true" /> : <span className="text-base" aria-hidden="true">●</span>}
                 카카오로 로그인
               </button>

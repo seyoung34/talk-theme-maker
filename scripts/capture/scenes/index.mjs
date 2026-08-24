@@ -32,8 +32,10 @@ const sharedScenes = [templateGallery, editorTour];
  * 프로필별 기본 구성. mock 환경(시스템 템플릿 없음)에서도 도는 씬만 넣는다.
  * 갤러리를 지나는 씬은 로컬 스택 + 촬영용 seed가 있어야 한다(계획서 §2.8).
  */
-export function defaultSceneIds(profileId) {
-  return (scenesByProfile[profileId] ?? sharedScenes).map((scene) => scene.id);
+export function defaultSceneIds(profileId, environment = "mock") {
+  return (scenesByProfile[profileId] ?? sharedScenes)
+    .filter((scene) => environment !== "mock" || !scene.requiresLocal)
+    .map((scene) => scene.id);
 }
 
 export function selectScenes(ids, profileId) {

@@ -36,16 +36,21 @@ if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(API)) {
 const buckets = ["theme-assets", "theme-public"];
 /**
  * 내보내고 다시 심는 테이블. 순서가 곧 삽입 순서다 — 외래키가 걸려 있어 부모가 먼저다.
- * `admin_asset_variants`/`bubble_specs`는 지금 비어 있어도 나중에 생기면 자동으로 따라온다.
+ * catalog registry와 bubble-builder 하위 테이블도 함께 보관한다. 순서가 곧 삽입 순서다 —
+ * 외래키가 걸려 있어 부모가 먼저다.
  */
-const tables = [
-  "admin_assets",
-  "admin_asset_targets",
-  "admin_asset_variants",
-  "admin_asset_bubble_specs",
-  "system_template_bundles",
-  "system_template_variants",
+const tableDefinitions = [
+  { name: "theme_asset_objects", conflictColumns: ["id"] },
+  { name: "admin_assets", conflictColumns: ["id"] },
+  { name: "admin_asset_targets", conflictColumns: ["id"] },
+  { name: "admin_asset_variants", conflictColumns: ["id"] },
+  { name: "admin_asset_bubble_specs", conflictColumns: ["asset_id"] },
+  { name: "admin_asset_bubble_designs", conflictColumns: ["asset_id"] },
+  { name: "admin_asset_bubble_decorations", conflictColumns: ["asset_id", "layer_id"] },
+  { name: "system_template_bundles", conflictColumns: ["id"] },
+  { name: "system_template_variants", conflictColumns: ["id"] },
 ];
+const tables = tableDefinitions.map(({ name }) => name);
 /** 계정 UUID는 `db reset` + 계정 재생성마다 바뀐다. 그대로 심으면 외래키가 깨진다. */
 const userRefColumns = new Set(["created_by"]);
 
@@ -65,6 +70,19 @@ function sql(statement) {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
+}
+
+function quoteIdentifier(identifier) {
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function tableColumns(table) {
+  const raw = sql(
+    `select coalesce(json_agg(column_name order by ordinal_position), '[]') ` +
+      `from information_schema.columns ` +
+      `where table_schema = 'public' and table_name = '${table}' and is_generated = 'NEVER';`,
+  ).trim();
+  return JSON.parse(raw);
 }
 
 const storageHeaders = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` };
@@ -111,6 +129,10 @@ async function seedFixture() {
   const adminId = sql("select user_id from public.admin_profiles limit 1;").trim() || null;
   if (!adminId) console.warn("! 관리자 계정이 없습니다. created_by를 비웁니다 (seed-local-users.mjs를 먼저 돌리면 채워집니다)");
 
+  // 구버전 fixture는 catalog registry를 내보내지 않았다. 그런 fixture를 계속 사용할 수
+  // 있도록 포인터만 비운다. 새로 export한 fixture는 registry를 부모 테이블로 먼저 심는다.
+  const hasCatalogRegistryRows = (fixture.rows.theme_asset_objects ?? []).length > 0;
+
   for (const { bucket, name, mime } of fixture.objects) {
     const body = await readFile(path.join(fixtureDir, "objects", bucket, name));
     const url = `${API}/storage/v1/object/${bucket}/${encodeURI(name)}`;
@@ -120,11 +142,18 @@ async function seedFixture() {
   }
   console.log(`  객체 ${fixture.objects.length}개 업로드`);
 
-  for (const table of tables) {
+  for (const definition of tableDefinitions) {
+    const { name: table, conflictColumns } = definition;
     const rows = fixture.rows[table] ?? [];
     if (!rows.length) continue;
     const remapped = rows.map((row) =>
-      Object.fromEntries(Object.entries(row).map(([column, value]) => [column, userRefColumns.has(column) && value ? adminId : value])),
+      Object.fromEntries(Object.entries(row).map(([column, value]) => {
+        if (userRefColumns.has(column)) return [column, value ? adminId : value];
+        if (!hasCatalogRegistryRows && (table === "admin_assets" || table === "admin_asset_variants") && column === "asset_object_id") {
+          return [column, null];
+        }
+        return [column, value];
+      })),
     );
     /**
      * 값을 SQL 리터럴로 직접 쓰지 않고 `json_populate_recordset`에 통째로 넘긴다.
@@ -134,9 +163,15 @@ async function seedFixture() {
      * 배열은 값만 봐서 구분할 수 없다. 테이블 타입을 아는 것은 Postgres뿐이므로 변환을 그쪽에
      * 맡긴다. 덕분에 컬럼이 늘어도 이 코드는 그대로다.
      */
+    const columns = tableColumns(table);
+    const updateColumns = columns.filter((column) => !conflictColumns.includes(column));
+    const conflict = conflictColumns.map(quoteIdentifier).join(", ");
+    const update = updateColumns.length
+      ? `do update set ${updateColumns.map((column) => `${quoteIdentifier(column)} = excluded.${quoteIdentifier(column)}`).join(", ")}`
+      : "do nothing";
     sql(
-      `insert into public.${table} select * from json_populate_recordset(null::public.${table}, ` +
-        `$fixture$${JSON.stringify(remapped)}$fixture$) on conflict (id) do nothing;`,
+      `insert into public.${quoteIdentifier(table)} select * from json_populate_recordset(null::public.${quoteIdentifier(table)}, ` +
+        `$fixture$${JSON.stringify(remapped)}$fixture$) on conflict (${conflict}) ${update};`,
     );
     console.log(`  ${table.padEnd(26)} ${rows.length}행`);
   }

@@ -16,6 +16,9 @@ describe("systemTemplateRepository.save storage transaction", () => {
   let bundleDeleteCalls: string[];
   let variantUpsertCalls: Record<string, unknown>[];
   let bundleInsertCalls: Record<string, unknown>[];
+  let bundleUpdateCalls: Record<string, unknown>[];
+  let existingVariantStorage: { upload_refs: unknown; preview_metadata: unknown } | null;
+  let generateThumbnail: ReturnType<typeof vi.fn>;
 
   function createClientStub() {
     return {
@@ -58,6 +61,31 @@ describe("systemTemplateRepository.save storage transaction", () => {
                 })),
               };
             }),
+            update: vi.fn((payload: Record<string, unknown>) => {
+              bundleUpdateCalls.push(payload);
+              return {
+                eq: vi.fn(() => ({
+                  select: vi.fn(() => ({
+                    single: vi.fn(async () => ({
+                      data: bundleInsertError ? null : {
+                        id: bundleId,
+                        title: "테스트 템플릿",
+                        description: null,
+                        status: "draft",
+                        visibility: "private",
+                        pricing_type: "free",
+                        price_amount: null,
+                        credit_cost: null,
+                        tags: [],
+                        created_at: "2026-08-22T00:00:00.000Z",
+                        updated_at: "2026-08-22T00:00:00.000Z",
+                      },
+                      error: bundleInsertError,
+                    })),
+                  })),
+                })),
+              };
+            }),
             delete: vi.fn(() => ({
               eq: vi.fn(async (_column: string, id: string) => {
                 bundleDeleteCalls.push(id);
@@ -68,6 +96,11 @@ describe("systemTemplateRepository.save storage transaction", () => {
         }
         if (table === "system_template_variants") {
           return {
+            select: vi.fn((columns: string) => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({ data: columns === "upload_refs,preview_metadata" ? existingVariantStorage : null, error: null })),
+              })),
+            })),
             upsert: vi.fn((payload: Record<string, unknown>) => {
               variantUpsertCalls.push(payload);
               return {
@@ -100,7 +133,7 @@ describe("systemTemplateRepository.save storage transaction", () => {
       createAdminThemeAssetSignedUrls: vi.fn(async (_supabase: unknown, paths: string[]) => Object.fromEntries(paths.map((path) => [path, `https://signed.test/${path}`]))),
     }));
     vi.doMock("@/lib/theme/systemTemplates/thumbnail", () => ({
-      generateSystemTemplateThumbnail: vi.fn(async () => null),
+      generateSystemTemplateThumbnail: generateThumbnail,
       thumbnailTabIconRoles: [],
     }));
     vi.doMock("@/lib/theme/systemTemplates/preview", () => ({
@@ -148,6 +181,9 @@ describe("systemTemplateRepository.save storage transaction", () => {
     bundleDeleteCalls = [];
     variantUpsertCalls = [];
     bundleInsertCalls = [];
+    bundleUpdateCalls = [];
+    existingVariantStorage = null;
+    generateThumbnail = vi.fn(async () => null);
     const client = createClientStub();
     createClient = vi.fn(() => client);
   });
@@ -172,7 +208,6 @@ describe("systemTemplateRepository.save storage transaction", () => {
     expect(uploadCalls).toHaveLength(1);
     expect(removeCalls).toEqual(expect.arrayContaining([
       { bucket: "theme-assets", paths: [expect.stringContaining("background.png")] },
-      { bucket: "theme-public", paths: expect.arrayContaining([expect.stringMatching(/^system-templates\/.+\/preview\/card\.webp$/)]) },
     ]));
     expect(bundleInsertCalls).toHaveLength(1);
     expect(variantUpsertCalls).toHaveLength(0);
@@ -188,9 +223,35 @@ describe("systemTemplateRepository.save storage transaction", () => {
     expect(uploadCalls).toHaveLength(1);
     expect(removeCalls).toEqual(expect.arrayContaining([
       { bucket: "theme-assets", paths: [expect.stringContaining("background.png")] },
-      { bucket: "theme-public", paths: expect.arrayContaining([expect.stringMatching(/^system-templates\/.+\/preview\/card\.webp$/)]) },
     ]));
     expect(variantUpsertCalls).toHaveLength(1);
     expect(bundleDeleteCalls).toEqual([bundleId]);
+  });
+
+  it("기존 variant 저장이 실패해도 이전 경로는 지우거나 덮어쓰지 않는다", async () => {
+    const oldPrivatePath = "system-templates/existing/background/background.png";
+    const oldCardPath = "system-templates/existing/preview/card.webp";
+    existingVariantStorage = {
+      upload_refs: {
+        [mainBackgroundSlotId]: [{ id: "old-upload", fileName: "background.png", mimeType: "image/png", size: 10, storagePath: oldPrivatePath }],
+      },
+      preview_metadata: { cardPreviewPath: oldCardPath },
+    };
+    variantUpsertError = { message: "existing variant upsert failed" };
+    generateThumbnail.mockResolvedValue(new Blob(["thumb"], { type: "image/webp" }));
+    const repository = await load();
+
+    await expect(repository.save({ ...input(), id: "11111111-2222-4333-8444-555555555555", bundleId })).rejects.toMatchObject({
+      message: "existing variant upsert failed",
+    });
+
+    expect(bundleUpdateCalls).toHaveLength(1);
+    expect(uploadCalls.some(({ path }) => path === oldPrivatePath || path === oldCardPath)).toBe(false);
+    expect(removeCalls.flatMap(({ paths }) => paths)).not.toContain(oldPrivatePath);
+    expect(removeCalls.flatMap(({ paths }) => paths)).not.toContain(oldCardPath);
+    expect(removeCalls).toEqual(expect.arrayContaining([
+      { bucket: "theme-assets", paths: [expect.stringContaining("/revisions/")] },
+      { bucket: "theme-public", paths: [expect.stringContaining("/revisions/")] },
+    ]));
   });
 });

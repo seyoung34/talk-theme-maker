@@ -96,7 +96,7 @@ describe("systemTemplateRepository.regeneratePreviewMetadata", () => {
 
     expect(upload).toHaveBeenCalledTimes(1);
     const metadata = updates.at(-1)?.preview_metadata as SystemTemplatePreviewMetadata;
-    expect(metadata.cardPreviewPath).toBe(`system-templates/${variantId}/preview/card.webp`);
+    expect(metadata.cardPreviewPath).toMatch(new RegExp(`^system-templates/${variantId}/revisions/[^/]+/preview/card\\.webp$`));
   });
 
   it("서명 실패는 호출자에게 전달하고 메타를 갱신하지 않는다", async () => {

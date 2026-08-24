@@ -79,6 +79,7 @@ async function closeExportDialog({ page, click, hold }) {
 
 export const guideExportDialog = {
   id: "export-dialog",
+  requiresLocal: true,
   title: "테마 파일 만들기",
   description: "다운로드를 누르면 형식과 크레딧을 확인하는 창이 열립니다",
   // 창이 화면 가운데를 덮으므로 변화가 크다. 창이 안 열리면 여기서 걸린다.
