@@ -1,7 +1,5 @@
 export type GuidePlatform = "android" | "ios";
 
-export type GuideMode = "easy" | "detailed";
-
 export type GuideStep = {
   title: string;
   body: string;
@@ -86,7 +84,23 @@ export type EasyStep = {
    * 카드에 넣으면 글자를 읽을 수 없고, 읽었더라도 자기 화면에 없는 UI라 따라 할 수가 없다.
    */
   mobileMedia?: EasyStepMedia;
+  /**
+   * 스텝 안에 접어 두는 심화 내용.
+   *
+   * 말풍선의 stretch·content 영역처럼 **처음 만드는 사람에게는 필요 없지만 한 번 막히면
+   * 반드시 찾게 되는** 내용이 있다. 스텝 본문에 펼쳐 두면 8스텝 전체가 무거워져 "그대로 따라
+   * 하면 된다"는 인상이 깨지고, 아래 상세 섹션으로만 보내면 문맥에서 멀어져 못 찾는다.
+   *
+   * 접어서 그 자리에 두면 둘 다 피한다. 기본은 닫혀 있고, 필요한 사람만 편다.
+   */
+  details?: EasyDetail[];
   hardStep?: boolean;
+};
+
+/** 접힌 심화 항목. 제목만 보이고 펴야 본문이 나온다. */
+export type EasyDetail = {
+  title: string;
+  body: string;
 };
 
 export type PlatformGuide = {
@@ -158,6 +172,13 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       {
         title: "배경 고르기",
         caption: "‘추천 에셋’에서 마음에 드는 배경을 고르면 미리보기에 바로 보여요. 내 사진을 올릴 수도 있어요.",
+        actions: [
+          "‘배경’ 그룹에서 바꾸고 싶은 배경을 골라요. 메인과 채팅방을 따로 정할 수 있어요.",
+          "‘추천 에셋’에 이미 고를 수 있는 배경이 있어요. 내 사진을 꼭 올리지 않아도 돼요.",
+          // 모르면 못 넘어가는 지점이라 여기 적는다. 이미지가 깔려 있으면 색은 투명한 부분에만
+          // 보여서, 색만 쓰려고 골랐는데 아무것도 안 바뀌는 것처럼 느껴진다.
+          "배경을 색으로만 채우고 싶다면 이미지를 ‘이미지 사용 안 함’으로 먼저 바꿔요. 이미지가 깔려 있으면 색이 가려져요.",
+        ],
         media: {
           type: "video",
           src: "/guide/editor/pick-background.mp4",
@@ -199,6 +220,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
           "‘채팅방’ 화면에서 말풍선 그룹을 열어요.",
           "‘내 말풍선 1’은 첫 번째 말풍선, ‘내 말풍선 2’는 이어서 보내는 말풍선이에요.",
           "상대 말풍선도 같은 방식으로 두 종류를 넣어요.",
+          "모서리가 늘어나거나 글자가 말풍선 밖으로 나오면 아래 ‘말풍선을 더 다듬고 싶다면’을 펼쳐 보세요.",
           "오른쪽 채팅방 미리보기로 실제로 어떻게 보이는지 확인해요.",
         ],
         // 주석 달린 정지 화면을 대신한다. 좌표 주석은 그 스크린샷에 맞춰 손으로 맞춘 값이라
@@ -217,6 +239,26 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
           poster: "/guide/editor/edit-bubble-mobile-poster.webp",
           aspect: "9 / 16",
         },
+        details: [
+          {
+            title: "말풍선을 더 다듬고 싶다면",
+            body:
+              "말풍선은 글자 길이에 따라 늘어나야 해서, 이미지 어디를 늘릴지 알려줘야 해요. " +
+              "슬롯을 고르면 나오는 ‘나만의 말풍선 만들기’에서 늘어나는 영역(stretch)과 글자가 들어갈 영역(content)을 조절할 수 있어요.",
+          },
+          {
+            title: "모서리가 이상하게 늘어나요",
+            body:
+              "늘어나는 영역에 모서리가 들어가 있어서예요. 모서리는 그대로 두고 가운데의 " +
+              "반복해도 티가 안 나는 부분만 늘어나게 잡으면 돼요.",
+          },
+          {
+            title: "글자가 말풍선 밖으로 나와요",
+            body:
+              "글자 영역이 말풍선보다 넓게 잡혀 있어요. 말풍선 안쪽 여백을 남기고 좁히면 " +
+              "긴 문장에서도 글자가 안쪽에 머물러요.",
+          },
+        ],
       },
       {
         title: "테마 파일 만들기",
@@ -256,21 +298,8 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
     ],
     sections: [
       {
-        id: "android-quick-start",
-        eyebrow: "01 · QUICK START",
-        title: "처음부터 적용까지",
-        summary: "템플릿 선택부터 휴대폰 적용까지 필요한 흐름만 먼저 확인하세요.",
-        steps: [
-          { title: "템플릿과 Android 선택", body: "Template에서 시작할 디자인을 고르고 Android 편집기로 이동합니다." },
-          { title: "화면별 요소 편집", body: "메인, 하단 탭, 채팅방, 잠금화면 순서로 이미지와 색상을 교체합니다." },
-          { title: "미리보기와 말풍선 확인", body: "실제 화면 조합을 확인하고 말풍선의 늘어나는 영역과 글자 영역을 조정합니다." },
-          { title: "APK 내보내기", body: "내보내기에서 앱 이름과 버전을 확인한 뒤 APK를 생성합니다.", note: "내보낼 때마다 고유 applicationId가 자동 발급됩니다." },
-          { title: "설치 후 테마 적용", body: "APK를 설치하고 생성된 테마 앱을 열어 ‘테마 적용하기’를 누릅니다." },
-        ],
-      },
-      {
         id: "android-edit",
-        eyebrow: "02 · EDITING",
+        eyebrow: "01 · EDITING",
         title: "요소별 편집 가이드",
         summary: "각 이미지는 쓰이는 화면과 상태가 다릅니다. 먼저 큰 배경을 정하고 작은 요소를 맞추면 전체 톤이 안정적입니다.",
         steps: [
@@ -284,7 +313,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       },
       {
         id: "android-apply",
-        eyebrow: "03 · APPLY",
+        eyebrow: "02 · APPLY",
         title: "APK 설치와 적용",
         summary: "APK는 설치 파일이고 APK ZIP은 공유·보관용 압축 파일입니다.",
         steps: [
@@ -297,7 +326,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       },
       {
         id: "android-spec",
-        eyebrow: "04 · SPECIFICATION",
+        eyebrow: "03 · SPECIFICATION",
         title: "상세 규격",
         summary: "Maker가 생성하는 구조를 이해하면 원본 이미지를 준비하거나 결과물을 디버깅하기 쉽습니다.",
         specifications: [
@@ -311,7 +340,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       },
       {
         id: "android-troubleshooting",
-        eyebrow: "05 · CHECKLIST",
+        eyebrow: "04 · CHECKLIST",
         title: "문제가 생겼을 때",
         summary: "내보내기를 다시 하기 전에 아래 항목을 먼저 확인하세요.",
         steps: [
@@ -331,21 +360,8 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
     output: ".ktheme · Theme ZIP",
     sections: [
       {
-        id: "ios-quick-start",
-        eyebrow: "01 · QUICK START",
-        title: "처음부터 적용까지",
-        summary: "iOS는 CSS와 배율별 이미지가 함께 구성됩니다. Maker가 구조를 자동으로 생성합니다.",
-        steps: [
-          { title: "템플릿과 iOS 선택", body: "Template에서 디자인을 고르고 iOS 편집기로 이동합니다." },
-          { title: "화면별 요소 편집", body: "메인, 탭, 채팅방의 이미지와 색상을 순서대로 조정합니다." },
-          { title: "말풍선 영역 확인", body: "말풍선의 늘어나는 기준점과 텍스트 여백을 미리보기에서 확인합니다." },
-          { title: ".ktheme 내보내기", body: "테마 이름과 버전을 확인하고 .ktheme 파일을 생성합니다.", note: "고유 identifier는 내보낼 때 서버에서 자동 발급됩니다." },
-          { title: "iPhone에서 카카오톡으로 열기", body: "다운로드한 파일을 iPhone으로 전달한 뒤 공유 메뉴에서 카카오톡으로 엽니다." },
-        ],
-      },
-      {
         id: "ios-edit",
-        eyebrow: "02 · EDITING",
+        eyebrow: "01 · EDITING",
         title: "요소별 편집 가이드",
         summary: "iOS는 같은 이미지의 @2x와 @3x 변형을 사용합니다. Maker에서는 가능한 한 큰 원본 하나를 준비하면 됩니다.",
         steps: [
@@ -359,7 +375,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       },
       {
         id: "ios-apply",
-        eyebrow: "03 · APPLY",
+        eyebrow: "02 · APPLY",
         title: ".ktheme 전달과 적용",
         summary: "iOS와 카카오톡 버전에 따라 공유 화면의 명칭과 배치가 달라질 수 있습니다.",
         steps: [
@@ -372,7 +388,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       },
       {
         id: "ios-spec",
-        eyebrow: "04 · SPECIFICATION",
+        eyebrow: "03 · SPECIFICATION",
         title: "상세 규격",
         summary: "sample theme의 패키지 구조와 CSS 참조 규칙입니다.",
         specifications: [
@@ -386,7 +402,7 @@ export const guideContent: Record<GuidePlatform, PlatformGuide> = {
       },
       {
         id: "ios-troubleshooting",
-        eyebrow: "05 · CHECKLIST",
+        eyebrow: "04 · CHECKLIST",
         title: "문제가 생겼을 때",
         summary: "파일을 다시 전달하기 전에 패키지와 이미지 형식을 확인하세요.",
         steps: [
@@ -404,6 +420,3 @@ export function isGuidePlatform(value: string | undefined): value is GuidePlatfo
   return value === "android" || value === "ios";
 }
 
-export function isGuideMode(value: string | undefined): value is GuideMode {
-  return value === "easy" || value === "detailed";
-}

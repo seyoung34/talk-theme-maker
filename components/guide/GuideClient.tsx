@@ -3,40 +3,41 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
-import { AlertTriangle, Apple, Check, CircleAlert, FileText, Images, Smartphone } from "lucide-react";
-import { guideContent, type EasyStep, type GuideMode, type GuidePlatform, type GuideSection } from "@/lib/guide/content";
+import { AlertTriangle, Apple, Check, ChevronRight, CircleAlert, Images, Smartphone } from "lucide-react";
+import { guideContent, type EasyStep, type GuidePlatform, type GuideSection } from "@/lib/guide/content";
 import { EasyStepMediaFrame } from "@/components/guide/EasyStepMedia";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 
 type GuideClientProps = {
   initialPlatform: GuidePlatform;
-  initialMode?: GuideMode;
 };
 
-export default function GuideClient({ initialPlatform, initialMode = "easy" }: GuideClientProps) {
+/**
+ * 가이드는 **한 페이지다.**
+ *
+ * 예전에는 "쉬운 / 자세한" 두 모드를 먼저 고르게 했다. 처음 오는 사람에게는 그 자체가 부담이다 —
+ * 무엇이 다른지 모르는 채로 골라야 하고, 잘못 고르면 자기가 찾던 것이 없는 화면에 도착한다.
+ * 게다가 쉬운 쪽 8스텝과 자세한 쪽 `01 처음부터 적용까지`는 같은 흐름을 두 번 쓴 것이었다.
+ *
+ * 이제 위에서 아래로 깊어진다. 8스텝 영상이 먼저 오고, 규격과 문제 해결은 그 아래에 있다.
+ * 처음 오는 사람은 위만 보면 되고, 다시 오는 사람은 찾아 내려온다.
+ *
+ * **플랫폼 구분은 남긴다.** 모드와 달리 Android와 iOS는 결과물이 다르다(APK 대 .ktheme,
+ * 설치 경로, 규격). 합치면 모든 문단에 "Android는… iOS는…"이 붙는다.
+ */
+export default function GuideClient({ initialPlatform }: GuideClientProps) {
   const router = useRouter();
   const [platform, setPlatform] = useState<GuidePlatform>(initialPlatform);
-  const [mode, setMode] = useState<GuideMode>(initialMode);
 
   useEffect(() => setPlatform(initialPlatform), [initialPlatform]);
-  useEffect(() => setMode(initialMode), [initialMode]);
   useEffect(() => {
     trackAnalyticsEvent("install_guide_viewed", { platform });
   }, [platform]);
 
-  const pushRoute = (nextPlatform: GuidePlatform, nextMode: GuideMode) => {
-    router.push(`/guide?platform=${nextPlatform}&mode=${nextMode}`, { scroll: false });
-  };
-
   const selectPlatform = (value: string) => {
     if (value !== "android" && value !== "ios") return;
     setPlatform(value);
-    pushRoute(value, mode);
-  };
-
-  const selectMode = (value: GuideMode) => {
-    setMode(value);
-    pushRoute(platform, value);
+    router.push(`/guide?platform=${value}`, { scroll: false });
   };
 
   return (
@@ -49,10 +50,6 @@ export default function GuideClient({ initialPlatform, initialMode = "easy" }: G
           <h1 className="mt-4 max-w-2xl text-[32px] font-black leading-[1.16] tracking-[-0.02em] text-[var(--color-on-background)] sm:text-[44px]">만드는 방법부터<br className="hidden sm:block" /> 적용하는 순간까지</h1>
         </div>
         <div className="grid gap-2.5">
-          <div className="grid w-full grid-cols-2 rounded-full border border-[#dbe8fb] bg-[#eef5ff] p-1" role="tablist" aria-label="가이드 방식 선택">
-            <ModeTab active={mode === "easy"} onClick={() => selectMode("easy")} label="쉬운 가이드" icon={<Images size={16} aria-hidden="true" />} />
-            <ModeTab active={mode === "detailed"} onClick={() => selectMode("detailed")} label="자세한 가이드" icon={<FileText size={16} aria-hidden="true" />} />
-          </div>
           <Tabs.List className="grid w-full grid-cols-2 rounded-full border border-[#dbe8fb] bg-[#eef5ff] p-1" aria-label="가이드 플랫폼 선택">
             <PlatformTab value="android" label="Android" icon={<Smartphone size={17} aria-hidden="true" />} />
             <PlatformTab value="ios" label="iOS" icon={<Apple size={17} aria-hidden="true" />} />
@@ -61,26 +58,14 @@ export default function GuideClient({ initialPlatform, initialMode = "easy" }: G
       </header>
 
       <Tabs.Content value="android" className="outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bbf]">
-        {mode === "easy" ? <EasyGuide platform="android" onSeeDetailed={() => selectMode("detailed")} /> : <PlatformManual platform="android" />}
+        <EasyGuide platform="android" />
+        <PlatformManual platform="android" />
       </Tabs.Content>
       <Tabs.Content value="ios" className="outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bbf]">
-        {mode === "easy" ? <EasyGuide platform="ios" onSeeDetailed={() => selectMode("detailed")} /> : <PlatformManual platform="ios" />}
+        <EasyGuide platform="ios" />
+        <PlatformManual platform="ios" />
       </Tabs.Content>
     </Tabs.Root>
-  );
-}
-
-function ModeTab({ active, onClick, label, icon }: { active: boolean; onClick: () => void; label: string; icon: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={`flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-black transition focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2f6bbf] ${active ? "bg-[#fee500] text-[#191600] shadow-[0_10px_22px_rgba(254,229,0,0.35)]" : "text-[#3d7bd6] hover:bg-white"}`}
-    >
-      {icon}{label}
-    </button>
   );
 }
 
@@ -95,7 +80,7 @@ function PlatformTab({ value, label, icon }: { value: GuidePlatform; label: stri
   );
 }
 
-function EasyGuide({ platform, onSeeDetailed }: { platform: GuidePlatform; onSeeDetailed: () => void }) {
+function EasyGuide({ platform }: { platform: GuidePlatform }) {
   const guide = guideContent[platform];
   const steps = guide.easySteps;
 
@@ -104,11 +89,9 @@ function EasyGuide({ platform, onSeeDetailed }: { platform: GuidePlatform; onSee
       <div className="pt-10">
         <div className="mx-auto grid max-w-lg place-items-center gap-3 rounded-[28px] border border-[#dbe8fb] bg-white/70 px-6 py-14 text-center">
           <span className="grid size-12 place-items-center rounded-2xl bg-[#eef5ff] text-[#2f6bbf]"><Images size={22} aria-hidden="true" /></span>
-          <p className="text-lg font-black text-[var(--color-on-background)]">쉬운 가이드를 준비하고 있어요</p>
-          <p className="max-w-sm text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{guide.label} 이미지 가이드는 곧 추가돼요. 지금은 아래 버튼으로 자세한 문서를 확인할 수 있어요.</p>
-          <button type="button" onClick={onSeeDetailed} className="mt-1 inline-flex items-center gap-2 rounded-full bg-[#2f6bbf] px-5 py-2.5 text-sm font-black text-white transition hover:bg-[#2a60ac]">
-            <FileText size={16} aria-hidden="true" />자세한 가이드 보기
-          </button>
+          <p className="text-lg font-black text-[var(--color-on-background)]">{guide.label} 화면 가이드를 준비하고 있어요</p>
+          {/* 아래로 이어지는 상세 문서가 이미 같은 페이지에 있다. 전환 버튼을 둘 자리가 아니다. */}
+          <p className="max-w-sm text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">단계별 화면은 곧 추가돼요. 아래 문서에 만드는 방법과 규격이 정리돼 있어요.</p>
         </div>
       </div>
     );
@@ -126,13 +109,6 @@ function EasyGuide({ platform, onSeeDetailed }: { platform: GuidePlatform; onSee
           <EasyStepCard key={step.title} step={step} index={index} platformLabel={guide.label} />
         ))}
       </ol>
-
-      <div className="mt-8 flex flex-col items-center gap-2 rounded-[24px] border border-[#dbe8fb] bg-white/70 px-6 py-6 text-center">
-        <p className="text-sm font-black text-[var(--color-on-background)]">규격·경로까지 더 자세히 알고 싶다면?</p>
-        <button type="button" onClick={onSeeDetailed} className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white px-5 py-2.5 text-sm font-black text-[#2f6bbf] transition hover:bg-[#eef5ff]">
-          <FileText size={16} aria-hidden="true" />자세한 가이드로 전환
-        </button>
-      </div>
     </div>
   );
 }
@@ -192,6 +168,29 @@ function EasyStepCard({ step, index, platformLabel }: { step: EasyStep; index: n
             </li>
           ))}
         </ol>
+      ) : null}
+
+      {/*
+        심화 내용은 접어서 그 스텝 안에 둔다.
+
+        펼쳐 두면 8스텝 전체가 무거워져 "그대로 따라 하면 된다"는 인상이 깨지고, 아래 상세 문서로만
+        보내면 문맥에서 멀어져 못 찾는다. 막힌 사람은 지금 보고 있는 스텝에서 찾기 때문이다.
+
+        `<details>`를 쓰는 이유는 상태를 직접 들지 않기 위해서다. 브라우저가 여닫기를 맡고,
+        스크린리더도 접힌 채로 제목을 읽어 준다.
+      */}
+      {step.details?.length ? (
+        <div className="grid gap-2 px-5 pb-5 sm:px-7 sm:pb-7">
+          {step.details.map((detail) => (
+            <details key={detail.title} className="group max-w-3xl rounded-2xl border border-[#e3ecf7] bg-[#f7fbff] px-4 py-3">
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-black text-[#2f6bbf] marker:content-['']">
+                <ChevronRight size={15} aria-hidden="true" className="shrink-0 transition group-open:rotate-90" />
+                {detail.title}
+              </summary>
+              <p className="mt-2 pl-[23px] text-sm font-medium leading-6 text-[var(--color-on-surface-variant)]">{detail.body}</p>
+            </details>
+          ))}
+        </div>
       ) : null}
     </li>
   );
