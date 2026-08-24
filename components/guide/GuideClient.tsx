@@ -98,12 +98,7 @@ function EasyGuide({ platform }: { platform: GuidePlatform }) {
   }
 
   return (
-    <div className="pt-7">
-      <div className="mb-8 text-center">
-        <p className="text-[22px] font-black tracking-[-0.02em] text-[var(--color-on-background)] sm:text-[26px]">사진 고르고 → 꾸미고 → 내 폰에 적용</p>
-        <p className="mt-2 text-sm font-semibold text-[var(--color-on-surface-variant)]">화면을 그대로 따라 하면 돼요.</p>
-      </div>
-
+    <div className="pt-8">
       <ol className="grid gap-5">
         {steps.map((step, index) => (
           <EasyStepCard key={step.title} step={step} index={index} platformLabel={guide.label} />
