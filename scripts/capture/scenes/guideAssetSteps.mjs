@@ -88,12 +88,25 @@ export const guidePickIcons = {
     await click(page.getByRole("button", { name: "탭 아이콘", exact: true }).first());
     await hold(0.7);
 
-    // 같은 탭의 기본/선택 두 슬롯을 차례로 짚는다. 짝이라는 것이 이 스텝의 내용이고,
-    // 선택 슬롯 카드에 "기본 이미지와 연결됨"이 이미 적혀 있어 화면만으로도 관계가 드러난다.
-    for (const slot of [/친구 탭 아이콘/, /친구 탭 선택 아이콘/]) {
+    /*
+     * 선택 슬롯을 **먼저** 짚고 기본 슬롯으로 돌아온다. 순서가 뒤집힌 이유가 있다.
+     *
+     * 마지막에 고른 슬롯이 곧 갈아 끼울 슬롯인데, **선택(focused) 아이콘은 그 탭이 눌려 있을
+     * 때만 그려진다.** 이 씬의 미리보기는 채팅 화면이라 친구 탭은 눌려 있지 않고, 그래서 선택
+     * 아이콘을 바꾸면 패널만 바뀌고 아래 탭바는 그대로다. 실제로 그렇게 찍혀서 "아이콘을 바꿀
+     * 수 있다"가 아니라 "슬롯이 여러 개다"까지만 전달됐다.
+     *
+     * 기본 아이콘은 눌려 있지 않은 탭에 그려지므로 교체가 바로 탭바에 나타난다.
+     * 둘을 다 짚는 것은 그대로다 — 짝이라는 사실이 이 스텝의 내용이기 때문이다.
+     */
+    for (const slot of [/친구 탭 선택 아이콘/, /친구 탭 아이콘/]) {
       await click(page.getByRole("button", { name: slot }).first());
-      await hold(1.2);
+      await hold(1.0);
     }
+
+    // 슬롯만 옮겨 다니면 미리보기가 그대로다. 실제로 갈아 끼워 탭바에 나타나는 것까지 담는다.
+    await pickFirstRecommendedAsset(ctx);
+    await hold(1.8);
   },
 };
 
@@ -121,10 +134,20 @@ export const guideEditBubble = {
     await click(page.getByRole("button", { name: "말풍선", exact: true }).first());
     await hold(0.7);
 
-    // 네 종류를 차례로 짚어 "이만큼 있다"를 보여준다. 교체 자체보다 종류의 존재가 요점이다.
-    for (const slot of [/내 말풍선 1/, /내 말풍선 2/, /상대 말풍선 1/, /상대 말풍선 2/]) {
+    /*
+     * 넷을 다 짚지 않고 둘만 짚는다. 12초를 넘겨 스텝 하나에 6~10초를 두는 기준에서 혼자 길었다.
+     *
+     * 네 종류가 있다는 사실은 **그룹을 연 순간 목록에 이미 다 나온다.** 옆의 순서 목록도 넷을
+     * 그대로 적는다. 그래서 짚어 가며 세지 않아도 개수는 전달된다.
+     *
+     * 남길 둘로 내 말풍선 1·2를 고른다. 내 것과 상대 것이 다르다는 건 미리보기만 봐도 알지만,
+     * **첫 말풍선과 이어지는 말풍선이 따로라는 것은 눌러 봐야 안다.** 모르고 하나만 바꾸면
+     * 연속으로 보낸 말풍선이 예전 모양으로 남는, 이 스텝이 막으려는 바로 그 실수가 난다.
+     * 모바일 판도 같은 이유로 둘만 짚는다.
+     */
+    for (const slot of [/내 말풍선 1/, /내 말풍선 2/]) {
       await click(page.getByRole("button", { name: slot }).first());
-      await hold(0.9);
+      await hold(1.1);
     }
   },
 };
@@ -166,11 +189,17 @@ export const guidePickIconsMobile = {
 
     await click(page.getByRole("button", { name: "탭 아이콘", exact: true }).first());
     await hold(0.7);
-    for (const slot of [/친구 탭 아이콘/, /친구 탭 선택 아이콘/]) {
+    // 데스크톱과 같은 순서다. 마지막에 고르는 기본 아이콘이 탭바에 바로 나타난다.
+    for (const slot of [/친구 탭 선택 아이콘/, /친구 탭 아이콘/]) {
       await expandMobileSlotList(ctx);
       await click(page.getByRole("button", { name: slot }).first());
-      await hold(1.2);
+      await hold(1.0);
     }
+
+    // 데스크톱과 같은 이유로 하나 갈아 끼운다. 슬롯만 옮겨 다니면 탭바가 그대로라
+    // "바꿀 수 있다"가 전달되지 않는다.
+    await pickFirstCandidateMobile(ctx);
+    await hold(1.6);
   },
 };
 
@@ -212,16 +241,18 @@ export const guideEditBubbleMobile = {
 };
 
 /**
- * 배경 스텝이 우선으로 고를 에셋.
+ * 에셋을 고르는 스텝들이 우선으로 집을 후보.
  *
- * 이 스텝은 "고르면 미리보기가 바로 바뀐다"를 보여주는 것이라 **바뀌는 것이 눈에 보여야**
+ * 이런 스텝은 "고르면 미리보기가 바로 바뀐다"를 보여주는 것이라 **바뀌는 것이 눈에 보여야**
  * 성립한다. 목록 첫 후보를 집었더니 파스텔 톤이라 기본 배경과 겹쳐, 첫 프레임과 끝 프레임의
  * 차이가 1%였다 — 끝까지 만들어 놓고 재생해 봐야 아는 종류의 실패다.
  *
  * 어느 에셋을 쓰느냐는 기술이 아니라 **캐스팅 문제**다. 그래서 목록 순서에 맡기지 않고 여기서
  * 이름으로 고른다. 없으면 첫 후보로 돌아가되, 그때는 대비를 보장할 수 없다.
+ *
+ * 배경뿐 아니라 탭 아이콘에도 같은 이름들이 있어 그대로 쓴다 — 대비가 필요한 이유가 같다.
  */
-const preferredBackgroundTitles = ["메론소다", "딸기우유"];
+const preferredAssetTitles = ["메론소다", "딸기우유"];
 
 /** 우선 후보가 보이면 그것을 누르고 true를 돌려준다. */
 async function clickPreferredCandidate({ page, click, hold }, titles) {
@@ -249,7 +280,7 @@ async function pickFirstRecommendedAsset(ctx) {
   const { page, click, hold } = ctx;
   await page.getByRole("button", { name: "추천 에셋" }).first().waitFor({ state: "visible", timeout: 20_000 });
 
-  if (await clickPreferredCandidate(ctx, preferredBackgroundTitles)) return;
+  if (await clickPreferredCandidate(ctx, preferredAssetTitles)) return;
 
   const fixedLabels = ["추천 에셋", "이미지 사용 안 함", "이미지 편집", "전체 보기"];
   const candidate = page
@@ -315,7 +346,7 @@ async function pickFirstCandidateMobile({ page, click, hold }) {
     );
   }
 
-  const preferred = preferredBackgroundTitles.find((title) => titles.includes(title));
+  const preferred = preferredAssetTitles.find((title) => titles.includes(title));
   await hold(0.5);
   await click(page.getByRole("button", { name: preferred ?? titles[0], exact: true }).first());
 }
