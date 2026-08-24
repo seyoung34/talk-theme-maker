@@ -148,7 +148,7 @@ export async function posterWebp(source, target, { atSec = 1 } = {}) {
  * 이어 붙이면 움직임이 미세하게 밀린다. concat 디먹서에 **프레임마다 실제 표시 시간**을 적어
  * 넘기고, `fps` 필터가 목표 레이트로 다시 샘플링하게 한다.
  */
-export async function framesToVideo(frames, target, { fps, slowdown, framesDir }) {
+export async function framesToVideo(frames, target, { fps, slowdown, framesDir, repeatLast = true }) {
   const { ffmpeg } = await resolveFfmpeg();
   if (frames.length < 2) throw new Error(`프레임이 ${frames.length}장뿐이라 영상을 만들 수 없습니다.`);
 
@@ -163,8 +163,15 @@ export async function framesToVideo(frames, target, { fps, slowdown, framesDir }
     lines.push(`file '${path.basename(frames[i].file)}'`);
     lines.push(`duration ${seconds.toFixed(6)}`);
   }
-  // concat 디먹서는 마지막 항목의 duration을 무시한다. 파일을 한 번 더 적어야 그 길이가 살아난다.
-  lines.push(`file '${path.basename(frames[frames.length - 1].file)}'`);
+  /*
+   * concat 디먹서는 마지막 항목의 duration을 무시한다. 파일을 한 번 더 적어야 그 길이가 살아난다.
+   *
+   * **다만 그 한 번이 공짜가 아니다.** 되풀이된 항목도 화면에 머무는 시간을 갖는다. 촬영본은
+   * 프레임이 수백 장이고 한 장이 30분의 1초라 티가 나지 않지만, 스크린샷을 몇 초씩 세워 두는
+   * 클립에서는 마지막 장면만 갑절로 길어진다 — 9.8초로 의도한 클립이 12.4초가 됐다.
+   * 그런 호출부는 `repeatLast: false`로 끄고 마지막 길이를 스스로 준비한다.
+   */
+  if (repeatLast) lines.push(`file '${path.basename(frames[frames.length - 1].file)}'`);
 
   const listPath = path.join(framesDir, "frames.txt");
   await writeFile(listPath, `${lines.join("\n")}\n`, "utf8");
