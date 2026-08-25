@@ -1,4 +1,4 @@
-import { resetEditorSession, settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
+import { enterEditorViaGallery, resetEditorSession, settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
 
 /**
  * `/guide` 쉬운 모드의 스텝에 꽂을 짧은 클립들.
@@ -13,15 +13,19 @@ import { resetEditorSession, settle, waitForEditorReady, waitForMobileEditorRead
  */
 
 /** 각 씬이 같은 자리에서 시작하도록 편집기를 연다. 대기는 전부 카메라 밖에서 끝낸다. */
-async function openEditor({ page, baseURL, dismissNotices, offCamera }) {
+/** iOS는 갤러리에서 "iOS로 시작"을 거쳐야 한다. 편집기에 플랫폼 전환 UI가 없다. */
+async function openEditorFor({ page, baseURL, platform, dismissNotices, offCamera }, waitReady) {
   await offCamera(async () => {
     await resetEditorSession(page, baseURL);
-    await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
-    await waitForEditorReady(page);
+    if (platform === "ios") await enterEditorViaGallery(page, baseURL, "ios");
+    else await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
+    await waitReady(page);
     await dismissNotices();
     await settle(page);
   });
 }
+
+const openEditor = (ctx) => openEditorFor(ctx, waitForEditorReady);
 
 /**
  * 스텝: 바꿀 화면 고르기.
@@ -56,6 +60,11 @@ export const guideChooseScreen = {
  * 팔레트에서 색을 고르면 미리보기 전체가 한 번에 다시 칠해진다. 가이드에서 보여줄 값이 가장 큰
  * 장면이고, 손으로 찍으면 색 선택기를 여닫는 과정이 지저분하게 남는 구간이기도 하다.
  */
+/*
+ * 슬롯 라벨은 이제 **양쪽 플랫폼이 같다.** 예전에는 Android가 `친구·채팅 배경 색상`,
+ * iOS가 `메인 배경색`이라 같은 씬이 iOS에서 30초를 기다리다 죽었다. 매니페스트에서
+ * 같은 role은 같은 라벨을 쓰도록 맞췄으므로 여기 선택자도 한 벌이면 된다.
+ */
 export const guideChangeColor = {
   id: "change-color",
   title: "색 바꾸기",
@@ -71,7 +80,7 @@ export const guideChangeColor = {
     // 배경 그룹 안의 색상 슬롯. 카드를 눌러야 가운데 패널에 팔레트가 열린다.
     await click(page.getByRole("button", { name: "배경", exact: true }).first());
     await hold(0.5);
-    await click(page.getByRole("button", { name: /배경 색상/ }).first());
+    await click(page.getByRole("button", { name: /메인 배경색/ }).first());
     await hold(0.7);
 
     // 팔레트 스와치는 색상 코드가 그대로 접근성 이름이다. 직접 고르는 편이 색상 코드를
@@ -92,15 +101,7 @@ export const guideChangeColor = {
  * 화살표 커서는 그리지 않는다 — 손가락으로 누르는 화면이다. `ctx.click`이 모바일 프로필에서는
  * 파문만 남긴다.
  */
-async function openMobileEditor({ page, baseURL, dismissNotices, offCamera }) {
-  await offCamera(async () => {
-    await resetEditorSession(page, baseURL);
-    await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
-    await waitForMobileEditorReady(page);
-    await dismissNotices();
-    await settle(page);
-  });
-}
+const openMobileEditor = (ctx) => openEditorFor(ctx, waitForMobileEditorReady);
 
 export const guideMobileChooseScreen = {
   id: "choose-screen",

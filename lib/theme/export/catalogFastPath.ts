@@ -8,8 +8,9 @@
  *   - Android `.9.png`의 marker 테두리가 iOS 이미지에 남는다
  *   - 말풍선 cap-inset이 실제 픽셀과 어긋난다
  *
- * Builder-side 변환은 Phase 5다. 그때까지 변환이 필요한 항목은 **catalog를 쓰지 않고** 기존
- * Blob/`field` 업로드로 떨어져야 한다.
+ * Builder-side 변환은 검증된 descriptor가 있는 경우에만 허용한다. descriptor가 없거나
+ * 해당 변환을 지원하지 않는 항목은 **catalog를 쓰지 않고** 기존 Blob/`field` 업로드로
+ * 떨어져야 한다.
  *
  * 이 모듈은 앱(Worker resolve)과 Builder가 함께 쓴다. Builder는 `bundle.json`을 파일로 받으므로
  * Worker가 제대로 걸렀다고 가정하지 않고 같은 조건을 다시 본다.
@@ -75,8 +76,9 @@ export function isIosCatalogFastPathEligible(input: {
 /**
  * Android 출력에 catalog 원본을 그대로 쓸 수 있는지.
  *
- * Android는 배율 변환이 없다 — 밀도별 폴더에 같은 바이트가 들어간다. 대신 `.9.png`는 marker를
- * 생성해야 하므로 제외한다.
+ * 일반 Android PNG는 density 폴더에 같은 바이트를 둘 수 있다. 다만 export mapping이
+ * raster target을 요구하는 슬롯은 `android-image` descriptor를 통해 Builder가 변환해야 하며,
+ * `.9.png`는 marker 생성이 필요하므로 fast path에서 제외한다.
  */
 export function isAndroidCatalogFastPathEligible(input: {
   path: string;

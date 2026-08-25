@@ -20,6 +20,7 @@ export const templateGallery = {
 
   async run(ctx) {
     const { page, baseURL, hold, click, dismissNotices, offCamera } = ctx;
+    const startLabel = this.startLabel ?? "Android로 시작";
     await offCamera(async () => {
       await page.goto(`${baseURL}/template`, { waitUntil: "load" });
       await settle(page);
@@ -45,7 +46,7 @@ export const templateGallery = {
     await click(cards.first());
 
     // 상세 모달. 여기서 한 번 더 눌러야 편집기로 간다.
-    const start = page.getByRole("button", { name: "Android로 시작" });
+    const start = page.getByRole("button", { name: startLabel });
     await start.waitFor({ state: "visible", timeout: 15_000 });
     await hold(0.6);
     await click(start);
@@ -70,6 +71,7 @@ export const templateGalleryMobile = {
   ...templateGallery,
   async run(ctx) {
     const { page, baseURL, hold, click, dismissNotices, offCamera } = ctx;
+    const startLabel = this.startLabel ?? "Android로 시작";
     await offCamera(async () => {
       await page.goto(`${baseURL}/template`, { waitUntil: "load" });
       await settle(page);
@@ -83,7 +85,7 @@ export const templateGalleryMobile = {
     await hold(0.5);
     await click(cards.first());
 
-    const start = page.getByRole("button", { name: "Android로 시작" });
+    const start = page.getByRole("button", { name: startLabel });
     await start.waitFor({ state: "visible", timeout: 15_000 });
     await hold(0.6);
     await click(start);
@@ -96,3 +98,12 @@ export const templateGalleryMobile = {
     await hold(0.8);
   },
 };
+
+/**
+ * 갤러리 씬의 iOS 판. 상세 모달에서 누르는 버튼만 다르다.
+ *
+ * 시스템 템플릿에 iOS variant가 없으면 이 버튼이 아예 나오지 않는다. 그때는 `enterEditorViaGallery`와
+ * 같은 이유로 던지는 것이 맞다 — Android 버튼을 대신 누르면 iOS라고 이름 붙은 Android 클립이 나온다.
+ */
+export const templateGalleryIos = { ...templateGallery, startLabel: "iOS로 시작" };
+export const templateGalleryIosMobile = { ...templateGalleryMobile, startLabel: "iOS로 시작" };

@@ -93,6 +93,74 @@ export async function resetEditorSession(page, baseURL) {
       try { window.localStorage.removeItem(key); } catch { /* 저장소를 막아 둔 컨텍스트 */ }
     }
   }, editorSessionKeys);
+
+  /*
+   * **자동 저장 초안은 IndexedDB에 있다.** localStorage만 지우면 남는다.
+   *
+   * 남으면 갤러리에 "내 작업" 카드가 앞에 끼어들고, 씬이 집는 `cards.first()`가 그 카드가 된다.
+   * 사용자 작업 카드의 모달에는 "iOS로 시작"이 아니라 "iOS 편집 계속하기"나 "iOS 사용 불가"가
+   * 나오므로, 편집을 한 씬 뒤부터 iOS 진입이 통째로 실패했다. 앞 세 씬은 통과하고 네 번째부터
+   * 죽는 모양이라 원인이 갤러리에 있는 것처럼 보였다.
+   */
+  await page.evaluate(async ({ dbName, stores }) => {
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      const open = indexedDB.open(dbName);
+      open.onerror = finish;
+      open.onsuccess = () => {
+        const db = open.result;
+        const present = stores.filter((name) => db.objectStoreNames.contains(name));
+        if (!present.length) { db.close(); finish(); return; }
+        const tx = db.transaction(present, "readwrite");
+        for (const name of present) tx.objectStore(name).clear();
+        tx.oncomplete = () => { db.close(); finish(); };
+        tx.onerror = () => { db.close(); finish(); };
+      };
+      // 열지 못해도 촬영을 막지 않는다. 초안이 없으면 애초에 지울 것도 없다.
+      setTimeout(finish, 3000);
+    });
+  }, { dbName: "kakaotalk-theme-maker", stores: ["editor-autosave-drafts", "editor-recovery-drafts"] });
+}
+
+/**
+ * 지정한 플랫폼으로 편집기에 들어간다.
+ *
+ * **편집기에는 플랫폼 전환 UI가 없다.** 어느 플랫폼으로 편집하는지는 갤러리에서 "Android로 시작"
+ * 또는 "iOS로 시작" 중 무엇을 눌렀느냐로 정해지고, 그 값이 편집기 세션에 남는다. 그래서 iOS
+ * 화면을 찍으려면 `/edit`으로 바로 갈 수 없고 갤러리를 거쳐야 한다.
+ *
+ * **미리보기가 플랫폼마다 다르게 그려지기 때문에 필요하다.** 헤더 색이 Android는 별도 슬롯인데
+ * iOS는 메인 배경색을 그대로 쓰고, 섹션 제목 색도 다른 역할을 본다(`ThemeScreensPreview`).
+ * Android로 찍은 클립을 iOS 가이드에 쓰면 그 사람 화면에 없는 헤더를 가르치게 된다.
+ *
+ * 시스템 템플릿은 **그 플랫폼 variant가 있어야** 버튼이 나온다. 없으면 여기서 던진다 —
+ * 조용히 Android로 들어가면 iOS 클립이라고 이름 붙은 Android 화면이 만들어진다.
+ */
+export async function enterEditorViaGallery(page, baseURL, platform) {
+  await page.goto(`${baseURL}/template`, { waitUntil: "load" });
+  await settle(page);
+
+  const cards = page.locator("article");
+  if ((await cards.count()) === 0) {
+    throw new Error("템플릿 갤러리가 비어 있습니다. --env=local 로 실행하세요.");
+  }
+  await cards.first().click();
+
+  const label = platform === "ios" ? "iOS로 시작" : "Android로 시작";
+  const start = page.getByRole("button", { name: label });
+  const ready = await start.waitFor({ state: "visible", timeout: 15_000 }).then(() => true).catch(() => false);
+  if (!ready) {
+    throw new Error(
+      [
+        `상세 모달에 '${label}' 버튼이 없습니다.`,
+        "  시스템 템플릿에 그 플랫폼 variant가 없으면 버튼이 나오지 않습니다.",
+        "  `system_template_variants`를 확인하세요.",
+      ].join("\n"),
+    );
+  }
+  await start.click();
+  await page.waitForURL(/\/edit$/, { timeout: 60_000 });
 }
 
 /**

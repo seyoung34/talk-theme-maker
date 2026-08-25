@@ -118,6 +118,11 @@ export type ThemeAssetSlot = {
   constraints?: ThemeAssetConstraints;
   note: string;
   optionLevel?: "basic" | "advanced";
+  /**
+   * 일반 편집기에서 직접 입력할 source인지, 관리자 호환 영역에서만 볼 role인지.
+   * canonical role 자체는 유지하면서 authoring policy가 사용자/관리자 노출을 결정한다.
+   */
+  editorVisibility?: "source" | "advanced" | "hidden";
   autoColorRecipe?: ThemeAutoColorRecipe;
   visibleInSections?: ThemeSection[];
   visibleInGroups?: ThemeSlotGroup[];

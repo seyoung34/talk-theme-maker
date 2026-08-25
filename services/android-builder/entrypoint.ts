@@ -181,7 +181,7 @@ async function readInputFiles(bundle: LocalBundle, source: BuildSource, assetsRo
 
     if ("catalogObject" in item) {
       // Worker가 이미 걸렀지만 여기서 다시 본다. 신뢰 경계는 프로세스마다 다시 긋는다.
-      assertCatalogManifestSource({ platform: "android", path: normalizedPath, ref: item.catalogObject, transform: item.transform });
+      assertCatalogManifestSource({ platform: "android", path: normalizedPath, ref: item.catalogObject, resourceRole: item.resourceRole, transform: item.transform });
       // catalog reader가 자체 캐시를 갖는다. generation과 SHA-256 대조도 그 안에서 한다.
       const catalogBytes = await readCatalogObject(item.catalogObject);
       const bytes = item.transform

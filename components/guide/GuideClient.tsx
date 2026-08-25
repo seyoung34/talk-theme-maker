@@ -57,14 +57,22 @@ export default function GuideClient({ initialPlatform }: GuideClientProps) {
         </div>
       </header>
 
-      <Tabs.Content value="android" className="outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bbf]">
-        <EasyGuide platform="android" />
-        <PlatformManual platform="android" />
-      </Tabs.Content>
-      <Tabs.Content value="ios" className="outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bbf]">
-        <EasyGuide platform="ios" />
-        <PlatformManual platform="ios" />
-      </Tabs.Content>
+      {(["android", "ios"] as const).map((value) => (
+        <Tabs.Content key={value} value={value} className="outline-none focus-visible:ring-2 focus-visible:ring-[#2f6bbf]">
+          {/*
+            목차를 **넓은 화면에서만** 옆에 세운다. 1280px 미만에서는 스텝 카드가 이미 화면 폭을
+            다 쓰고 있어서, 옆에 210px를 떼어 주면 영상이 그만큼 작아진다. 좁을 때는 위쪽에
+            가로로 눕혀 자리를 차지하지 않게 한다.
+          */}
+          <div className="xl:grid xl:grid-cols-[210px_minmax(0,1fr)] xl:gap-10">
+            <GuideToc platform={value} />
+            <div className="min-w-0">
+              <EasyGuide platform={value} />
+              <PlatformManual platform={value} />
+            </div>
+          </div>
+        </Tabs.Content>
+      ))}
     </Tabs.Root>
   );
 }
@@ -77,6 +85,56 @@ function PlatformTab({ value, label, icon }: { value: GuidePlatform; label: stri
     >
       {icon}{label}
     </Tabs.Trigger>
+  );
+}
+
+/**
+ * 페이지 목차.
+ *
+ * 스텝이 아홉이고 그 아래 문서가 넷이라, 다시 찾아온 사람이 필요한 자리로 바로 갈 방법이 있어야
+ * 한다. 예전에는 문서 쪽에만 목차가 있었는데 그건 이미 문서까지 내려온 사람에게만 보였다.
+ *
+ * 스텝과 문서를 **한 목록에 담는다.** 둘을 나누면 "규격은 어디 있지"를 두 곳에서 찾게 된다.
+ */
+function GuideToc({ platform }: { platform: GuidePlatform }) {
+  const guide = guideContent[platform];
+  const steps = guide.easySteps ?? [];
+
+  return (
+    <nav className="mb-6 xl:mb-0" aria-label={`${guide.label} 가이드 목차`}>
+      {/*
+        넓은 화면에서는 스크롤을 따라오게 붙이고, 좁은 화면에서는 가로로 눕혀 옆으로 넘긴다.
+        좁은 화면에서 세로로 세우면 목차만 한 화면을 채워 정작 내용이 아래로 밀린다.
+      */}
+      <div className="xl:sticky xl:top-[88px]">
+        <p className="mb-2 text-[11px] font-black tracking-[0.14em] text-[#94a3b8]">ON THIS PAGE</p>
+        <ol className="flex gap-1.5 overflow-x-auto pb-2 [scrollbar-width:thin] xl:grid xl:gap-0.5 xl:overflow-visible xl:pb-0">
+          {steps.map((step, index) => (
+            <li key={step.title} className="shrink-0 xl:shrink">
+              <TocLink href={`#step-${index + 1}`} index={`${index + 1}`} label={step.title} />
+            </li>
+          ))}
+          {guide.sections.map((section) => (
+            <li key={section.id} className="shrink-0 xl:shrink">
+              {/* 문서 항목은 번호 대신 점을 둔다. 스텝처럼 순서대로 따라 하는 것이 아니기 때문이다. */}
+              <TocLink href={`#${section.id}`} index="·" label={section.title} />
+            </li>
+          ))}
+        </ol>
+      </div>
+    </nav>
+  );
+}
+
+function TocLink({ href, index, label }: { href: string; index: string; label: string }) {
+  return (
+    <a
+      href={href}
+      className="flex min-h-10 items-center gap-2 whitespace-nowrap rounded-full px-2.5 py-2 text-xs font-extrabold text-[var(--color-on-surface-variant)] transition hover:bg-[#eef5ff] hover:text-[#2f6bbf] focus-visible:outline-2 focus-visible:outline-[#2f6bbf] xl:whitespace-normal"
+    >
+      <span className="w-3 shrink-0 text-center font-mono text-[10px] text-[#9bc0f5]">{index}</span>
+      {label}
+    </a>
   );
 }
 
@@ -109,8 +167,9 @@ function EasyGuide({ platform }: { platform: GuidePlatform }) {
 }
 
 function EasyStepCard({ step, index, platformLabel }: { step: EasyStep; index: number; platformLabel: string }) {
+  // `scroll-mt`가 필요하다. 사이트 헤더가 상단에 붙어 있어 그냥 이동하면 제목이 그 아래로 숨는다.
   return (
-    <li className="overflow-hidden rounded-[28px] border border-[#e3ecf7] bg-white shadow-[0_18px_42px_rgba(47,107,191,0.06)]">
+    <li id={`step-${index + 1}`} className="scroll-mt-24 overflow-hidden rounded-[28px] border border-[#e3ecf7] bg-white shadow-[0_18px_42px_rgba(47,107,191,0.06)]">
       {/*
         가로 2단이 아니라 세로로 쌓는다. 편집기 화면을 절반 폭 칸에 넣으면 1920으로 찍은 자료가
         698px로 줄어(2.75배 버림) 슬롯 이름 같은 작은 글자를 읽을 수 없다. 세로로 쌓으면 같은
@@ -213,22 +272,8 @@ function PlatformManual({ platform }: { platform: GuidePlatform }) {
         </div>
       </div>
 
-      <div className="mt-7 grid gap-8 lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-12">
-        <aside className="min-w-0">
-          <nav className="sticky top-[88px]" aria-label={`${guide.label} 가이드 목차`}>
-            <p className="mb-2 text-[11px] font-black tracking-[0.14em] text-[#94a3b8]">ON THIS PAGE</p>
-            <ol className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:thin] lg:grid lg:overflow-visible lg:pb-0">
-              {guide.sections.map((section, index) => (
-                <li key={section.id} className="shrink-0 lg:shrink">
-                  <a href={`#${section.id}`} className="flex min-h-10 items-center gap-2 rounded-full px-2.5 py-2 text-xs font-extrabold text-[var(--color-on-surface-variant)] transition hover:bg-[#eef5ff] hover:text-[#2f6bbf] focus-visible:outline-2 focus-visible:outline-[#2f6bbf]">
-                    <span className="font-mono text-[10px] text-[#9bc0f5]">0{index + 1}</span>{section.title}
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </nav>
-        </aside>
-
+      {/* 안쪽 목차는 없앴다. 페이지 목차가 스텝과 문서를 함께 담으므로 여기 또 두면 같은 목록이 두 벌이 된다. */}
+      <div className="mt-7">
         <div className="min-w-0 divide-y divide-[#e3ecf7]">
           {guide.sections.map((section) => <GuideSectionBlock key={section.id} section={section} />)}
         </div>

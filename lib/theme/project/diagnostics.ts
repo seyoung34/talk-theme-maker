@@ -1,5 +1,6 @@
-import { canDisableImageSlot, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { canDisableImageSlot, getResolvedColor, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { getSlotExportMapping } from "@/lib/theme/project/export";
+import { resolveProjectImageSource } from "@/lib/theme/project/assetSource";
 import type { ThemeProjectAnalysis, ThemeProjectFile, ThemeProjectResource } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate } from "@/lib/theme/templates";
 import type { ThemeDiagnostic } from "@/lib/theme/types";
@@ -34,22 +35,9 @@ export function createThemeProjectAnalysis(
     }
 
     const imageDisabled = isImageSlotDisabled(slot, selections);
-    let sourceSlot = slot;
-    let selectedUpload = imageDisabled ? undefined : getSelectedUpload(slot, uploads, selections, slots);
-    let upload = selectedUpload?.file;
-    let sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template, slots);
-
-    // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯의 소스를 그대로 사용한다.
-    const inheritedSource = imageDisabled ? undefined : getInheritedSourceSlot(slot, uploads, selections, template.id, template, slots);
-    if (inheritedSource) {
-      sourceSlot = inheritedSource;
-      selectedUpload = getSelectedUpload(inheritedSource, uploads, selections, slots);
-      upload = selectedUpload?.file;
-      sourceUrl = getResolvedAssetUrl(inheritedSource, uploads, selections, template.id, template, slots);
-    }
+    const { sourceSlot, selectedUpload, upload, sourceUrl, previewUrl } = resolveProjectImageSource(slot, uploads, selections, template.id, template, slots);
 
     if (!imageDisabled && slot.path && slot.fileName) {
-      const previewUrl = upload ? undefined : selectedUpload?.catalog?.previewUrl ?? getSelectedCandidate(sourceSlot, selections, template.id, template)?.previewUrl;
       files.push({
         path: slot.path,
         name: slot.fileName,

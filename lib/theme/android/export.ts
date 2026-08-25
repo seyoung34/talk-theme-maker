@@ -1,9 +1,11 @@
 import { mapWithConcurrency } from "@/lib/shared/concurrency";
+import { getAndroidRasterPlan, isAndroidDerivedLauncherRole, renderAndroidImageBlob } from "@/lib/theme/android/assetCompiler";
 import { exportNinePatch, flipCanvasHorizontally, loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { bubbleGeometryToAndroidMarkers, flipAndroidMarkersHorizontally, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
 import { exportSlotConcurrency } from "@/lib/theme/exportRequest";
 import { storagePathToFile } from "@/lib/theme/remoteAssets";
 import { isCatalogExportProducerEnabled } from "@/lib/theme/assetCatalog/exportGate";
+import { shouldUseDerivedAssetSource } from "@/lib/theme/project/assetSource";
 import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, requireUploadFile, uploadEntryFileName, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 import type { CatalogTransform } from "@/lib/theme/export/catalogTransform";
@@ -55,18 +57,26 @@ export async function buildAndroidThemeExportFiles(options: AndroidExportOptions
   // 45개 남짓한 이미지 슬롯의 지연이 그대로 누적되므로 동시 실행 수만 제한해 병렬 처리한다.
   const imageSlots = androidSlots.filter((slot) => slot.kind !== "color" && Boolean(slot.path));
   const sources = await mapWithConcurrency(imageSlots, exportSlotConcurrency, (slot) =>
-    resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots, catalogExportUserId),
+    shouldCreateTransparentLauncherForeground(slot, uploads, selections, templateId, template, androidSlots)
+      ? Promise.resolve<AndroidExportSource>({ blob: new Blob() })
+      : resolveAndroidSlotSource(slot, uploads, selections, templateId, template, bubbleEditsBySlotId[slot.id], androidSlots, catalogExportUserId),
   );
 
-  imageSlots.forEach((slot, index) => {
+  for (const [index, slot] of imageSlots.entries()) {
     const source = sources[index];
-    if (!source) return;
+    if (!source) continue;
     for (const path of getAndroidSlotExportPaths(slot)) {
-      if ("serverAsset" in source) files.push({ path, serverAsset: source.serverAsset });
-      else if ("catalogAsset" in source) files.push({ path, catalogAsset: source.catalogAsset, resourceRole: slot.role, ...(source.transform ? { transform: source.transform } : {}) });
-      else files.push({ path, blob: source.blob });
+      const rendered = await materializeAndroidSource(
+        slot,
+        path,
+        source,
+        shouldCreateTransparentLauncherForeground(slot, uploads, selections, templateId, template, androidSlots),
+      );
+      if ("serverAsset" in rendered) files.push({ path, serverAsset: rendered.serverAsset });
+      else if ("catalogAsset" in rendered) files.push({ path, catalogAsset: rendered.catalogAsset, resourceRole: slot.role, ...(rendered.transform ? { transform: rendered.transform } : {}) });
+      else files.push({ path, blob: rendered.blob });
     }
-  });
+  }
 
   files.push(
     textBlobFile("src/main/theme/values/colors.xml", buildAndroidColorsXml(template, androidSlots, colors, selections, templateId)),
@@ -158,6 +168,14 @@ async function resolveAndroidSlotSource(
   const inheritedSource = getInheritedSourceSlot(slot, uploads, selections, templateId, template, allSlots);
   if (inheritedSource) return resolveAndroidSlotSource(inheritedSource, uploads, selections, templateId, template, bubbleEdit, allSlots, catalogExportUserId);
 
+  // 일반 편집기의 launcher source는 `launcher_background` 하나다. 다만 기본 템플릿은
+  // 기존 foreground/legacy icon에 artwork가 들어 있을 수 있으므로, 사용자가 background를
+  // 실제로 바꾼 경우에만 숨겨진 호환 role을 파생한다. 기본값에서는 role별 기본 에셋을 보존한다.
+  if (shouldDeriveAndroidLauncherRole(slot, uploads, selections, templateId, template, allSlots)) {
+    const sourceSlot = allSlots.find((candidate) => candidate.role === "launcher_background" && candidate.platform === "android");
+    if (sourceSlot) return resolveAndroidSlotSource(sourceSlot, uploads, selections, templateId, template, bubbleEdit, allSlots, catalogExportUserId);
+  }
+
   const selectedUpload = getSelectedUpload(slot, uploads, selections, allSlots);
   if (slot.kind === "ninepatch") {
     if (selectedUpload?.catalog && !selectedUpload.imageEdit && isCatalogExportProducerEnabled("android", {
@@ -209,6 +227,57 @@ async function resolveAndroidSlotSource(
   const fallbackSlot = fallbackRole ? allSlots.find((candidate) => candidate.role === fallbackRole) : undefined;
   if (!fallbackSlot) return null;
   return resolveAndroidSlotSource(fallbackSlot, uploads, selections, templateId, template, bubbleEdit, allSlots, catalogExportUserId);
+}
+
+function shouldCreateTransparentLauncherForeground(
+  slot: ThemeAssetSlot,
+  uploads: SlotUploads,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  allSlots: ThemeAssetSlot[],
+) {
+  return slot.role === "launcher_foreground" && shouldDeriveAndroidLauncherRole(slot, uploads, selections, templateId, template, allSlots);
+}
+
+export function shouldDeriveAndroidLauncherRole(
+  slot: ThemeAssetSlot,
+  uploads: SlotUploads,
+  selections: SlotCandidateSelections,
+  templateId: ThemeTemplateId,
+  template: ThemeTemplate,
+  allSlots: ThemeAssetSlot[],
+) {
+  return isAndroidDerivedLauncherRole(slot.role) && shouldUseDerivedAssetSource(slot, uploads, selections, templateId, template, allSlots);
+}
+
+async function materializeAndroidSource(
+  slot: ThemeAssetSlot,
+  targetPath: string,
+  source: AndroidExportSource,
+  transparentForeground: boolean,
+): Promise<AndroidExportSource> {
+  const plan = getAndroidRasterPlan(slot, targetPath, transparentForeground);
+  if (!plan) return source;
+  // catalog source도 원본 크기를 그대로 복사하면 density별 계약을 위반한다. 브라우저에서
+  // legacyStoragePath로 우회하지 않고, 비동기 builder가 같은 cover 규칙을 적용하도록
+  // 명시적인 Android raster transform을 함께 보낸다.
+  if ("catalogAsset" in source) {
+    if (plan.mode !== "cover") return source;
+    return { ...source, transform: createAndroidImageCatalogTransform({ width: plan.width, height: plan.height, mode: "cover" }) };
+  }
+  if (plan.mode === "transparent") return { blob: await renderAndroidImageBlob(undefined, plan) };
+  const blob = "blob" in source ? source.blob : await fetchAssetBlob(source.serverAsset);
+  return { blob: await renderAndroidImageBlob(blob, plan) };
+}
+
+export function createAndroidImageCatalogTransform(plan: { width: number; height: number; mode: "cover" }): CatalogTransform {
+  return {
+    kind: "android-image",
+    outputFormat: "png",
+    fit: "cover",
+    targetDimensions: { width: plan.width, height: plan.height },
+  };
 }
 
 function createAndroidNinePatchCatalogTransform(bubbleEdit: BubbleEditState | undefined): CatalogTransform {

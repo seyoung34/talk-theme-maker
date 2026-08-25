@@ -156,6 +156,13 @@ export async function runCapture({
     baseURL,
     profile,
     /**
+     * 이 씬이 어느 플랫폼 편집기를 찍는지. 씬이 선언하지 않으면 Android다.
+     *
+     * 편집기에 플랫폼 전환 UI가 없어서 진입 경로가 갈린다 — iOS는 갤러리에서 "iOS로 시작"을
+     * 눌러야 하고, 그 선택이 편집기 세션에 남는다.
+     */
+    platform: "android",
+    /**
      * 움직임 없이 머문다. **단위는 최종 영상 기준 초다.**
      *
      * 프레임 수로 세면 안 된다. 최종 길이는 프레임 개수가 아니라 **촬영 시각**으로 정해지므로,
@@ -288,6 +295,7 @@ export async function runCapture({
        *
        * 켜져 있을 때만 부르면 배속만큼 기다리는 2.5초도 함께 사라진다.
        */
+      ctx.platform = scene.platform ?? "android";
       if (profile.chapters) await backend.chapter(scene.title, scene.description);
 
       deadSpans = [];

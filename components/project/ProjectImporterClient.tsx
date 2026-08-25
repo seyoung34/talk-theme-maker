@@ -68,6 +68,7 @@ import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAss
 import { getAdminCatalogUploadRef } from "@/lib/theme/assetCatalog/clientRef";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getBubblePairRole, getSlotCandidates } from "@/lib/theme/project/state";
+import { getAuthoringSlots } from "@/lib/theme/project/authoringPolicy";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 import type { EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
@@ -279,6 +280,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const activeTemplate = getThemeTemplate(templateId);
   const displayTemplateName = activeUserTemplate?.name ?? activeSystemTemplate?.title ?? activeTemplate.name;
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
+  const authoringSlots = useMemo(() => getAuthoringSlots(slots, platform, mode), [mode, platform, slots]);
   const handleAutosaveSaved = useCallback(() => {
     setNotice((current) => current?.message === "이 템플릿을 변경하면 기존 최근 작업이 새 작업으로 교체됩니다." ? null : current);
     persistEditorSession(mode, {
@@ -384,7 +386,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   }, [activeTemplate, setCandidateSelections, slots, templateId]);
 
   const viewportMode = useViewportMode();
-  const groups = useMemo(() => getSectionGroups(activeSection, slots), [activeSection, slots]);
+  const groups = useMemo(() => getSectionGroups(activeSection, authoringSlots), [activeSection, authoringSlots]);
   const analysis = useMemo(
     () => createThemeProjectAnalysis(activeTemplate, platform, slots, uploads, colors, candidateSelections),
     [activeTemplate, platform, slots, uploads, colors, candidateSelections],
@@ -436,8 +438,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     }
   }, [activeGroup, groups]);
 
-  const visibleSlots = useMemo(() => slots.filter((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, activeGroup)), [activeGroup, activeSection, slots]);
-  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId) ?? visibleSlots[0] ?? slots[0];
+  const visibleSlots = useMemo(() => authoringSlots.filter((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, activeGroup)), [activeGroup, activeSection, authoringSlots]);
+  const selectedSlot = authoringSlots.find((slot) => slot.id === selectedSlotId) ?? visibleSlots[0] ?? authoringSlots[0];
 
   useEffect(() => {
     setCandidateOpen(false);
@@ -454,7 +456,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const selectedBubblePairSlot = selectedSlot ? slots.find((slot) => slot.role === getBubblePairRole(selectedSlot.role)) : undefined;
   const selectedBubbleVariant = selectedSlot ? bubbleVariantFromRole(selectedSlot.role) : null;
   const selectedBubbleDesign = selectedSlot && selectedBubbleSlot ? getBubbleDesign(bubbleDesigns, selectedSlot.role, selectedBubbleSlot) : undefined;
-  const completion = getCompletion(slots, uploads, colors, candidateSelections, templateId, activeTemplate);
+  const completion = getCompletion(slots, uploads, colors, candidateSelections, templateId, activeTemplate, authoringSlots);
   const {
     adminAssetCursor,
     adminAssetsWithPreview,
@@ -773,10 +775,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const selectSection = (section: ThemeSection) => {
     setActiveSection(section);
-    const nextGroups = getSectionGroups(section, slots);
+    const nextGroups = getSectionGroups(section, authoringSlots);
     const nextGroup = nextGroups[0];
     if (nextGroup) setActiveGroup(nextGroup);
-    const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, section) && (!nextGroup || isSlotVisibleInGroup(slot, nextGroup)));
+    const firstSlot = authoringSlots.find((slot) => isSlotVisibleInSection(slot, section) && (!nextGroup || isSlotVisibleInGroup(slot, nextGroup)));
     setSelectedSlotId(firstSlot?.id);
     if (firstSlot) setSelectionPulseKey((current) => current + 1);
     if (viewportMode !== "mobile") {
@@ -786,7 +788,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const selectGroup = (group: ThemeSlotGroup) => {
     setActiveGroup(group);
-    const firstSlot = slots.find((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, group));
+    const firstSlot = authoringSlots.find((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, group));
     setSelectedSlotId(firstSlot?.id);
     if (firstSlot) setSelectionPulseKey((current) => current + 1);
     if (viewportMode === "mobile") {
@@ -1226,6 +1228,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     template: activeTemplate,
     templateId,
     slots,
+    editorSlots: authoringSlots,
     colors,
     selections: candidateSelections,
     bubbleEdits: renderedPreviewBubbleEdits,
@@ -1651,7 +1654,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 ariaLabel={selectedSlot ? `${selectedSlot.label} 편집 패널` : "요소 편집 패널"}
               >
                 <div className="shrink-0">
-                  <MobileSectionNav activeSection={activeSection} slots={slots} onSelectSection={selectSection} />
+                  <MobileSectionNav activeSection={activeSection} slots={authoringSlots} onSelectSection={selectSection} />
                 </div>
                 {mobileSheetSnap !== "collapsed" ? (
                   <div className="min-h-0 flex-1 overflow-y-auto pr-1 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
@@ -1693,7 +1696,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
               <div className="order-1 h-full min-w-0 lg:order-none">
                 <ProjectSectionRail
                   activeSection={activeSection}
-                  slots={slots}
+                  slots={authoringSlots}
                   onSelectSection={selectSection}
                 />
               </div>
@@ -1780,6 +1783,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 template={activeTemplate}
                 templateId={templateId}
                 slots={slots}
+                editorSlots={authoringSlots}
                 colors={colors}
                 selections={candidateSelections}
                 bubbleEdits={renderedPreviewBubbleEdits}

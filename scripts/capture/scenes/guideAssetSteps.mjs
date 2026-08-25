@@ -1,4 +1,4 @@
-import { expandMobileSlotList, openSection, resetEditorSession, settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
+import { enterEditorViaGallery, expandMobileSlotList, openSection, resetEditorSession, settle, waitForEditorReady, waitForMobileEditorReady } from "./shared.mjs";
 
 /**
  * 에셋을 고르는 가이드 스텝들 — 배경·탭 아이콘·말풍선.
@@ -12,26 +12,25 @@ import { expandMobileSlotList, openSection, resetEditorSession, settle, waitForE
  * 라벨이 다르므로 키를 그대로 선택자에 쓰면 0개를 잡는다.
  */
 
-/** 데스크톱 편집기를 연다. 대기는 전부 카메라 밖에서 끝낸다. */
-async function openEditor({ page, baseURL, dismissNotices, offCamera }) {
+/**
+ * 편집기를 연다. 대기는 전부 카메라 밖에서 끝낸다.
+ *
+ * **iOS는 갤러리를 거쳐야 한다.** 편집기에 플랫폼 전환 UI가 없어서, 어느 플랫폼으로 편집하는지는
+ * 갤러리에서 무엇을 눌렀느냐로 정해진다. Android는 기본값이라 `/edit`으로 바로 간다.
+ */
+async function openEditorFor({ page, baseURL, platform, dismissNotices, offCamera }, waitReady) {
   await offCamera(async () => {
     await resetEditorSession(page, baseURL);
-    await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
-    await waitForEditorReady(page);
+    if (platform === "ios") await enterEditorViaGallery(page, baseURL, "ios");
+    else await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
+    await waitReady(page);
     await dismissNotices();
     await settle(page);
   });
 }
 
-async function openMobileEditor({ page, baseURL, dismissNotices, offCamera }) {
-  await offCamera(async () => {
-    await resetEditorSession(page, baseURL);
-    await page.goto(`${baseURL}/edit`, { waitUntil: "load" });
-    await waitForMobileEditorReady(page);
-    await dismissNotices();
-    await settle(page);
-  });
-}
+const openEditor = (ctx) => openEditorFor(ctx, waitForEditorReady);
+const openMobileEditor = (ctx) => openEditorFor(ctx, waitForMobileEditorReady);
 
 /**
  * 스텝 4 — 배경 고르기.

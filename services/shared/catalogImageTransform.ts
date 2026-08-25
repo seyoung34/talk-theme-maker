@@ -44,8 +44,35 @@ export async function transformCatalogImage(
   source: CatalogImageSource,
   transform: CatalogTransform,
 ): Promise<Uint8Array> {
+  if (transform.kind === "android-image") return transformAndroidImage(bytes, source, transform);
   if (transform.kind === "android-nine-patch") return transformAndroidNinePatch(bytes, source, transform);
   return transformIosImage(bytes, source, transform);
+}
+
+async function transformAndroidImage(
+  bytes: Uint8Array,
+  source: CatalogImageSource,
+  transform: Extract<CatalogTransform, { kind: "android-image" }>,
+) {
+  const actual = await readImageDimensions(bytes);
+  assertSourceDimensions(actual.width, actual.height, source.width, source.height);
+
+  try {
+    // Browser의 renderAndroidImageBlob과 같은 중앙 cover 규칙을 쓴다. Android density별
+    // target은 worker가 검증하고, builder는 catalog 원본의 실제 크기와 해시를 다시 확인한다.
+    return new Uint8Array(await sharp(Buffer.from(bytes), { failOn: "error", limitInputPixels: maxImagePixels })
+      .resize({
+        width: transform.targetDimensions.width,
+        height: transform.targetDimensions.height,
+        fit: "cover",
+        position: "centre",
+        withoutEnlargement: false,
+      })
+      .png()
+      .toBuffer());
+  } catch (error) {
+    throw new CatalogImageTransformError(`Android raster 이미지 변환에 실패했습니다: ${formatError(error)}`);
+  }
 }
 
 async function transformIosImage(
