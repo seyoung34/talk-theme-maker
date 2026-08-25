@@ -1,5 +1,6 @@
 import { canDisableImageSlot, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { getSlotExportMapping } from "@/lib/theme/project/export";
+import { getDerivedAssetSourceRole } from "@/lib/theme/project/authoringPolicy";
 import type { ThemeProjectAnalysis, ThemeProjectFile, ThemeProjectResource } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate } from "@/lib/theme/templates";
 import type { ThemeDiagnostic } from "@/lib/theme/types";
@@ -65,7 +66,14 @@ export function createThemeProjectAnalysis(
     // catalog 참조가 있으면 export가 registry에서 바이트를 가져오므로 슬롯은 채워진 것이다.
     // `previewUrl`로 판정하면 안 된다 — 그 값은 만료되거나 서명에 실패하면 사라지는 화면용
     // 파생물이라, 정상적으로 내보내지는 슬롯에 "파일 필요" 경고가 뜬다.
-    if (slot.required && !upload && !sourceUrl && !selectedUpload?.catalog && !(imageDisabled && canDisableImageSlot(slot))) {
+    const derivedSourceRole = getDerivedAssetSourceRole(slot.role, platform);
+    const derivedSourceSlot = derivedSourceRole ? slots.find((candidate) => candidate.role === derivedSourceRole && candidate.platform === platform) : undefined;
+    const derivedSourceReady = Boolean(
+      derivedSourceSlot
+      && (getSelectedUpload(derivedSourceSlot, uploads, selections, slots)
+        || getResolvedAssetUrl(derivedSourceSlot, uploads, selections, template.id, template, slots)),
+    );
+    if (slot.required && !upload && !sourceUrl && !selectedUpload?.catalog && !derivedSourceReady && !(imageDisabled && canDisableImageSlot(slot))) {
       diagnostics.push({
         level: "warning",
         code: "missing-asset",

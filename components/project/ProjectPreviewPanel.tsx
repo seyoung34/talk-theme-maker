@@ -13,6 +13,7 @@ export function ProjectPreviewPanel({
   template,
   templateId,
   slots,
+  editorSlots = slots,
   colors,
   selections,
   bubbleEdits,
@@ -26,6 +27,7 @@ export function ProjectPreviewPanel({
   template: ThemeTemplate;
   templateId: ThemeTemplateId;
   slots: ThemeAssetSlot[];
+  editorSlots?: ThemeAssetSlot[];
   colors: SlotColors;
   selections: SlotCandidateSelections;
   bubbleEdits: Partial<Record<ThemeResourceRole, BubbleEditState>>;
@@ -60,8 +62,8 @@ export function ProjectPreviewPanel({
           {activeSection === "common" ? (
             <CommonAssetsPreview
               analysis={analysis}
-              activeGroup={getCommonActiveGroup(slots, selectedSlotId)}
-              slots={slots.filter((slot) => slot.section === "common")}
+              activeGroup={getCommonActiveGroup(editorSlots, selectedSlotId)}
+              slots={editorSlots.filter((slot) => slot.section === "common")}
               selectedSlotId={selectedSlotId}
               onSelectSlot={onSelectSlot}
             />

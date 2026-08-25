@@ -635,7 +635,7 @@
     "editableInBubbleEditor": true,
     "note": "내가 보낸 일반 메시지에 표시되는 말풍선 이미지입니다. 텍스트가 들어갈 안쪽 여백을 충분히 남겨 주세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/chatroomBubbleSend01.svg"
+      "basic": "/template-assets/basic/ios/chatroomBubbleSend01.png"
     },
     "cssSelector": "MessageCellStyle-Send",
     "cssProperty": "-ios-background-image"
@@ -655,7 +655,7 @@
     "editableInBubbleEditor": true,
     "note": "내 메시지가 연속으로 이어질 때 표시되는 그룹 말풍선 이미지입니다. 일반 말풍선과 같은 크기감으로 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/chatroomBubbleSend01.svg"
+      "basic": "/template-assets/basic/ios/chatroomBubbleSend02.png"
     },
     "cssSelector": "MessageCellStyle-Send",
     "cssProperty": "-ios-group-background-image"
@@ -675,7 +675,7 @@
     "editableInBubbleEditor": true,
     "note": "상대가 보낸 일반 메시지에 표시되는 말풍선 이미지입니다. 텍스트가 들어갈 안쪽 여백을 충분히 남겨 주세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.svg"
+      "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.png"
     },
     "cssSelector": "MessageCellStyle-Receive",
     "cssProperty": "-ios-background-image"
@@ -695,7 +695,7 @@
     "editableInBubbleEditor": true,
     "note": "상대 메시지가 연속으로 이어질 때 표시되는 그룹 말풍선 이미지입니다. 일반 말풍선과 같은 크기감으로 맞추세요.",
     "defaultAssetUrls": {
-      "basic": "/template-assets/basic/ios/chatroomBubbleReceive01.svg"
+      "basic": "/template-assets/basic/ios/chatroomBubbleReceive02.png"
     },
     "cssSelector": "MessageCellStyle-Receive",
     "cssProperty": "-ios-group-background-image"

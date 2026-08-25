@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import * as Popover from "@radix-ui/react-popover";
-import { FlipHorizontal2, Info, LoaderCircle, Minus, Plus, RotateCcw } from "lucide-react";
+import { FlipHorizontal2, Info, LoaderCircle, Minus, Plus, RotateCcw, Ruler } from "lucide-react";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { defaultImageEditState, renderEditedImageFile, type ImageEditState, type ImageEditTarget } from "@/lib/theme/imageEdit";
 import { bubbleEditorHelpHint, hasSeenHint, markHintSeen } from "@/lib/shared/hintStorage";
@@ -20,6 +20,24 @@ type ArtworkMetrics = {
 };
 
 type DragKind = "content-left" | "content-right" | "content-top" | "content-bottom" | "stretch";
+
+const bubbleEditorFitPadding = 32;
+const bubbleEditorMaxFitScale = 6;
+
+export function getBubbleEditorFitScale(stageWidth: number, stageHeight: number, artworkWidth: number, artworkHeight: number) {
+  if (![stageWidth, stageHeight, artworkWidth, artworkHeight].every((value) => Number.isFinite(value) && value > 0)) return 1;
+  const availableWidth = stageWidth - bubbleEditorFitPadding * 2;
+  const availableHeight = stageHeight - bubbleEditorFitPadding * 2;
+  return Math.max(0.01, Math.min(bubbleEditorMaxFitScale, availableWidth / artworkWidth, availableHeight / artworkHeight));
+}
+
+function readStageSize(stage: HTMLDivElement) {
+  const rect = stage.getBoundingClientRect();
+  return {
+    width: Math.round(rect.width || stage.clientWidth),
+    height: Math.round(rect.height || stage.clientHeight),
+  };
+}
 
 export function MobileBubbleEditor({
   slot,
@@ -212,6 +230,7 @@ export function MobileBubbleEditor({
   }, []);
 
   const artwork = asset ? getArtworkMetrics(asset) : null;
+  const editorStageReady = draft !== null;
 
   useEffect(() => {
     if (!draft || !artwork || !previewChangeRef.current) return;
@@ -225,12 +244,16 @@ export function MobileBubbleEditor({
   useLayoutEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
-    const update = () => setStageSize({ width: stage.clientWidth, height: stage.clientHeight });
+    const update = () => setStageSize(readStageSize(stage));
     update();
+    const frame = window.requestAnimationFrame(update);
     const observer = new ResizeObserver(update);
     observer.observe(stage);
-    return () => observer.disconnect();
-  }, [asset]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [asset, editorStageReady]);
 
   // Android .9 원본은 marker를 읽는 데 필요하지만, 편집 화면에는 marker 1px 테두리를
   // 제외한 artwork만 보여준다. geometry는 같은 asset에서 이미 계산되므로 편집·내보내기
@@ -245,8 +268,8 @@ export function MobileBubbleEditor({
 
   // 원본이 작은 말풍선도 편집 영역을 충분히 활용하도록 자동 맞춤의 상한을 넉넉히 둔다.
   // 별도 확대는 이 값의 배율로만 적용되며, 실제 말풍선 편집값에는 저장하지 않는다.
-  const fitScale = asset && stageSize.width && stageSize.height
-    ? Math.min(6, (stageSize.width - 64) / (artwork?.width ?? asset.width), (stageSize.height - 64) / (artwork?.height ?? asset.height))
+  const fitScale = asset
+    ? getBubbleEditorFitScale(stageSize.width, stageSize.height, artwork?.width ?? asset.width, artwork?.height ?? asset.height)
     : 1;
   const stageScale = fitScale * viewerZoom;
   const effectiveScale = stageScale * (draft?.imageState.scale ?? 1);
@@ -309,7 +332,10 @@ export function MobileBubbleEditor({
       if (imageChanged) setLoading(false);
     }
   };
-  const fitViewer = () => setViewerZoom(1);
+  const fitViewer = () => {
+    if (stageRef.current) setStageSize(readStageSize(stageRef.current));
+    setViewerZoom(1);
+  };
   const zoomIn = () => setViewerZoom((current) => Math.min(2.5, Number((current + 0.25).toFixed(2))));
   const zoomOut = () => setViewerZoom((current) => Math.max(0.5, Number((current - 0.25).toFixed(2))));
   /**
@@ -325,7 +351,7 @@ export function MobileBubbleEditor({
 
   if (loading && !asset) return <div className="grid min-h-48 place-items-center rounded-[22px] border border-[#dbe3ed] bg-white text-sm font-bold text-[#64748b]"><span className="inline-flex items-center gap-2"><LoaderCircle size={16} className="animate-spin" />편집 준비 중</span></div>;
   if (error && !asset) return <p className="rounded-[22px] border border-[#fecaca] bg-[#fff1f2] px-4 py-4 text-sm font-bold text-[#be123c]">{error}</p>;
-  if (!asset || !draft) return <p className="rounded-[22px] border border-dashed border-[#dbe3ed] bg-[#f8fafc] px-4 py-5 text-center text-sm font-semibold text-[#64748b]">편집할 말풍선을 선택하세요.</p>;
+  if (!asset || !draft || !artwork) return <p className="rounded-[22px] border border-dashed border-[#dbe3ed] bg-[#f8fafc] px-4 py-5 text-center text-sm font-semibold text-[#64748b]">편집할 말풍선을 선택하세요.</p>;
 
   // 화면에 보이는 방향. 파일에 이미 구워진 legacy 반전과 슬롯 반전이 겹치면 서로 상쇄된다.
   const displayFlipX = Boolean(draft.imageState.flipX) !== flipX;
@@ -353,6 +379,11 @@ export function MobileBubbleEditor({
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>
+        </div>
+        <div className="hidden min-w-0 flex-1 items-center justify-center gap-1.5 lg:flex" aria-label={`말풍선 크기 ${artwork.width} × ${artwork.height} 픽셀`}>
+          <Ruler size={14} className="shrink-0 text-[#94a3b8]" aria-hidden="true" />
+          <span className="text-[10px] font-black uppercase tracking-[0.12em] text-[#94a3b8]">말풍선 크기</span>
+          <span className="text-[11px] font-black tabular-nums text-[#475569]">{artwork.width} × {artwork.height}px</span>
         </div>
         <div className="inline-flex h-9 shrink-0 overflow-hidden rounded-xl border border-[#d7e0ec] bg-white shadow-[0_2px_7px_rgba(15,23,42,0.04)]" aria-label="편집 화면 크기 조절">
           <button type="button" className="px-2.5 text-[12px] font-black text-[#334155] transition hover:bg-[#eff6ff] hover:text-[#1d4ed8] focus-visible:relative focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-[#2563eb] disabled:cursor-default disabled:bg-[#f8fafc] disabled:text-[#94a3b8]" onClick={fitViewer} disabled={viewerZoom === 1}>맞춤</button>

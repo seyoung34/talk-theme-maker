@@ -28,6 +28,22 @@ function findSlot(id: string): ThemeAssetSlot {
 }
 
 describe("iOS bubble export defaults", () => {
+  it("basic 말풍선은 Android의 1/2 변형과 같은 네 개의 기본 artwork를 사용한다", () => {
+    const bubbleSlots = iosThemeSlots.filter((slot) => (
+      slot.role === "bubble_me_1"
+      || slot.role === "bubble_me_2"
+      || slot.role === "bubble_you_1"
+      || slot.role === "bubble_you_2"
+    ));
+
+    expect(Object.fromEntries(bubbleSlots.map((slot) => [slot.role, slot.defaultAssetUrls?.basic]))).toEqual({
+      bubble_me_1: "/template-assets/basic/ios/chatroomBubbleSend01.png",
+      bubble_me_2: "/template-assets/basic/ios/chatroomBubbleSend02.png",
+      bubble_you_1: "/template-assets/basic/ios/chatroomBubbleReceive01.png",
+      bubble_you_2: "/template-assets/basic/ios/chatroomBubbleReceive02.png",
+    });
+  });
+
   it("저장된 geometry가 없어도 가운데 기본값을 source scale에 맞춰 출력한다", () => {
     expect(
       getIosCssValues(

@@ -10,6 +10,29 @@ const source = {
 };
 
 describe("catalog transform contract", () => {
+  it("Android raster descriptor를 허용하고 target dimension을 검증한다", () => {
+    const transform = parseCatalogTransform({
+      kind: "android-image",
+      outputFormat: "png",
+      fit: "cover",
+      targetDimensions: { width: 432, height: 432 },
+    });
+
+    expect(validateCatalogTransform({
+      platform: "android",
+      path: "src/main/res/mipmap-xxxhdpi/ic_launcher_background.png",
+      source,
+      transform,
+    })).toEqual({ valid: true, transform });
+
+    expect(validateCatalogTransform({
+      platform: "android",
+      path: "src/main/res/mipmap-xxxhdpi/ic_launcher_background.png",
+      source,
+      transform: { ...transform, targetDimensions: { width: 9000, height: 9000 } },
+    })).toEqual({ valid: false, reason: "invalid_descriptor" });
+  });
+
   it("Android nine-patch descriptor를 허용한다", () => {
     const transform = parseCatalogTransform({
       kind: "android-nine-patch",

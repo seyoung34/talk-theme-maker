@@ -729,10 +729,11 @@ export function getCompletion(
   selections: SlotCandidateSelections,
   templateId: ThemeTemplateId,
   template: ThemeTemplate,
+  authoringSlots: ThemeAssetSlot[] = slots,
 ) {
   return {
-    total: slots.length,
-    ready: slots.filter((slot) => isSlotReady(slot, uploads, colors, selections, templateId, template, slots)).length,
+    total: authoringSlots.length,
+    ready: authoringSlots.filter((slot) => isSlotReady(slot, uploads, colors, selections, templateId, template, slots)).length,
   };
 }
 

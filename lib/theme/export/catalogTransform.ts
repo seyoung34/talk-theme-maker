@@ -13,6 +13,12 @@ export type CatalogTransformDimensions = {
  */
 export type CatalogTransform =
   | {
+      readonly kind: "android-image";
+      readonly outputFormat: "png";
+      readonly fit: "cover";
+      readonly targetDimensions: CatalogTransformDimensions;
+    }
+  | {
       readonly kind: "android-nine-patch";
       readonly outputFormat: "png";
       readonly flipX?: boolean;
@@ -68,6 +74,12 @@ export function validateCatalogTransform(input: {
   if (!transform) return { valid: false, reason: "invalid_descriptor" };
 
   if (input.platform === "android") {
+    if (transform.kind === "android-image") {
+      if (!input.path.toLowerCase().endsWith(".png")) return { valid: false, reason: "path_mismatch" };
+      if (input.source.mimeType !== "image/png") return { valid: false, reason: "source_mismatch" };
+      if (!isRasterTargetDimensions(transform.targetDimensions)) return { valid: false, reason: "dimensions_mismatch" };
+      return { valid: true, transform };
+    }
     if (transform.kind !== "android-nine-patch") return { valid: false, reason: "platform_mismatch" };
     if (!input.path.toLowerCase().endsWith(".9.png")) return { valid: false, reason: "path_mismatch" };
     if (input.source.mimeType !== "image/png") return { valid: false, reason: "source_mismatch" };
@@ -124,6 +136,16 @@ export function isAndroidNinePatchSourceName(fileName: string) {
 function parseCatalogTransformValue(value: unknown): CatalogTransform | undefined {
   if (!isRecord(value) || typeof value.kind !== "string" || value.outputFormat !== "png") return undefined;
   if (value.flipX !== undefined && typeof value.flipX !== "boolean") return undefined;
+
+  if (value.kind === "android-image") {
+    if (value.fit !== "cover" || !isDimensions(value.targetDimensions) || !isRasterTargetDimensions(value.targetDimensions)) return undefined;
+    return {
+      kind: "android-image",
+      outputFormat: "png",
+      fit: "cover",
+      targetDimensions: value.targetDimensions,
+    };
+  }
 
   if (value.kind === "android-nine-patch") {
     if (value.ninePatch !== undefined && !isNinePatchOptions(value.ninePatch)) return undefined;
@@ -195,6 +217,11 @@ function isRangeWithin(value: { start: number; end: number }, max: number) {
 
 function isDimensions(value: unknown): value is CatalogTransformDimensions {
   return isRecord(value) && hasPositiveDimensions(value.width, value.height);
+}
+
+/** Android builder가 메모리·출력 폭주 없이 처리할 수 있는 raster target 상한. */
+function isRasterTargetDimensions(value: CatalogTransformDimensions) {
+  return value.width <= 8192 && value.height <= 8192 && value.width * value.height <= 32_000_000;
 }
 
 function sameDimensions(left: CatalogTransformDimensions, right: CatalogTransformDimensions) {

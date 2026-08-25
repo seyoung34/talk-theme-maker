@@ -3,6 +3,24 @@ import sharp from "sharp";
 import { transformCatalogImage } from "./catalogImageTransform";
 
 describe("Cloud Run catalog image transforms", () => {
+  it("plain PNG를 Android density target 크기로 cover rasterize한다", async () => {
+    const input = await createPng(8, 4, (x, y) => [x * 20, y * 40, 80, 255]);
+    const output = await transformCatalogImage(input, {
+      fileName: "launcher.png",
+      sourceScale: 3,
+      width: 8,
+      height: 4,
+    }, {
+      kind: "android-image",
+      outputFormat: "png",
+      fit: "cover",
+      targetDimensions: { width: 5, height: 5 },
+    });
+    const decoded = await readPng(output);
+
+    expect([decoded.info.width, decoded.info.height]).toEqual([5, 5]);
+  });
+
   it("plain PNG를 Android nine-patch PNG로 감싼다", async () => {
     const input = await createPng(4, 3, (x, y) => [x + 1, y + 10, 80, 255]);
     const output = await transformCatalogImage(input, {

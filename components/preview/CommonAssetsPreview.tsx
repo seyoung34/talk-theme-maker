@@ -11,9 +11,9 @@ type CommonAssetsGroup = Extract<ThemeSlotGroup, "icon" | "profiles" | "launcher
 type RoleUrls = Partial<Record<ThemeResourceRole, string>>;
 
 const groupLabels: Record<CommonAssetsGroup, string> = {
-  icon: "대표 아이콘",
+  icon: "테마 아이콘",
   profiles: "프로필 이미지",
-  launcher: "런처 아이콘",
+  launcher: "실행 화면",
 };
 
 const circularRoles = new Set<ThemeResourceRole>(["profile_image_1", "profile_image_2", "profile_image_3"]);
@@ -40,6 +40,8 @@ export function CommonAssetsPreview({
 
   const url = urls[activeSlot.role];
   const circular = circularRoles.has(activeSlot.role);
+  const frameClassName = getFrameClassName(activeSlot.role, circular);
+  const contentClassName = activeSlot.role === "splash_landscape" ? "max-w-[560px]" : "max-w-[320px]";
 
   return (
     <section className="grid h-full w-full max-w-[920px] min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-4 rounded-[28px] border border-[#d7ddd8] bg-white/96 p-5 shadow-[0_22px_48px_rgba(15,23,42,0.12)]">
@@ -49,10 +51,10 @@ export function CommonAssetsPreview({
       </header>
 
       <div className="grid min-h-0 place-items-center overflow-auto p-4">
-        <div className="grid w-full max-w-[320px] justify-items-center gap-4">
-          <div className={`grid aspect-square w-full place-items-center overflow-hidden border border-[#e5e7eb] bg-[linear-gradient(180deg,#f8fafc,#eef2f7)] ${circular ? "rounded-full" : "rounded-[28px]"}`}>
+        <div className={`grid w-full ${contentClassName} justify-items-center gap-4`}>
+          <div className={`grid w-full place-items-center overflow-hidden border border-[#e5e7eb] bg-[linear-gradient(180deg,#f8fafc,#eef2f7)] ${frameClassName}`}>
             {url ? (
-              <span className="block h-full w-full bg-white bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${url})` }} />
+              <span className="block h-full w-full bg-white bg-cover bg-center bg-no-repeat" style={{ backgroundImage: `url(${url})` }} />
             ) : (
               <ImageIcon className="h-12 w-12 text-[#94a3b8]" />
             )}
@@ -65,6 +67,12 @@ export function CommonAssetsPreview({
       </div>
     </section>
   );
+}
+
+function getFrameClassName(role: ThemeResourceRole, circular: boolean) {
+  if (role === "splash") return "aspect-[9/16] max-h-[min(68vh,560px)] max-w-[320px] rounded-[28px]";
+  if (role === "splash_landscape") return "aspect-[16/9] max-w-[560px] rounded-[24px]";
+  return `aspect-square max-w-[320px] ${circular ? "rounded-full" : "rounded-[28px]"}`;
 }
 
 function sortSlots(slots: ThemeAssetSlot[]) {

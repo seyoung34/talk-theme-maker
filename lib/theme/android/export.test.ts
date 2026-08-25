@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { canUseServerAssetReference, getAndroidSlotExportPaths, resolveAndroidNinePatchMarkers } from "@/lib/theme/android/export";
+import { canUseServerAssetReference, createAndroidImageCatalogTransform, getAndroidSlotExportPaths, resolveAndroidNinePatchMarkers, shouldDeriveAndroidLauncherRole } from "@/lib/theme/android/export";
 import { bubbleGeometryToAndroidMarkers, flipAndroidMarkersHorizontally, flipBubbleGeometryHorizontally } from "@/lib/theme/bubbleGeometry";
-import { androidThemeSlots } from "@/lib/theme/templates";
+import { androidThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
+import { getInitialSlotCandidateSelections } from "@/lib/theme/project/state";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 
 /**
@@ -47,6 +48,23 @@ describe("Android 슬롯 출력 경로", () => {
     expect(empty.map((slot) => slot.id)).toEqual([]);
   });
 
+  it("launcher family는 target과 서로 다른 density 경로를 사용한다", () => {
+    expect(getAndroidSlotExportPaths(findSlot("android-launcher-background"))).toEqual([
+      "src/main/res/mipmap-xxxhdpi/ic_launcher_background.png",
+      "src/main/res/mipmap-mdpi/ic_launcher_background.png",
+      "src/main/res/mipmap-hdpi/ic_launcher_background.png",
+      "src/main/res/mipmap-xhdpi/ic_launcher_background.png",
+      "src/main/res/mipmap-xxhdpi/ic_launcher_background.png",
+    ]);
+    expect(getAndroidSlotExportPaths(findSlot("android-launcher-icon"))).toEqual([
+      "src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+      "src/main/res/mipmap-mdpi/ic_launcher.png",
+      "src/main/res/mipmap-hdpi/ic_launcher.png",
+      "src/main/res/mipmap-xhdpi/ic_launcher.png",
+      "src/main/res/mipmap-xxhdpi/ic_launcher.png",
+    ]);
+  });
+
   it("서로 다른 슬롯이 같은 zip 경로를 차지하지 않는다", () => {
     // 두 슬롯이 같은 경로로 나가면 나중 것이 앞의 것을 덮는다. 사용자에게는 "편집한 슬롯이
     // 반영되지 않는" 증상으로만 보여서 추적이 어렵다.
@@ -66,6 +84,31 @@ describe("Android 슬롯 출력 경로", () => {
   it("색상 슬롯은 이미지 경로를 갖지 않는다", () => {
     const colorSlotsWithPath = androidThemeSlots.filter((slot) => slot.kind === "color" && slot.path);
     expect(colorSlotsWithPath.map((slot) => slot.id)).toEqual([]);
+  });
+
+  it("기본 템플릿은 기존 launcher artwork를 보존하고, background를 바꾼 경우에만 파생한다", () => {
+    const template = getThemeTemplate("basic");
+    const selections = getInitialSlotCandidateSelections(androidThemeSlots, "basic", template);
+    const launcherIcon = findSlot("android-launcher-icon");
+    const background = findSlot("android-launcher-background");
+
+    expect(shouldDeriveAndroidLauncherRole(launcherIcon, {}, selections, "basic", template, androidThemeSlots)).toBe(false);
+
+    const uploadedSelections = { ...selections, [background.id]: "uploaded-background" };
+    const uploads = {
+      [background.id]: [{ id: "uploaded-background", file: new File([new Uint8Array([1])], "background.png", { type: "image/png" }) }],
+    };
+    expect(shouldDeriveAndroidLauncherRole(launcherIcon, uploads, uploadedSelections, "basic", template, androidThemeSlots)).toBe(true);
+    expect(shouldDeriveAndroidLauncherRole(findSlot("android-launcher-foreground"), uploads, uploadedSelections, "basic", template, androidThemeSlots)).toBe(true);
+  });
+
+  it("catalog raster transform은 target density 크기를 계약에 담는다", () => {
+    expect(createAndroidImageCatalogTransform({ width: 432, height: 432, mode: "cover" })).toEqual({
+      kind: "android-image",
+      outputFormat: "png",
+      fit: "cover",
+      targetDimensions: { width: 432, height: 432 },
+    });
   });
 });
 
