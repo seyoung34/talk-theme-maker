@@ -5,7 +5,8 @@ import { bubbleGeometryToAndroidMarkers, flipAndroidMarkersHorizontally, flipBub
 import { exportSlotConcurrency } from "@/lib/theme/exportRequest";
 import { storagePathToFile } from "@/lib/theme/remoteAssets";
 import { isCatalogExportProducerEnabled } from "@/lib/theme/assetCatalog/exportGate";
-import { getDefaultSelectedCandidate, getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, requireUploadFile, uploadEntryFileName, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { shouldUseDerivedAssetSource } from "@/lib/theme/project/assetSource";
+import { getImageAssetFallbackRole, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedUpload, requireUploadFile, uploadEntryFileName, type BubbleEditState, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 import type { CatalogTransform } from "@/lib/theme/export/catalogTransform";
 import { blobFile, createStoredZip } from "@/lib/theme/project/zip";
@@ -247,24 +248,7 @@ export function shouldDeriveAndroidLauncherRole(
   template: ThemeTemplate,
   allSlots: ThemeAssetSlot[],
 ) {
-  if (!isAndroidDerivedLauncherRole(slot.role)) return false;
-  if (hasExplicitImageSource(slot, uploads, selections, templateId, template, allSlots)) return false;
-  const sourceSlot = allSlots.find((candidate) => candidate.role === "launcher_background" && candidate.platform === "android");
-  return Boolean(sourceSlot && hasExplicitImageSource(sourceSlot, uploads, selections, templateId, template, allSlots));
-}
-
-function hasExplicitImageSource(
-  slot: ThemeAssetSlot,
-  uploads: SlotUploads,
-  selections: SlotCandidateSelections,
-  templateId: ThemeTemplateId,
-  template: ThemeTemplate,
-  allSlots: ThemeAssetSlot[],
-) {
-  if (getSelectedUpload(slot, uploads, selections, allSlots)) return true;
-  const selectedId = selections[slot.id];
-  const defaultCandidate = getDefaultSelectedCandidate(slot, templateId, template);
-  return Boolean(selectedId && selectedId !== defaultCandidate?.id);
+  return isAndroidDerivedLauncherRole(slot.role) && shouldUseDerivedAssetSource(slot, uploads, selections, templateId, template, allSlots);
 }
 
 async function materializeAndroidSource(

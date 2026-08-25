@@ -1,5 +1,6 @@
 import { isCatalogFastPathEligible } from "./catalogFastPath.js";
 import { parseCatalogTransform, validateCatalogTransform, type CatalogTransform } from "./catalogTransform.js";
+import type { ThemeResourceRole } from "../types.js";
 
 /**
  * Builder가 GCS catalog 객체를 읽는 공통 계층 (계획 §9.4).
@@ -30,6 +31,7 @@ export type CatalogObjectRef = {
 export type CatalogManifestItem = {
   readonly path: string;
   readonly catalogObject: CatalogObjectRef;
+  readonly resourceRole?: ThemeResourceRole;
   readonly transform?: CatalogTransform;
 };
 
@@ -85,6 +87,7 @@ export function isCatalogManifestItem(value: unknown): value is CatalogManifestI
     && typeof ref.sha256 === "string"
     && typeof ref.sizeBytes === "number"
     && typeof ref.mimeType === "string")) return false;
+  if (item.resourceRole !== undefined && typeof item.resourceRole !== "string") return false;
   if (item.transform === undefined) return true;
   try {
     parseCatalogTransform(item.transform);
@@ -139,6 +142,7 @@ export function assertCatalogManifestSource(input: {
   platform: "android" | "ios";
   path: string;
   ref: CatalogObjectRef;
+  resourceRole?: ThemeResourceRole;
   transform?: CatalogTransform;
 }) {
   if (input.transform) {
@@ -155,6 +159,7 @@ export function assertCatalogManifestSource(input: {
         width: input.ref.width,
         height: input.ref.height,
       },
+      resourceRole: input.resourceRole,
       transform: input.transform,
     });
     if (!verdict.valid) {

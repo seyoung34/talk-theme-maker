@@ -22,6 +22,7 @@ describe("catalog transform contract", () => {
       platform: "android",
       path: "src/main/res/mipmap-xxxhdpi/ic_launcher_background.png",
       source,
+      resourceRole: "launcher_background",
       transform,
     })).toEqual({ valid: true, transform });
 
@@ -29,8 +30,68 @@ describe("catalog transform contract", () => {
       platform: "android",
       path: "src/main/res/mipmap-xxxhdpi/ic_launcher_background.png",
       source,
+      resourceRole: "launcher_background",
       transform: { ...transform, targetDimensions: { width: 9000, height: 9000 } },
     })).toEqual({ valid: false, reason: "invalid_descriptor" });
+  });
+
+  it("Android raster descriptor를 실제 role 경로와 연결한다", () => {
+    const transform = {
+      kind: "android-image" as const,
+      outputFormat: "png" as const,
+      fit: "cover" as const,
+      targetDimensions: { width: 720, height: 1280 },
+    };
+    const splashSource = { ...source, fileName: "splash@3x.png", width: 300, height: 500 };
+
+    expect(validateCatalogTransform({
+      platform: "android",
+      path: "src/main/theme/drawable-xhdpi/theme_splash_image.png",
+      source: splashSource,
+      resourceRole: "splash",
+      transform,
+    })).toEqual({ valid: true, transform });
+
+    expect(validateCatalogTransform({
+      platform: "android",
+      path: "src/main/theme/drawable-xhdpi/theme_splash_image.png",
+      source: splashSource,
+      resourceRole: "main_background",
+      transform,
+    })).toEqual({ valid: false, reason: "role_mismatch" });
+
+    expect(validateCatalogTransform({
+      platform: "android",
+      path: "src/main/theme/drawable-xhdpi/theme_splash_image.png",
+      source: splashSource,
+      resourceRole: "splash",
+      transform: { ...transform, targetDimensions: { width: 1440, height: 2560 } },
+    })).toEqual({ valid: false, reason: "dimensions_mismatch" });
+  });
+
+  it("Android image 변환은 nine-patch 원본과 target을 거부한다", () => {
+    const transform = {
+      kind: "android-image" as const,
+      outputFormat: "png" as const,
+      fit: "cover" as const,
+      targetDimensions: { width: 432, height: 432 },
+    };
+
+    expect(validateCatalogTransform({
+      platform: "android",
+      path: "src/main/res/mipmap-xxxhdpi/ic_launcher_background.9.png",
+      source,
+      resourceRole: "launcher_background",
+      transform,
+    })).toEqual({ valid: false, reason: "path_mismatch" });
+
+    expect(validateCatalogTransform({
+      platform: "android",
+      path: "src/main/res/mipmap-xxxhdpi/ic_launcher_background.png",
+      source: { ...source, fileName: "launcher.9.png" },
+      resourceRole: "launcher_background",
+      transform,
+    })).toEqual({ valid: false, reason: "source_mismatch" });
   });
 
   it("Android nine-patch descriptor를 허용한다", () => {

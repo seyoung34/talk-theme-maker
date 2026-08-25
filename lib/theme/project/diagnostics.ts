@@ -1,6 +1,6 @@
-import { canDisableImageSlot, getInheritedSourceSlot, getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
+import { canDisableImageSlot, getResolvedColor, isImageSlotDisabled, type SlotCandidateSelections, type SlotColors, type SlotUploads } from "@/lib/theme/project/state";
 import { getSlotExportMapping } from "@/lib/theme/project/export";
-import { getDerivedAssetSourceRole } from "@/lib/theme/project/authoringPolicy";
+import { resolveProjectImageSource } from "@/lib/theme/project/assetSource";
 import type { ThemeProjectAnalysis, ThemeProjectFile, ThemeProjectResource } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate } from "@/lib/theme/templates";
 import type { ThemeDiagnostic } from "@/lib/theme/types";
@@ -35,22 +35,9 @@ export function createThemeProjectAnalysis(
     }
 
     const imageDisabled = isImageSlotDisabled(slot, selections);
-    let sourceSlot = slot;
-    let selectedUpload = imageDisabled ? undefined : getSelectedUpload(slot, uploads, selections, slots);
-    let upload = selectedUpload?.file;
-    let sourceUrl = getResolvedAssetUrl(slot, uploads, selections, template.id, template, slots);
-
-    // 직접 선택 없이 기본 슬롯을 상속 중이면(예: 탭 선택 아이콘) 기본 슬롯의 소스를 그대로 사용한다.
-    const inheritedSource = imageDisabled ? undefined : getInheritedSourceSlot(slot, uploads, selections, template.id, template, slots);
-    if (inheritedSource) {
-      sourceSlot = inheritedSource;
-      selectedUpload = getSelectedUpload(inheritedSource, uploads, selections, slots);
-      upload = selectedUpload?.file;
-      sourceUrl = getResolvedAssetUrl(inheritedSource, uploads, selections, template.id, template, slots);
-    }
+    const { sourceSlot, selectedUpload, upload, sourceUrl, previewUrl } = resolveProjectImageSource(slot, uploads, selections, template.id, template, slots);
 
     if (!imageDisabled && slot.path && slot.fileName) {
-      const previewUrl = upload ? undefined : selectedUpload?.catalog?.previewUrl ?? getSelectedCandidate(sourceSlot, selections, template.id, template)?.previewUrl;
       files.push({
         path: slot.path,
         name: slot.fileName,
@@ -66,14 +53,7 @@ export function createThemeProjectAnalysis(
     // catalog 참조가 있으면 export가 registry에서 바이트를 가져오므로 슬롯은 채워진 것이다.
     // `previewUrl`로 판정하면 안 된다 — 그 값은 만료되거나 서명에 실패하면 사라지는 화면용
     // 파생물이라, 정상적으로 내보내지는 슬롯에 "파일 필요" 경고가 뜬다.
-    const derivedSourceRole = getDerivedAssetSourceRole(slot.role, platform);
-    const derivedSourceSlot = derivedSourceRole ? slots.find((candidate) => candidate.role === derivedSourceRole && candidate.platform === platform) : undefined;
-    const derivedSourceReady = Boolean(
-      derivedSourceSlot
-      && (getSelectedUpload(derivedSourceSlot, uploads, selections, slots)
-        || getResolvedAssetUrl(derivedSourceSlot, uploads, selections, template.id, template, slots)),
-    );
-    if (slot.required && !upload && !sourceUrl && !selectedUpload?.catalog && !derivedSourceReady && !(imageDisabled && canDisableImageSlot(slot))) {
+    if (slot.required && !upload && !sourceUrl && !selectedUpload?.catalog && !(imageDisabled && canDisableImageSlot(slot))) {
       diagnostics.push({
         level: "warning",
         code: "missing-asset",

@@ -1,4 +1,4 @@
-import type { ThemePlatform } from "@/lib/theme/types";
+import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 import type { CatalogTransform } from "@/lib/theme/export/catalogTransform";
 
@@ -60,6 +60,7 @@ export type CatalogAssetSelection = {
 /** 권한 확인 뒤 Worker가 Builder에게 넘기는 항목. */
 export type ResolvedCatalogManifestItem = {
   readonly path: string;
+  readonly resourceRole?: ThemeResourceRole;
   /** Builder가 catalog 원본을 결과물용 PNG로 바꿔야 할 때만 존재한다. */
   readonly transform?: CatalogTransform;
   readonly catalogObject: {
@@ -180,9 +181,10 @@ export function assertReferencedAssetBudget(totals: {
   }
 }
 
-export function toResolvedCatalogManifestItem(path: string, record: ThemeAssetObjectRecord, transform?: CatalogTransform): ResolvedCatalogManifestItem {
+export function toResolvedCatalogManifestItem(path: string, record: ThemeAssetObjectRecord, transform?: CatalogTransform, resourceRole?: ThemeResourceRole): ResolvedCatalogManifestItem {
   return {
     path,
+    ...(resourceRole ? { resourceRole } : {}),
     ...(transform ? { transform } : {}),
     catalogObject: {
       objectKey: record.gcsObjectKey,

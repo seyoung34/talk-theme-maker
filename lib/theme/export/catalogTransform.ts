@@ -1,4 +1,5 @@
-import type { BubbleGeometry, Markers } from "../types.js";
+import { getAndroidRasterPlan } from "../android/assetCompiler.js";
+import type { BubbleGeometry, Markers, ThemeResourceRole } from "../types.js";
 
 export type CatalogTransformDimensions = {
   readonly width: number;
@@ -51,6 +52,7 @@ export type CatalogTransformValidationReason =
   | "invalid_descriptor"
   | "platform_mismatch"
   | "path_mismatch"
+  | "role_mismatch"
   | "source_mismatch"
   | "dimensions_mismatch";
 
@@ -68,6 +70,7 @@ export function validateCatalogTransform(input: {
   readonly platform: "android" | "ios";
   readonly path: string;
   readonly source: CatalogTransformSource;
+  readonly resourceRole?: ThemeResourceRole;
   readonly transform: unknown;
 }): CatalogTransformVerdict {
   const transform = parseCatalogTransformValue(input.transform);
@@ -75,9 +78,14 @@ export function validateCatalogTransform(input: {
 
   if (input.platform === "android") {
     if (transform.kind === "android-image") {
-      if (!input.path.toLowerCase().endsWith(".png")) return { valid: false, reason: "path_mismatch" };
+      const normalizedPath = input.path.replaceAll("\\", "/");
+      if (!normalizedPath.toLowerCase().endsWith(".png") || normalizedPath.toLowerCase().endsWith(".9.png")) return { valid: false, reason: "path_mismatch" };
       if (input.source.mimeType !== "image/png") return { valid: false, reason: "source_mismatch" };
-      if (!isRasterTargetDimensions(transform.targetDimensions)) return { valid: false, reason: "dimensions_mismatch" };
+      if (isAndroidNinePatchSourceName(input.source.fileName)) return { valid: false, reason: "source_mismatch" };
+      if (!hasPositiveDimensions(input.source.width, input.source.height)) return { valid: false, reason: "dimensions_mismatch" };
+      if (!input.resourceRole || !isAndroidRasterPathForRole(input.resourceRole, normalizedPath)) return { valid: false, reason: "role_mismatch" };
+      const plan = getAndroidRasterPlan({ role: input.resourceRole }, normalizedPath);
+      if (!plan || plan.mode !== "cover" || !sameDimensions(transform.targetDimensions, plan)) return { valid: false, reason: "dimensions_mismatch" };
       return { valid: true, transform };
     }
     if (transform.kind !== "android-nine-patch") return { valid: false, reason: "platform_mismatch" };
@@ -222,6 +230,18 @@ function isDimensions(value: unknown): value is CatalogTransformDimensions {
 /** Android builder가 메모리·출력 폭주 없이 처리할 수 있는 raster target 상한. */
 function isRasterTargetDimensions(value: CatalogTransformDimensions) {
   return value.width <= 8192 && value.height <= 8192 && value.width * value.height <= 32_000_000;
+}
+
+function isAndroidRasterPathForRole(role: ThemeResourceRole, path: string) {
+  const normalized = path.replaceAll("\\", "/").toLowerCase();
+  if (role === "theme_icon") return normalized === "src/main/theme/drawable-xxhdpi/icon.png";
+  if (role === "launcher_background") return /^src\/main\/res\/mipmap-(?:mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi)\/ic_launcher_background\.png$/.test(normalized);
+  if (role === "launcher_icon") return /^src\/main\/res\/mipmap-(?:mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi)\/ic_launcher\.png$/.test(normalized);
+  if (role === "launcher_round") return /^src\/main\/res\/mipmap-(?:mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi)\/ic_launcher_round\.png$/.test(normalized);
+  if (role === "launcher_foreground") return /^src\/main\/res\/mipmap-(?:mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi)\/ic_launcher_foreground\.png$/.test(normalized);
+  if (role === "splash") return /^src\/main\/theme\/(?:drawable-xhdpi|drawable-xxhdpi|drawable-sw600dp)\/theme_splash_image\.png$/.test(normalized);
+  if (role === "splash_landscape") return /^src\/main\/theme\/(?:drawable-land-xhdpi|drawable-land-xxhdpi|drawable-sw600dp-land)\/theme_splash_image\.png$/.test(normalized);
+  return false;
 }
 
 function sameDimensions(left: CatalogTransformDimensions, right: CatalogTransformDimensions) {
