@@ -1,4 +1,4 @@
-import { getAndroidRasterPlan } from "../android/assetCompiler.js";
+import { getAndroidRasterPlan } from "../android/assetCompiler";
 import type { BubbleGeometry, Markers, ThemeResourceRole } from "../types.js";
 
 export type CatalogTransformDimensions = {
