@@ -61,6 +61,14 @@ export type BubbleBuilderEditorHandle = { requestClose: () => void };
 type BubbleBuilderEditorProps = Omit<BubbleBuilderDialogProps, "open" | "onOpenChange"> & {
   active?: boolean;
   ref?: React.Ref<BubbleBuilderEditorHandle>;
+  /**
+   * 감싸는 쪽이 높이를 확정해 주는가.
+   *
+   * 다이얼로그는 확정해 준다(`inset-0` 또는 고정 높이). 그 안에서는 높이를 물려받아 캔버스가
+   * 남는 자리를 전부 쓰고 컨트롤만 스크롤한다. `/admin`처럼 문서 흐름에 그냥 놓이는 자리는
+   * 물려받을 높이가 없으므로 최소 높이로 버틴다.
+   */
+  fill?: boolean;
   onClose?: () => void;
   closeOnApply?: boolean;
 };
@@ -108,7 +116,7 @@ export function getBubbleEditSignature(spec: BubbleFamilyDesignSpec, decorationF
 }
 
 
-export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, active = true, ref, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
+export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, active = true, ref, fill = false, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
   const [spec, setSpec] = useState(() => initialSpec ?? createBubbleFamilyDesignSpec(side));
   const [decorationFiles, setDecorationFiles] = useState<DecorationFiles>({});
   const [decorationUrls, setDecorationUrls] = useState<Partial<Record<string, string>>>({});
@@ -524,7 +532,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
         flex를 쓰는 것은 시트의 `max-h-*%`가 컨테이너 높이를 기준으로 풀리게 하기 위해서다
         (grid 행에서는 퍼센트가 auto 크기 행을 만나 무시된다).
       */}
-      <section className="flex h-full min-w-0 flex-col bg-white text-slate-950">
+      <section className={`flex min-w-0 flex-col bg-white text-slate-950 ${fill ? "h-full" : "min-h-[40rem]"}`}>
         <header className="flex shrink-0 items-center gap-1 border-b border-slate-100 px-2 py-1.5">
           {closeButton}
           <h2 className="min-w-0 flex-1 truncate px-1 text-base font-black">나만의 말풍선 만들기</h2>
@@ -559,7 +567,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
         반대로 두었을 때는 색 두 칸과 슬라이더 두 개가 488px를 쓰고, 손으로 끌어 맞추는 캔버스가
         340px에 눌려 원본보다 작은 0.88배로 그려졌다. 직접 조작이 일어나는 쪽에 자리를 준다.
       */}
-      <section className="grid min-w-0 w-full gap-5 bg-white p-6 text-slate-950">
+      <section className={`grid min-w-0 w-full grid-rows-[auto_minmax(0,1fr)] gap-5 bg-white p-6 text-slate-950 ${fill ? "h-full" : "min-h-[34rem]"}`}>
         <div className="flex items-start justify-between gap-2">
           {/*
             어느 슬롯에 적용되는지는 도움말 팝오버가 이미 문장으로 설명한다. 헤더에서 같은 말을
@@ -572,16 +580,29 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
           </div>
         </div>
 
-        <div className="grid min-w-0 w-full grid-cols-[minmax(0,1fr)_340px] gap-5">
-          <aside className="grid min-h-[30rem] min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 rounded-2xl bg-slate-50 p-4">
+        <div className="grid min-h-0 min-w-0 w-full grid-cols-[minmax(0,1fr)_340px] gap-5">
+          <aside className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 rounded-2xl bg-slate-50 p-4">
             {preview}
             {textColorField}
           </aside>
 
-          <div className="grid content-start gap-5">
-            {bubbleSection}
-            {decorationSection}
-            {errorNote}
+          {/*
+            컨트롤만 스크롤한다.
+
+            두 컬럼이 같은 행에 있어서, 예전에는 오른쪽 내용이 길어지면 행이 높아지고 왼쪽 캔버스가
+            거기에 늘어났다. 경고 두 줄이 뜨고 사라지는 것만으로 캔버스가 140px 커졌다 작아지고
+            배율이 129%↔141%로 흔들렸다 — 장식을 끄는 도중에 그 일이 벌어지면 화면 이동량을
+            캔버스 좌표로 되돌리는 나눗셈의 분모가 바뀌어 손끝과 그림이 어긋난다.
+            높이를 바깥에서 고정하고 넘치는 쪽만 스크롤시키면, 경고뿐 아니라 레이어 추가·에러·
+            글자색 칸까지 무엇이 들고 나든 캔버스가 가만히 있는다.
+          */}
+          <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-4">
+            <div className="grid content-start gap-5 overflow-y-auto pr-1 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
+              {bubbleSection}
+              {decorationSection}
+              {errorNote}
+            </div>
+            {/* 적용하기는 스크롤 밖에 둔다. 모바일 앱바와 같은 이유다. */}
             {applyButton}
           </div>
         </div>
@@ -680,12 +701,14 @@ export function BubbleBuilderDialog({ open, onOpenChange, ...editorProps }: Bubb
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[90] bg-slate-950/45 backdrop-blur-sm" />
         {/*
-          모바일은 전체 화면이고 바깥 스크롤이 없다. 스크롤을 두면 캔버스 높이가 내용에 딸려
-          다시 흔들리고, 무엇보다 `적용하기`가 접힌 아래로 숨는다 — 그게 원래 문제였다.
-          데스크톱은 예전처럼 가운데 모달이고, 내용이 길면 모달이 스크롤한다.
+          어느 쪽이든 바깥 스크롤이 없다.
+
+          모달이 내용에 따라 늘었다 줄면 캔버스도 같이 흔들리고, 가운데 정렬이라 모달 자체가
+          위아래로 움직인다. 높이를 여기서 확정하고 안에서 넘치는 부분만 스크롤시킨다.
+          `44rem` 상한은 큰 모니터에서 모달이 화면 끝까지 늘어나지 않게 하는 선이다.
         */}
-        <Dialog.Content className="fixed inset-0 z-[91] overflow-hidden bg-white focus:outline-none lg:inset-x-3 lg:top-1/2 lg:mx-auto lg:inset-y-auto lg:max-h-[92dvh] lg:min-w-0 lg:w-auto lg:max-w-4xl lg:-translate-y-1/2 lg:overflow-y-auto lg:rounded-3xl lg:shadow-2xl lg:[scrollbar-color:#cbd5e1_transparent] lg:[scrollbar-width:thin] lg:[&::-webkit-scrollbar]:w-1.5 lg:[&::-webkit-scrollbar-thumb]:rounded-full lg:[&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
-          <BubbleBuilderEditor {...editorProps} ref={editorRef} active={open} onClose={() => onOpenChange(false)} />
+        <Dialog.Content className="fixed inset-0 z-[91] overflow-hidden bg-white focus:outline-none lg:inset-x-3 lg:top-1/2 lg:mx-auto lg:inset-y-auto lg:h-[min(92dvh,44rem)] lg:min-w-0 lg:w-auto lg:max-w-4xl lg:-translate-y-1/2 lg:rounded-3xl lg:shadow-2xl">
+          <BubbleBuilderEditor {...editorProps} ref={editorRef} active={open} fill onClose={() => onOpenChange(false)} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
