@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bubbleBodyScalePresets, bubbleBodyScaleRange, bubbleDecorationBaseSize, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleBodyScalePreset, getBubbleCanvasSize, getBubbleDecorationHandleRadius, getBubbleDecorationLayers, getBubbleDecorationRect, getBubbleDecorationSize, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
+import { bubbleBodyScaleRange, bubbleDecorationBaseSize, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleCanvasSize, getBubbleDecorationHandleRadius, getBubbleDecorationLayers, getBubbleDecorationRect, getBubbleDecorationSize, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleSideDesignSpec } from "@/lib/theme/bubbleBuilder/types";
 
 const baseDesign: BubbleSideDesignSpec = {
@@ -69,24 +69,15 @@ describe("bubble builder geometry", () => {
     expect(clamped.body.y).toBe(0);
   });
 
-  it("maps any stored body scale onto the nearest preset", () => {
-    // 슬라이더 시절 spec에는 임의의 값이 들어 있다. 못 읽으면 세그먼트가 아무것도 안 눌린 상태로 보인다.
-    expect(getBubbleBodyScalePreset(undefined)).toBe("normal");
-    expect(getBubbleBodyScalePreset(1)).toBe("normal");
-    expect(getBubbleBodyScalePreset(0.72)).toBe("small");
-    expect(getBubbleBodyScalePreset(1.38)).toBe("large");
-    // 범위 밖 값도 clamp 뒤에 가장 가까운 선택지로 떨어진다.
-    expect(getBubbleBodyScalePreset(99)).toBe("large");
-    expect(getBubbleBodyScalePreset(0)).toBe("small");
-  });
-
-  it("keeps every body scale preset inside the allowed range", () => {
-    for (const preset of bubbleBodyScalePresets) {
-      expect(preset.value).toBeGreaterThanOrEqual(bubbleBodyScaleRange.min);
-      expect(preset.value).toBeLessThanOrEqual(bubbleBodyScaleRange.max);
-      // 왕복이 되어야 고른 값이 그대로 다시 선택돼 보인다.
-      expect(getBubbleBodyScalePreset(preset.value)).toBe(preset.id);
-    }
+  /**
+   * `말풍선 크기` 컨트롤은 없앴지만 저장된 값은 계속 읽는다. 1로 눌러 버리면 이미 만들어 둔
+   * 테마의 여백이 조용히 달라진다.
+   */
+  it("still honours a body scale stored by an older builder", () => {
+    expect(getBubbleVariantGeometry({ ...baseDesign, bodyScale: 1.25 }, "first").body).toMatchObject({ width: 119, height: 100 });
+    expect(getBubbleVariantGeometry({ ...baseDesign, bodyScale: undefined }, "first").body).toMatchObject({ width: 95, height: 80 });
+    // 범위 밖 값은 눌러서 본체가 캔버스를 벗어나지 않게 한다.
+    expect(getBubbleVariantGeometry({ ...baseDesign, bodyScale: 99 }, "first").body.width).toBe(Math.round(95 * bubbleBodyScaleRange.max));
   });
 
   it("scales the body and moves the radius ceiling with it", () => {

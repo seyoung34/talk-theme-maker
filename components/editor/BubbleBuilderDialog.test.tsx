@@ -108,13 +108,17 @@ describe("BubbleBuilderDialog tabs", () => {
     expect(screen.getByRole("tab", { name: "꾸미기" })).toHaveAttribute("aria-selected", "false");
   });
 
-  it("offers body size as a few choices instead of a slider", () => {
+  /**
+   * `말풍선 크기`는 보이는 말풍선 크기를 바꾸지 않고 프레임 여백만 반대 방향으로 밀었다.
+   * 프레임 손잡이와 같은 결과를 두고 씨름하는 중복 컨트롤이라 없앴다.
+   */
+  it("no longer offers a body size control", () => {
     renderDialog();
 
+    expect(screen.queryByText("말풍선 크기")).toBeNull();
     for (const option of ["작게", "기본", "크게"]) {
-      expect(screen.getAllByRole("button", { name: option }).length).toBeGreaterThan(0);
+      expect(screen.queryByRole("button", { name: option })).toBeNull();
     }
-    expect(screen.getAllByRole("button", { name: "기본", pressed: true }).length).toBeGreaterThan(0);
   });
 });
 

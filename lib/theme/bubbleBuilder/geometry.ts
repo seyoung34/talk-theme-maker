@@ -76,32 +76,6 @@ export function getBubbleDecorationHandleRadius(source?: BubbleDecorationSourceS
 export const bubbleBodyScaleRange = { min: 0.7, max: 1.4 } as const;
 
 /**
- * 본체 크기의 선택지.
- *
- * 연속 슬라이더를 쓰지 않는다. 이 값이 정하는 것은 화면에 보이는 말풍선 크기가 아니라 9-slice의
- * **코너 두께**라, 실제 말풍선 크기는 글자 수가 정한다. 눈으로 맞추는 값이 아닌데 1% 단위를 열어
- * 두면 "지금 말풍선 크기를 맞추고 있다"는 오해만 커진다. 세 단계면 필요한 차이는 다 낸다.
- */
-export const bubbleBodyScalePresets = [
-  { id: "small", label: "작게", value: 0.8 },
-  { id: "normal", label: "기본", value: 1 },
-  { id: "large", label: "크게", value: 1.25 },
-] as const;
-
-export type BubbleBodyScalePresetId = (typeof bubbleBodyScalePresets)[number]["id"];
-
-/**
- * 저장된 배율에 가장 가까운 선택지. 옛 spec에는 슬라이더로 고른 임의의 값이 들어 있을 수 있어서,
- * 그대로 못 읽으면 세그먼트가 아무것도 선택되지 않은 상태로 보인다.
- */
-export function getBubbleBodyScalePreset(bodyScale: number | undefined): BubbleBodyScalePresetId {
-  const value = clamp(bodyScale ?? 1, bubbleBodyScaleRange.min, bubbleBodyScaleRange.max);
-  return bubbleBodyScalePresets.reduce((nearest, preset) => (
-    Math.abs(preset.value - value) < Math.abs(nearest.value - value) ? preset : nearest
-  )).id;
-}
-
-/**
  * 캔버스(프레임) 크기의 허용 범위. 단위는 배율이 아니라 픽셀이다.
  *
  * 캔버스는 그대로 내보내는 PNG의 크기다. 본체 바깥 여백은 장식이 삐져나올 자리이며,

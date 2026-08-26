@@ -17,7 +17,6 @@ import {
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
 import {
-  bubbleBodyScalePresets,
   bubbleCanvasSizeRange,
   bubbleDecorationMaxScale,
   createBubbleDecorationLayer,
@@ -27,7 +26,6 @@ import {
   getBubbleDecorationHandleRadius,
   getBubbleDecorationLayers,
   getBubbleDecorationRect,
-  getBubbleBodyScalePreset,
   getBubbleRadiusMax,
   getBubbleVariantGeometry,
   rectsOverlap,
@@ -292,19 +290,19 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
       <RangeField label="테두리 굵기" value={spec.design.borderWidth} min={0} max={10} onChange={(borderWidth) => updateDesign({ borderWidth })} />
       <RangeField label="모서리 둥글기" value={spec.design.radius} min={0} max={radiusMax} onChange={(radius) => updateDesign({ preset: "rounded", radius })} />
       {/*
-        본체를 키우면 9-slice의 코너가 두꺼워져 짧은 메시지의 말풍선이 커진다. 둥글기 상한도 같이
-        움직이므로, 줄일 때는 저장된 반지름을 새 상한으로 눌러 준다(그러지 않으면 슬라이더 손잡이가
-        범위 밖에 남아 값이 안 바뀐 것처럼 보인다).
+        `말풍선 크기(작게/기본/크게)`를 없앴다.
+
+        이 값은 화면에 보이는 말풍선 크기를 바꾸지 않는다. 9-slice에서 보이는 말풍선 가로는
+        `글자폭 + 2 × (테두리 굵기 + 10 + 둥글기 × 0.29)`이고 본체 배율이 들어가지 않는다.
+        실제로 바뀌는 것은 프레임 대비 투명 여백((프레임 - 본체) / 2)뿐인데, 그건 프레임 손잡이가
+        반대 방향으로 조절하는 바로 그 값이다 — 컨트롤 두 개가 한 결과를 두고 씨름했고, `크게`를
+        고르면 채팅방에서 말풍선이 차지하는 최소 폭이 오히려 줄었다.
+        `작게`(0.8)는 group에서 이미 고장나 있었다. 본체 95×60에서 content 높이가 24px 바닥에
+        눌려 테두리·둥글기 조절이 화면에 반영되지 않는다.
+
+        저장된 값은 계속 읽는다(`getVariantMetrics`). 1로 눌러 버리면 이미 만들어 둔 테마의
+        여백이 조용히 달라진다.
       */}
-      <ChoiceField
-        label="말풍선 크기"
-        value={getBubbleBodyScalePreset(spec.design.bodyScale)}
-        options={bubbleBodyScalePresets}
-        onChange={(presetId) => {
-          const nextScale = bubbleBodyScalePresets.find((preset) => preset.id === presetId)?.value ?? 1;
-          updateDesign({ bodyScale: nextScale, radius: Math.min(spec.design.radius, getBubbleRadiusMax("rounded", variant, nextScale)) });
-        }}
-      />
       {/* 프레임 크기는 숫자보다 눈으로 맞추는 값이라 미리보기의 손잡이로 옮겼다. */}
       <p className="text-[11px] font-bold text-slate-400">프레임(점선)은 장식이 삐져나올 자리예요. 미리보기의 손잡이를 끌어 넓힐 수 있어요.</p>
     </BuilderSection>
@@ -1127,34 +1125,6 @@ function BodyMoveAffordance({ active }: { active: boolean }) {
 function BuilderSection({ children }: { children: React.ReactNode }) { return <section className="grid gap-3 rounded-2xl border border-slate-200 p-4">{children}</section>; }
 function RangeField({ label, value, min, max, suffix = "", onChange }: { label: string; value: number; min: number; max: number; suffix?: string; onChange: (value: number) => void }) { return <label className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs font-bold text-slate-600"><span>{label}</span><span>{Math.round(value)}{suffix}</span><input type="range" className="col-span-2 accent-blue-600" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} /></label>; }
 
-/**
- * 눈금이 아니라 몇 개의 선택지로 고르는 값. 연속값이 의미 없는 설정에 쓴다.
- */
-function ChoiceField<T extends string>({ label, value, options, onChange }: {
-  label: string;
-  value: T;
-  options: readonly { id: T; label: string }[];
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="grid gap-1.5 text-xs font-bold text-slate-600">
-      <span id={`${label}-label`}>{label}</span>
-      <div className="grid grid-flow-col gap-1 rounded-xl bg-slate-100 p-1" role="group" aria-labelledby={`${label}-label`}>
-        {options.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            aria-pressed={value === option.id}
-            className={`min-h-9 rounded-lg text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${value === option.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
-            onClick={() => onChange(option.id)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
 /**
  * 라벨과 색상 코드를 한 줄에 나란히 두면 2열 배치의 좁은 폭(360px 기기에서 약 149px)에서
  * 자리가 모자라 줄바꿈이 일어나 카드 높이가 두 배가 된다. 견본 옆에 두 줄로 쌓아 폭을 아낀다.
