@@ -158,6 +158,64 @@ describe("BubbleBuilderDialog mobile shell", () => {
   });
 });
 
+/**
+ * 닫는 길이 셋(✕, Esc, 바깥 클릭)인데 셋 다 아무 말 없이 편집을 버렸다. 올린 꾸미기 이미지까지
+ * 함께 사라져서, 적용하기를 못 찾고 ✕를 누른 사람은 작업을 통째로 잃었다.
+ */
+describe("BubbleBuilderDialog close guard", () => {
+  it("closes straight away when nothing was touched", () => {
+    const onOpenChange = vi.fn();
+    renderDialog({ onOpenChange });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "닫기" })[0]);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.queryByText("적용하지 않은 변경 사항이 있어요")).toBeNull();
+  });
+
+  it("asks before dropping an unapplied change", () => {
+    const onOpenChange = vi.fn();
+    renderDialog({ onOpenChange });
+    fireEvent.paste(window, { clipboardData: { files: [new File(["image"], "cat.png", { type: "image/png" })] } });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "닫기" })[0]);
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByText("적용하지 않은 변경 사항이 있어요")).toBeInTheDocument();
+  });
+
+  it("keeps editing or discards from the confirm", () => {
+    const onOpenChange = vi.fn();
+    renderDialog({ onOpenChange });
+    fireEvent.paste(window, { clipboardData: { files: [new File(["image"], "cat.png", { type: "image/png" })] } });
+    fireEvent.click(screen.getAllByRole("button", { name: "닫기" })[0]);
+
+    fireEvent.click(screen.getByRole("button", { name: "계속 편집하기" }));
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "닫기" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "적용하지 않고 나가기" }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  /**
+   * 열 때 preset을 rounded로 강제하고 반지름을 상한으로 누르므로, `initialSpec`과 그대로 비교하면
+   * 옛 spec은 아무것도 건드리지 않아도 열자마자 "바뀐 것"이 된다.
+   */
+  it("does not treat the normalisation done on open as a change", () => {
+    const onOpenChange = vi.fn();
+    renderDialog({
+      onOpenChange,
+      // radius 999는 상한으로 눌리고, 단일 decoration은 배열로 옮겨진다.
+      spec: { ...spec, design: { ...spec.design, preset: "capsule", radius: 999 } },
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "닫기" })[0]);
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
 describe("BubbleBuilderDialog zoom controls", () => {
   it("offers a way to zoom without a pinch gesture", () => {
     renderDialog();
@@ -168,7 +226,7 @@ describe("BubbleBuilderDialog zoom controls", () => {
   });
 });
 
-function renderDialog() {
+function renderDialog(overrides: { onOpenChange?: () => void; spec?: BubbleFamilyDesignSpec } = {}) {
   return render(
     <BubbleBuilderDialog
       open
@@ -176,8 +234,8 @@ function renderDialog() {
       variant="first"
       slotLabel="내 말풍선 1"
       platform="android"
-      initialSpec={spec}
-      onOpenChange={vi.fn()}
+      initialSpec={overrides.spec ?? spec}
+      onOpenChange={overrides.onOpenChange ?? vi.fn()}
       onApply={vi.fn()}
     />,
   );

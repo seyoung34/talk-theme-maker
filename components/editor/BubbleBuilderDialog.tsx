@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FlipHorizontal, ImagePlus, Info, LoaderCircle, Maximize, Minus, Move, Plus, RotateCw, Sparkles, X } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
@@ -55,16 +55,35 @@ type BubbleBuilderDialogProps = {
   onApply: (result: GeneratedBubbleDesign, decorationFiles: DecorationFiles) => void;
 };
 
+/** 바깥(다이얼로그)에서 닫기를 요청하는 통로. Esc·바깥 클릭도 ✕와 같은 확인 절차를 타야 한다. */
+export type BubbleBuilderEditorHandle = { requestClose: () => void };
+
 type BubbleBuilderEditorProps = Omit<BubbleBuilderDialogProps, "open" | "onOpenChange"> & {
   active?: boolean;
+  ref?: React.Ref<BubbleBuilderEditorHandle>;
   onClose?: () => void;
   closeOnApply?: boolean;
 };
 
 const decorationMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
+/**
+ * "이번에 무언가 바꿨는가"를 재는 지문.
+ *
+ * `updatedAt`은 뺀다 — 값이 그대로여도 손대는 순간마다 올라가서, 넣어 두면 늘 바뀐 것이 된다.
+ * 올린 원본 파일도 함께 센다. 이미지 세 장을 얹고 닫으면 그 세 장이 통째로 사라지는데,
+ * 디자인 값만 보면 레이어가 지워진 경우와 구분되지 않는다.
+ */
+export function getBubbleEditSignature(spec: BubbleFamilyDesignSpec, decorationFiles: DecorationFiles) {
+  const files = Object.entries(decorationFiles)
+    .filter((entry): entry is [string, File] => Boolean(entry[1]))
+    .map(([layerId, file]) => `${layerId}:${file.name}:${file.size}:${file.lastModified}`)
+    .sort();
+  return JSON.stringify({ design: spec.design, files });
+}
 
-export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, active = true, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
+
+export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, active = true, ref, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
   const [spec, setSpec] = useState(() => initialSpec ?? createBubbleFamilyDesignSpec(side));
   const [decorationFiles, setDecorationFiles] = useState<DecorationFiles>({});
   const [decorationUrls, setDecorationUrls] = useState<Partial<Record<string, string>>>({});
@@ -76,6 +95,8 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const [activeTab, setActiveTab] = useState<"bubble" | "decoration">("bubble");
   // 모바일 컨트롤 시트의 높이. 캔버스와 세로를 나눠 갖는다.
   const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const baselineRef = useRef("");
 
   const layers = useMemo(() => spec.design.decorations ?? [], [spec.design.decorations]);
 
@@ -146,22 +167,31 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
     if (!active) return;
     const source = initialSpec ?? createBubbleFamilyDesignSpec(side);
     const sourceLayers = getBubbleDecorationLayers(source);
-    setSpec({
+    const normalized = {
       ...source,
       design: {
         ...source.design,
-        preset: "rounded",
+        preset: "rounded" as const,
         radius: Math.min(source.design.radius, getBubbleRadiusMax("rounded", variant, source.design.bodyScale)),
         decoration: undefined,
         decorations: sourceLayers,
       },
-    });
+    };
+    setSpec(normalized);
     setDecorationFiles({ ...(initialDecorationFiles ?? {}) });
+    /*
+      "안 바뀌었다"의 기준은 `initialSpec`이 아니라 **여기서 정규화한 결과**다.
+      이 효과가 preset을 rounded로 강제하고 반지름을 새 상한으로 누르며 옛 단일 장식을
+      배열로 옮기기 때문에, 원본과 비교하면 옛 spec은 아무것도 건드리지 않아도 열자마자
+      바뀐 것으로 읽힌다.
+    */
+    baselineRef.current = getBubbleEditSignature(normalized, initialDecorationFiles ?? {});
     setSelectedLayerId(sourceLayers[0]?.id ?? null);
     setError(undefined);
     setDragActive(false);
     setActiveTab("bubble");
     setSheetExpanded(false);
+    setCloseConfirmOpen(false);
   }, [active, initialDecorationFiles, initialSpec, side, variant]);
 
   useEffect(() => {
@@ -177,23 +207,24 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   }, [acceptDecorationFile, active]);
 
   /**
-   * Esc는 먼저 선택을 푼다.
+   * Esc는 가장 안쪽 것부터 되돌린다.
    *
-   * 장식을 고른 상태에서 Esc가 곧장 다이얼로그를 닫으면, 편집 중이던 사람이 "선택만 풀려던"
-   * 동작으로 작업을 통째로 잃는다. 캡처 단계에서 잡아 Radix의 닫기 처리로 넘어가지 않게 막고,
-   * 고른 장식이 없을 때만 평소대로 닫히게 둔다.
+   * 되묻기가 떠 있으면 그것부터 닫고, 장식을 고른 상태면 선택만 푼다. 곧장 다이얼로그를 닫으면
+   * "선택만 풀려던" 동작이 작업을 통째로 버린다. 캡처 단계에서 잡아 Radix의 닫기 처리로 넘어가지
+   * 않게 막고, 되돌릴 것이 없을 때만 평소대로 닫히게 둔다.
    */
   useEffect(() => {
-    if (!active || !selectedLayerId) return;
+    if (!active || (!selectedLayerId && !closeConfirmOpen)) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      setSelectedLayerId(null);
+      if (closeConfirmOpen) setCloseConfirmOpen(false);
+      else setSelectedLayerId(null);
     };
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
-  }, [active, selectedLayerId]);
+  }, [active, closeConfirmOpen, selectedLayerId]);
 
   useEffect(() => {
     const created: Record<string, string> = {};
@@ -259,7 +290,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const apply = async () => {
     if (layers.some((layer) => !decorationFiles[layer.id])) {
       setError("저장된 장식 원본을 찾지 못했습니다. 이미지를 다시 선택하거나 장식을 제거해 주세요.");
-      return;
+      return false;
     }
     // 겹침·늘어남은 막지 않는다. 판정이 보는 것은 이미지의 사각형이라 실제로 걸친 것이 투명한
     // 여백뿐일 수 있고, 글자 위에 무늬를 얹는 것처럼 일부러 겹치는 디자인도 있다.
@@ -269,14 +300,32 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
       const nextSpec = { ...spec, decorationSourceName: undefined, updatedAt: Date.now() };
       const result = await generateBubbleAsset({ spec: nextSpec, platform, variant, decorationFiles });
       onApply(result, decorationFiles);
+      // 적용한 순간이 새 기준이다. 그러지 않으면 적용 직후 닫아도 확인 창이 뜬다.
+      baselineRef.current = getBubbleEditSignature(nextSpec, decorationFiles);
       if (closeOnApply) onClose?.();
+      return true;
     } catch (cause) {
       console.error(cause);
       setError("말풍선 이미지를 만들지 못했습니다. 장식 이미지를 바꾸거나 다시 시도해 주세요.");
+      return false;
     } finally {
       setIsApplying(false);
     }
   };
+
+  /**
+   * 닫기는 잃을 것이 있을 때만 되묻는다.
+   *
+   * 닫는 길이 셋이다 — ✕, Esc, 바깥 클릭. 셋 다 아무 말 없이 편집을 버렸고, 올린 꾸미기
+   * 이미지까지 함께 사라졌다. 세 길을 모두 이 함수로 모은다.
+   */
+  const dirty = getBubbleEditSignature(spec, decorationFiles) !== baselineRef.current;
+  const requestClose = useCallback(() => {
+    if (isApplying) return;
+    if (dirty) setCloseConfirmOpen(true);
+    else onClose?.();
+  }, [dirty, isApplying, onClose]);
+  useImperativeHandle(ref, () => ({ requestClose }), [requestClose]);
 
   const bodyScale = spec.design.bodyScale ?? 1;
   const radiusMax = getBubbleRadiusMax("rounded", variant, bodyScale);
@@ -386,7 +435,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   );
 
   const closeButton = onClose
-    ? <button type="button" disabled={isApplying} onClick={onClose} className="grid size-10 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50" aria-label="닫기"><X size={20} /></button>
+    ? <button type="button" disabled={isApplying} onClick={requestClose} className="grid size-10 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50" aria-label="닫기"><X size={20} /></button>
     : null;
 
   const preview = (
@@ -510,7 +559,47 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
           </div>
         </div>
       </section>
+
+      {closeConfirmOpen ? (
+        <CloseConfirm
+          busy={isApplying}
+          onKeepEditing={() => setCloseConfirmOpen(false)}
+          onDiscard={() => { setCloseConfirmOpen(false); onClose?.(); }}
+          onApplyAndClose={() => void apply().then((ok) => { setCloseConfirmOpen(false); if (ok) onClose?.(); })}
+        />
+      ) : null}
     </>
+  );
+}
+
+/**
+ * 닫기 전 되묻기.
+ *
+ * `적용하고 나가기`를 맨 위에 둔다. 여기까지 온 사람은 대체로 적용하기를 못 찾았을 뿐이라
+ * 되묻기의 기본 답이 곧 원래 하려던 일이다. 버리는 쪽은 마지막에 두고 색으로만 구분한다.
+ */
+function CloseConfirm({ busy, onKeepEditing, onDiscard, onApplyAndClose }: {
+  busy: boolean;
+  onKeepEditing: () => void;
+  onDiscard: () => void;
+  onApplyAndClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[95] grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="말풍선 편집 종료 확인">
+      <section className="grid w-full max-w-[360px] gap-4 rounded-3xl bg-white p-5 text-slate-950 shadow-2xl">
+        <div className="grid gap-1">
+          <h3 className="text-lg font-black">적용하지 않은 변경 사항이 있어요</h3>
+          <p className="text-sm font-medium leading-6 text-slate-500">지금 나가면 이번에 바꾼 색·모양과 올린 꾸미기 이미지가 사라져요.</p>
+        </div>
+        <div className="grid gap-2">
+          <button type="button" disabled={busy} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50" onClick={onApplyAndClose}>
+            {busy ? <LoaderCircle size={18} className="animate-spin" /> : <Sparkles size={18} />}{busy ? "만드는 중" : "적용하고 나가기"}
+          </button>
+          <button type="button" disabled={busy} className="min-h-12 rounded-xl border border-slate-200 px-4 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-50" onClick={onKeepEditing}>계속 편집하기</button>
+          <button type="button" disabled={busy} className="min-h-11 rounded-xl px-4 text-sm font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50" onClick={onDiscard}>적용하지 않고 나가기</button>
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -552,8 +641,14 @@ function ControlSheet({ expanded, onExpandedChange, children }: { expanded: bool
 }
 
 export function BubbleBuilderDialog({ open, onOpenChange, ...editorProps }: BubbleBuilderDialogProps) {
+  const editorRef = useRef<BubbleBuilderEditorHandle>(null);
+  /*
+    Esc와 바깥 클릭도 ✕와 같은 길을 타게 한다. Radix는 둘 다 `onOpenChange(false)`로 알려 오는데,
+    `open`이 통제 대상이라 여기서 내리지 않으면 열린 채로 남는다. 그 사이에 편집기가 되물을지
+    그냥 닫을지 정한다.
+  */
   return (
-    <Dialog.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
+    <Dialog.Root open={open} onOpenChange={(next) => { if (next) onOpenChange(true); else editorRef.current?.requestClose(); }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[90] bg-slate-950/45 backdrop-blur-sm" />
         {/*
@@ -562,7 +657,7 @@ export function BubbleBuilderDialog({ open, onOpenChange, ...editorProps }: Bubb
           데스크톱은 예전처럼 가운데 모달이고, 내용이 길면 모달이 스크롤한다.
         */}
         <Dialog.Content className="fixed inset-0 z-[91] overflow-hidden bg-white focus:outline-none lg:inset-x-3 lg:top-1/2 lg:mx-auto lg:inset-y-auto lg:max-h-[92dvh] lg:min-w-0 lg:w-auto lg:max-w-4xl lg:-translate-y-1/2 lg:overflow-y-auto lg:rounded-3xl lg:shadow-2xl lg:[scrollbar-color:#cbd5e1_transparent] lg:[scrollbar-width:thin] lg:[&::-webkit-scrollbar]:w-1.5 lg:[&::-webkit-scrollbar-thumb]:rounded-full lg:[&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
-          <BubbleBuilderEditor {...editorProps} active={open} onClose={() => onOpenChange(false)} />
+          <BubbleBuilderEditor {...editorProps} ref={editorRef} active={open} onClose={() => onOpenChange(false)} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
