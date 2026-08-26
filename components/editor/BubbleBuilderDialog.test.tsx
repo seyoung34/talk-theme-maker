@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { BubbleBuilderDialog, getBubblePreviewLayout, getBubblePreviewScale } from "@/components/editor/BubbleBuilderDialog";
+import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
 import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 
 const spec: BubbleFamilyDesignSpec = {
@@ -129,48 +129,13 @@ describe("BubbleBuilderDialog frame handles", () => {
   });
 });
 
-describe("BubbleBuilderDialog preview scale", () => {
-  it("keeps the desktop scale when the container is wide enough", () => {
-    expect(getBubblePreviewScale(420, 274)).toBe(1.35);
-  });
+describe("BubbleBuilderDialog zoom controls", () => {
+  it("offers a way to zoom without a pinch gesture", () => {
+    renderDialog();
 
-  it("scales the preview down to the available mobile width", () => {
-    expect(getBubblePreviewScale(240, 274)).toBeCloseTo(240 / 274);
-  });
-
-  it("keeps a usable minimum scale for very narrow containers", () => {
-    expect(getBubblePreviewScale(100, 274)).toBe(0.65);
-  });
-});
-
-/**
- * 모서리 손잡이가 실제로 무언가를 바꾸는지는 이 계산에 달려 있다. 배율을 현재 캔버스 폭으로 잡으면
- * 남는 폭에 맞춰 되돌아와 화면 위 상자 크기가 늘 같아지고, 손잡이를 끌어도 아무 일이 없어 보인다.
- */
-describe("BubbleBuilderDialog preview layout", () => {
-  const maxCanvas = { width: 350, height: 322 };
-
-  it("grows the stage as the frame grows while the outer box stays put", () => {
-    const small = getBubblePreviewLayout({ width: 250, height: 230 }, maxCanvas, 280);
-    const large = getBubblePreviewLayout({ width: 350, height: 322 }, maxCanvas, 280);
-
-    expect(large.stageWidth).toBeGreaterThan(small.stageWidth);
-    expect(large.stageHeight).toBeGreaterThan(small.stageHeight);
-    expect(small.boundsWidth).toBe(large.boundsWidth);
-    expect(small.boundsHeight).toBe(large.boundsHeight);
-  });
-
-  it("keeps the largest frame inside the available width", () => {
-    const layout = getBubblePreviewLayout(maxCanvas, maxCanvas, 280);
-
-    expect(layout.stageWidth).toBeLessThanOrEqual(280);
-    expect(layout.boundsWidth).toBeLessThanOrEqual(280);
-  });
-
-  it("leaves room around a default-size frame for the corner handles", () => {
-    const layout = getBubblePreviewLayout({ width: 250, height: 230 }, maxCanvas, 280);
-
-    expect(layout.boundsWidth - layout.stageWidth).toBeGreaterThan(16);
+    expect(screen.getAllByRole("button", { name: "확대" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "축소" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "화면에 맞추기" }).length).toBeGreaterThan(0);
   });
 });
 
