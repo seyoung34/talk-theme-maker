@@ -764,24 +764,47 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
   const panRef = useRef(pan);
   panRef.current = pan;
 
+  /*
+    보기 상태는 ref에 먼저 쓰고 state에 넘긴다.
+
+    휠과 핀치는 한 번 그리는 사이에 여러 번 들어온다. 렌더가 갱신해 주는 값만 읽으면 그 사이의
+    호출이 모두 같은 출발점을 보고 계산해서 중간 단계가 통째로 사라진다. ref를 그 자리에서
+    갱신하면 이어지는 호출이 앞의 결과를 이어받는다.
+  */
   const movePan = useCallback((next: BubblePreviewPan) => {
-    setPan(clampBubblePreviewPan(next, stageSizeRef.current, viewportSizeRef.current));
+    const clamped = clampBubblePreviewPan(next, stageSizeRef.current, viewportSizeRef.current);
+    panRef.current = clamped;
+    setPan(clamped);
   }, []);
 
-  /** 집은 점을 제자리에 두고 배율만 바꾼다. `anchor`는 뷰포트 중심 기준 좌표다. */
+  /**
+   * 집은 점을 제자리에 두고 배율만 바꾼다. `anchor`는 뷰포트 중심 기준 좌표다.
+   *
+   * `setZoom` 업데이터 **안에서** `setPan`을 부르지 않는다. 업데이터는 순수해야 하고, React는
+   * 이를 여러 번 실행할 수 있다(개발 모드의 StrictMode에서는 확정적으로 두 번). 그러면 앵커
+   * 보정이 두 번 적용돼 집은 지점이 갈 자리의 두 배로 밀려난다 — 측정으로 확인한 값이다.
+   */
   const applyZoom = useCallback((nextZoom: number, anchor: BubblePreviewPan = { x: 0, y: 0 }) => {
-    setZoom((current) => {
-      const clamped = clampBubblePreviewZoom(nextZoom);
-      setPan((currentPan) => clampBubblePreviewPan(
-        getBubblePreviewZoomPan(currentPan, anchor, clamped / current),
-        { width: stageSizeRef.current.width * (clamped / current), height: stageSizeRef.current.height * (clamped / current) },
-        viewportSizeRef.current,
-      ));
-      return clamped;
-    });
+    const current = zoomRef.current;
+    const clamped = clampBubblePreviewZoom(nextZoom);
+    if (Math.abs(clamped - current) < 0.0001) return;
+    const ratio = clamped / current;
+    const stage = { width: stageSizeRef.current.width * ratio, height: stageSizeRef.current.height * ratio };
+    const nextPan = clampBubblePreviewPan(
+      getBubblePreviewZoomPan(panRef.current, anchor, ratio),
+      stage,
+      viewportSizeRef.current,
+    );
+    zoomRef.current = clamped;
+    panRef.current = nextPan;
+    stageSizeRef.current = stage;
+    setZoom(clamped);
+    setPan(nextPan);
   }, []);
 
   const fitToViewport = useCallback(() => {
+    zoomRef.current = 1;
+    panRef.current = { x: 0, y: 0 };
     setZoom(1);
     setPan({ x: 0, y: 0 });
   }, []);
@@ -855,12 +878,16 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     const nextZoom = clampBubblePreviewZoom(pinch.zoom * ratio);
     const applied = nextZoom / pinch.zoom;
     const zoomed = getBubblePreviewZoomPan(pinch.pan, pinch.center, applied);
-    setZoom(nextZoom);
-    setPan(clampBubblePreviewPan(
+    // 핀치 시작값(`pinch`)에서 매번 다시 계산하므로 누적 오차가 없다. ref만 따라 갱신한다.
+    zoomRef.current = nextZoom;
+    const nextPan = clampBubblePreviewPan(
       { x: zoomed.x + (next.center.x - pinch.center.x), y: zoomed.y + (next.center.y - pinch.center.y) },
       { width: geometry.canvas.width * fitScale * nextZoom, height: geometry.canvas.height * fitScale * nextZoom },
       viewportSizeRef.current,
-    ));
+    );
+    panRef.current = nextPan;
+    setZoom(nextZoom);
+    setPan(nextPan);
   };
 
   const handleViewportPointerUpCapture = (event: React.PointerEvent) => {
@@ -891,10 +918,10 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     movePan({ x: drag.pan.x + dx, y: drag.pan.y + dy });
   };
   /**
-   * 두 번 두드리면 확대와 맞춤을 오간다.
+   * 두 번 두드리면 확대와 맞춤을 오간다. **손가락과 펜에서만.**
    *
-   * 손가락으로 쓰는 화면에서 휠이 없고, 핀치는 한 손으로 쓰기 어렵다. 두 번째 두드림이 아니면
-   * 평소대로 선택 해제로 읽는다.
+   * 휠이 없고 핀치가 한 손으로 어려운 화면을 위한 통로다. 마우스에는 휠과 버튼이 이미 있는데,
+   * 여기서까지 받으면 빈 자리를 두 번 클릭한 것이 배율 초기화로 읽혀 "확대가 안 된다"가 된다.
    */
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const endViewportPan = (event: React.PointerEvent) => {
@@ -902,6 +929,10 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     viewportPanRef.current = null;
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* noop */ }
     if (!drag || drag.moved || pinchRef.current) return;
+    if (event.pointerType === "mouse") {
+      clearSelection();
+      return;
+    }
     const now = Date.now();
     const last = lastTapRef.current;
     if (last && now - last.time < 320 && Math.hypot(event.clientX - last.x, event.clientY - last.y) < 24) {
@@ -1153,7 +1184,15 @@ function ZoomControls({ percent, canZoomIn, canZoomOut, onZoomIn, onZoomOut, onF
 }) {
   const button = "grid size-8 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-35";
   return (
-    <div className="pointer-events-auto absolute bottom-2 right-2 flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur">
+    /*
+      이 막대는 뷰포트 **안**에 있다. 전파를 멈추지 않으면 버튼을 누른 것이 "빈 자리를 두드렸다"로도
+      읽혀서 두 가지가 따라온다 — 빠르게 두 번 누르면 두 번째가 더블탭으로 잡혀 배율이 맞춤으로
+      되돌아가고(확대가 안 되는 것처럼 보인다), 누를 때마다 골라 둔 장식의 선택이 풀린다.
+    */
+    <div
+      className="pointer-events-auto absolute bottom-2 right-2 flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur"
+      onPointerDown={(event) => event.stopPropagation()}
+    >
       <button type="button" className={button} aria-label="축소" disabled={!canZoomOut} onClick={onZoomOut}><Minus size={15} /></button>
       <span className="min-w-11 text-center text-[11px] font-black tabular-nums text-slate-500" aria-live="polite">{percent}%</span>
       <button type="button" className={button} aria-label="확대" disabled={!canZoomIn} onClick={onZoomIn}><Plus size={15} /></button>
