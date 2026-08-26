@@ -77,6 +77,8 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const [error, setError] = useState<string>();
   const [dragActive, setDragActive] = useState(false);
   const [activeTab, setActiveTab] = useState<"bubble" | "decoration">("bubble");
+  // 모바일 컨트롤 시트의 높이. 캔버스와 세로를 나눠 갖는다.
+  const [sheetExpanded, setSheetExpanded] = useState(false);
 
   const layers = useMemo(() => spec.design.decorations ?? [], [spec.design.decorations]);
 
@@ -162,6 +164,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
     setError(undefined);
     setDragActive(false);
     setActiveTab("bubble");
+    setSheetExpanded(false);
   }, [active, initialDecorationFiles, initialSpec, side, variant]);
 
   useEffect(() => {
@@ -340,94 +343,185 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
     <button type="button" disabled={isApplying} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void apply()}>{isApplying ? <LoaderCircle size={18} className="animate-spin" /> : <Sparkles size={18} />}{isApplying ? "만드는 중" : "적용하기"}</button>
   );
 
+  const helpPopover = (
+    <Popover.Root>
+      <Popover.Trigger className="grid size-10 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2" aria-label="도움말"><Info size={20} /></Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content sideOffset={8} align="end" className="z-[92] w-64 rounded-2xl border border-slate-200 bg-white p-4 text-xs font-medium leading-5 text-slate-600 shadow-xl focus:outline-none">
+          <p className="mb-2 text-sm font-black text-slate-900">미리보기 안내</p>
+          <ul className="grid gap-1.5">
+            <li className="flex items-center gap-2"><span className="inline-block h-2.5 w-4 shrink-0 rounded-sm border border-dashed border-emerald-600/80" /><span><b className="font-bold text-slate-800">글자 영역</b> · 그림이 여기를 덮으면 메시지가 가려요.</span></li>
+            <li className="flex items-center gap-2"><span className="inline-block h-2.5 w-4 shrink-0 rounded-sm bg-sky-400/70" /><span><b className="font-bold text-slate-800">늘어나는 구간</b> · 긴 메시지에서 늘어나는 곳이에요. 이 선을 가로지르는 그림도 함께 늘어나요.</span></li>
+          </ul>
+          <p className="mt-3 border-t border-slate-100 pt-3">현재 선택한 {slotLabel} 슬롯 하나에만 적용되고, 다른 말풍선은 바뀌지 않아요.</p>
+          <Popover.Arrow className="fill-white" />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+
+  const closeButton = onClose
+    ? <button type="button" disabled={isApplying} onClick={onClose} className="grid size-10 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50" aria-label="닫기"><X size={20} /></button>
+    : null;
+
+  const preview = (
+    <BubblePreview
+      spec={spec}
+      variant={variant}
+      layers={layers}
+      decorationUrls={decorationUrls}
+      decorationSizes={decorationSizes}
+      selectedLayerId={selectedLayerId}
+      onSelectLayer={setSelectedLayerId}
+      onRemoveLayer={removeLayer}
+      onDecorationChange={patchLayer}
+      onBodyChange={updateDesign}
+      onCanvasScaleChange={updateDesign}
+    />
+  );
+
+  const textColorField = (
+    <div className="grid gap-2">
+      <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={spec.design.syncTextColorOnApply} onChange={(event) => updateDesign({ syncTextColorOnApply: event.currentTarget.checked })} className="size-4 accent-blue-600" />글자색도 함께 맞추기</label>
+      {spec.design.syncTextColorOnApply ? <ColorField label="말풍선 글자색" value={spec.design.textColor} onChange={(textColor) => updateDesign({ textColor })} /> : null}
+    </div>
+  );
+
+  const errorNote = error ? <p className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700" role="alert">{error}</p> : null;
+
+  // 탭. 순서가 없으므로 번호가 아니라 이름으로 고른다.
+  const tabList = (
+    <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="편집 항목">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === tab.id}
+          className={`min-h-10 rounded-lg text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${activeTab === tab.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+          onClick={() => setActiveTab(tab.id)}
+        >
+          {tab.name}
+        </button>
+      ))}
+    </div>
+  );
+
+  /*
+    셸을 둘로 나눈다.
+
+    한 벌로 버티던 동안 모바일은 중앙 모달 안의 세로 스크롤이었고, 390px 화면에서 내용 969px 중
+    787px만 보였다 — `적용하기`가 열자마자 화면 밖(모달 하단보다 117px 아래)이라, 못 찾고 ✕로
+    나가는 것이 자연스러운 결과였다. 캔버스도 386px 안의 한 블록이라 손으로 끌어 맞출 자리가
+    없었다. 세로가 귀한 쪽과 가로가 남는 쪽은 배치의 답이 달라서, 한 트리로 둘 다 맞출 수 없다.
+  */
   return (
-    <section className="grid min-w-0 w-full gap-3 bg-white p-4 text-slate-950 md:p-6 lg:gap-5">
-          <div className="flex items-start justify-between gap-2">
-            {/*
-              어느 슬롯에 적용되는지는 도움말 팝오버가 이미 문장으로 설명한다. 헤더에서 같은 말을
-              한 줄 더 쓰지 않는다.
-            */}
-            <div className="min-w-0">
-              <h2 className="flex items-center gap-2 text-lg font-black text-slate-950 lg:text-xl">나만의 말풍선 만들기</h2>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <Popover.Root>
-                <Popover.Trigger className="grid size-10 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2" aria-label="도움말"><Info size={20} /></Popover.Trigger>
-                <Popover.Portal>
-                  <Popover.Content sideOffset={8} align="end" className="z-[92] w-64 rounded-2xl border border-slate-200 bg-white p-4 text-xs font-medium leading-5 text-slate-600 shadow-xl focus:outline-none">
-                    <p className="mb-2 text-sm font-black text-slate-900">미리보기 안내</p>
-                    <ul className="grid gap-1.5">
-                      <li className="flex items-center gap-2"><span className="inline-block h-2.5 w-4 shrink-0 rounded-sm border border-dashed border-emerald-600/80" /><span><b className="font-bold text-slate-800">글자 영역</b> · 그림이 여기를 덮으면 메시지가 가려요.</span></li>
-                      <li className="flex items-center gap-2"><span className="inline-block h-2.5 w-4 shrink-0 rounded-sm bg-sky-400/70" /><span><b className="font-bold text-slate-800">늘어나는 구간</b> · 긴 메시지에서 늘어나는 곳이에요. 이 선을 가로지르는 그림도 함께 늘어나요.</span></li>
-                    </ul>
-                    <p className="mt-3 border-t border-slate-100 pt-3">현재 선택한 {slotLabel} 슬롯 하나에만 적용되고, 다른 말풍선은 바뀌지 않아요.</p>
-                    <Popover.Arrow className="fill-white" />
-                  </Popover.Content>
-                </Popover.Portal>
-              </Popover.Root>
-              {onClose ? <button type="button" disabled={isApplying} onClick={onClose} className="grid size-10 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50" aria-label="닫기"><X size={20} /></button> : null}
-            </div>
-          </div>
-
-          {/* 모바일 탭. 순서가 없으므로 번호가 아니라 이름으로 고른다. */}
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 lg:hidden" role="tablist" aria-label="편집 항목">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                className={`min-h-10 rounded-lg text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${activeTab === tab.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.name}
-              </button>
-            ))}
-          </div>
-
+    <>
+      {/*
+        모바일: 전체 화면. 앱바(적용하기 고정) · 캔버스 · 컨트롤 시트.
+        높이는 `100dvh`가 아니라 `h-full`로 받는다. 감싸는 `Dialog.Content`가 `inset-0`이라
+        이미 확정 높이인데, 여기서 dvh를 다시 재면 주소창 높이만큼 어긋나 시트 아래가 잘린다.
+        flex를 쓰는 것은 시트의 `max-h-*%`가 컨테이너 높이를 기준으로 풀리게 하기 위해서다
+        (grid 행에서는 퍼센트가 auto 크기 행을 만나 무시된다).
+      */}
+      <section className="flex h-full min-w-0 flex-col bg-white text-slate-950 lg:hidden">
+        <header className="flex shrink-0 items-center gap-1 border-b border-slate-100 px-2 py-1.5">
+          {closeButton}
+          <h2 className="min-w-0 flex-1 truncate px-1 text-base font-black">나만의 말풍선 만들기</h2>
+          {helpPopover}
           {/*
-            넓은 컬럼은 캔버스가 가진다.
-            반대로 두었을 때는 색 두 칸과 슬라이더 두 개가 488px를 쓰고, 손으로 끌어 맞추는
-            캔버스가 340px에 눌려 원본보다 작은 0.88배로 그려졌다. 직접 조작이 일어나는 쪽에
-            자리를 준다.
+            적용하기는 앱바에 둔다. 스크롤 맨 아래에 있던 동안에는 열자마자 화면 밖이라,
+            버튼을 못 찾고 ✕로 나가면서 편집을 통째로 잃는 일이 구조적으로 일어났다.
           */}
-          <div className="grid min-w-0 w-full gap-4 lg:mt-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-5">
-            {/* 미리보기: 모바일은 탭 아래 고정, 데스크톱은 좌측 넓은 컬럼 */}
-            <aside className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 rounded-2xl bg-slate-50 p-4 lg:min-h-[30rem]">
-              <BubblePreview
-                spec={spec}
-                variant={variant}
-                layers={layers}
-                decorationUrls={decorationUrls}
-                decorationSizes={decorationSizes}
-                selectedLayerId={selectedLayerId}
-                onSelectLayer={setSelectedLayerId}
-                onRemoveLayer={removeLayer}
-                onDecorationChange={patchLayer}
-                onBodyChange={updateDesign}
-                onCanvasScaleChange={updateDesign}
-              />
-              <div className="grid gap-2">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={spec.design.syncTextColorOnApply} onChange={(event) => updateDesign({ syncTextColorOnApply: event.currentTarget.checked })} className="size-4 accent-blue-600" />글자색도 함께 맞추기</label>
-                {spec.design.syncTextColorOnApply ? <ColorField label="말풍선 글자색" value={spec.design.textColor} onChange={(textColor) => updateDesign({ textColor })} /> : null}
-              </div>
-            </aside>
+          <button
+            type="button"
+            disabled={isApplying}
+            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-blue-600 px-3.5 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => void apply()}
+          >
+            {isApplying ? <LoaderCircle size={16} className="animate-spin" /> : <Sparkles size={16} />}{isApplying ? "만드는 중" : "적용하기"}
+          </button>
+        </header>
 
-            {/* 데스크톱: 모든 섹션을 한 화면에 표시. 순서는 모바일 탭과 같게 유지한다. */}
-            <div className="hidden content-start gap-5 lg:grid">
-              {bubbleSection}
-              {decorationSection}
-              {error ? <p className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700" role="alert">{error}</p> : null}
-              {applyButton}
-            </div>
+        <div className="min-h-0 flex-1 px-3 pt-2">{preview}</div>
 
-            {/* 모바일 전용: 선택한 탭 컨트롤. 적용하기는 어느 탭에 있든 항상 보인다. */}
-            <div className="lg:hidden">
-              {tabs.find((tab) => tab.id === activeTab)?.node}
-              {error ? <p className="mt-3 rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700" role="alert">{error}</p> : null}
-              <div className="mt-4">{applyButton}</div>
-            </div>
+        <ControlSheet expanded={sheetExpanded} onExpandedChange={setSheetExpanded}>
+          {tabList}
+          {tabs.find((tab) => tab.id === activeTab)?.node}
+          {textColorField}
+          {errorNote}
+        </ControlSheet>
+      </section>
+
+      {/*
+        데스크톱: 넓은 컬럼은 캔버스가 가진다.
+        반대로 두었을 때는 색 두 칸과 슬라이더 두 개가 488px를 쓰고, 손으로 끌어 맞추는 캔버스가
+        340px에 눌려 원본보다 작은 0.88배로 그려졌다. 직접 조작이 일어나는 쪽에 자리를 준다.
+      */}
+      <section className="hidden min-w-0 w-full gap-5 bg-white p-6 text-slate-950 lg:grid">
+        <div className="flex items-start justify-between gap-2">
+          {/*
+            어느 슬롯에 적용되는지는 도움말 팝오버가 이미 문장으로 설명한다. 헤더에서 같은 말을
+            한 줄 더 쓰지 않는다.
+          */}
+          <h2 className="min-w-0 text-xl font-black text-slate-950">나만의 말풍선 만들기</h2>
+          <div className="flex shrink-0 items-center gap-1">
+            {helpPopover}
+            {closeButton}
           </div>
+        </div>
+
+        <div className="grid min-w-0 w-full grid-cols-[minmax(0,1fr)_340px] gap-5">
+          <aside className="grid min-h-[30rem] min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 rounded-2xl bg-slate-50 p-4">
+            {preview}
+            {textColorField}
+          </aside>
+
+          <div className="grid content-start gap-5">
+            {bubbleSection}
+            {decorationSection}
+            {errorNote}
+            {applyButton}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+/**
+ * 모바일 컨트롤 시트.
+ *
+ * 높이를 `dvh`로 묶어 캔버스와 자리를 나눈다 — 부모 높이를 기준으로 잡으면 캔버스는 시트가
+ * 남긴 높이를, 시트는 캔버스가 남긴 높이를 서로 참조해 순환한다. 내용이 상한보다 짧으면 그만큼만
+ * 차지하므로 `말풍선` 탭에서는 캔버스가 더 넓어진다.
+ *
+ * 손잡이는 눌러도 접히고 끌어도 접힌다. 시트를 처음 보는 사람은 누르고, 익숙한 사람은 끈다.
+ */
+function ControlSheet({ expanded, onExpandedChange, children }: { expanded: boolean; onExpandedChange: (expanded: boolean) => void; children: React.ReactNode }) {
+  const dragStartRef = useRef<number | null>(null);
+  return (
+    <section className={`grid min-h-0 shrink-0 grid-rows-[auto_minmax(0,1fr)] rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.06)] transition-[max-height] ${expanded ? "max-h-[75%]" : "max-h-[40%]"}`}>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        aria-label={expanded ? "설정 영역 줄이기" : "설정 영역 넓히기"}
+        className="grid touch-none place-items-center py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+        onClick={() => onExpandedChange(!expanded)}
+        onPointerDown={(event) => { dragStartRef.current = event.clientY; }}
+        onPointerUp={(event) => {
+          const start = dragStartRef.current;
+          dragStartRef.current = null;
+          if (start === null) return;
+          const distance = event.clientY - start;
+          // 끌었다고 볼 만큼 움직였을 때만 방향을 읽는다. 그 아래는 click이 받아 토글한다.
+          if (Math.abs(distance) < 12) return;
+          onExpandedChange(distance < 0);
+        }}
+      >
+        <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
+      </button>
+      <div className="grid min-h-0 content-start gap-3 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
     </section>
   );
 }
@@ -437,7 +531,12 @@ export function BubbleBuilderDialog({ open, onOpenChange, ...editorProps }: Bubb
     <Dialog.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[90] bg-slate-950/45 backdrop-blur-sm" />
-        <Dialog.Content className="fixed inset-x-3 top-1/2 z-[91] mx-auto max-h-[92dvh] min-w-0 w-auto max-w-4xl -translate-y-1/2 overflow-y-auto rounded-3xl bg-white shadow-2xl focus:outline-none [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
+        {/*
+          모바일은 전체 화면이고 바깥 스크롤이 없다. 스크롤을 두면 캔버스 높이가 내용에 딸려
+          다시 흔들리고, 무엇보다 `적용하기`가 접힌 아래로 숨는다 — 그게 원래 문제였다.
+          데스크톱은 예전처럼 가운데 모달이고, 내용이 길면 모달이 스크롤한다.
+        */}
+        <Dialog.Content className="fixed inset-0 z-[91] overflow-hidden bg-white focus:outline-none lg:inset-x-3 lg:top-1/2 lg:mx-auto lg:inset-y-auto lg:max-h-[92dvh] lg:min-w-0 lg:w-auto lg:max-w-4xl lg:-translate-y-1/2 lg:overflow-y-auto lg:rounded-3xl lg:shadow-2xl lg:[scrollbar-color:#cbd5e1_transparent] lg:[scrollbar-width:thin] lg:[&::-webkit-scrollbar]:w-1.5 lg:[&::-webkit-scrollbar-thumb]:rounded-full lg:[&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
           <BubbleBuilderEditor {...editorProps} active={open} onClose={() => onOpenChange(false)} />
         </Dialog.Content>
       </Dialog.Portal>
@@ -644,11 +743,28 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     drag.moved = true;
     movePan({ x: drag.pan.x + dx, y: drag.pan.y + dy });
   };
+  /**
+   * 두 번 두드리면 확대와 맞춤을 오간다.
+   *
+   * 손가락으로 쓰는 화면에서 휠이 없고, 핀치는 한 손으로 쓰기 어렵다. 두 번째 두드림이 아니면
+   * 평소대로 선택 해제로 읽는다.
+   */
+  const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const endViewportPan = (event: React.PointerEvent) => {
     const drag = viewportPanRef.current;
     viewportPanRef.current = null;
-    if (drag && !drag.moved && !pinchRef.current) clearSelection();
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* noop */ }
+    if (!drag || drag.moved || pinchRef.current) return;
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last && now - last.time < 320 && Math.hypot(event.clientX - last.x, event.clientY - last.y) < 24) {
+      lastTapRef.current = null;
+      if (zoom > 1.05) fitToViewport();
+      else applyZoom(2, viewportPoint(event.clientX, event.clientY));
+      return;
+    }
+    lastTapRef.current = { time: now, x: event.clientX, y: event.clientY };
+    clearSelection();
   };
 
   /**
@@ -769,7 +885,7 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
   };
 
   return (
-    <div className="grid min-h-0 min-w-0 w-full grid-rows-[minmax(0,1fr)_auto_auto] gap-1.5">
+    <div className="grid h-full min-h-0 min-w-0 w-full grid-rows-[minmax(0,1fr)_auto_auto] gap-1.5">
       {/*
         뷰포트 크기는 바깥 레이아웃이 정한다(모바일은 화면을 채우고, 데스크톱은 넓은 컬럼을 채운다).
         프레임 크기가 뷰포트를 정하던 시절에는 프레임을 줄일수록 편집할 자리도 같이 줄었다.

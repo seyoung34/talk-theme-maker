@@ -129,6 +129,31 @@ describe("BubbleBuilderDialog frame handles", () => {
   });
 });
 
+/**
+ * 모바일에서는 `적용하기`가 스크롤 맨 아래에 있어 열자마자 화면 밖이었다(390px 화면에서 모달
+ * 하단보다 117px 아래). 앱바로 올려 스크롤과 무관하게 만든 것이 이 셸의 존재 이유다.
+ */
+describe("BubbleBuilderDialog mobile shell", () => {
+  it("keeps apply in the app bar, outside the scrolling control sheet", () => {
+    renderDialog();
+
+    const mobileShell = document.querySelector("section.lg\\:hidden");
+    expect(mobileShell).not.toBeNull();
+    expect(mobileShell?.querySelector("header")?.textContent).toContain("적용하기");
+  });
+
+  it("offers a control sheet that can be made taller", () => {
+    renderDialog();
+
+    const handle = screen.getByRole("button", { name: "설정 영역 넓히기" });
+    expect(handle).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(handle);
+
+    expect(screen.getByRole("button", { name: "설정 영역 줄이기" })).toHaveAttribute("aria-expanded", "true");
+  });
+});
+
 describe("BubbleBuilderDialog zoom controls", () => {
   it("offers a way to zoom without a pinch gesture", () => {
     renderDialog();
