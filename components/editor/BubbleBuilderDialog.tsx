@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FlipHorizontal, ImagePlus, Info, LoaderCircle, Maximize, Minus, Move, Plus, RotateCw, Sparkles, X } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
@@ -68,6 +68,31 @@ type BubbleBuilderEditorProps = Omit<BubbleBuilderDialogProps, "open" | "onOpenC
 const decorationMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
 
 /**
+ * 지금 어느 셸을 쓸지.
+ *
+ * 두 셸을 CSS로만 감추면 둘 다 마운트돼서 미리보기가 두 벌 돌아간다 — 캔버스 DOM도, 크기를
+ * 지켜보는 ResizeObserver도, 줌·이동 상태도 두 개다. 감춰진 쪽은 크기가 0이라 배율 계산이
+ * 엉뚱한 값으로 돌고, 화면 폭이 바뀌어 셸이 교대하면 그 값이 그대로 나타난다.
+ *
+ * 다이얼로그는 열 때 비로소 마운트되는 클라이언트 전용 트리라 서버 렌더 값이 쓰일 일이 없다.
+ * 그래도 `useSyncExternalStore`를 쓰는 것은 첫 클라이언트 렌더부터 올바른 값을 읽어 한 프레임의
+ * 깜빡임을 없애기 위해서다.
+ */
+const desktopShellQuery = "(min-width: 1024px)";
+
+function useDesktopShell() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const query = window.matchMedia(desktopShellQuery);
+      query.addEventListener("change", onChange);
+      return () => query.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(desktopShellQuery).matches,
+    () => true,
+  );
+}
+
+/**
  * "이번에 무언가 바꿨는가"를 재는 지문.
  *
  * `updatedAt`은 뺀다 — 값이 그대로여도 손대는 순간마다 올라가서, 넣어 두면 늘 바뀐 것이 된다.
@@ -96,6 +121,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   // 모바일 컨트롤 시트의 높이. 캔버스와 세로를 나눠 갖는다.
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+  const isDesktop = useDesktopShell();
   const baselineRef = useRef("");
 
   const layers = useMemo(() => spec.design.decorations ?? [], [spec.design.decorations]);
@@ -491,14 +517,14 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   */
   return (
     <>
-      {/*
+      {isDesktop ? null : <>{/*
         모바일: 전체 화면. 앱바(적용하기 고정) · 캔버스 · 컨트롤 시트.
         높이는 `100dvh`가 아니라 `h-full`로 받는다. 감싸는 `Dialog.Content`가 `inset-0`이라
         이미 확정 높이인데, 여기서 dvh를 다시 재면 주소창 높이만큼 어긋나 시트 아래가 잘린다.
         flex를 쓰는 것은 시트의 `max-h-*%`가 컨테이너 높이를 기준으로 풀리게 하기 위해서다
         (grid 행에서는 퍼센트가 auto 크기 행을 만나 무시된다).
       */}
-      <section className="flex h-full min-w-0 flex-col bg-white text-slate-950 lg:hidden">
+      <section className="flex h-full min-w-0 flex-col bg-white text-slate-950">
         <header className="flex shrink-0 items-center gap-1 border-b border-slate-100 px-2 py-1.5">
           {closeButton}
           <h2 className="min-w-0 flex-1 truncate px-1 text-base font-black">나만의 말풍선 만들기</h2>
@@ -526,13 +552,14 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
           {errorNote}
         </ControlSheet>
       </section>
+      </>}
 
-      {/*
+      {isDesktop ? <>{/*
         데스크톱: 넓은 컬럼은 캔버스가 가진다.
         반대로 두었을 때는 색 두 칸과 슬라이더 두 개가 488px를 쓰고, 손으로 끌어 맞추는 캔버스가
         340px에 눌려 원본보다 작은 0.88배로 그려졌다. 직접 조작이 일어나는 쪽에 자리를 준다.
       */}
-      <section className="hidden min-w-0 w-full gap-5 bg-white p-6 text-slate-950 lg:grid">
+      <section className="grid min-w-0 w-full gap-5 bg-white p-6 text-slate-950">
         <div className="flex items-start justify-between gap-2">
           {/*
             어느 슬롯에 적용되는지는 도움말 팝오버가 이미 문장으로 설명한다. 헤더에서 같은 말을
@@ -559,6 +586,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
           </div>
         </div>
       </section>
+      </> : null}
 
       {closeConfirmOpen ? (
         <CloseConfirm

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
 import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
 
@@ -34,6 +34,29 @@ beforeAll(() => {
 afterAll(() => vi.unstubAllGlobals());
 afterEach(cleanup);
 
+/**
+ * 셸은 이제 CSS로 감추는 것이 아니라 하나만 마운트된다. 모바일 쪽을 보려면 미디어 쿼리가
+ * 어긋나게 만들어야 한다.
+ */
+function useMobileShell() {
+  const original = window.matchMedia;
+  beforeEach(() => {
+    window.matchMedia = ((media: string) => ({
+      media,
+      matches: false,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+  });
+  afterEach(() => {
+    window.matchMedia = original;
+  });
+}
+
 describe("BubbleBuilderDialog decoration input", () => {
   it("accepts an image pasted from the clipboard", () => {
     renderDialog();
@@ -41,7 +64,7 @@ describe("BubbleBuilderDialog decoration input", () => {
 
     fireEvent.paste(window, { clipboardData: { files: [file] } });
 
-    // 데스크톱/모바일 두 뷰가 동시에 DOM에 존재하므로 파일명이 여러 벌 나타날 수 있다.
+    // 목록과 미리보기 라벨 양쪽에 나오므로 파일명이 여러 벌일 수 있다.
     expect(screen.getAllByText("clipboard-cat.png").length).toBeGreaterThan(0);
   });
 
@@ -101,11 +124,25 @@ describe("BubbleBuilderDialog tabs", () => {
     expect(screen.queryByRole("button", { name: "이전" })).toBeNull();
   });
 
-  it("opens on the bubble tab and keeps both tabs reachable", () => {
+  /** 탭은 좁은 화면 전용이다. 데스크톱 셸은 두 묶음을 한 번에 보여 준다. */
+  it("shows every section at once on the desktop shell", () => {
     renderDialog();
 
-    expect(screen.getByRole("tab", { name: "말풍선" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "꾸미기" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByRole("tab", { name: "말풍선" })).toBeNull();
+    expect(screen.getAllByText("꾸미기 이미지 추가").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("모서리 둥글기").length).toBeGreaterThan(0);
+  });
+
+  /**
+   * 두 셸을 CSS로만 감추면 둘 다 마운트돼 미리보기가 두 벌 돈다 — 캔버스도, ResizeObserver도,
+   * 줌·이동 상태도 두 개다. 감춰진 쪽은 크기가 0이라 배율이 엉뚱하게 잡히고, 화면 폭이 바뀌어
+   * 셸이 교대하면 그 값이 그대로 나타난다.
+   */
+  it("mounts exactly one canvas", () => {
+    renderDialog();
+
+    expect(screen.getAllByRole("button", { name: "프레임 크기 조절 (왼쪽 위)" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "화면에 맞추기" })).toHaveLength(1);
   });
 
   /**
@@ -138,12 +175,14 @@ describe("BubbleBuilderDialog frame handles", () => {
  * 하단보다 117px 아래). 앱바로 올려 스크롤과 무관하게 만든 것이 이 셸의 존재 이유다.
  */
 describe("BubbleBuilderDialog mobile shell", () => {
+  useMobileShell();
+
   it("keeps apply in the app bar, outside the scrolling control sheet", () => {
     renderDialog();
 
-    const mobileShell = document.querySelector("section.lg\\:hidden");
-    expect(mobileShell).not.toBeNull();
-    expect(mobileShell?.querySelector("header")?.textContent).toContain("적용하기");
+    const header = document.querySelector("header");
+    expect(header).not.toBeNull();
+    expect(header?.textContent).toContain("적용하기");
   });
 
   it("offers a control sheet that can be made taller", () => {
