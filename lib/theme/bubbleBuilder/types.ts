@@ -18,6 +18,14 @@ export type BubbleDecorationLayer = BubbleDecorationTransform & {
   sourceName?: string;
 };
 
+/**
+ * 원본 안에서 불투명한 픽셀이 차지하는 비율 사각형(0~1). 투명 여백을 뺀 "실제 그림"의 자리다.
+ *
+ * 저장하지 않는다. 원본 파일에서 그때그때 다시 잰다 — 파일이 곧 진실이고, 저장해 두면
+ * 원본을 바꿨을 때 옛 값이 남는다.
+ */
+export type BubbleDecorationContentBox = { x: number; y: number; width: number; height: number };
+
 export type BubbleSideDesignSpec = {
   side: BubbleBuilderSide;
   preset: BubbleShapePreset;

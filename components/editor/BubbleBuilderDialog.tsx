@@ -23,14 +23,18 @@ import {
   createBubbleFamilyDesignSpec,
   crossesBubbleStretch,
   generateBubbleAsset,
+  getBubbleDecorationContentRect,
   getBubbleDecorationHandleRadius,
   getBubbleDecorationLayers,
   getBubbleDecorationRect,
   getBubbleRadiusMax,
+  fullBubbleDecorationContentBox,
   getBubbleVariantGeometry,
+  getOpaqueContentBox,
   rectsOverlap,
   type BubbleBuilderSide,
   type BubbleBuilderVariant,
+  type BubbleDecorationContentBox,
   type BubbleDecorationLayer,
   type BubbleDecorationSourceSize,
   type BubbleDecorationTransform,
@@ -121,6 +125,8 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const [decorationFiles, setDecorationFiles] = useState<DecorationFiles>({});
   const [decorationUrls, setDecorationUrls] = useState<Partial<Record<string, string>>>({});
   const [decorationSizes, setDecorationSizes] = useState<Partial<Record<string, BubbleDecorationSourceSize>>>({});
+  // 원본 안에서 실제 그림이 차지하는 자리. 클릭 판정·경고·선택 표시가 이걸 본다.
+  const [decorationContentBoxes, setDecorationContentBoxes] = useState<Partial<Record<string, BubbleDecorationContentBox>>>({});
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [isApplying, setIsApplying] = useState(false);
   const [error, setError] = useState<string>();
@@ -188,12 +194,13 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
     const colliding: string[] = [];
     const stretched: string[] = [];
     for (const layer of layers) {
-      const rect = getBubbleDecorationRect(layer, geometry.canvas, decorationSizes[layer.id]);
+      // 여백이 아니라 보이는 그림으로 잰다. 여백까지 세면 아무것도 닿지 않았는데 경고가 뜬다.
+      const rect = getBubbleDecorationContentRect(layer, geometry.canvas, decorationSizes[layer.id], decorationContentBoxes[layer.id]);
       if (rectsOverlap(rect, geometry.content)) colliding.push(layer.id);
       if (crossesBubbleStretch(rect, geometry.stretch)) stretched.push(layer.id);
     }
     return { collidingLayerIds: colliding, stretchedLayerIds: stretched };
-  }, [decorationSizes, layers, spec.design, variant]);
+  }, [decorationContentBoxes, decorationSizes, layers, spec.design, variant]);
   const decorationCollision = collidingLayerIds.length > 0;
   const decorationStretched = stretchedLayerIds.length > 0;
 
@@ -272,14 +279,17 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
       두 번째 이미지를 추가할 때 첫 번째가 잠깐 정사각형 근사로 되돌아가 상자가 튄다.
     */
     let cancelled = false;
-    setDecorationSizes((current) => Object.fromEntries(
+    const prune = <T,>(current: Partial<Record<string, T>>) => Object.fromEntries(
       Object.keys(created).flatMap((layerId) => (current[layerId] ? [[layerId, current[layerId]] as const] : [])),
-    ));
+    );
+    setDecorationSizes(prune);
+    setDecorationContentBoxes(prune);
     for (const [layerId, url] of Object.entries(created)) {
       const image = new Image();
       image.onload = () => {
         if (cancelled) return;
         setDecorationSizes((current) => ({ ...current, [layerId]: { width: image.naturalWidth, height: image.naturalHeight } }));
+        setDecorationContentBoxes((current) => ({ ...current, [layerId]: getOpaqueContentBox(image, image.naturalWidth, image.naturalHeight) }));
       };
       image.src = url;
     }
@@ -479,6 +489,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
       layers={layers}
       decorationUrls={decorationUrls}
       decorationSizes={decorationSizes}
+      decorationContentBoxes={decorationContentBoxes}
       selectedLayerId={selectedLayerId}
       onSelectLayer={setSelectedLayerId}
       onRemoveLayer={removeLayer}
@@ -737,6 +748,7 @@ type BubblePreviewProps = {
   layers: BubbleDecorationLayer[];
   decorationUrls: Partial<Record<string, string>>;
   decorationSizes: Partial<Record<string, BubbleDecorationSourceSize>>;
+  decorationContentBoxes: Partial<Record<string, BubbleDecorationContentBox>>;
   selectedLayerId: string | null;
   onSelectLayer?: (layerId: string | null) => void;
   onRemoveLayer?: (layerId: string) => void;
@@ -745,7 +757,7 @@ type BubblePreviewProps = {
   onCanvasSizeChange?: (size: { width: number; height: number }) => void;
 };
 
-function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes, selectedLayerId, onSelectLayer, onRemoveLayer, onDecorationChange, onBodyChange, onCanvasSizeChange }: BubblePreviewProps) {
+function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes, decorationContentBoxes, selectedLayerId, onSelectLayer, onRemoveLayer, onDecorationChange, onBodyChange, onCanvasSizeChange }: BubblePreviewProps) {
   const geometry = useMemo(() => getBubbleVariantGeometry(spec.design, variant), [spec, variant]);
   /** 배율의 기준은 프레임 **상한**이다. 근거는 `getBubblePreviewFitScale` 주석에 있다. */
   const maxCanvas = { width: bubbleCanvasSizeRange.max, height: bubbleCanvasSizeRange.max };
@@ -1022,7 +1034,7 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     const cy = rect.top + (geometry.canvas.height / 2 + drag.deco.offsetY) * scale;
     if (drag.kind === "resize") {
       const dist = Math.hypot(event.clientX - cx, event.clientY - cy) / scale;
-      onDecorationChange(layerId, { scale: clampNumber(dist / getBubbleDecorationHandleRadius(decorationSizes[layerId]), 0.3, bubbleDecorationMaxScale) });
+      onDecorationChange(layerId, { scale: clampNumber(dist / getBubbleDecorationHandleRadius(decorationSizes[layerId], decorationContentBoxes[layerId]), 0.3, bubbleDecorationMaxScale) });
     } else {
       const angle = (Math.atan2(event.clientY - cy, event.clientX - cx) * 180) / Math.PI + 90;
       onDecorationChange(layerId, { rotation: Math.round(((angle + 180) % 360) - 180) });
@@ -1120,26 +1132,43 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
             {layers.map((layer) => {
               const url = decorationUrls[layer.id];
               if (!url) return null;
-              // 실제 그려지는 사각형. 정사각형 근사를 쓰던 동안에는 넓적한 그림의 빈 위아래가
-              // 클릭을 먹어 그 아래의 말풍선 본체를 잡을 수 없었다.
+              // 그림은 원본 파일 전체의 자리에 그린다. 결과물과 같아야 하므로 여기는 건드리지 않는다.
               const rect = getBubbleDecorationRect(layer, geometry.canvas, decorationSizes[layer.id]);
+              /*
+                잡는 자리와 선택 표시는 **보이는 그림**에만 붙인다.
+
+                원본 둘레의 투명 여백까지 잡히면 그림에서 한참 떨어진 빈자리가 클릭을 먹어 아래의
+                말풍선 본체를 잡을 수 없고, 선택 테두리와 손잡이도 그림에서 멀찍이 떠 있게 된다.
+              */
+              const box = decorationContentBoxes[layer.id] ?? fullBubbleDecorationContentBox;
+              const contentStyle = {
+                left: `${box.x * 100}%`,
+                top: `${box.y * 100}%`,
+                width: `${box.width * 100}%`,
+                height: `${box.height * 100}%`,
+              };
               const interactive = Boolean(onDecorationChange);
               const isSelected = selectedLayerId === layer.id;
               return (
                 <div
                   key={layer.id}
-                  className={`absolute ${interactive ? (isSelected ? "cursor-move" : "cursor-pointer") : "pointer-events-none"}`}
+                  className="pointer-events-none absolute"
                   style={{ left: rect.x * scale, top: rect.y * scale, width: rect.width * scale, height: rect.height * scale, transform: `rotate(${layer.rotation ?? 0}deg)` }}
-                  onPointerDown={beginDecoDrag("move", layer)}
                 >
                   <div role="img" aria-label={layer.sourceName ?? "장식 미리보기"} className="absolute inset-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url(${url})`, transform: layer.flipX ? "scaleX(-1)" : undefined }} />
-                  {interactive && isSelected ? <>
-                    <span className="absolute inset-0 rounded-sm ring-1 ring-blue-400/70" />
-                    <button type="button" aria-label="회전" className="absolute -top-3 left-1/2 grid size-6 -translate-x-1/2 cursor-grab place-items-center rounded-full border border-blue-200 bg-white text-blue-600 shadow" onPointerDown={beginDecoDrag("rotate", layer)}><RotateCw size={13} /></button>
-                    <button type="button" aria-label="이미지 제거" className="absolute -right-2.5 -top-2.5 grid size-6 place-items-center rounded-full border border-rose-200 bg-white text-rose-600 shadow" onPointerDown={(event) => event.stopPropagation()} onClick={() => onRemoveLayer?.(layer.id)}><X size={13} /></button>
-                    <button type="button" aria-label="좌우 반전" className="absolute -bottom-2.5 -left-2.5 grid size-6 place-items-center rounded-full border border-blue-200 bg-white text-blue-600 shadow" onPointerDown={(event) => event.stopPropagation()} onClick={() => onDecorationChange?.(layer.id, { flipX: !layer.flipX })}><FlipHorizontal size={13} /></button>
-                    <button type="button" aria-label="크기 조절" className="absolute -bottom-2.5 -right-2.5 size-5 cursor-nwse-resize rounded-full border border-blue-200 bg-white shadow" onPointerDown={beginDecoDrag("resize", layer)} />
-                  </> : null}
+                  <div
+                    className={`absolute ${interactive ? `pointer-events-auto ${isSelected ? "cursor-move" : "cursor-pointer"}` : ""}`}
+                    style={contentStyle}
+                    onPointerDown={interactive ? beginDecoDrag("move", layer) : undefined}
+                  >
+                    {interactive && isSelected ? <>
+                      <span className="absolute inset-0 rounded-sm ring-1 ring-blue-400/70" />
+                      <button type="button" aria-label="회전" className="absolute -top-3 left-1/2 grid size-6 -translate-x-1/2 cursor-grab place-items-center rounded-full border border-blue-200 bg-white text-blue-600 shadow" onPointerDown={beginDecoDrag("rotate", layer)}><RotateCw size={13} /></button>
+                      <button type="button" aria-label="이미지 제거" className="absolute -right-2.5 -top-2.5 grid size-6 place-items-center rounded-full border border-rose-200 bg-white text-rose-600 shadow" onPointerDown={(event) => event.stopPropagation()} onClick={() => onRemoveLayer?.(layer.id)}><X size={13} /></button>
+                      <button type="button" aria-label="좌우 반전" className="absolute -bottom-2.5 -left-2.5 grid size-6 place-items-center rounded-full border border-blue-200 bg-white text-blue-600 shadow" onPointerDown={(event) => event.stopPropagation()} onClick={() => onDecorationChange?.(layer.id, { flipX: !layer.flipX })}><FlipHorizontal size={13} /></button>
+                      <button type="button" aria-label="크기 조절" className="absolute -bottom-2.5 -right-2.5 size-5 cursor-nwse-resize rounded-full border border-blue-200 bg-white shadow" onPointerDown={beginDecoDrag("resize", layer)} />
+                    </> : null}
+                  </div>
                 </div>
               );
             })}

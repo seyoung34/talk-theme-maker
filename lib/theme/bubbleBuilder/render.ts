@@ -1,5 +1,6 @@
-import { crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleDecorationLayers, getBubbleDecorationSize, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
-import type { BubbleBuilderVariant, BubbleDecorationLayer, BubbleFamilyDesignSpec, BubbleRect, GeneratedBubbleAsset, GeneratedBubbleDesign, GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder/types";
+import { getOpaqueContentBox } from "@/lib/theme/bubbleBuilder/alphaBounds";
+import { crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleDecorationContentRect, getBubbleDecorationLayers, getBubbleDecorationSize, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
+import type { BubbleBuilderVariant, BubbleDecorationContentBox, BubbleDecorationLayer, BubbleFamilyDesignSpec, BubbleRect, GeneratedBubbleAsset, GeneratedBubbleDesign, GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder/types";
 import type { BubbleGeometry, Markers, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 type GenerateBubbleFamilyOptions = {
@@ -10,7 +11,7 @@ type GenerateBubbleFamilyOptions = {
 
 type GenerateBubbleAssetOptions = GenerateBubbleFamilyOptions & { variant: BubbleBuilderVariant };
 
-type DecorationBitmap = { layer: BubbleDecorationLayer; bitmap: ImageBitmap };
+type DecorationBitmap = { layer: BubbleDecorationLayer; bitmap: ImageBitmap; content: BubbleDecorationContentBox };
 
 async function loadDecorationBitmaps(spec: BubbleFamilyDesignSpec, decorationFiles?: Partial<Record<string, File>>): Promise<DecorationBitmap[]> {
   if (!decorationFiles) return [];
@@ -19,7 +20,9 @@ async function loadDecorationBitmaps(spec: BubbleFamilyDesignSpec, decorationFil
     layers.map(async (layer) => {
       const file = decorationFiles[layer.id];
       if (!file) return null;
-      return { layer, bitmap: await createImageBitmap(file) };
+      const bitmap = await createImageBitmap(file);
+      // 경고 판정이 미리보기와 같아야 한다. 여백을 빼고 실제 그림이 어디 있는지 여기서도 잰다.
+      return { layer, bitmap, content: getOpaqueContentBox(bitmap, bitmap.width, bitmap.height) };
     }),
   );
   return loaded.filter((item): item is DecorationBitmap => item !== null);
@@ -66,11 +69,18 @@ async function renderBubbleAsset(spec: BubbleFamilyDesignSpec, platform: ThemePl
   context.clearRect(0, 0, artwork.width, artwork.height);
   drawBubbleBody(context, geometry.body, geometry.radius, spec.design);
 
-  for (const { layer, bitmap } of decorations) {
-    const decorationRect = drawDecoration(context, bitmap, artwork.width, artwork.height, layer);
-    if (rectsOverlap(decorationRect, geometry.content)) warnings.push({ code: "decoration-overlap", message: "꾸미기 이미지가 글자 영역과 겹쳐요." });
-    // 여기서는 원본 비율로 그린 실제 사각형을 본다. 미리보기는 정사각형 근사를 쓰므로 판정이 다를 수 있다.
-    if (crossesBubbleStretch(decorationRect, geometry.stretch)) warnings.push({ code: "decoration-stretch", message: "꾸미기 이미지가 늘어나는 선을 지나가요." });
+  for (const { layer, bitmap, content } of decorations) {
+    drawDecoration(context, bitmap, artwork.width, artwork.height, layer);
+    /*
+      판정은 **보이는 그림**의 사각형으로 한다.
+
+      이 경고는 적용 직후 알림 문구로도 나간다(`ProjectImporterClient`). 원본 파일 전체를 세면
+      투명 여백이 글자 영역에 걸치기만 해도 `글자 영역과 겹쳐요`가 떠서, 실제로는 아무것도
+      가리지 않았는데 사용자가 그림을 옮기게 만든다.
+    */
+    const visible = getBubbleDecorationContentRect(layer, geometry.canvas, bitmap, content);
+    if (rectsOverlap(visible, geometry.content)) warnings.push({ code: "decoration-overlap", message: "꾸미기 이미지가 글자 영역과 겹쳐요." });
+    if (crossesBubbleStretch(visible, geometry.stretch)) warnings.push({ code: "decoration-stretch", message: "꾸미기 이미지가 늘어나는 선을 지나가요." });
   }
   if (geometry.content.width < 24 || geometry.content.height < 24) warnings.push({ code: "content-too-small", message: "글자가 들어갈 영역이 너무 작아요." });
 
@@ -108,13 +118,11 @@ function drawDecoration(
   canvasWidth: number,
   canvasHeight: number,
   decoration: BubbleDecorationLayer,
-): BubbleRect {
+) {
   // 미리보기와 같은 계산을 쓴다. 두 곳이 갈라지면 화면에서 맞춘 자리가 결과물에서 어긋난다.
   const { width, height } = getBubbleDecorationSize(decoration, bitmap);
   const centerX = canvasWidth / 2 + decoration.offsetX;
   const centerY = canvasHeight / 2 + decoration.offsetY;
-  const x = centerX - width / 2;
-  const y = centerY - height / 2;
 
   context.save();
   context.translate(centerX, centerY);
@@ -122,7 +130,6 @@ function drawDecoration(
   if (decoration.flipX) context.scale(-1, 1);
   context.drawImage(bitmap, -width / 2, -height / 2, width, height);
   context.restore();
-  return { x, y, width, height };
 }
 
 async function renderAndroidAsset(

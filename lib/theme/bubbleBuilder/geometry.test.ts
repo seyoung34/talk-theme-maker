@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bubbleBodyScaleRange, bubbleDecorationBaseSize, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleCanvasSize, getBubbleDecorationHandleRadius, getBubbleDecorationLayers, getBubbleDecorationRect, getBubbleDecorationSize, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
+import { fullBubbleDecorationContentBox } from "@/lib/theme/bubbleBuilder/alphaBounds";
+import { bubbleBodyScaleRange, bubbleDecorationBaseSize, getBubbleDecorationContentRect, rectsOverlap, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleCanvasSize, getBubbleDecorationHandleRadius, getBubbleDecorationLayers, getBubbleDecorationRect, getBubbleDecorationSize, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleSideDesignSpec } from "@/lib/theme/bubbleBuilder/types";
 
 const baseDesign: BubbleSideDesignSpec = {
@@ -227,6 +228,47 @@ describe("bubble builder geometry", () => {
       expect(getBubbleDecorationHandleRadius(undefined)).toBeCloseTo(bubbleDecorationBaseSize * Math.SQRT1_2);
       // 넓적한 원본은 모서리가 더 가깝다 — 이걸 무시하면 손잡이를 잡는 순간 크기가 튄다.
       expect(getBubbleDecorationHandleRadius({ width: 200, height: 80 })).toBeCloseTo(Math.hypot(96, 38.4) / 2);
+    });
+  });
+
+  /**
+   * 장식 이미지는 보통 그림 둘레에 투명 여백을 두고 저장된다. 그 여백까지 그림으로 세면
+   * 아무것도 닿지 않았는데 `글자 영역과 겹쳐요`가 뜨고, 그림에서 떨어진 빈자리가 클릭을 먹는다.
+   */
+  describe("decoration content rect", () => {
+    // 기본 자리처럼 본체 위쪽에 걸치게 둔다. 전체 사각형은 글자 영역에 닿고 그림 띠는 닿지 않는다.
+    const layer = { scale: 1, offsetX: 0, offsetY: -46 };
+    const canvas = { width: 250, height: 230 };
+    const source = { width: 200, height: 160 };
+
+    it("falls back to the whole rect when the opaque area is unknown", () => {
+      expect(getBubbleDecorationContentRect(layer, canvas, source)).toEqual(getBubbleDecorationRect(layer, canvas, source));
+      expect(getBubbleDecorationContentRect(layer, canvas, source, fullBubbleDecorationContentBox))
+        .toEqual(getBubbleDecorationRect(layer, canvas, source));
+    });
+
+    it("shrinks to the opaque band inside the source", () => {
+      // 가운데 25% 높이만 그림이고 위아래는 투명한 이미지.
+      const rect = getBubbleDecorationContentRect(layer, canvas, source, { x: 0, y: 0.375, width: 1, height: 0.25 });
+      const full = getBubbleDecorationRect(layer, canvas, source);
+
+      expect(rect.width).toBeCloseTo(full.width);
+      expect(rect.height).toBeCloseTo(full.height * 0.25);
+      expect(rect.y).toBeCloseTo(full.y + full.height * 0.375);
+      // 여백을 빼면 글자 영역에 닿지 않는다 — 예전 판정은 여기서 오탐을 냈다.
+      const geometry = getBubbleVariantGeometry({ ...baseDesign, borderWidth: 4 }, "first");
+      expect(rectsOverlap(full, geometry.content)).toBe(true);
+      expect(rectsOverlap(rect, geometry.content)).toBe(false);
+    });
+
+    it("moves the resize handle reference onto the opaque corner", () => {
+      // 손잡이가 보이는 그림의 모서리로 옮겨 갔으므로 기준 거리도 같이 가야 크기가 안 튄다.
+      const box = { x: 0, y: 0.375, width: 1, height: 0.25 };
+      const base = getBubbleDecorationSize({ scale: 1 }, source);
+
+      expect(getBubbleDecorationHandleRadius(source, box))
+        .toBeCloseTo(Math.hypot(base.width / 2, base.height * 0.625 - base.height / 2));
+      expect(getBubbleDecorationHandleRadius(source, box)).toBeLessThan(getBubbleDecorationHandleRadius(source));
     });
   });
 

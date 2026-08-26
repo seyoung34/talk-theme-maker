@@ -1,6 +1,7 @@
 import type { Insets, Markers, StretchPoint } from "@/lib/theme/types";
 import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
-import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDecorationLayer, BubbleDecorationTransform, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
+import { fullBubbleDecorationContentBox } from "@/lib/theme/bubbleBuilder/alphaBounds";
+import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDecorationContentBox, BubbleDecorationLayer, BubbleDecorationTransform, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
 
 const variantPresets: Record<BubbleBuilderVariant, { width: number; height: number; bodyWidth: number; bodyHeight: number }> = {
   first: { width: 250, height: 230, bodyWidth: 95, bodyHeight: 80 },
@@ -54,16 +55,44 @@ export function getBubbleDecorationRect(
 }
 
 /**
- * 크기 조절 손잡이의 기준 거리 — 배율 1일 때 중심에서 모서리까지.
+ * 장식에서 **보이는 그림**이 차지하는 사각형.
  *
- * 손잡이는 중심에서 포인터까지의 거리를 배율로 되돌린다. 원본 비율을 쓰기 전에는 정사각형을
- * 가정한 `baseSize * SQRT1_2`가 그 거리였는데, 넓적한 그림에서는 모서리가 그보다 멀어 손잡이를
- * 잡는 순간 크기가 튀었다.
+ * `getBubbleDecorationRect`가 돌려주는 것은 원본 파일 전체의 자리이고, 그 안에는 보통 투명
+ * 여백이 들어 있다. 클릭 판정과 겹침·늘어남 경고는 여백이 아니라 그림을 봐야 한다 — 여백을
+ * 세면 아무것도 닿지 않았는데 경고가 뜨고, 그림에서 멀찍이 떨어진 빈자리가 클릭을 먹는다.
+ *
+ * 그리는 위치와 크기는 그대로 둔다. 여기서 좁히는 것은 판정과 선택 표시뿐이라, 이미 저장된
+ * 장식의 모양은 하나도 바뀌지 않는다.
  */
-export function getBubbleDecorationHandleRadius(source?: BubbleDecorationSourceSize) {
-  if (!source || source.width <= 0 || source.height <= 0) return bubbleDecorationBaseSize * Math.SQRT1_2;
-  const baseScale = Math.min(1, bubbleDecorationBaseSize / Math.max(source.width, source.height));
-  return Math.hypot(source.width * baseScale, source.height * baseScale) / 2;
+export function getBubbleDecorationContentRect(
+  layer: Pick<BubbleDecorationTransform, "scale" | "offsetX" | "offsetY">,
+  canvas: { width: number; height: number },
+  source?: BubbleDecorationSourceSize,
+  content?: BubbleDecorationContentBox,
+): BubbleRect {
+  const rect = getBubbleDecorationRect(layer, canvas, source);
+  const box = content ?? fullBubbleDecorationContentBox;
+  return {
+    x: rect.x + rect.width * box.x,
+    y: rect.y + rect.height * box.y,
+    width: rect.width * box.width,
+    height: rect.height * box.height,
+  };
+}
+
+/**
+ * 크기 조절 손잡이의 기준 거리 — 배율 1일 때 레이어 중심에서 손잡이가 붙는 모서리까지.
+ *
+ * 손잡이는 중심에서 포인터까지의 거리를 배율로 되돌린다. 그래서 기준 거리가 손잡이의 실제
+ * 위치와 같아야 잡는 순간 크기가 튀지 않는다. 정사각형을 가정하던 시절에는 넓적한 그림에서,
+ * 여백을 포함하던 시절에는 여백이 큰 그림에서 각각 어긋났다.
+ */
+export function getBubbleDecorationHandleRadius(source?: BubbleDecorationSourceSize, content?: BubbleDecorationContentBox) {
+  const base = getBubbleDecorationSize({ scale: 1 }, source);
+  const box = content ?? fullBubbleDecorationContentBox;
+  const dx = base.width * (box.x + box.width) - base.width / 2;
+  const dy = base.height * (box.y + box.height) - base.height / 2;
+  return Math.max(1, Math.hypot(dx, dy));
 }
 
 /**
