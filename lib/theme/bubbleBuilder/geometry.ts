@@ -102,36 +102,43 @@ export function getBubbleBodyScalePreset(bodyScale: number | undefined): BubbleB
 }
 
 /**
- * 캔버스 크기 배율의 허용 범위. 가로·세로에 같은 범위를 쓴다.
+ * 캔버스(프레임) 크기의 허용 범위. 단위는 배율이 아니라 픽셀이다.
  *
  * 캔버스는 그대로 내보내는 PNG의 크기다. 본체 바깥 여백은 장식이 삐져나올 자리이며,
  * 투명 여백이라 실제 화면에서는 말풍선 주변의 빈 공간이 된다. 그래서 크게 벌릴수록
- * 말풍선이 차지하는 최소 면적도 함께 커진다 — 상한을 1.4로 묶어 둔 이유다.
+ * 말풍선이 차지하는 최소 면적도 함께 커진다 — 상한을 묶어 둔 이유다.
+ *
+ * 배율이 아니라 픽셀인 것은 화면 표시가 이미 픽셀(`프레임 250 × 230`)이기 때문이다.
+ * 배율로 두면 같은 1.2가 variant마다 다른 픽셀을 내서 "최대 300"이 슬롯마다 다른 뜻이 된다.
  */
-export const bubbleCanvasScaleRange = { min: 0.8, max: 1.4 } as const;
+export const bubbleCanvasSizeRange = { min: 150, max: 300 } as const;
 
-type CanvasScaleSource = Pick<BubbleSideDesignSpec, "canvasScale" | "canvasScaleX" | "canvasScaleY">;
+type CanvasSizeSource = Pick<BubbleSideDesignSpec, "canvasWidth" | "canvasHeight" | "canvasScale" | "canvasScaleX" | "canvasScaleY">;
 
 /**
- * 축별 캔버스 배율. 가로·세로를 함께 늘리던 옛 `canvasScale`은 두 축의 기본값으로 읽는다.
+ * 프레임 픽셀 크기.
+ *
+ * 배율로 저장하던 옛 spec은 그 variant의 기본 치수에 곱해 픽셀로 읽는다. 옛 상한(1.4배)이
+ * 새 상한을 넘는 경우가 있어 마지막에 범위로 누른다 — 이미 만들어 둔 테마의 프레임이 최대
+ * 300px로 줄어들 수 있고, 그건 상한을 낮춘 결과다.
  */
-export function getBubbleCanvasScale(design: CanvasScaleSource) {
-  const legacy = design.canvasScale;
+export function getBubbleCanvasSize(design: CanvasSizeSource, variant: BubbleBuilderVariant) {
+  const source = variantPresets[variant];
+  const legacyX = design.canvasScaleX ?? design.canvasScale;
+  const legacyY = design.canvasScaleY ?? design.canvasScale;
   return {
-    x: clamp(design.canvasScaleX ?? legacy ?? 1, bubbleCanvasScaleRange.min, bubbleCanvasScaleRange.max),
-    y: clamp(design.canvasScaleY ?? legacy ?? 1, bubbleCanvasScaleRange.min, bubbleCanvasScaleRange.max),
+    width: clamp(Math.round(design.canvasWidth ?? source.width * (legacyX ?? 1)), bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max),
+    height: clamp(Math.round(design.canvasHeight ?? source.height * (legacyY ?? 1)), bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max),
   };
 }
 
 /**
- * 배율을 적용한 캔버스·본체 치수. 둥글기 상한과 실제 배치가 같은 숫자를 보게 하려고 한곳에서 만든다.
+ * 캔버스·본체 치수. 둥글기 상한과 실제 배치가 같은 숫자를 보게 하려고 한곳에서 만든다.
  */
-function getVariantMetrics(design: Pick<BubbleSideDesignSpec, "preset" | "bodyScale"> & CanvasScaleSource, variant: BubbleBuilderVariant) {
+function getVariantMetrics(design: Pick<BubbleSideDesignSpec, "preset" | "bodyScale"> & CanvasSizeSource, variant: BubbleBuilderVariant) {
   const source = variantPresets[variant];
-  const canvasScale = getBubbleCanvasScale(design);
   const bodyScale = clamp(design.bodyScale ?? 1, bubbleBodyScaleRange.min, bubbleBodyScaleRange.max);
-  const canvasWidth = Math.round(source.width * canvasScale.x);
-  const canvasHeight = Math.round(source.height * canvasScale.y);
+  const { width: canvasWidth, height: canvasHeight } = getBubbleCanvasSize(design, variant);
   // 본체가 캔버스를 넘으면 위치 clamp가 음수 범위를 받아 배치가 무너진다. 치수 단계에서 먼저 막는다.
   const scaledWidth = Math.min(Math.round(source.bodyWidth * bodyScale), canvasWidth);
   const scaledHeight = Math.min(Math.round(source.bodyHeight * bodyScale), canvasHeight);

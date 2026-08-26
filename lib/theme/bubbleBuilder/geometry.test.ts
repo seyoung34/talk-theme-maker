@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bubbleBodyScalePresets, bubbleBodyScaleRange, bubbleDecorationBaseSize, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleBodyScalePreset, getBubbleCanvasScale, getBubbleDecorationHandleRadius, getBubbleDecorationLayers, getBubbleDecorationRect, getBubbleDecorationSize, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
+import { bubbleBodyScalePresets, bubbleBodyScaleRange, bubbleDecorationBaseSize, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleBodyScalePreset, getBubbleCanvasSize, getBubbleDecorationHandleRadius, getBubbleDecorationLayers, getBubbleDecorationRect, getBubbleDecorationSize, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleSideDesignSpec } from "@/lib/theme/bubbleBuilder/types";
 
 const baseDesign: BubbleSideDesignSpec = {
@@ -102,49 +102,56 @@ describe("bubble builder geometry", () => {
     expect(getBubbleRadiusMax("rounded", "first", 0.7)).toBe(28);
   });
 
-  it("scales the canvas without changing the body", () => {
-    const wide = getBubbleVariantGeometry({ ...baseDesign, canvasScaleX: 1.4, canvasScaleY: 1.4 }, "first");
+  it("resizes the canvas without changing the body", () => {
+    const wide = getBubbleVariantGeometry({ ...baseDesign, canvasWidth: 300, canvasHeight: 300 }, "first");
 
-    expect(wide.canvas).toEqual({ width: 350, height: 322 });
+    expect(wide.canvas).toEqual({ width: 300, height: 300 });
     expect(wide.body.width).toBe(95);
     expect(wide.body.height).toBe(80);
     // 여백이 늘어난 만큼 본체는 안쪽으로 밀린다.
-    expect(wide.body.x).toBe(Math.round((350 - 95) / 2));
+    expect(wide.body.x).toBe(Math.round((300 - 95) / 2));
   });
 
-  it("scales canvas width and height independently", () => {
+  it("resizes canvas width and height independently", () => {
     // 두 축이 묶여 있으면 원본 비율(250:230)을 벗어날 수 없어 직사각형 프레임을 만들지 못한다.
-    const geometry = getBubbleVariantGeometry({ ...baseDesign, canvasScaleX: 1.4, canvasScaleY: 0.8 }, "first");
+    const geometry = getBubbleVariantGeometry({ ...baseDesign, canvasWidth: 300, canvasHeight: 150 }, "first");
 
-    expect(geometry.canvas).toEqual({ width: 350, height: 184 });
+    expect(geometry.canvas).toEqual({ width: 300, height: 150 });
     expect(geometry.body).toMatchObject({ width: 95, height: 80 });
-    expect(geometry.body.x).toBe(Math.round((350 - 95) / 2));
-    expect(geometry.body.y).toBe(Math.round((184 - 80) / 2));
+    expect(geometry.body.x).toBe(Math.round((300 - 95) / 2));
+    expect(geometry.body.y).toBe(Math.round((150 - 80) / 2));
   });
 
-  it("reads the legacy single canvasScale as both axes", () => {
-    // 축이 갈리기 전에 저장된 spec은 한 값만 갖는다. 이걸 못 읽으면 프레임이 기본 크기로 돌아간다.
-    expect(getBubbleCanvasScale({ canvasScale: 1.2 })).toEqual({ x: 1.2, y: 1.2 });
+  /**
+   * 배율로 저장하던 시절의 spec을 픽셀로 읽는다. 못 읽으면 이미 만들어 둔 말풍선의 프레임이
+   * 조용히 기본 크기로 돌아간다.
+   */
+  it("reads legacy scale fields as pixels", () => {
+    expect(getBubbleCanvasSize({ canvasScale: 1.2 }, "first")).toEqual({ width: 300, height: 276 });
     // 축별 값이 있으면 그쪽이 이긴다.
-    expect(getBubbleCanvasScale({ canvasScale: 1.2, canvasScaleY: 0.9 })).toEqual({ x: 1.2, y: 0.9 });
-    expect(getBubbleVariantGeometry({ ...baseDesign, canvasScale: 1.4 }, "first").canvas).toEqual({ width: 350, height: 322 });
+    expect(getBubbleCanvasSize({ canvasScale: 1.2, canvasScaleY: 0.8 }, "first")).toEqual({ width: 300, height: 184 });
+    // 픽셀이 있으면 배율보다 우선한다.
+    expect(getBubbleCanvasSize({ canvasWidth: 200, canvasHeight: 180, canvasScale: 1.2 }, "first")).toEqual({ width: 200, height: 180 });
+    // 옛 상한(1.4배 = 350)은 새 상한 300으로 눌린다.
+    expect(getBubbleCanvasSize({ canvasScale: 1.4 }, "first")).toEqual({ width: 300, height: 300 });
   });
 
-  it("clamps out-of-range scales instead of letting the body escape the canvas", () => {
-    const geometry = getBubbleVariantGeometry({ ...baseDesign, bodyScale: 99, canvasScaleX: 0.01, canvasScaleY: 99 }, "first");
+  it("clamps out-of-range sizes instead of letting the body escape the canvas", () => {
+    const geometry = getBubbleVariantGeometry({ ...baseDesign, bodyScale: 99, canvasWidth: 1, canvasHeight: 9999 }, "first");
 
-    expect(geometry.canvas).toEqual({ width: 200, height: 322 });
+    expect(geometry.canvas).toEqual({ width: 150, height: 300 });
     expect(geometry.body.width).toBeLessThanOrEqual(geometry.canvas.width);
     expect(geometry.body.height).toBeLessThanOrEqual(geometry.canvas.height);
     expect(geometry.body.x).toBeGreaterThanOrEqual(0);
     expect(geometry.body.y).toBeGreaterThanOrEqual(0);
   });
 
-  it("keeps default geometry unchanged when no scale is stored", () => {
-    // 저장된 옛 spec에는 배율 필드가 없다. 기본값이 1이 아니면 기존 말풍선이 조용히 달라진다.
+  it("keeps default geometry unchanged when no size is stored", () => {
+    // 저장된 옛 spec에는 프레임 필드가 없다. 기본값이 변하면 기존 말풍선이 조용히 달라진다.
     expect(getBubbleVariantGeometry(baseDesign, "first")).toEqual(
-      getBubbleVariantGeometry({ ...baseDesign, bodyScale: 1, canvasScaleX: 1, canvasScaleY: 1 }, "first"),
+      getBubbleVariantGeometry({ ...baseDesign, bodyScale: 1, canvasWidth: 250, canvasHeight: 230 }, "first"),
     );
+    expect(getBubbleVariantGeometry(baseDesign, "group").canvas).toEqual({ width: 250, height: 190 });
   });
 
   it("makes the circle body square and preserves a text-safe rect", () => {

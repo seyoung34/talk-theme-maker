@@ -18,7 +18,7 @@ import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
 import { themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
 import {
   bubbleBodyScalePresets,
-  bubbleCanvasScaleRange,
+  bubbleCanvasSizeRange,
   bubbleDecorationMaxScale,
   createBubbleDecorationLayer,
   createBubbleFamilyDesignSpec,
@@ -28,7 +28,6 @@ import {
   getBubbleDecorationLayers,
   getBubbleDecorationRect,
   getBubbleBodyScalePreset,
-  getBubbleCanvasScale,
   getBubbleRadiusMax,
   getBubbleVariantGeometry,
   rectsOverlap,
@@ -231,6 +230,34 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
     setSpec((current) => ({ ...current, design: { ...current.design, ...patch }, updatedAt: Date.now() }));
   };
 
+  /**
+   * 프레임을 줄이면 장식도 같이 데려온다.
+   *
+   * 프레임은 그대로 잘라 내보내는 경계라, 밖으로 나간 장식은 조용히 사라진다. 끌어서 옮길 때는
+   * 캔버스 안으로 눌러 주면서 프레임을 줄일 때는 두지 않으면, 줄였다 늘리는 사이에 그림이
+   * 없어졌다 나타난다. 배율 필드도 함께 지운다 — 픽셀과 배율이 같이 남으면 어느 쪽이 참인지
+   * `getBubbleCanvasSize`의 우선순위에만 적혀 있게 된다.
+   */
+  const updateCanvasSize = useCallback((size: { width: number; height: number }) => {
+    setSpec((current) => ({
+      ...current,
+      design: {
+        ...current.design,
+        canvasWidth: size.width,
+        canvasHeight: size.height,
+        canvasScale: undefined,
+        canvasScaleX: undefined,
+        canvasScaleY: undefined,
+        decorations: (current.design.decorations ?? []).map((layer) => ({
+          ...layer,
+          offsetX: clampNumber(layer.offsetX, -size.width / 2, size.width / 2),
+          offsetY: clampNumber(layer.offsetY, -size.height / 2, size.height / 2),
+        })),
+      },
+      updatedAt: Date.now(),
+    }));
+  }, []);
+
   const apply = async () => {
     if (layers.some((layer) => !decorationFiles[layer.id])) {
       setError("저장된 장식 원본을 찾지 못했습니다. 이미지를 다시 선택하거나 장식을 제거해 주세요.");
@@ -376,7 +403,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
       onRemoveLayer={removeLayer}
       onDecorationChange={patchLayer}
       onBodyChange={updateDesign}
-      onCanvasScaleChange={updateDesign}
+      onCanvasSizeChange={updateCanvasSize}
     />
   );
 
@@ -548,10 +575,10 @@ type PreviewDrag =
   | { kind: "move" | "resize" | "rotate"; startX: number; startY: number; deco: BubbleDecorationTransform }
   | { kind: "body"; startX: number; startY: number; bodyX: number; bodyY: number };
 
-/** 배율은 소수라 부동소수 오차를 감안해 비교한다. */
-function atCanvasScaleLimit(scale: { x: number; y: number }, bound: "min" | "max") {
-  const limit = bubbleCanvasScaleRange[bound];
-  return Math.abs(scale.x - limit) < 0.001 || Math.abs(scale.y - limit) < 0.001;
+/** 어느 한 축이라도 범위 끝에 닿았는가. */
+function atCanvasSizeLimit(canvas: { width: number; height: number }, bound: "min" | "max") {
+  const limit = bubbleCanvasSizeRange[bound];
+  return canvas.width === limit || canvas.height === limit;
 }
 
 const checkerboardStyle: React.CSSProperties = {
@@ -571,13 +598,13 @@ type BubblePreviewProps = {
   onRemoveLayer?: (layerId: string) => void;
   onDecorationChange?: (layerId: string, patch: Partial<BubbleDecorationTransform>) => void;
   onBodyChange?: (patch: { bodyOffsetX: number; bodyOffsetY: number }) => void;
-  onCanvasScaleChange?: (patch: { canvasScaleX: number; canvasScaleY: number }) => void;
+  onCanvasSizeChange?: (size: { width: number; height: number }) => void;
 };
 
-function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes, selectedLayerId, onSelectLayer, onRemoveLayer, onDecorationChange, onBodyChange, onCanvasScaleChange }: BubblePreviewProps) {
+function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes, selectedLayerId, onSelectLayer, onRemoveLayer, onDecorationChange, onBodyChange, onCanvasSizeChange }: BubblePreviewProps) {
   const geometry = useMemo(() => getBubbleVariantGeometry(spec.design, variant), [spec, variant]);
   /** 배율의 기준은 프레임 **상한**이다. 근거는 `getBubblePreviewFitScale` 주석에 있다. */
-  const maxCanvas = useMemo(() => getBubbleVariantGeometry({ ...spec.design, canvasScale: undefined, canvasScaleX: bubbleCanvasScaleRange.max, canvasScaleY: bubbleCanvasScaleRange.max }, variant).canvas, [spec.design, variant]);
+  const maxCanvas = { width: bubbleCanvasSizeRange.max, height: bubbleCanvasSizeRange.max };
   const [viewportSize, setViewportSize] = useState<Partial<BubblePreviewSize>>({});
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<BubblePreviewPan>({ x: 0, y: 0 });
@@ -588,7 +615,6 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
   const dragRef = useRef<PreviewDrag | null>(null);
   const activeLayerRef = useRef<string | null>(null);
   const [bodyDragging, setBodyDragging] = useState(false);
-  const canvasScale = getBubbleCanvasScale(spec.design);
   const frameDragRef = useRef<FrameDrag | null>(null);
   const [frameDragging, setFrameDragging] = useState(false);
   const dragging = frameDragging || bodyDragging;
@@ -596,7 +622,7 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
    * 한계에 닿았는지 알려 준다. 숫자만 멈추면 "안 움직인다"로 읽혀서, 제한이 있다는 사실 자체를
    * 알 수 없다 — 손잡이만 남기고 슬라이더를 없앤 뒤로는 이게 유일한 통로다.
    */
-  const frameLimit = atCanvasScaleLimit(canvasScale, "max") ? "최대" : atCanvasScaleLimit(canvasScale, "min") ? "최소" : undefined;
+  const frameLimit = atCanvasSizeLimit(geometry.canvas, "max") ? "최대" : atCanvasSizeLimit(geometry.canvas, "min") ? "최소" : undefined;
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
@@ -834,19 +860,20 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* noop */ }
   };
 
-  const applyCanvasScale = (next: { x: number; y: number }) => onCanvasScaleChange?.({
-    canvasScaleX: clampNumber(next.x, bubbleCanvasScaleRange.min, bubbleCanvasScaleRange.max),
-    canvasScaleY: clampNumber(next.y, bubbleCanvasScaleRange.min, bubbleCanvasScaleRange.max),
+  const applyCanvasSize = (next: { width: number; height: number }) => onCanvasSizeChange?.({
+    width: Math.round(clampNumber(next.width, bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max)),
+    height: Math.round(clampNumber(next.height, bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max)),
   });
   /**
    * 잡은 손잡이가 가진 방향만 움직인다.
    *
    * 두 축을 한 값으로 묶으면 대각선으로만 커져서 원본 비율(가로:세로)을 벗어날 수 없다. 축을 나눠
    * 놓으면 모서리는 두 축을 동시에, 변 가운데 손잡이는 한 축만 바꿔서 직사각형 프레임을 만들 수 있다.
-   * 프레임은 바깥 상자 안에서 가운데 정렬이라 한쪽 모서리를 dx만큼 끌면 폭은 2dx 변한다.
+   * 프레임은 뷰포트 안에서 가운데 정렬이라 한쪽 모서리를 dx만큼 끌면 폭은 2dx 변한다.
+   * `dirX`/`dirY`가 0인 변 가운데 손잡이는 그 축의 이동량이 0이 되어 저절로 한 축만 남는다.
    */
   const beginFrameDrag = (handle: FrameHandle) => (event: React.PointerEvent) => {
-    if (!onCanvasScaleChange) return;
+    if (!onCanvasSizeChange) return;
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -854,22 +881,18 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
       handle,
       startX: event.clientX,
       startY: event.clientY,
-      startScaleX: canvasScale.x,
-      startScaleY: canvasScale.y,
-      startStageWidth: Math.max(1, stageWidth),
-      startStageHeight: Math.max(1, stageHeight),
+      startWidth: geometry.canvas.width,
+      startHeight: geometry.canvas.height,
     };
     setFrameDragging(true);
   };
   const moveFrameDrag = (event: React.PointerEvent) => {
     const drag = frameDragRef.current;
     if (!drag) return;
-    const dx = (event.clientX - drag.startX) * drag.handle.dirX;
-    const dy = (event.clientY - drag.startY) * drag.handle.dirY;
-    applyCanvasScale({
-      x: drag.startScaleX * ((drag.startStageWidth + 2 * dx) / drag.startStageWidth),
-      y: drag.startScaleY * ((drag.startStageHeight + 2 * dy) / drag.startStageHeight),
-    });
+    // 화면 픽셀을 캔버스 픽셀로 되돌린다. 확대해 둔 상태에서도 손끝과 모서리가 같이 움직인다.
+    const dx = ((event.clientX - drag.startX) * drag.handle.dirX) / scale;
+    const dy = ((event.clientY - drag.startY) * drag.handle.dirY) / scale;
+    applyCanvasSize({ width: drag.startWidth + 2 * dx, height: drag.startHeight + 2 * dy });
   };
   const endFrameDrag = (event: React.PointerEvent) => {
     frameDragRef.current = null;
@@ -878,10 +901,13 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
   };
   // 슬라이더를 없앤 대신 키보드로도 조절할 수 있게 남겨 둔다. 손잡이가 가진 축만 움직인다.
   const handleFrameKey = (handle: FrameHandle) => (event: React.KeyboardEvent) => {
-    const step = event.key === "ArrowUp" || event.key === "ArrowRight" ? 0.02 : event.key === "ArrowDown" || event.key === "ArrowLeft" ? -0.02 : 0;
+    const step = event.key === "ArrowUp" || event.key === "ArrowRight" ? 4 : event.key === "ArrowDown" || event.key === "ArrowLeft" ? -4 : 0;
     if (!step) return;
     event.preventDefault();
-    applyCanvasScale({ x: canvasScale.x + step * Math.abs(handle.dirX), y: canvasScale.y + step * Math.abs(handle.dirY) });
+    applyCanvasSize({
+      width: geometry.canvas.width + step * Math.abs(handle.dirX),
+      height: geometry.canvas.height + step * Math.abs(handle.dirY),
+    });
   };
 
   return (
@@ -958,7 +984,7 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
             손잡이는 stage 바깥에 둔다. stage는 `overflow-hidden`이라 안에 넣으면 모서리 밖으로
             내민 절반이 잘려 잡을 면적이 줄어든다.
           */}
-          {onCanvasScaleChange ? <FrameResizeHandles active={frameDragging} onBegin={beginFrameDrag} onMove={moveFrameDrag} onEnd={endFrameDrag} onKeyDown={handleFrameKey} /> : null}
+          {onCanvasSizeChange ? <FrameResizeHandles active={frameDragging} onBegin={beginFrameDrag} onMove={moveFrameDrag} onEnd={endFrameDrag} onKeyDown={handleFrameKey} /> : null}
         </div>
         <ZoomControls
           percent={Math.round(scale * 100)}
@@ -1025,10 +1051,8 @@ type FrameDrag = {
   handle: FrameHandle;
   startX: number;
   startY: number;
-  startScaleX: number;
-  startScaleY: number;
-  startStageWidth: number;
-  startStageHeight: number;
+  startWidth: number;
+  startHeight: number;
 };
 
 /**
