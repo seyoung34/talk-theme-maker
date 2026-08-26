@@ -1,4 +1,4 @@
-import { bubbleDecorationBaseSize, bubbleDecorationMaxScale, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleDecorationLayers, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
+import { crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleDecorationLayers, getBubbleDecorationSize, getBubbleVariantGeometry, getIosBubbleGeometry, rectsOverlap } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleBuilderVariant, BubbleDecorationLayer, BubbleFamilyDesignSpec, BubbleRect, GeneratedBubbleAsset, GeneratedBubbleDesign, GeneratedBubbleFamily } from "@/lib/theme/bubbleBuilder/types";
 import type { BubbleGeometry, Markers, ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -109,10 +109,8 @@ function drawDecoration(
   canvasHeight: number,
   decoration: BubbleDecorationLayer,
 ): BubbleRect {
-  const baseScale = Math.min(1, bubbleDecorationBaseSize / Math.max(bitmap.width, bitmap.height));
-  const scale = baseScale * Math.max(0.1, Math.min(bubbleDecorationMaxScale, decoration.scale));
-  const width = Math.max(1, bitmap.width * scale);
-  const height = Math.max(1, bitmap.height * scale);
+  // 미리보기와 같은 계산을 쓴다. 두 곳이 갈라지면 화면에서 맞춘 자리가 결과물에서 어긋난다.
+  const { width, height } = getBubbleDecorationSize(decoration, bitmap);
   const centerX = canvasWidth / 2 + decoration.offsetX;
   const centerY = canvasHeight / 2 + decoration.offsetY;
   const x = centerX - width / 2;

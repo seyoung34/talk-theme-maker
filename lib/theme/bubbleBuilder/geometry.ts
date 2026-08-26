@@ -1,6 +1,6 @@
 import type { Insets, Markers, StretchPoint } from "@/lib/theme/types";
 import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
-import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDecorationLayer, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
+import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDecorationLayer, BubbleDecorationTransform, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
 
 const variantPresets: Record<BubbleBuilderVariant, { width: number; height: number; bodyWidth: number; bodyHeight: number }> = {
   first: { width: 250, height: 230, bodyWidth: 95, bodyHeight: 80 },
@@ -13,6 +13,58 @@ export const bubbleBuilderPresetVersion = "bubble-builder-v1" as const;
 export const bubbleDecorationBaseSize = 96;
 // 장식 크기 배율 상한. 캐릭터를 말풍선 본체보다 크게 얹을 수 있어야 한다.
 export const bubbleDecorationMaxScale = 4;
+
+export type BubbleDecorationSourceSize = { width: number; height: number };
+
+/**
+ * 장식이 실제로 그려지는 크기.
+ *
+ * 원본이 정사각형이 아니면 짧은 쪽에 투명 여백이 남는다. 미리보기가 이 값 대신
+ * `bubbleDecorationBaseSize` 정사각형을 쓰던 동안에는 세 가지가 어긋나 있었다 —
+ * 넓적한 그림의 클릭 영역이 그림 위아래의 빈 자리까지 먹었고(말풍선 본체를 잡을 수 없었다),
+ * 96px보다 작은 원본은 미리보기에서만 확대돼 보였으며, 겹침·늘어남 판정이 결과물과 달랐다.
+ * 원본 크기를 모르는 호출부(아직 이미지를 못 읽은 첫 프레임)는 예전 정사각형 근사로 떨어진다.
+ */
+export function getBubbleDecorationSize(layer: Pick<BubbleDecorationTransform, "scale">, source?: BubbleDecorationSourceSize) {
+  const scale = clamp(layer.scale, 0.1, bubbleDecorationMaxScale);
+  if (!source || source.width <= 0 || source.height <= 0) {
+    const size = bubbleDecorationBaseSize * scale;
+    return { width: size, height: size };
+  }
+  const baseScale = Math.min(1, bubbleDecorationBaseSize / Math.max(source.width, source.height));
+  return {
+    width: Math.max(1, source.width * baseScale * scale),
+    height: Math.max(1, source.height * baseScale * scale),
+  };
+}
+
+/** 캔버스 좌표에서 장식이 차지하는 사각형. 회전은 빼고 본다(렌더도 회전 전 사각형을 돌려준다). */
+export function getBubbleDecorationRect(
+  layer: Pick<BubbleDecorationTransform, "scale" | "offsetX" | "offsetY">,
+  canvas: { width: number; height: number },
+  source?: BubbleDecorationSourceSize,
+): BubbleRect {
+  const { width, height } = getBubbleDecorationSize(layer, source);
+  return {
+    x: canvas.width / 2 + layer.offsetX - width / 2,
+    y: canvas.height / 2 + layer.offsetY - height / 2,
+    width,
+    height,
+  };
+}
+
+/**
+ * 크기 조절 손잡이의 기준 거리 — 배율 1일 때 중심에서 모서리까지.
+ *
+ * 손잡이는 중심에서 포인터까지의 거리를 배율로 되돌린다. 원본 비율을 쓰기 전에는 정사각형을
+ * 가정한 `baseSize * SQRT1_2`가 그 거리였는데, 넓적한 그림에서는 모서리가 그보다 멀어 손잡이를
+ * 잡는 순간 크기가 튀었다.
+ */
+export function getBubbleDecorationHandleRadius(source?: BubbleDecorationSourceSize) {
+  if (!source || source.width <= 0 || source.height <= 0) return bubbleDecorationBaseSize * Math.SQRT1_2;
+  const baseScale = Math.min(1, bubbleDecorationBaseSize / Math.max(source.width, source.height));
+  return Math.hypot(source.width * baseScale, source.height * baseScale) / 2;
+}
 
 /**
  * 본체 크기 배율의 허용 범위.

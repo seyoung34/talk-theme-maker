@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bubbleBodyScalePresets, bubbleBodyScaleRange, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleBodyScalePreset, getBubbleCanvasScale, getBubbleDecorationLayers, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
+import { bubbleBodyScalePresets, bubbleBodyScaleRange, bubbleDecorationBaseSize, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleBodyScalePreset, getBubbleCanvasScale, getBubbleDecorationHandleRadius, getBubbleDecorationLayers, getBubbleDecorationRect, getBubbleDecorationSize, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleSideDesignSpec } from "@/lib/theme/bubbleBuilder/types";
 
 const baseDesign: BubbleSideDesignSpec = {
@@ -187,6 +187,49 @@ describe("bubble builder geometry", () => {
     expect(ios.stretch).toEqual(geometry.stretch);
     expect(ios.insets.left + geometry.content.width + ios.insets.right).toBe(geometry.canvas.width);
     expect(ios.insets.top + geometry.content.height + ios.insets.bottom).toBe(geometry.canvas.height);
+  });
+
+  /**
+   * 클릭 영역·겹침 판정·미리보기 상자가 모두 이 사각형을 쓴다. 정사각형 근사를 쓰던 동안에는
+   * 넓적한 그림의 빈 위아래가 클릭을 먹어 그 아래 말풍선 본체를 잡을 수 없었다.
+   */
+  describe("decoration rect", () => {
+    it("keeps the source aspect ratio instead of a square box", () => {
+      const size = getBubbleDecorationSize({ scale: 1 }, { width: 200, height: 80 });
+
+      expect(size.width).toBeCloseTo(bubbleDecorationBaseSize);
+      expect(size.height).toBeCloseTo(bubbleDecorationBaseSize * 0.4);
+    });
+
+    it("never enlarges a source smaller than the base size", () => {
+      // 렌더는 baseScale을 1로 묶어 작은 원본을 키우지 않는다. 미리보기도 같아야 한다.
+      expect(getBubbleDecorationSize({ scale: 1 }, { width: 32, height: 32 })).toEqual({ width: 32, height: 32 });
+      expect(getBubbleDecorationSize({ scale: 2 }, { width: 32, height: 32 })).toEqual({ width: 64, height: 64 });
+    });
+
+    it("falls back to the square approximation before the source is measured", () => {
+      expect(getBubbleDecorationSize({ scale: 1.5 }, undefined)).toEqual({
+        width: bubbleDecorationBaseSize * 1.5,
+        height: bubbleDecorationBaseSize * 1.5,
+      });
+    });
+
+    it("centers the rect on the canvas plus the layer offset", () => {
+      const rect = getBubbleDecorationRect({ scale: 1, offsetX: 10, offsetY: -20 }, { width: 250, height: 230 }, { width: 200, height: 80 });
+
+      expect(rect.x).toBeCloseTo(125 + 10 - 48);
+      expect(rect.y).toBeCloseTo(115 - 20 - 19.2);
+      expect(rect.width).toBeCloseTo(96);
+      expect(rect.height).toBeCloseTo(38.4);
+    });
+
+    it("measures the resize handle from the real corner", () => {
+      // 정사각형 원본에서는 예전 상수와 같아야 손잡이 감각이 그대로다.
+      expect(getBubbleDecorationHandleRadius({ width: 96, height: 96 })).toBeCloseTo(bubbleDecorationBaseSize * Math.SQRT1_2);
+      expect(getBubbleDecorationHandleRadius(undefined)).toBeCloseTo(bubbleDecorationBaseSize * Math.SQRT1_2);
+      // 넓적한 원본은 모서리가 더 가깝다 — 이걸 무시하면 손잡이를 잡는 순간 크기가 튄다.
+      expect(getBubbleDecorationHandleRadius({ width: 200, height: 80 })).toBeCloseTo(Math.hypot(96, 38.4) / 2);
+    });
   });
 
   it("adds the Android marker-border offset", () => {
