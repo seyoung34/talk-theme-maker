@@ -10,7 +10,9 @@ import {
 import { processGrobleWebhookEvent, recordGrobleWebhookRejection } from "@/lib/billing/paymentRepository";
 import { requireGrobleServerConfig } from "@/lib/supabase/config";
 
-export const runtime = "edge";
+// No runtime declaration on purpose. @opennextjs/cloudflare does not support Next's "edge"
+// runtime; the whole app already runs on workerd through the Node.js runtime with nodejs_compat.
+// crypto.subtle and TextEncoder used below are available there.
 
 // Names only, never values. A failed test delivery is often the only chance to learn which headers
 // Groble actually sends, and header names carry no buyer data.
