@@ -71,12 +71,18 @@ function requireIsoDate(value: unknown, field: string) {
   return text;
 }
 
+// Groble drops a malformed ?ref instead of forwarding it, so a buyer who edits the checkout URL
+// produces a missing field rather than a bad one. Both mean the same thing operationally — a
+// captured payment we cannot match — so they share one code instead of falling into the generic
+// invalid_payload bucket that quarantine rows use for genuinely broken bodies.
 function requireUuid(value: unknown, field: string) {
-  const text = requireString(value, field);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)) {
+  if (
+    typeof value !== "string"
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  ) {
     throw new GrobleWebhookError("invalid_reference", `${field} must be a UUID`);
   }
-  return text;
+  return value;
 }
 
 function isGrobleEventType(value: unknown): value is GrobleEventType {
