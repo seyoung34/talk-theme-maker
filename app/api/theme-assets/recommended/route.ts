@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createTtlCache } from "@/lib/shared/ttlCache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAssetPlatformVariant, type AdminAssetCandidate, type AdminAssetKind, type AdminAssetTarget } from "@/lib/theme/adminAssets";
+import { selectAdminAssetTargetMatch } from "@/lib/theme/adminAssetWorkspace";
+import type { ThemeResourceRole } from "@/lib/theme/types";
 import { adminLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { buildPickerThumbnailIndex, selectPickerThumbnailUrl, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
@@ -101,7 +103,9 @@ export async function GET(request: NextRequest) {
   try {
     const platform = request.nextUrl.searchParams.get("platform");
     const assetKind = request.nextUrl.searchParams.get("assetKind");
-    const slotRole = request.nextUrl.searchParams.get("slotRole") || undefined;
+    // 모르는 role은 그대로 흘려보낸다. 어떤 `exact_role` target과도 맞지 않아 kind 전체 후보만
+    // 남을 뿐이고, 여기서 400을 내면 슬롯 목록이 늘어날 때마다 이 라우트가 같이 막힌다.
+    const slotRole = (request.nextUrl.searchParams.get("slotRole") || undefined) as ThemeResourceRole | undefined;
     const limit = Math.min(50, Math.max(1, Number(request.nextUrl.searchParams.get("limit")) || 24));
     const cursorParam = request.nextUrl.searchParams.get("cursor");
     const cursor = decodeCursor(cursorParam);
@@ -119,10 +123,10 @@ export async function GET(request: NextRequest) {
 
     const data = await readRecommendedSourceRows(admin, assetKind);
 
-    const ranked = uniqueRankedAssets((data)
+    const ranked = (data)
       .map((row: unknown) => mapCanonicalAdminAssetRow(row))
-      .flatMap((asset) => matchingTargets(asset, platform, slotRole, assetKind))
-      .sort(compareRankedAssets));
+      .flatMap((asset) => rankAsset(asset, platform, slotRole, assetKind))
+      .sort(compareRankedAssets);
     const cursorFiltered = cursor ? ranked.filter((item) => compareRankedAssetToCursor(item, cursor) > 0) : ranked;
     const page = cursorFiltered.slice(0, limit);
     const hasMore = cursorFiltered.length > limit;
@@ -255,43 +259,25 @@ function jsonRecommendedPage(payload: RecommendedPagePayload) {
   });
 }
 
-function matchingTargets(asset: ReturnType<typeof mapCanonicalAdminAssetRow>, platform: "android" | "ios", slotRole: string | undefined, assetKind: AdminAssetKind): readonly RankedAsset[] {
-  const matches: RankedAsset[] = [];
-  for (const target of asset.targets) {
-    if (!target.enabled || (target.platform !== platform && target.platform !== "all")) continue;
-    if (target.targetKind === "exact_role" && slotRole && target.slotRole === slotRole) {
-      matches.push({ asset, target, matchRank: 0 });
-    } else if (target.targetKind === "exact_role" && slotRole && target.slotRole && isCompatibleExactRole(assetKind, target.slotRole, slotRole)) {
-      matches.push({ asset, target, matchRank: 1 });
-    } else if (target.targetKind === "asset_kind" && !target.slotRole) {
-      matches.push({ asset, target, matchRank: 1 });
-    } else if (target.targetKind === "shape_rule" && !target.slotRole) {
-      matches.push({ asset, target, matchRank: 2 });
-    }
-  }
-  return matches;
-}
-
-/** 한 에셋이 여러 target과 일치해도 피커에는 가장 좋은 target 하나만 노출한다. */
-function uniqueRankedAssets(ranked: readonly RankedAsset[]): RankedAsset[] {
-  const seen = new Set<string>();
-  return ranked.filter((item) => {
-    if (seen.has(item.asset.id)) return false;
-    seen.add(item.asset.id);
-    return true;
-  });
-}
-
-function isCompatibleExactRole(assetKind: AdminAssetKind, targetRole: string, requestedRole: string): boolean {
-  if (assetKind === "bubble") return targetRole.startsWith("bubble_") && requestedRole.startsWith("bubble_");
-  if (assetKind === "background") return isSharedBackgroundRole(targetRole) && isSharedBackgroundRole(requestedRole);
-  if (assetKind === "icon") return targetRole.startsWith("tab_icon_") && requestedRole.startsWith("tab_icon_");
-  if (assetKind === "passcode_indicator") return targetRole.startsWith("passcode_indicator") && requestedRole.startsWith("passcode_indicator");
-  return false;
-}
-
-function isSharedBackgroundRole(role: string): boolean {
-  return role === "main_background" || role === "chat_background" || role === "tab_background_image";
+/**
+ * 이 에셋을 요청 슬롯에 추천할 수 있으면 근거 target 하나와 순위를 붙여 돌려준다.
+ *
+ * 판정 자체는 `selectAdminAssetTargetMatch`가 한다 — export 게이트와 **같은 함수**여야 피커에
+ * 보이는 것과 결과물에 넣을 수 있는 것이 어긋나지 않는다.
+ */
+function rankAsset(
+  asset: ReturnType<typeof mapCanonicalAdminAssetRow>,
+  platform: "android" | "ios",
+  slotRole: ThemeResourceRole | undefined,
+  assetKind: AdminAssetKind,
+): readonly RankedAsset[] {
+  const match = selectAdminAssetTargetMatch(
+    { ...(slotRole ? { role: slotRole } : {}), kind: assetKind },
+    asset,
+    platform,
+    { allowCompatibleExactRole: true },
+  );
+  return match ? [{ asset, target: match.target, matchRank: match.rank }] : [];
 }
 
 /**

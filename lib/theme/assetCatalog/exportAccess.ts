@@ -1,5 +1,6 @@
 import { getAdminAssetCandidateMatchRank } from "@/lib/theme/adminAssetWorkspace";
 import {
+  inferAdminAssetKind,
   inferLegacyAssetKind,
   type AdminAssetKind,
   type AdminAssetPlatform,
@@ -73,6 +74,25 @@ const imageRolesByPlatform: Readonly<Record<ThemePlatform, ReadonlySet<ThemeReso
   android: new Set(getThemeSlots("android").filter((slot) => slot.kind !== "color").map((slot) => slot.role)),
   ios: new Set(getThemeSlots("ios").filter((slot) => slot.kind !== "color").map((slot) => slot.role)),
 };
+
+/**
+ * role → 그 슬롯이 받는 에셋 종류.
+ *
+ * `inferLegacyAssetKind(role)`로 대신하면 안 된다. 그 함수는 `group`을 보지 못해 `splash`나
+ * `find_add_friend`를 배경으로 분류하는데, 피커가 쓰는 `inferThemeAssetKind(slot)`은 아이콘으로
+ * 본다. 두 판정이 갈라지면 피커에서 고를 수 있는 에셋이 내보내기에서 403이 된다.
+ *
+ * 슬롯을 못 찾을 때만 role 기반 추정으로 떨어진다 — 발행된 템플릿에는 지금 manifest에 없는
+ * 옛 role이 남아 있을 수 있고, 그 경우 종전 판정을 유지하는 편이 안전하다.
+ */
+const assetKindByRole: Readonly<Record<ThemePlatform, ReadonlyMap<ThemeResourceRole, AdminAssetKind>>> = {
+  android: new Map(getThemeSlots("android").map((slot) => [slot.role, inferAdminAssetKind(slot)])),
+  ios: new Map(getThemeSlots("ios").map((slot) => [slot.role, inferAdminAssetKind(slot)])),
+};
+
+function resolveExportSlotKind(platform: ThemePlatform, role: ThemeResourceRole): AdminAssetKind {
+  return assetKindByRole[platform].get(role) ?? inferLegacyAssetKind(role);
+}
 
 const allowedAssetKinds = new Set<AdminAssetKind>([
   "background",
@@ -160,11 +180,18 @@ export function isAdminAssetAllowedForExport(input: {
   resourceRole: ThemeResourceRole;
 }) {
   const { asset, platform, resourceRole } = input;
-  if (!asset.enabled || (asset.platform !== "all" && asset.platform !== platform)) return false;
+  if (!asset.enabled) return false;
 
-  const slotKind = inferLegacyAssetKind(resourceRole);
+  /**
+   * 플랫폼 판정은 target이 한다.
+   *
+   * 대표 target(`selectRepresentativeTarget`)의 platform을 여기서 한 번 더 보면, `exact_role(android)`
+   * 과 `asset_kind(all)`을 함께 가진 에셋이 iOS에서 거부된다 — 대표로 뽑히는 쪽이 `exact_role`이라
+   * platform이 android로 좁혀지기 때문이다. target을 전부 훑는 아래 판정이 `all`/플랫폼 일치를
+   * 이미 검사하고, target이 없는 legacy 행은 `asset.platform`으로 만든 target으로 똑같이 막힌다.
+   */
   return getAdminAssetCandidateMatchRank(
-    { role: resourceRole, kind: slotKind },
+    { role: resourceRole, kind: resolveExportSlotKind(platform, resourceRole) },
     {
       assetKind: asset.assetKind,
       enabled: asset.enabled,

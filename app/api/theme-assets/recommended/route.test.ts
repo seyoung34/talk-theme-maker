@@ -142,6 +142,34 @@ describe("GET /api/theme-assets/recommended", () => {
     expect(findActiveByKeys).toHaveBeenCalledTimes(1);
   });
 
+  it("호환되지 않는 exact_role target은 그 슬롯에서 제외한다", async () => {
+    const GET = await load([[
+      sourceRow("kind-target", [{ targetKind: "asset_kind", priority: 0 }]),
+      sourceRow("other-exact", [{ targetKind: "exact_role", slotRole: "passcode_background", priority: 10 }]),
+    ]]);
+
+    const response = await GET({
+      nextUrl: new URL("http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=main_background"),
+    } as never);
+    const payload = await response.json();
+
+    expect(payload.items.map((item: { id: string }) => item.id)).toEqual(["kind-target"]);
+  });
+
+  it("slotRole이 없으면 exact_role target은 빼고 kind 전체 후보만 내려준다", async () => {
+    const GET = await load([[
+      sourceRow("kind-target", [{ targetKind: "asset_kind", priority: 0 }]),
+      sourceRow(exactAssetId, [{ targetKind: "exact_role", slotRole: "main_background", priority: 10 }]),
+    ]]);
+
+    const response = await GET({
+      nextUrl: new URL("http://localhost/api/theme-assets/recommended?platform=android&assetKind=background"),
+    } as never);
+    const payload = await response.json();
+
+    expect(payload.items.map((item: { id: string }) => item.id)).toEqual(["kind-target"]);
+  });
+
   it("잘못된 platform과 assetKind는 DB 조회 전에 거부한다", async () => {
     const GET = await load([[]]);
 

@@ -36,10 +36,58 @@ describe("catalog export access", () => {
 
   it.each([
     ["disabled", { enabled: false }],
-    ["wrong platform", { platform: "ios" }],
+    ["wrong platform target", { admin_asset_targets: [{ asset_id: assetId, platform: "ios", slot_role: "main_background", target_kind: "exact_role", priority: 0, enabled: true }] }],
     ["disabled target", { admin_asset_targets: [{ asset_id: assetId, platform: "android", slot_role: "main_background", target_kind: "exact_role", priority: 0, enabled: false }] }],
   ])("%s 에셋은 export에서 차단한다", (_label, overrides) => {
     expect(isAdminAssetAllowedForExport({ asset: access(overrides), platform: "android", resourceRole: "main_background" })).toBe(false);
+  });
+
+  // target이 아직 없는 옛 행은 부모 컬럼이 유일한 근거라 그대로 플랫폼 경계가 된다.
+  it("child target이 없는 legacy 행은 부모 platform으로 차단한다", () => {
+    const legacy = access({ platform: "ios", admin_asset_targets: [] });
+    expect(isAdminAssetAllowedForExport({ asset: legacy, platform: "android", resourceRole: "main_background" })).toBe(false);
+    expect(isAdminAssetAllowedForExport({ asset: legacy, platform: "ios", resourceRole: "main_background" })).toBe(true);
+  });
+
+  /**
+   * 대표 target(`selectRepresentativeTarget`)은 `exact_role`을 먼저 고르므로 `asset.platform`이
+   * android로 좁혀진다. 그 값으로 플랫폼을 판정하면 `asset_kind(all)` target이 허용하는 iOS
+   * 내보내기가 막힌다 — 피커는 같은 자산을 iOS에서 보여 주므로 그대로 두면 403이 된다.
+   */
+  it("exact_role(android)과 asset_kind(all)을 함께 가진 에셋은 iOS에서도 허용한다", () => {
+    const shared = mapAdminAssetExportAccessRow({
+      id: assetId,
+      slot_role: "main_background",
+      platform: "android",
+      asset_kind: "background",
+      enabled: true,
+      admin_asset_targets: [
+        { asset_id: assetId, platform: "android", slot_role: "main_background", target_kind: "exact_role", priority: 0, enabled: true },
+        { asset_id: assetId, platform: "all", slot_role: null, target_kind: "asset_kind", priority: 0, enabled: true },
+      ],
+    });
+    expect(isAdminAssetAllowedForExport({ asset: shared, platform: "ios", resourceRole: "main_background" })).toBe(true);
+  });
+
+  /**
+   * `inferLegacyAssetKind`는 `group`을 못 봐서 이 role들을 배경으로 분류하지만, 피커가 쓰는
+   * `inferThemeAssetKind(slot)`은 아이콘으로 본다. 게이트가 옛 추정을 쓰면 피커에서 고를 수 있는
+   * 아이콘이 내보내기에서 403이 된다.
+   */
+  it.each([
+    ["splash", "android"],
+    ["find_add_friend", "android"],
+    ["find_add_friend", "ios"],
+  ] as const)("%s(%s) 슬롯은 슬롯 정의 기준 kind로 판정한다", (resourceRole, platform) => {
+    const icon = mapAdminAssetExportAccessRow({
+      id: assetId,
+      slot_role: "theme_icon",
+      platform: "all",
+      asset_kind: "icon",
+      enabled: true,
+      admin_asset_targets: [{ asset_id: assetId, platform: "all", slot_role: null, target_kind: "asset_kind", priority: 0, enabled: true }],
+    });
+    expect(isAdminAssetAllowedForExport({ asset: icon, platform, resourceRole })).toBe(true);
   });
 
   it("호환되는 말풍선 role은 기존 추천 target 규칙처럼 허용한다", () => {
