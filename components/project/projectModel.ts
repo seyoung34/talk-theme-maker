@@ -13,7 +13,7 @@ import {
 } from "@/lib/theme/project/state";
 import { getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
-import { describeAdminAssetAnalysis, getAdminAssetKindLabel, isAdminAssetRecommendedForSlot, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { describeAdminAssetAnalysis, getAdminAssetKindLabel, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
@@ -269,9 +269,17 @@ export function buildSlotCandidates(
   return allItems;
 }
 
+/**
+ * 추천 에셋 카드.
+ *
+ * **여기서 다시 거르지 않는다.** 이 목록은 `/api/theme-assets/recommended`가 요청한 슬롯에 맞춰
+ * 이미 골라 준 것이고(`selectAdminAssetTargetMatch`), 서버는 24개씩 잘라 보낸다. 여기서 한 번 더
+ * 거르면 잘라 낸 **뒤에** 줄어들어 `/admin/assets`와 개수가 절대 맞지 않고, "더 보기"를 눌러도
+ * 늘어나는 수가 매번 달라진다. 무엇보다 판정이 서버·export 게이트와 갈라져, 화면에서 사라진
+ * 에셋이 실제로는 내보내기 허용 대상인 상태가 된다.
+ */
 function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | undefined, adminAssets: Array<AdminAssetCandidate & { previewUrl?: string; thumbnailUrl?: string }>): SlotCandidate[] {
   return adminAssets
-    .filter((asset) => isAdminAssetRecommendedForSlot(slot, asset))
     .map((asset) => ({
       id: asset.id,
       title: asset.title,

@@ -202,6 +202,39 @@ describe("시스템 템플릿과 추천 에셋 후보 병합", () => {
       expect.objectContaining({ title: "템플릿 에셋", status: "private.png", source: "template", selected: true }),
     ]);
   });
+
+  /**
+   * 추천 API가 슬롯에 맞춰 이미 골라 준 목록이다. 여기서 한 번 더 거르면 서버가 24개씩 잘라 낸
+   * **뒤에** 줄어들어 `/admin/assets`와 개수가 맞지 않고, 판정이 export 게이트와도 갈라진다.
+   *
+   * `find_add_friend`·`splash`·`passcode_keypad_pressed_image`는 예전 클라이언트 필터의 role
+   * 화이트리스트에 없어서 추천 에셋이 **항상 0개**로 보이던 슬롯이다.
+   */
+  it.each(["find_add_friend", "splash", "profile_image_2", "tab_icon_chats"])(
+    "%s 슬롯도 추천 응답을 그대로 후보로 보여 준다",
+    (role) => {
+      const target = slots.find((candidate) => candidate.role === role)!;
+      const recommended = {
+        ...adminAsset("server-picked", "서버가 고른 추천"),
+        slotRole: "theme_icon" as const,
+        assetKind: "icon" as const,
+        // 불투명 가로형: 예전 shape 게이트가 tab_icon_* 슬롯에서 버리던 형태다.
+        analysis: { shapes: ["wide" as const] },
+      };
+
+      const candidates = buildSlotCandidates(target, {}, {}, {}, "basic", template, slots, [recommended]);
+
+      expect(candidates.filter((candidate) => candidate.source === "admin")).toHaveLength(1);
+    },
+  );
+
+  it("추천 응답 개수를 그대로 후보 개수로 옮긴다", () => {
+    const recommended = Array.from({ length: 24 }, (_, index) => adminAsset(`asset-${index}`));
+
+    const candidates = buildSlotCandidates(slot, {}, {}, {}, "basic", template, slots, recommended);
+
+    expect(candidates.filter((candidate) => candidate.source === "admin")).toHaveLength(24);
+  });
 });
 
 /**
