@@ -1,4 +1,5 @@
 import type { ExportFailureReason } from "@/lib/theme/export/failureReason";
+import { campaigns, marketingUtmCatalog } from "@/lib/marketing/links";
 
 export const analyticsConsentStorageKey = "talktheme:analytics-consent:v1";
 export const analyticsConsentChangedEvent = "talktheme:analytics-consent-changed";
@@ -11,20 +12,23 @@ const funnelContextStorageKey = "talktheme:analytics-funnel-context:v1";
  * 허용 목록. 여기에 없는 값은 조용히 버린다.
  *
  * 임의 문자열을 그대로 보내면 오타·봇·장난 값이 GA4 측정기준에 쌓여 보고서를 못 쓰게 된다.
- * 대신 **새 채널을 쓰려면 이 목록을 먼저 고쳐야 한다.**
+ * 대신 **새 채널을 쓰려면 링크 대장에 먼저 등록해야 한다.** 현재 링크의 값은 대장에서 자동으로
+ * 가져오며, 아래 `legacyUtmValues`만 이 체계 이전에 이미 사용한 값을 별도로 보존한다.
  *
  * `lib/marketing/links.ts`의 링크 대장이 쓰는 값은 전부 여기 있어야 한다. 어긋나면 내가 뿌린
  * 링크가 통계에 안 잡히므로 테스트로 묶어 두었다.
  */
+const legacyUtmValues = {
+  // 아래 값은 이 체계 이전에 이미 뿌린 링크가 있을 수 있어 계속 받는다.
+  utm_source: ["instagram", "naver", "google", "tiktok", "youtube", "x", "community", "direct_share"],
+  utm_medium: ["search", "community"],
+  utm_campaign: ["instagram_personal_launch", "naver_search", "google_search", "tiktok_launch", "youtube_launch", "x_launch", "community_launch"],
+} as const;
+
 const allowedUtmValues = {
-  utm_source: new Set(["instagram", "naver", "google", "tiktok", "youtube", "x", "community", "direct_share"]),
-  utm_medium: new Set(["social", "search", "organic", "video", "community", "referral"]),
-  utm_campaign: new Set([
-    "friends_test",
-    "launch_2608",
-    // 아래는 이 체계 이전에 쓰던 값이다. 이미 뿌린 링크가 있을 수 있어 계속 받는다.
-    "instagram_personal_launch", "naver_search", "google_search", "tiktok_launch", "youtube_launch", "x_launch", "community_launch",
-  ]),
+  utm_source: new Set([...marketingUtmCatalog.utm_source, ...legacyUtmValues.utm_source]),
+  utm_medium: new Set([...marketingUtmCatalog.utm_medium, ...legacyUtmValues.utm_medium]),
+  utm_campaign: new Set([...Object.keys(campaigns), ...legacyUtmValues.utm_campaign]),
 };
 
 /**
@@ -70,7 +74,7 @@ function buildCampaignQuery(acquisition: AcquisitionContext) {
   const value = query.toString();
   return value ? `?${value}` : "";
 }
-const knownCampaignKeys = new Set(["instagram_personal_launch", "naver_search", "google_search", "tiktok_launch", "youtube_launch", "x_launch", "community_launch"]);
+const knownCampaignKeys = new Set([...Object.keys(campaigns), ...legacyUtmValues.utm_campaign]);
 
 export type AnalyticsConsent = "granted" | "denied";
 type AnalyticsPrimitive = string | number | boolean;

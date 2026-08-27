@@ -60,7 +60,11 @@ describe("getMarketingLink", () => {
 
 describe("buildMarketingDestination", () => {
   it("대장의 값만 붙인다", () => {
-    const url = buildMarketingDestination("https://talktheme.shop", marketingLinks.ig);
-    expect(url).toBe("https://talktheme.shop/?utm_source=instagram&utm_medium=social&utm_campaign=friends_test");
+    const url = new URL(buildMarketingDestination("https://talktheme.shop", marketingLinks.ig));
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      utm_source: marketingLinks.ig.source,
+      utm_medium: marketingLinks.ig.medium,
+      utm_campaign: marketingLinks.ig.campaign,
+    });
   });
 });
