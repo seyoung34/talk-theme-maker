@@ -736,14 +736,14 @@ export default function AdminAssetsClient() {
   };
 
   const applyBubbleBuilder = async (result: GeneratedBubbleDesign, decorations: Partial<Record<string, File>>) => {
-    if (!selectedSlot) return;
+    if (!selectedSlot) return false;
     const variant = bubbleVariantFromRole(selectedSlot.role);
-    if (!variant) return;
+    if (!variant) return false;
     try {
       // 저장된 geometryMode가 generated여도 현재 편집 세션에서 수동 조정했다면
       // 재생성 결과가 그 값을 덮어쓴다. 새 후보에서 아직 빌더 결과가 없는 첫 적용은 묻지 않는다.
       const hasManualGeometryToReplace = bubbleGeometryMode === "manual" && Boolean(editingAsset || bubbleBuilderDraft);
-      if (hasManualGeometryToReplace && typeof window !== "undefined" && !window.confirm("빌더를 다시 적용하면 수동 geometry 조정값이 자동 계산값으로 바뀝니다. 계속할까요?")) return;
+      if (hasManualGeometryToReplace && typeof window !== "undefined" && !window.confirm("빌더를 다시 적용하면 수동 geometry 조정값이 자동 계산값으로 바뀝니다. 계속할까요?")) return false;
       const results = await Promise.all((['android', 'ios'] as const).map((platform) => generateBubbleAsset({ spec: result.spec, platform, variant, decorationFiles: decorations })));
       const android = results.find((item) => item.asset.platform === "android")?.asset;
       const ios = results.find((item) => item.asset.platform === "ios")?.asset;
@@ -767,9 +767,11 @@ export default function AdminAssetsClient() {
       setTitle((current) => current || "말풍선 빌더 후보");
       setBubbleWorkspaceMode("adjust");
       setNotice("Android/iOS 말풍선 결과를 만들었습니다. 저장하면 하나의 관리 후보로 등록됩니다.");
+      return true;
     } catch (error) {
       console.error(error);
       setNotice("말풍선 빌더 결과를 준비하지 못했습니다.");
+      return false;
     }
   };
 
@@ -1076,7 +1078,7 @@ export default function AdminAssetsClient() {
                       initialDecorationFiles={bubbleBuilderDraft?.decorations ?? bubbleBuilderInitial?.decorations}
                       closeOnApply={false}
                       onClose={() => setBubbleWorkspaceMode("library")}
-                      onApply={(result, decorations) => { void applyBubbleBuilder(result, decorations); }}
+                      onApply={applyBubbleBuilder}
                     />
                   ) : (
                     <div className="grid gap-4">

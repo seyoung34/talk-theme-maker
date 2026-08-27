@@ -1123,7 +1123,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const applyBubbleDesign = (result: GeneratedBubbleDesign, decorationFiles: Partial<Record<string, File>>) => {
     if (!selectedSlot || !selectedBubbleSlot || result.asset.role !== selectedSlot.role) {
       setNotice({ tone: "error", message: "선택한 말풍선 슬롯과 생성 결과가 일치하지 않습니다." });
-      return;
+      return false;
     }
     const generatedAt = Date.now();
     const uploadId = `${selectedSlot.id}:bubble-builder:${result.spec.familyId}:${generatedAt}:${result.asset.variant}`;
@@ -1179,6 +1179,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     const warningSuffix = result.warnings.length ? ` ${result.warnings[0].message}` : "";
     setNotice({ tone: result.warnings.length ? "warning" : "success", message: `${selectedSlot.label} 슬롯에 말풍선을 적용했습니다.${warningSuffix}` });
     if (selectedSlot) scheduleInteractionEvent("bubble_edit_completed", selectedSlot, { edit_type: "builder" });
+    return true;
   };
 
   const openSaveDialog = () => {

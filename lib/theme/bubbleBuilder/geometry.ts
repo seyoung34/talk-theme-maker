@@ -1,6 +1,8 @@
 import type { Insets, Markers, StretchPoint } from "@/lib/theme/types";
 import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
-import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDecorationLayer, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
+import { fullBubbleDecorationContentBox } from "@/lib/theme/bubbleBuilder/alphaBounds";
+import { readableThemeForeground } from "@/lib/theme/color";
+import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDecorationContentBox, BubbleDecorationLayer, BubbleDecorationTransform, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
 
 const variantPresets: Record<BubbleBuilderVariant, { width: number; height: number; bodyWidth: number; bodyHeight: number }> = {
   first: { width: 250, height: 230, bodyWidth: 95, bodyHeight: 80 },
@@ -14,6 +16,101 @@ export const bubbleDecorationBaseSize = 96;
 // 장식 크기 배율 상한. 캐릭터를 말풍선 본체보다 크게 얹을 수 있어야 한다.
 export const bubbleDecorationMaxScale = 4;
 
+export type BubbleDecorationSourceSize = { width: number; height: number };
+
+/**
+ * 장식이 실제로 그려지는 크기.
+ *
+ * 원본이 정사각형이 아니면 짧은 쪽에 투명 여백이 남는다. 미리보기가 이 값 대신
+ * `bubbleDecorationBaseSize` 정사각형을 쓰던 동안에는 세 가지가 어긋나 있었다 —
+ * 넓적한 그림의 클릭 영역이 그림 위아래의 빈 자리까지 먹었고(말풍선 본체를 잡을 수 없었다),
+ * 96px보다 작은 원본은 미리보기에서만 확대돼 보였으며, 겹침·늘어남 판정이 결과물과 달랐다.
+ * 원본 크기를 모르는 호출부(아직 이미지를 못 읽은 첫 프레임)는 예전 정사각형 근사로 떨어진다.
+ */
+export function getBubbleDecorationSize(layer: Pick<BubbleDecorationTransform, "scale">, source?: BubbleDecorationSourceSize) {
+  const scale = clamp(layer.scale, 0.1, bubbleDecorationMaxScale);
+  if (!source || source.width <= 0 || source.height <= 0) {
+    const size = bubbleDecorationBaseSize * scale;
+    return { width: size, height: size };
+  }
+  const baseScale = Math.min(1, bubbleDecorationBaseSize / Math.max(source.width, source.height));
+  return {
+    width: Math.max(1, source.width * baseScale * scale),
+    height: Math.max(1, source.height * baseScale * scale),
+  };
+}
+
+/** 캔버스 좌표에서 장식이 차지하는 사각형. 회전은 빼고 본다(렌더도 회전 전 사각형을 돌려준다). */
+export function getBubbleDecorationRect(
+  layer: Pick<BubbleDecorationTransform, "scale" | "offsetX" | "offsetY">,
+  canvas: { width: number; height: number },
+  source?: BubbleDecorationSourceSize,
+): BubbleRect {
+  const { width, height } = getBubbleDecorationSize(layer, source);
+  return {
+    x: canvas.width / 2 + layer.offsetX - width / 2,
+    y: canvas.height / 2 + layer.offsetY - height / 2,
+    width,
+    height,
+  };
+}
+
+/**
+ * 원본에서 잰 실제 그림 영역을 화면·결과물에 적용되는 좌우반전까지 반영해 돌려준다.
+ *
+ * 그림 자체는 renderer/preview에서 `scaleX(-1)`로 뒤집지만 alpha bounds는 원본 좌표로
+ * 남아 있으면, 비대칭 투명 여백이 있는 파일에서 선택 영역과 경고가 반대쪽을 가리킨다.
+ */
+export function getBubbleDecorationTransformedContentBox(
+  layer: { flipX?: boolean },
+  content?: BubbleDecorationContentBox,
+): BubbleDecorationContentBox {
+  const box = content ?? fullBubbleDecorationContentBox;
+  if (!layer.flipX) return box;
+  return { ...box, x: 1 - box.x - box.width };
+}
+
+/**
+ * 장식에서 **보이는 그림**이 차지하는 사각형.
+ *
+ * `getBubbleDecorationRect`가 돌려주는 것은 원본 파일 전체의 자리이고, 그 안에는 보통 투명
+ * 여백이 들어 있다. 클릭 판정과 겹침·늘어남 경고는 여백이 아니라 그림을 봐야 한다 — 여백을
+ * 세면 아무것도 닿지 않았는데 경고가 뜨고, 그림에서 멀찍이 떨어진 빈자리가 클릭을 먹는다.
+ *
+ * 그리는 위치와 크기는 그대로 둔다. 여기서 좁히는 것은 판정과 선택 표시뿐이라, 이미 저장된
+ * 장식의 모양은 하나도 바뀌지 않는다.
+ */
+export function getBubbleDecorationContentRect(
+  layer: Pick<BubbleDecorationTransform, "scale" | "offsetX" | "offsetY"> & { flipX?: boolean },
+  canvas: { width: number; height: number },
+  source?: BubbleDecorationSourceSize,
+  content?: BubbleDecorationContentBox,
+): BubbleRect {
+  const rect = getBubbleDecorationRect(layer, canvas, source);
+  const box = getBubbleDecorationTransformedContentBox(layer, content);
+  return {
+    x: rect.x + rect.width * box.x,
+    y: rect.y + rect.height * box.y,
+    width: rect.width * box.width,
+    height: rect.height * box.height,
+  };
+}
+
+/**
+ * 크기 조절 손잡이의 기준 거리 — 배율 1일 때 레이어 중심에서 손잡이가 붙는 모서리까지.
+ *
+ * 손잡이는 중심에서 포인터까지의 거리를 배율로 되돌린다. 그래서 기준 거리가 손잡이의 실제
+ * 위치와 같아야 잡는 순간 크기가 튀지 않는다. 정사각형을 가정하던 시절에는 넓적한 그림에서,
+ * 여백을 포함하던 시절에는 여백이 큰 그림에서 각각 어긋났다.
+ */
+export function getBubbleDecorationHandleRadius(source?: BubbleDecorationSourceSize, content?: BubbleDecorationContentBox, flipX = false) {
+  const base = getBubbleDecorationSize({ scale: 1 }, source);
+  const box = getBubbleDecorationTransformedContentBox({ flipX }, content);
+  const dx = base.width * (box.x + box.width) - base.width / 2;
+  const dy = base.height * (box.y + box.height) - base.height / 2;
+  return Math.max(1, Math.hypot(dx, dy));
+}
+
 /**
  * 본체 크기 배율의 허용 범위.
  *
@@ -24,62 +121,48 @@ export const bubbleDecorationMaxScale = 4;
 export const bubbleBodyScaleRange = { min: 0.7, max: 1.4 } as const;
 
 /**
- * 본체 크기의 선택지.
- *
- * 연속 슬라이더를 쓰지 않는다. 이 값이 정하는 것은 화면에 보이는 말풍선 크기가 아니라 9-slice의
- * **코너 두께**라, 실제 말풍선 크기는 글자 수가 정한다. 눈으로 맞추는 값이 아닌데 1% 단위를 열어
- * 두면 "지금 말풍선 크기를 맞추고 있다"는 오해만 커진다. 세 단계면 필요한 차이는 다 낸다.
- */
-export const bubbleBodyScalePresets = [
-  { id: "small", label: "작게", value: 0.8 },
-  { id: "normal", label: "기본", value: 1 },
-  { id: "large", label: "크게", value: 1.25 },
-] as const;
-
-export type BubbleBodyScalePresetId = (typeof bubbleBodyScalePresets)[number]["id"];
-
-/**
- * 저장된 배율에 가장 가까운 선택지. 옛 spec에는 슬라이더로 고른 임의의 값이 들어 있을 수 있어서,
- * 그대로 못 읽으면 세그먼트가 아무것도 선택되지 않은 상태로 보인다.
- */
-export function getBubbleBodyScalePreset(bodyScale: number | undefined): BubbleBodyScalePresetId {
-  const value = clamp(bodyScale ?? 1, bubbleBodyScaleRange.min, bubbleBodyScaleRange.max);
-  return bubbleBodyScalePresets.reduce((nearest, preset) => (
-    Math.abs(preset.value - value) < Math.abs(nearest.value - value) ? preset : nearest
-  )).id;
-}
-
-/**
- * 캔버스 크기 배율의 허용 범위. 가로·세로에 같은 범위를 쓴다.
+ * 캔버스(프레임) 크기의 허용 범위. 단위는 배율이 아니라 픽셀이다.
  *
  * 캔버스는 그대로 내보내는 PNG의 크기다. 본체 바깥 여백은 장식이 삐져나올 자리이며,
  * 투명 여백이라 실제 화면에서는 말풍선 주변의 빈 공간이 된다. 그래서 크게 벌릴수록
- * 말풍선이 차지하는 최소 면적도 함께 커진다 — 상한을 1.4로 묶어 둔 이유다.
+ * 말풍선이 차지하는 최소 면적도 함께 커진다 — 상한을 묶어 둔 이유다.
+ *
+ * 배율이 아니라 픽셀인 것은 화면 표시가 이미 픽셀(`프레임 250 × 230`)이기 때문이다.
+ * 배율로 두면 같은 1.2가 variant마다 다른 픽셀을 내서 "최대 300"이 슬롯마다 다른 뜻이 된다.
  */
-export const bubbleCanvasScaleRange = { min: 0.8, max: 1.4 } as const;
+export const bubbleCanvasSizeRange = { min: 150, max: 300 } as const;
 
-type CanvasScaleSource = Pick<BubbleSideDesignSpec, "canvasScale" | "canvasScaleX" | "canvasScaleY">;
+/** 말풍선 배경 위에서 읽히는 텍스트 색. 빌더에서는 검정/흰색 두 가지로만 단순화한다. */
+export function getBubbleTextColorForFill(fill: string) {
+  return readableThemeForeground(fill) === "#FFFFFF" ? "#FFFFFF" : "#000000";
+}
+
+type CanvasSizeSource = Pick<BubbleSideDesignSpec, "canvasWidth" | "canvasHeight" | "canvasScale" | "canvasScaleX" | "canvasScaleY">;
 
 /**
- * 축별 캔버스 배율. 가로·세로를 함께 늘리던 옛 `canvasScale`은 두 축의 기본값으로 읽는다.
+ * 프레임 픽셀 크기.
+ *
+ * 배율로 저장하던 옛 spec은 그 variant의 기본 치수에 곱해 픽셀로 읽는다. 옛 상한(1.4배)이
+ * 새 상한을 넘는 경우가 있어 마지막에 범위로 누른다 — 이미 만들어 둔 테마의 프레임이 최대
+ * 300px로 줄어들 수 있고, 그건 상한을 낮춘 결과다.
  */
-export function getBubbleCanvasScale(design: CanvasScaleSource) {
-  const legacy = design.canvasScale;
+export function getBubbleCanvasSize(design: CanvasSizeSource, variant: BubbleBuilderVariant) {
+  const source = variantPresets[variant];
+  const legacyX = design.canvasScaleX ?? design.canvasScale;
+  const legacyY = design.canvasScaleY ?? design.canvasScale;
   return {
-    x: clamp(design.canvasScaleX ?? legacy ?? 1, bubbleCanvasScaleRange.min, bubbleCanvasScaleRange.max),
-    y: clamp(design.canvasScaleY ?? legacy ?? 1, bubbleCanvasScaleRange.min, bubbleCanvasScaleRange.max),
+    width: clamp(Math.round(design.canvasWidth ?? source.width * (legacyX ?? 1)), bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max),
+    height: clamp(Math.round(design.canvasHeight ?? source.height * (legacyY ?? 1)), bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max),
   };
 }
 
 /**
- * 배율을 적용한 캔버스·본체 치수. 둥글기 상한과 실제 배치가 같은 숫자를 보게 하려고 한곳에서 만든다.
+ * 캔버스·본체 치수. 둥글기 상한과 실제 배치가 같은 숫자를 보게 하려고 한곳에서 만든다.
  */
-function getVariantMetrics(design: Pick<BubbleSideDesignSpec, "preset" | "bodyScale"> & CanvasScaleSource, variant: BubbleBuilderVariant) {
+function getVariantMetrics(design: Pick<BubbleSideDesignSpec, "preset" | "bodyScale"> & CanvasSizeSource, variant: BubbleBuilderVariant) {
   const source = variantPresets[variant];
-  const canvasScale = getBubbleCanvasScale(design);
   const bodyScale = clamp(design.bodyScale ?? 1, bubbleBodyScaleRange.min, bubbleBodyScaleRange.max);
-  const canvasWidth = Math.round(source.width * canvasScale.x);
-  const canvasHeight = Math.round(source.height * canvasScale.y);
+  const { width: canvasWidth, height: canvasHeight } = getBubbleCanvasSize(design, variant);
   // 본체가 캔버스를 넘으면 위치 clamp가 음수 범위를 받아 배치가 무너진다. 치수 단계에서 먼저 막는다.
   const scaledWidth = Math.min(Math.round(source.bodyWidth * bodyScale), canvasWidth);
   const scaledHeight = Math.min(Math.round(source.bodyHeight * bodyScale), canvasHeight);
@@ -88,7 +171,7 @@ function getVariantMetrics(design: Pick<BubbleSideDesignSpec, "preset" | "bodySc
   return { canvasWidth, canvasHeight, bodyWidth, bodyHeight };
 }
 
-export function createBubbleFamilyDesignSpec(side: BubbleBuilderSide, textColor = "#111827"): BubbleFamilyDesignSpec {
+export function createBubbleFamilyDesignSpec(side: BubbleBuilderSide): BubbleFamilyDesignSpec {
   const now = Date.now();
   return {
     version: 1,
@@ -102,10 +185,10 @@ export function createBubbleFamilyDesignSpec(side: BubbleBuilderSide, textColor 
       // 시작값은 무채색으로 둔다. 채도가 있는 기본색은 사용자가 올린 장식과 충돌하고,
       // "내가 고른 색"과 헷갈린다. 기본 템플릿과 같은 계단을 쓴다.
       fill: "#FFFFFF",
-      borderColor: "#C9CCD1",
+      borderColor: "#222222",
       borderWidth: 4,
-      textColor,
-      syncTextColorOnApply: false,
+      textColor: getBubbleTextColorForFill("#FFFFFF"),
+      syncTextColorOnApply: true,
       decorations: [],
     },
     createdAt: now,

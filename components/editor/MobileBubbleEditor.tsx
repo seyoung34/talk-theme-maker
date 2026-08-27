@@ -5,7 +5,6 @@ import * as Popover from "@radix-ui/react-popover";
 import { FlipHorizontal2, Info, LoaderCircle, Minus, Plus, RotateCcw, Ruler } from "lucide-react";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { defaultImageEditState, renderEditedImageFile, type ImageEditState, type ImageEditTarget } from "@/lib/theme/imageEdit";
-import { bubbleEditorHelpHint, hasSeenHint, markHintSeen } from "@/lib/shared/hintStorage";
 import { isMobileBubbleEditDirty, type MobileBubbleEditDraft } from "@/lib/theme/mobileBubbleEdit";
 import { bubbleGeometryToLegacyEdit, centeredBubbleGeometry, flipBubbleGeometryHorizontally, normalizeBubbleGeometry, resolveBubbleGeometry } from "@/lib/theme/bubbleGeometry";
 import { isAndroidNinePatchSourceName } from "@/lib/theme/sourceImage";
@@ -221,13 +220,6 @@ export function MobileBubbleEditor({
   useEffect(() => {
     setViewerZoom(1);
   }, [preparedFile, slot.id]);
-
-  // 마운트 이후에 읽는다. 렌더 중 localStorage를 보면 서버 출력과 어긋나 hydration이 깨진다.
-  useEffect(() => {
-    if (hasSeenHint(bubbleEditorHelpHint)) return;
-    markHintSeen(bubbleEditorHelpHint);
-    setHelpOpen(true);
-  }, []);
 
   const artwork = asset ? getArtworkMetrics(asset) : null;
   const editorStageReady = draft !== null;
