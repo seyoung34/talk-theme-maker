@@ -220,6 +220,71 @@ export function parseGrobleWebhook(rawBody: string): ParsedGrobleEvent {
   };
 }
 
+// Codes that mean our side is behind the provider rather than the delivery being malformed.
+// They answer with 500 so Groble keeps retrying and a fix can still settle the payment.
+const retryableWebhookErrorCodes = new Set([
+  "unsupported_version",
+  "unsupported_event",
+  "unknown_product",
+  "invalid_product",
+  "invalid_amount",
+  "invalid_reference",
+  "invalid_refund",
+]);
+
+export function isRetryableGrobleWebhookError(code: string) {
+  return retryableWebhookErrorCodes.has(code);
+}
+
+const maxShapeDepth = 4;
+const maxShapeKeys = 40;
+
+// Structure only: keys and value types, never the values themselves, so a quarantined payload can
+// be diagnosed without copying buyer details into our database.
+function describeShape(value: unknown, depth: number): unknown {
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    if (depth >= maxShapeDepth) return "array";
+    return { array: value.length, item: value.length > 0 ? describeShape(value[0], depth + 1) : "empty" };
+  }
+  if (isRecord(value)) {
+    if (depth >= maxShapeDepth) return "object";
+    const keys = Object.keys(value).sort().slice(0, maxShapeKeys);
+    return Object.fromEntries(keys.map((key) => [key, describeShape(value[key], depth + 1)]));
+  }
+  return typeof value;
+}
+
+function optionalString(value: unknown, maxLength = 128) {
+  return typeof value === "string" && value.length > 0 && value.length <= maxLength ? value : null;
+}
+
+export type GrobleRejectionDescription = {
+  eventId: string | null;
+  eventType: string | null;
+  schemaVersion: string | null;
+  occurredAt: string | null;
+  payloadShape: Record<string, unknown>;
+};
+
+export function describeRejectedGroblePayload(rawBody: string): GrobleRejectionDescription {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return { eventId: null, eventType: null, schemaVersion: null, occurredAt: null, payloadShape: { parse: "invalid_json" } };
+  }
+  const envelope = isRecord(payload) ? payload : {};
+  const occurredAt = optionalString(envelope.occurredAt, 64);
+  return {
+    eventId: optionalString(envelope.id, 256),
+    eventType: optionalString(envelope.type, 64),
+    schemaVersion: optionalString(envelope.version, 64),
+    occurredAt: occurredAt && Number.isFinite(Date.parse(occurredAt)) ? occurredAt : null,
+    payloadShape: describeShape(payload, 0) as Record<string, unknown>,
+  };
+}
+
 function parseHex(value: string) {
   if (!/^[0-9a-f]{64}$/i.test(value)) return null;
   return Uint8Array.from(value.match(/.{2}/g) ?? [], (byte) => Number.parseInt(byte, 16));

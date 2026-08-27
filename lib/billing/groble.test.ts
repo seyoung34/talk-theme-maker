@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   createGrobleCheckoutUrl,
+  describeRejectedGroblePayload,
   GrobleWebhookError,
+  isRetryableGrobleWebhookError,
   parseGrobleWebhook,
   verifyGrobleWebhookSignature,
 } from "@/lib/billing/groble";
@@ -124,6 +126,42 @@ describe("Groble billing", () => {
       previousSecret,
       now: Number(timestamp) * 1000,
     })).resolves.toBeUndefined();
+  });
+
+  it("describes a rejected payload by structure without copying any value", () => {
+    const description = describeRejectedGroblePayload(JSON.stringify(completedPayload()));
+
+    expect(description).toMatchObject({
+      eventId: "evt_live_1",
+      eventType: "payment.completed",
+      schemaVersion: "2026-04-30",
+      occurredAt: "2026-08-28T10:00:00+09:00",
+    });
+    const shape = JSON.stringify(description.payloadShape);
+    expect(shape).not.toContain("must-not-be-saved");
+    expect(shape).not.toContain("01012345678");
+    expect(shape).not.toContain("merchant-1");
+    // Key names survive so a schema drift is diagnosable from the quarantine row alone.
+    expect(shape).toContain("sellerReference");
+    expect(description.payloadShape).toMatchObject({ id: "string", data: { object: { pricing: { finalAmount: "number" } } } });
+  });
+
+  it("describes an unparsable body without throwing", () => {
+    expect(describeRejectedGroblePayload("<html>gateway error</html>")).toEqual({
+      eventId: null,
+      eventType: null,
+      schemaVersion: null,
+      occurredAt: null,
+      payloadShape: { parse: "invalid_json" },
+    });
+  });
+
+  it("asks for redelivery when our side is behind, not when the body is malformed", () => {
+    expect(isRetryableGrobleWebhookError("unsupported_version")).toBe(true);
+    expect(isRetryableGrobleWebhookError("unknown_product")).toBe(true);
+    expect(isRetryableGrobleWebhookError("invalid_reference")).toBe(true);
+    expect(isRetryableGrobleWebhookError("invalid_json")).toBe(false);
+    expect(isRetryableGrobleWebhookError("invalid_payload")).toBe(false);
   });
 
   it("rejects a valid signature outside the five-minute replay window", async () => {

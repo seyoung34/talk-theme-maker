@@ -18,6 +18,8 @@ type RedeemMessage = { tone: "success" | "error"; text: string } | null;
 
 const MAX_PAYMENT_CHECKS = 4;
 const GROBLE_PAYMENT_SESSION_KEY = "talktheme:billing:groble:v1";
+const REFUND_REVIEW_MESSAGE = "환불과 크레딧 사용 내역을 조정하고 있습니다. 고객지원에 문의해 주세요.";
+const REFUND_REQUESTED_MESSAGE = "환불 요청을 확인하고 있습니다. 처리 결과는 고객지원에서 확인해 주세요.";
 
 function getPrepareError(payload: BillingPrepareResponse) {
   if (payload.reason === "invalid_product") return "충전 상품을 다시 선택해 주세요.";
@@ -43,6 +45,14 @@ function readGroblePaymentSession() {
     return { paymentId: session.paymentId, returnTo: typeof session.returnTo === "string" ? session.returnTo : null };
   } catch {
     return null;
+  }
+}
+
+function clearGroblePaymentSession() {
+  try {
+    window.sessionStorage.removeItem(GROBLE_PAYMENT_SESSION_KEY);
+  } catch {
+    // Private-mode browsers can refuse session storage; the payment result does not depend on it.
   }
 }
 
@@ -109,18 +119,8 @@ export default function CreditsClient() {
           return;
         }
         const { status, credits, refund_status: refundStatus } = payload.payment;
-        if (refundStatus === "review_required") {
-          setPaymentOutcome({ status: "failed", message: "환불과 크레딧 사용 내역을 조정하고 있습니다. 고객지원에 문의해 주세요." });
-          await refreshMe();
-          return;
-        }
-        if (refundStatus === "requested") {
-          setPaymentOutcome({ status: "pending", message: "환불 요청을 확인하고 있습니다. 처리 결과는 고객지원에서 확인해 주세요." });
-          await refreshMe();
-          return;
-        }
+        // The purchase settled, so record and clear it before reporting any refund follow-up.
         if (status === "paid") {
-          setPaymentOutcome({ status, credits, message: `${credits}크레딧이 충전되었습니다.` });
           const product = creditProducts.find((item) => item.credits === credits && item.amount === payload.payment?.amount);
           if (payload.payment.analytics_transaction_id) {
             trackPurchaseOnce(payload.payment.analytics_transaction_id, {
@@ -130,12 +130,33 @@ export default function CreditsClient() {
             });
           }
           await refreshMe();
-          window.sessionStorage.removeItem(GROBLE_PAYMENT_SESSION_KEY);
+          clearGroblePaymentSession();
+          if (refundStatus === "review_required") {
+            setPaymentOutcome({ status: "failed", message: REFUND_REVIEW_MESSAGE });
+            return;
+          }
+          if (refundStatus === "requested") {
+            setPaymentOutcome({ status: "pending", message: REFUND_REQUESTED_MESSAGE });
+            return;
+          }
+          setPaymentOutcome({ status, credits, message: `${credits}크레딧이 충전되었습니다.` });
           router.replace(returnDestination ?? "/credits", { scroll: false });
           return;
         }
         if (status === "failed" || status === "canceled") {
+          clearGroblePaymentSession();
           setPaymentOutcome({ status, message: status === "canceled" && refundStatus === "refunded" ? "결제 환불이 완료되어 구매 크레딧이 회수되었습니다." : status === "canceled" ? "결제가 취소되었습니다. 결제된 금액은 없습니다." : "결제를 완료하지 못했습니다. 상품과 결제 정보를 확인한 뒤 다시 시도해 주세요." });
+          return;
+        }
+        if (refundStatus === "review_required") {
+          clearGroblePaymentSession();
+          setPaymentOutcome({ status: "failed", message: REFUND_REVIEW_MESSAGE });
+          await refreshMe();
+          return;
+        }
+        if (refundStatus === "requested") {
+          setPaymentOutcome({ status: "pending", message: REFUND_REQUESTED_MESSAGE });
+          await refreshMe();
           return;
         }
         if (attempt < MAX_PAYMENT_CHECKS - 1) await new Promise((resolve) => window.setTimeout(resolve, 2500));

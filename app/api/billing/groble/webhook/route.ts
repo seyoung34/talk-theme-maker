@@ -1,14 +1,37 @@
 import { NextResponse } from "next/server";
 import {
+  describeRejectedGroblePayload,
   grobleWebhookMaxBodyBytes,
   GrobleWebhookError,
+  isRetryableGrobleWebhookError,
   parseGrobleWebhook,
   verifyGrobleWebhookSignature,
 } from "@/lib/billing/groble";
-import { processGrobleWebhookEvent } from "@/lib/billing/paymentRepository";
+import { processGrobleWebhookEvent, recordGrobleWebhookRejection } from "@/lib/billing/paymentRepository";
 import { requireGrobleServerConfig } from "@/lib/supabase/config";
 
 export const runtime = "edge";
+
+// Names only, never values. A failed test delivery is often the only chance to learn which headers
+// Groble actually sends, and header names carry no buyer data.
+function listProviderHeaderNames(headers: Headers) {
+  return [...headers.keys()].filter((name) => name.startsWith("x-")).sort().slice(0, 30);
+}
+
+async function quarantineDelivery(idempotencyKey: string, errorCode: string, rawBody: string) {
+  try {
+    await recordGrobleWebhookRejection({
+      idempotencyKey,
+      errorCode,
+      description: describeRejectedGroblePayload(rawBody),
+    });
+  } catch (error) {
+    console.error("Failed to record Groble webhook rejection", {
+      errorCode,
+      name: error instanceof Error ? error.name : "unknown",
+    });
+  }
+}
 
 export async function POST(request: Request) {
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
@@ -28,30 +51,49 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: false, reason: "invalid_idempotency_key" }, { status: 400 });
   }
 
+  let secrets: ReturnType<typeof requireGrobleServerConfig>;
   try {
-    const { grobleWebhookSecret, grobleWebhookPreviousSecret } = requireGrobleServerConfig();
+    secrets = requireGrobleServerConfig();
+  } catch {
+    console.error("Failed to process Groble webhook", { configurationMissing: true });
+    return NextResponse.json({ received: false, reason: "configuration_missing" }, { status: 500 });
+  }
+
+  try {
     await verifyGrobleWebhookSignature({
       rawBody,
       timestamp: request.headers.get("x-groble-timestamp"),
       signature: request.headers.get("x-groble-signature"),
       signaturePrevious: request.headers.get("x-groble-signature-previous"),
-      secret: grobleWebhookSecret,
-      previousSecret: grobleWebhookPreviousSecret,
+      secret: secrets.grobleWebhookSecret,
+      previousSecret: secrets.grobleWebhookPreviousSecret,
     });
+  } catch (error) {
+    const code = error instanceof GrobleWebhookError ? error.code : "invalid_signature";
+    console.warn("Rejected unauthenticated Groble webhook", {
+      code,
+      receivedHeaders: listProviderHeaderNames(request.headers),
+    });
+    return NextResponse.json({ received: false, reason: code }, { status: 401 });
+  }
+
+  // The delivery is authentic from here, so anything we refuse is quarantined rather than dropped.
+  try {
     const event = parseGrobleWebhook(rawBody);
     const result = await processGrobleWebhookEvent(event, idempotencyKey);
     return NextResponse.json({ received: true, result: result?.result ?? "processed" });
   } catch (error) {
     if (error instanceof GrobleWebhookError) {
-      const status = error.code === "invalid_signature" || error.code === "missing_signature" || error.code === "invalid_timestamp" ? 401 : 400;
-      console.warn("Rejected Groble webhook", { code: error.code });
-      return NextResponse.json({ received: false, reason: error.code }, { status });
+      await quarantineDelivery(idempotencyKey, error.code, rawBody);
+      // A retryable code means our side is behind, not that the delivery was bad: answer 500 so
+      // Groble keeps redelivering and a fix can still settle the payment.
+      const retryable = isRetryableGrobleWebhookError(error.code);
+      console.warn("Quarantined Groble webhook", { code: error.code, retryable });
+      return NextResponse.json({ received: false, reason: error.code }, { status: retryable ? 500 : 400 });
     }
-    const configurationMissing = error instanceof Error && error.message.includes("Groble server configuration is missing");
-    console.error("Failed to process Groble webhook", { configurationMissing, name: error instanceof Error ? error.name : "unknown" });
-    return NextResponse.json(
-      { received: false, reason: configurationMissing ? "configuration_missing" : "temporary_failure" },
-      { status: 500 },
-    );
+    console.error("Failed to process Groble webhook", {
+      name: error instanceof Error ? error.name : "unknown",
+    });
+    return NextResponse.json({ received: false, reason: "temporary_failure" }, { status: 500 });
   }
 }
