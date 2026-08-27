@@ -185,15 +185,42 @@ describe("BubbleBuilderDialog mobile shell", () => {
     expect(header?.textContent).toContain("적용하기");
   });
 
-  it("offers a control sheet that can be made taller", () => {
+  it("separates the preview from the independently scrolling controls", () => {
     renderDialog();
 
-    const handle = screen.getByRole("button", { name: "설정 영역 넓히기" });
-    expect(handle).toHaveAttribute("aria-expanded", "false");
+    const preview = screen.getByTestId("bubble-builder-preview-region");
+    const controls = screen.getByTestId("bubble-builder-controls-scroll");
+    expect(preview).toHaveClass("h-[min(27.0625rem,calc(100vw+3.5625rem))]");
+    expect(controls).toHaveClass("overflow-y-auto", "overscroll-contain");
+    expect(preview.contains(controls)).toBe(false);
+    expect(screen.queryByRole("button", { name: /설정 영역 (넓히기|줄이기)/ })).toBeNull();
+  });
 
-    fireEvent.click(handle);
+  it("opens the decoration tab and removes manual text color controls", () => {
+    renderDialog();
 
-    expect(screen.getByRole("button", { name: "설정 영역 줄이기" })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("tab", { name: "꾸미기" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "말풍선" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.queryByText("말풍선 글자색")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("keeps all mobile view controls in a stable row", () => {
+    renderDialog();
+
+    expect(screen.getByRole("button", { name: "확대" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "축소" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "화면에 맞추기" })).toBeVisible();
+  });
+
+  it("keeps the tab switch outside the scrolling panel", () => {
+    renderDialog();
+
+    const controls = screen.getByTestId("bubble-builder-controls-scroll");
+    const decorationTab = screen.getByRole("tab", { name: "꾸미기" });
+    expect(controls.contains(decorationTab)).toBe(false);
+    expect(controls).toHaveAttribute("role", "tabpanel");
+    expect(controls).toHaveAttribute("aria-labelledby", decorationTab.id);
   });
 });
 

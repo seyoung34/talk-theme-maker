@@ -1,6 +1,7 @@
 import type { Insets, Markers, StretchPoint } from "@/lib/theme/types";
 import { bubbleGeometryToAndroidMarkers } from "@/lib/theme/bubbleGeometry";
 import { fullBubbleDecorationContentBox } from "@/lib/theme/bubbleBuilder/alphaBounds";
+import { readableThemeForeground } from "@/lib/theme/color";
 import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDecorationContentBox, BubbleDecorationLayer, BubbleDecorationTransform, BubbleFamilyDesignSpec, BubbleRect, BubbleShapePreset, BubbleSideDesignSpec, BubbleVariantGeometry } from "@/lib/theme/bubbleBuilder/types";
 
 const variantPresets: Record<BubbleBuilderVariant, { width: number; height: number; bodyWidth: number; bodyHeight: number }> = {
@@ -55,6 +56,21 @@ export function getBubbleDecorationRect(
 }
 
 /**
+ * 원본에서 잰 실제 그림 영역을 화면·결과물에 적용되는 좌우반전까지 반영해 돌려준다.
+ *
+ * 그림 자체는 renderer/preview에서 `scaleX(-1)`로 뒤집지만 alpha bounds는 원본 좌표로
+ * 남아 있으면, 비대칭 투명 여백이 있는 파일에서 선택 영역과 경고가 반대쪽을 가리킨다.
+ */
+export function getBubbleDecorationTransformedContentBox(
+  layer: { flipX?: boolean },
+  content?: BubbleDecorationContentBox,
+): BubbleDecorationContentBox {
+  const box = content ?? fullBubbleDecorationContentBox;
+  if (!layer.flipX) return box;
+  return { ...box, x: 1 - box.x - box.width };
+}
+
+/**
  * 장식에서 **보이는 그림**이 차지하는 사각형.
  *
  * `getBubbleDecorationRect`가 돌려주는 것은 원본 파일 전체의 자리이고, 그 안에는 보통 투명
@@ -65,13 +81,13 @@ export function getBubbleDecorationRect(
  * 장식의 모양은 하나도 바뀌지 않는다.
  */
 export function getBubbleDecorationContentRect(
-  layer: Pick<BubbleDecorationTransform, "scale" | "offsetX" | "offsetY">,
+  layer: Pick<BubbleDecorationTransform, "scale" | "offsetX" | "offsetY"> & { flipX?: boolean },
   canvas: { width: number; height: number },
   source?: BubbleDecorationSourceSize,
   content?: BubbleDecorationContentBox,
 ): BubbleRect {
   const rect = getBubbleDecorationRect(layer, canvas, source);
-  const box = content ?? fullBubbleDecorationContentBox;
+  const box = getBubbleDecorationTransformedContentBox(layer, content);
   return {
     x: rect.x + rect.width * box.x,
     y: rect.y + rect.height * box.y,
@@ -87,9 +103,9 @@ export function getBubbleDecorationContentRect(
  * 위치와 같아야 잡는 순간 크기가 튀지 않는다. 정사각형을 가정하던 시절에는 넓적한 그림에서,
  * 여백을 포함하던 시절에는 여백이 큰 그림에서 각각 어긋났다.
  */
-export function getBubbleDecorationHandleRadius(source?: BubbleDecorationSourceSize, content?: BubbleDecorationContentBox) {
+export function getBubbleDecorationHandleRadius(source?: BubbleDecorationSourceSize, content?: BubbleDecorationContentBox, flipX = false) {
   const base = getBubbleDecorationSize({ scale: 1 }, source);
-  const box = content ?? fullBubbleDecorationContentBox;
+  const box = getBubbleDecorationTransformedContentBox({ flipX }, content);
   const dx = base.width * (box.x + box.width) - base.width / 2;
   const dy = base.height * (box.y + box.height) - base.height / 2;
   return Math.max(1, Math.hypot(dx, dy));
@@ -115,6 +131,11 @@ export const bubbleBodyScaleRange = { min: 0.7, max: 1.4 } as const;
  * 배율로 두면 같은 1.2가 variant마다 다른 픽셀을 내서 "최대 300"이 슬롯마다 다른 뜻이 된다.
  */
 export const bubbleCanvasSizeRange = { min: 150, max: 300 } as const;
+
+/** 말풍선 배경 위에서 읽히는 텍스트 색. 빌더에서는 검정/흰색 두 가지로만 단순화한다. */
+export function getBubbleTextColorForFill(fill: string) {
+  return readableThemeForeground(fill) === "#FFFFFF" ? "#FFFFFF" : "#000000";
+}
 
 type CanvasSizeSource = Pick<BubbleSideDesignSpec, "canvasWidth" | "canvasHeight" | "canvasScale" | "canvasScaleX" | "canvasScaleY">;
 
@@ -150,7 +171,7 @@ function getVariantMetrics(design: Pick<BubbleSideDesignSpec, "preset" | "bodySc
   return { canvasWidth, canvasHeight, bodyWidth, bodyHeight };
 }
 
-export function createBubbleFamilyDesignSpec(side: BubbleBuilderSide, textColor = "#111827"): BubbleFamilyDesignSpec {
+export function createBubbleFamilyDesignSpec(side: BubbleBuilderSide): BubbleFamilyDesignSpec {
   const now = Date.now();
   return {
     version: 1,
@@ -164,10 +185,10 @@ export function createBubbleFamilyDesignSpec(side: BubbleBuilderSide, textColor 
       // 시작값은 무채색으로 둔다. 채도가 있는 기본색은 사용자가 올린 장식과 충돌하고,
       // "내가 고른 색"과 헷갈린다. 기본 템플릿과 같은 계단을 쓴다.
       fill: "#FFFFFF",
-      borderColor: "#C9CCD1",
+      borderColor: "#222222",
       borderWidth: 4,
-      textColor,
-      syncTextColorOnApply: false,
+      textColor: getBubbleTextColorForFill("#FFFFFF"),
+      syncTextColorOnApply: true,
       decorations: [],
     },
     createdAt: now,

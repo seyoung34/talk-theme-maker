@@ -4,6 +4,7 @@ import {
   bubblePreviewZoomRange,
   clampBubblePreviewPan,
   clampBubblePreviewZoom,
+  getBubblePreviewFrameFitZoom,
   getBubblePreviewFitScale,
   getBubblePreviewLayout,
   getBubblePreviewZoomPan,
@@ -59,6 +60,17 @@ describe("bubble preview layout", () => {
   it("clamps the zoom to the allowed range", () => {
     expect(clampBubblePreviewZoom(99)).toBe(bubblePreviewZoomRange.max);
     expect(clampBubblePreviewZoom(0)).toBe(bubblePreviewZoomRange.min);
+  });
+
+  it("computes the zoom that fills the viewport with the current frame", () => {
+    const canvas = { width: 150, height: 150 };
+    const viewport = { width: 324, height: 324 };
+    const zoom = getBubblePreviewFrameFitZoom(canvas, { width: 300, height: 300 }, viewport);
+    const layout = getBubblePreviewLayout(canvas, { width: 300, height: 300 }, viewport, zoom);
+
+    expect(zoom).toBeCloseTo(2);
+    expect(layout.stageWidth).toBeCloseTo(viewport.width - bubblePreviewHandleInset * 2);
+    expect(layout.stageHeight).toBeCloseTo(viewport.height - bubblePreviewHandleInset * 2);
   });
 });
 

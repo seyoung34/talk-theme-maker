@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fullBubbleDecorationContentBox } from "@/lib/theme/bubbleBuilder/alphaBounds";
-import { bubbleBodyScaleRange, bubbleDecorationBaseSize, getBubbleDecorationContentRect, rectsOverlap, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleCanvasSize, getBubbleDecorationHandleRadius, getBubbleDecorationLayers, getBubbleDecorationRect, getBubbleDecorationSize, getBubbleRadiusMax, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
+import { bubbleBodyScaleRange, bubbleDecorationBaseSize, getBubbleDecorationContentRect, getBubbleDecorationTransformedContentBox, rectsOverlap, createBubbleDecorationLayer, createBubbleFamilyDesignSpec, crossesBubbleStretch, getAndroidBubbleMarkers, getBubbleCanvasSize, getBubbleDecorationHandleRadius, getBubbleDecorationLayers, getBubbleDecorationRect, getBubbleDecorationSize, getBubbleRadiusMax, getBubbleTextColorForFill, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder/geometry";
 import type { BubbleSideDesignSpec } from "@/lib/theme/bubbleBuilder/types";
 
 const baseDesign: BubbleSideDesignSpec = {
@@ -16,7 +16,7 @@ const baseDesign: BubbleSideDesignSpec = {
 
 describe("bubble builder geometry", () => {
   it("starts with no decoration and places new layers centered above the body", () => {
-    expect(createBubbleFamilyDesignSpec("me").design.decorations).toEqual([]);
+    expect(createBubbleFamilyDesignSpec("me").design).toMatchObject({ borderColor: "#222222", textColor: "#000000", syncTextColorOnApply: true, decorations: [] });
     expect(createBubbleDecorationLayer("layer-1", "cat.png")).toMatchObject({
       id: "layer-1",
       sourceName: "cat.png",
@@ -25,6 +25,12 @@ describe("bubble builder geometry", () => {
       scale: 1.6,
       flipX: false,
     });
+  });
+
+  it("chooses pure black or white text from the bubble fill", () => {
+    expect(getBubbleTextColorForFill("#FFFFFF")).toBe("#000000");
+    expect(getBubbleTextColorForFill("#FFE27A")).toBe("#000000");
+    expect(getBubbleTextColorForFill("#202020")).toBe("#FFFFFF");
   });
 
   it("reads legacy single-decoration recipes as one layer keyed by familyId", () => {
@@ -269,6 +275,19 @@ describe("bubble builder geometry", () => {
       expect(getBubbleDecorationHandleRadius(source, box))
         .toBeCloseTo(Math.hypot(base.width / 2, base.height * 0.625 - base.height / 2));
       expect(getBubbleDecorationHandleRadius(source, box)).toBeLessThan(getBubbleDecorationHandleRadius(source));
+    });
+
+    it("mirrors asymmetric alpha bounds when a decoration is flipped", () => {
+      const box = { x: 0.1, y: 0.2, width: 0.25, height: 0.3 };
+      const flipped = getBubbleDecorationTransformedContentBox({ flipX: true }, box);
+
+      expect(flipped).toEqual({ x: 0.65, y: 0.2, width: 0.25, height: 0.3 });
+      expect(getBubbleDecorationContentRect({ ...layer, flipX: false }, canvas, source, box).x)
+        .toBeCloseTo(getBubbleDecorationRect(layer, canvas, source).x + 96 * 0.1);
+      expect(getBubbleDecorationContentRect({ ...layer, flipX: true }, canvas, source, box).x)
+        .toBeCloseTo(getBubbleDecorationRect(layer, canvas, source).x + 96 * 0.65);
+      expect(getBubbleDecorationHandleRadius(source, box, true))
+        .toBeCloseTo(Math.hypot(96 * 0.9 - 48, 38.4 * 0.5 - 19.2));
     });
   });
 

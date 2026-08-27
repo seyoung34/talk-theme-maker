@@ -9,6 +9,7 @@ import {
   bubblePreviewZoomStep,
   clampBubblePreviewPan,
   clampBubblePreviewZoom,
+  getBubblePreviewFrameFitZoom,
   getBubblePreviewLayout,
   getBubblePreviewZoomPan,
   type BubblePreviewPan,
@@ -24,11 +25,12 @@ import {
   crossesBubbleStretch,
   generateBubbleAsset,
   getBubbleDecorationContentRect,
+  getBubbleDecorationTransformedContentBox,
   getBubbleDecorationHandleRadius,
   getBubbleDecorationLayers,
   getBubbleDecorationRect,
   getBubbleRadiusMax,
-  fullBubbleDecorationContentBox,
+  getBubbleTextColorForFill,
   getBubbleVariantGeometry,
   getOpaqueContentBox,
   rectsOverlap,
@@ -46,6 +48,7 @@ import type { ThemePlatform } from "@/lib/theme/types";
 const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 type DecorationFiles = Partial<Record<string, File>>;
+type BubbleCanvasResize = { width: number; height: number; contentShiftX: number; contentShiftY: number };
 
 type BubbleBuilderDialogProps = {
   open: boolean;
@@ -56,7 +59,7 @@ type BubbleBuilderDialogProps = {
   initialSpec?: BubbleFamilyDesignSpec;
   initialDecorationFiles?: DecorationFiles;
   onOpenChange: (open: boolean) => void;
-  onApply: (result: GeneratedBubbleDesign, decorationFiles: DecorationFiles) => void;
+  onApply: (result: GeneratedBubbleDesign, decorationFiles: DecorationFiles) => boolean | Promise<boolean>;
 };
 
 /** 바깥(다이얼로그)에서 닫기를 요청하는 통로. Esc·바깥 클릭도 ✕와 같은 확인 절차를 타야 한다. */
@@ -131,9 +134,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const [isApplying, setIsApplying] = useState(false);
   const [error, setError] = useState<string>();
   const [dragActive, setDragActive] = useState(false);
-  const [activeTab, setActiveTab] = useState<"bubble" | "decoration">("bubble");
-  // 모바일 컨트롤 시트의 높이. 캔버스와 세로를 나눠 갖는다.
-  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<"bubble" | "decoration">("decoration");
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const isDesktop = useDesktopShell();
   const baselineRef = useRef("");
@@ -214,6 +215,8 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
         ...source.design,
         preset: "rounded" as const,
         radius: Math.min(source.design.radius, getBubbleRadiusMax("rounded", variant, source.design.bodyScale)),
+        textColor: getBubbleTextColorForFill(source.design.fill),
+        syncTextColorOnApply: true,
         decoration: undefined,
         decorations: sourceLayers,
       },
@@ -230,8 +233,9 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
     setSelectedLayerId(sourceLayers[0]?.id ?? null);
     setError(undefined);
     setDragActive(false);
-    setActiveTab("bubble");
-    setSheetExpanded(false);
+    // 모바일은 이 빌더에 들어온 목적이 꾸미기일 가능성이 높다. 데스크톱은 탭을
+    // 렌더링하지 않으므로 같은 상태를 써도 두 영역을 동시에 보여 주는 동작에는 영향이 없다.
+    setActiveTab("decoration");
     setCloseConfirmOpen(false);
   }, [active, initialDecorationFiles, initialSpec, side, variant]);
 
@@ -300,7 +304,14 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   }, [decorationFiles]);
 
   const updateDesign = (patch: Partial<BubbleFamilyDesignSpec["design"]>) => {
-    setSpec((current) => ({ ...current, design: { ...current.design, ...patch }, updatedAt: Date.now() }));
+    setSpec((current) => {
+      const design = { ...current.design, ...patch };
+      if (patch.fill !== undefined) {
+        design.textColor = getBubbleTextColorForFill(patch.fill);
+        design.syncTextColorOnApply = true;
+      }
+      return { ...current, design, updatedAt: Date.now() };
+    });
   };
 
   /**
@@ -311,7 +322,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
    * 없어졌다 나타난다. 배율 필드도 함께 지운다 — 픽셀과 배율이 같이 남으면 어느 쪽이 참인지
    * `getBubbleCanvasSize`의 우선순위에만 적혀 있게 된다.
    */
-  const updateCanvasSize = useCallback((size: { width: number; height: number }) => {
+  const updateCanvasSize = useCallback((size: BubbleCanvasResize) => {
     setSpec((current) => ({
       ...current,
       design: {
@@ -321,10 +332,12 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
         canvasScale: undefined,
         canvasScaleX: undefined,
         canvasScaleY: undefined,
+        bodyOffsetX: (current.design.bodyOffsetX ?? 0) + size.contentShiftX,
+        bodyOffsetY: (current.design.bodyOffsetY ?? 0) + size.contentShiftY,
         decorations: (current.design.decorations ?? []).map((layer) => ({
           ...layer,
-          offsetX: clampNumber(layer.offsetX, -size.width / 2, size.width / 2),
-          offsetY: clampNumber(layer.offsetY, -size.height / 2, size.height / 2),
+          offsetX: clampNumber(layer.offsetX + size.contentShiftX, -size.width / 2, size.width / 2),
+          offsetY: clampNumber(layer.offsetY + size.contentShiftY, -size.height / 2, size.height / 2),
         })),
       },
       updatedAt: Date.now(),
@@ -343,7 +356,8 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
       setError(undefined);
       const nextSpec = { ...spec, decorationSourceName: undefined, updatedAt: Date.now() };
       const result = await generateBubbleAsset({ spec: nextSpec, platform, variant, decorationFiles });
-      onApply(result, decorationFiles);
+      const applied = await onApply(result, decorationFiles);
+      if (!applied) return false;
       // 적용한 순간이 새 기준이다. 그러지 않으면 적용 직후 닫아도 확인 창이 뜬다.
       baselineRef.current = getBubbleEditSignature(nextSpec, decorationFiles);
       if (closeOnApply) onClose?.();
@@ -375,13 +389,13 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const radiusMax = getBubbleRadiusMax("rounded", variant, bodyScale);
 
   const bubbleSection = (
-    <BuilderSection>
-      <div className="grid grid-cols-2 gap-3">
-        <ColorField label="배경색" value={spec.design.fill} onChange={(fill) => updateDesign({ fill })} />
-        <ColorField label="테두리색" value={spec.design.borderColor} onChange={(borderColor) => updateDesign({ borderColor })} />
+    <BuilderSection compact={!isDesktop}>
+      <div className={`grid grid-cols-2 ${isDesktop ? "gap-3" : "gap-x-3 border-b border-slate-100 pb-1"}`}>
+        <ColorField compact={!isDesktop} label="배경색" value={spec.design.fill} onChange={(fill) => updateDesign({ fill })} />
+        <ColorField compact={!isDesktop} label="테두리색" value={spec.design.borderColor} onChange={(borderColor) => updateDesign({ borderColor })} />
       </div>
-      <RangeField label="테두리 굵기" value={spec.design.borderWidth} min={0} max={10} onChange={(borderWidth) => updateDesign({ borderWidth })} />
-      <RangeField label="모서리 둥글기" value={spec.design.radius} min={0} max={radiusMax} onChange={(radius) => updateDesign({ preset: "rounded", radius })} />
+      <RangeField compact={!isDesktop} label="테두리 굵기" value={spec.design.borderWidth} min={0} max={10} onChange={(borderWidth) => updateDesign({ borderWidth })} />
+      <RangeField compact={!isDesktop} label="모서리 둥글기" value={spec.design.radius} min={0} max={radiusMax} onChange={(radius) => updateDesign({ preset: "rounded", radius })} />
       {/*
         `말풍선 크기(작게/기본/크게)`를 없앴다.
 
@@ -397,24 +411,27 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
         여백이 조용히 달라진다.
       */}
       {/* 프레임 크기는 숫자보다 눈으로 맞추는 값이라 미리보기의 손잡이로 옮겼다. */}
-      <p className="text-[11px] font-bold text-slate-400">프레임(점선)은 장식이 삐져나올 자리예요. 미리보기의 손잡이를 끌어 넓힐 수 있어요.</p>
+      <p className={`${isDesktop ? "text-[11px]" : "border-t border-slate-100 pt-1.5 text-[10px] leading-4"} font-bold text-slate-400`}>프레임(점선)은 장식이 삐져나올 자리예요. 미리보기의 손잡이를 끌어 넓힐 수 있어요.</p>
     </BuilderSection>
   );
 
   const decorationSection = (
-    <BuilderSection>
+    <BuilderSection compact={!isDesktop}>
       <div
         data-testid="bubble-decoration-dropzone"
-        className={`rounded-2xl border-2 border-dashed p-3 transition ${dragActive ? "border-blue-500 bg-blue-100 ring-4 ring-blue-50" : "border-blue-300 bg-blue-50"}`}
+        className={`${isDesktop ? "rounded-2xl border-2 p-3" : "rounded-lg border px-3 py-2"} border-dashed transition ${dragActive ? "border-blue-500 bg-blue-100 ring-4 ring-blue-50" : "border-blue-300 bg-blue-50"}`}
         onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }}
         onDragOver={(event) => { event.preventDefault(); setDragActive(true); }}
         onDragLeave={(event) => { event.preventDefault(); if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false); }}
         onDrop={(event) => { event.preventDefault(); setDragActive(false); acceptDecorationFile(Array.from(event.dataTransfer.files).find((file) => decorationMimeTypes.has(file.type)) ?? event.dataTransfer.files[0]); }}
       >
-        <label className="flex min-h-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl text-center text-blue-700 hover:bg-white/50">
-          <span className="flex items-center gap-2 text-sm font-black"><ImagePlus size={19} />꾸미기 이미지 추가</span>
-          <span className="text-[11px] font-bold text-blue-600/80">클릭해서 선택 · Ctrl+V 붙여넣기 · 파일 끌어놓기</span>
-          <span className="text-[10px] font-medium text-slate-500">PNG · JPG · WebP · 여러 장 추가 가능</span>
+        <label className={`${isDesktop ? "min-h-20 flex-col justify-center gap-1 rounded-xl text-center" : "min-h-12 flex-row gap-2.5 text-left"} flex cursor-pointer items-center text-blue-700 hover:bg-white/50`}>
+          <span className={`${isDesktop ? "gap-2 text-sm" : "grid size-8 shrink-0 place-items-center rounded-md bg-white text-xs shadow-sm"} flex items-center font-black`}><ImagePlus size={isDesktop ? 19 : 17} /><span className={isDesktop ? "" : "sr-only"}>꾸미기 이미지 추가</span></span>
+          <span className={`${isDesktop ? "contents" : "grid min-w-0 gap-0.5"}`}>
+            <span className={`${isDesktop ? "hidden" : "text-xs"} font-black`}>꾸미기 이미지 추가</span>
+            <span className={`${isDesktop ? "text-[11px]" : "truncate text-[10px]"} font-bold text-blue-600/80`}>{isDesktop ? "클릭해서 선택 · Ctrl+V 붙여넣기 · 파일 끌어놓기" : "선택 · 붙여넣기 · 끌어놓기"}</span>
+            <span className={`${isDesktop ? "text-[10px]" : "text-[9px]"} font-medium text-slate-500`}>PNG · JPG · WebP · 여러 장 추가 가능</span>
+          </span>
           <input className="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={(event) => { for (const file of Array.from(event.currentTarget.files ?? [])) acceptDecorationFile(file); event.currentTarget.value = ""; }} />
         </label>
       </div>
@@ -426,7 +443,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
               type="button"
               aria-pressed={selectedLayerId === layer.id}
               onClick={() => setSelectedLayerId(layer.id)}
-              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold transition ${selectedLayerId === layer.id ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+              className={`flex items-center gap-2 border text-left text-xs font-bold transition ${isDesktop ? "rounded-xl px-3 py-2" : "rounded-lg px-2 py-1.5"} ${selectedLayerId === layer.id ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
             >
               <span className="size-7 shrink-0 rounded-md border border-slate-200 bg-slate-50 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: decorationUrls[layer.id] ? `url(${decorationUrls[layer.id]})` : undefined }} aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate">{layer.sourceName ?? `이미지 ${index + 1}`}</span>
@@ -439,8 +456,8 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
           둘 다 amber로 둔다. 바로 아래 에러 표시가 rose를 쓰고 있어서, 막지 않는 알림에 rose를
           주면 같은 자리에서 두 색의 뜻이 갈린다.
         */}
-        {decorationCollision ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">그림이 <b>글자 영역</b>과 겹쳐요. 투명한 여백만 걸친 것이라면 그대로 두어도 괜찮아요.</p> : null}
-        {decorationStretched ? <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">그림이 <b>늘어나는 선</b>을 지나가요. 긴 메시지에서는 그 부분이 늘어나 보여요.</p> : null}
+        {decorationCollision ? <p className={`${isDesktop ? "rounded-xl p-3 text-xs" : "rounded-lg p-2 text-[10px] leading-4"} border border-amber-200 bg-amber-50 font-bold text-amber-800`}>그림이 <b>글자 영역</b>과 겹쳐요. 투명한 여백만 걸친 것이라면 그대로 두어도 괜찮아요.</p> : null}
+        {decorationStretched ? <p className={`${isDesktop ? "rounded-xl p-3 text-xs" : "rounded-lg p-2 text-[10px] leading-4"} border border-amber-200 bg-amber-50 font-bold text-amber-800`}>그림이 <b>늘어나는 선</b>을 지나가요. 긴 메시지에서는 그 부분이 늘어나 보여요.</p> : null}
       </> : null}
     </BuilderSection>
   );
@@ -453,8 +470,8 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
    * 순서를 강제할 이유도 없어서, 순서 없는 탭으로 바꾸고 `적용하기`를 항상 띄운다.
    */
   const tabs = [
-    { id: "bubble", name: "말풍선", node: bubbleSection },
     { id: "decoration", name: "꾸미기", node: decorationSection },
+    { id: "bubble", name: "말풍선", node: bubbleSection },
   ] as const;
 
   const applyButton = (
@@ -463,7 +480,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
 
   const helpPopover = (
     <Popover.Root>
-      <Popover.Trigger className="grid size-10 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2" aria-label="도움말"><Info size={20} /></Popover.Trigger>
+      <Popover.Trigger className="grid size-9 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 min-[360px]:size-10" aria-label="도움말"><Info size={20} /></Popover.Trigger>
       <Popover.Portal>
         <Popover.Content sideOffset={8} align="end" className="z-[92] w-64 rounded-2xl border border-slate-200 bg-white p-4 text-xs font-medium leading-5 text-slate-600 shadow-xl focus:outline-none">
           <p className="mb-2 text-sm font-black text-slate-900">미리보기 안내</p>
@@ -479,7 +496,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   );
 
   const closeButton = onClose
-    ? <button type="button" disabled={isApplying} onClick={requestClose} className="grid size-10 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50" aria-label="닫기"><X size={20} /></button>
+    ? <button type="button" disabled={isApplying} onClick={requestClose} className="grid size-9 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50 min-[360px]:size-10" aria-label="닫기"><X size={20} /></button>
     : null;
 
   const preview = (
@@ -496,28 +513,24 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
       onDecorationChange={patchLayer}
       onBodyChange={updateDesign}
       onCanvasSizeChange={updateCanvasSize}
+      compactControls={!isDesktop}
     />
-  );
-
-  const textColorField = (
-    <div className="grid gap-2">
-      <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={spec.design.syncTextColorOnApply} onChange={(event) => updateDesign({ syncTextColorOnApply: event.currentTarget.checked })} className="size-4 accent-blue-600" />글자색도 함께 맞추기</label>
-      {spec.design.syncTextColorOnApply ? <ColorField label="말풍선 글자색" value={spec.design.textColor} onChange={(textColor) => updateDesign({ textColor })} /> : null}
-    </div>
   );
 
   const errorNote = error ? <p className="rounded-xl bg-rose-50 p-3 text-xs font-bold text-rose-700" role="alert">{error}</p> : null;
 
-  // 탭. 순서가 없으므로 번호가 아니라 이름으로 고른다.
+  // 모바일은 꾸미기를 먼저 보여 주되, 각 항목은 이름으로 전환한다.
   const tabList = (
-    <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="편집 항목">
+    <div className="grid grid-cols-2 border-b border-slate-200" role="tablist" aria-label="편집 항목">
       {tabs.map((tab) => (
         <button
           key={tab.id}
+          id={`bubble-builder-tab-${tab.id}`}
           type="button"
           role="tab"
           aria-selected={activeTab === tab.id}
-          className={`min-h-10 rounded-lg text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${activeTab === tab.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+          aria-controls="bubble-builder-tabpanel"
+          className={`min-h-10 border-b-2 text-xs font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${activeTab === tab.id ? "border-blue-600 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"}`}
           onClick={() => setActiveTab(tab.id)}
         >
           {tab.name}
@@ -537,13 +550,12 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   return (
     <>
       {isDesktop ? null : <>{/*
-        모바일: 전체 화면. 앱바(적용하기 고정) · 캔버스 · 컨트롤 시트.
+        모바일: 전체 화면. 앱바(적용하기 고정) · 캔버스 · 독립 스크롤 컨트롤.
         높이는 `100dvh`가 아니라 `h-full`로 받는다. 감싸는 `Dialog.Content`가 `inset-0`이라
-        이미 확정 높이인데, 여기서 dvh를 다시 재면 주소창 높이만큼 어긋나 시트 아래가 잘린다.
-        flex를 쓰는 것은 시트의 `max-h-*%`가 컨테이너 높이를 기준으로 풀리게 하기 위해서다
-        (grid 행에서는 퍼센트가 auto 크기 행을 만나 무시된다).
+        이미 확정 높이다. 미리보기 높이만 동적 뷰포트에 맞춰 제한하고, 남은 높이는 설정 패널이
+        전부 받는다. 설정이 길어져도 캔버스와 크기 정보는 움직이거나 가려지지 않는다.
       */}
-      <section className={`flex min-w-0 flex-col bg-white text-slate-950 ${fill ? "h-full" : "min-h-[40rem]"}`}>
+      <section className={`grid min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden bg-white text-slate-950 ${fill ? "h-full" : "min-h-[40rem]"}`}>
         <header className="flex shrink-0 items-center gap-1 border-b border-slate-100 px-2 py-1.5">
           {closeButton}
           <h2 className="min-w-0 flex-1 truncate px-1 text-base font-black">나만의 말풍선 만들기</h2>
@@ -555,21 +567,32 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
           <button
             type="button"
             disabled={isApplying}
-            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-blue-600 px-3.5 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={isApplying ? "말풍선 만드는 중" : "적용하기"}
+            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-blue-600 px-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 min-[360px]:px-3.5"
             onClick={() => void apply()}
           >
-            {isApplying ? <LoaderCircle size={16} className="animate-spin" /> : <Sparkles size={16} />}{isApplying ? "만드는 중" : "적용하기"}
+            {isApplying ? <LoaderCircle size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            <span aria-hidden="true">{isApplying ? <><span className="min-[360px]:hidden">처리 중</span><span className="hidden min-[360px]:inline">만드는 중</span></> : <>적용<span className="hidden min-[360px]:inline">하기</span></>}</span>
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 px-3 pt-2">{preview}</div>
+        <div className="h-[min(27.0625rem,calc(100vw+3.5625rem))] min-h-0 px-2 py-1.5" data-testid="bubble-builder-preview-region">
+          {preview}
+        </div>
 
-        <ControlSheet expanded={sheetExpanded} onExpandedChange={setSheetExpanded}>
-          {tabList}
-          {tabs.find((tab) => tab.id === activeTab)?.node}
-          {textColorField}
-          {errorNote}
-        </ControlSheet>
+        <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] border-t border-slate-200 bg-white" aria-label="말풍선 편집 설정">
+          <div className="px-3 pt-1">{tabList}</div>
+          <div
+            id="bubble-builder-tabpanel"
+            role="tabpanel"
+            aria-labelledby={`bubble-builder-tab-${activeTab}`}
+            data-testid="bubble-builder-controls-scroll"
+            className="grid min-h-0 content-start gap-2 overflow-y-auto overscroll-contain px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]"
+          >
+            {tabs.find((tab) => tab.id === activeTab)?.node}
+            {errorNote}
+          </div>
+        </section>
       </section>
       </>}
 
@@ -594,7 +617,6 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
         <div className="grid min-h-0 min-w-0 w-full grid-cols-[minmax(0,1fr)_340px] gap-5">
           <aside className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] gap-3 rounded-2xl bg-slate-50 p-4">
             {preview}
-            {textColorField}
           </aside>
 
           {/*
@@ -605,7 +627,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
             배율이 129%↔141%로 흔들렸다 — 장식을 끄는 도중에 그 일이 벌어지면 화면 이동량을
             캔버스 좌표로 되돌리는 나눗셈의 분모가 바뀌어 손끝과 그림이 어긋난다.
             높이를 바깥에서 고정하고 넘치는 쪽만 스크롤시키면, 경고뿐 아니라 레이어 추가·에러·
-            글자색 칸까지 무엇이 들고 나든 캔버스가 가만히 있는다.
+            무엇이 들고 나든 캔버스가 가만히 있는다.
           */}
           <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-4">
             <div className="grid content-start gap-5 overflow-y-auto pr-1 [scrollbar-color:#cbd5e1_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#cbd5e1]">
@@ -663,43 +685,6 @@ function CloseConfirm({ busy, onKeepEditing, onDiscard, onApplyAndClose }: {
   );
 }
 
-/**
- * 모바일 컨트롤 시트.
- *
- * 높이를 `dvh`로 묶어 캔버스와 자리를 나눈다 — 부모 높이를 기준으로 잡으면 캔버스는 시트가
- * 남긴 높이를, 시트는 캔버스가 남긴 높이를 서로 참조해 순환한다. 내용이 상한보다 짧으면 그만큼만
- * 차지하므로 `말풍선` 탭에서는 캔버스가 더 넓어진다.
- *
- * 손잡이는 눌러도 접히고 끌어도 접힌다. 시트를 처음 보는 사람은 누르고, 익숙한 사람은 끈다.
- */
-function ControlSheet({ expanded, onExpandedChange, children }: { expanded: boolean; onExpandedChange: (expanded: boolean) => void; children: React.ReactNode }) {
-  const dragStartRef = useRef<number | null>(null);
-  return (
-    <section className={`grid min-h-0 shrink-0 grid-rows-[auto_minmax(0,1fr)] rounded-t-2xl border-t border-slate-200 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.06)] transition-[max-height] ${expanded ? "max-h-[75%]" : "max-h-[40%]"}`}>
-      <button
-        type="button"
-        aria-expanded={expanded}
-        aria-label={expanded ? "설정 영역 줄이기" : "설정 영역 넓히기"}
-        className="grid touch-none place-items-center py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
-        onClick={() => onExpandedChange(!expanded)}
-        onPointerDown={(event) => { dragStartRef.current = event.clientY; }}
-        onPointerUp={(event) => {
-          const start = dragStartRef.current;
-          dragStartRef.current = null;
-          if (start === null) return;
-          const distance = event.clientY - start;
-          // 끌었다고 볼 만큼 움직였을 때만 방향을 읽는다. 그 아래는 click이 받아 토글한다.
-          if (Math.abs(distance) < 12) return;
-          onExpandedChange(distance < 0);
-        }}
-      >
-        <span className="h-1 w-10 rounded-full bg-slate-300" aria-hidden="true" />
-      </button>
-      <div className="grid min-h-0 content-start gap-3 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">{children}</div>
-    </section>
-  );
-}
-
 export function BubbleBuilderDialog({ open, onOpenChange, ...editorProps }: BubbleBuilderDialogProps) {
   const editorRef = useRef<BubbleBuilderEditorHandle>(null);
   /*
@@ -754,10 +739,11 @@ type BubblePreviewProps = {
   onRemoveLayer?: (layerId: string) => void;
   onDecorationChange?: (layerId: string, patch: Partial<BubbleDecorationTransform>) => void;
   onBodyChange?: (patch: { bodyOffsetX: number; bodyOffsetY: number }) => void;
-  onCanvasSizeChange?: (size: { width: number; height: number }) => void;
+  onCanvasSizeChange?: (size: BubbleCanvasResize) => void;
+  compactControls?: boolean;
 };
 
-function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes, decorationContentBoxes, selectedLayerId, onSelectLayer, onRemoveLayer, onDecorationChange, onBodyChange, onCanvasSizeChange }: BubblePreviewProps) {
+function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes, decorationContentBoxes, selectedLayerId, onSelectLayer, onRemoveLayer, onDecorationChange, onBodyChange, onCanvasSizeChange, compactControls = false }: BubblePreviewProps) {
   const geometry = useMemo(() => getBubbleVariantGeometry(spec.design, variant), [spec, variant]);
   /** 배율의 기준은 프레임 **상한**이다. 근거는 `getBubblePreviewFitScale` 주석에 있다. */
   const maxCanvas = { width: bubbleCanvasSizeRange.max, height: bubbleCanvasSizeRange.max };
@@ -837,12 +823,31 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     setPan(nextPan);
   }, []);
 
-  const fitToViewport = useCallback(() => {
+  const resetToOverview = useCallback(() => {
     zoomRef.current = 1;
     panRef.current = { x: 0, y: 0 };
     setZoom(1);
     setPan({ x: 0, y: 0 });
   }, []);
+
+  const frameFitZoom = getBubblePreviewFrameFitZoom(geometry.canvas, maxCanvas, viewportSize);
+  const fitCurrentFrame = () => {
+    const nextZoom = getBubblePreviewFrameFitZoom(geometry.canvas, maxCanvas, viewportSizeRef.current);
+    zoomRef.current = nextZoom;
+    panRef.current = { x: 0, y: 0 };
+    setZoom(nextZoom);
+    setPan({ x: 0, y: 0 });
+  };
+
+  // 프레임을 바꾼 뒤 이전 확대·이동값을 그대로 두면 작은 프레임이 화면 밖으로 밀릴 수 있다.
+  // 모바일에서 맞춤 버튼을 기본 노출하지 않는 대신, 프레임 변경 시에는 자동으로 복구한다.
+  const previousCanvasRef = useRef({ variant, width: geometry.canvas.width, height: geometry.canvas.height });
+  useEffect(() => {
+    const previous = previousCanvasRef.current;
+    const changed = previous.variant !== variant || previous.width !== geometry.canvas.width || previous.height !== geometry.canvas.height;
+    previousCanvasRef.current = { variant, width: geometry.canvas.width, height: geometry.canvas.height };
+    if (changed && !frameDragging) resetToOverview();
+  }, [frameDragging, geometry.canvas.height, geometry.canvas.width, resetToOverview, variant]);
 
   /** 뷰포트 중심 기준으로 옮긴 포인터 좌표. 줌 앵커와 핀치 중점이 같은 공간을 쓰게 한다. */
   const viewportPoint = useCallback((clientX: number, clientY: number): BubblePreviewPan => {
@@ -876,7 +881,7 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
   */
   const pointersRef = useRef(new Map<number, BubblePreviewPan>());
   const pinchRef = useRef<{ distance: number; zoom: number; center: BubblePreviewPan; pan: BubblePreviewPan } | null>(null);
-  const viewportPanRef = useRef<{ x: number; y: number; pan: BubblePreviewPan; moved: boolean } | null>(null);
+  const viewportPanRef = useRef<{ x: number; y: number; pan: BubblePreviewPan; moved: boolean; canMove: boolean } | null>(null);
 
   const pinchState = () => {
     const points = [...pointersRef.current.values()];
@@ -931,21 +936,23 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
   };
 
   /*
-    빈 자리를 끌면 화면을 밀고, 끌지 않고 떼면 선택이 풀린다.
+    터치·펜으로 빈 자리를 끌면 화면을 밀고, 마우스는 클릭 선택 해제만 받는다.
 
     확대해 두면 무대가 뷰포트를 넘겨 여백이 사라지므로, 무대 안의 빈 체커보드에서도 밀 수 있어야
-    한다 — 장식·본체·손잡이는 전파를 멈추므로 여기까지 올라오는 것은 빈 자리뿐이다.
+    한다. 다만 마우스에는 휠과 보기 버튼이 이미 있고 빈 공간 드래그가 프레임 이동으로 오해되므로
+    이동은 막는다 — 장식·본체·손잡이는 전파를 멈추므로 각 직접 조작에는 영향이 없다.
     선택 해제를 pointerdown이 아니라 뗄 때로 미룬 것은, 밀려고 잡은 것까지 선택 해제로
     읽지 않기 위해서다.
   */
   const beginViewportPan = (event: React.PointerEvent) => {
     if (pinchRef.current) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    viewportPanRef.current = { x: event.clientX, y: event.clientY, pan: panRef.current, moved: false };
+    viewportPanRef.current = { x: event.clientX, y: event.clientY, pan: panRef.current, moved: false, canMove: event.pointerType !== "mouse" };
   };
   const moveViewportPan = (event: React.PointerEvent) => {
     const drag = viewportPanRef.current;
     if (!drag || pinchRef.current) return;
+    if (!drag.canMove) return;
     const dx = event.clientX - drag.x;
     const dy = event.clientY - drag.y;
     if (!drag.moved && Math.hypot(dx, dy) < 4) return;
@@ -972,7 +979,7 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     const last = lastTapRef.current;
     if (last && now - last.time < 320 && Math.hypot(event.clientX - last.x, event.clientY - last.y) < 24) {
       lastTapRef.current = null;
-      if (zoom > 1.05) fitToViewport();
+      if (zoom > 1.05) resetToOverview();
       else applyZoom(2, viewportPoint(event.clientX, event.clientY));
       return;
     }
@@ -1034,7 +1041,7 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     const cy = rect.top + (geometry.canvas.height / 2 + drag.deco.offsetY) * scale;
     if (drag.kind === "resize") {
       const dist = Math.hypot(event.clientX - cx, event.clientY - cy) / scale;
-      onDecorationChange(layerId, { scale: clampNumber(dist / getBubbleDecorationHandleRadius(decorationSizes[layerId], decorationContentBoxes[layerId]), 0.3, bubbleDecorationMaxScale) });
+      onDecorationChange(layerId, { scale: clampNumber(dist / getBubbleDecorationHandleRadius(decorationSizes[layerId], decorationContentBoxes[layerId], drag.deco.flipX), 0.3, bubbleDecorationMaxScale) });
     } else {
       const angle = (Math.atan2(event.clientY - cy, event.clientX - cx) * 180) / Math.PI + 90;
       onDecorationChange(layerId, { rotation: Math.round(((angle + 180) % 360) - 180) });
@@ -1047,17 +1054,13 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* noop */ }
   };
 
-  const applyCanvasSize = (next: { width: number; height: number }) => onCanvasSizeChange?.({
-    width: Math.round(clampNumber(next.width, bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max)),
-    height: Math.round(clampNumber(next.height, bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max)),
-  });
   /**
    * 잡은 손잡이가 가진 방향만 움직인다.
    *
    * 두 축을 한 값으로 묶으면 대각선으로만 커져서 원본 비율(가로:세로)을 벗어날 수 없다. 축을 나눠
    * 놓으면 모서리는 두 축을 동시에, 변 가운데 손잡이는 한 축만 바꿔서 직사각형 프레임을 만들 수 있다.
-   * 프레임은 뷰포트 안에서 가운데 정렬이라 한쪽 모서리를 dx만큼 끌면 폭은 2dx 변한다.
-   * `dirX`/`dirY`가 0인 변 가운데 손잡이는 그 축의 이동량이 0이 되어 저절로 한 축만 남는다.
+   * 잡은 쪽 경계만 포인터를 따라가고 반대쪽 경계는 고정한다. 프레임 중심 이동량의 반대만큼
+   * 본체·장식 오프셋을 보정하면 결과물 안의 그림도 제자리에 남는다.
    */
   const beginFrameDrag = (handle: FrameHandle) => (event: React.PointerEvent) => {
     if (!onCanvasSizeChange) return;
@@ -1070,6 +1073,9 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
       startY: event.clientY,
       startWidth: geometry.canvas.width,
       startHeight: geometry.canvas.height,
+      lastWidth: geometry.canvas.width,
+      lastHeight: geometry.canvas.height,
+      startPan: panRef.current,
     };
     setFrameDragging(true);
   };
@@ -1079,7 +1085,24 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     // 화면 픽셀을 캔버스 픽셀로 되돌린다. 확대해 둔 상태에서도 손끝과 모서리가 같이 움직인다.
     const dx = ((event.clientX - drag.startX) * drag.handle.dirX) / scale;
     const dy = ((event.clientY - drag.startY) * drag.handle.dirY) / scale;
-    applyCanvasSize({ width: drag.startWidth + 2 * dx, height: drag.startHeight + 2 * dy });
+    const width = Math.round(clampNumber(drag.startWidth + dx, bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max));
+    const height = Math.round(clampNumber(drag.startHeight + dy, bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max));
+    const widthDelta = width - drag.lastWidth;
+    const heightDelta = height - drag.lastHeight;
+    drag.lastWidth = width;
+    drag.lastHeight = height;
+    onCanvasSizeChange?.({
+      width,
+      height,
+      contentShiftX: -drag.handle.dirX * widthDelta / 2,
+      contentShiftY: -drag.handle.dirY * heightDelta / 2,
+    });
+    const nextPan = {
+      x: drag.startPan.x + drag.handle.dirX * (width - drag.startWidth) * scale / 2,
+      y: drag.startPan.y + drag.handle.dirY * (height - drag.startHeight) * scale / 2,
+    };
+    panRef.current = nextPan;
+    setPan(nextPan);
   };
   const endFrameDrag = (event: React.PointerEvent) => {
     frameDragRef.current = null;
@@ -1091,11 +1114,30 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
     const step = event.key === "ArrowUp" || event.key === "ArrowRight" ? 4 : event.key === "ArrowDown" || event.key === "ArrowLeft" ? -4 : 0;
     if (!step) return;
     event.preventDefault();
-    applyCanvasSize({
-      width: geometry.canvas.width + step * Math.abs(handle.dirX),
-      height: geometry.canvas.height + step * Math.abs(handle.dirY),
+    const width = Math.round(clampNumber(geometry.canvas.width + step * Math.abs(handle.dirX), bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max));
+    const height = Math.round(clampNumber(geometry.canvas.height + step * Math.abs(handle.dirY), bubbleCanvasSizeRange.min, bubbleCanvasSizeRange.max));
+    onCanvasSizeChange?.({
+      width,
+      height,
+      contentShiftX: -handle.dirX * (width - geometry.canvas.width) / 2,
+      contentShiftY: -handle.dirY * (height - geometry.canvas.height) / 2,
     });
   };
+
+  const viewIsFrameFitted = Math.abs(zoom - frameFitZoom) < 0.001 && Math.abs(pan.x) <= 0.5 && Math.abs(pan.y) <= 0.5;
+  const viewIsOverview = Math.abs(zoom - 1) < 0.001 && Math.abs(pan.x) <= 0.5 && Math.abs(pan.y) <= 0.5;
+  const zoomControls = (
+    <ZoomControls
+      compact={compactControls}
+      percent={Math.round(scale * 100)}
+      canZoomOut={zoom > bubblePreviewZoomRange.min + 0.001}
+      canZoomIn={zoom < bubblePreviewZoomRange.max - 0.001}
+      fitDisabled={compactControls ? viewIsFrameFitted : viewIsOverview}
+      onZoomOut={() => applyZoom(zoom / bubblePreviewZoomStep)}
+      onZoomIn={() => applyZoom(zoom * bubblePreviewZoomStep)}
+      onFit={compactControls ? fitCurrentFrame : resetToOverview}
+    />
+  );
 
   return (
     <div className="grid h-full min-h-0 min-w-0 w-full grid-rows-[minmax(0,1fr)_auto_auto] gap-1.5">
@@ -1105,7 +1147,8 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
       */}
       <div
         ref={viewportRef}
-        className="relative min-h-[260px] w-full touch-none overflow-hidden rounded-xl"
+        data-testid="bubble-builder-preview-viewport"
+        className={`relative min-h-0 w-full touch-none overflow-hidden rounded-xl ${compactControls ? "" : "min-h-[260px]"}`}
         onPointerDownCapture={handleViewportPointerDownCapture}
         onPointerMoveCapture={handleViewportPointerMoveCapture}
         onPointerUpCapture={handleViewportPointerUpCapture}
@@ -1140,7 +1183,7 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
                 원본 둘레의 투명 여백까지 잡히면 그림에서 한참 떨어진 빈자리가 클릭을 먹어 아래의
                 말풍선 본체를 잡을 수 없고, 선택 테두리와 손잡이도 그림에서 멀찍이 떠 있게 된다.
               */
-              const box = decorationContentBoxes[layer.id] ?? fullBubbleDecorationContentBox;
+              const box = getBubbleDecorationTransformedContentBox(layer, decorationContentBoxes[layer.id]);
               const contentStyle = {
                 left: `${box.x * 100}%`,
                 top: `${box.y * 100}%`,
@@ -1190,27 +1233,22 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
           */}
           {onCanvasSizeChange ? <FrameResizeHandles active={frameDragging} onBegin={beginFrameDrag} onMove={moveFrameDrag} onEnd={endFrameDrag} onKeyDown={handleFrameKey} /> : null}
         </div>
-        <ZoomControls
-          percent={Math.round(scale * 100)}
-          canZoomOut={zoom > bubblePreviewZoomRange.min + 0.001}
-          canZoomIn={zoom < bubblePreviewZoomRange.max - 0.001}
-          onZoomOut={() => applyZoom(zoom / bubblePreviewZoomStep)}
-          onZoomIn={() => applyZoom(zoom * bubblePreviewZoomStep)}
-          onFit={fitToViewport}
-        />
+        {!compactControls ? zoomControls : null}
       </div>
       {/*
-        크기 표시는 상시로 두고 끄는 동안만 강조한다. 세 가지를 한 줄로 해결한다 —
-        끌 때의 피드백, 안 끌 때의 조회(슬라이더를 없애 다른 확인 경로가 없다),
-        그리고 "이건 조절할 수 있는 값"이라는 힌트.
+        크기 표시는 상시로 두고 끄는 동안만 강조한다. 모바일에서는 이 줄에 보기 버튼도 둬서
+        캔버스 위의 작업 공간을 가리지 않는다.
       */}
-      <p className={`flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center transition ${dragging ? "text-xs font-black text-slate-900" : "text-[11px] font-bold text-slate-400"}`} aria-live="polite">
-        <span>프레임 {geometry.canvas.width} × {geometry.canvas.height}</span>
-        {frameLimit ? <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-black text-amber-700">{frameLimit}</span> : null}
-        <span aria-hidden="true" className="text-slate-300">·</span>
-        <span>말풍선 {geometry.body.width} × {geometry.body.height}</span>
-      </p>
-      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] font-bold text-slate-500">
+      <div className={`${compactControls ? "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5" : "flex min-w-0 items-center justify-center gap-2"}`}>
+        <p className={`flex min-w-0 flex-wrap items-center gap-y-1 overflow-hidden transition ${compactControls ? "justify-start gap-x-1 text-left" : "justify-center gap-x-2 text-center"} ${dragging ? "text-xs font-black text-slate-900" : "text-[10px] font-bold text-slate-400 min-[360px]:text-[11px]"}`} aria-live="polite">
+          <span>프레임 {geometry.canvas.width} × {geometry.canvas.height}</span>
+          {frameLimit ? <span className="rounded-full bg-amber-100 px-1.5 text-[10px] font-black text-amber-700">{frameLimit}</span> : null}
+          <span aria-hidden="true" className="text-slate-300">·</span>
+          <span>말풍선 {geometry.body.width} × {geometry.body.height}</span>
+        </p>
+        {compactControls ? zoomControls : null}
+      </div>
+      <div className={`flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] font-bold text-slate-500 ${compactControls ? "px-1" : ""}`}>
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm border border-dashed border-slate-400/70" />프레임</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm border border-dashed border-emerald-600/80" />글자 영역</span>
         <span className="flex items-center gap-1"><span className="inline-block h-2 w-3 rounded-sm bg-sky-400/70" />늘어나는 구간</span>
@@ -1223,18 +1261,20 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
  * 보기 배율 조절.
  *
  * 핀치와 Ctrl+휠만으로는 "확대할 수 있다"는 사실이 어디에도 드러나지 않고, 마우스만 쓰는
- * 사람과 키보드 사용자에게는 통로 자체가 없다. 퍼센트를 늘 띄워 두는 것은 지금 보고 있는 것이
- * 실제 크기가 아님을 알리는 유일한 표시라서다.
+ * 사람과 키보드 사용자에게는 통로 자체가 없다. 데스크톱에서는 현재 배율을 퍼센트로 보여 주고,
+ * 모바일에서는 캔버스 아래에 +/-만 두어 편집 공간을 가리지 않게 한다.
  */
-function ZoomControls({ percent, canZoomIn, canZoomOut, onZoomIn, onZoomOut, onFit }: {
+function ZoomControls({ compact = false, percent, canZoomIn, canZoomOut, fitDisabled, onZoomIn, onZoomOut, onFit }: {
+  compact?: boolean;
   percent: number;
   canZoomIn: boolean;
   canZoomOut: boolean;
+  fitDisabled: boolean;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFit: () => void;
 }) {
-  const button = "grid size-8 place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-35";
+  const button = `grid place-items-center rounded-lg text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-35 ${compact ? "size-7 min-[360px]:size-8" : "size-8"}`;
   return (
     /*
       이 막대는 뷰포트 **안**에 있다. 전파를 멈추지 않으면 버튼을 누른 것이 "빈 자리를 두드렸다"로도
@@ -1242,13 +1282,13 @@ function ZoomControls({ percent, canZoomIn, canZoomOut, onZoomIn, onZoomOut, onF
       되돌아가고(확대가 안 되는 것처럼 보인다), 누를 때마다 골라 둔 장식의 선택이 풀린다.
     */
     <div
-      className="pointer-events-auto absolute bottom-2 right-2 flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur"
+      className={compact ? "flex shrink-0 items-center gap-0.5 rounded-xl border border-slate-200 bg-white/95 p-0.5 shadow-sm backdrop-blur" : "pointer-events-auto absolute bottom-2 right-2 flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-sm backdrop-blur"}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <button type="button" className={button} aria-label="축소" disabled={!canZoomOut} onClick={onZoomOut}><Minus size={15} /></button>
-      <span className="min-w-11 text-center text-[11px] font-black tabular-nums text-slate-500" aria-live="polite">{percent}%</span>
       <button type="button" className={button} aria-label="확대" disabled={!canZoomIn} onClick={onZoomIn}><Plus size={15} /></button>
-      <button type="button" className={button} aria-label="화면에 맞추기" title="화면에 맞추기" onClick={onFit}><Maximize size={15} /></button>
+      {!compact ? <span className="min-w-11 text-center text-[11px] font-black tabular-nums text-slate-500" aria-live="polite">{percent}%</span> : null}
+      <button type="button" className={button} aria-label="화면에 맞추기" title="화면에 맞추기" disabled={fitDisabled} onClick={onFit}><Maximize size={15} /></button>
     </div>
   );
 }
@@ -1265,6 +1305,9 @@ type FrameDrag = {
   startY: number;
   startWidth: number;
   startHeight: number;
+  lastWidth: number;
+  lastHeight: number;
+  startPan: BubblePreviewPan;
 };
 
 /**
@@ -1336,28 +1379,39 @@ function BodyMoveAffordance({ active }: { active: boolean }) {
   );
 }
 
-function BuilderSection({ children }: { children: React.ReactNode }) { return <section className="grid gap-3 rounded-2xl border border-slate-200 p-4">{children}</section>; }
-function RangeField({ label, value, min, max, suffix = "", onChange }: { label: string; value: number; min: number; max: number; suffix?: string; onChange: (value: number) => void }) { return <label className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs font-bold text-slate-600"><span>{label}</span><span>{Math.round(value)}{suffix}</span><input type="range" className="col-span-2 accent-blue-600" min={min} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} /></label>; }
+function BuilderSection({ children, compact = false }: { children: React.ReactNode; compact?: boolean }) {
+  return <section className={`grid ${compact ? "gap-2 px-1 pb-1" : "gap-3 rounded-2xl border border-slate-200 p-4"}`}>{children}</section>;
+}
+
+function RangeField({ label, value, min, max, suffix = "", onChange, compact = false }: { label: string; value: number; min: number; max: number; suffix?: string; onChange: (value: number) => void; compact?: boolean }) {
+  return (
+    <label className={`grid grid-cols-[1fr_auto] gap-x-3 font-bold text-slate-600 ${compact ? "gap-y-0 text-[11px]" : "gap-y-1 text-xs"}`}>
+      <span>{label}</span>
+      <span className="tabular-nums">{Math.round(value)}{suffix}</span>
+      <input type="range" className={`col-span-2 accent-blue-600 ${compact ? "h-4" : ""}`} min={min} max={max} value={value} onChange={(event) => onChange(Number(event.currentTarget.value))} />
+    </label>
+  );
+}
 
 /**
  * 라벨과 색상 코드를 한 줄에 나란히 두면 2열 배치의 좁은 폭(360px 기기에서 약 149px)에서
  * 자리가 모자라 줄바꿈이 일어나 카드 높이가 두 배가 된다. 견본 옆에 두 줄로 쌓아 폭을 아낀다.
  */
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function ColorField({ label, value, onChange, compact = false }: { label: string; value: string; onChange: (value: string) => void; compact?: boolean }) {
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600">
+    <div className={`flex items-center font-bold text-slate-600 ${compact ? "gap-1.5 py-1 text-[11px]" : "gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"}`}>
       <ThemeColorPicker value={value} label={label} onChange={onChange}>
         <button
           type="button"
           aria-label={`${label} 색상 선택 열기`}
-          className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-black/10 shadow-sm transition hover:ring-2 hover:ring-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-95"
+          className={`relative shrink-0 cursor-pointer overflow-hidden border border-black/10 transition hover:ring-2 hover:ring-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-95 ${compact ? "size-7 rounded-md" : "size-8 rounded-lg shadow-sm"}`}
         >
           <span className="absolute inset-0" style={{ backgroundColor: themeColorToCss(value) }} aria-hidden="true" />
         </button>
       </ThemeColorPicker>
       <span className="grid min-w-0 leading-tight">
         <span className="truncate">{label}</span>
-        <span className="truncate font-mono text-[10px] font-medium text-slate-400">{themeColorRgbHex(value)}</span>
+        <span className={`truncate font-mono font-medium text-slate-400 ${compact ? "text-[9px]" : "text-[10px]"}`}>{themeColorRgbHex(value)}</span>
       </span>
     </div>
   );

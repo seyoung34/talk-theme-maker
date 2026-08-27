@@ -57,6 +57,24 @@ export function getBubblePreviewLayout(
 }
 
 /**
+ * 현재 프레임을 뷰포트에 가득 맞추기 위해 필요한 사용자 줌.
+ *
+ * 기본 배율은 프레임 상한을 기준으로 해서 프레임 크기 변화가 화면에 드러나게 한다. 반면 사용자가
+ * `맞춤`을 요청한 순간에는 지금 편집하는 프레임 자체가 기준이어야 작은 프레임도 충분히 크게
+ * 다룰 수 있다. 두 맞춤 배율의 비율을 사용자 줌으로 돌려주면 저장 좌표는 건드리지 않는다.
+ */
+export function getBubblePreviewFrameFitZoom(
+  canvas: BubblePreviewSize,
+  maxCanvas: BubblePreviewSize,
+  available: Partial<BubblePreviewSize>,
+) {
+  const overviewScale = getBubblePreviewFitScale(available, maxCanvas);
+  const frameScale = getBubblePreviewFitScale(available, canvas);
+  if (overviewScale <= 0) return 1;
+  return clampBubblePreviewZoom(frameScale / overviewScale);
+}
+
+/**
  * 이동 가능한 범위.
  *
  * 무대가 뷰포트 안에 다 들어오면 손잡이 여백만큼만 움직인다 — 다 보이는데 밀 수 있으면

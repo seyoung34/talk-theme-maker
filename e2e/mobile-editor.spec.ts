@@ -47,6 +47,109 @@ test.describe("모바일 편집기", () => {
     await expectAutosaveSaved(page);
   });
 
+  test("말풍선 빌더는 미리보기와 편집 패널을 분리하고 컴팩트한 보기 조절을 제공한다", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.goto("/edit");
+    await expect(page.getByRole("button", { name: "편집 종료" })).toBeVisible();
+
+    await page.getByRole("button", { name: "편집 패널 펼치기" }).click();
+    await page.getByRole("button", { name: "채팅방", exact: true }).click();
+    await page.getByRole("button", { name: "말풍선", exact: true }).click();
+    await page.getByRole("button", { name: "나만의 말풍선 만들기" }).click();
+
+    await expect(page.getByRole("heading", { name: "나만의 말풍선 만들기" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "꾸미기" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByText("말풍선 글자색")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "확대" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "축소" })).toBeVisible();
+    const fitButton = page.getByRole("button", { name: "화면에 맞추기" });
+    await expect(fitButton).toBeVisible();
+    await expect(fitButton).toBeEnabled();
+    await expect(page.getByRole("button", { name: /설정 영역 (넓히기|줄이기)/ })).toHaveCount(0);
+
+    const preview = page.getByTestId("bubble-builder-preview-region");
+    const controls = page.getByTestId("bubble-builder-controls-scroll");
+    await expect(preview).toBeVisible();
+    await expect(controls).toBeVisible();
+    await expect(controls).toHaveCSS("overflow-y", "auto");
+
+    const layout = await page.evaluate(() => {
+      const previewElement = document.querySelector<HTMLElement>('[data-testid="bubble-builder-preview-region"]');
+      const controlsElement = document.querySelector<HTMLElement>('[data-testid="bubble-builder-controls-scroll"]');
+      if (!previewElement || !controlsElement) return null;
+      const previewRect = previewElement.getBoundingClientRect();
+      const controlsRect = controlsElement.getBoundingClientRect();
+      const previewViewportRect = document.querySelector<HTMLElement>('[data-testid="bubble-builder-preview-viewport"]')?.getBoundingClientRect();
+      return {
+        previewBottom: previewRect.bottom,
+        controlsTop: controlsRect.top,
+        controlsBottom: controlsRect.bottom,
+        viewportHeight: window.innerHeight,
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+        previewViewportWidth: previewViewportRect?.width ?? 0,
+        previewViewportHeight: previewViewportRect?.height ?? 0,
+      };
+    });
+    expect(layout).not.toBeNull();
+    expect(layout!.previewBottom).toBeLessThanOrEqual(layout!.controlsTop);
+    expect(layout!.controlsBottom).toBeLessThanOrEqual(layout!.viewportHeight + 1);
+    expect(layout!.documentWidth).toBeLessThanOrEqual(layout!.viewportWidth + 1);
+    expect(Math.abs(layout!.previewViewportWidth - layout!.previewViewportHeight)).toBeLessThanOrEqual(8);
+
+    const leftHandle = page.getByRole("button", { name: "프레임 크기 조절 (왼쪽)" });
+    const rightHandle = page.getByRole("button", { name: "프레임 크기 조절 (오른쪽)" });
+    const beforeLeft = await leftHandle.boundingBox();
+    const beforeRight = await rightHandle.boundingBox();
+    expect(beforeLeft).not.toBeNull();
+    expect(beforeRight).not.toBeNull();
+
+    await fitButton.click();
+    await expect(fitButton).toBeDisabled();
+    const afterLeft = await leftHandle.boundingBox();
+    const afterRight = await rightHandle.boundingBox();
+    expect(afterLeft).not.toBeNull();
+    expect(afterRight).not.toBeNull();
+    expect(afterRight!.x - afterLeft!.x).toBeGreaterThan((beforeRight!.x - beforeLeft!.x) * 1.1);
+
+    // 오른쪽 손잡이를 안쪽으로 끌면 오른쪽 경계만 움직이고 반대편인 왼쪽 경계는 고정돼야 한다.
+    const rightCenter = { x: afterRight!.x + afterRight!.width / 2, y: afterRight!.y + afterRight!.height / 2 };
+    await page.mouse.move(rightCenter.x, rightCenter.y);
+    await page.mouse.down();
+    await page.mouse.move(rightCenter.x - 28, rightCenter.y, { steps: 4 });
+    await page.mouse.up();
+
+    const resizedLeft = await leftHandle.boundingBox();
+    const resizedRight = await rightHandle.boundingBox();
+    expect(resizedLeft).not.toBeNull();
+    expect(resizedRight).not.toBeNull();
+    expect(Math.abs(resizedLeft!.x - afterLeft!.x)).toBeLessThanOrEqual(2);
+    expect(resizedRight!.x).toBeLessThan(afterRight!.x - 20);
+
+    // 마우스로 빈 편집 영역을 끌어도 프레임 전체는 이동하지 않는다.
+    const previewViewport = page.getByTestId("bubble-builder-preview-viewport");
+    const previewBox = await previewViewport.boundingBox();
+    expect(previewBox).not.toBeNull();
+    const frameBeforeBlankDrag = await leftHandle.boundingBox();
+    await page.mouse.move(previewBox!.x + 42, previewBox!.y + 42);
+    await page.mouse.down();
+    await page.mouse.move(previewBox!.x + 72, previewBox!.y + 62, { steps: 4 });
+    await page.mouse.up();
+    const frameAfterBlankDrag = await leftHandle.boundingBox();
+    expect(frameBeforeBlankDrag).not.toBeNull();
+    expect(frameAfterBlankDrag).not.toBeNull();
+    expect(Math.abs(frameAfterBlankDrag!.x - frameBeforeBlankDrag!.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(frameAfterBlankDrag!.y - frameBeforeBlankDrag!.y)).toBeLessThanOrEqual(1);
+
+    for (const buttonName of ["적용하기", "축소", "확대", "화면에 맞추기"]) {
+      const button = page.getByRole("button", { name: buttonName });
+      const box = await button.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(layout!.viewportWidth);
+    }
+  });
+
   test("랜딩이 320~412px에서 가로 스크롤 없이 CTA를 온전히 보여준다", async ({ page }) => {
     // UX-010: 기기별 최소 폭에서 문서 폭·CTA 경계를 함께 확인한다.
     for (const viewport of [320, 360, 390, 412]) {
