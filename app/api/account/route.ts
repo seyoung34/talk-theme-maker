@@ -28,6 +28,9 @@ export async function DELETE(request: Request) {
     if (result.reason === "pending_export") {
       return NextResponse.json({ error: "진행 중인 내보내기가 끝난 뒤 회원탈퇴를 진행해 주세요." }, { status: 409 });
     }
+    if (result.reason === "billing_hold") {
+      return NextResponse.json({ error: "환불 조정이 끝난 뒤 회원탈퇴를 진행해 주세요. 고객지원에서 확인할 수 있습니다." }, { status: 409 });
+    }
     return NextResponse.json({ error: "진행 중인 결제가 끝난 뒤 회원탈퇴를 진행해 주세요." }, { status: 409 });
   }
 
@@ -37,6 +40,8 @@ export async function DELETE(request: Request) {
       ? "진행 중인 내보내기 작업을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
       : result.step === "pending_payment_lookup"
         ? "진행 중인 결제를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
+        : result.step === "billing_hold_lookup"
+          ? "환불 조정 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
         : result.step === "admin_lookup"
           ? "회원탈퇴 가능 여부를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요."
           : "회원탈퇴를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";

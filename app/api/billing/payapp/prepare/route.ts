@@ -4,12 +4,19 @@ import { getSafeBillingReturnTo } from "@/lib/billing/returnTo";
 import { getCurrentUserOrNull } from "@/lib/billing/credits";
 import { getCreditProduct } from "@/lib/billing/products";
 import { createAdminClient } from "@/lib/supabase/server";
+import { isPayappCheckoutEnabled } from "@/lib/supabase/config";
 
 type PrepareBody = { phone?: string; productId?: string; returnTo?: string };
 
 export async function POST(request: Request) {
   const user = await getCurrentUserOrNull();
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다.", reason: "unauthenticated" }, { status: 401 });
+  if (!isPayappCheckoutEnabled()) {
+    return NextResponse.json(
+      { error: "결제창이 그로블로 변경되었습니다. 크레딧 페이지에서 다시 시작해 주세요.", reason: "payapp_checkout_disabled" },
+      { status: 409 },
+    );
+  }
 
   const body = (await request.json().catch(() => ({}))) as PrepareBody;
   const product = getCreditProduct(body.productId);

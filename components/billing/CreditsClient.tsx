@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, ArrowLeft, Check, CheckCircle2, Clock3, CreditCard, Gift, LoaderCircle, RefreshCw, ShieldCheck, Smartphone, Sparkles, Star, XCircle } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, CheckCircle2, Clock3, CreditCard, Gift, LoaderCircle, RefreshCw, ShieldCheck, Sparkles, Star, XCircle } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
-import type { AccountMeResponse, CreditCodeRedeemResponse, PayappPrepareResponse, PayappStatusResponse, PaymentStatus } from "@/lib/billing/apiTypes";
-import { creditProducts, type CreditProductId } from "@/lib/billing/products";
+import type { AccountMeResponse, BillingPaymentStatusResponse, BillingPrepareResponse, CreditCodeRedeemResponse, PaymentStatus } from "@/lib/billing/apiTypes";
+import { creditProducts, singleCreditPrice, type CreditProductId } from "@/lib/billing/products";
 import { getKnownCampaignKey, trackAnalyticsEvent, trackPurchaseOnce } from "@/lib/analytics/ga4";
 import { readJsonResponse } from "@/lib/shared/api/http";
-import { getSafeBillingReturnTo } from "@/lib/billing/returnTo";
+import { getSafeBillingReturnTo, type BillingReturnTo } from "@/lib/billing/returnTo";
 import { claimSignupBonusFromClient } from "@/lib/billing/signupBonusClient";
 
 type PaymentOutcome = { status: PaymentStatus | "checking"; credits?: number; message: string } | null;
@@ -17,32 +17,44 @@ type ChargePhase = "idle" | "preparing" | "redirecting";
 type RedeemMessage = { tone: "success" | "error"; text: string } | null;
 
 const MAX_PAYMENT_CHECKS = 4;
+const GROBLE_PAYMENT_SESSION_KEY = "talktheme:billing:groble:v1";
 
-function normalizePhone(value: string) { return value.replace(/\D/g, "").slice(0, 11); }
-function formatPhone(value: string) {
-  const digits = normalizePhone(value);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
-  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
-}
-function isValidPhone(value: string) { return /^01[016789]\d{7,8}$/.test(normalizePhone(value)); }
-function getPrepareError(payload: PayappPrepareResponse) {
+function getPrepareError(payload: BillingPrepareResponse) {
   if (payload.reason === "invalid_product") return "충전 상품을 다시 선택해 주세요.";
-  if (payload.reason === "invalid_phone") return "휴대폰번호를 정확히 입력해 주세요.";
-  if (payload.reason === "payapp_config_missing") return "결제 설정을 확인 중입니다. 잠시 후 다시 시도해 주세요.";
+  if (payload.reason === "billing_hold") return "환불 조정이 끝난 뒤 다시 결제해 주세요.";
+  if (payload.reason === "checkout_temporarily_disabled") return "결제 기능을 준비하고 있습니다. 잠시 후 다시 시도해 주세요.";
   if (payload.reason === "unauthenticated") return "로그인이 만료되었습니다. 다시 로그인해 주세요.";
   return "결제 요청을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
+function readGroblePaymentSession() {
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(GROBLE_PAYMENT_SESSION_KEY) ?? "null") as unknown;
+    if (!value || typeof value !== "object") return null;
+    const session = value as { version?: unknown; paymentId?: unknown; returnTo?: unknown; startedAt?: unknown };
+    const startedAt = typeof session.startedAt === "number" ? session.startedAt : Number.NaN;
+    if (
+      session.version !== 1
+      || typeof session.paymentId !== "string"
+      || !Number.isFinite(startedAt)
+      || startedAt > Date.now() + 60_000
+      || startedAt < Date.now() - 7 * 24 * 60 * 60 * 1000
+    ) return null;
+    return { paymentId: session.paymentId, returnTo: typeof session.returnTo === "string" ? session.returnTo : null };
+  } catch {
+    return null;
+  }
 }
 
 export default function CreditsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [me, setMe] = useState<AccountMeResponse | null>(null);
-  const [selectedProductId, setSelectedProductId] = useState<CreditProductId>("credit-4");
-  const [phone, setPhone] = useState("");
-  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<CreditProductId>("credit-2");
   const [pageError, setPageError] = useState<string | null>(null);
   const [paymentOutcome, setPaymentOutcome] = useState<PaymentOutcome>(null);
+  const [activePaymentId, setActivePaymentId] = useState<string | null>(null);
+  const [activeReturnTo, setActiveReturnTo] = useState<BillingReturnTo | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [chargePhase, setChargePhase] = useState<ChargePhase>("idle");
   const [grantCode, setGrantCode] = useState("");
@@ -81,14 +93,14 @@ export default function CreditsClient() {
 
   useEffect(() => { void refreshMe(); }, [refreshMe]);
 
-  const checkPayment = useCallback(async (paymentId: string, automatic = false) => {
-    setPaymentOutcome({ status: "checking", message: automatic ? "PayApp 결제 승인을 확인하고 있습니다." : "결제 결과를 다시 확인하고 있습니다." });
+  const checkPayment = useCallback(async (paymentId: string, automatic = false, returnDestination = returnTo) => {
+    setPaymentOutcome({ status: "checking", message: automatic ? "그로블 결제 승인을 확인하고 있습니다." : "결제 결과를 다시 확인하고 있습니다." });
     for (let attempt = 0; attempt < MAX_PAYMENT_CHECKS; attempt += 1) {
       try {
-        const response = await fetch(`/api/billing/payapp/status?paymentId=${encodeURIComponent(paymentId)}`, { cache: "no-store" });
-        const payload = await readJsonResponse<PayappStatusResponse>(response);
+        const response = await fetch(`/api/billing/payments/status?paymentId=${encodeURIComponent(paymentId)}`, { cache: "no-store" });
+        const payload = await readJsonResponse<BillingPaymentStatusResponse>(response);
         if (response.status === 401) {
-          const callbackPath = `/credits?billing=payapp-return&paymentId=${encodeURIComponent(paymentId)}${returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ""}`;
+          const callbackPath = `/credits?billing=groble-return${returnDestination ? `&returnTo=${encodeURIComponent(returnDestination)}` : ""}`;
           router.push(`/login?returnTo=${encodeURIComponent(callbackPath)}&reason=billing`);
           return;
         }
@@ -96,7 +108,17 @@ export default function CreditsClient() {
           setPaymentOutcome({ status: "failed", message: "결제 상태를 확인하지 못했습니다. 잠시 후 다시 확인해 주세요." });
           return;
         }
-        const { status, credits } = payload.payment;
+        const { status, credits, refund_status: refundStatus } = payload.payment;
+        if (refundStatus === "review_required") {
+          setPaymentOutcome({ status: "failed", message: "환불과 크레딧 사용 내역을 조정하고 있습니다. 고객지원에 문의해 주세요." });
+          await refreshMe();
+          return;
+        }
+        if (refundStatus === "requested") {
+          setPaymentOutcome({ status: "pending", message: "환불 요청을 확인하고 있습니다. 처리 결과는 고객지원에서 확인해 주세요." });
+          await refreshMe();
+          return;
+        }
         if (status === "paid") {
           setPaymentOutcome({ status, credits, message: `${credits}크레딧이 충전되었습니다.` });
           const product = creditProducts.find((item) => item.credits === credits && item.amount === payload.payment?.amount);
@@ -108,11 +130,12 @@ export default function CreditsClient() {
             });
           }
           await refreshMe();
-          router.replace(returnTo ?? "/credits", { scroll: false });
+          window.sessionStorage.removeItem(GROBLE_PAYMENT_SESSION_KEY);
+          router.replace(returnDestination ?? "/credits", { scroll: false });
           return;
         }
         if (status === "failed" || status === "canceled") {
-          setPaymentOutcome({ status, message: status === "canceled" ? "결제가 취소되었습니다. 결제된 금액은 없습니다." : "결제를 완료하지 못했습니다. 상품과 결제 정보를 확인한 뒤 다시 시도해 주세요." });
+          setPaymentOutcome({ status, message: status === "canceled" && refundStatus === "refunded" ? "결제 환불이 완료되어 구매 크레딧이 회수되었습니다." : status === "canceled" ? "결제가 취소되었습니다. 결제된 금액은 없습니다." : "결제를 완료하지 못했습니다. 상품과 결제 정보를 확인한 뒤 다시 시도해 주세요." });
           return;
         }
         if (attempt < MAX_PAYMENT_CHECKS - 1) await new Promise((resolve) => window.setTimeout(resolve, 2500));
@@ -125,13 +148,21 @@ export default function CreditsClient() {
   }, [refreshMe, returnTo, router]);
 
   useEffect(() => {
-    const paymentId = searchParams.get("paymentId");
-    if (searchParams.get("billing") !== "payapp-return" || !paymentId) return;
-    void checkPayment(paymentId, true);
-  }, [checkPayment, searchParams]);
+    if (searchParams.get("billing") !== "groble-return") return;
+    const session = readGroblePaymentSession();
+    if (!session) {
+      setPaymentOutcome({ status: "pending", message: "결제창에서 돌아왔습니다. 웹훅 반영이 늦을 수 있으니 잠시 후 잔액을 다시 확인해 주세요." });
+      void refreshMe();
+      return;
+    }
+    setActivePaymentId(session.paymentId);
+    const sessionReturnTo = getSafeBillingReturnTo(session.returnTo);
+    setActiveReturnTo(sessionReturnTo);
+    void checkPayment(session.paymentId, true, sessionReturnTo);
+  }, [checkPayment, refreshMe, searchParams]);
 
   useEffect(() => {
-    trackAnalyticsEvent("credit_purchase_viewed", { entry_point: searchParams.get("entry") === "export_block" ? "export_block" : "menu", provider: "payapp" });
+    trackAnalyticsEvent("credit_purchase_viewed", { entry_point: searchParams.get("entry") === "export_block" ? "export_block" : "menu", provider: "groble" });
   }, [searchParams]);
 
   const chargeCredits = async () => {
@@ -140,26 +171,28 @@ export default function CreditsClient() {
       router.push(`/login?returnTo=${encodeURIComponent(creditsPath)}&reason=billing`);
       return;
     }
-    if (!isValidPhone(phone)) {
-      setPhoneError("010으로 시작하는 휴대폰번호를 정확히 입력해 주세요.");
+    if (me.billingHold) {
+      setPaymentOutcome({ status: "failed", message: "환불 조정이 끝난 뒤 다시 결제해 주세요." });
       return;
     }
-    setPhoneError(null);
     setPaymentOutcome(null);
     setChargePhase("preparing");
     try {
-      const response = await fetch("/api/billing/payapp/prepare", {
+      const response = await fetch("/api/billing/checkout/prepare", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: normalizePhone(phone), productId: selectedProduct.id, returnTo }),
+        body: JSON.stringify({ productId: selectedProduct.id }),
       });
-      const payload = await readJsonResponse<PayappPrepareResponse>(response);
+      const payload = await readJsonResponse<BillingPrepareResponse>(response);
       if (response.status === 401) {
         router.push(`/login?returnTo=${encodeURIComponent(creditsPath)}&reason=billing`);
         return;
       }
-      if (!response.ok || !payload.checkoutUrl) throw new Error(getPrepareError(payload));
-      trackAnalyticsEvent("begin_checkout", { currency: "KRW", value: selectedProduct.amount, provider: "payapp", items: [{ item_id: selectedProduct.id, item_name: selectedProduct.name, price: selectedProduct.amount, quantity: 1 }] });
+      if (!response.ok || !payload.checkoutUrl || !payload.paymentId) throw new Error(getPrepareError(payload));
+      window.sessionStorage.setItem(GROBLE_PAYMENT_SESSION_KEY, JSON.stringify({ version: 1, paymentId: payload.paymentId, returnTo, startedAt: Date.now() }));
+      setActivePaymentId(payload.paymentId);
+      setActiveReturnTo(returnTo);
+      trackAnalyticsEvent("begin_checkout", { currency: "KRW", value: selectedProduct.amount, provider: "groble", items: [{ item_id: selectedProduct.id, item_name: selectedProduct.name, price: selectedProduct.amount, quantity: 1 }] });
       setChargePhase("redirecting");
       window.location.assign(payload.checkoutUrl);
     } catch (error) {
@@ -167,8 +200,6 @@ export default function CreditsClient() {
       setChargePhase("idle");
     }
   };
-
-  const paymentId = searchParams.get("paymentId");
 
   const redeemGrantCode = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -227,13 +258,13 @@ export default function CreditsClient() {
             <span className="block text-[#2f6bbf]">바로 Export 하세요.</span>
           </h1>
           <p className="mt-3 max-w-2xl text-sm font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:text-[16px]">
-            상품을 고른 뒤 PayApp에서 결제를 완료하면 크레딧이 즉시 반영됩니다. 이벤트 코드가 있다면
+            상품을 고른 뒤 그로블에서 결제를 완료하면 크레딧이 자동으로 반영됩니다. 이벤트 코드가 있다면
             아래에서 함께 등록할 수 있습니다.
           </p>
         </header>
 
         {pageError ? <div className="mb-5 flex items-center justify-between gap-3 rounded-[22px] border border-[#f1b7b1] bg-[var(--color-error-container)] px-4 py-3 text-sm font-semibold text-[var(--color-on-error-container)]" role="alert"><span className="flex items-center gap-2"><AlertCircle size={17} aria-hidden="true" />{pageError}</span><button type="button" className="underline shrink-0 underline-offset-2" onClick={() => void refreshMe()}>다시 시도</button></div> : null}
-        {paymentOutcome ? <PaymentNotice outcome={paymentOutcome} onRetry={paymentId ? () => void checkPayment(paymentId) : undefined} /> : null}
+        {paymentOutcome ? <PaymentNotice outcome={paymentOutcome} onRetry={activePaymentId ? () => void checkPayment(activePaymentId, false, activeReturnTo) : undefined} /> : null}
 
 
 
@@ -244,7 +275,7 @@ export default function CreditsClient() {
               <legend className="sr-only">크레딧 상품</legend>
               {creditProducts.map((product) => {
                 const selected = selectedProduct.id === product.id;
-                const savings = product.credits * 3000 - product.amount;
+                const savings = product.credits * singleCreditPrice - product.amount;
                 return (
                   <label key={product.id} className={`relative flex min-h-52 cursor-pointer flex-col overflow-hidden rounded-[28px] border bg-white/88 p-5 shadow-[0_18px_42px_rgba(47,107,191,0.08)] transition focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--color-secondary)] ${selected ? "border-[#2f6bbf] -translate-y-1 shadow-[0_26px_60px_rgba(47,107,191,0.18)]" : "border-[#dbe8fb] hover:-translate-y-1 hover:border-[#9bc0f5]"}`}>
                     <span className={`pointer-events-none absolute inset-x-0 top-0 h-24 ${selected ? "bg-[linear-gradient(180deg,rgba(232,241,255,0.98),rgba(255,255,255,0))]" : "bg-[linear-gradient(180deg,rgba(247,251,255,0.95),rgba(255,255,255,0))]"}`} />
@@ -271,12 +302,9 @@ export default function CreditsClient() {
 
             {me?.user ? (
               <>
-                <label htmlFor="billing-phone" className="block mt-5 text-sm font-extrabold">결제 요청 휴대폰번호</label>
-                <div className="relative mt-2"><Smartphone className="absolute left-3 top-3.5 text-[var(--color-outline)]" size={18} aria-hidden="true" /><input id="billing-phone" className="h-12 w-full rounded-xl border border-[var(--color-outline-variant)] bg-white pl-10 pr-3 text-sm font-semibold outline-none transition placeholder:text-[var(--color-outline)] focus:border-[var(--color-secondary)] focus:ring-3 focus:ring-[var(--color-secondary-container)] disabled:bg-[var(--color-surface-low)]" inputMode="numeric" autoComplete="tel" placeholder="010-1234-5678" value={formatPhone(phone)} onChange={(event) => { setPhone(normalizePhone(event.currentTarget.value)); setPhoneError(null); }} onBlur={() => { if (phone && !isValidPhone(phone)) setPhoneError("010으로 시작하는 휴대폰번호를 정확히 입력해 주세요."); }} aria-describedby="phone-help phone-error" aria-invalid={Boolean(phoneError)} disabled={chargePhase !== "idle"} /></div>
-                <p id="phone-help" className="mt-2 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">PayApp 결제 요청을 전송하는 용도로만 사용하며 결제 테이블에 별도 저장하지 않습니다. <Link href="/privacy" className="underline underline-offset-2">개인정보 처리방침</Link></p>
-                {phoneError ? <p id="phone-error" className="mt-2 flex items-center gap-1.5 text-xs font-bold text-[var(--color-error)]" role="alert"><AlertCircle size={14} aria-hidden="true" />{phoneError}</p> : null}
-                <button type="button" className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#fee500] px-4 py-3 text-sm font-extrabold text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void chargeCredits()} disabled={chargePhase !== "idle" || isLoading}>
-                  {chargePhase === "preparing" ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />결제 요청 준비 중</> : chargePhase === "redirecting" ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />PayApp으로 이동 중</> : <>{selectedProduct.amount.toLocaleString("ko-KR")}원 결제하기</>}
+                {me.billingHold ? <div className="mt-5 rounded-2xl border border-[#e4cc76] bg-[#fff8d7] p-3 text-xs font-bold leading-5 text-[#665300]" role="alert">환불 조정 중인 계정입니다. 새 결제나 내보내기 전에 <Link href="/support" className="underline underline-offset-2">고객지원</Link>에 문의해 주세요.</div> : null}
+                <button type="button" className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#fee500] px-4 py-3 text-sm font-extrabold text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] disabled:cursor-not-allowed disabled:opacity-55" onClick={() => void chargeCredits()} disabled={chargePhase !== "idle" || isLoading || me.billingHold}>
+                  {chargePhase === "preparing" ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />결제 요청 준비 중</> : chargePhase === "redirecting" ? <><LoaderCircle className="animate-spin" size={18} aria-hidden="true" />그로블로 이동 중</> : <>{selectedProduct.amount.toLocaleString("ko-KR")}원 결제하기</>}
                 </button>
                 <p className="mt-3 text-[11px] font-semibold leading-5 text-[var(--color-outline)]">결제하면 <Link href="/terms" className="underline underline-offset-2">이용약관</Link>과 <Link href="/refund" className="underline underline-offset-2">환불·청약철회 안내</Link>를 확인한 것으로 처리됩니다. 문의는 <Link href="/support" className="underline underline-offset-2">고객지원</Link>에서 접수할 수 있습니다.</p>
               </>
@@ -284,7 +312,7 @@ export default function CreditsClient() {
               <div className="mt-5 rounded-[24px] bg-[#f7fbff] p-4"><p className="text-sm font-extrabold">결제하려면 로그인이 필요합니다.</p><Link href={`/login?returnTo=${encodeURIComponent(creditsPath)}&reason=billing`} className="mt-3 flex min-h-11 items-center justify-center rounded-full bg-[#2f6bbf] px-4 py-2.5 text-sm font-extrabold text-white">로그인</Link></div>
             )}
 
-            <div className="mt-4 flex items-start gap-2 text-[11px] font-semibold leading-5 text-[var(--color-outline)]"><ShieldCheck className="mt-0.5 shrink-0" size={14} aria-hidden="true" />결제는 외부 PayApp 화면에서 진행되며, 사업자 정보와 연락처는 <Link href="/support" className="underline underline-offset-2">고객지원</Link>에서 확인할 수 있습니다.</div>
+            <div className="mt-4 flex items-start gap-2 text-[11px] font-semibold leading-5 text-[var(--color-outline)]"><ShieldCheck className="mt-0.5 shrink-0" size={14} aria-hidden="true" />결제와 구매자 인증은 외부 그로블 결제창에서 진행됩니다. 결제 완료 후 “크레딧 확인하기”로 돌아와 주세요.</div>
           </aside>
         </div>
 

@@ -59,6 +59,7 @@ export type AccountMeResponse = {
   user: { id: string; email?: string } | null;
   profile?: { email?: string; display_name?: string | null; avatar_url?: string | null; provider?: string | null } | null;
   credits: number;
+  billingHold?: boolean;
   signupBonus?: SignupBonusDto | null;
   isAdmin?: boolean;
   exports?: AccountExportDto[];
@@ -72,6 +73,28 @@ export type SessionResponse = {
 };
 
 export type PaymentStatus = "pending" | "paid" | "failed" | "canceled";
+
+export type BillingPrepareResponse = {
+  paymentId?: string;
+  checkoutUrl?: string;
+  amount?: number;
+  credits?: number;
+  error?: string;
+  reason?: string;
+};
+
+export type BillingPaymentStatusResponse = {
+  payment?: {
+    id: string;
+    status: PaymentStatus;
+    amount: number;
+    credits: number;
+    refund_status?: "none" | "requested" | "refunded" | "review_required";
+    analytics_transaction_id?: string;
+  };
+  error?: string;
+  reason?: string;
+};
 
 export type PayappPrepareResponse = {
   checkoutUrl?: string;

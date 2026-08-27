@@ -1,8 +1,9 @@
-export type AccountDeletionBlockReason = "admin_account" | "pending_export" | "pending_payment";
+export type AccountDeletionBlockReason = "admin_account" | "pending_export" | "pending_payment" | "billing_hold";
 export type AccountDeletionFailureStep =
   | "admin_lookup"
   | "pending_export_lookup"
   | "pending_payment_lookup"
+  | "billing_hold_lookup"
   | "service_data_deletion"
   | "auth_user_delete"
   | "audit_completion";
@@ -16,6 +17,7 @@ export interface AccountDeletionRepository {
   isAdmin(userId: string): Promise<{ value: boolean; error: unknown | null }>;
   hasPendingExport(userId: string): Promise<{ value: boolean; error: unknown | null }>;
   hasPendingPayment(userId: string): Promise<{ value: boolean; error: unknown | null }>;
+  hasBillingHold(userId: string): Promise<{ value: boolean; error: unknown | null }>;
   prepareServiceDataDeletion(userId: string): Promise<{ error: unknown | null }>;
   deleteAuthUser(userId: string): Promise<{ error: unknown | null }>;
   completeDeletionAudit(userId: string): Promise<{ error: unknown | null }>;
@@ -42,6 +44,10 @@ export async function deleteAccount(
   const pendingPayment = await repository.hasPendingPayment(userId);
   if (pendingPayment.error) return { status: "failed", step: "pending_payment_lookup", cause: pendingPayment.error };
   if (pendingPayment.value) return { status: "blocked", reason: "pending_payment" };
+
+  const billingHold = await repository.hasBillingHold(userId);
+  if (billingHold.error) return { status: "failed", step: "billing_hold_lookup", cause: billingHold.error };
+  if (billingHold.value) return { status: "blocked", reason: "billing_hold" };
 
   const preparation = await repository.prepareServiceDataDeletion(userId);
   if (preparation.error) return { status: "failed", step: "service_data_deletion", cause: preparation.error };

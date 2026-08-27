@@ -8,6 +8,7 @@ function createRepository(
     isAdmin: vi.fn().mockResolvedValue({ value: false, error: null }),
     hasPendingExport: vi.fn().mockResolvedValue({ value: false, error: null }),
     hasPendingPayment: vi.fn().mockResolvedValue({ value: false, error: null }),
+    hasBillingHold: vi.fn().mockResolvedValue({ value: false, error: null }),
     prepareServiceDataDeletion: vi.fn().mockResolvedValue({ error: null }),
     deleteAuthUser: vi.fn().mockResolvedValue({ error: null }),
     completeDeletionAudit: vi.fn().mockResolvedValue({ error: null }),
@@ -62,10 +63,23 @@ describe("deleteAccount", () => {
     expect(repository.deleteAuthUser).not.toHaveBeenCalled();
   });
 
+  it("blocks while a refund requires billing review", async () => {
+    const repository = createRepository({
+      hasBillingHold: vi.fn().mockResolvedValue({ value: true, error: null }),
+    });
+
+    await expect(deleteAccount("user-1", repository)).resolves.toEqual({
+      status: "blocked",
+      reason: "billing_hold",
+    });
+    expect(repository.prepareServiceDataDeletion).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["admin_lookup", "isAdmin"],
     ["pending_export_lookup", "hasPendingExport"],
     ["pending_payment_lookup", "hasPendingPayment"],
+    ["billing_hold_lookup", "hasBillingHold"],
   ] as const)("returns the failed %s step without deleting the auth user", async (step, method) => {
     const repository = createRepository({
       [method]: vi.fn().mockResolvedValue({ value: false, error: new Error(step) }),

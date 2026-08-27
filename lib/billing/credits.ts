@@ -82,6 +82,10 @@ export function isSignupBonusUnavailableError(error: unknown) {
   ].some((value) => hasErrorMessage(error, value));
 }
 
+export function isBillingHoldError(error: unknown) {
+  return hasErrorMessage(error, "billing_hold");
+}
+
 export async function reserveCreditForExport({
   userId,
   platform,
