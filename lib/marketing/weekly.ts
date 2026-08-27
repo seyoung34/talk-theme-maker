@@ -1,4 +1,4 @@
-import { campaigns } from "@/lib/marketing/links";
+import { getMarketingCampaign } from "@/lib/marketing/links";
 
 /**
  * 주간 마케팅 지표.
@@ -84,7 +84,7 @@ export function buildWeeklyReport(input: {
       .map(([campaign, requests]) => ({
         campaign,
         // 대장에 없는 코드도 보여 준다. 지운 캠페인의 과거 데이터가 사라지면 안 된다.
-        label: campaigns[campaign]?.label ?? campaign,
+        label: getMarketingCampaign(campaign)?.label ?? campaign,
         requests,
       }))
       .sort((left, right) => right.requests - left.requests),

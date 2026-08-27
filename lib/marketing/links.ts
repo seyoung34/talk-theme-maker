@@ -23,7 +23,7 @@ export type MarketingCampaign = {
  * 캠페인 코드는 `<목적>_<YYMM>` 형태로 짓는다. 날짜가 없으면 반년 뒤에 언제 것인지 알 수 없고,
  * 같은 채널에 두 번째 활동을 올릴 때 구분이 사라진다.
  */
-export const campaigns: Record<string, MarketingCampaign> = {
+export const campaigns = {
   friends_test: {
     label: "지인 테스트",
     startedOn: "2026-08-07",
@@ -41,7 +41,17 @@ export const campaigns: Record<string, MarketingCampaign> = {
       "지인 테스트에서 문제가 정리된 뒤 시작하는 공개 홍보. friends_test 의 후속이며 같은 링크 "
       + "코드를 그대로 쓰고 캠페인만 이 값으로 옮긴다. 채널 간 비교는 이 캠페인부터 유효하다.",
   },
-};
+  reels_2608: {
+    label: "인스타 릴스 루틴 실험",
+    startedOn: "2026-08-27",
+    endedOn: null,
+    note:
+      "EXP-002. 지인 테스트(friends_test)와 같은 기간에 돌기 때문에 캠페인을 나눈다. "
+      + "분리하지 않으면 지인 유입과 공개 유입이 한 칸에 쌓여 채널 판단이 불가능해진다.",
+  },
+} satisfies Record<string, MarketingCampaign>;
+
+export type MarketingCampaignKey = keyof typeof campaigns;
 
 export type MarketingLink = {
   /** 리다이렉트할 서비스 내 경로. */
@@ -49,7 +59,7 @@ export type MarketingLink = {
   readonly source: string;
   /** GA4 채널 그룹이 알아듣는 값이어야 한다. `lib/analytics/ga4.ts`의 별칭 표 참조. */
   readonly medium: string;
-  readonly campaign: keyof typeof campaigns;
+  readonly campaign: MarketingCampaignKey;
   /** 이 코드를 실제로 어디에 붙였는지. */
   readonly placement: string;
 };
@@ -65,7 +75,7 @@ export const marketingLinks: Record<string, MarketingLink> = {
     path: "/",
     source: "instagram",
     medium: "social",
-    campaign: "friends_test",
+    campaign: "reels_2608",
     placement: "개인 인스타그램 프로필 링크와 게시물",
   },
   dm: {
@@ -107,8 +117,19 @@ export const marketingLinks: Record<string, MarketingLink> = {
   },
 };
 
+/** 현재 실제 링크가 사용하는 UTM 값. GA4 허용 목록은 이 카탈로그에서 파생한다. */
+export const marketingUtmCatalog = {
+  utm_source: [...new Set(Object.values(marketingLinks).map((link) => link.source))],
+  utm_medium: [...new Set(Object.values(marketingLinks).map((link) => link.medium))],
+} as const;
+
 export function getMarketingLink(code: string) {
   return marketingLinks[code.trim().toLowerCase()];
+}
+
+export function getMarketingCampaign(key: string) {
+  const normalized = key.trim() as MarketingCampaignKey;
+  return Object.prototype.hasOwnProperty.call(campaigns, normalized) ? campaigns[normalized] : undefined;
 }
 
 /** 리다이렉트할 최종 주소. UTM 은 대장의 값만 붙으므로 임의 값이 섞일 수 없다. */
