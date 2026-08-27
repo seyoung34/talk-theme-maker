@@ -1,4 +1,4 @@
-import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
+import type { SystemTemplateDeleteResult, SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { normalizeSystemTemplateVisibility, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
 import { assertValidTemplateName } from "@/lib/theme/templateName";
@@ -94,9 +94,24 @@ export const localSystemTemplateRepository: SystemTemplateRepository = {
   },
 
   async delete(id: string) {
+    const record = await withThemeDatabaseStore<SystemTemplateRecord | undefined>(storeName, "readonly", (store) => store.get(id));
+    if (!record) return emptyDeleteResult(false);
     await withThemeDatabaseStore<undefined>(storeName, "readwrite", (store) => store.delete(id));
+    return emptyDeleteResult(true);
+  },
+
+  async deleteBundle(bundleId: string) {
+    const records = await withThemeDatabaseStore<SystemTemplateRecord[]>(storeName, "readonly", (store) => store.getAll());
+    const matches = records.filter((record) => (record.bundleId ?? record.id) === bundleId);
+    if (!matches.length) return emptyDeleteResult(false);
+    await Promise.all(matches.map((record) => withThemeDatabaseStore<undefined>(storeName, "readwrite", (store) => store.delete(record.id))));
+    return emptyDeleteResult(true);
   },
 };
+
+function emptyDeleteResult(deleted: boolean): SystemTemplateDeleteResult {
+  return { deleted, storageCleanupFailed: false, bundleCleanupFailed: false };
+}
 
 function toSummary(record: SystemTemplateRecord): SystemTemplateSummary {
   return {

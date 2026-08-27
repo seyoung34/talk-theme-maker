@@ -1,5 +1,11 @@
 import type { RemoteSlotUploads, SystemTemplateMetadataRecord, SystemTemplatePage, SystemTemplateRecord, SystemTemplateSaveInput, SystemTemplateStatus, SystemTemplateSummary, SystemTemplateVisibility, ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 
+export type SystemTemplateDeleteResult = {
+  deleted: boolean;
+  storageCleanupFailed: boolean;
+  bundleCleanupFailed: boolean;
+};
+
 export type SystemTemplateRepository = {
   list(): Promise<SystemTemplateSummary[]>;
   listPage(options?: { cursor?: string; limit?: number; publicOnly?: boolean }): Promise<SystemTemplatePage>;
@@ -20,5 +26,8 @@ export type SystemTemplateRepository = {
   // 메타 갱신은 계속한다. 반면 서명 URL 생성·Storage 요청·업로드 같은 인프라 실패는 던진다.
   // 다음 템플릿에서도 똑같이 실패할 것이므로 호출자가 일괄 처리를 즉시 멈춰야 한다.
   regeneratePreviewMetadata(id: string): Promise<void>;
-  delete(id: string): Promise<void>;
+  /** 한 플랫폼 variant와 그 variant가 소유한 Storage 파일을 삭제한다. */
+  delete(id: string): Promise<SystemTemplateDeleteResult>;
+  /** bundle과 모든 플랫폼 variant, 각 variant가 소유한 Storage 파일을 삭제한다. */
+  deleteBundle(bundleId: string): Promise<SystemTemplateDeleteResult>;
 };

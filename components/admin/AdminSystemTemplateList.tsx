@@ -7,7 +7,7 @@ import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import { regenerateSystemTemplatePreviews } from "@/lib/theme/systemTemplates/regenerateAll";
-import { systemTemplateRepository, type SystemTemplateStatus, type SystemTemplateSummary, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
+import { systemTemplateRepository, type SystemTemplateDeleteResult, type SystemTemplateStatus, type SystemTemplateSummary, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
 import { templateStartStorageKey, themeTemplates } from "@/lib/theme/templates";
 import type { ThemePlatform } from "@/lib/theme/types";
 
@@ -38,7 +38,7 @@ export default function AdminSystemTemplateList() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const loadTemplates = async () => {
+  const loadTemplates = async (): Promise<boolean> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -46,9 +46,11 @@ export default function AdminSystemTemplateList() {
       setTemplates(page.items);
       setNextCursor(page.nextCursor);
       setUploadPreviewUrls(await createSystemTemplatePreviewUrls(page.items, uploadPreviewUrls));
+      return true;
     } catch (loadError) {
       console.error(loadError);
       setError("시스템 템플릿을 불러오지 못했습니다.");
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -185,19 +187,33 @@ export default function AdminSystemTemplateList() {
   };
 
   const deleteSelected = async () => {
-    if (!deleteTarget) return;
+    const target = deleteTarget;
+    if (!target) return;
 
     try {
       setIsDeleting(true);
       setError(null);
-      const ids = deleteTarget.platform
-        ? [deleteTarget.bundle.variants[deleteTarget.platform]?.id].filter((id): id is string => Boolean(id))
-        : Object.values(deleteTarget.bundle.variants).map((template) => template.id);
-      await Promise.all(ids.map((id) => systemTemplateRepository.delete(id)));
-      setTemplates((current) => current.filter((template) => !ids.includes(template.id)));
-      setNotice(deleteTarget.platform ? `${platformLabel(deleteTarget.platform)} variant를 삭제했습니다.` : "시스템 템플릿을 삭제했습니다.");
+      let result: SystemTemplateDeleteResult;
+      if (target.platform) {
+        const variant = target.bundle.variants[target.platform];
+        if (!variant) throw new Error("삭제할 플랫폼 버전을 찾을 수 없습니다.");
+        result = await systemTemplateRepository.delete(variant.id);
+      } else {
+        result = await systemTemplateRepository.deleteBundle(target.bundle.id);
+      }
+      const refreshed = await loadTemplates();
       setDeleteTarget(null);
-      if (!deleteTarget.platform || Object.keys(deleteTarget.bundle.variants).length <= 1) setSelectedBundleId(null);
+      if (!target.platform || Object.keys(target.bundle.variants).length <= 1) setSelectedBundleId(null);
+      if (!refreshed) return;
+      if (!result.deleted) {
+        setNotice("이미 삭제된 시스템 템플릿입니다. 목록을 새로고침했습니다.");
+        return;
+      }
+      if (result.storageCleanupFailed || result.bundleCleanupFailed) {
+        setNotice("DB에서는 삭제했지만 일부 파일 또는 번들 정리에 실패했습니다. 로그를 확인해 주세요.");
+      } else {
+        setNotice(target.platform ? `${platformLabel(target.platform)} 버전을 삭제했습니다.` : "시스템 템플릿과 모든 버전을 삭제했습니다.");
+      }
     } catch (deleteError) {
       console.error(deleteError);
       setError("시스템 템플릿을 삭제하지 못했습니다.");
@@ -737,7 +753,7 @@ function DeleteSystemTemplateDialog({
         <div className="grid gap-2">
           <span className="w-fit rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-700">삭제 확인</span>
           <h3 className="font-[var(--font-display)] text-2xl font-semibold text-[var(--color-on-surface)]">{targetLabel}</h3>
-          <p className="text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">삭제하면 관리자 목록과 템플릿 갤러리에서 사라집니다.</p>
+          <p className="text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">삭제하면 DB와 관리자 목록, 템플릿 갤러리에서 사라집니다. 전체 삭제는 모든 플랫폼 버전도 함께 지웁니다.</p>
         </div>
         <div className="flex justify-end gap-2">
           <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={isDeleting}>

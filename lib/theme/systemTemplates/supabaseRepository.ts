@@ -6,7 +6,7 @@ import { collectRemoteUploadPaths } from "@/lib/theme/systemTemplates/uploadRefP
 import { getResolvedColor, getSelectedSharedSlotEntry, requireUploadFile } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploadEntry, SlotUploads } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
-import type { SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
+import type { SystemTemplateDeleteResult, SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
 import { createSystemTemplatePreviewVisual, previewRoles, tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
 import { findUnsignedPreviewAssets, generatePreviewScreens } from "@/lib/theme/systemTemplates/screenPreview";
@@ -55,6 +55,8 @@ type PreviousVariantStorage = {
   uploadRefs: RemoteSlotUploads;
   previewMetadata: SystemTemplatePreviewMetadata;
 };
+
+type VariantStorageRow = Pick<VariantRow, "id" | "bundle_id" | "upload_refs" | "preview_metadata">;
 
 export const systemTemplateRepository: SystemTemplateRepository = {
   async list() {
@@ -418,10 +420,58 @@ export const systemTemplateRepository: SystemTemplateRepository = {
     }
   },
 
-  async delete(id) {
+  async delete(id): Promise<SystemTemplateDeleteResult> {
     const supabase = createClient();
-    const { error } = await supabase.from("system_template_variants").delete().eq("id", id);
-    if (error) throw error;
+    const { data: variant, error: deleteError } = await supabase.rpc("delete_system_template_variant", { p_variant_id: id }).maybeSingle();
+    if (deleteError) throw deleteError;
+    if (!variant) return { deleted: false, storageCleanupFailed: false, bundleCleanupFailed: false };
+
+    const storage = await collectVariantStorageForDeletion(supabase, variant as unknown as VariantStorageRow);
+    const cleanupResult = await removeTrackedSystemTemplateStorage(supabase, storage.tracker);
+    return {
+      deleted: true,
+      storageCleanupFailed: storage.listingFailed || !cleanupResult,
+      bundleCleanupFailed: false,
+    };
+  },
+
+  async deleteBundle(bundleId): Promise<SystemTemplateDeleteResult> {
+    const supabase = createClient();
+    const { data: variants, error: readError } = await supabase
+      .from("system_template_variants")
+      .select("id,bundle_id,upload_refs,preview_metadata")
+      .eq("bundle_id", bundleId);
+    if (readError) throw readError;
+    if (!variants?.length) {
+      const { data: bundle, error: bundleReadError } = await supabase
+        .from("system_template_bundles")
+        .select("id")
+        .eq("id", bundleId)
+        .maybeSingle();
+      if (bundleReadError) throw bundleReadError;
+      if (!bundle) return { deleted: false, storageCleanupFailed: false, bundleCleanupFailed: false };
+    }
+
+    const storageTracker = createStorageUploadTracker();
+    let listingFailed = false;
+    for (const variant of (variants ?? []) as unknown as VariantStorageRow[]) {
+      const storage = await collectVariantStorageForDeletion(supabase, variant);
+      mergeStorageUploadTracker(storageTracker, storage.tracker);
+      listingFailed ||= storage.listingFailed;
+    }
+
+    // 부모를 지우면 FK ON DELETE CASCADE로 화면에 보이지 않는 variant까지 함께 삭제된다.
+    const { data: deletedBundle, error: deleteError } = await supabase
+      .from("system_template_bundles")
+      .delete()
+      .eq("id", bundleId)
+      .select("id")
+      .maybeSingle();
+    if (deleteError) throw deleteError;
+    if (!deletedBundle) return { deleted: false, storageCleanupFailed: false, bundleCleanupFailed: false };
+
+    const cleanupResult = await removeTrackedSystemTemplateStorage(supabase, storageTracker);
+    return { deleted: true, storageCleanupFailed: listingFailed || !cleanupResult, bundleCleanupFailed: false };
   },
 };
 
@@ -439,23 +489,95 @@ function trackUploadedPath(tracker: StorageUploadTracker, bucket: string, path: 
 }
 
 async function removeTrackedSystemTemplateStorage(supabase: ReturnType<typeof createClient>, tracker: StorageUploadTracker) {
-  const removals = [
-    ...(tracker.privatePaths.size
-      ? [supabase.storage.from(themeAssetsBucketName).remove(Array.from(tracker.privatePaths))]
-      : []),
-    ...(tracker.publicPaths.size
-      ? [supabase.storage.from(themePublicBucketName).remove(Array.from(tracker.publicPaths))]
-      : []),
-  ];
-  if (!removals.length) return;
+  const removals: Promise<{ error: unknown }>[]= [];
+  for (const [bucket, paths] of [
+    [themeAssetsBucketName, tracker.privatePaths],
+    [themePublicBucketName, tracker.publicPaths],
+  ] as const) {
+    const values = Array.from(paths);
+    for (let index = 0; index < values.length; index += 100) {
+      removals.push(supabase.storage.from(bucket).remove(values.slice(index, index + 100)));
+    }
+  }
+  if (!removals.length) return true;
 
   try {
     const results = await Promise.all(removals);
     const cleanupError = results.find((result) => result.error)?.error;
-    if (cleanupError) console.warn("System template storage cleanup failed.", cleanupError);
+    if (cleanupError) {
+      console.warn("System template storage cleanup failed.", cleanupError);
+      return false;
+    }
+    return true;
   } catch (error) {
     console.warn("System template storage cleanup failed.", error);
+    return false;
   }
+}
+
+function getVariantStorageTracker(variant: VariantStorageRow): StorageUploadTracker {
+  const ownedPrefix = `system-templates/${sanitizeStoragePathPart(variant.id)}/`;
+  return {
+    privatePaths: new Set(
+      collectRemoteUploadPaths(variant.upload_refs ?? {})
+        .filter((path) => path.startsWith(ownedPrefix)),
+    ),
+    publicPaths: new Set(
+      previewStoragePaths(variant.preview_metadata)
+        .filter((path) => path.startsWith(ownedPrefix)),
+    ),
+  };
+}
+
+async function collectVariantStorageForDeletion(supabase: ReturnType<typeof createClient>, variant: VariantStorageRow) {
+  const tracker = getVariantStorageTracker(variant);
+  let listingFailed = false;
+  for (const [bucket, paths] of [
+    [themeAssetsBucketName, tracker.privatePaths],
+    [themePublicBucketName, tracker.publicPaths],
+  ] as const) {
+    try {
+      for (const path of await listOwnedStoragePaths(supabase, bucket, `system-templates/${sanitizeStoragePathPart(variant.id)}`)) {
+        paths.add(path);
+      }
+    } catch (error) {
+      listingFailed = true;
+      console.warn("System template storage inventory failed.", { bucket, variantId: variant.id, error });
+    }
+  }
+  return { tracker, listingFailed };
+}
+
+async function listOwnedStoragePaths(
+  supabase: ReturnType<typeof createClient>,
+  bucket: string,
+  prefix: string,
+) {
+  const paths: string[] = [];
+  const directories = [prefix];
+  const pageSize = 1000;
+
+  while (directories.length) {
+    const directory = directories.pop();
+    if (!directory) continue;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase.storage.from(bucket).list(directory, { limit: pageSize, offset });
+      if (error) throw error;
+      const entries = data ?? [];
+      for (const entry of entries) {
+        const path = `${directory}/${entry.name}`;
+        if (entry.id === null) directories.push(path);
+        else paths.push(path);
+      }
+      if (entries.length < pageSize) break;
+    }
+  }
+  return paths;
+}
+
+function mergeStorageUploadTracker(target: StorageUploadTracker, source: StorageUploadTracker) {
+  for (const path of source.privatePaths) target.privatePaths.add(path);
+  for (const path of source.publicPaths) target.publicPaths.add(path);
 }
 
 function previewStoragePaths(previewMetadata: SystemTemplatePreviewMetadata | null | undefined) {
