@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   getCurrentUserOrNull,
+  isBillingHoldError,
   isExportAlreadyInProgressError,
   isInsufficientCreditsError,
   markExportJobBackend,
@@ -136,6 +137,7 @@ function classifyFailure(error: unknown) {
   if (error instanceof AndroidValidationError) return { code: error.code, message: error.message, status: error.status };
   if (error instanceof CatalogExportResolutionError) return { code: error.code, message: error.message, status: error.status };
   if (isInsufficientCreditsError(error)) return { code: "insufficient_credits", message: "크레딧이 부족합니다.", status: 402 };
+  if (isBillingHoldError(error)) return { code: "billing_hold", message: "환불 조정 중인 계정입니다. 고객지원에 문의해 주세요.", status: 409 };
   if (isExportAlreadyInProgressError(error)) {
     return { code: "export_already_in_progress", message: "이미 진행 중인 내보내기가 있습니다. 완료 후 다시 시도해 주세요.", status: 409 };
   }

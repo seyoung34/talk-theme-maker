@@ -33,6 +33,15 @@ export async function deleteSupabaseAccount(userId: string): Promise<AccountDele
         .maybeSingle();
       return { value: Boolean(data), error };
     },
+    async hasBillingHold(candidateUserId) {
+      const { data, error } = await admin
+        .from("credit_balances")
+        .select("user_id")
+        .eq("user_id", candidateUserId)
+        .eq("billing_hold", true)
+        .maybeSingle();
+      return { value: Boolean(data), error };
+    },
     async prepareServiceDataDeletion(candidateUserId) {
       const { error } = await admin.rpc("prepare_account_deletion", {
         p_user_id: candidateUserId,
