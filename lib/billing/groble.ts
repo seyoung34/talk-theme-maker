@@ -220,15 +220,16 @@ export function parseGrobleWebhook(rawBody: string): ParsedGrobleEvent {
   };
 }
 
-// Codes that mean our side is behind the provider rather than the delivery being malformed.
-// They answer with 500 so Groble keeps retrying and a fix can still settle the payment.
+// Groble retries 500 seven times over roughly 44 hours and treats 400 as a final failure, so 500 is
+// reserved for codes a deploy can still fix: the same payload would settle once we register the
+// product, accept the schema version, or correct the price. Codes whose outcome cannot change on
+// redelivery — a buyer-stripped ?ref, a subscription event we never handle — stay 400 and rely on
+// the quarantine row instead, so they cannot push the endpoint toward Groble's auto-disable.
 const retryableWebhookErrorCodes = new Set([
   "unsupported_version",
-  "unsupported_event",
   "unknown_product",
   "invalid_product",
   "invalid_amount",
-  "invalid_reference",
   "invalid_refund",
 ]);
 

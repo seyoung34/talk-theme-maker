@@ -156,12 +156,15 @@ describe("Groble billing", () => {
     });
   });
 
-  it("asks for redelivery when our side is behind, not when the body is malformed", () => {
+  it("asks for redelivery only when a deploy could still settle the same payload", () => {
     expect(isRetryableGrobleWebhookError("unsupported_version")).toBe(true);
     expect(isRetryableGrobleWebhookError("unknown_product")).toBe(true);
-    expect(isRetryableGrobleWebhookError("invalid_reference")).toBe(true);
+    expect(isRetryableGrobleWebhookError("invalid_amount")).toBe(true);
     expect(isRetryableGrobleWebhookError("invalid_json")).toBe(false);
     expect(isRetryableGrobleWebhookError("invalid_payload")).toBe(false);
+    // A buyer can strip ?ref, and we never sell subscriptions: redelivery cannot change either.
+    expect(isRetryableGrobleWebhookError("invalid_reference")).toBe(false);
+    expect(isRetryableGrobleWebhookError("unsupported_event")).toBe(false);
   });
 
   it("rejects a valid signature outside the five-minute replay window", async () => {
