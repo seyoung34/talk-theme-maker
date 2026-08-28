@@ -44,10 +44,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: false, reason: "payload_too_large" }, { status: 413 });
   }
 
-  const rawBody = await request.text();
-  if (new TextEncoder().encode(rawBody).byteLength > grobleWebhookMaxBodyBytes) {
+  const rawBodyBytes = new Uint8Array(await request.arrayBuffer());
+  if (rawBodyBytes.byteLength > grobleWebhookMaxBodyBytes) {
     return NextResponse.json({ received: false, reason: "payload_too_large" }, { status: 413 });
   }
+  const rawBody = new TextDecoder().decode(rawBodyBytes);
   const idempotencyKey = request.headers.get("x-groble-idempotency-key");
   if (!idempotencyKey || idempotencyKey.length > 256) {
     return NextResponse.json({ received: false, reason: "invalid_idempotency_key" }, { status: 400 });
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
 
   try {
     await verifyGrobleWebhookSignature({
-      rawBody,
+      rawBody: rawBodyBytes,
       timestamp: request.headers.get("x-groble-timestamp"),
       signature: request.headers.get("x-groble-signature"),
       signaturePrevious: request.headers.get("x-groble-signature-previous"),
@@ -90,7 +91,9 @@ export async function POST(request: Request) {
       // A retryable code means our side is behind, not that the delivery was bad: answer 500 so
       // Groble keeps redelivering and a fix can still settle the payment.
       const retryable = isRetryableGrobleWebhookError(error.code);
-      console.warn("Quarantined Groble webhook", { code: error.code, retryable });
+      // The parser error only contains a field path and is safe to log. It makes a provider
+      // schema drift diagnosable without logging the signed body or buyer data.
+      console.warn("Quarantined Groble webhook", { code: error.code, retryable, detail: error.message });
       return NextResponse.json({ received: false, reason: error.code }, { status: retryable ? 500 : 400 });
     }
     console.error("Failed to process Groble webhook", {

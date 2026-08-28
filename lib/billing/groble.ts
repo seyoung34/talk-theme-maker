@@ -10,6 +10,11 @@ const supportedEventTypes = [
   "payment.refunded",
 ] as const;
 
+// Groble sends the input mode of the payment page that the buyer used. Credit products are
+// one-time purchases, but they may be reached from any of Groble's supported one-time entry
+// modes. In particular, NORMAL is the mode used by Groble's documented test payloads.
+const supportedOneTimeInputModes = new Set(["NORMAL", "SIMPLE", "PAYMENT_WINDOW"]);
+
 export type GrobleEventType = (typeof supportedEventTypes)[number];
 
 export type ParsedGrobleEvent = {
@@ -54,6 +59,11 @@ function requireString(value: unknown, field: string) {
     throw new GrobleWebhookError("invalid_payload", `${field} must be a non-empty string`);
   }
   return value;
+}
+
+function requireOptionalString(value: unknown, field: string, fallback: string) {
+  if (value === undefined || value === null) return fallback;
+  return requireString(value, field);
 }
 
 function requirePositiveInteger(value: unknown, field: string) {
@@ -137,7 +147,10 @@ export function parseGrobleWebhook(rawBody: string): ParsedGrobleEvent {
   }
   const option = requireRecord(options[0], "options[0]");
   const optionId = requireString(option.optionId, "options[0].optionId");
-  const optionName = requireString(option.name, "options[0].name");
+  // Products without a named option can omit this value (or send null). The option ID and
+  // amount remain allowlisted below, so using the content title as a display fallback does not
+  // weaken product matching while keeping the parser compatible with those payment windows.
+  const optionName = requireOptionalString(option.name, "options[0].name", contentTitle);
   const quantity = requirePositiveInteger(option.quantity, "options[0].quantity");
   const subtotal = requirePositiveInteger(option.subtotal, "options[0].subtotal");
   const pricing = requireRecord(object.pricing, "pricing");
@@ -145,16 +158,22 @@ export function parseGrobleWebhook(rawBody: string): ParsedGrobleEvent {
   const amount = requirePositiveInteger(pricing.finalAmount, "pricing.finalAmount");
   const isTestEvent = eventId.startsWith("evt_test_");
 
-  if (!isTestEvent && (paymentType !== "ONE_TIME" || inputMode !== "PAYMENT_WINDOW")) {
-    throw new GrobleWebhookError("invalid_product", "Only one-time payment-window products are supported");
+  if (!isTestEvent && (paymentType !== "ONE_TIME" || !supportedOneTimeInputModes.has(inputMode))) {
+    throw new GrobleWebhookError("invalid_product", "Only supported one-time payment modes are allowed");
   }
-  if (currency !== "KRW" || quantity !== 1 || subtotal !== amount) {
-    throw new GrobleWebhookError("invalid_amount", "Webhook price snapshot does not match the supported checkout shape");
+  if (currency !== "KRW" || quantity !== 1) {
+    throw new GrobleWebhookError("invalid_amount", "Webhook currency or quantity does not match the supported checkout shape");
   }
 
   const product = getCreditProductByGroble(contentId, optionId);
-  if (!isTestEvent && (!product || product.amount !== amount)) {
+  if (!isTestEvent && !product) {
     throw new GrobleWebhookError("unknown_product", "Webhook product is not registered");
+  }
+  // `subtotal` is the option subtotal. Groble can add shipping or apply a coupon after that
+  // point, so it must not be compared directly with `pricing.finalAmount`. Credit products still
+  // use a fixed-price allowlist: a final amount different from the registered pack is rejected.
+  if (!isTestEvent && product && product.amount !== amount) {
+    throw new GrobleWebhookError("invalid_amount", "Webhook final amount does not match the registered product");
   }
 
   let sellerReference: string | null = null;
@@ -308,7 +327,13 @@ function constantTimeEqualHex(left: string, right: string) {
   return difference === 0;
 }
 
-async function signGroblePayload(secret: string, timestamp: string, rawBody: string) {
+type GrobleRawBody = string | Uint8Array;
+
+function toRawBodyBytes(rawBody: GrobleRawBody) {
+  return typeof rawBody === "string" ? new TextEncoder().encode(rawBody) : rawBody;
+}
+
+async function signGroblePayload(secret: string, timestamp: string, rawBody: GrobleRawBody) {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -317,12 +342,17 @@ async function signGroblePayload(secret: string, timestamp: string, rawBody: str
     false,
     ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(`${timestamp}.${rawBody}`));
+  const prefix = encoder.encode(`${timestamp}.`);
+  const body = toRawBodyBytes(rawBody);
+  const message = new Uint8Array(prefix.byteLength + body.byteLength);
+  message.set(prefix);
+  message.set(body, prefix.byteLength);
+  const signature = await crypto.subtle.sign("HMAC", key, message);
   return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export async function verifyGrobleWebhookSignature(input: {
-  rawBody: string;
+  rawBody: GrobleRawBody;
   timestamp: string | null;
   signature: string | null;
   signaturePrevious: string | null;
@@ -330,11 +360,11 @@ export async function verifyGrobleWebhookSignature(input: {
   previousSecret?: string;
   now?: number;
 }) {
-  const timestampSeconds = input.timestamp && /^\d{10}$/.test(input.timestamp)
-    ? Number.parseInt(input.timestamp, 10)
+  const timestampSeconds = input.timestamp && /^\d+$/.test(input.timestamp)
+    ? Number(input.timestamp)
     : Number.NaN;
   const nowSeconds = Math.floor((input.now ?? Date.now()) / 1000);
-  if (!Number.isFinite(timestampSeconds) || Math.abs(nowSeconds - timestampSeconds) > grobleWebhookTimestampToleranceSeconds) {
+  if (!Number.isSafeInteger(timestampSeconds) || timestampSeconds < 0 || Math.abs(nowSeconds - timestampSeconds) > grobleWebhookTimestampToleranceSeconds) {
     throw new GrobleWebhookError("invalid_timestamp", "Webhook timestamp is outside the accepted window");
   }
   if (!input.signature) {

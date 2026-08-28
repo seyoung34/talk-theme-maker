@@ -7,7 +7,7 @@ export const creditProducts = [
     amount: singleCreditPrice,
     name: "1 Credit",
     label: "1크레딧",
-    groble: { checkoutUrl: "https://www.groble.im/payment/VkMcLk", contentId: "VkMcLk", optionId: "9361" },
+    groble: { checkoutUrl: "https://www.groble.im/payment/qZKWSP", contentId: "qZKWSP", optionId: "9373" },
   },
   {
     id: "credit-2",
@@ -32,12 +32,27 @@ export const creditProducts = [
 export type CreditProduct = (typeof creditProducts)[number];
 export type CreditProductId = CreditProduct["id"];
 
+/**
+ * 결제 상품을 교체해도 이미 열려 있던 결제창의 웹훅은 예전 식별자를 보낼 수 있다.
+ * 신규 checkout은 위의 현재 식별자만 사용하고, 이 목록은 진행 중인 결제 정산을 위한
+ * 수신 호환 alias로만 유지한다.
+ */
+const legacyGrobleProductAliases = [
+  { contentId: "VkMcLk", optionId: "9361", productId: "credit-1" },
+] as const;
+
 export function getCreditProduct(productId: string | undefined) {
   return creditProducts.find((product) => product.id === productId) ?? null;
 }
 
 export function getCreditProductByGroble(contentId: string, optionId: string) {
-  return creditProducts.find(
+  const current = creditProducts.find(
     (product) => product.groble.contentId === contentId && product.groble.optionId === optionId,
-  ) ?? null;
+  );
+  if (current) return current;
+
+  const legacy = legacyGrobleProductAliases.find(
+    (alias) => alias.contentId === contentId && alias.optionId === optionId,
+  );
+  return legacy ? getCreditProduct(legacy.productId) : null;
 }
