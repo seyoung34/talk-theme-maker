@@ -20,7 +20,12 @@
     "ASSET_CATALOG_EXPORT_ENABLED_ANDROID": "1",
     "ASSET_CATALOG_EXPORT_ENABLED_IOS": "1",
     "ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST": "admin:de7633d1-e8fe-43e3-9e11-2ac929015d73",
-    "ASSET_CATALOG_EXPORT_IOS_ASSET_ALLOWLIST": "admin:de7633d1-e8fe-43e3-9e11-2ac929015d73"
+    "ASSET_CATALOG_EXPORT_IOS_ASSET_ALLOWLIST": "admin:de7633d1-e8fe-43e3-9e11-2ac929015d73",
+    // 그로블 결제창 전환 스위치. `0`이면 /api/billing/checkout/prepare가 503으로 막는다.
+    // 대시보드 var로 두면 안 된다 — Workers Builds는 `--keep-vars` 없이 배포하므로 wrangler가
+    // 배포 전에 모든 var를 지우고 이 블록만 다시 세운다. 그러면 결제가 조용히 꺼진다.
+    // 시크릿인 GROBLE_WEBHOOK_SECRET은 Secret이라 이 영향을 받지 않는다.
+    "GROBLE_CHECKOUT_ENABLED": "1"
   },
   "services": [
     {
