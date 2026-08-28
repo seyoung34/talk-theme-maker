@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
 import { readJsonResponse } from "@/lib/shared/api/http";
+import type { AdminAssetListPayload } from "@/lib/theme/adminAssetList";
 import { shadowPublishThemeAsset } from "@/lib/theme/assetCatalog/shadowPublishClient";
 import {
   getThemeAssetSignedUrls,
@@ -80,69 +81,16 @@ const adminAssetSelect = [
   "admin_asset_bubble_designs!admin_asset_bubble_designs_asset_id_fkey(asset_id,recipe,geometry_mode,admin_asset_bubble_decorations(layer_id,storage_path,file_name,mime_type))",
 ].join(",");
 
-export async function listAdminAssetCandidates(): Promise<AdminAssetCandidate[]> {
-  return (await listAdminAssetCandidatePage({ limit: 30 })).items;
-}
-
-export async function listAdminAssetCandidatePage(options: AdminAssetListOptions = {}): Promise<AdminAssetPage> {
-  const supabase = createClient();
-  const limit = Math.min(50, Math.max(1, options.limit ?? 24));
-  const cursor = decodeCursor(options.cursor);
-  const targetFiltered = Boolean(options.platform || options.slotRole);
-  const allRows: unknown[] = [];
-
-  if (targetFiltered) {
-    // Platform/role lives in a child target table. Filtering the first
-    // `limit + 1` parent rows in JavaScript loses matching assets whenever a
-    // page contains unrelated targets. Walk ordered parent rows in batches,
-    // then apply the cursor and target filter before taking the page.
-    const batchSize = 100;
-    let offset = 0;
-    while (allRows.length < limit + 1) {
-      let query = supabase
-        .from("admin_assets")
-        .select(adminAssetSelect)
-        .order("updated_at", { ascending: false })
-        .order("id", { ascending: false })
-        .range(offset, offset + batchSize - 1);
-      if (options.assetKind) query = query.eq("asset_kind", options.assetKind);
-      if (options.enabledOnly) query = query.eq("enabled", true);
-
-      const { data, error } = await query;
-      if (error) throw error;
-      const rows = Array.isArray(data) ? data : [];
-      for (const row of rows) {
-        if (cursor && !rowIsAfterCursor(row, cursor)) continue;
-        if (!rowMatchesListOptions(row, options)) continue;
-        allRows.push(row);
-        if (allRows.length >= limit + 1) break;
-      }
-      if (rows.length < batchSize) break;
-      offset += rows.length;
-    }
-  } else {
-    let query = supabase
-      .from("admin_assets")
-      .select(adminAssetSelect)
-      .order("updated_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(limit + 1);
-    if (options.assetKind) query = query.eq("asset_kind", options.assetKind);
-    if (options.enabledOnly) query = query.eq("enabled", true);
-    if (cursor) query = query.or(`updated_at.lt.${cursor.updatedAt},and(updated_at.eq.${cursor.updatedAt},id.lt.${cursor.id})`);
-
-    const { data, error } = await query;
-    if (error) throw error;
-    allRows.push(...(Array.isArray(data) ? data : []));
-  }
-
-  const hasMore = allRows.length > limit;
-  const pageRows = hasMore ? allRows.slice(0, limit) : allRows;
-  const canonicalAssets = pageRows.map(mapCanonicalAdminAssetRow);
-  const previewUrls = await getThemeAssetSignedUrls(canonicalAssets.flatMap((asset) => [asset.storagePath, ...asset.variants.map((variant) => variant.storagePath)]));
-  const items = canonicalAssets.map((asset) => canonicalAdminAssetToCandidate(asset, previewUrls[asset.storagePath], previewUrls));
-  const last = canonicalAssets.at(-1);
-  return { items, nextCursor: hasMore && last ? encodeCursor(new Date(last.updatedAt).toISOString(), last.id) : undefined };
+export async function listAdminAssetLibrary(options: {
+  readonly assetKind: AdminAssetKind | "legacy";
+  readonly includeDisabled?: boolean;
+}): Promise<AdminAssetListPayload> {
+  const params = new URLSearchParams({ assetKind: options.assetKind });
+  if (options.includeDisabled) params.set("includeDisabled", "true");
+  const response = await fetch(`/api/admin/theme-assets?${params.toString()}`, { cache: "no-store" });
+  const payload = await readJsonResponse<AdminAssetListPayload & { readonly error?: string }>(response);
+  if (!response.ok) throw new Error(payload.error ?? "관리 후보를 불러오지 못했습니다.");
+  return { items: payload.items ?? [], truncated: Boolean(payload.truncated) };
 }
 
 /**
@@ -570,46 +518,6 @@ type AdminBubbleSpecRow = {
   readonly geometry: AdminBubbleSpec["geometry"] | null;
 };
 
-function rowMatchesListOptions(row: unknown, options: AdminAssetListOptions): boolean {
-  const record = requireObject(row);
-  const platform = options.platform;
-  const slotRole = options.slotRole;
-  if (!platform && !slotRole) return true;
-  const targets = record.admin_asset_targets;
-  if (Array.isArray(targets) && targets.length > 0) {
-    return targets.some((target) => {
-      const targetRecord = requireObject(target);
-      if (targetRecord.enabled === false) return false;
-      if (platform && targetRecord.platform !== platform && targetRecord.platform !== "all") return false;
-      if (!slotRole) return true;
-      return targetRecord.target_kind !== "exact_role" || targetRecord.slot_role === slotRole;
-    });
-  }
-
-  // Legacy rows may not have child targets yet. Keep them visible when their
-  // denormalized parent metadata matches the requested slot.
-  const parentPlatform = record.platform;
-  const parentRole = record.slot_role;
-  return (
-    (!platform || parentPlatform === platform || parentPlatform === "all") &&
-    (!slotRole || parentRole === slotRole)
-  );
-}
-
-function rowIsAfterCursor(row: unknown, cursor: { readonly updatedAt: string; readonly id: string }): boolean {
-  const record = requireObject(row);
-  const rowUpdatedAt = typeof record.updated_at === "string" ? Date.parse(record.updated_at) : Number.NaN;
-  const cursorUpdatedAt = Date.parse(cursor.updatedAt);
-  if (!Number.isFinite(rowUpdatedAt) || !Number.isFinite(cursorUpdatedAt)) return false;
-  const rowId = typeof record.id === "string" ? record.id : "";
-  return rowUpdatedAt < cursorUpdatedAt || (rowUpdatedAt === cursorUpdatedAt && rowId < cursor.id);
-}
-
-function requireObject(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("INVALID_CANONICAL_ASSET_ROW");
-  return value as Record<string, unknown>;
-}
-
 function readAdminAssetStoragePaths(value: unknown): string[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   const record = value as Record<string, unknown>;
@@ -633,15 +541,3 @@ function readAdminAssetStoragePaths(value: unknown): string[] {
   return [...paths];
 }
 
-function encodeCursor(updatedAt: string, id: string): string {
-  return `${updatedAt}|${id}`;
-}
-
-function decodeCursor(value?: string): { readonly updatedAt: string; readonly id: string } | null {
-  if (!value) return null;
-  const separator = value.lastIndexOf("|");
-  if (separator < 1) return null;
-  const updatedAt = value.slice(0, separator);
-  const id = value.slice(separator + 1);
-  return /^[0-9a-f-]{36}$/i.test(id) && Number.isFinite(new Date(updatedAt).getTime()) ? { updatedAt, id } : null;
-}

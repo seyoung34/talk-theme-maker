@@ -12,13 +12,14 @@ import AdminBubbleTextPreview from "@/components/admin/AdminBubbleTextPreview";
 import {
   deleteAdminAssetCandidate,
   findSystemTemplatesUsingAdminAsset,
+  getAdminAssetCandidate,
+  listAdminAssetLibrary,
   adminAssetToFile,
   adminAssetBubbleDecorationToFile,
   bubbleAdjustmentToSpec,
   describeAdminAssetAnalysis,
   getAdminAssetKindLabel,
   inferAdminAssetKind,
-  listAdminAssetCandidatePage,
   saveAdminAssetCandidate,
   saveAdminBubbleBuilderCandidate,
   updateAdminAssetCandidate,
@@ -31,6 +32,7 @@ import {
   type AdminAssetTargetInput,
   type AdminBubbleSpec,
 } from "@/lib/theme/adminAssets";
+import { adminAssetListTileUrl, sortAdminAssetListItems, filterAdminAssetListItems, isAdminAssetListSortKey, toAdminAssetListItem, type AdminAssetListItem, type AdminAssetListSortKey } from "@/lib/theme/adminAssetList";
 import { bubbleSlotFromRole } from "@/lib/theme/project/state";
 import { generateBubbleAsset, type BubbleFamilyDesignSpec, type GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
@@ -120,7 +122,9 @@ function getAdminAssetFileKey(file: File) {
 
 export default function AdminAssetsClient() {
   const bubblePreviewPlatform: ThemePlatform = "android";
-  const [assets, setAssets] = useState<AdminAssetCandidate[]>([]);
+  const [assets, setAssets] = useState<AdminAssetListItem[]>([]);
+  const [assetsTruncated, setAssetsTruncated] = useState(false);
+  const [assetSort, setAssetSort] = useState<AdminAssetListSortKey>("updated");
   const [title, setTitle] = useState("");
   const [assetKind, setAssetKind] = useState<AdminAssetKind>("background");
   const [analysis, setAnalysis] = useState<AdminAssetAnalysis | null>(null);
@@ -135,10 +139,9 @@ export default function AdminAssetsClient() {
   const [dragActive, setDragActive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [editingAsset, setEditingAsset] = useState<AdminAssetCandidate | null>(null);
-  const [assetPendingDelete, setAssetPendingDelete] = useState<AdminAssetCandidate | null>(null);
+  const [assetPendingDelete, setAssetPendingDelete] = useState<AdminAssetListItem | null>(null);
   // 삭제 확인 창에 "이 에셋을 쓰는 템플릿"을 보여 준다. `null`은 아직 조회 중이라는 뜻이다.
   const [templatesUsingPendingDelete, setTemplatesUsingPendingDelete] = useState<string[] | null>(null);
-  const [assetCursor, setAssetCursor] = useState<string>();
   const [isLoadingAssets, setIsLoadingAssets] = useState(false);
   const [isSavingAsset, setIsSavingAsset] = useState(false);
   const [isLoadingEditAsset, setIsLoadingEditAsset] = useState(false);
@@ -146,7 +149,6 @@ export default function AdminAssetsClient() {
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [imageEditOpen, setImageEditOpen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
-  const [assetListFilter, setAssetListFilter] = useState<"all" | "exact" | "review" | "bubble">("all");
   const [assetGridColumns, setAssetGridColumns] = useState<3 | 4 | 5>(3);
   const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
@@ -223,31 +225,22 @@ export default function AdminAssetsClient() {
       (editingAsset || selectedSaveTargets.length > 0) &&
       (assetKind !== "bubble" || bubbleSpec),
   );
-  const visibleAssets = useMemo(
-    () => assets.filter((asset) => asset.enabled && asset.assetKind === assetKind),
-    [assetKind, assets],
-  );
-  const filteredAssets = useMemo(() => {
-    const query = assetSearch.trim().toLowerCase();
-    return visibleAssets
-      .map((asset) => ({
+  /**
+   * 목록 파생값.
+   *
+   * 서버가 이미 kind로 좁혀 **종류 전체**를 보내므로 여기서 다시 거르지 않는다. 정렬과 검색이
+   * 전체 집합 위에서 도는 것이 이 화면의 요점이다 — 커서 페이지네이션 위에서는 "이름순"이
+   * 로드된 페이지 안에서만 성립해 목록이 거짓말을 한다.
+   */
+  const sortedAssets = useMemo(() => sortAdminAssetListItems(assets, assetSort), [assets, assetSort]);
+  const filteredAssets = useMemo(
+    () =>
+      filterAdminAssetListItems(sortedAssets, assetSearch).map((asset) => ({
         asset,
         warnings: getAdminAssetGuidanceForSlots(activeKindSlots, asset.assetKind ?? assetKind, asset.analysis ?? null),
-      }))
-      .filter(({ asset, warnings }) => {
-        const matchesQuery =
-          !query ||
-          asset.title.toLowerCase().includes(query) ||
-          asset.fileName.toLowerCase().includes(query) ||
-          asset.slotRole.toLowerCase().includes(query);
-        const matchesFilter =
-          assetListFilter === "all" ||
-          (assetListFilter === "exact" && isExactAdminAssetTarget(asset)) ||
-          (assetListFilter === "review" && warnings.length > 0) ||
-          (assetListFilter === "bubble" && Boolean(asset.bubbleAdjustment));
-        return matchesQuery && matchesFilter;
-      });
-  }, [activeKindSlots, assetKind, assetListFilter, assetSearch, visibleAssets]);
+      })),
+    [activeKindSlots, assetKind, assetSearch, sortedAssets],
+  );
   const guidanceItems = useMemo(() => getAdminAssetGuidanceForSlots(activeKindSlots, assetKind, analysis), [activeKindSlots, analysis, assetKind]);
 
   useEffect(() => {
@@ -279,7 +272,7 @@ export default function AdminAssetsClient() {
   }, [file]);
 
   useEffect(() => {
-    void refreshAssets(undefined, false);
+    void refreshAssets();
   }, [assetKind]);
 
   useEffect(() => {
@@ -351,20 +344,20 @@ export default function AdminAssetsClient() {
     return () => window.removeEventListener("paste", handlePaste);
   }, []);
 
-  const refreshAssets = async (cursor?: string, append = false) => {
+  /** 저장 직후에는 R2 축소본이 아직 없다. 그 한 장만 signed 원본으로 그리고 다음 조회에서 축소본으로 바뀐다. */
+  const toListItem = (asset: AdminAssetCandidate) =>
+    toAdminAssetListItem(asset, asset.previewUrl ? { previewUrl: asset.previewUrl } : {});
+
+  const refreshAssets = async () => {
     if (!assetKind) return;
     const seq = ++assetRequestSeqRef.current;
     try {
       setIsLoadingAssets(true);
-      const page = await listAdminAssetCandidatePage({
-        assetKind,
-        cursor,
-        limit: 24,
-        enabledOnly: true,
-      });
+      const page = await listAdminAssetLibrary({ assetKind });
+      // 종류를 빠르게 오갈 때 늦게 도착한 이전 응답이 현재 목록을 덮어쓰지 않게 한다.
       if (seq !== assetRequestSeqRef.current) return;
-      setAssets((current) => append ? [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))] : page.items);
-      setAssetCursor(page.nextCursor);
+      setAssets([...page.items]);
+      setAssetsTruncated(page.truncated);
     } catch (error) {
       if (seq !== assetRequestSeqRef.current) return;
       console.error(error);
@@ -403,7 +396,7 @@ export default function AdminAssetsClient() {
           geometryMode: bubbleGeometryMode,
           enabled: editingAsset.enabled,
         });
-        setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? updatedAsset : asset)));
+        setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? toListItem(updatedAsset) : asset)));
         setEditingAsset(updatedAsset);
         setBubbleBuilderDraft(null);
         for (const pending of pendingFiles) URL.revokeObjectURL(pending.previewUrl);
@@ -427,7 +420,7 @@ export default function AdminAssetsClient() {
           bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined,
           bubbleSpec: assetKind === "bubble" ? bubbleSpec : undefined,
         });
-        setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? updatedAsset : asset)));
+        setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? toListItem(updatedAsset) : asset)));
         setEditingAsset(updatedAsset);
         setNotice("에셋 정보를 저장했습니다.");
       } catch (error) {
@@ -471,7 +464,7 @@ export default function AdminAssetsClient() {
         setPendingFiles([]);
         setUploadProgress(null);
         setNotice("관리 후보를 추가했습니다.");
-        setAssets((current) => [savedAsset, ...current.filter((item) => item.id !== savedAsset.id)]);
+        setAssets((current) => [toListItem(savedAsset), ...current.filter((item) => item.id !== savedAsset.id)]);
         return;
       }
 
@@ -517,7 +510,7 @@ export default function AdminAssetsClient() {
       }
 
       if (savedAssets.length > 0) {
-        setAssets((current) => [...savedAssets.slice().reverse(), ...current.filter((item) => !savedAssets.some((saved) => saved.id === item.id))]);
+        setAssets((current) => [...savedAssets.slice().reverse().map(toListItem), ...current.filter((item) => !savedAssets.some((saved) => saved.id === item.id))]);
       }
 
       if (failedItems.length === 0) {
@@ -566,7 +559,7 @@ export default function AdminAssetsClient() {
     return () => { cancelled = true; };
   }, [assetPendingDelete]);
 
-  const remove = async (asset: AdminAssetCandidate) => {
+  const remove = async (asset: AdminAssetListItem) => {
     if (deletingAssetId) return;
     try {
       setDeletingAssetId(asset.id);
@@ -676,8 +669,25 @@ export default function AdminAssetsClient() {
     }
   };
 
-  const beginInPlaceEdit = async (asset: AdminAssetCandidate) => {
+  /**
+   * 목록 항목으로 편집을 시작한다.
+   *
+   * 목록 DTO에는 말풍선 spec/design, variant 원본, target 원문이 없다 — 카드 수십 장에 실어
+   * 보내지 않으려고 뺀 값들이다. 편집은 한 건이므로 그때 그 하나만 온전히 받는다.
+   */
+  const beginInPlaceEdit = async (item: AdminAssetListItem) => {
     if (isSavingAsset || isLoadingEditAsset) return;
+    let asset: AdminAssetCandidate;
+    try {
+      setIsLoadingEditAsset(true);
+      asset = await getAdminAssetCandidate(item.id);
+    } catch (error) {
+      console.error(error);
+      setNotice("후보 정보를 불러오지 못했습니다.");
+      return;
+    } finally {
+      setIsLoadingEditAsset(false);
+    }
     setEditingAsset(asset);
     setBubbleBuilderDraft(null);
     setBubbleBuilderInitial(null);
@@ -1147,7 +1157,7 @@ export default function AdminAssetsClient() {
                 <div>
                   <h2 className="text-lg font-black text-[var(--color-on-surface)]">등록된 관리 후보</h2>
                   <p className="mt-1 text-xs font-semibold text-[var(--color-on-surface-variant)]">
-                    {getAdminAssetKindLabel(assetKind)} · {formatAdminAssetScope(activeKindSlots)} · {filteredAssets.length}/{visibleAssets.length}개 표시
+                    {getAdminAssetKindLabel(assetKind)} · {formatAdminAssetScope(activeKindSlots)} · {assetSearch.trim() ? `검색 결과 ${filteredAssets.length} / ` : ""}{assetsTruncated ? `${assets.length}개 이상` : `전체 ${assets.length}개`}
                   </p>
                 </div>
                 <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
@@ -1164,31 +1174,27 @@ export default function AdminAssetsClient() {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    className={`rounded-full px-3 py-2 text-xs font-black transition ${assetListFilter === "all" ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`}
-                    onClick={() => setAssetListFilter("all")}
-                    aria-pressed={assetListFilter === "all"}
-                  >
-                    전체
-                  </button>
                   <div className="relative">
                     <select
-                      value={assetListFilter === "all" ? "" : assetListFilter}
+                      value={assetSort}
                       onChange={(event) => {
                         const value = event.currentTarget.value;
-                        setAssetListFilter(value === "" ? "all" : (value as "exact" | "review" | "bubble"));
+                        if (isAdminAssetListSortKey(value)) setAssetSort(value);
                       }}
-                      aria-label="세부 필터"
-                      className={`h-[34px] appearance-none rounded-full border pl-3 pr-8 text-xs font-black outline-none transition ${assetListFilter !== "all" ? "border-transparent bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]"}`}
+                      aria-label="정렬 기준"
+                      className="h-[34px] appearance-none rounded-full border border-[var(--color-outline-variant)] bg-white pl-3 pr-8 text-xs font-black text-[var(--color-on-surface-variant)] outline-none transition hover:bg-[var(--color-surface-low)]"
                     >
-                      <option value="">세부 필터</option>
-                      <option value="exact">정확한 슬롯</option>
-                      <option value="review">확인 필요</option>
-                      <option value="bubble">말풍선 조정</option>
+                      <option value="updated">최근 수정순</option>
+                      <option value="created">최근 등록순</option>
+                      <option value="title">이름순</option>
                     </select>
-                    <ChevronDown className={`pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 ${assetListFilter !== "all" ? "text-[var(--color-inverse-on-surface)]" : "text-[var(--color-on-surface-variant)]"}`} aria-hidden="true" />
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" />
                   </div>
+                  {assetsTruncated ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1.5 text-[11px] font-black text-amber-800">
+                      <AlertTriangle size={11} aria-hidden="true" /> 500개까지만 불러왔습니다
+                    </span>
+                  ) : null}
                 </div>
                 <div className="relative">
                   <select
@@ -1225,11 +1231,6 @@ export default function AdminAssetsClient() {
                 </>
               )}
             </section>
-            {assetCursor ? (
-              <button type="button" className="hidden" disabled={isLoadingAssets} onClick={() => void refreshAssets(assetCursor, true)}>
-                {isLoadingAssets ? "불러오는 중" : "에셋 더 보기"}
-              </button>
-            ) : null}
             </section>
             <aside className="hidden">
               <div>
@@ -1257,15 +1258,14 @@ export default function AdminAssetsClient() {
           </section>
           <section className="hidden">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0"><span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Library</span><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{getAdminAssetKindLabel(assetKind)} · {filteredAssets.length}/{visibleAssets.length}개</p></div>
+              <div className="min-w-0"><span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Library</span><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{getAdminAssetKindLabel(assetKind)} · {assetSearch.trim() ? `검색 ${filteredAssets.length} / ` : ""}{assetsTruncated ? `${assets.length}개 이상` : `${assets.length}개`}</p></div>
               <div className="relative min-w-[220px] flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" /><input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.currentTarget.value)} placeholder="후보 검색" className="h-10 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-xs font-semibold outline-none focus:bg-white" aria-label="관리 후보 검색" /></div>
-              <div className="flex flex-wrap gap-1">{([["all", "전체"], ["exact", "정확"], ["review", "확인"], ["bubble", "말풍선"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setAssetListFilter(value)} aria-pressed={assetListFilter === value} className={`rounded-full px-2.5 py-1.5 text-[11px] font-black ${assetListFilter === value ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{label}</button>)}</div>
+              <div className="flex flex-wrap gap-1">{([["updated", "수정순"], ["created", "등록순"], ["title", "이름순"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setAssetSort(value)} aria-pressed={assetSort === value} className={`rounded-full px-2.5 py-1.5 text-[11px] font-black ${assetSort === value ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{label}</button>)}</div>
             </div>
             <div className="flex min-h-[132px] gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
               {isLoadingAssets && assets.length === 0 ? <span className="grid min-w-48 place-items-center rounded-2xl bg-[var(--color-surface-low)] text-xs font-bold text-[var(--color-on-surface-variant)]">후보를 불러오는 중</span> : null}
               {!isLoadingAssets && filteredAssets.length === 0 ? <span className="grid min-w-64 place-items-center rounded-2xl border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 text-center text-xs font-bold text-[var(--color-on-surface-variant)]">표시할 관리 후보가 없습니다.</span> : null}
               {filteredAssets.map(({ asset, warnings }) => <AdminAssetDockCard key={asset.id} asset={asset} slots={slots} warnings={warnings} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />)}
-              {assetCursor ? <button type="button" className="min-h-[132px] min-w-28 rounded-2xl border border-dashed border-[var(--color-outline-variant)] px-3 text-xs font-black text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)] disabled:opacity-50" disabled={isLoadingAssets} onClick={() => void refreshAssets(assetCursor, true)}>{isLoadingAssets ? "불러오는 중" : "더 보기"}</button> : null}
             </div>
           </section>
       </div>
@@ -1543,7 +1543,9 @@ function getAdminAssetSlotLabel(role: string, slots: readonly ThemeAssetSlot[]) 
   return slots.find((slot) => slot.role === role)?.label ?? role;
 }
 
-function formatAdminAssetTargetInput(target: AdminAssetTargetInput, slots: readonly ThemeAssetSlot[], assetKind?: AdminAssetKind) {
+type FormattableTarget = Pick<AdminAssetTargetInput, "platform" | "slotRole" | "targetKind">;
+
+function formatAdminAssetTargetInput(target: FormattableTarget, slots: readonly ThemeAssetSlot[], assetKind?: AdminAssetKind) {
   const platformLabel = formatPlatformLabel(target.platform);
   if (target.slotRole) return `${platformLabel} · ${getAdminAssetSlotLabel(target.slotRole, slots)}`;
   if (target.targetKind === "asset_kind") return `${platformLabel} · ${assetKind ? getAdminAssetKindLabel(assetKind) : "해당 분류"} 전체`;
@@ -1551,24 +1553,18 @@ function formatAdminAssetTargetInput(target: AdminAssetTargetInput, slots: reado
   return `${platformLabel} · 적용 슬롯`;
 }
 
-function formatAdminAssetTargetsFromInputs(targets: readonly AdminAssetTargetInput[], slots: readonly ThemeAssetSlot[], assetKind?: AdminAssetKind) {
+function formatAdminAssetTargetsFromInputs(targets: readonly FormattableTarget[], slots: readonly ThemeAssetSlot[], assetKind?: AdminAssetKind) {
   if (targets.length < 1) return "적용 슬롯 없음";
   return targets.map((target) => formatAdminAssetTargetInput(target, slots, assetKind)).join(" / ");
 }
 
-function formatAdminAssetTargets(asset: AdminAssetCandidate, slots: readonly ThemeAssetSlot[]) {
+function formatAdminAssetTargets(
+  asset: Pick<AdminAssetCandidate, "platform" | "slotRole" | "assetKind"> & { readonly targets?: readonly FormattableTarget[] },
+  slots: readonly ThemeAssetSlot[],
+) {
   const targets = asset.targets ?? [];
   if (targets.length < 1) return `${formatPlatformLabel(asset.platform)} · ${getAdminAssetSlotLabel(asset.slotRole, slots)}`;
   return targets.map((target) => formatAdminAssetTargetInput(target, slots, asset.assetKind)).join(" / ");
-}
-
-function isExactAdminAssetTarget(asset: AdminAssetCandidate) {
-  return (asset.targets ?? []).some(
-    (target) =>
-      target.enabled &&
-      target.targetKind === "exact_role" &&
-      Boolean(target.slotRole),
-  );
 }
 
 function AdminAssetCard({
@@ -1579,13 +1575,14 @@ function AdminAssetCard({
   onEdit,
   onDelete,
 }: {
-  asset: AdminAssetCandidate;
+  asset: AdminAssetListItem;
   slots: readonly ThemeAssetSlot[];
   warnings: string[];
   deleting: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const tileUrl = adminAssetListTileUrl(asset);
   return (
     <article className={`relative grid gap-3 overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] transition duration-200 ${deleting ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(42,103,103,0.1)]"}`}>
       {deleting ? (
@@ -1597,7 +1594,7 @@ function AdminAssetCard({
         </div>
       ) : null}
       <div className="aspect-[4/3] overflow-hidden rounded-[18px] border border-[var(--color-outline-variant)]" style={TRANSPARENCY_CHECKER_STYLE}>
-        <div className="size-full bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} />
+        <div className="size-full bg-contain bg-center bg-no-repeat" style={{ backgroundImage: tileUrl ? `url(${tileUrl})` : undefined }} />
       </div>
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap gap-1.5">
@@ -1609,7 +1606,7 @@ function AdminAssetCard({
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : getAdminAssetSlotLabel(asset.slotRole, slots)}</span>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{formatAdminAssetTargets(asset, slots)}</span>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{describeAdminAssetAnalysis(asset.analysis)}</span>
-        {asset.bubbleAdjustment ? <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">말풍선 조정값 저장됨</span> : null}
+        {asset.hasBubbleAdjustment ? <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">말풍선 조정값 저장됨</span> : null}
         {warnings[0] ? <span className="mt-2 block rounded-xl bg-amber-50 px-2.5 py-2 text-[11px] font-semibold leading-4 text-amber-900">{warnings[0]}</span> : null}
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -1632,16 +1629,17 @@ function AdminAssetDockCard({
   onEdit,
   onDelete,
 }: {
-  asset: AdminAssetCandidate;
+  asset: AdminAssetListItem;
   slots: readonly ThemeAssetSlot[];
   warnings: string[];
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const tileUrl = adminAssetListTileUrl(asset);
   return (
     <article className="grid min-w-48 max-w-48 grid-rows-[76px_auto] gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-white p-2.5 shadow-[0_8px_18px_rgba(42,103,103,0.06)]">
       <button type="button" onClick={onEdit} className="relative overflow-hidden rounded-xl border border-[var(--color-outline-variant)] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-info)]" style={TRANSPARENCY_CHECKER_STYLE} aria-label={`${asset.title} 수정`}>
-        <span className="absolute inset-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: asset.previewUrl ? `url(${asset.previewUrl})` : undefined }} aria-hidden="true" />
+        <span className="absolute inset-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: tileUrl ? `url(${tileUrl})` : undefined }} aria-hidden="true" />
         {warnings.length > 0 ? <span className="absolute right-1.5 top-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-800">확인 {warnings.length}</span> : null}
       </button>
       <div className="min-w-0"><button type="button" onClick={onEdit} className="block w-full truncate text-left text-xs font-black text-[var(--color-on-surface)] hover:underline">{asset.title}</button><span className="mt-0.5 block truncate text-[10px] font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : getAdminAssetSlotLabel(asset.slotRole, slots)}</span><div className="mt-2 flex gap-1"><button type="button" onClick={onEdit} className="rounded-lg bg-[var(--color-surface-low)] px-2 py-1 text-[10px] font-black text-[var(--color-on-surface-variant)]">수정</button><button type="button" onClick={onDelete} className="rounded-lg bg-red-50 px-2 py-1 text-[10px] font-black text-red-700">삭제</button></div></div>
