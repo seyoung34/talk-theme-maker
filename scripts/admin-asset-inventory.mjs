@@ -53,9 +53,9 @@ if (jsonPath) {
 }
 
 async function buildReport() {
-  const assets = await selectRows("admin_assets", "id,asset_kind,enabled,storage_path,asset_object_id,created_at,updated_at");
+  const assets = await selectRows("admin_assets", "id,asset_kind,enabled,storage_path,asset_object_id,mime_type,created_at,updated_at");
   const targets = await selectRows("admin_asset_targets", "asset_id,platform,slot_role,target_kind,enabled");
-  const variants = await selectRows("admin_asset_variants", "asset_id,platform,storage_path,asset_object_id");
+  const variants = await selectRows("admin_asset_variants", "asset_id,platform,storage_path,asset_object_id,mime_type");
   const registry = await selectRows("theme_asset_objects", "id,logical_asset_id,variant_key,status,r2_previews");
   const templateVariants = await selectRows("system_template_variants", "id,upload_refs");
 
@@ -131,8 +131,8 @@ function summariseCatalog(assets, variants, registry) {
   );
 
   const pointers = [
-    ...assets.map((asset) => ({ kind: "canonical", assetId: asset.id, objectId: asset.asset_object_id })),
-    ...variants.map((variant) => ({ kind: variant.platform, assetId: variant.asset_id, objectId: variant.asset_object_id })),
+    ...assets.map((asset) => ({ kind: "canonical", assetId: asset.id, objectId: asset.asset_object_id, mimeType: asset.mime_type })),
+    ...variants.map((variant) => ({ kind: variant.platform, assetId: variant.asset_id, objectId: variant.asset_object_id, mimeType: variant.mime_type })),
   ];
 
   const missing = pointers.filter((pointer) => !pointer.objectId);
@@ -142,6 +142,16 @@ function summariseCatalog(assets, variants, registry) {
 
   const statusCounts = new Map();
   for (const row of registry) statusCounts.set(row.status, (statusCounts.get(row.status) ?? 0) + 1);
+
+  const thumbnailByMime = new Map();
+  for (const pointer of pointers) {
+    const mimeType = typeof pointer.mimeType === "string" && pointer.mimeType ? pointer.mimeType : "(unknown)";
+    const summary = thumbnailByMime.get(mimeType) ?? { total: 0, covered: 0, fallback: 0 };
+    summary.total += 1;
+    if (pointer.objectId && pickerIds.has(pointer.objectId)) summary.covered += 1;
+    else summary.fallback += 1;
+    thumbnailByMime.set(mimeType, summary);
+  }
 
   return {
     registryRows: registry.length,
@@ -153,6 +163,7 @@ function summariseCatalog(assets, variants, registry) {
     thumbnailCovered: withThumbnail.length,
     // 목록·피커가 원본 signed URL로 떨어지는 수. 전량 로드 비용의 실체다.
     thumbnailFallback: pointers.length - withThumbnail.length,
+    thumbnailByMime: Object.fromEntries(thumbnailByMime),
     danglingSamples: dangling.slice(0, 10),
   };
 }
@@ -293,6 +304,9 @@ function printReport(value) {
   line("  active 아님", `${value.catalog.pointerInactive}개`);
   line("썸네일 있음", `${value.catalog.thumbnailCovered}개`);
   line("원본 폴백", `${value.catalog.thumbnailFallback}개  → 전량 로드 시 내려받는 원본 수`);
+  for (const [mimeType, summary] of Object.entries(value.catalog.thumbnailByMime)) {
+    line(`  ${mimeType}`, `${summary.covered}/${summary.total} 썸네일 · 폴백 ${summary.fallback}`);
+  }
 
   console.log("\n[5] Storage orphan (Phase 5 GC 대상)");
   line("객체 수", `${value.storage.objects}개`);
