@@ -126,25 +126,27 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
   });
   if (uploadError) throw uploadError;
 
-  let persisted = false;
+  // 재저장이면 지금 DB가 가리키는 경로를 먼저 기억한다. 커밋 뒤에 지울 대상이다.
+  const previousPath = input.id ? await readAdminAssetStoragePath(id) : undefined;
+
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    const payload = createAdminAssetPersistencePayload(input, id, storagePath, userData.user?.id ?? null);
-    const { error } = await supabase.from("admin_assets").upsert(payload.asset).select(adminAssetSelect).single();
+    const payload = createAdminAssetPersistencePayload(input, id, storagePath, null);
+    /**
+     * 부모·target·말풍선 spec·catalog 포인터를 **한 트랜잭션**에서 쓴다.
+     *
+     * 예전에는 이 넷을 브라우저에서 순차 실행했다. target을 지우고 다시 넣는 사이에 끊기면
+     * target이 없는 에셋이 남는데, 그 상태는 오류를 내지 않고 적용 범위만 조용히 좁아진다
+     * (`parseTargets`가 부모 컬럼으로 legacy target 하나를 만들어 낸다).
+     *
+     * `created_by`는 RPC 안에서 `auth.uid()`로 채운다 — 클라이언트가 보낸 값을 믿을 이유가 없다.
+     */
+    const { error } = await supabase.rpc("upsert_admin_asset_bundle", {
+      p_asset: payload.asset,
+      p_targets: payload.targets,
+      p_variants: [],
+      p_bubble_spec: payload.bubbleSpec ?? null,
+    });
     if (error) throw error;
-    persisted = true;
-
-    await replaceAdminAssetTargets(id, payload.targets);
-    await replaceAdminAssetBubbleSpec(id, payload.bubbleSpec);
-
-    // `input.id`가 있는 재저장도 지원하므로, 새 Supabase Storage 바이트가 publisher에
-    // 반영되기 전에는 이전 catalog object를 export에 사용할 수 없게 한다. 새 에셋에서는
-    // null이므로 no-op에 가깝고, 기존 에셋에서는 stale pointer를 legacy 경로로 되돌린다.
-    const { error: clearCatalogLinkError } = await supabase
-      .from("admin_assets")
-      .update({ asset_object_id: null })
-      .eq("id", id);
-    if (clearCatalogLinkError) throw clearCatalogLinkError;
 
     /**
      * catalog 병행 기록 (계획 §15 rollout 1단계 write shadow).
@@ -158,13 +160,27 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
       canonical: new File([input.blob], input.fileName, { type: mimeType }),
     });
 
-    return getAdminAssetCandidate(id);
-  } catch (error) {
-    if (!input.id && persisted) {
-      await supabase.from("admin_assets").delete().eq("id", id);
+    const saved = await getAdminAssetCandidate(id);
+    // 커밋이 끝난 뒤에야 이전 revision을 지운다. 먼저 지우면 RPC 실패 시 되돌아갈 바이트가 없다.
+    if (previousPath && previousPath !== storagePath) {
+      await supabase.storage.from(themeAssetsBucketName).remove([previousPath]);
     }
-    if (!input.id || !persisted) await supabase.storage.from(themeAssetsBucketName).remove([storagePath]);
+    return saved;
+  } catch (error) {
+    // RPC는 전부 커밋되거나 전부 롤백된다. 실패했다면 방금 올린 바이트만 치우면 된다.
+    await supabase.storage.from(themeAssetsBucketName).remove([storagePath]);
     throw error;
+  }
+}
+
+/** 재저장 전 DB가 가리키던 경로. 못 읽어도 저장을 막지 않는다 — 정리를 한 번 건너뛸 뿐이다. */
+async function readAdminAssetStoragePath(id: string): Promise<string | undefined> {
+  try {
+    const { data } = await createClient().from("admin_assets").select("storage_path").eq("id", id).maybeSingle();
+    const path = (data as { storage_path?: unknown } | null)?.storage_path;
+    return typeof path === "string" ? path : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -175,32 +191,39 @@ export async function updateAdminAssetCandidate(id: string, input: AdminAssetCan
 
   const supabase = createClient();
   const bubbleSpec = input.bubbleSpec;
-  const { error } = await supabase
-    .from("admin_assets")
-    .update({
-      title,
-      ...(typeof input.enabled === "boolean" ? { enabled: input.enabled } : {}),
-      ...(input.bubbleAdjustment ? { bubble_adjustment: input.bubbleAdjustment } : {}),
-    })
-    .eq("id", id);
+  /**
+   * 바이트를 바꾸지 않는 수정도 한 트랜잭션으로 처리한다.
+   *
+   * 저장 경로와 같은 이유다 — 제목만 고치려던 요청이 target 교체 중간에 끊기면 적용 범위를
+   * 잃는다. `asset_object_id`는 **건드리지 않는다**: 내용이 그대로인데 포인터를 끊으면
+   * export가 legacy 경로로 떨어진다.
+   *
+   * 넘기지 않은 인자는 "그대로 둔다"는 뜻이다. 특히 `p_targets`가 null이면 target을 지우지 않는다.
+   */
+  const { error } = await supabase.rpc("update_admin_asset_metadata", {
+    p_asset_id: id,
+    p_title: title,
+    p_enabled: typeof input.enabled === "boolean" ? input.enabled : null,
+    p_bubble_adjustment: input.bubbleAdjustment ?? null,
+    p_targets: input.targets
+      ? input.targets.map((target) => ({
+          platform: target.platform,
+          slot_role: target.slotRole ?? null,
+          target_kind: target.targetKind,
+          priority: target.priority,
+          enabled: target.enabled,
+        }))
+      : null,
+    p_bubble_spec: bubbleSpec
+      ? {
+          android_markers: bubbleSpec.androidMarkers,
+          ios_insets: bubbleSpec.iosInsets,
+          ios_stretch: bubbleSpec.iosStretch,
+          geometry: bubbleSpec.geometry ?? null,
+        }
+      : null,
+  });
   if (error) throw error;
-
-  const targetRows = input.targets?.map((target) => ({ asset_id: id, platform: target.platform, slot_role: target.slotRole ?? null, target_kind: target.targetKind, priority: target.priority, enabled: target.enabled }));
-  if (targetRows) await replaceAdminAssetTargets(id, targetRows);
-  if (bubbleSpec) {
-    await replaceAdminAssetBubbleSpec(id, {
-      asset_id: id,
-      android_markers: bubbleSpec.androidMarkers,
-      ios_insets: bubbleSpec.iosInsets,
-      ios_stretch: bubbleSpec.iosStretch,
-      geometry: bubbleSpec.geometry ?? null,
-    });
-    const { error: geometryModeError } = await supabase
-      .from("admin_asset_bubble_designs")
-      .update({ geometry_mode: "manual" })
-      .eq("asset_id", id);
-    if (geometryModeError) throw geometryModeError;
-  }
 
   return getAdminAssetCandidate(id);
 }
@@ -462,41 +485,6 @@ export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis): strin
   if (!analysis?.width || !analysis.height) return "크기 미확인";
   return `${analysis.width}x${analysis.height}`;
 }
-
-async function replaceAdminAssetTargets(
-  assetId: string,
-  targets: readonly {
-    readonly platform: ThemePlatform | "all";
-    readonly slot_role: string | null;
-    readonly target_kind: string;
-    readonly priority: number;
-    readonly enabled: boolean;
-  }[],
-): Promise<void> {
-  const supabase = createClient();
-  const { error: deleteError } = await supabase.from("admin_asset_targets").delete().eq("asset_id", assetId);
-  if (deleteError) throw deleteError;
-  if (targets.length < 1) return;
-  const { error: insertError } = await supabase.from("admin_asset_targets").insert(targets);
-  if (insertError) throw insertError;
-}
-
-async function replaceAdminAssetBubbleSpec(assetId: string, bubbleSpec?: AdminBubbleSpecRow): Promise<void> {
-  const supabase = createClient();
-  const { error: deleteError } = await supabase.from("admin_asset_bubble_specs").delete().eq("asset_id", assetId);
-  if (deleteError) throw deleteError;
-  if (!bubbleSpec) return;
-  const { error: insertError } = await supabase.from("admin_asset_bubble_specs").insert(bubbleSpec);
-  if (insertError) throw insertError;
-}
-
-type AdminBubbleSpecRow = {
-  readonly asset_id: string;
-  readonly android_markers: AdminBubbleSpec["androidMarkers"];
-  readonly ios_insets: AdminBubbleSpec["iosInsets"];
-  readonly ios_stretch: AdminBubbleSpec["iosStretch"];
-  readonly geometry: AdminBubbleSpec["geometry"] | null;
-};
 
 function readAdminAssetStoragePaths(value: unknown): string[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
