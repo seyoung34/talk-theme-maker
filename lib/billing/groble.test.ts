@@ -42,6 +42,9 @@ describe("Groble billing", () => {
     expect(createGrobleCheckoutUrl(creditProducts[1], paymentId)).toBe(
       `https://www.groble.im/payment/u9xtdR?ref=${paymentId}`,
     );
+    expect(createGrobleCheckoutUrl(creditProducts[0], paymentId)).toBe(
+      `https://www.groble.im/payment/qZKWSP?ref=${paymentId}`,
+    );
   });
 
   it("parses a supported event and strips buyer PII", () => {
@@ -88,13 +91,43 @@ describe("Groble billing", () => {
     });
   });
 
+  it("accepts every documented one-time input mode and an unnamed option", () => {
+    for (const inputMode of ["NORMAL", "SIMPLE", "PAYMENT_WINDOW"]) {
+      const payload = completedPayload();
+      payload.id = `evt_live_${inputMode.toLowerCase()}`;
+      payload.data.object.content.inputMode = inputMode;
+      delete (payload.data.object.options[0] as { name?: string }).name;
+
+      expect(parseGrobleWebhook(JSON.stringify(payload))).toMatchObject({
+        eventType: "payment.completed",
+        productId: "credit-2",
+        optionId: "9362",
+        amount: 5000,
+      });
+    }
+  });
+
+  it("validates the registered final amount without assuming subtotal equals final amount", () => {
+    const payload = completedPayload();
+    payload.data.object.options[0].subtotal = 4000;
+    Object.assign(payload.data.object.pricing, {
+      originalAmount: 6000,
+      couponDiscountAmount: 1000,
+    });
+
+    expect(parseGrobleWebhook(JSON.stringify(payload))).toMatchObject({
+      productId: "credit-2",
+      amount: 5000,
+    });
+  });
+
   it("verifies the raw-body HMAC and timestamp window", async () => {
     const rawBody = JSON.stringify(completedPayload());
     const timestamp = "1787860800";
     const secret = "test-secret";
 
     await expect(verifyGrobleWebhookSignature({
-      rawBody,
+      rawBody: new TextEncoder().encode(rawBody),
       timestamp,
       signature: await signature(secret, timestamp, rawBody),
       signaturePrevious: null,

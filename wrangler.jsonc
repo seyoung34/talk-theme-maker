@@ -14,6 +14,9 @@
     "binding": "ASSETS"
   },
   "vars": {
+    // 그로블 결제창과 서명 웹훅 검증을 완료한 뒤 canary 결제를 위해 활성화한다.
+    // 웹훅 시크릿은 대시보드 Secret으로만 관리한다.
+    "GROBLE_CHECKOUT_ENABLED": "1",
     // 관리자 저장의 catalog write-shadow는 기존 운영 동작을 유지한다.
     "ASSET_CATALOG_WRITE_ENABLED": "1",
     // Phase 5 변환 canary. 범위 밖 logical asset은 기존 File/legacy 경로를 유지한다.
