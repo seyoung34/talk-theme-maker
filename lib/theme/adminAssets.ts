@@ -36,6 +36,7 @@ export {
   bubbleSpecToAdjustment,
   canonicalAdminAssetToCandidate,
   inferAdminAssetKind,
+  legacyRoleFromKind,
   mapCanonicalAdminAssetRow,
   type AdminAssetCandidate,
   type AdminAssetCandidateInput,
@@ -208,6 +209,19 @@ export async function updateAdminAssetCandidate(id: string, input: AdminAssetCan
   }
 
   return getAdminAssetCandidate(id);
+}
+
+/**
+ * 후보를 추천 목록에서 내리거나 다시 올린다.
+ *
+ * `updateAdminAssetCandidate`로도 되지만 그쪽은 제목을 함께 검증·기록한다. 활성 여부만
+ * 바꾸는 데 제목을 다시 쓰면 `updated_at`이 내용 변경처럼 움직이고, 목록의 "최근 수정순"이
+ * 실제 수정과 어긋난다. 이 경로는 `enabled` 하나만 건드린다.
+ */
+export async function setAdminAssetEnabled(id: string, enabled: boolean): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase.from("admin_assets").update({ enabled }).eq("id", id);
+  if (error) throw error;
 }
 
 export async function getAdminAssetCandidate(id: string): Promise<AdminAssetCandidate> {

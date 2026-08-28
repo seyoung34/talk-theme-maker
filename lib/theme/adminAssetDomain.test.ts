@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createBubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
-import { canonicalAdminAssetToCandidate, isValidBubbleBuilderTargets, mapCanonicalAdminAssetRow, selectAdminAssetPlatformVariant } from "@/lib/theme/adminAssetDomain";
+import { canonicalAdminAssetToCandidate, isValidBubbleBuilderTargets, legacyRoleFromKind, mapCanonicalAdminAssetRow, selectAdminAssetPlatformVariant } from "@/lib/theme/adminAssetDomain";
+import { getThemeSlots } from "@/lib/theme/templates";
 
 const markers = {
   top: { start: 10, end: 11 },
@@ -95,5 +96,38 @@ describe("isValidBubbleBuilderTargets", () => {
 
   it("rejects a shape_rule target", () => {
     expect(isValidBubbleBuilderTargets([{ platform: "all", targetKind: "shape_rule", priority: 0, enabled: true }], "bubble_me_1")).toBe(false);
+  });
+});
+
+/**
+ * `admin_assets.slot_role`은 `NOT NULL`이라 값을 계속 써야 하지만, 라우팅·매칭의 근거는
+ * `admin_asset_targets`다. 저장 경로가 슬롯 목록의 첫 항목을 쓰면 manifest에 슬롯이
+ * 추가·재정렬될 때 같은 kind의 저장값이 조용히 바뀐다. kind마다 고정된 값이어야 한다.
+ */
+describe("legacyRoleFromKind", () => {
+  it("kind마다 슬롯 목록 순서와 무관한 고정 role을 준다", () => {
+    expect(legacyRoleFromKind("background")).toBe("main_background");
+    expect(legacyRoleFromKind("bubble")).toBe("bubble_me_1");
+    expect(legacyRoleFromKind("profile")).toBe("profile_image_1");
+    expect(legacyRoleFromKind("launcher")).toBe("launcher_foreground");
+    expect(legacyRoleFromKind("passcode")).toBe("passcode_background");
+    expect(legacyRoleFromKind("passcode_indicator")).toBe("passcode_indicator_1");
+    expect(legacyRoleFromKind("icon")).toBe("theme_icon");
+  });
+
+  it("kind를 모르면 아이콘으로 떨어진다", () => {
+    expect(legacyRoleFromKind(undefined)).toBe("theme_icon");
+  });
+
+  /** 여기서 나온 role은 실제 슬롯이어야 한다. 아니면 카드 라벨이 role 문자열로 노출된다. */
+  it("돌려주는 role은 실제 이미지 슬롯이다", () => {
+    const imageRoles = new Set(
+      (["android", "ios"] as const).flatMap((platform) =>
+        getThemeSlots(platform).filter((slot) => slot.kind !== "color").map((slot) => slot.role),
+      ),
+    );
+    for (const kind of ["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"] as const) {
+      expect(imageRoles.has(legacyRoleFromKind(kind))).toBe(true);
+    }
   });
 });

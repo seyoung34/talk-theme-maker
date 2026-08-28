@@ -577,9 +577,19 @@ function selectRepresentativeTarget(targets: readonly AdminAssetTarget[]): Admin
   throw new AdminAssetDomainError("INVALID_ASSET_TARGET");
 }
 
-function legacyRoleFromKind(kind?: AdminAssetKind): ThemeResourceRole {
+/**
+ * kind 하나를 대표하는 고정 role.
+ *
+ * `admin_assets.slot_role`이 `NOT NULL`이라 값을 계속 써야 하는데, 그 값이 라우팅이나
+ * 매칭의 근거는 아니다(근거는 `admin_asset_targets`다). 슬롯 목록의 첫 항목을 쓰면
+ * manifest에 슬롯이 추가·재정렬될 때 같은 kind의 저장값이 조용히 바뀌므로, kind마다 고정된
+ * 이 값만 쓴다.
+ */
+export function legacyRoleFromKind(kind?: AdminAssetKind): ThemeResourceRole {
   if (kind === "bubble") return "bubble_me_1";
-  if (kind === "profile") return "profile_image";
+  // `profile_image`는 어느 manifest에도 없는 role이다. 저장된 `slot_role`이 실존 슬롯이 아니면
+  // export 접근 조회(`requireResourceRole`)가 그 행 전체를 거절한다.
+  if (kind === "profile") return "profile_image_1";
   if (kind === "launcher") return "launcher_foreground";
   if (kind === "passcode_indicator") return "passcode_indicator_1";
   if (kind === "passcode") return "passcode_background";

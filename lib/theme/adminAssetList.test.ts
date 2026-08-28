@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   adminAssetListTileUrl,
+  describeAdminAssetScope,
+  getAdminAssetScopeLabel,
   filterAdminAssetListItems,
   isAdminAssetListSortKey,
   sortAdminAssetListItems,
@@ -141,6 +143,31 @@ describe("sortAdminAssetListItems", () => {
   it("정렬 키가 아닌 값은 받지 않는다", () => {
     expect(isAdminAssetListSortKey("title")).toBe(true);
     expect(isAdminAssetListSortKey("priority")).toBe(false);
+  });
+});
+
+describe("describeAdminAssetScope", () => {
+  const kindWide = { platform: "all", targetKind: "asset_kind" } as const;
+  const roleSpecific = { platform: "android", slotRole: "main_background", targetKind: "exact_role" } as const;
+
+  it.each([
+    ["kind 전체 target만", [kindWide], "kind_wide"],
+    ["슬롯 지정 target만", [roleSpecific], "role_specific"],
+    ["둘 다", [kindWide, roleSpecific], "mixed"],
+    ["target 없음", [], "none"],
+  ])("%s → %s", (_label, targets, expected) => {
+    expect(describeAdminAssetScope(targets)).toBe(expected);
+  });
+
+  /** `shape_rule`도 슬롯을 지정하지 않으므로 kind 전체와 같은 범위다. */
+  it("shape_rule은 kind 전체로 본다", () => {
+    expect(describeAdminAssetScope([{ platform: "all", targetKind: "shape_rule" }])).toBe("kind_wide");
+  });
+
+  it("모든 범위에 사람이 읽을 라벨이 있다", () => {
+    for (const scope of ["kind_wide", "role_specific", "mixed", "none"] as const) {
+      expect(getAdminAssetScopeLabel(scope)).not.toBe("");
+    }
   });
 });
 

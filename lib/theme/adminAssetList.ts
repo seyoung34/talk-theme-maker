@@ -116,6 +116,30 @@ export function adminAssetListTileUrl(item: Pick<AdminAssetListItem, "thumbnailU
   return item.thumbnailUrl ?? item.previewUrl;
 }
 
+/**
+ * 이 에셋이 어디까지 적용되는가.
+ *
+ * 운영자가 카드에서 알아야 하는 건 "종류 전체에 쓰이는 기본 후보인가, 특정 슬롯에만 걸어 둔
+ * 것인가"다. 지금 저장 경로는 항상 kind 전체 target을 만들므로 `role`은 그 이전에 등록된
+ * 에셋을 뜻하고, 편집 화면의 "kind 전체로 전환"으로 옮길 수 있다.
+ */
+export type AdminAssetScope = "kind_wide" | "role_specific" | "mixed" | "none";
+
+export function describeAdminAssetScope(targets: readonly AdminAssetListTarget[]): AdminAssetScope {
+  if (!targets.length) return "none";
+  const hasKindWide = targets.some((target) => target.targetKind !== "exact_role");
+  const hasRoleSpecific = targets.some((target) => target.targetKind === "exact_role");
+  if (hasKindWide && hasRoleSpecific) return "mixed";
+  return hasKindWide ? "kind_wide" : "role_specific";
+}
+
+export function getAdminAssetScopeLabel(scope: AdminAssetScope): string {
+  if (scope === "kind_wide") return "분류 전체";
+  if (scope === "role_specific") return "슬롯 지정";
+  if (scope === "mixed") return "혼합";
+  return "적용 없음";
+}
+
 export const adminAssetListSortKeys = ["updated", "created", "title"] as const;
 export type AdminAssetListSortKey = (typeof adminAssetListSortKeys)[number];
 
