@@ -36,6 +36,7 @@ export {
   bubbleSpecToAdjustment,
   canonicalAdminAssetToCandidate,
   createDefaultBubbleAdjustment,
+  getAdminAssetKindLabel,
   inferAdminAssetKind,
   legacyRoleFromKind,
   mapCanonicalAdminAssetRow,
@@ -455,19 +456,6 @@ export async function adminAssetToFile(asset: AdminAssetCandidate): Promise<File
 
 export async function adminAssetBubbleDecorationToFile(decoration: AdminAssetBubbleDecoration): Promise<File> {
   return storagePathToFile(decoration.storagePath, decoration.fileName, decoration.mimeType);
-}
-
-export function getAdminAssetKindLabel(kind: AdminAssetKind): string {
-  const labels: Record<AdminAssetKind, string> = {
-    background: "배경 이미지",
-    icon: "아이콘",
-    bubble: "말풍선",
-    profile: "프로필",
-    launcher: "런처 아이콘",
-    passcode: "잠금화면 배경",
-    passcode_indicator: "암호 표시",
-  };
-  return labels[kind];
 }
 
 export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis): string {

@@ -1,5 +1,5 @@
-import type { AdminAssetCandidate, AdminAssetKind, AdminAssetTarget } from "@/lib/theme/adminAssetDomain";
-import { inferAdminAssetKind } from "@/lib/theme/adminAssetDomain";
+import type { AdminAssetCandidate, AdminAssetKind, AdminAssetPlatform, AdminAssetTarget, AdminAssetTargetInput } from "@/lib/theme/adminAssetDomain";
+import { getAdminAssetKindLabel, inferAdminAssetKind } from "@/lib/theme/adminAssetDomain";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -65,6 +65,77 @@ export function selectAdminAssetTargetMatch(
     }
   }
   return best;
+}
+
+/**
+ * 적용 범위를 사람이 읽는 문장으로.
+ *
+ * 관리자 화면이 "이 후보가 어디에 쓰이는가"를 카드·저장 확인 다이얼로그·사이드바에서 각각
+ * 보여 주는데, 그 문구가 갈라지면 같은 에셋이 화면마다 다른 범위로 읽힌다.
+ */
+export function formatAdminAssetPlatformLabel(platform: AdminAssetPlatform) {
+  return platform === "all" ? "Android+iOS" : platform === "android" ? "Android" : "iOS";
+}
+
+/** kind 하나가 덮는 슬롯들을 요약한다. 넷 이상이면 앞 둘만 적고 나머지는 수로 줄인다. */
+export function formatAdminAssetScope(slots: readonly ThemeAssetSlot[]) {
+  const labels = Array.from(new Set(slots.map((slot) => slot.label)));
+  if (labels.length === 0) return "적용 슬롯 없음";
+  if (labels.length <= 3) return labels.join(" · ");
+  return `${labels.slice(0, 2).join(" · ")} 외 ${labels.length - 2}개`;
+}
+
+/** 슬롯을 못 찾으면 role 문자열을 그대로 보여 준다 — 빈칸보다 낫다. */
+export function getAdminAssetSlotLabel(role: string, slots: readonly ThemeAssetSlot[]) {
+  return slots.find((slot) => slot.role === role)?.label ?? role;
+}
+
+/** 문구에 필요한 만큼만. 목록 DTO의 축약 target과 저장 입력 target을 모두 받는다. */
+export type FormattableAdminAssetTarget = Pick<AdminAssetTargetInput, "platform" | "slotRole" | "targetKind">;
+
+export function formatAdminAssetTarget(
+  target: FormattableAdminAssetTarget,
+  slots: readonly ThemeAssetSlot[],
+  assetKind?: AdminAssetKind,
+) {
+  const platformLabel = formatAdminAssetPlatformLabel(target.platform);
+  if (target.slotRole) return `${platformLabel} · ${getAdminAssetSlotLabel(target.slotRole, slots)}`;
+  if (target.targetKind === "asset_kind") return `${platformLabel} · ${assetKind ? getAdminAssetKindLabel(assetKind) : "해당 분류"} 전체`;
+  if (target.targetKind === "shape_rule") return `${platformLabel} · 조건에 맞는 슬롯`;
+  return `${platformLabel} · 적용 슬롯`;
+}
+
+export function formatAdminAssetTargetsFromInputs(
+  targets: readonly FormattableAdminAssetTarget[],
+  slots: readonly ThemeAssetSlot[],
+  assetKind?: AdminAssetKind,
+) {
+  if (targets.length < 1) return "적용 슬롯 없음";
+  return targets.map((target) => formatAdminAssetTarget(target, slots, assetKind)).join(" / ");
+}
+
+/** target이 없는 옛 행은 부모 컬럼으로 문장을 만든다. */
+export function formatAdminAssetTargets(
+  asset: Pick<AdminAssetCandidate, "platform" | "slotRole" | "assetKind"> & { readonly targets?: readonly FormattableAdminAssetTarget[] },
+  slots: readonly ThemeAssetSlot[],
+) {
+  const targets = asset.targets ?? [];
+  if (targets.length < 1) return `${formatAdminAssetPlatformLabel(asset.platform)} · ${getAdminAssetSlotLabel(asset.slotRole, slots)}`;
+  return targets.map((target) => formatAdminAssetTarget(target, slots, asset.assetKind)).join(" / ");
+}
+
+/**
+ * 관리자 화면에서 새 후보를 저장할 때 붙이는 target.
+ *
+ * **슬롯을 고정하지 않는다.** 어떤 슬롯에 쓸지는 `/edit`에서 사용자가 고르는 일이고, 관리자는
+ * "이 종류의 후보"로만 등록한다. 말풍선도 마찬가지다 — 편집기가 좌우반전(`bubbleFlipX`)을
+ * 비파괴로 지원하므로 `bubble_me_1`용으로 만든 그림을 `bubble_you_1`에서도 쓸 수 있다.
+ *
+ * 예전에는 일반 업로드·빌더·기존 후보 전환이 각자 같은 값을 만드는 함수를 따로 들고 있었다.
+ * 셋이 갈라지면 등록 경로에 따라 적용 범위가 달라진다.
+ */
+export function createAdminAssetSaveTargets(): AdminAssetTargetInput[] {
+  return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }];
 }
 
 export function createAdminAssetWorkspaceSlots(platformSlots: Readonly<Record<ThemePlatform, readonly ThemeAssetSlot[]>>): AdminAssetWorkspaceSlot[] {

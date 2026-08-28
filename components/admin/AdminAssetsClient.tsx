@@ -30,9 +30,9 @@ import {
   type AdminBubbleAdjustment,
   type AdminAssetCandidate,
   type AdminAssetKind,
-  type AdminAssetTargetInput,
   type AdminBubbleSpec,
 } from "@/lib/theme/adminAssets";
+import { createAdminAssetSaveTargets, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs, getAdminAssetSlotLabel } from "@/lib/theme/adminAssetWorkspace";
 import { adminAssetListTileUrl, describeAdminAssetScope, filterAdminAssetListItems, getAdminAssetScopeLabel, isAdminAssetListSortKey, sortAdminAssetListItems, toAdminAssetListItem, type AdminAssetListItem, type AdminAssetListSortKey } from "@/lib/theme/adminAssetList";
 import { bubbleSlotFromRole } from "@/lib/theme/project/state";
 import { generateBubbleAsset, type BubbleFamilyDesignSpec, type GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
@@ -202,8 +202,8 @@ export default function AdminAssetsClient() {
     [bubbleEditorPlatform, bubbleAnchorSlot],
   );
   const selectedSaveTargets = useMemo(
-    () => (bubbleBuilderDraft ? getAdminBubbleBuilderTargets() : getAdminAssetSaveTargets(assetKind)),
-    [assetKind, bubbleBuilderDraft],
+    () => createAdminAssetSaveTargets(),
+    [],
   );
   const effectiveBubbleAdjustment = useMemo<AdminBubbleAdjustment>(() => ({
     markers: bubblePreviewEdits.android?.markers ?? bubbleAdjustment.markers,
@@ -406,7 +406,7 @@ export default function AdminAssetsClient() {
           id: editingAsset.id,
           title: title.trim() || editingAsset.title,
           slotRole: saveSlotRole,
-          targets: getAdminBubbleBuilderTargets(),
+          targets: createAdminAssetSaveTargets(),
           variants: bubbleBuilderDraft.variants.map((result) => ({ platform: result.asset.platform, file: result.asset.file, analysis: analysis ?? undefined })),
           bubbleSpec: bubbleSpec ?? bubbleBuilderDraft.bubbleSpec,
           recipe: bubbleBuilderDraft.recipe,
@@ -1402,30 +1402,9 @@ function getUnifiedAdminAssetSlots(): ThemeAssetSlot[] {
     });
 }
 
-function getAdminAssetSaveTargets(assetKind: AdminAssetKind): AdminAssetTargetInput[] {
-  // 후보 등록은 특정 슬롯에 고정하지 않는다. 실제 템플릿에서 슬롯을 고르는 일은
-  // admin/edit가 담당하고, 여기서는 kind 전체에 추천되는 후보로 저장한다.
-  void assetKind;
-  return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }];
-}
-
-/**
- * 편집기에서 말풍선을 비파괴로 좌우반전할 수 있으므로(`bubbleFlipX`), 빌더로 만든 말풍선도 슬롯을
- * exact로 고정하지 않고 네 기본 슬롯(`bubble_me_1/2`, `bubble_you_1/2`)이 공유하는 그룹 후보로
- * 등록한다. 일반 파일 업로드 경로(`getAdminAssetSaveTargets`)의 bubble 기본값과 동일하게 맞춘 것이다.
- */
-function getAdminBubbleBuilderTargets(): AdminAssetTargetInput[] {
-  return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }];
-}
-
 function bubbleVariantFromRole(role: string): "first" | "group" | null {
   if (!role.startsWith("bubble_")) return null;
   return role.endsWith("_2") ? "group" : "first";
-}
-
-function getSharedAdminAssetTargets(asset: AdminAssetCandidate): AdminAssetTargetInput[] {
-  void asset;
-  return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }];
 }
 
 /** 정사각으로 볼 비율 폭. 예전 `shapes`의 "square" 판정과 같은 경계다. */
@@ -1563,45 +1542,6 @@ function BubblePlatformCard({
 
 function formatRange(range: { start: number; end: number }) {
   return `${range.start}-${range.end}`;
-}
-
-function formatPlatformLabel(platform: "all" | ThemePlatform) {
-  return platform === "all" ? "Android+iOS" : platform === "android" ? "Android" : "iOS";
-}
-
-function formatAdminAssetScope(slots: readonly ThemeAssetSlot[]) {
-  const labels = Array.from(new Set(slots.map((slot) => slot.label)));
-  if (labels.length === 0) return "적용 슬롯 없음";
-  if (labels.length <= 3) return labels.join(" · ");
-  return `${labels.slice(0, 2).join(" · ")} 외 ${labels.length - 2}개`;
-}
-
-function getAdminAssetSlotLabel(role: string, slots: readonly ThemeAssetSlot[]) {
-  return slots.find((slot) => slot.role === role)?.label ?? role;
-}
-
-type FormattableTarget = Pick<AdminAssetTargetInput, "platform" | "slotRole" | "targetKind">;
-
-function formatAdminAssetTargetInput(target: FormattableTarget, slots: readonly ThemeAssetSlot[], assetKind?: AdminAssetKind) {
-  const platformLabel = formatPlatformLabel(target.platform);
-  if (target.slotRole) return `${platformLabel} · ${getAdminAssetSlotLabel(target.slotRole, slots)}`;
-  if (target.targetKind === "asset_kind") return `${platformLabel} · ${assetKind ? getAdminAssetKindLabel(assetKind) : "해당 분류"} 전체`;
-  if (target.targetKind === "shape_rule") return `${platformLabel} · 조건에 맞는 슬롯`;
-  return `${platformLabel} · 적용 슬롯`;
-}
-
-function formatAdminAssetTargetsFromInputs(targets: readonly FormattableTarget[], slots: readonly ThemeAssetSlot[], assetKind?: AdminAssetKind) {
-  if (targets.length < 1) return "적용 슬롯 없음";
-  return targets.map((target) => formatAdminAssetTargetInput(target, slots, assetKind)).join(" / ");
-}
-
-function formatAdminAssetTargets(
-  asset: Pick<AdminAssetCandidate, "platform" | "slotRole" | "assetKind"> & { readonly targets?: readonly FormattableTarget[] },
-  slots: readonly ThemeAssetSlot[],
-) {
-  const targets = asset.targets ?? [];
-  if (targets.length < 1) return `${formatPlatformLabel(asset.platform)} · ${getAdminAssetSlotLabel(asset.slotRole, slots)}`;
-  return targets.map((target) => formatAdminAssetTargetInput(target, slots, asset.assetKind)).join(" / ");
 }
 
 function AdminAssetCard({
@@ -1773,7 +1713,7 @@ function AdminAssetEditDialog({
     try {
       const updatedAsset = await updateAdminAssetCandidate(asset.id, {
         title: normalizedTitle,
-        targets: targetMode === "shared" ? getSharedAdminAssetTargets(asset) : undefined,
+        targets: targetMode === "shared" ? createAdminAssetSaveTargets() : undefined,
         bubbleAdjustment: isBubble ? bubbleAdjustment : undefined,
         bubbleSpec: nextBubbleSpec,
       });

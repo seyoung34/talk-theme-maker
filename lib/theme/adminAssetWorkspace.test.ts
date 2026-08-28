@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createAdminAssetWorkspaceSlots, getAdminAssetCandidateMatchRank, getAdminAssetWorkspaceSlotVariant, selectAdminAssetTargetMatch } from "@/lib/theme/adminAssetWorkspace";
+import { createAdminAssetSaveTargets, createAdminAssetWorkspaceSlots, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs, getAdminAssetCandidateMatchRank, getAdminAssetSlotLabel, getAdminAssetWorkspaceSlotVariant, selectAdminAssetTargetMatch } from "@/lib/theme/adminAssetWorkspace";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssetDomain";
-import type { ThemeAssetSlot } from "@/lib/theme/templates";
+import { getThemeSlots, type ThemeAssetSlot } from "@/lib/theme/templates";
 
 const androidIcon = {
   id: "android-theme-icon",
@@ -108,5 +108,60 @@ describe("admin asset workspace slots", () => {
     const [slot] = createAdminAssetWorkspaceSlots({ android: [androidIcon], ios: [] });
 
     expect(selectAdminAssetTargetMatch(slot!, { assetKind: "icon", enabled: true, targets: [] }, "android")).toBeUndefined();
+  });
+});
+
+/**
+ * 적용 범위 문구는 카드·저장 확인 다이얼로그·사이드바가 함께 쓴다. 예전에는 컴포넌트 파일에
+ * 있어 테스트가 없었고, 같은 에셋이 화면마다 다르게 읽힐 여지가 있었다.
+ */
+describe("적용 범위 문구", () => {
+  const slots = getThemeSlots("android");
+
+  it("kind 전체 target은 분류 이름으로 읽힌다", () => {
+    expect(formatAdminAssetTargetsFromInputs([{ platform: "all", targetKind: "asset_kind" }], slots, "background"))
+      .toBe("Android+iOS · 배경 이미지 전체");
+  });
+
+  it("슬롯 지정 target은 슬롯 라벨로 읽힌다", () => {
+    expect(formatAdminAssetTargetsFromInputs([{ platform: "android", slotRole: "main_background", targetKind: "exact_role" }], slots))
+      .toBe("Android · 메인 배경 이미지");
+  });
+
+  it("여러 target은 하나로 이어 붙인다", () => {
+    const text = formatAdminAssetTargetsFromInputs(
+      [
+        { platform: "android", slotRole: "main_background", targetKind: "exact_role" },
+        { platform: "all", targetKind: "asset_kind" },
+      ],
+      slots,
+      "background",
+    );
+
+    expect(text).toBe("Android · 메인 배경 이미지 / Android+iOS · 배경 이미지 전체");
+  });
+
+  it("target이 없으면 부모 컬럼으로 읽는다", () => {
+    expect(formatAdminAssetTargets({ platform: "ios", slotRole: "theme_icon", assetKind: "icon", targets: [] }, slots))
+      .toBe("iOS · 테마 대표 아이콘");
+  });
+
+  /** 슬롯을 못 찾아도 빈칸 대신 role을 보여 준다. */
+  it("모르는 role은 문자열 그대로 보여 준다", () => {
+    expect(getAdminAssetSlotLabel("no_such_role", slots)).toBe("no_such_role");
+  });
+
+  it("슬롯이 넷 이상이면 앞 둘만 적고 나머지는 수로 줄인다", () => {
+    const many = slots.filter((slot) => slot.role.startsWith("tab_icon_")).slice(0, 5);
+
+    expect(formatAdminAssetScope(many)).toMatch(/외 \d+개$/);
+    expect(formatAdminAssetScope([])).toBe("적용 슬롯 없음");
+  });
+});
+
+/** 등록 경로마다 다른 범위가 나오면 같은 화면에서 등록한 에셋이 서로 다르게 적용된다. */
+describe("createAdminAssetSaveTargets", () => {
+  it("어떤 경로로 저장하든 kind 전체 target 하나만 만든다", () => {
+    expect(createAdminAssetSaveTargets()).toEqual([{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }]);
   });
 });

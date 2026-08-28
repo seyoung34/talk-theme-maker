@@ -362,6 +362,20 @@ export function bubbleSpecToAdjustment(spec: AdminBubbleSpec): AdminBubbleAdjust
  * 원본 크기를 모르면 60x42로 가정한다 — 실패해도 편집기에서 바로 고칠 수 있는 값이어야 하고,
  * 0이나 음수가 나오면 마커·inset이 뒤집혀 미리보기가 깨진다. 그래서 모든 값에 하한을 둔다.
  */
+/** 관리자 화면과 편집기 후보 카드가 함께 쓰는 종류 이름. */
+export function getAdminAssetKindLabel(kind: AdminAssetKind): string {
+  const labels: Record<AdminAssetKind, string> = {
+    background: "배경 이미지",
+    icon: "아이콘",
+    bubble: "말풍선",
+    profile: "프로필",
+    launcher: "런처 아이콘",
+    passcode: "잠금화면 배경",
+    passcode_indicator: "암호 표시",
+  };
+  return labels[kind];
+}
+
 export function createDefaultBubbleAdjustment(analysis?: AdminAssetAnalysis | null): AdminBubbleAdjustment {
   const width = Math.max(8, analysis?.width ?? 60);
   const height = Math.max(8, analysis?.height ?? 42);
