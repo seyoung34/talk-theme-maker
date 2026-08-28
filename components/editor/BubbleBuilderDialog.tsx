@@ -766,6 +766,12 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
    */
   const frameLimit = atCanvasSizeLimit(geometry.canvas, "max") ? "최대" : atCanvasSizeLimit(geometry.canvas, "min") ? "최소" : undefined;
 
+  // 모바일 미리보기는 컨트롤 문구의 줄바꿈과 폰트에 따라 높이가 달라지면 안 된다.
+  // 측정된 폭을 높이에도 명시해 Linux/Windows 브라우저의 글꼴 차이와 무관하게 정사각형을 유지한다.
+  const compactViewportStyle = compactControls && viewportSize.width
+    ? { height: `${viewportSize.width}px`, aspectRatio: "1 / 1" }
+    : undefined;
+
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -1148,7 +1154,8 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
       <div
         ref={viewportRef}
         data-testid="bubble-builder-preview-viewport"
-        className={`relative min-h-0 w-full touch-none overflow-hidden rounded-xl ${compactControls ? "" : "min-h-[260px]"}`}
+        className={`relative min-h-0 w-full touch-none overflow-hidden rounded-xl ${compactControls ? "aspect-square h-auto self-start" : "min-h-[260px]"}`}
+        style={compactViewportStyle}
         onPointerDownCapture={handleViewportPointerDownCapture}
         onPointerMoveCapture={handleViewportPointerMoveCapture}
         onPointerUpCapture={handleViewportPointerUpCapture}
