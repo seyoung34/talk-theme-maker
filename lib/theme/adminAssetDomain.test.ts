@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createBubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
-import { canonicalAdminAssetToCandidate, isValidBubbleBuilderTargets, legacyRoleFromKind, mapCanonicalAdminAssetRow, selectAdminAssetPlatformVariant } from "@/lib/theme/adminAssetDomain";
+import { canonicalAdminAssetToCandidate, createDefaultBubbleAdjustment, isValidBubbleBuilderTargets, legacyRoleFromKind, mapCanonicalAdminAssetRow, selectAdminAssetPlatformVariant } from "@/lib/theme/adminAssetDomain";
 import { getThemeSlots } from "@/lib/theme/templates";
 
 const markers = {
@@ -129,5 +129,46 @@ describe("legacyRoleFromKind", () => {
     for (const kind of ["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"] as const) {
       expect(imageRoles.has(legacyRoleFromKind(kind))).toBe(true);
     }
+  });
+});
+
+/**
+ * 분석 필드가 크기만 남은 뒤에도 말풍선 기본 조정값이 그대로여야 한다.
+ * 이 값이 바뀌면 새로 등록한 모든 말풍선의 초기 늘어남 구간이 달라진다.
+ */
+describe("createDefaultBubbleAdjustment", () => {
+  it("원본 크기를 모르면 60x42로 가정한다", () => {
+    expect(createDefaultBubbleAdjustment()).toEqual(createDefaultBubbleAdjustment({ width: 60, height: 42 }));
+  });
+
+  // 가운데 42~58%를 늘어나는 구간으로 잡는다. `floor`라 58%는 57px가 된다(부동소수점).
+  it("크기에서 마커·inset·stretch를 계산한다", () => {
+    expect(createDefaultBubbleAdjustment({ width: 100, height: 50 })).toEqual({
+      markers: {
+        top: { start: 42, end: 57 },
+        left: { start: 21, end: 28 },
+        right: { start: 21, end: 28 },
+        bottom: { start: 42, end: 57 },
+      },
+      insets: { top: 14, right: 28, bottom: 14, left: 28 },
+      stretch: { x: 50, y: 25 },
+    });
+  });
+
+  /** 0이나 음수가 나오면 마커가 뒤집혀 미리보기가 깨진다. */
+  it("아주 작은 이미지에서도 모든 값이 1 이상이고 end가 start보다 크다", () => {
+    const { markers, insets, stretch } = createDefaultBubbleAdjustment({ width: 1, height: 1 });
+
+    for (const range of Object.values(markers!)) {
+      expect(range.start).toBeGreaterThanOrEqual(1);
+      expect(range.end).toBeGreaterThan(range.start);
+    }
+    for (const value of Object.values(insets!)) expect(value).toBeGreaterThanOrEqual(1);
+    expect(stretch!.x).toBeGreaterThanOrEqual(1);
+    expect(stretch!.y).toBeGreaterThanOrEqual(1);
+  });
+
+  it("크기를 모르는 분석 결과는 기본값과 같다", () => {
+    expect(createDefaultBubbleAdjustment({})).toEqual(createDefaultBubbleAdjustment(null));
   });
 });

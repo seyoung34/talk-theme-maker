@@ -219,7 +219,7 @@ describe("시스템 템플릿과 추천 에셋 후보 병합", () => {
         slotRole: "theme_icon" as const,
         assetKind: "icon" as const,
         // 불투명 가로형: 예전 shape 게이트가 tab_icon_* 슬롯에서 버리던 형태다.
-        analysis: { shapes: ["wide" as const] },
+        analysis: { width: 240, height: 100 },
       };
 
       const candidates = buildSlotCandidates(target, {}, {}, {}, "basic", template, slots, [recommended]);

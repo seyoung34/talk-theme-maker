@@ -9,16 +9,22 @@ import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
  * 기존 호출부(50여 곳)를 위해 이름만 남긴다.
  */
 export type AdminAssetKind = ThemeAssetKind;
-export type AdminAssetShape = "square" | "portrait" | "wide" | "transparent" | "ninepatch" | "unknown";
 export type AdminAssetPlatform = ThemePlatform | "all";
 export type AdminAssetTargetKind = "exact_role" | "asset_kind" | "shape_rule";
 
+/**
+ * 업로드 이미지의 크기.
+ *
+ * 한때 `shapes`·`aspectRatio`·`transparentPixelRatio`도 함께 담았지만, 추천 판정이
+ * target 기반으로 옮겨간 뒤로는 어느 것도 동작을 바꾸지 않고 화면 문구로만 쓰였다. 특히
+ * 투명도는 이미지마다 캔버스에 그려 전 픽셀 알파를 훑어야 해서 업로드 경로에서 가장 비쌌다.
+ *
+ * 크기는 남긴다 — 말풍선 마커 기본값(`createDefaultBubbleAdjustment`)과 해상도·비율 경고가
+ * 실제로 쓴다. 기존 행에 남아 있는 다른 키는 읽을 때 무시하므로 migration이 필요 없다.
+ */
 export type AdminAssetAnalysis = {
   readonly width?: number;
   readonly height?: number;
-  readonly aspectRatio?: number;
-  readonly transparentPixelRatio?: number;
-  readonly shapes: readonly AdminAssetShape[];
 };
 
 export type AdminBubbleAdjustment = {
@@ -350,6 +356,52 @@ export function bubbleSpecToAdjustment(spec: AdminBubbleSpec): AdminBubbleAdjust
   };
 }
 
+/**
+ * 새 말풍선 후보의 초기 조정값.
+ *
+ * 원본 크기를 모르면 60x42로 가정한다 — 실패해도 편집기에서 바로 고칠 수 있는 값이어야 하고,
+ * 0이나 음수가 나오면 마커·inset이 뒤집혀 미리보기가 깨진다. 그래서 모든 값에 하한을 둔다.
+ */
+export function createDefaultBubbleAdjustment(analysis?: AdminAssetAnalysis | null): AdminBubbleAdjustment {
+  const width = Math.max(8, analysis?.width ?? 60);
+  const height = Math.max(8, analysis?.height ?? 42);
+  return {
+    markers: createDefaultBubbleMarkers(width, height),
+    insets: createDefaultBubbleInsets(width, height),
+    stretch: createDefaultBubbleStretch(width, height),
+  };
+}
+
+/** 가운데 약 16%를 늘어나는 구간으로 잡는다. `end`는 항상 `start`보다 크다. */
+export function createDefaultBubbleMarkers(width = 60, height = 42): Markers {
+  const xStart = Math.max(1, Math.floor(width * 0.42));
+  const xEnd = Math.max(xStart + 1, Math.floor(width * 0.58));
+  const yStart = Math.max(1, Math.floor(height * 0.42));
+  const yEnd = Math.max(yStart + 1, Math.floor(height * 0.58));
+  return {
+    top: { start: xStart, end: xEnd },
+    left: { start: yStart, end: yEnd },
+    right: { start: yStart, end: yEnd },
+    bottom: { start: xStart, end: xEnd },
+  };
+}
+
+export function createDefaultBubbleInsets(width = 60, height = 42): Insets {
+  return {
+    top: Math.max(1, Math.round(height * 0.28)),
+    right: Math.max(1, Math.round(width * 0.28)),
+    bottom: Math.max(1, Math.round(height * 0.28)),
+    left: Math.max(1, Math.round(width * 0.28)),
+  };
+}
+
+export function createDefaultBubbleStretch(width = 60, height = 42): StretchPoint {
+  return {
+    x: Math.max(1, Math.round(width * 0.5)),
+    y: Math.max(1, Math.round(height * 0.5)),
+  };
+}
+
 export function bubbleAdjustmentToSpec(
   adjustment?: AdminBubbleAdjustment,
   geometry?: Partial<Record<ThemePlatform, BubbleGeometry>>,
@@ -528,12 +580,10 @@ function isValidBubbleSpecLike(markers: Markers | undefined, insets: Insets | un
 function parseOptionalAnalysis(value: unknown): AdminAssetAnalysis | undefined {
   if (value == null) return undefined;
   const record = requireRecord(value);
+  // 옛 행의 shapes/aspectRatio/transparentPixelRatio는 읽지 않고 버린다.
   return {
     width: readOptionalNumber(record.width),
     height: readOptionalNumber(record.height),
-    aspectRatio: readOptionalNumber(record.aspectRatio),
-    transparentPixelRatio: readOptionalNumber(record.transparentPixelRatio),
-    shapes: readShapeArray(record.shapes),
   };
 }
 
@@ -640,15 +690,6 @@ function readOptionalThemeResourceRole(value: unknown): ThemeResourceRole | unde
 function readStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string");
-}
-
-function readShapeArray(value: unknown): AdminAssetShape[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(isAdminAssetShape);
-}
-
-function isAdminAssetShape(value: unknown): value is AdminAssetShape {
-  return value === "square" || value === "portrait" || value === "wide" || value === "transparent" || value === "ninepatch" || value === "unknown";
 }
 
 function requireRecord(value: unknown): Record<string, unknown> {

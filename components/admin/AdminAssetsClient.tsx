@@ -17,6 +17,7 @@ import {
   adminAssetToFile,
   adminAssetBubbleDecorationToFile,
   bubbleAdjustmentToSpec,
+  createDefaultBubbleAdjustment,
   describeAdminAssetAnalysis,
   getAdminAssetKindLabel,
   inferAdminAssetKind,
@@ -29,7 +30,6 @@ import {
   type AdminBubbleAdjustment,
   type AdminAssetCandidate,
   type AdminAssetKind,
-  type AdminAssetShape,
   type AdminAssetTargetInput,
   type AdminBubbleSpec,
 } from "@/lib/theme/adminAssets";
@@ -252,11 +252,11 @@ export default function AdminAssetsClient() {
     () =>
       filterAdminAssetListItems(sortedAssets, assetSearch).map((asset) => ({
         asset,
-        warnings: getAdminAssetGuidanceForSlots(activeKindSlots, asset.assetKind ?? assetKind, asset.analysis ?? null),
+        warnings: getAdminAssetGuidanceForSlots(activeKindSlots, asset.assetKind ?? assetKind, asset.analysis ?? null, asset.fileName),
       })),
     [activeKindSlots, assetKind, assetSearch, sortedAssets],
   );
-  const guidanceItems = useMemo(() => getAdminAssetGuidanceForSlots(activeKindSlots, assetKind, analysis), [activeKindSlots, analysis, assetKind]);
+  const guidanceItems = useMemo(() => getAdminAssetGuidanceForSlots(activeKindSlots, assetKind, analysis, file?.name), [activeKindSlots, analysis, assetKind, file]);
 
   useEffect(() => {
     if (assetKind !== "bubble" || !analysis) return;
@@ -278,7 +278,7 @@ export default function AdminAssetsClient() {
       })
       .catch((error) => {
         console.error(error);
-        if (active) setAnalysis({ shapes: inferShapesFromFileName(file.name) });
+        if (active) setAnalysis({});
       });
     return () => {
       active = false;
@@ -500,7 +500,7 @@ export default function AdminAssetsClient() {
         try {
           const itemAnalysis = pending.file === file && analysis
             ? analysis
-            : await analyzeImageFile(pending.file).catch(() => ({ shapes: inferShapesFromFileName(pending.file.name) }));
+            : await analyzeImageFile(pending.file).catch(() => ({}));
           const savedAsset = await saveAdminAssetCandidate({
             slotRole: representativeTarget.slotRole ?? saveSlotRole,
             platform: representativeTarget.platform,
@@ -1043,7 +1043,7 @@ export default function AdminAssetsClient() {
               ) : null}
               {file ? (
                 <div className="rounded-2xl bg-[var(--color-surface-low)] px-4 py-3 text-xs font-bold text-[var(--color-on-surface-variant)]">
-                  자동 분석: {describeAdminAssetAnalysis(analysis ?? { shapes: inferShapesFromFileName(file.name) })}
+                  자동 분석: {describeAdminAssetAnalysis(analysis ?? undefined)}
                 </div>
               ) : null}
               {guidanceItems.length > 0 ? (
@@ -1267,7 +1267,7 @@ export default function AdminAssetsClient() {
                 <span className="text-xs font-black text-[var(--color-on-surface)]">적용되는 슬롯</span>
                 <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{editingAsset ? formatAdminAssetTargets(editingAsset, slots) : formatAdminAssetTargetsFromInputs(selectedSaveTargets, slots, assetKind)}</p>
               </section>
-              {file ? <section className="grid gap-2 rounded-2xl bg-[var(--color-surface-low)] p-3"><span className="text-xs font-black text-[var(--color-on-surface)]">자동 분석</span><p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{describeAdminAssetAnalysis(analysis ?? { shapes: inferShapesFromFileName(file.name) })}</p></section> : null}
+              {file ? <section className="grid gap-2 rounded-2xl bg-[var(--color-surface-low)] p-3"><span className="text-xs font-black text-[var(--color-on-surface)]">자동 분석</span><p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{describeAdminAssetAnalysis(analysis ?? undefined)}</p></section> : null}
               {guidanceItems.length > 0 ? <section className="grid gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3"><span className="inline-flex items-center gap-1.5 text-xs font-black text-amber-950"><AlertTriangle size={14} /> 저장 전 확인</span><ul className="grid gap-1.5">{guidanceItems.map((item) => <li key={item} className="text-xs font-semibold leading-5 text-amber-900">{item}</li>)}</ul></section> : null}
               <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={requestSave}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
@@ -1428,33 +1428,46 @@ function getSharedAdminAssetTargets(asset: AdminAssetCandidate): AdminAssetTarge
   return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }];
 }
 
-function getAdminAssetGuidance(slot: ThemeAssetSlot | undefined, assetKind: AdminAssetKind, analysis: AdminAssetAnalysis | null) {
+/** 정사각으로 볼 비율 폭. 예전 `shapes`의 "square" 판정과 같은 경계다. */
+const squareAspectRatioRange = { min: 0.85, max: 1.18 } as const;
+
+/**
+ * 업로드 이미지에 대한 경고.
+ *
+ * 크기와 파일명만 본다. 예전에는 캔버스 픽셀 스캔에서 얻은 형태·투명도도 함께 봤지만, 그
+ * 비용을 업로드마다 치를 만한 경고가 아니었다. 정사각 여부는 비율로, 9-patch 여부는 파일명
+ * 확장자로 같은 결론을 낼 수 있어 그대로 남긴다.
+ *
+ * **사라진 것은 투명 배경 경고 하나다.** 알파 채널 비율은 픽셀을 읽지 않으면 알 수 없다.
+ */
+function getAdminAssetGuidance(
+  slot: ThemeAssetSlot | undefined,
+  assetKind: AdminAssetKind,
+  analysis: AdminAssetAnalysis | null,
+  fileName?: string,
+) {
   if (!slot || !analysis) return [];
   const items: string[] = [];
   const width = analysis.width ?? 0;
   const height = analysis.height ?? 0;
-  const shapes = new Set(analysis.shapes);
-  const hasTransparencyAnalysis = typeof analysis.transparentPixelRatio === "number";
-  const hasTransparentPixels = hasTransparencyAnalysis ? (analysis.transparentPixelRatio ?? 0) > 0.01 : shapes.has("transparent");
 
   if (!width || !height) {
     items.push("이미지 크기를 확인하지 못했습니다. 저장 후 실제 프리뷰에서 깨짐 여부를 확인하세요.");
     return items;
   }
 
-  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher" || assetKind === "passcode_indicator") && !shapes.has("square")) {
+  const aspectRatio = width / height;
+  const isSquarish = aspectRatio > squareAspectRatioRange.min && aspectRatio < squareAspectRatioRange.max;
+  const isNinePatchFile = Boolean(fileName?.toLowerCase().endsWith(".9.png"));
+
+  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher" || assetKind === "passcode_indicator") && !isSquarish) {
     items.push("아이콘·프로필·암호 표시 이미지는 정사각형에 가까울수록 잘리지 않고 안정적으로 보입니다.");
   }
-  if ((assetKind === "background" || assetKind === "passcode" || slot.role.includes("background")) && width / height > 1.2) {
+  if ((assetKind === "background" || assetKind === "passcode" || slot.role.includes("background")) && aspectRatio > 1.2) {
     items.push("배경 이미지는 세로 화면에서 사용됩니다. 가로형 이미지는 상하 영역이 비거나 잘릴 수 있습니다.");
   }
-  if (assetKind === "bubble" && !shapes.has("ninepatch") && slot.platform === "android") {
+  if (assetKind === "bubble" && !isNinePatchFile && slot.platform === "android") {
     items.push("Android 말풍선은 9-patch 또는 stretch 조정값이 중요합니다. 저장 전 말풍선 조정값을 확인하세요.");
-  }
-  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher" || assetKind === "passcode_indicator" || assetKind === "bubble") && !hasTransparentPixels) {
-    items.push(hasTransparencyAnalysis
-      ? "투명 픽셀이 거의 없습니다. 누끼가 필요한 에셋은 실제 테마에서 사각 배경이 보일 수 있습니다."
-      : "투명 배경 여부를 확인하지 못했습니다. 누끼가 필요한 에셋은 배경이 사각형으로 보일 수 있습니다.");
   }
   if (Math.min(width, height) < 48) {
     items.push("이미지 한쪽 변이 48px 미만입니다. 고해상도 기기에서 흐릿하게 보일 수 있습니다.");
@@ -1469,8 +1482,13 @@ function getAdminAssetGuidance(slot: ThemeAssetSlot | undefined, assetKind: Admi
   return Array.from(new Set(items));
 }
 
-function getAdminAssetGuidanceForSlots(slots: readonly ThemeAssetSlot[], assetKind: AdminAssetKind, analysis: AdminAssetAnalysis | null) {
-  return Array.from(new Set(slots.flatMap((slot) => getAdminAssetGuidance(slot, assetKind, analysis))));
+function getAdminAssetGuidanceForSlots(
+  slots: readonly ThemeAssetSlot[],
+  assetKind: AdminAssetKind,
+  analysis: AdminAssetAnalysis | null,
+  fileName?: string,
+) {
+  return Array.from(new Set(slots.flatMap((slot) => getAdminAssetGuidance(slot, assetKind, analysis, fileName))));
 }
 
 function BubblePlatformSummary({
@@ -1893,6 +1911,13 @@ function AdminAssetEditDialog({
   );
 }
 
+/**
+ * 업로드 이미지의 크기를 잰다.
+ *
+ * 브라우저 전용이다 — `Image`와 `URL.createObjectURL`을 쓰므로 서버 공용 `lib/theme`으로
+ * 옮기지 않는다. 예전에는 캔버스에 그려 전 픽셀 알파까지 훑었지만, 그 결과(투명도·형태)를
+ * 쓰는 곳이 화면 문구밖에 없어 업로드마다 치를 비용이 아니었다.
+ */
 async function analyzeImageFile(file: File): Promise<AdminAssetAnalysis> {
   const url = URL.createObjectURL(file);
   try {
@@ -1902,115 +1927,11 @@ async function analyzeImageFile(file: File): Promise<AdminAssetAnalysis> {
       element.onerror = () => reject(new Error("이미지를 분석하지 못했습니다."));
       element.src = url;
     });
-    const aspectRatio = image.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : undefined;
-    const transparentPixelRatio = analyzeTransparentPixelRatio(image);
     return {
       width: image.naturalWidth || undefined,
       height: image.naturalHeight || undefined,
-      aspectRatio,
-      transparentPixelRatio,
-      shapes: inferShapes(file, aspectRatio, transparentPixelRatio),
     };
   } finally {
     URL.revokeObjectURL(url);
   }
-}
-
-function analyzeTransparentPixelRatio(image: HTMLImageElement) {
-  const sourceWidth = image.naturalWidth || image.width;
-  const sourceHeight = image.naturalHeight || image.height;
-  if (!sourceWidth || !sourceHeight) return undefined;
-
-  const maxSize = 160;
-  const scale = Math.min(1, maxSize / Math.max(sourceWidth, sourceHeight));
-  const width = Math.max(1, Math.round(sourceWidth * scale));
-  const height = Math.max(1, Math.round(sourceHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) return undefined;
-
-  try {
-    context.clearRect(0, 0, width, height);
-    context.drawImage(image, 0, 0, width, height);
-    const pixels = context.getImageData(0, 0, width, height).data;
-    let transparentPixels = 0;
-    const totalPixels = width * height;
-    for (let index = 3; index < pixels.length; index += 4) {
-      if (pixels[index] < 250) transparentPixels += 1;
-    }
-    return totalPixels > 0 ? transparentPixels / totalPixels : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function inferShapes(file: File, aspectRatio?: number, transparentPixelRatio?: number): AdminAssetShape[] {
-  const shapes = new Set<AdminAssetShape>(inferShapesFromFileName(file.name));
-  if (aspectRatio) {
-    if (aspectRatio > 0.85 && aspectRatio < 1.18) shapes.add("square");
-    if (aspectRatio <= 0.85) shapes.add("portrait");
-    if (aspectRatio >= 1.18) shapes.add("wide");
-  }
-  if (typeof transparentPixelRatio === "number") {
-    if (transparentPixelRatio > 0.01) {
-      shapes.add("transparent");
-    } else {
-      shapes.delete("transparent");
-    }
-  } else if (file.type === "image/png") {
-    shapes.add("transparent");
-  }
-  return Array.from(shapes);
-}
-
-function inferShapesFromFileName(fileName: string): AdminAssetShape[] {
-  const normalized = fileName.toLowerCase();
-  const shapes = new Set<AdminAssetShape>();
-  if (normalized.endsWith(".9.png")) shapes.add("ninepatch");
-  if (normalized.endsWith(".png")) shapes.add("transparent");
-  if (normalized.includes("background") || normalized.includes("bg")) shapes.add("portrait");
-  if (normalized.includes("icon") || normalized.includes("ico") || normalized.includes("profile") || normalized.includes("avatar")) shapes.add("square");
-  if (shapes.size === 0) shapes.add("unknown");
-  return Array.from(shapes);
-}
-
-function createDefaultBubbleAdjustment(analysis?: AdminAssetAnalysis | null): AdminBubbleAdjustment {
-  const width = Math.max(8, analysis?.width ?? 60);
-  const height = Math.max(8, analysis?.height ?? 42);
-  return {
-    markers: createDefaultMarkers(width, height),
-    insets: createDefaultInsets(width, height),
-    stretch: createDefaultStretch(width, height),
-  };
-}
-
-function createDefaultMarkers(width = 60, height = 42): Markers {
-  const xStart = Math.max(1, Math.floor(width * 0.42));
-  const xEnd = Math.max(xStart + 1, Math.floor(width * 0.58));
-  const yStart = Math.max(1, Math.floor(height * 0.42));
-  const yEnd = Math.max(yStart + 1, Math.floor(height * 0.58));
-  return {
-    top: { start: xStart, end: xEnd },
-    left: { start: yStart, end: yEnd },
-    right: { start: yStart, end: yEnd },
-    bottom: { start: xStart, end: xEnd },
-  };
-}
-
-function createDefaultInsets(width = 60, height = 42): Insets {
-  return {
-    top: Math.max(1, Math.round(height * 0.28)),
-    right: Math.max(1, Math.round(width * 0.28)),
-    bottom: Math.max(1, Math.round(height * 0.28)),
-    left: Math.max(1, Math.round(width * 0.28)),
-  };
-}
-
-function createDefaultStretch(width = 60, height = 42): StretchPoint {
-  return {
-    x: Math.max(1, Math.round(width * 0.5)),
-    y: Math.max(1, Math.round(height * 0.5)),
-  };
 }

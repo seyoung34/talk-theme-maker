@@ -35,6 +35,7 @@ export {
   bubbleAdjustmentToSpec,
   bubbleSpecToAdjustment,
   canonicalAdminAssetToCandidate,
+  createDefaultBubbleAdjustment,
   inferAdminAssetKind,
   legacyRoleFromKind,
   mapCanonicalAdminAssetRow,
@@ -46,7 +47,6 @@ export {
   type AdminAssetPage,
   type AdminAssetPlatform,
   type AdminAssetRecommendationItem,
-  type AdminAssetShape,
   type AdminAssetAnalysis,
   type AdminAssetTarget,
   type AdminAssetTargetInput,
@@ -471,11 +471,8 @@ export function getAdminAssetKindLabel(kind: AdminAssetKind): string {
 }
 
 export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis): string {
-  if (!analysis) return "분석 정보 없음";
-  const size = analysis.width && analysis.height ? `${analysis.width}x${analysis.height}` : "크기 미확인";
-  const shape = analysis.shapes.filter((item) => item !== "unknown").join(", ") || "unknown";
-  const transparency = typeof analysis.transparentPixelRatio === "number" ? ` · 투명 ${Math.round(analysis.transparentPixelRatio * 100)}%` : "";
-  return `${size} · ${shape}${transparency}`;
+  if (!analysis?.width || !analysis.height) return "크기 미확인";
+  return `${analysis.width}x${analysis.height}`;
 }
 
 async function replaceAdminAssetTargets(
