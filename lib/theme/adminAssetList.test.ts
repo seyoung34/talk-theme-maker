@@ -35,7 +35,6 @@ function listItem(overrides: Partial<AdminAssetListItem> = {}): AdminAssetListIt
     title: "가",
     slotRole: "main_background",
     platform: "all",
-    enabled: true,
     createdAt: 0,
     updatedAt: 0,
     fileName: "a.png",

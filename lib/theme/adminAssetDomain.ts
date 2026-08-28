@@ -45,6 +45,7 @@ export type AdminAssetTarget = {
   readonly slotRole?: ThemeResourceRole;
   readonly targetKind: AdminAssetTargetKind;
   readonly priority: number;
+  /** legacy visibility flag; availability is now determined by registration and target compatibility. */
   readonly enabled: boolean;
 };
 
@@ -145,7 +146,6 @@ export type AdminAssetListOptions = {
   readonly slotRole?: ThemeResourceRole;
   readonly cursor?: string;
   readonly limit?: number;
-  readonly enabledOnly?: boolean;
 };
 
 export type CanonicalAdminAsset = {

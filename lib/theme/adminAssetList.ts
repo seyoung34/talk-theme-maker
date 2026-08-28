@@ -22,8 +22,8 @@ import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 /**
  * 카드가 "적용 범위"를 문장으로 그리는 데 필요한 만큼만 남긴 target.
  *
- * `id`/`assetId`/`priority`/`enabled`는 빼도 화면이 그려진다. 순위와 활성 여부는 후보를
- * 고르는 서버(`selectAdminAssetTargetMatch`)의 판단 재료이지 목록이 보여 줄 값이 아니다.
+ * `id`/`assetId`/`priority`/legacy enabled는 빼도 화면이 그려진다. 순위와 legacy 상태는
+ * 후보를 고르는 내부 계약의 잔여 필드이지 목록이 보여 줄 값이 아니다.
  */
 export type AdminAssetListTarget = {
   readonly platform: AdminAssetPlatform;
@@ -38,7 +38,6 @@ export type AdminAssetListItem = {
   /** 대표 target에서 온 값. `asset_kind`가 비어 있는 옛 행의 카드 라벨에만 쓴다. */
   readonly slotRole: ThemeResourceRole;
   readonly platform: AdminAssetPlatform;
-  readonly enabled: boolean;
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly fileName: string;
@@ -93,7 +92,6 @@ export function toAdminAssetListItem(
     ...(asset.assetKind ? { assetKind: asset.assetKind } : {}),
     slotRole: asset.slotRole,
     platform: asset.platform,
-    enabled: asset.enabled,
     createdAt: asset.createdAt,
     updatedAt: asset.updatedAt,
     fileName: asset.fileName,

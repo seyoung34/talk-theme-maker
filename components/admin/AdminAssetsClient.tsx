@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertTriangle, Check, ChevronDown, Edit3, Eye, EyeOff, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
@@ -23,7 +23,6 @@ import {
   legacyRoleFromKind,
   saveAdminAssetCandidate,
   saveAdminBubbleBuilderCandidate,
-  setAdminAssetEnabled,
   updateAdminAssetCandidate,
   withAdminAssetPlatformVariant,
   type AdminAssetAnalysis,
@@ -127,8 +126,6 @@ export default function AdminAssetsClient() {
   const [assets, setAssets] = useState<AdminAssetListItem[]>([]);
   const [assetsTruncated, setAssetsTruncated] = useState(false);
   const [assetSort, setAssetSort] = useState<AdminAssetListSortKey>("updated");
-  const [includeDisabled, setIncludeDisabled] = useState(false);
-  const [togglingAssetId, setTogglingAssetId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [assetKind, setAssetKind] = useState<AdminAssetKind>("background");
   const [analysis, setAnalysis] = useState<AdminAssetAnalysis | null>(null);
@@ -291,7 +288,7 @@ export default function AdminAssetsClient() {
 
   useEffect(() => {
     void refreshAssets();
-  }, [assetKind, includeDisabled]);
+  }, [assetKind]);
 
   useEffect(() => {
     setBubbleBuilderDraft(null);
@@ -369,9 +366,12 @@ export default function AdminAssetsClient() {
   const refreshAssets = async () => {
     if (!assetKind) return;
     const seq = ++assetRequestSeqRef.current;
+    // 종류를 바꾸는 순간 이전 종류의 카드가 새 제목 아래 잠깐 보이지 않게 한다.
+    setAssets([]);
+    setAssetsTruncated(false);
     try {
       setIsLoadingAssets(true);
-      const page = await listAdminAssetLibrary({ assetKind, includeDisabled });
+      const page = await listAdminAssetLibrary({ assetKind });
       // 종류를 빠르게 오갈 때 늦게 도착한 이전 응답이 현재 목록을 덮어쓰지 않게 한다.
       if (seq !== assetRequestSeqRef.current) return;
       setAssets([...page.items]);
@@ -412,7 +412,8 @@ export default function AdminAssetsClient() {
           recipe: bubbleBuilderDraft.recipe,
           decorations: bubbleBuilderDraft.decorations,
           geometryMode: bubbleGeometryMode,
-          enabled: editingAsset.enabled,
+          // 활성/비활성 토글은 제거했다. 기존 레코드를 다시 저장해도 후보로 유지한다.
+          enabled: true,
         });
         setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? toListItem(updatedAsset) : asset)));
         setEditingAsset(updatedAsset);
@@ -576,31 +577,6 @@ export default function AdminAssetsClient() {
     });
     return () => { cancelled = true; };
   }, [assetPendingDelete]);
-
-  /**
-   * 후보를 추천 목록에서 내리거나 다시 올린다.
-   *
-   * 낙관적으로 먼저 뒤집고 실패하면 되돌린다. "비활성 포함"이 꺼져 있으면 비활성으로 바꾼
-   * 항목은 목록에서 빠져야 하는데, 그 제거까지 낙관적으로 하면 실패했을 때 되살릴 자리를
-   * 잃는다. 그래서 자리는 두고 다음 조회에서 정리한다.
-   */
-  const toggleEnabled = async (asset: AdminAssetListItem) => {
-    if (togglingAssetId) return;
-    const next = !asset.enabled;
-    setTogglingAssetId(asset.id);
-    setAssets((current) => current.map((item) => (item.id === asset.id ? { ...item, enabled: next } : item)));
-    try {
-      await setAdminAssetEnabled(asset.id, next);
-      if (editingAsset?.id === asset.id) setEditingAsset({ ...editingAsset, enabled: next });
-      setNotice(next ? "추천 목록에 다시 노출합니다." : "추천 목록에서 내렸습니다. 편집기 후보에서 빠집니다.");
-    } catch (error) {
-      console.error(error);
-      setAssets((current) => current.map((item) => (item.id === asset.id ? { ...item, enabled: asset.enabled } : item)));
-      setNotice("활성 상태를 바꾸지 못했습니다.");
-    } finally {
-      setTogglingAssetId(null);
-    }
-  };
 
   const remove = async (asset: AdminAssetListItem) => {
     if (deletingAssetId) return;
@@ -1233,15 +1209,6 @@ export default function AdminAssetsClient() {
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" />
                   </div>
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]">
-                    <input
-                      type="checkbox"
-                      checked={includeDisabled}
-                      onChange={(event) => setIncludeDisabled(event.currentTarget.checked)}
-                      className="size-3.5 accent-[var(--color-info)]"
-                    />
-                    비활성 포함
-                  </label>
                   {assetsTruncated ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1.5 text-[11px] font-black text-amber-800">
                       <AlertTriangle size={11} aria-hidden="true" /> 500개까지만 불러왔습니다
@@ -1267,7 +1234,7 @@ export default function AdminAssetsClient() {
               ) : filteredAssets.length > 0 ? (
                 <div className={`grid gap-3 sm:grid-cols-2 ${assetGridColumns === 3 ? "xl:grid-cols-3" : assetGridColumns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
                   {filteredAssets.map(({ asset, warnings }) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} deleting={deletingAssetId === asset.id} toggling={togglingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} onToggleEnabled={() => void toggleEnabled(asset)} />
+                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} deleting={deletingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />
                   ))}
                 </div>
               ) : (
@@ -1312,7 +1279,6 @@ export default function AdminAssetsClient() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0"><span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Library</span><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{getAdminAssetKindLabel(assetKind)} · {assetSearch.trim() ? `검색 ${filteredAssets.length} / ` : ""}{assetsTruncated ? `${assets.length}개 이상` : `${assets.length}개`}</p></div>
               <div className="relative min-w-[220px] flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" /><input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.currentTarget.value)} placeholder="후보 검색" className="h-10 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-xs font-semibold outline-none focus:bg-white" aria-label="관리 후보 검색" /></div>
-              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-[var(--color-surface-low)] px-2.5 py-1.5 text-[11px] font-black text-[var(--color-on-surface-variant)]"><input type="checkbox" checked={includeDisabled} onChange={(event) => setIncludeDisabled(event.currentTarget.checked)} className="size-3 accent-[var(--color-info)]" />비활성 포함</label>
               <div className="flex flex-wrap gap-1">{([["updated", "수정순"], ["created", "등록순"], ["title", "이름순"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setAssetSort(value)} aria-pressed={assetSort === value} className={`rounded-full px-2.5 py-1.5 text-[11px] font-black ${assetSort === value ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{label}</button>)}</div>
             </div>
             <div className="flex min-h-[132px] gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
@@ -1387,7 +1353,6 @@ export default function AdminAssetsClient() {
             <Dialog.Title className="text-xl font-extrabold text-[var(--color-on-surface)]">이 후보를 삭제할까요?</Dialog.Title>
             <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
               &ldquo;{assetPendingDelete?.title}&rdquo; 후보와 저장된 이미지가 영구히 삭제됩니다. 되돌릴 수 없습니다.
-              {assetPendingDelete?.enabled ? " 잠시 감추기만 하려면 카드의 “내리기”를 쓰세요 — 언제든 되돌릴 수 있습니다." : ""}
             </Dialog.Description>
             {templatesUsingPendingDelete && templatesUsingPendingDelete.length > 0 ? (
               <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2.5 text-xs font-semibold leading-5 text-amber-900">
@@ -1459,7 +1424,8 @@ function bubbleVariantFromRole(role: string): "first" | "group" | null {
 }
 
 function getSharedAdminAssetTargets(asset: AdminAssetCandidate): AdminAssetTargetInput[] {
-  return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: asset.enabled }];
+  void asset;
+  return [{ platform: "all", targetKind: "asset_kind", priority: 0, enabled: true }];
 }
 
 function getAdminAssetGuidance(slot: ThemeAssetSlot | undefined, assetKind: AdminAssetKind, analysis: AdminAssetAnalysis | null) {
@@ -1625,24 +1591,20 @@ function AdminAssetCard({
   slots,
   warnings,
   deleting,
-  toggling,
   onEdit,
   onDelete,
-  onToggleEnabled,
 }: {
   asset: AdminAssetListItem;
   slots: readonly ThemeAssetSlot[];
   warnings: string[];
   deleting: boolean;
-  toggling: boolean;
   onEdit: () => void;
   onDelete: () => void;
-  onToggleEnabled: () => void;
 }) {
   const tileUrl = adminAssetListTileUrl(asset);
   const scopeLabel = getAdminAssetScopeLabel(describeAdminAssetScope(asset.targets));
   return (
-    <article className={`relative grid gap-3 overflow-hidden rounded-[24px] border bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] transition duration-200 ${asset.enabled ? "border-[var(--color-outline-variant)]" : "border-dashed border-slate-300"} ${deleting ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(42,103,103,0.1)]"}`}>
+    <article className={`relative grid gap-3 overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] transition duration-200 ${deleting ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(42,103,103,0.1)]"}`}>
       {deleting ? (
         <div className="absolute inset-0 z-10 grid place-items-center bg-white/70 backdrop-blur-[1px]" role="status" aria-live="polite">
           <span className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-700 shadow-sm">
@@ -1651,13 +1613,12 @@ function AdminAssetCard({
           </span>
         </div>
       ) : null}
-      <div className={`aspect-[4/3] overflow-hidden rounded-[18px] border border-[var(--color-outline-variant)] ${asset.enabled ? "" : "opacity-50 grayscale"}`} style={TRANSPARENCY_CHECKER_STYLE}>
+      <div className="aspect-[4/3] overflow-hidden rounded-[18px] border border-[var(--color-outline-variant)]" style={TRANSPARENCY_CHECKER_STYLE}>
         <div className="size-full bg-contain bg-center bg-no-repeat" style={{ backgroundImage: tileUrl ? `url(${tileUrl})` : undefined }} />
       </div>
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap gap-1.5">
           <span className="rounded-full bg-[var(--color-inverse-surface)] px-2 py-0.5 text-[10px] font-black text-[var(--color-inverse-on-surface)]">{scopeLabel}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${asset.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{asset.enabled ? "사용 중" : "비활성"}</span>
           {asset.variantPlatforms.map((platform) => (
             <span key={platform} className="rounded-full bg-[var(--color-surface-low)] px-2 py-0.5 text-[10px] font-black text-[var(--color-on-surface-variant)]">{platform === "android" ? "Android 전용본" : "iOS 전용본"}</span>
           ))}
@@ -1670,20 +1631,9 @@ function AdminAssetCard({
         {asset.hasBubbleAdjustment ? <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">말풍선 조정값 저장됨</span> : null}
         {warnings[0] ? <span className="mt-2 block rounded-xl bg-amber-50 px-2.5 py-2 text-[11px] font-semibold leading-4 text-amber-900">{warnings[0]}</span> : null}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <button type="button" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" disabled={deleting} onClick={onEdit}>
           <Pencil size={14} aria-hidden="true" /> 수정
-        </button>
-        <button
-          type="button"
-          className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:-translate-y-0.5 hover:bg-[var(--color-surface-low)] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]"
-          disabled={deleting || toggling}
-          onClick={onToggleEnabled}
-          aria-pressed={!asset.enabled}
-          title={asset.enabled ? "편집기 추천 후보에서 내립니다" : "편집기 추천 후보로 다시 올립니다"}
-        >
-          {toggling ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : asset.enabled ? <EyeOff size={14} aria-hidden="true" /> : <Eye size={14} aria-hidden="true" />}
-          {asset.enabled ? "내리기" : "올리기"}
         </button>
         <button type="button" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:-translate-y-0.5 hover:border-red-200 hover:bg-red-50 hover:text-red-700 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" disabled={deleting} onClick={onDelete}>
           {deleting ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : null}
@@ -1710,7 +1660,7 @@ function AdminAssetDockCard({
   const tileUrl = adminAssetListTileUrl(asset);
   return (
     <article className="grid min-w-48 max-w-48 grid-rows-[76px_auto] gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-white p-2.5 shadow-[0_8px_18px_rgba(42,103,103,0.06)]">
-      <button type="button" onClick={onEdit} className={`relative overflow-hidden rounded-xl border border-[var(--color-outline-variant)] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-info)] ${asset.enabled ? "" : "opacity-50 grayscale"}`} style={TRANSPARENCY_CHECKER_STYLE} aria-label={`${asset.title} 수정`}>
+      <button type="button" onClick={onEdit} className="relative overflow-hidden rounded-xl border border-[var(--color-outline-variant)] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-info)]" style={TRANSPARENCY_CHECKER_STYLE} aria-label={`${asset.title} 수정`}>
         <span className="absolute inset-0 bg-contain bg-center bg-no-repeat" style={{ backgroundImage: tileUrl ? `url(${tileUrl})` : undefined }} aria-hidden="true" />
         {warnings.length > 0 ? <span className="absolute right-1.5 top-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-800">확인 {warnings.length}</span> : null}
       </button>

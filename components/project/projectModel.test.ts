@@ -235,6 +235,22 @@ describe("시스템 템플릿과 추천 에셋 후보 병합", () => {
 
     expect(candidates.filter((candidate) => candidate.source === "admin")).toHaveLength(24);
   });
+
+  it("다른 슬롯 요청에 속한 늦은 추천 응답은 후보로 재사용하지 않는다", () => {
+    const targetSlot = slots.find((candidate) => candidate.role === "main_background")!;
+    const recommended = {
+      ...adminAsset("stale-recommendation"),
+      recommendationContext: {
+        platform: "android" as const,
+        assetKind: "bubble" as const,
+        slotRole: "bubble_me_1",
+      },
+    };
+
+    const candidates = buildSlotCandidates(targetSlot, {}, {}, {}, "basic", template, slots, [recommended]);
+
+    expect(candidates.some((candidate) => candidate.id === recommended.id && candidate.source === "admin")).toBe(false);
+  });
 });
 
 /**

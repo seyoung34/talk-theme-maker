@@ -180,10 +180,10 @@ export function isAdminAssetAllowedForExport(input: {
   resourceRole: ThemeResourceRole;
 }) {
   const { asset, platform, resourceRole } = input;
-  if (!asset.enabled) return false;
 
   /**
-   * 플랫폼 판정은 target이 한다.
+   * 플랫폼 판정은 target이 한다. enabled는 과거 추천 토글의 잔여 컬럼이므로 현재 후보
+   * 가용성에서는 사용하지 않는다.
    *
    * 대표 target(`selectRepresentativeTarget`)의 platform을 여기서 한 번 더 보면, `exact_role(android)`
    * 과 `asset_kind(all)`을 함께 가진 에셋이 iOS에서 거부된다 — 대표로 뽑히는 쪽이 `exact_role`이라

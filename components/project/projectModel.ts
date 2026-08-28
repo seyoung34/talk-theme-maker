@@ -13,10 +13,10 @@ import {
 } from "@/lib/theme/project/state";
 import { getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
-import { describeAdminAssetAnalysis, getAdminAssetKindLabel, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { describeAdminAssetAnalysis, getAdminAssetKindLabel, inferAdminAssetKind, type AdminAssetCandidate, type AdminAssetKind } from "@/lib/theme/adminAssets";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
-import type { ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
+import type { ThemePlatform, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 export type SlotCandidate = {
   id: string;
@@ -166,7 +166,7 @@ export function buildSlotCandidates(
   templateId: ThemeTemplateId,
   template: ThemeTemplate,
   allSlots: ThemeAssetSlot[] = [],
-  adminAssets: AdminAssetCandidate[] = [],
+  adminAssets: AdminAssetCandidateWithRecommendationContext[] = [],
   uploadPreviewUrls: Record<string, string> = {},
 ): SlotCandidate[] {
   if (!slot) return [];
@@ -238,7 +238,7 @@ export function buildSlotCandidates(
       // 시스템 템플릿 제작자가 같은 관리자 에셋을 추천 라이브러리에도 등록하면 ID가
       // 보존된 채 hydrate된다. 이 경우 템플릿 파일을 canonical 후보로 유지하고 관리자
       // 메타데이터는 이름을 설명하는 데만 사용한다. 파일·삭제 권한·내보내기는 템플릿
-      // 사본을 계속 바라보므로 추천 에셋이 나중에 바뀌거나 비활성화돼도 결과가 변하지 않는다.
+      // 사본을 계속 바라보므로 추천 에셋 목록이 나중에 바뀌어도 결과가 변하지 않는다.
       const matchingAdminAsset = adminAssetsById.get(entry.id);
       return {
         id: entry.id,
@@ -278,8 +278,28 @@ export function buildSlotCandidates(
  * 늘어나는 수가 매번 달라진다. 무엇보다 판정이 서버·export 게이트와 갈라져, 화면에서 사라진
  * 에셋이 실제로는 내보내기 허용 대상인 상태가 된다.
  */
-function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | undefined, adminAssets: Array<AdminAssetCandidate & { previewUrl?: string; thumbnailUrl?: string }>): SlotCandidate[] {
+type AdminAssetRecommendationContext = {
+  readonly platform: ThemePlatform;
+  readonly assetKind: AdminAssetKind;
+  readonly slotRole: string;
+};
+
+type AdminAssetCandidateWithRecommendationContext = AdminAssetCandidate & {
+  readonly previewUrl?: string;
+  readonly thumbnailUrl?: string;
+  readonly recommendationContext?: AdminAssetRecommendationContext;
+};
+
+function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | undefined, adminAssets: AdminAssetCandidateWithRecommendationContext[]): SlotCandidate[] {
   return adminAssets
+    .filter((asset) => {
+      const context = asset.recommendationContext;
+      if (!context) return true;
+      if (context.platform !== slot.platform || context.assetKind !== inferAdminAssetKind(slot)) return false;
+      // bubble 후보 풀은 네 기본 말풍선 슬롯이 공유한다. 나머지는 요청한 role의 응답만
+      // 현재 패널에 허용해, 슬롯 전환 중 이전 응답이 잘못 적용되지 않게 한다.
+      return context.assetKind === "bubble" || context.slotRole === slot.role;
+    })
     .map((asset) => ({
       id: asset.id,
       title: asset.title,

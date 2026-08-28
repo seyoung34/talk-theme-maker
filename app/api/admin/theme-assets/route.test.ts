@@ -14,6 +14,7 @@ function row(id: string, overrides: Record<string, unknown> = {}) {
     file_name: `${id}.png`,
     mime_type: "image/png",
     storage_path: `admin-assets/${id}/background.png`,
+    asset_object_id: "registry-1",
     enabled: true,
     created_at: "2026-08-20T00:00:00.000Z",
     updated_at: "2026-08-22T00:00:00.000Z",
@@ -118,7 +119,7 @@ describe("GET /api/admin/theme-assets", () => {
    * 썸네일이 있는 에셋은 원본을 서명조차 하지 않아야 한다.
    */
   it("썸네일이 있으면 원본을 서명하지 않고 Storage path도 응답에 넣지 않는다", async () => {
-    registryRows = [{ logical_asset_id: `admin:${assetId}`, variant_key: "canonical", r2_previews: { picker: { objectKey: "preview/v1/ab/hash.webp" } } }];
+    registryRows = [{ id: "registry-1", logical_asset_id: `admin:${assetId}`, variant_key: "canonical", r2_previews: { picker: { objectKey: "preview/v1/ab/hash.webp" } } }];
     const GET = await load([[row(assetId)]], { r2Origin: "https://preview.test" });
 
     const response = await GET(request("assetKind=background"));
@@ -132,7 +133,7 @@ describe("GET /api/admin/theme-assets", () => {
   });
 
   it("썸네일이 없는 에셋만 원본 signed URL로 폴백한다", async () => {
-    registryRows = [{ logical_asset_id: `admin:${assetId}`, variant_key: "canonical", r2_previews: { picker: { objectKey: "preview/v1/ab/hash.webp" } } }];
+    registryRows = [{ id: "registry-1", logical_asset_id: `admin:${assetId}`, variant_key: "canonical", r2_previews: { picker: { objectKey: "preview/v1/ab/hash.webp" } } }];
     const GET = await load([[row(assetId), row("22222222-2222-4222-8222-222222222222")]], { r2Origin: "https://preview.test" });
 
     const response = await GET(request("assetKind=background"));
@@ -141,6 +142,42 @@ describe("GET /api/admin/theme-assets", () => {
     expect(signedPaths).toEqual([["admin-assets/22222222-2222-4222-8222-222222222222/background.png"]]);
     expect(payload.items.find((item: { id: string }) => item.id === assetId).previewUrl).toBeUndefined();
     expect(payload.items.find((item: { id: string }) => item.id !== assetId).previewUrl).toContain("https://signed.test/");
+  });
+
+  it("현재 catalog pointer와 다른 예전 registry 썸네일은 사용하지 않는다", async () => {
+    registryRows = [{ id: "old-registry", logical_asset_id: `admin:${assetId}`, variant_key: "canonical", r2_previews: { picker: { objectKey: "preview/old.webp" } } }];
+    const GET = await load([[row(assetId, { asset_object_id: "current-registry" })]], { r2Origin: "https://preview.test" });
+
+    const response = await GET(request("assetKind=background"));
+    const payload = await response.json();
+
+    expect(payload.items[0].thumbnailUrl).toBeUndefined();
+    expect(payload.items[0].previewUrl).toContain("https://signed.test/");
+  });
+
+  it("canonical이 없는 빌더 후보는 현재 Android variant 썸네일을 사용한다", async () => {
+    registryRows = [{ id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: { picker: { objectKey: "preview/android.webp" } } }];
+    const GET = await load([[
+      row(assetId, {
+        asset_kind: "bubble",
+        asset_object_id: null,
+        admin_asset_variants: [{
+          id: "variant-1",
+          asset_id: assetId,
+          platform: "android",
+          storage_path: `admin-assets/${assetId}/android.png`,
+          asset_object_id: "android-registry",
+          file_name: "android.png",
+          mime_type: "image/png",
+        }],
+      }),
+    ]], { r2Origin: "https://preview.test" });
+
+    const response = await GET(request("assetKind=bubble"));
+    const payload = await response.json();
+
+    expect(payload.items[0].thumbnailUrl).toBe("https://preview.test/preview/android.webp");
+    expect(payload.items[0].previewUrl).toBeUndefined();
   });
 
   it("R2 origin이 없으면 전부 원본으로 떨어진다", async () => {
@@ -177,16 +214,43 @@ describe("GET /api/admin/theme-assets", () => {
     expect(payload.truncated).toBe(true);
   });
 
-  it("기본값은 enabled 에셋만, includeDisabled면 전부 읽는다", async () => {
-    const GET = await load([[]]);
+  it("501~599개인 종류도 500개로 자르고 truncated로 알린다", async () => {
+    const batch = (count: number, prefix: string) => Array.from({ length: count }, (_, index) => row(`${prefix}-${index}`));
+    const GET = await load([batch(200, "first"), batch(200, "second"), batch(101, "third")]);
+
+    const response = await GET(request("assetKind=background"));
+    const payload = await response.json();
+
+    expect(payload.items).toHaveLength(500);
+    expect(payload.truncated).toBe(true);
+    expect(rangeStarts).toEqual([0, 200, 400]);
+  });
+
+  it("기존 enabled 값과 무관하게 등록된 후보를 모두 읽는다", async () => {
+    const GET = await load([[row(assetId, { enabled: false })]]);
     await GET(request("assetKind=background"));
 
-    expect(assetFilters).toContainEqual({ column: "enabled", value: true });
-
-    const GET2 = await load([[]]);
-    await GET2(request("assetKind=background&includeDisabled=true"));
-
     expect(assetFilters).not.toContainEqual({ column: "enabled", value: true });
+  });
+
+  it("말풍선 spec이 있으면 조정값 배지를 유지한다", async () => {
+    const GET = await load([[
+      row(assetId, {
+        asset_kind: "bubble",
+        admin_asset_bubble_specs: [{
+          asset_id: assetId,
+          android_markers: { top: { start: 1, end: 2 }, left: { start: 1, end: 2 }, right: { start: 4, end: 5 }, bottom: { start: 4, end: 5 } },
+          ios_insets: { top: 1, right: 1, bottom: 1, left: 1 },
+          ios_stretch: { x: 2, y: 2 },
+          geometry: null,
+        }],
+      }),
+    ]]);
+
+    const response = await GET(request("assetKind=bubble"));
+    const payload = await response.json();
+
+    expect(payload.items[0].hasBubbleAdjustment).toBe(true);
   });
 
   it("legacy는 asset_kind가 비어 있는 행을 찾는다", async () => {

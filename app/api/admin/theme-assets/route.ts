@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow } from "@/lib/theme/adminAssets";
 import { toAdminAssetListItem, type AdminAssetListItem, type AdminAssetListPayload } from "@/lib/theme/adminAssetList";
 import { adminLogicalAssetId, canonicalVariantKey } from "@/lib/theme/assetCatalog/logicalAssetId";
-import { buildPickerThumbnailIndex, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
+import { buildPickerThumbnailIndex, filterPickerThumbnailRowsForCurrentAssets, type PickerThumbnailAssetRef, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
 import { themeAssetsBucketName } from "@/lib/theme/remoteAssets";
 
@@ -53,11 +53,13 @@ const listSelect = [
   "file_name",
   "mime_type",
   "storage_path",
+  "asset_object_id",
   "enabled",
   "created_at",
   "updated_at",
   "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
-  "admin_asset_variants(id,asset_id,platform,storage_path,file_name,mime_type)",
+  "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch,geometry)",
+  "admin_asset_variants(id,asset_id,platform,storage_path,asset_object_id,file_name,mime_type)",
 ].join(",");
 
 export async function GET(request: NextRequest) {
@@ -69,14 +71,12 @@ export async function GET(request: NextRequest) {
   if (!assetKind || (!allowedAssetKinds.has(assetKind) && assetKind !== legacyAssetKind)) {
     return NextResponse.json({ error: "assetKind가 올바르지 않습니다." }, { status: 400 });
   }
-  const includeDisabled = request.nextUrl.searchParams.get("includeDisabled") === "true";
-
   try {
     const admin = createAdminClient();
-    const { rows, truncated } = await readListRows(admin, assetKind, includeDisabled);
+    const { rows, truncated } = await readListRows(admin, assetKind);
     const candidates = rows.map((row) => canonicalAdminAssetToCandidate(mapCanonicalAdminAssetRow(row)));
 
-    const thumbnails = await readThumbnailIndex(admin, candidates.map((candidate) => candidate.id));
+    const thumbnails = await readThumbnailIndex(admin, candidates);
     const needsFallback = candidates.filter((candidate) => !pickThumbnailUrl(thumbnails, candidate.id));
     const signedUrls = await createSignedUrlMap(admin, needsFallback.map((candidate) => candidate.storagePath));
 
@@ -100,30 +100,32 @@ export async function GET(request: NextRequest) {
 async function readListRows(
   admin: ReturnType<typeof createAdminClient>,
   assetKind: string,
-  includeDisabled: boolean,
 ): Promise<{ rows: unknown[]; truncated: boolean }> {
   const rows: unknown[] = [];
   let offset = 0;
 
-  while (rows.length <= maxRows) {
+  while (rows.length < maxRows) {
+    // 상한 바로 앞에서는 한 행을 더 요청해 501~599개인 종류도 정확히 잘렸다고 표시한다.
+    // 매번 200개를 요청하면 마지막 짧은 batch를 정상 종료로 오인할 수 있다.
+    const requestSize = Math.min(batchSize, maxRows + 1 - rows.length);
     const base = admin.from("admin_assets").select(listSelect);
     // 필터를 먼저 걸고 `range`는 마지막에 둔다. 범위를 잡은 뒤 조건을 더하면 배치 경계가
     // 필터 이전 집합 기준이 되어 페이지마다 다른 모집단을 자르게 된다.
-    let query = assetKind === legacyAssetKind ? base.is("asset_kind", null) : base.eq("asset_kind", assetKind);
-    if (!includeDisabled) query = query.eq("enabled", true);
+    const query = assetKind === legacyAssetKind ? base.is("asset_kind", null) : base.eq("asset_kind", assetKind);
 
     const { data, error } = await query
       .order("updated_at", { ascending: false })
       .order("id", { ascending: false })
-      .range(offset, offset + batchSize - 1);
+      .range(offset, offset + requestSize - 1);
     if (error) throw error;
     const batch = Array.isArray(data) ? data : [];
     rows.push(...batch);
-    if (batch.length < batchSize) return { rows, truncated: false };
+    if (rows.length > maxRows) return { rows: rows.slice(0, maxRows), truncated: true };
+    if (batch.length < requestSize) return { rows, truncated: false };
     offset += batch.length;
   }
 
-  return { rows: rows.slice(0, maxRows), truncated: true };
+  return { rows, truncated: true };
 }
 
 /**
@@ -134,17 +136,17 @@ async function readListRows(
  */
 async function readThumbnailIndex(
   admin: ReturnType<typeof createAdminClient>,
-  adminAssetIds: readonly string[],
+  assets: readonly PickerThumbnailAssetRef[],
 ): Promise<PickerThumbnailIndex> {
-  if (!adminAssetIds.length || !getR2PreviewOrigin()) return {};
+  if (!assets.length || !getR2PreviewOrigin()) return {};
   try {
     const { data, error } = await admin
       .from("theme_asset_objects")
-      .select("logical_asset_id,variant_key,r2_previews")
+      .select("id,logical_asset_id,variant_key,r2_previews")
       .eq("status", "active")
-      .in("logical_asset_id", adminAssetIds.map(adminLogicalAssetId));
+      .in("logical_asset_id", assets.map((asset) => adminLogicalAssetId(asset.id)));
     if (error) throw error;
-    return buildPickerThumbnailIndex(data ?? []);
+    return buildPickerThumbnailIndex(filterPickerThumbnailRowsForCurrentAssets(data ?? [], assets));
   } catch (error) {
     console.warn("Admin asset thumbnail lookup failed; falling back to signed originals.", JSON.stringify(serializeError(error)));
     return {};
@@ -158,7 +160,7 @@ async function readThumbnailIndex(
  */
 function pickThumbnailUrl(index: PickerThumbnailIndex, adminAssetId: string): string | undefined {
   const byVariant = index[adminAssetId];
-  return byVariant?.[canonicalVariantKey];
+  return byVariant?.[canonicalVariantKey] ?? byVariant?.android ?? byVariant?.ios;
 }
 
 async function createSignedUrlMap(

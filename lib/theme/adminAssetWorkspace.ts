@@ -53,10 +53,11 @@ export function selectAdminAssetTargetMatch(
   platform: ThemePlatform,
   options: { readonly allowCompatibleExactRole?: boolean } = {},
 ): AdminAssetTargetMatch | undefined {
-  if (!asset.enabled) return undefined;
   let best: AdminAssetTargetMatch | undefined;
   for (const target of resolveMatchTargets(asset)) {
-    if (!target.enabled || (target.platform !== "all" && target.platform !== platform)) continue;
+    // enabled는 과거 운영 토글의 잔여 컬럼이다. 현재는 등록된 후보를 모두 사용하고
+    // 플랫폼/target 종류만 호환성의 근거로 삼는다.
+    if (target.platform !== "all" && target.platform !== platform) continue;
     const rank = getTargetMatchRank(slot, target, asset.assetKind, options.allowCompatibleExactRole ?? false);
     if (rank === undefined) continue;
     if (!best || rank < best.rank || (rank === best.rank && target.priority > best.target.priority)) {

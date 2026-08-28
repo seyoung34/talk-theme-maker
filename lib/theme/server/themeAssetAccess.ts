@@ -24,7 +24,7 @@ type SupabaseAdminClient = ReturnType<typeof createAdminClient>;
  */
 const visibilityCacheTtlMs = 60_000;
 const publicVariantCache = createTtlCache<boolean>({ ttlMs: visibilityCacheTtlMs, maxEntries: 256 });
-const enabledAdminAssetCache = createTtlCache<boolean>({ ttlMs: visibilityCacheTtlMs, maxEntries: 256 });
+const adminAssetCache = createTtlCache<boolean>({ ttlMs: visibilityCacheTtlMs, maxEntries: 256 });
 
 export type ThemeAssetAccessCheck = {
   ok: true;
@@ -90,25 +90,23 @@ export async function checkThemeAssetStorageAccess(
   const adminAssetPaths = paths.filter((path) => path.startsWith("admin-assets/"));
   if (adminAssetPaths.length && !isAdmin) {
     // 이번 요청 안에서는 캐시 축출에 흔들리지 않도록 답을 지역 Map에 모은다.
-    const enabled = readCached(enabledAdminAssetCache, adminAssetPaths);
-    const unknown = adminAssetPaths.filter((path) => !enabled.has(path));
+    const known = readCached(adminAssetCache, adminAssetPaths);
+    const unknown = adminAssetPaths.filter((path) => !known.has(path));
 
     if (unknown.length) {
-      const { data: enabledAssets, error } = await adminClient
+      const { data: registeredAssets, error } = await adminClient
         .from("admin_assets")
         .select("storage_path,admin_asset_targets!inner(id)")
-        .eq("enabled", true)
-        .eq("admin_asset_targets.enabled", true)
         .in("storage_path", unknown);
       if (error) throw error;
 
-      const enabledPaths = new Set((enabledAssets ?? []).map((asset) => asset.storage_path));
+      const registeredPaths = new Set((registeredAssets ?? []).map((asset) => asset.storage_path));
       // 조회 결과에 없는 경로는 "공개 아님"이다. 이 답도 저장해야 비공개 경로 반복 요청이
       // 캐시를 그대로 통과하지 않는다.
-      for (const path of unknown) writeCached(enabledAdminAssetCache, enabled, path, enabledPaths.has(path));
+      for (const path of unknown) writeCached(adminAssetCache, known, path, registeredPaths.has(path));
     }
 
-    const forbiddenPath = adminAssetPaths.find((path) => !enabled.get(path));
+    const forbiddenPath = adminAssetPaths.find((path) => !known.get(path));
     if (forbiddenPath) {
       return { ok: false, status: 403, error: "공개되지 않은 추천 에셋입니다." };
     }

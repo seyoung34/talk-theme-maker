@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
 import { getThemeSlots } from "@/lib/theme/templates";
-import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import type { AdminAssetCandidate, AdminAssetPage } from "@/lib/theme/adminAssets";
 
-const listRecommendedAssetCandidatePage = vi.fn(async () => ({ items: [] as AdminAssetCandidate[], nextCursor: undefined }));
+const listRecommendedAssetCandidatePage = vi.fn<() => Promise<AdminAssetPage>>(async () => ({ items: [] as AdminAssetCandidate[], nextCursor: undefined }));
 
 vi.mock("@/lib/theme/adminAssets", async () => {
   const actual = await vi.importActual<typeof import("@/lib/theme/adminAssets")>("@/lib/theme/adminAssets");
@@ -57,5 +57,32 @@ describe("useProjectAssetUploads - 말풍선 슬롯 간 추천 에셋 공유", (
 
     rerender({ selectedSlot: mainBackground });
     await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(2));
+  });
+
+  it("첫 요청이 실패한 뒤 다른 말풍선 슬롯으로 옮기면 다시 요청한다", async () => {
+    listRecommendedAssetCandidatePage.mockClear();
+    listRecommendedAssetCandidatePage
+      .mockRejectedValueOnce(new Error("temporary failure"))
+      .mockResolvedValue({ items: [], nextCursor: undefined });
+    const { rerender } = renderWithSlot(bubbleMe1);
+
+    await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(1));
+    rerender({ selectedSlot: bubbleMe2 });
+    await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(2));
+  });
+
+  it("더 보기에서는 기존 페이지 뒤에 새 후보를 이어 붙인다", async () => {
+    listRecommendedAssetCandidatePage.mockClear();
+    const first = { id: "first", title: "첫 후보" } as AdminAssetCandidate;
+    const second = { id: "second", title: "두 번째 후보" } as AdminAssetCandidate;
+    listRecommendedAssetCandidatePage
+      .mockResolvedValueOnce({ items: [first], nextCursor: "next" })
+      .mockResolvedValueOnce({ items: [second], nextCursor: undefined });
+    const { result } = renderWithSlot(bubbleMe1);
+
+    await vi.waitFor(() => expect(result.current.adminAssetsWithPreview.map((item) => item.id)).toEqual(["first"]));
+    await act(async () => { await result.current.loadMoreAdminAssets(); });
+
+    expect(result.current.adminAssetsWithPreview.map((item) => item.id)).toEqual(["first", "second"]);
   });
 });

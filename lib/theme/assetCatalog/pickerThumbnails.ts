@@ -29,10 +29,40 @@ export const pickerPreviewPresetKey = "picker";
 type PreviewEntry = { objectKey?: unknown; sha256?: unknown };
 
 export type PickerThumbnailRow = {
+  readonly id?: unknown;
   readonly logical_asset_id?: unknown;
   readonly variant_key?: unknown;
   readonly r2_previews?: unknown;
 };
+
+export type PickerThumbnailAssetRef = {
+  readonly id: string;
+  readonly assetObjectId?: unknown;
+  readonly variants?: readonly { readonly assetObjectId?: unknown }[];
+};
+
+/**
+ * 같은 logical asset의 예전 revision이 active로 남아 있어도 현재 parent/variant pointer와
+ * 일치하는 registry row만 타일에 쓴다. 재업로드 중 pointer가 비워진 경우에는 stale R2
+ * 이미지를 보여 주지 않고 호출부가 Storage 원본으로 폴백한다.
+ */
+export function filterPickerThumbnailRowsForCurrentAssets(
+  rows: readonly PickerThumbnailRow[],
+  assets: readonly PickerThumbnailAssetRef[],
+): PickerThumbnailRow[] {
+  const currentObjectIds = new Map<string, Set<string>>();
+  for (const asset of assets) {
+    const objectIds = [asset.assetObjectId, ...(asset.variants ?? []).map((variant) => variant.assetObjectId)]
+      .filter((value): value is string => typeof value === "string" && value.length > 0);
+    if (objectIds.length > 0) currentObjectIds.set(adminLogicalAssetId(asset.id), new Set(objectIds));
+  }
+
+  return rows.filter((row) => {
+    const logicalAssetId = typeof row.logical_asset_id === "string" ? row.logical_asset_id : "";
+    const registryId = typeof row.id === "string" ? row.id : "";
+    return Boolean(registryId && currentObjectIds.get(logicalAssetId)?.has(registryId));
+  });
+}
 
 /** `adminAssetId` → `variantKey` → URL. */
 export type PickerThumbnailIndex = Readonly<Record<string, Readonly<Record<string, string>>>>;

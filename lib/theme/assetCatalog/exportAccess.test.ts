@@ -30,16 +30,25 @@ describe("catalog export access", () => {
     expect(isCatalogExportResourceRole("launcher_icon", "ios")).toBe(false);
   });
 
-  it("현재 enabled와 exact target 정책을 통과시킨다", () => {
+  it("현재 target 호환성 정책을 통과시킨다", () => {
     expect(isAdminAssetAllowedForExport({ asset: access(), platform: "android", resourceRole: "main_background" })).toBe(true);
   });
 
   it.each([
-    ["disabled", { enabled: false }],
     ["wrong platform target", { admin_asset_targets: [{ asset_id: assetId, platform: "ios", slot_role: "main_background", target_kind: "exact_role", priority: 0, enabled: true }] }],
-    ["disabled target", { admin_asset_targets: [{ asset_id: assetId, platform: "android", slot_role: "main_background", target_kind: "exact_role", priority: 0, enabled: false }] }],
   ])("%s 에셋은 export에서 차단한다", (_label, overrides) => {
     expect(isAdminAssetAllowedForExport({ asset: access(overrides), platform: "android", resourceRole: "main_background" })).toBe(false);
+  });
+
+  it("legacy enabled 값과 무관하게 등록된 target은 export에 허용한다", () => {
+    expect(isAdminAssetAllowedForExport({
+      asset: access({
+        enabled: false,
+        admin_asset_targets: [{ asset_id: assetId, platform: "android", slot_role: "main_background", target_kind: "exact_role", priority: 0, enabled: false }],
+      }),
+      platform: "android",
+      resourceRole: "main_background",
+    })).toBe(true);
   });
 
   // target이 아직 없는 옛 행은 부모 컬럼이 유일한 근거라 그대로 플랫폼 경계가 된다.
@@ -140,11 +149,8 @@ describe("catalog export access", () => {
   });
 });
 
-/**
- * 권한 경로의 기본값은 거부다. 조회가 `enabled`를 빠뜨리면(성능 목적으로 select 목록을 줄이는
- * 등) 비활성 에셋이 조용히 통과하는 일이 없어야 한다.
- */
-describe("enabled 플래그는 fail-closed다", () => {
+/** DB 컬럼은 구버전 row 호환을 위해 파싱하지만, 현재 제품 정책에서는 가용성 판정에 쓰지 않는다. */
+describe("legacy enabled 필드는 메타데이터로만 읽는다", () => {
   const base = {
     id: "3f1a4b2c-0000-4000-8000-000000000001",
     slot_role: "main_background",
@@ -152,7 +158,7 @@ describe("enabled 플래그는 fail-closed다", () => {
     asset_kind: "background",
   };
 
-  it("명시적 true만 허용한다", () => {
+  it("명시적 true는 유지한다", () => {
     expect(mapAdminAssetExportAccessRow({ ...base, enabled: true }).enabled).toBe(true);
   });
 
@@ -162,7 +168,7 @@ describe("enabled 플래그는 fail-closed다", () => {
     ["문자열 true", { enabled: "true" }],
     ["숫자 1", { enabled: 1 }],
     ["false", { enabled: false }],
-  ])("%s는 거부한다", (_label, overrides) => {
+  ])("%s는 legacy 값으로 false를 보존한다", (_label, overrides) => {
     expect(mapAdminAssetExportAccessRow({ ...base, ...overrides }).enabled).toBe(false);
   });
 });

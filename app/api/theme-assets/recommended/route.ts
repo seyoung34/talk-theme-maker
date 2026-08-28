@@ -6,7 +6,7 @@ import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAss
 import { selectAdminAssetTargetMatch } from "@/lib/theme/adminAssetWorkspace";
 import type { ThemeResourceRole } from "@/lib/theme/types";
 import { adminLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
-import { buildPickerThumbnailIndex, selectPickerThumbnailUrl, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
+import { buildPickerThumbnailIndex, filterPickerThumbnailRowsForCurrentAssets, selectPickerThumbnailUrl, type PickerThumbnailAssetRef, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
 import { isCatalogExportAssetAllowed, warnOnCatalogExportScopeDrift } from "@/lib/theme/assetCatalog/exportGate";
 import { findMatchingCatalogRef } from "@/lib/theme/assetCatalog/recommendedCatalog";
@@ -14,7 +14,7 @@ import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
 
 const bucketName = "theme-assets";
 const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"]);
-/** 한 번의 PostgREST 요청 크기. 추천 결과를 정확히 정렬하려면 모든 enabled source를 읽어야 한다. */
+/** 한 번의 PostgREST 요청 크기. 추천 결과를 정확히 정렬하려면 모든 source를 읽어야 한다. */
 const sourceBatchSize = 200;
 const recommendedPageCacheTtlSeconds = 30;
 
@@ -114,8 +114,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Valid platform and assetKind are required." }, { status: 400 });
     }
 
-    // 편집기에서 슬롯을 고를 때마다 호출되는 경로다. 응답은 사용자와 무관하게
-    // enabled 에셋만 담으므로 짧게 재사용해 슬롯 클릭마다 원본 전체를 다시 읽지 않게 한다.
+    // 편집기에서 슬롯을 고를 때마다 호출되는 경로다. 등록 후보 집합을 짧게 재사용해
+    // 슬롯 클릭마다 원본 전체를 다시 읽지 않게 한다.
     const cacheKey = [platform, assetKind, slotRole ?? "", limit, cursor ? cursorParam : ""].join("|");
     const admin = createAdminClient();
     const cached = recommendedPageCache.get(cacheKey);
@@ -132,11 +132,14 @@ export async function GET(request: NextRequest) {
     const hasMore = cursorFiltered.length > limit;
     const signedUrls = await createSignedUrlMap(admin, page.map((item) => item.asset.variants.find((variant) => variant.platform === platform)?.storagePath ?? item.asset.storagePath));
     const signedUrlRecord = Object.fromEntries(signedUrls);
-    const thumbnailIndex = await readPickerThumbnailIndex(admin, page.map((item) => item.asset.id));
-
-    const entries = page.map((item) => {
+    const prepared = page.map((item) => {
       const candidate = canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord);
       const withVariant = withAdminAssetPlatformVariant(candidate, platform);
+      return { item, candidate, withVariant };
+    });
+    const thumbnailIndex = await readPickerThumbnailIndex(admin, prepared.map(({ withVariant }) => withVariant));
+
+    const entries = prepared.map(({ item, candidate, withVariant }) => {
       /**
        * 플랫폼 원본으로 바뀌었는지 본다.
        *
@@ -187,7 +190,6 @@ async function readRecommendedSourceRows(
     const { data, error } = await admin
       .from("admin_assets")
       .select(recommendedAssetSelect)
-      .eq("enabled", true)
       .eq("asset_kind", assetKind)
       .order("updated_at", { ascending: false })
       .order("id", { ascending: false })
@@ -288,17 +290,17 @@ function rankAsset(
  */
 async function readPickerThumbnailIndex(
   admin: ReturnType<typeof createAdminClient>,
-  adminAssetIds: readonly string[],
+  assets: readonly PickerThumbnailAssetRef[],
 ): Promise<PickerThumbnailIndex> {
-  if (!adminAssetIds.length || !getR2PreviewOrigin()) return {};
+  if (!assets.length || !getR2PreviewOrigin()) return {};
   try {
     const { data, error } = await admin
       .from("theme_asset_objects")
-      .select("logical_asset_id,variant_key,r2_previews")
+      .select("id,logical_asset_id,variant_key,r2_previews")
       .eq("status", "active")
-      .in("logical_asset_id", adminAssetIds.map(adminLogicalAssetId));
+      .in("logical_asset_id", assets.map((asset) => adminLogicalAssetId(asset.id)));
     if (error) throw error;
-    return buildPickerThumbnailIndex(data ?? []);
+    return buildPickerThumbnailIndex(filterPickerThumbnailRowsForCurrentAssets(data ?? [], assets));
   } catch (error) {
     console.warn("Picker thumbnail lookup failed; falling back to original preview URLs.", JSON.stringify(serializeError(error)));
     return {};

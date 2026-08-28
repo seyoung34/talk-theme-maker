@@ -60,6 +60,28 @@ describe("buildPickerThumbnailIndex", () => {
   });
 });
 
+describe("filterPickerThumbnailRowsForCurrentAssets", () => {
+  it("현재 canonical/variant pointer와 일치하는 registry row만 남긴다", async () => {
+    const { filterPickerThumbnailRowsForCurrentAssets } = await load("https://cdn.example.com");
+    const rows = [
+      row("canonical", "aa", { id: "current-canonical" }),
+      row("android", "bb", { id: "current-android" }),
+      row("canonical", "cc", { id: "stale" }),
+    ];
+
+    expect(filterPickerThumbnailRowsForCurrentAssets(rows, [{
+      id: assetId,
+      assetObjectId: "current-canonical",
+      variants: [{ assetObjectId: "current-android" }],
+    }])).toEqual(rows.slice(0, 2));
+  });
+
+  it("현재 pointer가 없으면 예전 active row도 남기지 않는다", async () => {
+    const { filterPickerThumbnailRowsForCurrentAssets } = await load("https://cdn.example.com");
+    expect(filterPickerThumbnailRowsForCurrentAssets([row("canonical", "aa", { id: "old" })], [{ id: assetId }])).toEqual([]);
+  });
+});
+
 describe("selectPickerThumbnailUrl", () => {
   it("플랫폼 variant 썸네일을 우선한다", async () => {
     const { buildPickerThumbnailIndex, selectPickerThumbnailUrl } = await load("https://cdn.example.com");
