@@ -158,11 +158,6 @@ describe("describeAdminAssetScope", () => {
     expect(describeAdminAssetScope(targets)).toBe(expected);
   });
 
-  /** `shape_rule`도 슬롯을 지정하지 않으므로 kind 전체와 같은 범위다. */
-  it("shape_rule은 kind 전체로 본다", () => {
-    expect(describeAdminAssetScope([{ platform: "all", targetKind: "shape_rule" }])).toBe("kind_wide");
-  });
-
   it("모든 범위에 사람이 읽을 라벨이 있다", () => {
     for (const scope of ["kind_wide", "role_specific", "mixed", "none"] as const) {
       expect(getAdminAssetScopeLabel(scope)).not.toBe("");

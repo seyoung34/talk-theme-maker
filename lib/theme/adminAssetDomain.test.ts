@@ -94,8 +94,8 @@ describe("isValidBubbleBuilderTargets", () => {
     expect(isValidBubbleBuilderTargets([], "bubble_me_1")).toBe(false);
   });
 
-  it("rejects a shape_rule target", () => {
-    expect(isValidBubbleBuilderTargets([{ platform: "all", targetKind: "shape_rule", priority: 0, enabled: true }], "bubble_me_1")).toBe(false);
+  it("rejects an exact_role target for another slot", () => {
+    expect(isValidBubbleBuilderTargets([{ platform: "all", slotRole: "bubble_you_1", targetKind: "exact_role", priority: 0, enabled: true }], "bubble_me_1")).toBe(false);
   });
 });
 

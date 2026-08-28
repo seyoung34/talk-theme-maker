@@ -343,7 +343,7 @@ function readAssetKind(value: unknown): AdminAssetKind | undefined {
 }
 
 function readTargetKind(value: unknown): AdminAssetTargetKind {
-  if (value === "exact_role" || value === "asset_kind" || value === "shape_rule") return value;
+  if (value === "exact_role" || value === "asset_kind") return value;
   throw new AdminAssetExportAccessError("INVALID_ADMIN_ASSET_ACCESS_ROW");
 }
 

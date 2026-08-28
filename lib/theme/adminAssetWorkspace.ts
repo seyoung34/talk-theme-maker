@@ -101,7 +101,6 @@ export function formatAdminAssetTarget(
   const platformLabel = formatAdminAssetPlatformLabel(target.platform);
   if (target.slotRole) return `${platformLabel} · ${getAdminAssetSlotLabel(target.slotRole, slots)}`;
   if (target.targetKind === "asset_kind") return `${platformLabel} · ${assetKind ? getAdminAssetKindLabel(assetKind) : "해당 분류"} 전체`;
-  if (target.targetKind === "shape_rule") return `${platformLabel} · 조건에 맞는 슬롯`;
   return `${platformLabel} · 적용 슬롯`;
 }
 
@@ -188,9 +187,7 @@ function getTargetMatchRank(
   // `exact_role`이 아닌 target에 role이 박혀 있으면 저장 시 검증(`validateTarget`)을 통과할 수 없는
   // 형태다. 그런 행은 어느 슬롯을 뜻하는지 알 수 없으므로 근거로 쓰지 않는다.
   if (target.slotRole) return undefined;
-  if (target.targetKind === "asset_kind") return assetKind === slot.kind ? 1 : undefined;
-  if (target.targetKind === "shape_rule") return assetKind === slot.kind ? 2 : undefined;
-  return undefined;
+  return target.targetKind === "asset_kind" && assetKind === slot.kind ? 1 : undefined;
 }
 
 /**

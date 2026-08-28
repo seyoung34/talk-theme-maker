@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type TargetInput = {
-  readonly targetKind: "exact_role" | "asset_kind" | "shape_rule";
+  readonly targetKind: "exact_role" | "asset_kind";
   readonly slotRole?: string;
   readonly priority: number;
 };
@@ -114,7 +114,7 @@ describe("GET /api/theme-assets/recommended", () => {
       if (index === 0) {
         return sourceRow(duplicateAssetId, [
           { targetKind: "asset_kind", priority: 9 },
-          { targetKind: "shape_rule", priority: 9 },
+          { targetKind: "exact_role", slotRole: "main_background", priority: 9 },
         ]);
       }
       return sourceRow(`asset-${String(index).padStart(3, "0")}`, [{ targetKind: "asset_kind", priority: 0 }]);

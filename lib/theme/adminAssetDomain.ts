@@ -10,7 +10,7 @@ import type { CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
  */
 export type AdminAssetKind = ThemeAssetKind;
 export type AdminAssetPlatform = ThemePlatform | "all";
-export type AdminAssetTargetKind = "exact_role" | "asset_kind" | "shape_rule";
+export type AdminAssetTargetKind = "exact_role" | "asset_kind";
 
 /**
  * 업로드 이미지의 크기.
@@ -686,7 +686,7 @@ function parseThemePlatform(value: unknown): ThemePlatform {
 }
 
 function parseTargetKind(value: unknown): AdminAssetTargetKind {
-  if (value === "exact_role" || value === "asset_kind" || value === "shape_rule") return value;
+  if (value === "exact_role" || value === "asset_kind") return value;
   throw new AdminAssetDomainError("INVALID_ASSET_TARGET");
 }
 

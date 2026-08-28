@@ -96,12 +96,14 @@ describe("admin asset workspace slots", () => {
     const generic = asset({
       targets: [
         { platform: "all", targetKind: "asset_kind", priority: 3, enabled: true },
-        { platform: "all", targetKind: "shape_rule", priority: 7, enabled: true },
+        { platform: "android", targetKind: "asset_kind", priority: 7, enabled: true },
       ],
     });
 
     expect(selectAdminAssetTargetMatch(slot!, multi, "android")).toMatchObject({ rank: 0, target: { priority: 1 } });
-    expect(selectAdminAssetTargetMatch(slot!, generic, "android")).toMatchObject({ rank: 1, target: { priority: 3 } });
+    expect(selectAdminAssetTargetMatch(slot!, generic, "android")).toMatchObject({ rank: 1, target: { priority: 7 } });
+    // iOS에서는 android 전용 target이 빠져 남은 하나가 근거가 된다.
+    expect(selectAdminAssetTargetMatch(slot!, generic, "ios")).toMatchObject({ rank: 1, target: { priority: 3 } });
   });
 
   it("targets가 비어 있고 부모 컬럼도 없으면 어떤 근거도 만들지 않는다", () => {
