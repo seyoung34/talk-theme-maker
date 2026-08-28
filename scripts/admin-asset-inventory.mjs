@@ -56,6 +56,7 @@ async function buildReport() {
   const assets = await selectRows("admin_assets", "id,asset_kind,enabled,storage_path,asset_object_id,mime_type,created_at,updated_at");
   const targets = await selectRows("admin_asset_targets", "asset_id,platform,slot_role,target_kind,enabled");
   const variants = await selectRows("admin_asset_variants", "asset_id,platform,storage_path,asset_object_id,mime_type");
+  const decorations = await selectRows("admin_asset_bubble_decorations", "asset_id,storage_path");
   const registry = await selectRows("theme_asset_objects", "id,logical_asset_id,variant_key,status,r2_previews");
   const templateVariants = await selectRows("system_template_variants", "id,upload_refs");
 
@@ -66,7 +67,7 @@ async function buildReport() {
     availability: summariseAvailability(assets, targets),
     targets: summariseTargets(targets),
     catalog: summariseCatalog(assets, variants, registry),
-    storage: await summariseStorage(assets, variants),
+    storage: await summariseStorage(assets, variants, decorations),
     templateReferences: summariseTemplateReferences(templateVariants),
   };
 }
@@ -127,7 +128,7 @@ function summariseCatalog(assets, variants, registry) {
   const byId = new Map(registry.map((row) => [row.id, row]));
   const activeIds = new Set(registry.filter((row) => row.status === "active").map((row) => row.id));
   const pickerIds = new Set(
-    registry.filter((row) => readPickerObjectKey(row.r2_previews)).map((row) => row.id),
+    registry.filter((row) => row.status === "active" && readPickerObjectKey(row.r2_previews)).map((row) => row.id),
   );
 
   const pointers = [
@@ -174,10 +175,11 @@ function summariseCatalog(assets, variants, registry) {
  * 일반 재저장은 새 revision 경로에 올리고 이전 파일을 지우지 않으며, 삭제는 현재 행이 가리키는
  * 경로만 지운다. 그래서 여기 쌓이는 수가 곧 Phase 5가 회수할 용량이다.
  */
-async function summariseStorage(assets, variants) {
+async function summariseStorage(assets, variants, decorations) {
   const referenced = new Set([
     ...assets.map((asset) => asset.storage_path),
     ...variants.map((variant) => variant.storage_path),
+    ...decorations.map((decoration) => decoration.storage_path),
   ].filter(Boolean));
 
   const objects = await listStorageObjects(STORAGE_ROOT);

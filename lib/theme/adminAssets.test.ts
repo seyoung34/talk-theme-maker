@@ -11,6 +11,7 @@ describe("admin asset storage persistence", () => {
   let removeCalls: string[][];
   let rpcCalls: { name: string; args: Record<string, unknown> }[];
   let rpcError: { message: string } | null;
+  let candidateError: { message: string } | null;
   let client: ReturnType<typeof createClientStub>;
 
   function createClientStub() {
@@ -66,7 +67,7 @@ describe("admin asset storage persistence", () => {
           return {
             select: vi.fn(() => ({
               eq: vi.fn(() => ({
-                single: vi.fn(async () => ({ data: row, error: null })),
+                single: vi.fn(async () => ({ data: candidateError ? null : row, error: candidateError })),
                 maybeSingle: vi.fn(async () => ({ data: { storage_path: previousPath }, error: null })),
               })),
             })),
@@ -110,6 +111,7 @@ describe("admin asset storage persistence", () => {
     removeCalls = [];
     rpcCalls = [];
     rpcError = null;
+    candidateError = null;
     client = createClientStub();
     createClient = vi.fn(() => client);
     shadowPublishThemeAsset = vi.fn(async () => ({ status: "disabled" }));
@@ -191,6 +193,15 @@ describe("admin asset storage persistence", () => {
 
     expect(removeCalls).toEqual([[uploadCalls[0].path]]);
     expect(removeCalls[0]).not.toContain(previousPath);
+  });
+
+  it("RPC가 커밋된 뒤 조회가 실패해도 새 바이트를 지우지 않는다", async () => {
+    candidateError = { message: "candidate read failed" };
+    const { saveAdminAssetCandidate } = await load();
+
+    await expect(saveAdminAssetCandidate(input())).rejects.toMatchObject({ message: "candidate read failed" });
+
+    expect(removeCalls).toEqual([]);
   });
 
   /**

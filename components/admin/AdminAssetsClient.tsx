@@ -149,10 +149,26 @@ export default function AdminAssetsClient() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingFilesRef = useRef<PendingAdminAssetFile[]>([]);
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
+  const assetKindRef = useRef<AdminAssetKind>(assetKind);
+  const editRequestRef = useRef(0);
+
+  const selectAssetKind = useCallback((nextKind: AdminAssetKind) => {
+    if (assetKindRef.current === nextKind) return;
+    // kind을 바꾸는 순간 진행 중인 상세 조회를 무효화한다. React effect보다 먼저 ref를
+    // 바꿔야 빠르게 완료된 이전 응답도 새 분류의 편집 상태에 섞이지 않는다.
+    assetKindRef.current = nextKind;
+    editRequestRef.current += 1;
+    setIsLoadingEditAsset(false);
+    setAssetKind(nextKind);
+  }, []);
 
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
   }, [pendingFiles]);
+
+  useEffect(() => {
+    assetKindRef.current = assetKind;
+  }, [assetKind]);
 
   useEffect(() => () => {
     for (const pending of pendingFilesRef.current) URL.revokeObjectURL(pending.previewUrl);
@@ -283,15 +299,17 @@ export default function AdminAssetsClient() {
   }, [file]);
 
   useEffect(() => {
+    editRequestRef.current += 1;
     setBubbleBuilderDraft(null);
     setBubbleBuilderInitial(null);
     setEditingAsset(null);
+    setIsLoadingEditAsset(false);
     setBubbleGeometry({});
     setBubblePreviewEdits({});
     setBubbleVariantFiles({});
     setBubbleGeometryMode("manual");
     setBubbleWorkspaceMode("library");
-  }, [bubbleAnchorSlot?.role]);
+  }, [assetKind, bubbleAnchorSlot?.role]);
 
   useEffect(() => {
     if (!notice) return;
@@ -369,6 +387,8 @@ export default function AdminAssetsClient() {
 
   const submit = async () => {
     if (activeKindSlots.length === 0 || isSavingAsset || (!editingAsset && !bubbleBuilderDraft && uploadableFiles.length === 0 && !file)) return;
+    const saveKind = assetKindRef.current;
+    const isCurrentSave = () => assetKindRef.current === saveKind;
     if (editingAsset && bubbleBuilderDraft) {
       try {
         setIsSavingAsset(true);
@@ -385,6 +405,7 @@ export default function AdminAssetsClient() {
           // 활성/비활성 토글은 제거했다. 기존 레코드를 다시 저장해도 후보로 유지한다.
           enabled: true,
         });
+        if (!isCurrentSave()) return;
         setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? toListItem(updatedAsset) : asset)));
         setEditingAsset(updatedAsset);
         setBubbleBuilderDraft(null);
@@ -409,6 +430,7 @@ export default function AdminAssetsClient() {
           bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined,
           bubbleSpec: assetKind === "bubble" ? bubbleSpec : undefined,
         });
+        if (!isCurrentSave()) return;
         setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? toListItem(updatedAsset) : asset)));
         setEditingAsset(updatedAsset);
         setNotice("에셋 정보를 저장했습니다.");
@@ -441,6 +463,7 @@ export default function AdminAssetsClient() {
           decorations: bubbleBuilderDraft.decorations,
           geometryMode: bubbleGeometryMode,
         });
+        if (!isCurrentSave()) return;
         setTitle("");
         setFile(null);
         setBubbleGeometry({});
@@ -487,17 +510,22 @@ export default function AdminAssetsClient() {
             targets: saveTargets,
           });
           savedAssets.push(savedAsset);
-          setPendingFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: "success", error: undefined } : item));
-          setUploadProgress((current) => current ? { ...current, completed: current.completed + 1, succeeded: current.succeeded + 1, activeFileName: undefined } : current);
+          if (isCurrentSave()) {
+            setPendingFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: "success", error: undefined } : item));
+            setUploadProgress((current) => current ? { ...current, completed: current.completed + 1, succeeded: current.succeeded + 1, activeFileName: undefined } : current);
+          }
         } catch (error) {
           console.error(error);
           const message = error instanceof Error && error.message ? error.message : "저장하지 못했습니다.";
           failedItems.push({ ...pending, status: "error", error: message });
-          setPendingFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: "error", error: message } : item));
-          setUploadProgress((current) => current ? { ...current, completed: current.completed + 1, failed: current.failed + 1, activeFileName: undefined } : current);
+          if (isCurrentSave()) {
+            setPendingFiles((current) => current.map((item) => item.id === pending.id ? { ...item, status: "error", error: message } : item));
+            setUploadProgress((current) => current ? { ...current, completed: current.completed + 1, failed: current.failed + 1, activeFileName: undefined } : current);
+          }
         }
       }
 
+      if (!isCurrentSave()) return;
       if (savedAssets.length > 0) {
         setAssets((current) => [...savedAssets.slice().reverse().map(toListItem), ...current.filter((item) => !savedAssets.some((saved) => saved.id === item.id))]);
       }
@@ -666,17 +694,23 @@ export default function AdminAssetsClient() {
    */
   const beginInPlaceEdit = async (item: AdminAssetListItem) => {
     if (isSavingAsset || isLoadingEditAsset) return;
+    const requestId = ++editRequestRef.current;
+    const requestedKind = assetKindRef.current;
+    const isCurrentRequest = () => editRequestRef.current === requestId && assetKindRef.current === requestedKind;
     let asset: AdminAssetCandidate;
     try {
       setIsLoadingEditAsset(true);
       asset = await getAdminAssetCandidate(item.id);
+      if (!isCurrentRequest()) return;
     } catch (error) {
+      if (!isCurrentRequest()) return;
       console.error(error);
       setNotice("후보 정보를 불러오지 못했습니다.");
       return;
     } finally {
-      setIsLoadingEditAsset(false);
+      if (isCurrentRequest()) setIsLoadingEditAsset(false);
     }
+    if (!isCurrentRequest()) return;
     setEditingAsset(asset);
     setBubbleBuilderDraft(null);
     setBubbleBuilderInitial(null);
@@ -703,6 +737,7 @@ export default function AdminAssetsClient() {
           return [platform, undefined] as const;
         }
       }));
+      if (!isCurrentRequest()) return;
       const platformFiles = Object.fromEntries(loadedFiles.filter(([, loaded]) => loaded)) as Partial<Record<ThemePlatform, File>>;
       const source = platformFiles.android ?? platformFiles.ios;
       if (!source) throw new Error("말풍선 원본을 어느 플랫폼에서도 받지 못했습니다.");
@@ -713,18 +748,21 @@ export default function AdminAssetsClient() {
       setFile(source);
       if (asset.bubbleDesign) {
         const decorations = Object.fromEntries(await Promise.all(asset.bubbleDesign.decorations.map(async (decoration) => [decoration.layerId, await adminAssetBubbleDecorationToFile(decoration)] as const)));
+        if (!isCurrentRequest()) return;
         setBubbleBuilderInitial({ recipe: asset.bubbleDesign.recipe, decorations });
       }
     } catch (error) {
+      if (!isCurrentRequest()) return;
       console.error(error);
       setNotice("말풍선 원본을 불러오지 못했습니다. geometry 저장은 다시 시도할 수 있습니다.");
     } finally {
-      setIsLoadingEditAsset(false);
+      if (isCurrentRequest()) setIsLoadingEditAsset(false);
     }
   };
 
   const exitInPlaceEdit = () => {
     if (isSavingAsset) return;
+    editRequestRef.current += 1;
     setEditingAsset(null);
     setBubbleBuilderDraft(null);
     setBubbleBuilderInitial(null);
@@ -802,7 +840,7 @@ export default function AdminAssetsClient() {
                   key={group.kind}
                   type="button"
                   className={`flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition ${assetKind === group.kind ? "border-[var(--color-info)] bg-[var(--color-info-container)] text-[var(--color-info-strong)]" : "border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface)] hover:bg-[var(--color-surface-low)]"}`}
-                  onClick={() => setAssetKind(group.kind)}
+                  onClick={() => selectAssetKind(group.kind)}
                   aria-current={assetKind === group.kind ? "true" : undefined}
                 >
                   <span className="text-sm font-black">{getAdminAssetKindLabel(group.kind)}</span>
@@ -858,7 +896,7 @@ export default function AdminAssetsClient() {
               </label>
               <label className="grid gap-2">
                 <span className="text-sm font-black text-[var(--color-on-surface)]">에셋 분류</span>
-                <select className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none" value={assetKind} onChange={(event) => setAssetKind(event.currentTarget.value as AdminAssetKind)}>
+                <select className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none" value={assetKind} onChange={(event) => selectAssetKind(event.currentTarget.value as AdminAssetKind)}>
                   {assetKindOrder.map((kind) => (
                     <option key={kind} value={kind}>
                       {getAdminAssetKindLabel(kind)}

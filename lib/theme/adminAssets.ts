@@ -128,6 +128,7 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
 
   // 재저장이면 지금 DB가 가리키는 경로를 먼저 기억한다. 커밋 뒤에 지울 대상이다.
   const previousPath = input.id ? await readAdminAssetStoragePath(id) : undefined;
+  let persisted = false;
 
   try {
     const payload = createAdminAssetPersistencePayload(input, id, storagePath, null);
@@ -147,6 +148,9 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
       p_bubble_spec: payload.bubbleSpec ?? null,
     });
     if (error) throw error;
+    // 여기부터는 DB transaction이 끝났다. 이후 조회·정리 단계가 실패해도 새 row가
+    // 가리키는 바이트를 삭제하면 안 된다.
+    persisted = true;
 
     /**
      * catalog 병행 기록 (계획 §15 rollout 1단계 write shadow).
@@ -167,8 +171,9 @@ export async function saveAdminAssetCandidate(input: AdminAssetCandidateInput): 
     }
     return saved;
   } catch (error) {
-    // RPC는 전부 커밋되거나 전부 롤백된다. 실패했다면 방금 올린 바이트만 치우면 된다.
-    await supabase.storage.from(themeAssetsBucketName).remove([storagePath]);
+    // RPC 이전 실패만 보상한다. 커밋 후 getAdminAssetCandidate/이전 revision 정리 등이
+    // 실패한 경우에는 DB가 새 경로를 가리키므로 바이트를 보존하고 다음 정리에서 재시도한다.
+    if (!persisted) await supabase.storage.from(themeAssetsBucketName).remove([storagePath]);
     throw error;
   }
 }
