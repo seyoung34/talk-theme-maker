@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertTriangle, Check, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Pencil, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
@@ -13,7 +13,6 @@ import {
   deleteAdminAssetCandidate,
   findSystemTemplatesUsingAdminAsset,
   getAdminAssetCandidate,
-  listAdminAssetLibrary,
   adminAssetToFile,
   adminAssetBubbleDecorationToFile,
   bubbleAdjustmentToSpec,
@@ -33,7 +32,8 @@ import {
   type AdminBubbleSpec,
 } from "@/lib/theme/adminAssets";
 import { createAdminAssetSaveTargets, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs, getAdminAssetSlotLabel } from "@/lib/theme/adminAssetWorkspace";
-import { adminAssetListTileUrl, describeAdminAssetScope, filterAdminAssetListItems, getAdminAssetScopeLabel, isAdminAssetListSortKey, sortAdminAssetListItems, toAdminAssetListItem, type AdminAssetListItem, type AdminAssetListSortKey } from "@/lib/theme/adminAssetList";
+import { useAdminAssetLibrary } from "@/components/admin/hooks/useAdminAssetLibrary";
+import { adminAssetListTileUrl, describeAdminAssetScope, getAdminAssetScopeLabel, isAdminAssetListSortKey, toAdminAssetListItem, type AdminAssetListItem } from "@/lib/theme/adminAssetList";
 import { bubbleSlotFromRole } from "@/lib/theme/project/state";
 import { generateBubbleAsset, type BubbleFamilyDesignSpec, type GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
@@ -123,9 +123,6 @@ function getAdminAssetFileKey(file: File) {
 
 export default function AdminAssetsClient() {
   const bubblePreviewPlatform: ThemePlatform = "android";
-  const [assets, setAssets] = useState<AdminAssetListItem[]>([]);
-  const [assetsTruncated, setAssetsTruncated] = useState(false);
-  const [assetSort, setAssetSort] = useState<AdminAssetListSortKey>("updated");
   const [title, setTitle] = useState("");
   const [assetKind, setAssetKind] = useState<AdminAssetKind>("background");
   const [analysis, setAnalysis] = useState<AdminAssetAnalysis | null>(null);
@@ -143,13 +140,11 @@ export default function AdminAssetsClient() {
   const [assetPendingDelete, setAssetPendingDelete] = useState<AdminAssetListItem | null>(null);
   // 삭제 확인 창에 "이 에셋을 쓰는 템플릿"을 보여 준다. `null`은 아직 조회 중이라는 뜻이다.
   const [templatesUsingPendingDelete, setTemplatesUsingPendingDelete] = useState<string[] | null>(null);
-  const [isLoadingAssets, setIsLoadingAssets] = useState(false);
   const [isSavingAsset, setIsSavingAsset] = useState(false);
   const [isLoadingEditAsset, setIsLoadingEditAsset] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<AdminAssetUploadProgress | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [imageEditOpen, setImageEditOpen] = useState(false);
-  const [assetSearch, setAssetSearch] = useState("");
   const [assetGridColumns, setAssetGridColumns] = useState<3 | 4 | 5>(3);
   const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
@@ -161,7 +156,6 @@ export default function AdminAssetsClient() {
   const [rightSidebarWidth, setRightSidebarWidth] = useState(400);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingFilesRef = useRef<PendingAdminAssetFile[]>([]);
-  const assetRequestSeqRef = useRef(0);
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
 
   useEffect(() => {
@@ -175,6 +169,18 @@ export default function AdminAssetsClient() {
   const slots = useMemo(getUnifiedAdminAssetSlots, []);
   const slotGroups = useMemo(() => groupSlotsByAssetKind(slots), [slots]);
   const activeKindSlots = useMemo(() => slots.filter((slot) => inferAdminAssetKind(slot) === assetKind), [assetKind, slots]);
+  const notifyLibraryError = useCallback((message: string) => setNotice(message), []);
+  const {
+    assets,
+    setAssets,
+    visibleAssets,
+    truncated: assetsTruncated,
+    isLoading: isLoadingAssets,
+    search: assetSearch,
+    setSearch: setAssetSearch,
+    sort: assetSort,
+    setSort: setAssetSort,
+  } = useAdminAssetLibrary({ assetKind, onError: notifyLibraryError });
   // 등록 화면에서는 슬롯을 선택하지 않는다. 기존 저장 계약(slot_role)과 말풍선 편집기의
   // 기준 크기를 위해 kind별 첫 슬롯만 내부 대표값으로 사용한다.
   /**
@@ -241,20 +247,18 @@ export default function AdminAssetsClient() {
       (assetKind !== "bubble" || bubbleSpec),
   );
   /**
-   * 목록 파생값.
+   * 카드에 얹을 경고.
    *
-   * 서버가 이미 kind로 좁혀 **종류 전체**를 보내므로 여기서 다시 거르지 않는다. 정렬과 검색이
-   * 전체 집합 위에서 도는 것이 이 화면의 요점이다 — 커서 페이지네이션 위에서는 "이름순"이
-   * 로드된 페이지 안에서만 성립해 목록이 거짓말을 한다.
+   * 조회·정렬·검색은 `useAdminAssetLibrary`가 맡는다. 경고는 슬롯 맥락과 화면 문구가 필요해
+   * 여기 남는다 — 훅이 manifest와 UI 문구에 묶이지 않게 하는 경계다.
    */
-  const sortedAssets = useMemo(() => sortAdminAssetListItems(assets, assetSort), [assets, assetSort]);
   const filteredAssets = useMemo(
     () =>
-      filterAdminAssetListItems(sortedAssets, assetSearch).map((asset) => ({
+      visibleAssets.map((asset) => ({
         asset,
         warnings: getAdminAssetGuidanceForSlots(activeKindSlots, asset.assetKind ?? assetKind, asset.analysis ?? null, asset.fileName),
       })),
-    [activeKindSlots, assetKind, assetSearch, sortedAssets],
+    [activeKindSlots, assetKind, visibleAssets],
   );
   const guidanceItems = useMemo(() => getAdminAssetGuidanceForSlots(activeKindSlots, assetKind, analysis, file?.name), [activeKindSlots, analysis, assetKind, file]);
 
@@ -285,10 +289,6 @@ export default function AdminAssetsClient() {
       URL.revokeObjectURL(previewUrl);
     };
   }, [file]);
-
-  useEffect(() => {
-    void refreshAssets();
-  }, [assetKind]);
 
   useEffect(() => {
     setBubbleBuilderDraft(null);
@@ -362,28 +362,6 @@ export default function AdminAssetsClient() {
   /** 저장 직후에는 R2 축소본이 아직 없다. 그 한 장만 signed 원본으로 그리고 다음 조회에서 축소본으로 바뀐다. */
   const toListItem = (asset: AdminAssetCandidate) =>
     toAdminAssetListItem(asset, asset.previewUrl ? { previewUrl: asset.previewUrl } : {});
-
-  const refreshAssets = async () => {
-    if (!assetKind) return;
-    const seq = ++assetRequestSeqRef.current;
-    // 종류를 바꾸는 순간 이전 종류의 카드가 새 제목 아래 잠깐 보이지 않게 한다.
-    setAssets([]);
-    setAssetsTruncated(false);
-    try {
-      setIsLoadingAssets(true);
-      const page = await listAdminAssetLibrary({ assetKind });
-      // 종류를 빠르게 오갈 때 늦게 도착한 이전 응답이 현재 목록을 덮어쓰지 않게 한다.
-      if (seq !== assetRequestSeqRef.current) return;
-      setAssets([...page.items]);
-      setAssetsTruncated(page.truncated);
-    } catch (error) {
-      if (seq !== assetRequestSeqRef.current) return;
-      console.error(error);
-      setNotice("관리 후보를 불러오지 못했습니다.");
-    } finally {
-      if (seq === assetRequestSeqRef.current) setIsLoadingAssets(false);
-    }
-  };
 
   const startSidebarResize = (side: SidebarResize["side"], event: React.PointerEvent<HTMLButtonElement>) => {
     if (side === "left" && isLeftSidebarCollapsed) return;
