@@ -18,7 +18,7 @@ test("그로블 결제창 왕복 후 서명 웹훅이 반영한 크레딧을 확
       contentType: "application/json",
       body: JSON.stringify({
         paymentId: "90df4ea9-dd9f-4f5a-91cc-b4c09344f96a",
-        checkoutUrl: "https://www.groble.im/payment/u9xtdR?ref=90df4ea9-dd9f-4f5a-91cc-b4c09344f96a",
+        checkoutUrl: "https://www.groble.im/payment/ptjv39?ref=90df4ea9-dd9f-4f5a-91cc-b4c09344f96a",
         amount: 5000,
         credits: 2,
       }),
@@ -35,7 +35,7 @@ test("그로블 결제창 왕복 후 서명 웹훅이 반영한 크레딧을 확
   await expect(page.getByLabel("결제 요청 휴대폰번호")).toHaveCount(0);
   await page.getByRole("button", { name: "5,000원 결제하기" }).click();
 
-  await expect(page).toHaveURL(/groble\.im\/payment\/u9xtdR\?ref=/);
+  await expect(page).toHaveURL(/groble\.im\/payment\/ptjv39\?ref=/);
   expect(prepareBody).toEqual({ productId: "credit-2" });
 
   await page.route("**/api/billing/payments/status**", async (route) => {

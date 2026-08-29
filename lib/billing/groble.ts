@@ -147,9 +147,8 @@ export function parseGrobleWebhook(rawBody: string): ParsedGrobleEvent {
   }
   const option = requireRecord(options[0], "options[0]");
   const optionId = requireString(option.optionId, "options[0].optionId");
-  // Products without a named option can omit this value (or send null). The option ID and
-  // amount remain allowlisted below, so using the content title as a display fallback does not
-  // weaken product matching while keeping the parser compatible with those payment windows.
+  // Groble's documented schema supplies an option ID. Keep it for structural validation and audit,
+  // while the content ID and amount below determine the credit pack because the option ID is opaque.
   const optionName = requireOptionalString(option.name, "options[0].name", contentTitle);
   const quantity = requirePositiveInteger(option.quantity, "options[0].quantity");
   const subtotal = requirePositiveInteger(option.subtotal, "options[0].subtotal");
@@ -165,13 +164,14 @@ export function parseGrobleWebhook(rawBody: string): ParsedGrobleEvent {
     throw new GrobleWebhookError("invalid_amount", "Webhook currency or quantity does not match the supported checkout shape");
   }
 
-  const product = getCreditProductByGroble(contentId, optionId);
+  const product = getCreditProductByGroble(contentId);
   if (!isTestEvent && !product) {
     throw new GrobleWebhookError("unknown_product", "Webhook product is not registered");
   }
   // `subtotal` is the option subtotal. Groble can add shipping or apply a coupon after that
-  // point, so it must not be compared directly with `pricing.finalAmount`. Credit products still
-  // use a fixed-price allowlist: a final amount different from the registered pack is rejected.
+  // point, so it must not be compared directly with `pricing.finalAmount`. Credit products use
+  // a content-level identity plus a fixed-price allowlist: a final amount different from the
+  // registered pack is rejected. The opaque optionId is retained below for audit only.
   if (!isTestEvent && product && product.amount !== amount) {
     throw new GrobleWebhookError("invalid_amount", "Webhook final amount does not match the registered product");
   }
