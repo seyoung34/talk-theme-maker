@@ -556,7 +556,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
         전부 받는다. 설정이 길어져도 캔버스와 크기 정보는 움직이거나 가려지지 않는다.
       */}
       <section className={`grid min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden bg-white text-slate-950 ${fill ? "h-full" : "min-h-[40rem]"}`}>
-        <header className="flex shrink-0 items-center gap-1 border-b border-slate-100 px-2 py-1.5">
+        <header className="flex min-w-0 shrink-0 items-center gap-1 border-b border-slate-100 px-2 py-1.5">
           {closeButton}
           <h2 className="min-w-0 flex-1 truncate px-1 text-base font-black">나만의 말풍선 만들기</h2>
           {helpPopover}
