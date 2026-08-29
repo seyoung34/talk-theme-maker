@@ -6,7 +6,7 @@ export const creditProducts = [
     credits: 1,
     amount: singleCreditPrice,
     name: "1 Credit",
-    label: "1크레딧",
+    label: "크레딧 1개",
     groble: { checkoutUrl: "https://www.groble.im/payment/qZKWSP", contentId: "qZKWSP" },
   },
   {
@@ -14,8 +14,8 @@ export const creditProducts = [
     credits: 2,
     amount: 5000,
     name: "2 Credits",
-    label: "2크레딧",
-    badge: "가장 많이 선택",
+    label: "크레딧 2개",
+    badge: { label: "추천 구성", tone: "primary" },
     groble: { checkoutUrl: "https://www.groble.im/payment/ptjv39", contentId: "ptjv39" },
   },
   {
@@ -23,8 +23,8 @@ export const creditProducts = [
     credits: 5,
     amount: 11000,
     name: "5 Credits",
-    label: "5크레딧",
-    badge: "가장 높은 할인",
+    label: "크레딧 5개",
+    badge: { label: "최대 할인", tone: "highlight" },
     groble: { checkoutUrl: "https://www.groble.im/payment/mBkPrA", contentId: "mBkPrA" },
   },
 ] as const;

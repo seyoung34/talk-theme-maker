@@ -845,13 +845,13 @@ function SignupOfferSection() {
                     className="absolute inset-x-[-0.14em] bottom-[0.06em] z-0 h-[0.4em] -rotate-2 rounded-[0.32em] bg-[rgba(254,229,0,0.62)]"
                     style={{ transformOrigin: "left center" }}
                   />
-                  <span className="relative text-[#2f6bbf]">1크레딧</span>
+                  <span className="relative text-[#2f6bbf]">크레딧 1개</span>
                 </span>
                 ,
                 <br />첫 테마 파일은 무료예요
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
-                카카오나 이메일로 가입하면 1크레딧이 바로 지급됩니다. 이후 테마 파일은 1크레딧부터이고,
+                카카오나 이메일로 가입하면 크레딧 1개가 바로 지급됩니다. 이후 테마 파일은 크레딧 1개부터이고,
                 결제는 크레딧을 충전할 때만 발생해요.
               </p>
             </div>
@@ -865,7 +865,7 @@ function SignupOfferSection() {
                 }}
                 className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#fee500] px-7 py-4 text-base font-black text-[#191600] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] hover:shadow-[0_10px_24px_rgba(47,107,191,0.14)] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:w-auto"
               >
-                무료로 가입하고 1크레딧 받기
+                무료로 가입하고 크레딧 1개 받기
                 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
               </Link>
               {/* 보조 동선이므로 주 버튼보다 한 단계 낮은 무게로 둔다 */}

@@ -74,7 +74,7 @@ export default function SignupBonusControl() {
               <span className={`rounded-full px-2.5 py-1 text-[11px] font-extrabold ${campaign.status === "active" ? "bg-[#e4f6ee] text-[#155d45]" : "bg-[#edf0f4] text-[#5c6878]"}`}>
                 {campaign.status === "active" ? "지급 중" : "중지됨"}
               </span>
-              <strong className="text-sm font-extrabold text-[#4d4100]">가입 혜택 {campaign.credits}크레딧</strong>
+              <strong className="text-sm font-extrabold text-[#4d4100]">가입 혜택 크레딧 {campaign.credits}개</strong>
             </div>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-[#746a3a]">
               <span>현재까지 {campaign.grantCount.toLocaleString("ko-KR")}명 지급</span>

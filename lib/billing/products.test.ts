@@ -4,9 +4,9 @@ import { creditProducts, getCreditProduct, getCreditProductByGroble, singleCredi
 describe("creditProducts", () => {
   it("defines the approved 1, 2, and 5 credit packages", () => {
     expect(creditProducts).toEqual([
-      { id: "credit-1", credits: 1, amount: 3000, name: "1 Credit", label: "1크레딧", groble: { checkoutUrl: "https://www.groble.im/payment/qZKWSP", contentId: "qZKWSP" } },
-      { id: "credit-2", credits: 2, amount: 5000, name: "2 Credits", label: "2크레딧", badge: "가장 많이 선택", groble: { checkoutUrl: "https://www.groble.im/payment/ptjv39", contentId: "ptjv39" } },
-      { id: "credit-5", credits: 5, amount: 11000, name: "5 Credits", label: "5크레딧", badge: "가장 높은 할인", groble: { checkoutUrl: "https://www.groble.im/payment/mBkPrA", contentId: "mBkPrA" } },
+      { id: "credit-1", credits: 1, amount: 3000, name: "1 Credit", label: "크레딧 1개", groble: { checkoutUrl: "https://www.groble.im/payment/qZKWSP", contentId: "qZKWSP" } },
+      { id: "credit-2", credits: 2, amount: 5000, name: "2 Credits", label: "크레딧 2개", badge: { label: "추천 구성", tone: "primary" }, groble: { checkoutUrl: "https://www.groble.im/payment/ptjv39", contentId: "ptjv39" } },
+      { id: "credit-5", credits: 5, amount: 11000, name: "5 Credits", label: "크레딧 5개", badge: { label: "최대 할인", tone: "highlight" }, groble: { checkoutUrl: "https://www.groble.im/payment/mBkPrA", contentId: "mBkPrA" } },
     ]);
     expect(singleCreditPrice).toBe(3000);
   });

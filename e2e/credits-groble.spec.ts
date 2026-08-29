@@ -31,12 +31,16 @@ test("그로블 결제창 왕복 후 서명 웹훅이 반영한 크레딧을 확
   }));
 
   await page.goto("/credits");
-  await expect(page.getByText("결제와 구매자 인증은 외부 그로블 결제창에서 진행됩니다.")).toBeVisible();
+  await expect(page.getByText("결제 후 크레딧이 자동으로 반영됩니다. 결제는 그로블 결제창에서 진행됩니다.")).toBeVisible();
   await expect(page.getByLabel("결제 요청 휴대폰번호")).toHaveCount(0);
   await page.getByRole("button", { name: "5,000원 결제하기" }).click();
 
   await expect(page).toHaveURL(/groble\.im\/payment\/ptjv39\?ref=/);
   expect(prepareBody).toEqual({ productId: "credit-2" });
+  await page.goBack();
+  await expect(page).toHaveURL(/\/credits$/);
+  await expect(page.getByRole("button", { name: "5,000원 결제하기" })).toBeEnabled();
+  await expect(page.getByText("결제창에서 돌아왔습니다. 결제하지 않았다면 다시 시도해 주세요.")).toBeVisible();
 
   await page.route("**/api/billing/payments/status**", async (route) => {
     balance = 2;
@@ -57,7 +61,7 @@ test("그로블 결제창 왕복 후 서명 웹훅이 반영한 크레딧을 확
   });
 
   await page.goto("/credits?billing=groble-return");
-  await expect(page.getByText("2크레딧이 충전되었습니다.")).toBeVisible();
+  await expect(page.getByText("크레딧 2개가 충전되었습니다.")).toBeVisible();
   await expect(page.getByText("2", { exact: true }).first()).toBeVisible();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("talktheme:billing:groble:v1"))).toBeNull();
 });

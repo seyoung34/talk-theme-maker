@@ -53,7 +53,7 @@ test.describe("공개 페이지", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
 
-    const signupCta = page.getByRole("link", { name: /무료로 가입하고 1크레딧 받기/ });
+    const signupCta = page.getByRole("link", { name: /무료로 가입하고 크레딧 1개 받기/ });
     await signupCta.scrollIntoViewIfNeeded();
     await expect(signupCta).toBeVisible();
     await expect(signupCta).toHaveAttribute("href", "/login");
@@ -66,7 +66,7 @@ test.describe("공개 페이지", () => {
     const heroIsBefore = await page.evaluate(() => {
       const h1 = document.querySelector("h1");
       const link = [...document.querySelectorAll("a")].find((a) =>
-        a.textContent?.includes("무료로 가입하고 1크레딧 받기"),
+        a.textContent?.includes("무료로 가입하고 크레딧 1개 받기"),
       );
       if (!h1 || !link) return false;
       return Boolean(h1.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING);
