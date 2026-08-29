@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   createGrobleCheckoutUrl,
   describeRejectedGroblePayload,
-  GrobleWebhookError,
   isRetryableGrobleWebhookError,
   parseGrobleWebhook,
   verifyGrobleWebhookSignature,
@@ -22,8 +21,8 @@ function completedPayload() {
         merchantUid: "merchant-1",
         sellerReference: paymentId,
         buyer: { email: "must-not-be-saved@example.com", phoneNumber: "01012345678" },
-        content: { id: "u9xtdR", title: "크레딧 2개", paymentType: "ONE_TIME", inputMode: "PAYMENT_WINDOW" },
-        options: [{ optionId: "9362", name: "기본 옵션", quantity: 1, subtotal: 5000 }],
+        content: { id: "ptjv39", title: "크레딧 2개", paymentType: "ONE_TIME", inputMode: "PAYMENT_WINDOW" },
+        options: [{ optionId: "opaque-option-2", name: "기본 옵션", quantity: 1, subtotal: 5000 }],
         pricing: { currency: "KRW", finalAmount: 5000 },
       },
     },
@@ -40,7 +39,7 @@ async function signature(secret: string, timestamp: string, rawBody: string) {
 describe("Groble billing", () => {
   it("creates an allowlisted checkout URL with an opaque payment UUID", () => {
     expect(createGrobleCheckoutUrl(creditProducts[1], paymentId)).toBe(
-      `https://www.groble.im/payment/u9xtdR?ref=${paymentId}`,
+      `https://www.groble.im/payment/ptjv39?ref=${paymentId}`,
     );
     expect(createGrobleCheckoutUrl(creditProducts[0], paymentId)).toBe(
       `https://www.groble.im/payment/qZKWSP?ref=${paymentId}`,
@@ -54,7 +53,7 @@ describe("Groble billing", () => {
       eventType: "payment.completed",
       paymentId,
       productId: "credit-2",
-      optionId: "9362",
+      optionId: "opaque-option-2",
       amount: 5000,
     });
     expect(JSON.stringify(event.sanitizedPayload)).not.toContain("must-not-be-saved");
@@ -65,7 +64,25 @@ describe("Groble billing", () => {
     const payload = completedPayload();
     payload.data.object.pricing.finalAmount = 3000;
     payload.data.object.options[0].subtotal = 3000;
-    expect(() => parseGrobleWebhook(JSON.stringify(payload))).toThrowError(GrobleWebhookError);
+    expect(() => parseGrobleWebhook(JSON.stringify(payload))).toThrowError(
+      expect.objectContaining({ code: "invalid_amount" }),
+    );
+  });
+
+  it("accepts the real one-credit webhook option ID without configuring it", () => {
+    const payload = completedPayload();
+    payload.data.object.content.id = "qZKWSP";
+    payload.data.object.content.title = "크레딧 1개";
+    payload.data.object.options[0].optionId = "jJDneD";
+    payload.data.object.options[0].subtotal = 3000;
+    payload.data.object.pricing.finalAmount = 3000;
+
+    expect(parseGrobleWebhook(JSON.stringify(payload))).toMatchObject({
+      productId: "credit-1",
+      contentId: "qZKWSP",
+      optionId: "jJDneD",
+      amount: 3000,
+    });
   });
 
   it("fails closed when Groble changes the webhook schema version", () => {
@@ -101,7 +118,7 @@ describe("Groble billing", () => {
       expect(parseGrobleWebhook(JSON.stringify(payload))).toMatchObject({
         eventType: "payment.completed",
         productId: "credit-2",
-        optionId: "9362",
+        optionId: "opaque-option-2",
         amount: 5000,
       });
     }

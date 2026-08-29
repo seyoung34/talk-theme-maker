@@ -766,12 +766,6 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
    */
   const frameLimit = atCanvasSizeLimit(geometry.canvas, "max") ? "최대" : atCanvasSizeLimit(geometry.canvas, "min") ? "최소" : undefined;
 
-  // 모바일 미리보기는 컨트롤 문구의 줄바꿈과 폰트에 따라 높이가 달라지면 안 된다.
-  // 측정된 폭을 높이에도 명시해 Linux/Windows 브라우저의 글꼴 차이와 무관하게 정사각형을 유지한다.
-  const compactViewportStyle = compactControls && viewportSize.width
-    ? { height: `${viewportSize.width}px`, aspectRatio: "1 / 1" }
-    : undefined;
-
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -1151,20 +1145,20 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
         뷰포트 크기는 바깥 레이아웃이 정한다(모바일은 화면을 채우고, 데스크톱은 넓은 컬럼을 채운다).
         프레임 크기가 뷰포트를 정하던 시절에는 프레임을 줄일수록 편집할 자리도 같이 줄었다.
       */}
-      <div
-        ref={viewportRef}
-        data-testid="bubble-builder-preview-viewport"
-        className={`relative min-h-0 w-full touch-none overflow-hidden rounded-xl ${compactControls ? "aspect-square h-auto self-start" : "min-h-[260px]"}`}
-        style={compactViewportStyle}
-        onPointerDownCapture={handleViewportPointerDownCapture}
-        onPointerMoveCapture={handleViewportPointerMoveCapture}
-        onPointerUpCapture={handleViewportPointerUpCapture}
-        onPointerCancelCapture={handleViewportPointerUpCapture}
-        onPointerDown={beginViewportPan}
-        onPointerMove={moveViewportPan}
-        onPointerUp={endViewportPan}
-        onPointerCancel={endViewportPan}
-      >
+      <div className={compactControls ? "aspect-square min-h-0 min-w-0 w-full self-start" : "contents"}>
+        <div
+          ref={viewportRef}
+          data-testid="bubble-builder-preview-viewport"
+          className={`relative min-h-0 min-w-0 w-full touch-none overflow-hidden rounded-xl ${compactControls ? "h-full" : "min-h-[260px]"}`}
+          onPointerDownCapture={handleViewportPointerDownCapture}
+          onPointerMoveCapture={handleViewportPointerMoveCapture}
+          onPointerUpCapture={handleViewportPointerUpCapture}
+          onPointerCancelCapture={handleViewportPointerUpCapture}
+          onPointerDown={beginViewportPan}
+          onPointerMove={moveViewportPan}
+          onPointerUp={endViewportPan}
+          onPointerCancel={endViewportPan}
+        >
         <div className="absolute left-1/2 top-1/2" style={{ transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px)`, width: stageWidth, height: stageHeight }}>
           {/* 내보내는 PNG는 모서리가 각진 사각형이라 미리보기도 각지게 둔다. 둥글리면 실제와 어긋난다. */}
           <div ref={stageRef} className="absolute inset-0 touch-none overflow-hidden" style={{ ...checkerboardStyle }} onPointerMove={handleMove} onPointerUp={endDrag}>
@@ -1241,6 +1235,7 @@ function BubblePreview({ spec, variant, layers, decorationUrls, decorationSizes,
           {onCanvasSizeChange ? <FrameResizeHandles active={frameDragging} onBegin={beginFrameDrag} onMove={moveFrameDrag} onEnd={endFrameDrag} onKeyDown={handleFrameKey} /> : null}
         </div>
         {!compactControls ? zoomControls : null}
+        </div>
       </div>
       {/*
         크기 표시는 상시로 두고 끄는 동안만 강조한다. 모바일에서는 이 줄에 보기 버튼도 둬서

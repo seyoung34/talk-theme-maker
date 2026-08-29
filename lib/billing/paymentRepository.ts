@@ -53,7 +53,9 @@ export async function prepareGroblePayment(input: { userId: string; productId: C
       product_id: product.id,
       seller_reference: paymentId,
       provider_content_id: product.groble.contentId,
-      provider_option_id: product.groble.optionId,
+      // Groble's option ID is an opaque webhook value. Keep the column for the received value,
+      // but do not pretend to know it when creating a pending payment.
+      provider_option_id: null,
       amount: product.amount,
       credits: product.credits,
       status: "pending",
