@@ -55,6 +55,17 @@ export type ExportDownloadLinkResponse = {
   reason?: string;
 };
 
+/** `credit_ledger.type`의 DB CHECK 제약과 같은 값이어야 한다. */
+export type CreditLedgerType = "purchase" | "export" | "promotion" | "refund";
+
+export type CreditLedgerEntryDto = {
+  id: string;
+  /** 양수는 지급, 음수는 차감. 화면 라벨은 `type`과 이 부호로 정한다. */
+  amount: number;
+  type: CreditLedgerType;
+  created_at: string;
+};
+
 export type AccountMeResponse = {
   user: { id: string; email?: string } | null;
   profile?: { email?: string; display_name?: string | null; avatar_url?: string | null; provider?: string | null } | null;
@@ -63,6 +74,8 @@ export type AccountMeResponse = {
   signupBonus?: SignupBonusDto | null;
   isAdmin?: boolean;
   exports?: AccountExportDto[];
+  /** 최근 크레딧 내역. 최신순이며 `creditLedgerFetchLimit`까지만 담는다. */
+  ledger?: CreditLedgerEntryDto[];
   error?: string;
 };
 

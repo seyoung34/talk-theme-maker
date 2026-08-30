@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowRight, ChevronDown, Coins, Download, LoaderCircle, Megaphone, MessageSquare, RefreshCw, ShieldCheck, Sparkles, Star, UserRound } from "lucide-react";
+import { AlertCircle, ArrowRight, Coins, Download, LoaderCircle, Megaphone, MessageSquare, Receipt, RefreshCw, ShieldCheck, Sparkles, Star } from "lucide-react";
 import SiteHeader from "@/components/layout/SiteHeader";
-import type { AccountExportDto, AccountMeResponse, ExportDownloadLinkResponse } from "@/lib/billing/apiTypes";
+import AccountCarousel from "@/components/account/AccountCarousel";
+import type { AccountExportDto, AccountMeResponse, CreditLedgerEntryDto, ExportDownloadLinkResponse } from "@/lib/billing/apiTypes";
+import { creditLedgerFetchLimit, creditLedgerPageSize, describeCreditLedgerEntry, formatCreditLedgerAmount } from "@/lib/billing/creditLedger";
+import { chunkIntoPages } from "@/lib/shared/paging";
 import { getExportDownloadState } from "@/lib/theme/android/outputRetention";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createClient } from "@/lib/supabase/client";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { claimSignupBonusFromClient } from "@/lib/billing/signupBonusClient";
-import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 import { deleteLocalUserThemeData } from "@/lib/theme/project/deleteLocalUserData";
 
 export default function AccountClient() {
@@ -42,6 +44,7 @@ export default function AccountClient() {
 
   useEffect(() => { void refreshMe(); }, [refreshMe]);
 
+  const ledgerTotal = me?.ledger?.length ?? 0;
   const accountId = me?.user?.id ?? null;
   const pendingExportKey = (me?.exports ?? [])
     .filter((item) => (item.platform === "android" || item.platform === "ios") && item.status === "pending")
@@ -139,10 +142,7 @@ export default function AccountClient() {
         <div className="grid content-start gap-3 sm:gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.65fr)]">
           <div className="grid overflow-hidden rounded-[24px] border border-[#dbe8fb] bg-white/90 shadow-[0_14px_38px_rgba(47,107,191,0.08)] backdrop-blur lg:contents">
             <section className="p-4 sm:p-6 lg:col-start-1 lg:row-start-1 lg:rounded-[28px] lg:border lg:border-[#dbe8fb] lg:bg-white/86 lg:shadow-[0_18px_48px_rgba(47,107,191,0.08)]" aria-labelledby="account-info-title">
-              <div className="mb-3 flex items-center gap-3 sm:mb-5">
-                <span className="grid size-10 place-items-center rounded-[14px] bg-[#eaf2ff] text-[var(--color-secondary)] sm:size-11 sm:rounded-2xl"><UserRound size={20} aria-hidden="true" /></span>
-                <div><h2 id="account-info-title" className="text-base font-extrabold">사용자 정보</h2><p className="text-xs font-semibold text-[var(--color-on-surface-variant)]">현재 로그인한 계정입니다.</p></div>
-              </div>
+              <h2 id="account-info-title" className="sr-only">사용자 정보</h2>
               {isLoading ? <div className="h-16 animate-pulse rounded-xl bg-[var(--color-surface-low)] sm:h-20" aria-label="계정 정보 불러오는 중" /> : me?.user ? (
                 <dl className="grid grid-cols-2 gap-2 text-sm sm:gap-3">
                   <div className="min-w-0 rounded-2xl border border-[#e3ecf7] bg-[#f7fbff] p-3 sm:rounded-[22px] sm:p-4"><dt className="mb-1 text-[11px] font-bold uppercase tracking-[0.1em] text-[#3d7bd6] sm:text-xs">이름</dt><dd className="truncate text-sm font-extrabold sm:text-[15px]">{me.profile?.display_name || "이름 미설정"}</dd></div>
@@ -154,80 +154,95 @@ export default function AccountClient() {
               )}
             </section>
 
-            <section className="border-t border-[#e3ecf7] bg-[linear-gradient(180deg,#f7fbff_0%,#eef5ff_100%)] lg:col-start-2 lg:row-start-1 lg:overflow-hidden lg:rounded-[30px] lg:border lg:border-[#dbe8fb] lg:bg-white/88 lg:shadow-[0_24px_68px_rgba(47,107,191,0.1)]" aria-labelledby="credit-balance-title">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 sm:p-6 lg:block lg:bg-[linear-gradient(180deg,#f7fbff_0%,#eef5ff_100%)]">
+            {/*
+              데스크톱에서는 세로 flex다. 이 카드는 왼쪽 "사용자 정보"와 같은 grid 행이라 그쪽
+              높이만큼 늘어나는데, 내용을 위에서부터 쌓으면 아래가 그냥 빈 채로 남는다. 충전
+              버튼을 `lg:mt-auto`로 바닥에 붙여 남는 공간이 잔액과 버튼 사이로 가게 한다.
+            */}
+            <section className="border-t border-[#e3ecf7] lg:col-start-2 lg:row-start-1 lg:flex lg:flex-col lg:overflow-hidden lg:rounded-[28px] lg:border lg:border-[#dbe8fb] lg:bg-white/86 lg:shadow-[0_14px_38px_rgba(47,107,191,0.07)] lg:backdrop-blur" aria-labelledby="credit-balance-title">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4 sm:p-6 lg:block lg:pb-4">
                 <div>
-                  <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--color-on-surface-variant)]"><Coins size={18} aria-hidden="true" /><h2 id="credit-balance-title">보유 크레딧</h2></div>
-                  <div className="mt-1.5 flex items-end gap-2 sm:mt-3"><strong className="font-[var(--font-display)] text-4xl font-semibold tracking-[-0.05em] text-[#2f6bbf] sm:text-5xl">{isLoading ? "—" : me?.credits ?? 0}</strong><span className="pb-1 text-sm font-bold text-[var(--color-on-surface-variant)] sm:pb-1.5">크레딧</span></div>
-                  <p className="mt-1 text-[11px] font-semibold leading-5 text-[var(--color-on-surface-variant)] sm:mt-3 sm:text-xs">테마 파일 1개를 받을 때 크레딧 1개를 사용합니다.</p>
+                  {/* 라벨과 숫자의 baseline을 맞춰 한 줄의 활자처럼 읽히게 한다. */}
+                  <div className="lg:flex lg:items-baseline lg:justify-between lg:gap-3">
+                    <div className="flex items-center gap-2 text-sm font-extrabold text-[var(--color-on-surface-variant)]"><Coins size={18} aria-hidden="true" /><h2 id="credit-balance-title">보유 크레딧</h2></div>
+                    <div className="mt-1.5 flex items-end gap-2 sm:mt-3 lg:mt-0"><strong className="font-[var(--font-display)] text-4xl font-semibold tracking-[-0.05em] text-[#2f6bbf] sm:text-5xl">{isLoading ? "—" : me?.credits ?? 0}</strong><span className="pb-1 text-sm font-bold text-[var(--color-on-surface-variant)] sm:pb-1.5">크레딧</span></div>
+                  </div>
                   {me?.signupBonus ? <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-[#f6df75] bg-[#fff9d9] px-2.5 py-1.5 text-[11px] font-extrabold leading-4 text-[#695600]"><Sparkles size={13} aria-hidden="true" />가입 혜택 크레딧 {me.signupBonus.creditsGranted}개를 받았어요.</p> : null}
                 </div>
-                <Link href={me?.user ? "/credits" : "/login?returnTo=%2Fcredits&reason=billing"} className="flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-[#fee500] px-4 py-2.5 text-sm font-extrabold text-[#191600] shadow-[0_12px_24px_rgba(254,229,0,0.3)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] lg:hidden">
+                <Link href={me?.user ? "/credits" : "/login?returnTo=%2Fcredits&reason=billing"} className="flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-[#fee500] px-4 py-2.5 text-sm font-extrabold text-[#191600] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] lg:hidden">
                   충전<ArrowRight size={16} aria-hidden="true" />
                 </Link>
               </div>
-              <div className="hidden p-5 lg:block">
-                <Link href={me?.user ? "/credits" : "/login?returnTo=%2Fcredits&reason=billing"} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#fee500] px-4 py-3 text-sm font-extrabold text-[#191600] shadow-[0_16px_32px_rgba(254,229,0,0.34)] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
+              <div className="hidden px-6 pb-6 lg:block lg:mt-auto">
+                <Link href={me?.user ? "/credits" : "/login?returnTo=%2Fcredits&reason=billing"} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-[#fee500] px-4 py-3 text-sm font-extrabold text-[#191600] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]">
                   충전하기<ArrowRight size={17} aria-hidden="true" />
                 </Link>
-                <p className="mt-3 text-center text-[11px] font-semibold text-[var(--color-outline)]">필요한 만큼 상품을 선택해 충전할 수 있습니다.</p>
               </div>
             </section>
           </div>
 
-          <section className="rounded-[22px] border border-[#dbe8fb] bg-[#f7fbff] p-4 sm:rounded-[28px] sm:p-6 lg:col-start-1 lg:row-start-2" aria-labelledby="storage-scope-title">
-            <h2 id="storage-scope-title" className="text-sm font-extrabold sm:text-base">보관 범위</h2>
-            <details className="group mt-2 lg:hidden">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl bg-white px-3.5 py-2.5 text-sm font-bold text-[var(--color-on-surface-variant)] [&::-webkit-details-marker]:hidden">
-                <span className="flex min-w-0 items-center gap-2"><AlertCircle size={17} className="shrink-0 text-[#3d7bd6]" aria-hidden="true" /><span>프로젝트는 이 브라우저에만 저장됩니다.</span></span>
-                <ChevronDown size={17} className="shrink-0 text-[#3d7bd6] transition group-open:rotate-180" aria-hidden="true" />
-              </summary>
-              <dl className="mt-2 grid gap-2 text-xs">
-                <div className="rounded-2xl border border-[#e3ecf7] bg-white p-3"><dt className="font-black text-[#3d7bd6]">계정에 보관</dt><dd className="mt-1 font-semibold leading-5 text-[var(--color-on-surface-variant)]">{persistenceNotice.accountDetailed}</dd></div>
-                <div className="rounded-2xl border border-[#e3ecf7] bg-white p-3"><dt className="font-black text-[#3d7bd6]">이 브라우저에 보관</dt><dd className="mt-1 font-semibold leading-5 text-[var(--color-on-surface-variant)]">{persistenceNotice.browserDetailed} {persistenceNotice.browserRisk}</dd></div>
-              </dl>
-            </details>
-            <dl className="mt-4 hidden gap-3 text-sm lg:grid lg:grid-cols-2">
-              <div className="rounded-[20px] border border-[#e3ecf7] bg-white p-4"><dt className="text-xs font-black text-[#3d7bd6]">계정에 보관</dt><dd className="mt-1 font-semibold leading-6 text-[var(--color-on-surface-variant)]">{persistenceNotice.accountDetailed}</dd></div>
-              <div className="rounded-[20px] border border-[#e3ecf7] bg-white p-4"><dt className="text-xs font-black text-[#3d7bd6]">이 브라우저에 보관</dt><dd className="mt-1 font-semibold leading-6 text-[var(--color-on-surface-variant)]">{persistenceNotice.browserDetailed} {persistenceNotice.browserRisk}</dd></div>
-            </dl>
-          </section>
+          {/*
+            크레딧 내역.
 
-          {me?.user ? (
-            <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6 lg:col-start-2 lg:row-start-2" aria-labelledby="support-entry-title">
-              <div className="flex items-center gap-3">
-                <span className="grid size-10 place-items-center rounded-[14px] bg-[#eef5ff] text-[#2f6bbf] sm:size-11 sm:rounded-2xl"><MessageSquare size={19} aria-hidden="true" /></span>
-                <div>
-                  <h2 id="support-entry-title" className="text-base font-extrabold">공지·문의</h2>
-                  <p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">문의 답변은 이 페이지에서 확인할 수 있습니다.</p>
+            `reason`은 서버에서 내려보내지 않는다 — 캠페인 키·결제 사유가 들어가는 내부 슬러그라
+            사용자에게 보여 줄 값이 아니고, 라벨은 `type`과 금액 부호로 정한다.
+          */}
+          {/*
+            우측 열의 2행은 카드 두 장을 쌓는다.
+
+            둘을 각자 grid 행에 두면 두 가지가 어긋난다. 행 높이는 왼쪽 "최근 테마 파일"이
+            정하는데 grid 기본값이 `stretch`라 크레딧 내역 카드가 그 높이까지 늘어나 아래가
+            비고, 공지·문의는 다음 행으로 밀려 그 빈 공간만큼 멀어진다.
+
+            한 칸에 넣고 `self-start`를 주면 카드는 제 내용만큼만 차지하고 공지·문의가 바로
+            아래에 붙는다. 모바일에서는 래퍼가 그냥 세로 흐름이라 순서가 그대로다.
+          */}
+          <div className="grid gap-3 sm:gap-6 lg:col-start-2 lg:row-start-2 lg:self-start">
+            <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6" aria-labelledby="credit-ledger-title">
+              <div className="mb-3 flex items-center gap-3 sm:mb-4">
+                <span className="grid size-10 place-items-center rounded-[14px] bg-[#eef5ff] text-[#2f6bbf] sm:size-11 sm:rounded-2xl"><Receipt size={20} aria-hidden="true" /></span>
+                <div className="min-w-0">
+                  <h2 id="credit-ledger-title" className="text-base font-extrabold">크레딧 내역</h2>
+                  <p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">
+                    {ledgerTotal > 0 ? `최근 ${ledgerTotal}건` : "충전과 사용 기록이 여기에 쌓입니다."}
+                  </p>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-1">
-                <Link href="/account/inquiries" className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-[#cfe0ff] bg-white px-3 py-2.5 text-sm font-extrabold text-[#2f6bbf] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] lg:min-h-12">
-                  문의·답변<ArrowRight size={16} aria-hidden="true" />
-                </Link>
-                <Link href="/notice" className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-[#dbe8fb] bg-white px-3 py-2.5 text-sm font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] lg:min-h-12">
-                  <Megaphone size={16} aria-hidden="true" />공지사항
-                </Link>
-              </div>
+              <CreditLedgerPanel entries={me?.ledger ?? []} isLoading={isLoading} />
             </section>
-          ) : null}
 
-          <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6 lg:col-start-1 lg:row-start-3" aria-labelledby="export-history-title">
+            {me?.user ? (
+              <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6" aria-labelledby="support-entry-title">
+                <div className="flex items-center gap-3">
+                  <span className="grid size-10 place-items-center rounded-[14px] bg-[#eef5ff] text-[#2f6bbf] sm:size-11 sm:rounded-2xl"><MessageSquare size={19} aria-hidden="true" /></span>
+                  <div>
+                    <h2 id="support-entry-title" className="text-base font-extrabold">공지·문의</h2>
+                    <p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">문의 답변은 이 페이지에서 확인할 수 있습니다.</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-1">
+                  <Link href="/account/inquiries" className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-[#cfe0ff] bg-white px-3 py-2.5 text-sm font-extrabold text-[#2f6bbf] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] lg:min-h-12">
+                    문의·답변<ArrowRight size={16} aria-hidden="true" />
+                  </Link>
+                  <Link href="/notice" className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full border border-[#dbe8fb] bg-white px-3 py-2.5 text-sm font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)] lg:min-h-12">
+                    <Megaphone size={16} aria-hidden="true" />공지사항
+                  </Link>
+                </div>
+              </section>
+            ) : null}
+          </div>
+
+          <section className="rounded-[22px] border border-[#dbe8fb] bg-white/86 p-4 shadow-[0_14px_38px_rgba(47,107,191,0.07)] backdrop-blur sm:rounded-[28px] sm:p-6 lg:col-start-1 lg:row-start-2" aria-labelledby="export-history-title">
             <div className="mb-3 flex items-center gap-3 sm:mb-5">
               <span className="grid size-10 place-items-center rounded-[14px] bg-[#eafaf1] text-[#34c98a] sm:size-11 sm:rounded-2xl"><Download size={20} aria-hidden="true" /></span>
-              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 테마 파일</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">최근 10개 · 완료된 Android·iOS 파일은 최대 7일간 다시 받을 수 있습니다.</p></div>
+              <div><h2 id="export-history-title" className="text-base font-extrabold">최근 테마 파일</h2><p className="text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)] sm:text-xs">완료된 Android·iOS 파일은 최대 7일간 다시 받을 수 있습니다.</p></div>
             </div>
             {pendingExportKey ? <div className="mb-3 flex items-start gap-2 rounded-2xl border border-[#cfe0ff] bg-[#f4f9ff] px-3.5 py-3 text-[11px] font-semibold leading-5 text-[#36577f]" role="status" aria-live="polite"><RefreshCw className="mt-0.5 shrink-0 text-[#2f6bbf]" size={15} aria-hidden="true" /><span><strong className="font-extrabold text-[#2f6bbf]">백그라운드에서 생성 중입니다.</strong> 이 페이지는 10초마다 상태를 확인하며, 창을 닫아도 작업은 계속됩니다.</span></div> : null}
-            {(me?.exports ?? []).length === 0 ? <div className="rounded-[18px] bg-[#f7fbff] px-4 py-5 text-center text-sm font-semibold text-[var(--color-on-surface-variant)] sm:rounded-[24px] sm:py-8">아직 받은 테마 파일이 없습니다.</div> : (
-              <div className="divide-y divide-[var(--color-outline-variant)] overflow-hidden rounded-[18px] border border-[#e3ecf7] bg-[#fcfdff] sm:rounded-[24px]">
-                {(me?.exports ?? []).map((item) => <ExportRow key={item.id} item={item} onRefreshed={() => void refreshMe()} />)}
-              </div>
-            )}
+            <ExportHistoryPanel exports={me?.exports ?? []} isLoading={isLoading} onRefreshed={() => void refreshMe()} />
           </section>
 
             {me?.user ? (
-              <section className="border-t border-[#e3ecf7] pt-5 text-right lg:col-start-1 lg:row-start-4" aria-labelledby="account-deletion-title">
+              <section className="border-t border-[#e3ecf7] pt-5 text-right lg:col-start-1 lg:row-start-3 lg:self-start" aria-labelledby="account-deletion-title">
                 {!isDeletionOpen ? (
                   <p className="text-xs font-semibold text-[var(--color-outline)]"><span id="account-deletion-title">계정을 더 이상 사용하지 않으시나요?</span> <button type="button" className="ml-1 font-bold text-[var(--color-on-surface-variant)] underline underline-offset-2 transition hover:text-[var(--color-error)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-error)]" onClick={() => { setIsDeletionOpen(true); setDeletionError(null); }}>회원탈퇴</button></p>
                 ) : (
@@ -330,7 +345,7 @@ function ExportRowAction({ item, onRefreshed }: { item: AccountExportDto; onRefr
   if (downloadState === "available") {
     return (
       <div className="mt-2">
-        <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#2f6bbf] px-3.5 text-xs font-extrabold text-white shadow-[0_8px_18px_rgba(47,107,191,0.22)] transition hover:bg-[#2a60ac] disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]" onClick={() => void download()} disabled={isWorking}>
+        <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[#2f6bbf] px-3.5 text-xs font-extrabold text-white transition hover:bg-[#2a60ac] disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]" onClick={() => void download()} disabled={isWorking}>
           <Download size={14} aria-hidden="true" />
           {isWorking ? "준비 중" : "다시 받기"}
         </button>
@@ -348,6 +363,98 @@ function ExportRowAction({ item, onRefreshed }: { item: AccountExportDto; onRefr
   }
 
   return null;
+}
+
+/**
+ * 크레딧 내역 목록과 페이지 이동.
+ *
+ * 캐러셀이 아니라 세로 목록 + 페이지 이동이다. 금액·날짜가 세로로 정렬돼야 훑어보기 쉽고,
+ * 가로로 밀어 넘기면 "지금 몇 번째를 보고 있나"를 잃는다. 페이지가 하나뿐이면 이동 컨트롤을
+ * 아예 그리지 않는다.
+ */
+function CreditLedgerPanel({ entries, isLoading }: { entries: readonly CreditLedgerEntryDto[]; isLoading: boolean }) {
+  if (isLoading) return <ListSkeleton rows={3} />;
+  if (entries.length === 0) {
+    return <EmptyPanel>아직 크레딧 내역이 없습니다.</EmptyPanel>;
+  }
+
+  const pages = chunkIntoPages(entries, creditLedgerPageSize).map((page, index) => (
+    <ul key={index} className="divide-y divide-[var(--color-outline-variant)] overflow-hidden rounded-[18px] border border-[#e3ecf7] bg-[#fcfdff] sm:rounded-[24px]">
+      {page.map((entry) => <CreditLedgerRow key={entry.id} entry={entry} />)}
+    </ul>
+  ));
+
+  return (
+    <div className="grid gap-3">
+      <AccountCarousel pages={pages} label="크레딧 내역" />
+      {entries.length >= creditLedgerFetchLimit ? (
+        <p className="text-center text-[11px] font-semibold text-[var(--color-outline)]">최근 {creditLedgerFetchLimit}건까지 표시합니다.</p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * 최근 테마 파일.
+ *
+ * 크레딧 내역과 같은 캐러셀·같은 장 크기를 쓴다. 두 목록이 나란히 놓이는 화면이라 넘기는
+ * 방식이 다르면 같은 페이지에서 두 가지를 배워야 한다.
+ */
+function ExportHistoryPanel({
+  exports,
+  isLoading,
+  onRefreshed,
+}: {
+  exports: readonly AccountExportDto[];
+  isLoading: boolean;
+  onRefreshed: () => void;
+}) {
+  if (isLoading) return <ListSkeleton rows={2} />;
+  if (exports.length === 0) return <EmptyPanel>아직 받은 테마 파일이 없습니다.</EmptyPanel>;
+
+  const pages = chunkIntoPages(exports, creditLedgerPageSize).map((page, index) => (
+    <div key={index} className="divide-y divide-[var(--color-outline-variant)] overflow-hidden rounded-[18px] border border-[#e3ecf7] bg-[#fcfdff] sm:rounded-[24px]">
+      {page.map((item) => <ExportRow key={item.id} item={item} onRefreshed={onRefreshed} />)}
+    </div>
+  ));
+
+  return <AccountCarousel pages={pages} label="최근 테마 파일" />;
+}
+
+/** 두 목록이 같은 빈 상태·로딩 모양을 쓰도록 모아 둔다. */
+function EmptyPanel({ children }: { children: ReactNode }) {
+  return <div className="rounded-[18px] bg-[#f7fbff] px-4 py-5 text-center text-sm font-semibold text-[var(--color-on-surface-variant)] sm:rounded-[24px] sm:py-8">{children}</div>;
+}
+
+function ListSkeleton({ rows }: { rows: number }) {
+  return (
+    <div className="grid gap-2" aria-busy="true">
+      {Array.from({ length: rows }).map((_, index) => <span key={index} className="h-12 animate-pulse rounded-2xl bg-[#f2f7fd]" />)}
+    </div>
+  );
+}
+
+/**
+ * 한 줄.
+ *
+ * 모바일에서는 라벨과 금액을 한 줄에, 날짜를 그 아래에 둔다. 셋을 한 줄에 밀어 넣으면 좁은
+ * 폭에서 라벨이 잘리는데, 잘려도 되는 건 날짜가 아니라 없는 편이 나은 정보다.
+ */
+function CreditLedgerRow({ entry }: { entry: CreditLedgerEntryDto }) {
+  const { label, tone } = describeCreditLedgerEntry(entry);
+  return (
+    <li className="flex items-center justify-between gap-3 bg-white/75 px-3.5 py-3 sm:px-4">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-extrabold text-[var(--color-on-surface)]">{label}</p>
+        <time className="mt-0.5 block text-[11px] font-semibold text-[var(--color-on-surface-variant)]" dateTime={entry.created_at}>
+          {new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(entry.created_at))}
+        </time>
+      </div>
+      <span className={`shrink-0 text-sm font-extrabold tabular-nums ${tone === "debit" ? "text-[var(--color-on-surface-variant)]" : "text-[#2f6bbf]"}`}>
+        {formatCreditLedgerAmount(entry.amount)}
+      </span>
+    </li>
+  );
 }
 
 function StatusBadge({ status }: { status: string }) {
