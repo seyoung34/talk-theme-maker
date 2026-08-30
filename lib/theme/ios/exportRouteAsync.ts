@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { createExportEnqueueFailureEvent } from "@/lib/ops/eventFactories";
+import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
 import {
   getCurrentUserOrNull,
   isBillingHoldError,
@@ -137,6 +139,14 @@ export async function handleAsyncIosExportRequest(request: Request) {
       errorCode: failure.code,
       error: safeErrorSummary(error),
     })}`);
+    if (failure.status >= 500) {
+      scheduleOpsEvent(createExportEnqueueFailureEvent({
+        platform: "ios",
+        exportJobId,
+        errorCode: failure.code,
+        durationMs,
+      }));
+    }
     return NextResponse.json({ error: failure.message, reason: failure.code, ...(refunded ? { refunded: true } : {}) }, { status: failure.status });
   }
 }

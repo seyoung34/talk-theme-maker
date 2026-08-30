@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import {
+  createGrobleWebhookProcessingEvent,
+  createGrobleWebhookRejectedEvent,
+  createGrobleWebhookTemporaryFailureEvent,
+} from "@/lib/ops/eventFactories";
+import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
+import {
   describeRejectedGroblePayload,
   grobleWebhookMaxBodyBytes,
   GrobleWebhookError,
   isRetryableGrobleWebhookError,
   parseGrobleWebhook,
+  type ParsedGrobleEvent,
   verifyGrobleWebhookSignature,
 } from "@/lib/billing/groble";
 import { processGrobleWebhookEvent, recordGrobleWebhookRejection } from "@/lib/billing/paymentRepository";
@@ -21,11 +28,12 @@ function listProviderHeaderNames(headers: Headers) {
 }
 
 async function quarantineDelivery(idempotencyKey: string, errorCode: string, rawBody: string) {
+  const description = describeRejectedGroblePayload(rawBody);
   try {
     await recordGrobleWebhookRejection({
       idempotencyKey,
       errorCode,
-      description: describeRejectedGroblePayload(rawBody),
+      description,
     });
   } catch (error) {
     console.error("Failed to record Groble webhook rejection", {
@@ -33,6 +41,7 @@ async function quarantineDelivery(idempotencyKey: string, errorCode: string, raw
       name: error instanceof Error ? error.name : "unknown",
     });
   }
+  return description;
 }
 
 export async function POST(request: Request) {
@@ -81,13 +90,30 @@ export async function POST(request: Request) {
   }
 
   // The delivery is authentic from here, so anything we refuse is quarantined rather than dropped.
+  let parsedEvent: ParsedGrobleEvent | null = null;
   try {
     const event = parseGrobleWebhook(rawBody);
+    parsedEvent = event;
     const result = await processGrobleWebhookEvent(event, idempotencyKey);
+    const resultCode = result?.result;
+    if (resultCode === "rejected" || resultCode === "review_required") {
+      scheduleOpsEvent(createGrobleWebhookProcessingEvent({
+        eventId: event.eventId,
+        eventType: event.eventType,
+        result: resultCode,
+        occurredAt: event.occurredAt,
+      }));
+    }
     return NextResponse.json({ received: true, result: result?.result ?? "processed" });
   } catch (error) {
     if (error instanceof GrobleWebhookError) {
-      await quarantineDelivery(idempotencyKey, error.code, rawBody);
+      const description = await quarantineDelivery(idempotencyKey, error.code, rawBody);
+      scheduleOpsEvent(createGrobleWebhookRejectedEvent({
+        errorCode: error.code,
+        eventId: description.eventId,
+        eventType: description.eventType,
+        occurredAt: description.occurredAt,
+      }));
       // A retryable code means our side is behind, not that the delivery was bad: answer 500 so
       // Groble keeps redelivering and a fix can still settle the payment.
       const retryable = isRetryableGrobleWebhookError(error.code);
@@ -96,6 +122,12 @@ export async function POST(request: Request) {
       console.warn("Quarantined Groble webhook", { code: error.code, retryable, detail: error.message });
       return NextResponse.json({ received: false, reason: error.code }, { status: retryable ? 500 : 400 });
     }
+    scheduleOpsEvent(createGrobleWebhookTemporaryFailureEvent({
+      eventId: parsedEvent?.eventId ?? null,
+      eventType: parsedEvent?.eventType ?? null,
+      errorCode: error instanceof Error ? error.name : "unknown_error",
+      occurredAt: parsedEvent?.occurredAt ?? null,
+    }));
     console.error("Failed to process Groble webhook", {
       name: error instanceof Error ? error.name : "unknown",
     });

@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { completeExportJob, failExportJob } from "@/lib/billing/credits";
+import { createExportFailureEvent } from "@/lib/ops/eventFactories";
+import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
 import { getBuilderAccessToken, readBuilderConfig, type BuilderConfig } from "@/lib/theme/export/buildJobClient";
 
 const signedUrlTtlSeconds = 300;
@@ -52,6 +54,13 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
     return { kind: "completed", downloadUrl: await signOutputUrl(platform, exportJobId, row.file_name), fileName: row.file_name };
   }
   if (row.status === "failed") {
+    scheduleOpsEvent(createExportFailureEvent({
+      platform,
+      exportJobId,
+      errorCode: row.error_code ?? fallbackBuildFailureReason(platform),
+      durationMs: Date.now() - new Date(row.created_at).getTime(),
+      watchdog: row.error_code === "build_watchdog_timeout",
+    }));
     return { kind: "failed", error: row.error ?? "내보내기 작업에 실패했습니다.", reason: row.error_code ?? fallbackBuildFailureReason(platform) };
   }
 
@@ -69,6 +78,13 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
         errorMessage: "내보내기 작업이 시간 내에 끝나지 않았습니다.",
         durationMs: Date.now() - new Date(row.created_at).getTime(),
       }).catch(() => undefined);
+      scheduleOpsEvent(createExportFailureEvent({
+        platform,
+        exportJobId,
+        errorCode: "build_watchdog_timeout",
+        durationMs: Date.now() - new Date(row.created_at).getTime(),
+        watchdog: true,
+      }));
       return { kind: "failed", error: "내보내기 작업이 시간 내에 끝나지 않았습니다.", reason: "build_watchdog_timeout" };
     }
     return { kind: "pending", stage: row.stage };
@@ -87,6 +103,13 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
   await failExportJob({ userId, exportJobId, errorCode, errorMessage, durationMs }).catch((settleError) => {
     if (!isAlreadySettled(settleError)) throw settleError;
   });
+  scheduleOpsEvent(createExportFailureEvent({
+    platform,
+    exportJobId,
+    errorCode,
+    durationMs,
+    watchdog: errorCode === "build_watchdog_timeout",
+  }));
   return { kind: "failed", error: errorMessage, reason: errorCode };
 }
 

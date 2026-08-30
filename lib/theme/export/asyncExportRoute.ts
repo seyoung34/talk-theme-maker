@@ -1,4 +1,6 @@
 import { failExportJob } from "@/lib/billing/credits";
+import { createExportRefundFailureEvent } from "@/lib/ops/eventFactories";
+import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
 import { safeErrorSummary } from "@/lib/theme/export/http";
 
 type FailedExportJob = {
@@ -27,5 +29,10 @@ export async function settleFailedExportJob(args: FailedExportJob, logPrefix: st
     exportJobId: args.exportJobId,
     error: safeErrorSummary(lastError),
   })}`);
+  scheduleOpsEvent(createExportRefundFailureEvent({
+    platform: logPrefix.startsWith("ios") ? "ios" : "android",
+    exportJobId: args.exportJobId,
+    errorCode: args.errorCode,
+  }));
   return false;
 }
