@@ -548,7 +548,22 @@ export default function TemplateGalleryClient() {
           </div>
 
           {hasPersonalItems ? (
-            <div className="grid grid-flow-col auto-cols-[calc(50%-0.25rem)] snap-x snap-mandatory gap-2 overflow-x-auto pb-1 sm:auto-cols-[300px] sm:gap-3">
+            /*
+              가로 스크롤이 카드 장식을 잘라내지 않게 여백을 준다.
+
+              `overflow-x-auto`는 세로축도 함께 자른다 — CSS에서 한 축이 `auto`면 다른 축의
+              `visible`은 `auto`로 승격되므로, 세로만 넘치게 두는 방법이 없다. 그래서 카드가
+              경계 밖에 그리는 것들(그림자 아래 약 45px, hover 시 4px 상승, focus ring 사방 4px)이
+              전부 잘렸다.
+
+              padding으로 자리를 만들고 같은 크기의 음수 margin으로 되돌린다. 레이아웃 폭·높이는
+              그대로 두면서 스크롤 컨테이너만 섹션 안쪽 여백까지 넓히는 방식이다. 폭이 유지되어야
+              `auto-cols-[calc(50%-0.25rem)]`의 "두 장 + 살짝 보이기"가 그대로 남는다. 잘리는
+              지점은 섹션 안쪽 테두리와 정확히 겹쳐서, 그림자가 잘린 게 아니라 섹션에서 끝난 것처럼 보인다.
+
+              `scroll-px-*`가 없으면 스냅이 padding을 지나쳐 카드가 섹션 가장자리에 딱 붙는다.
+            */
+            <div className="-mx-5 -mb-5 -mt-2 grid grid-flow-col auto-cols-[calc(50%-0.25rem)] snap-x snap-mandatory scroll-px-5 gap-2 overflow-x-auto px-5 pb-5 pt-2 [scrollbar-width:thin] sm:auto-cols-[300px] sm:gap-3 md:-mx-6 md:-mb-6 md:scroll-px-6 md:px-6 md:pb-6">
               {recentWork ? (
                 <TemplateCard
                   title="최근 작업"
