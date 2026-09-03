@@ -122,7 +122,11 @@ export function formatOpsIssuesForTelegram(input: { events: OpsIssue[]; inquirie
     for (const event of input.events) {
       const icon = event.severity === "P1" ? "🚨" : "⚠️";
       const entity = event.entityId ? ` · ${event.entityId}` : "";
-      lines.push(`${icon} [${event.severity}] ${event.eventType}${entity}`, `  ${formatKoreanTime(event.occurredAt)}`);
+      lines.push(
+        `${icon} [${event.severity}] ${event.eventType}${entity}`,
+        `  이벤트 ID: ${formatOpsIdentifier(event.eventId)}`,
+        `  ${formatKoreanTime(event.occurredAt)}`,
+      );
     }
   }
 
@@ -287,6 +291,11 @@ function formatKoreanDate(value: string) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return value.slice(0, 10);
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(date);
+}
+
+function formatOpsIdentifier(value: string, maxLength = 80) {
+  const normalized = value.replace(/[\u0000-\u001F\u007F]/g, "").trim();
+  return normalized.length <= maxLength ? normalized : `${normalized.slice(0, maxLength - 1)}…`;
 }
 
 function buildAdminUrl(path: string | undefined, siteUrl: string) {

@@ -4,7 +4,7 @@ import {
 } from "@/lib/theme/export/buildJobClient";
 
 const ga4DataApiScope = "https://www.googleapis.com/auth/analytics.readonly";
-const ga4RequestTimeoutMs = 10_000;
+const ga4OverallTimeoutMs = 12_000;
 
 export type Ga4VisitorConfig = {
   propertyId: string;
@@ -57,7 +57,8 @@ export async function readGa4DailyVisitors(
   options: {
     env?: Record<string, string | undefined>;
     fetchImpl?: typeof fetch;
-    getAccessToken?: (config: Ga4VisitorConfig) => Promise<string>;
+    getAccessToken?: (config: Ga4VisitorConfig, signal?: AbortSignal) => Promise<string>;
+    timeoutMs?: number;
   } = {},
 ): Promise<Ga4VisitorResult> {
   let config: Ga4VisitorConfig | null;
@@ -70,10 +71,15 @@ export async function readGa4DailyVisitors(
   if (!config) return emptyGa4Result("not_configured");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return emptyGa4Result("invalid_config");
 
+  const deadlineController = new AbortController();
+  const timeoutId = setTimeout(() => deadlineController.abort(), options.timeoutMs ?? ga4OverallTimeoutMs);
   try {
     const getAccessToken = options.getAccessToken ?? getDefaultAccessToken;
-    const accessToken = await getAccessToken(config);
-    const response = await fetchWithTimeout(
+    const accessToken = await awaitWithDeadline(
+      getAccessToken(config, deadlineController.signal),
+      deadlineController.signal,
+    );
+    const response = await fetchWithDeadline(
       `https://analyticsdata.googleapis.com/v1beta/properties/${encodeURIComponent(config.propertyId)}:runReport`,
       {
         method: "POST",
@@ -94,8 +100,9 @@ export async function readGa4DailyVisitors(
         }),
       },
       options.fetchImpl ?? fetch,
+      deadlineController.signal,
     );
-    const payload = await readJson(response);
+    const payload = await readJson(response, deadlineController.signal);
     if (!response.ok) {
       throw new Ga4DataApiError(
         response.status === 401 || response.status === 403 ? "authentication_failed" : "request_failed",
@@ -107,14 +114,16 @@ export async function readGa4DailyVisitors(
   } catch (error) {
     logGa4Failure(error);
     return emptyGa4Result("unavailable");
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
-async function getDefaultAccessToken(config: Ga4VisitorConfig) {
+async function getDefaultAccessToken(config: Ga4VisitorConfig, signal?: AbortSignal) {
   const accessToken = await getImpersonatedAccessToken(
     config.serviceAccountEmail,
     readGcpOidcConfig(),
-    { scopes: [ga4DataApiScope] },
+    { scopes: [ga4DataApiScope], signal },
   );
   return accessToken;
 }
@@ -142,27 +151,57 @@ function emptyGa4Result(status: Exclude<Ga4VisitorStatus, "ok">): Ga4VisitorResu
   return { status, visitors: null, sessions: null, newUsers: null };
 }
 
-async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, fetchImpl: typeof fetch) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), ga4RequestTimeoutMs);
+async function fetchWithDeadline(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  fetchImpl: typeof fetch,
+  signal: AbortSignal,
+) {
   try {
-    return await fetchImpl(input, { ...init, signal: controller.signal });
+    return await awaitWithDeadline(fetchImpl(input, { ...init, signal }), signal);
   } catch (error) {
+    if (error instanceof Ga4DataApiError) throw error;
     if (error instanceof Error && error.name === "AbortError") {
       throw new Ga4DataApiError("request_failed", "GA4 Data API 요청 시간이 초과되었습니다.");
     }
     throw new Ga4DataApiError("request_failed", "GA4 Data API 네트워크 요청에 실패했습니다.");
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
-async function readJson(response: Response) {
+async function readJson(response: Response, signal: AbortSignal) {
   try {
-    return await response.json();
-  } catch {
+    return await awaitWithDeadline(response.json(), signal);
+  } catch (error) {
+    if (error instanceof Ga4DataApiError) throw error;
     return null;
   }
+}
+
+async function awaitWithDeadline<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener("abort", onAbort);
+      reject(new Ga4DataApiError("request_failed", "GA4 Data API 요청 시간이 초과되었습니다."));
+    };
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+
+    operation.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
 }
 
 function logGa4Failure(error: unknown) {

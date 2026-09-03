@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { getCurrentOpsDay, getOpsDayRange, getPreviousOpsDay, readOpsDailySummary } from "@/lib/ops/dailySummary";
+import {
+  getCurrentOpsDay,
+  getOpsDayRange,
+  getPreviousOpsDay,
+  readOpsDailySummary,
+  validateCompletedOpsDay,
+} from "@/lib/ops/dailySummary";
 
 const mocks = vi.hoisted(() => ({
   getOpsDailySummary: vi.fn(),
@@ -65,5 +71,14 @@ describe("operations day boundaries", () => {
 
   it("rejects invalid calendar dates", () => {
     expect(() => getOpsDayRange("2026-02-30")).toThrow("invalid_ops_day");
+  });
+
+  it("allows only calendar days that ended before the current KST day", () => {
+    const now = new Date("2026-09-03T00:30:00.000Z");
+
+    expect(validateCompletedOpsDay("2026-02-30", now)).toEqual({ ok: false, reason: "invalid_date" });
+    expect(validateCompletedOpsDay("2026-09-03", now)).toEqual({ ok: false, reason: "date_not_closed" });
+    expect(validateCompletedOpsDay("2026-09-04", now)).toEqual({ ok: false, reason: "date_not_closed" });
+    expect(validateCompletedOpsDay("2026-09-02", now)).toEqual({ ok: true, day: "2026-09-02" });
   });
 });

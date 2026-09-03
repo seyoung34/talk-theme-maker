@@ -1,11 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/internal/ops/telegram/webhook/route";
 
-const mocks = vi.hoisted(() => ({
-  getOpsCommandReply: vi.fn(),
-  readTelegramConfig: vi.fn(),
-  sendTelegramMessage: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  class MockTelegramError extends Error {
+    constructor(public readonly code: string, public readonly retryable: boolean) {
+      super(code);
+      this.name = "TelegramError";
+    }
+  }
+
+  return {
+    getOpsCommandReply: vi.fn(),
+    isTelegramNotificationsEnabled: vi.fn(),
+    readTelegramConfig: vi.fn(),
+    sendTelegramMessage: vi.fn(),
+    TelegramError: MockTelegramError,
+  };
+});
 
 vi.mock("@/lib/ops/commands", () => ({
   getOpsCommandReply: mocks.getOpsCommandReply,
@@ -17,13 +28,15 @@ vi.mock("@/lib/ops/commands", () => ({
 }));
 
 vi.mock("@/lib/ops/telegram", () => ({
-  TelegramError: class TelegramError extends Error {},
+  TelegramError: mocks.TelegramError,
+  isTelegramNotificationsEnabled: mocks.isTelegramNotificationsEnabled,
   readTelegramConfig: mocks.readTelegramConfig,
   sendTelegramMessage: mocks.sendTelegramMessage,
 }));
 
 beforeEach(() => {
   vi.stubEnv("TELEGRAM_WEBHOOK_SECRET", "webhook-secret");
+  mocks.isTelegramNotificationsEnabled.mockReset().mockReturnValue(true);
   mocks.readTelegramConfig.mockReset().mockReturnValue({
     botToken: "123456789:abcdefghijklmnopqrst",
     chatId: "987654321",
@@ -48,10 +61,46 @@ function request(body: unknown, secret = "webhook-secret") {
 }
 
 describe("Telegram webhook route", () => {
+  it("acknowledges updates while Telegram notifications are disabled", async () => {
+    mocks.isTelegramNotificationsEnabled.mockReturnValueOnce(false);
+    vi.stubEnv("TELEGRAM_WEBHOOK_SECRET", "");
+
+    const response = await POST(request({ message: { chat: { id: 987654321, type: "private" }, text: "/status" } }, "wrong"));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ok: true, ignored: "disabled" });
+    expect(mocks.readTelegramConfig).not.toHaveBeenCalled();
+  });
+
   it("rejects an invalid Telegram secret before reading the update", async () => {
     const response = await POST(request({ message: {} }, "wrong"));
     expect(response.status).toBe(401);
     expect(mocks.sendTelegramMessage).not.toHaveBeenCalled();
+  });
+
+  it("acknowledges a permanent provider failure instead of asking Telegram to retry", async () => {
+    mocks.sendTelegramMessage.mockRejectedValueOnce(new mocks.TelegramError("telegram_invalid_response", false));
+
+    const response = await POST(request({
+      message: { chat: { id: 987654321, type: "private" }, text: "/status" },
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      acknowledged: true,
+      reason: "permanent_provider_failure",
+    });
+  });
+
+  it("returns 5xx for a retryable provider failure", async () => {
+    mocks.sendTelegramMessage.mockRejectedValueOnce(new mocks.TelegramError("telegram_request_timeout", true));
+
+    const response = await POST(request({
+      message: { chat: { id: 987654321, type: "private" }, text: "/status" },
+    }));
+
+    expect(response.status).toBe(502);
   });
 
   it("ignores messages outside the configured private operator chat", async () => {

@@ -7,6 +7,7 @@ import {
   markOpsNotificationDeadLetter,
   markOpsNotificationRetry,
   markOpsNotificationSent,
+  requeueOpsNotification,
 } from "@/lib/ops/repository";
 import type { OpsEvent } from "@/lib/ops/events";
 
@@ -26,7 +27,11 @@ export async function tryPublishOpsEvent(event: OpsEvent) {
 
   try {
     const enqueueResult = await enqueueOpsEvent(event);
-    if (enqueueResult === "duplicate") return { status: "duplicate" as const };
+    if (enqueueResult === "duplicate") {
+      const requeued = await requeueOpsNotification({ eventId: event.eventId });
+      const drainResult = await drainTelegramNotifications({ limit: 1 });
+      return { status: "duplicate" as const, requeued, drainResult };
+    }
     const drainResult = await drainTelegramNotifications({ limit: 1 });
     return { status: enqueueResult, drainResult };
   } catch (error) {

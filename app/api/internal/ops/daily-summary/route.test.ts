@@ -4,10 +4,10 @@ import { POST } from "@/app/api/internal/ops/daily-summary/route";
 const mocks = vi.hoisted(() => ({
   authorizeOpsInternalRequest: vi.fn(),
   createOpsDailySummaryEvent: vi.fn(),
-  drainTelegramNotifications: vi.fn(),
   tryPublishOpsEvent: vi.fn(),
   getPreviousOpsDay: vi.fn(),
   readOpsDailySummary: vi.fn(),
+  validateCompletedOpsDay: vi.fn(),
 }));
 
 vi.mock("@/lib/ops/internalAuth", () => ({
@@ -19,13 +19,13 @@ vi.mock("@/lib/ops/eventFactories", () => ({
 }));
 
 vi.mock("@/lib/ops/dispatcher", () => ({
-  drainTelegramNotifications: mocks.drainTelegramNotifications,
   tryPublishOpsEvent: mocks.tryPublishOpsEvent,
 }));
 
 vi.mock("@/lib/ops/dailySummary", () => ({
   getPreviousOpsDay: mocks.getPreviousOpsDay,
   readOpsDailySummary: mocks.readOpsDailySummary,
+  validateCompletedOpsDay: mocks.validateCompletedOpsDay,
 }));
 
 const summary = {
@@ -54,13 +54,11 @@ beforeEach(() => {
   mocks.authorizeOpsInternalRequest.mockReset().mockReturnValue({ ok: true });
   mocks.getPreviousOpsDay.mockReset().mockReturnValue("2026-09-02");
   mocks.readOpsDailySummary.mockReset().mockResolvedValue(summary);
+  mocks.validateCompletedOpsDay.mockReset().mockImplementation((day: string) => ({ ok: true, day }));
   mocks.createOpsDailySummaryEvent.mockReset().mockReturnValue({ eventId: "daily-event" });
   mocks.tryPublishOpsEvent.mockReset().mockResolvedValue({
     status: "inserted",
     drainResult: { status: "drained", claimed: 1, sent: 1, retried: 0, deadLettered: 0 },
-  });
-  mocks.drainTelegramNotifications.mockReset().mockResolvedValue({
-    status: "drained", claimed: 1, sent: 1, retried: 0, deadLettered: 0,
   });
 });
 
@@ -75,17 +73,48 @@ describe("daily operations summary route", () => {
     });
     expect(mocks.readOpsDailySummary).toHaveBeenCalledWith("2026-09-02");
     expect(mocks.createOpsDailySummaryEvent).toHaveBeenCalledWith(summary);
-    expect(mocks.drainTelegramNotifications).not.toHaveBeenCalled();
   });
 
   it("drains existing delivery work when the date event is already present", async () => {
-    mocks.tryPublishOpsEvent.mockResolvedValueOnce({ status: "duplicate" });
+    mocks.tryPublishOpsEvent.mockResolvedValueOnce({
+      status: "duplicate",
+      requeued: true,
+      drainResult: { status: "drained", claimed: 1, sent: 1, retried: 0, deadLettered: 0 },
+    });
 
     const response = await POST(new Request("https://talktheme.test/api/internal/ops/daily-summary?date=2026-09-01", { method: "POST" }));
 
     expect(response.status).toBe(200);
     expect(mocks.readOpsDailySummary).toHaveBeenCalledWith("2026-09-01");
-    expect(mocks.drainTelegramNotifications).toHaveBeenCalledWith({ limit: 20 });
+    await expect(response.json()).resolves.toMatchObject({
+      notification: { status: "duplicate", requeued: true, drain: { sent: 1 } },
+    });
+  });
+
+  it("returns 400 for an invalid calendar date without creating an event", async () => {
+    mocks.validateCompletedOpsDay.mockReturnValueOnce({ ok: false, reason: "invalid_date" });
+
+    const response = await POST(new Request(
+      "https://talktheme.test/api/internal/ops/daily-summary?date=2026-02-30",
+      { method: "POST" },
+    ));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ reason: "invalid_date" });
+    expect(mocks.readOpsDailySummary).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for today or a future date because the KST day is not closed", async () => {
+    mocks.validateCompletedOpsDay.mockReturnValueOnce({ ok: false, reason: "date_not_closed" });
+
+    const response = await POST(new Request(
+      "https://talktheme.test/api/internal/ops/daily-summary?date=2026-09-03",
+      { method: "POST" },
+    ));
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ reason: "date_not_closed" });
+    expect(mocks.readOpsDailySummary).not.toHaveBeenCalled();
   });
 
   it("does not run without the internal scheduler token", async () => {

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createOpsEvent, type OpsEvent } from "@/lib/ops/events";
-import { claimOpsNotificationBatch, enqueueOpsEvent, getOpsDailySummary, getOpsStatusSnapshot } from "@/lib/ops/repository";
+import {
+  claimOpsNotificationBatch,
+  enqueueOpsEvent,
+  getOpsDailySummary,
+  getOpsStatusSnapshot,
+  requeueOpsNotification,
+} from "@/lib/ops/repository";
 
 const mocks = vi.hoisted(() => ({ rpc: vi.fn() }));
 
@@ -116,6 +122,16 @@ describe("ops repository contract guards", () => {
       openInquiries: 1,
       billingHolds: 0,
       lastP1At: null,
+    });
+  });
+
+  it("requeues only the dead-letter delivery through the server-side recovery RPC", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: true, error: null });
+
+    await expect(requeueOpsNotification({ eventId: "ops.daily_summary:2026-09-02" })).resolves.toBe(true);
+    expect(mocks.rpc).toHaveBeenCalledWith("requeue_ops_notification", {
+      p_event_id: "ops.daily_summary:2026-09-02",
+      p_channel: "telegram",
     });
   });
 });

@@ -78,4 +78,34 @@ describe("GA4 Data API visitor reader", () => {
       GA4_SERVICE_ACCOUNT_EMAIL: "not-an-account",
     })).toBe("invalid");
   });
+
+  it("applies one deadline across token acquisition and the GA4 request", async () => {
+    const getAccessToken = vi.fn(() => new Promise<string>(() => {}));
+
+    await expect(readGa4DailyVisitors("2026-09-02", {
+      env: {
+        GA4_PROPERTY_ID: "545151038",
+        GA4_SERVICE_ACCOUNT_EMAIL: "ga4-admin@project.iam.gserviceaccount.com",
+      },
+      getAccessToken,
+      timeoutMs: 25,
+    })).resolves.toMatchObject({ status: "unavailable" });
+    expect(getAccessToken).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the deadline active while the response JSON body is being read", async () => {
+    const response = new Response(null, { status: 200 });
+    vi.spyOn(response, "json").mockImplementation(() => new Promise<unknown>(() => {}));
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(response);
+
+    await expect(readGa4DailyVisitors("2026-09-02", {
+      env: {
+        GA4_PROPERTY_ID: "545151038",
+        GA4_SERVICE_ACCOUNT_EMAIL: "ga4-admin@project.iam.gserviceaccount.com",
+      },
+      fetchImpl,
+      getAccessToken: vi.fn().mockResolvedValue("short-lived-token"),
+      timeoutMs: 25,
+    })).resolves.toMatchObject({ status: "unavailable" });
+  });
 });

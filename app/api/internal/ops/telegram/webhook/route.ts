@@ -2,13 +2,19 @@ import { NextResponse } from "next/server";
 import { getOpsCommandReply, parseOpsTelegramCommand } from "@/lib/ops/commands";
 import { authorizeTelegramWebhookRequest } from "@/lib/ops/internalAuth";
 import { readTelegramOperatorText } from "@/lib/ops/telegramWebhook";
-import { readTelegramConfig, sendTelegramMessage, TelegramError } from "@/lib/ops/telegram";
+import { isTelegramNotificationsEnabled, readTelegramConfig, sendTelegramMessage, TelegramError } from "@/lib/ops/telegram";
 
 const maxWebhookBodyBytes = 64 * 1024;
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  // Telegram retries non-2xx webhook responses. A disabled bot has no work to do, so
+  // acknowledge the update before checking secrets or reading the request body.
+  if (!isTelegramNotificationsEnabled()) {
+    return NextResponse.json({ ok: true, ignored: "disabled" });
+  }
+
   const auth = authorizeTelegramWebhookRequest(request);
   if (!auth.ok) {
     const configurationFailure = auth.reason === "configuration_missing" || auth.reason === "configuration_invalid";
@@ -57,7 +63,11 @@ export async function POST(request: Request) {
     console.error("[telegram-webhook] command_failed", {
       command: parsed.name,
       errorCode: error instanceof TelegramError ? error.code : "unknown_error",
+      retryable: error instanceof TelegramError ? error.retryable : undefined,
     });
+    if (error instanceof TelegramError && !error.retryable) {
+      return NextResponse.json({ ok: true, acknowledged: true, reason: "permanent_provider_failure" });
+    }
     return NextResponse.json({ error: "Telegram 명령을 처리하지 못했습니다.", reason: "command_failed" }, { status: 502 });
   }
 }

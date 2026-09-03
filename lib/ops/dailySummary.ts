@@ -9,6 +9,10 @@ export type OpsDayRange = {
   endAt: string;
 };
 
+export type OpsCompletedDayValidation =
+  | { ok: true; day: string }
+  | { ok: false; reason: "invalid_date" | "date_not_closed" };
+
 export type OpsDailySummary = OpsDailySummaryCounts & {
   day: string;
   startAt: string;
@@ -33,6 +37,17 @@ export function getPreviousOpsDay(now = new Date()) {
 
 export function getCurrentOpsDay(now = new Date()) {
   return getKstDate(now);
+}
+
+export function validateCompletedOpsDay(day: string, now = new Date()): OpsCompletedDayValidation {
+  try {
+    getOpsDayRange(day);
+  } catch {
+    return { ok: false, reason: "invalid_date" };
+  }
+
+  if (day >= getCurrentOpsDay(now)) return { ok: false, reason: "date_not_closed" };
+  return { ok: true, day };
 }
 
 export function getOpsDayRange(day: string): OpsDayRange {

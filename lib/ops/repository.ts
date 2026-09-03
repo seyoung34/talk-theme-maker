@@ -141,6 +141,17 @@ export async function markOpsNotificationDeadLetter(input: {
   });
 }
 
+export async function requeueOpsNotification(input: { eventId: string; channel?: "telegram" }) {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("requeue_ops_notification", {
+    p_event_id: input.eventId,
+    p_channel: input.channel ?? "telegram",
+  });
+  if (error) throw error;
+  const result = Array.isArray(data) ? data[0] : data;
+  return result === true;
+}
+
 export async function getOpsDailySummary(input: { startAt: string; endAt: string }): Promise<OpsDailySummaryCounts> {
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("get_ops_daily_summary", {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createOpsEvent } from "@/lib/ops/events";
-import { formatOpsEventForTelegram } from "@/lib/ops/formatters";
+import { formatOpsEventForTelegram, formatOpsIssuesForTelegram } from "@/lib/ops/formatters";
 
 describe("Telegram message formatter", () => {
   it("renders severity, entity, safe details, and an admin link", () => {
@@ -62,5 +62,21 @@ describe("Telegram message formatter", () => {
     expect(message).toContain("방문자(GA4 동의 기준): 12명 · 세션 19 · 신규 5");
     expect(message).toContain("결제: 1건 · ₩4,900");
     expect(message).toContain("운영 이슈: P1 0건 · P2 1건");
+  });
+
+  it("includes a bounded event ID for issues without an entity", () => {
+    const eventId = `runtime.health_failed:${"x".repeat(160)}`;
+    const message = formatOpsIssuesForTelegram({
+      events: [{
+        eventId,
+        eventType: "runtime.health_failed",
+        severity: "P1",
+        occurredAt: "2026-08-30T00:00:00.000Z",
+      }],
+      inquiries: [],
+    });
+
+    expect(message).toContain(`이벤트 ID: ${eventId.slice(0, 79)}…`);
+    expect(message).not.toContain(eventId);
   });
 });

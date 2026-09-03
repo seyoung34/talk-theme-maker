@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { authorizeOpsInternalRequest } from "@/lib/ops/internalAuth";
 import { createOpsDailySummaryEvent } from "@/lib/ops/eventFactories";
-import { drainTelegramNotifications, tryPublishOpsEvent } from "@/lib/ops/dispatcher";
-import { getPreviousOpsDay, readOpsDailySummary } from "@/lib/ops/dailySummary";
+import { tryPublishOpsEvent } from "@/lib/ops/dispatcher";
+import { getPreviousOpsDay, readOpsDailySummary, validateCompletedOpsDay } from "@/lib/ops/dailySummary";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +15,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const requestedDay = new URL(request.url).searchParams.get("date")?.trim();
-  const day = requestedDay || getPreviousOpsDay();
+  const requestedDay = new URL(request.url).searchParams.get("date");
+  let day: string;
+  if (requestedDay === null) {
+    day = getPreviousOpsDay();
+  } else {
+    const validation = validateCompletedOpsDay(requestedDay.trim());
+    if (!validation.ok) {
+      return NextResponse.json(
+        {
+          error: validation.reason === "invalid_date"
+            ? "일일 요약 날짜가 올바르지 않습니다."
+            : "아직 종료되지 않은 날짜는 요약할 수 없습니다.",
+          reason: validation.reason,
+        },
+        { status: 400 },
+      );
+    }
+    day = validation.day;
+  }
 
   try {
     const summary = await readOpsDailySummary(day);
@@ -29,15 +46,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "일일 요약을 발송 대기열에 넣지 못했습니다.", reason: "publish_failed" }, { status: 502 });
     }
 
-    // 이미 생성된 동일 날짜 이벤트를 재실행하는 경우에도 남아 있는 delivery를 회수한다.
-    const drain = publish.status === "duplicate"
-      ? await drainTelegramNotifications({ limit: 20 })
-      : publish.drainResult;
+    // duplicate 재실행 시 dead-letter delivery를 복구한 뒤 회수한다.
+    const drain = publish.status === "inserted" || publish.status === "duplicate"
+      ? publish.drainResult
+      : undefined;
     return NextResponse.json({
       day,
       summary,
       notification: {
         status: publish.status,
+        ...(publish.status === "duplicate" ? { requeued: publish.requeued } : {}),
         ...(drain ? { drain } : {}),
       },
     });
