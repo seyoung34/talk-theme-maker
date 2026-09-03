@@ -164,10 +164,14 @@ export async function getBuilderAccessToken(config: BuilderConfig) {
  * 대상 SA마다 WIF 주체(`principal://…/subject/cloudflare-worker-prod`)에
  * `roles/iam.workloadIdentityUser`가 걸려 있어야 한다. 그 역할이 `getAccessToken`을 포함한다.
  */
-export async function getImpersonatedAccessToken(serviceAccount: string, config: GcpOidcConfig) {
+export async function getImpersonatedAccessToken(
+  serviceAccount: string,
+  config: GcpOidcConfig,
+  options: { scopes?: string[] } = {},
+) {
   const oidcToken = await signCloudflareOidcToken(config);
   const federatedToken = await exchangeStsToken(config.wifAudience, oidcToken);
-  return impersonateServiceAccount(serviceAccount, federatedToken);
+  return impersonateServiceAccount(serviceAccount, federatedToken, options.scopes ?? [GCP_SCOPE]);
 }
 
 async function signCloudflareOidcToken(config: GcpOidcConfig) {
@@ -218,13 +222,13 @@ async function exchangeStsToken(audience: string, subjectToken: string) {
   return payload.access_token;
 }
 
-async function impersonateServiceAccount(serviceAccount: string, federatedToken: string) {
+async function impersonateServiceAccount(serviceAccount: string, federatedToken: string, scopes: string[]) {
   const response = await fetchWithTimeout(
     `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(serviceAccount)}:generateAccessToken`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${federatedToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: [GCP_SCOPE] }),
+      body: JSON.stringify({ scope: scopes }),
     },
     {
       code: "impersonation_request_failed",

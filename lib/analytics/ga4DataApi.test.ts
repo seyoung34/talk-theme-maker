@@ -1,0 +1,81 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { getGa4VisitorConfigStatus, readGa4DailyVisitors, readGa4VisitorConfig } from "@/lib/analytics/ga4DataApi";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("GA4 Data API visitor reader", () => {
+  it("does not call Google when the optional server configuration is absent", async () => {
+    const fetchImpl = vi.fn<typeof fetch>();
+
+    await expect(readGa4DailyVisitors("2026-09-02", {
+      env: {},
+      fetchImpl,
+    })).resolves.toEqual({
+      status: "not_configured",
+      visitors: null,
+      sessions: null,
+      newUsers: null,
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("reads the aggregate metrics for an explicit KST calendar day", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      rows: [{ metricValues: [{ value: "12" }, { value: "19" }, { value: "5" }] }],
+    }), { status: 200 }));
+
+    const result = await readGa4DailyVisitors("2026-09-02", {
+      env: {
+        GA4_PROPERTY_ID: "properties/545151038",
+        GA4_SERVICE_ACCOUNT_EMAIL: "ga4-admin@project.iam.gserviceaccount.com",
+      },
+      fetchImpl,
+      getAccessToken: vi.fn().mockResolvedValue("short-lived-token"),
+    });
+
+    expect(result).toEqual({ status: "ok", visitors: 12, sessions: 19, newUsers: 5 });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://analyticsdata.googleapis.com/v1beta/properties/545151038:runReport",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ Authorization: "Bearer short-lived-token" }),
+      }),
+    );
+    const request = fetchImpl.mock.calls[0]?.[1];
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      dateRanges: [{ startDate: "2026-09-02", endDate: "2026-09-02" }],
+      metrics: [{ name: "totalUsers" }, { name: "sessions" }, { name: "newUsers" }],
+    });
+  });
+
+  it("turns provider failures into an unavailable metric instead of failing the whole summary", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response("provider error", { status: 403 }));
+
+    await expect(readGa4DailyVisitors("2026-09-02", {
+      env: {
+        GA4_PROPERTY_ID: "545151038",
+        GA4_SERVICE_ACCOUNT_EMAIL: "ga4-admin@project.iam.gserviceaccount.com",
+      },
+      fetchImpl,
+      getAccessToken: vi.fn().mockResolvedValue("short-lived-token"),
+    })).resolves.toEqual({
+      status: "unavailable",
+      visitors: null,
+      sessions: null,
+      newUsers: null,
+    });
+  });
+
+  it("rejects malformed optional configuration before a network call", () => {
+    expect(() => readGa4VisitorConfig({
+      GA4_PROPERTY_ID: "not-a-property",
+      GA4_SERVICE_ACCOUNT_EMAIL: "not-an-account",
+    })).toThrow("GA4 Data API 설정 형식이 올바르지 않습니다.");
+    expect(getGa4VisitorConfigStatus({
+      GA4_PROPERTY_ID: "not-a-property",
+      GA4_SERVICE_ACCOUNT_EMAIL: "not-an-account",
+    })).toBe("invalid");
+  });
+});

@@ -17,6 +17,50 @@ export type ClaimedOpsNotification = {
 
 export type OpsDeliveryStatus = "sent" | "retry" | "dead_letter";
 
+export type OpsDailySummaryCounts = {
+  signups: number;
+  paymentsPaid: number;
+  paymentsPaidAmount: number;
+  paymentFailures: number;
+  refundsCount: number;
+  refundsAmount: number;
+  refundsReviewRequired: number;
+  exportsSucceeded: number;
+  exportsFailed: number;
+  exportsPending: number;
+  newInquiries: number;
+  openInquiries: number;
+  p1Issues: number;
+  p2Issues: number;
+  deadLetterNotifications: number;
+};
+
+export type OpsStatusSnapshot = {
+  pendingExports: number;
+  staleExports: number;
+  pendingNotifications: number;
+  retryNotifications: number;
+  deadLetterNotifications: number;
+  openInquiries: number;
+  billingHolds: number;
+  lastP1At: string | null;
+};
+
+export type OpsIssue = {
+  eventId: string;
+  eventType: OpsEvent["type"];
+  severity: "P1" | "P2";
+  occurredAt: string;
+  entityKind?: NonNullable<OpsEvent["entity"]>["kind"];
+  entityId?: string;
+};
+
+export type OpsInquiryIssue = {
+  id: string;
+  status: "open" | "answered";
+  createdAt: string;
+};
+
 const telegramDeliveryLeaseSeconds = 180;
 
 export async function enqueueOpsEvent(event: OpsEvent): Promise<"inserted" | "duplicate"> {
@@ -97,6 +141,49 @@ export async function markOpsNotificationDeadLetter(input: {
   });
 }
 
+export async function getOpsDailySummary(input: { startAt: string; endAt: string }): Promise<OpsDailySummaryCounts> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("get_ops_daily_summary", {
+    p_start: input.startAt,
+    p_end: input.endAt,
+  });
+  if (error) throw error;
+  return parseOpsDailySummary(getRpcRow(data, "ops_daily_summary"));
+}
+
+export async function getOpsStatusSnapshot(): Promise<OpsStatusSnapshot> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("get_ops_status_snapshot", {});
+  if (error) throw error;
+  return parseOpsStatusSnapshot(getRpcRow(data, "ops_status_snapshot"));
+}
+
+export async function listRecentOpsIssues(input: { limit?: number } = {}) {
+  const limit = Math.min(Math.max(Math.trunc(input.limit ?? 8), 1), 20);
+  const admin = createAdminClient();
+  const [eventsResult, inquiriesResult] = await Promise.all([
+    admin
+      .from("ops_events")
+      .select("event_id,event_type,severity,occurred_at,entity_kind,entity_id")
+      .in("severity", ["P1", "P2"])
+      .order("occurred_at", { ascending: false })
+      .limit(limit),
+    admin
+      .from("inquiries")
+      .select("id,status,created_at")
+      .in("status", ["open", "answered"])
+      .order("updated_at", { ascending: false })
+      .limit(limit),
+  ]);
+  if (eventsResult.error) throw eventsResult.error;
+  if (inquiriesResult.error) throw inquiriesResult.error;
+
+  return {
+    events: (eventsResult.data as unknown[] | null ?? []).map(parseOpsIssue),
+    inquiries: (inquiriesResult.data as unknown[] | null ?? []).map(parseOpsInquiryIssue),
+  };
+}
+
 async function updateOpsDelivery(
   functionName: "mark_ops_notification_sent" | "mark_ops_notification_retry" | "mark_ops_notification_dead_letter",
   args: Record<string, unknown>,
@@ -140,6 +227,104 @@ function parseClaimedNotification(row: unknown): ClaimedOpsNotification {
   }
   const leaseId = requireString(row.lease_id, "lease_id");
   return { event, attemptCount, leaseId };
+}
+
+function parseOpsDailySummary(row: unknown): OpsDailySummaryCounts {
+  if (!isRecord(row)) throw new Error("invalid_ops_daily_summary_row");
+  return {
+    signups: parseCount(row.signups, "signups"),
+    paymentsPaid: parseCount(row.payments_paid, "payments_paid"),
+    paymentsPaidAmount: parseCount(row.payments_paid_amount, "payments_paid_amount"),
+    paymentFailures: parseCount(row.payment_failures, "payment_failures"),
+    refundsCount: parseCount(row.refunds_count, "refunds_count"),
+    refundsAmount: parseCount(row.refunds_amount, "refunds_amount"),
+    refundsReviewRequired: parseCount(row.refunds_review_required, "refunds_review_required"),
+    exportsSucceeded: parseCount(row.exports_succeeded, "exports_succeeded"),
+    exportsFailed: parseCount(row.exports_failed, "exports_failed"),
+    exportsPending: parseCount(row.exports_pending, "exports_pending"),
+    newInquiries: parseCount(row.new_inquiries, "new_inquiries"),
+    openInquiries: parseCount(row.open_inquiries, "open_inquiries"),
+    p1Issues: parseCount(row.p1_issues, "p1_issues"),
+    p2Issues: parseCount(row.p2_issues, "p2_issues"),
+    deadLetterNotifications: parseCount(row.dead_letter_notifications, "dead_letter_notifications"),
+  };
+}
+
+function parseOpsStatusSnapshot(row: unknown): OpsStatusSnapshot {
+  if (!isRecord(row)) throw new Error("invalid_ops_status_snapshot_row");
+  return {
+    pendingExports: parseCount(row.pending_exports, "pending_exports"),
+    staleExports: parseCount(row.stale_exports, "stale_exports"),
+    pendingNotifications: parseCount(row.pending_notifications, "pending_notifications"),
+    retryNotifications: parseCount(row.retry_notifications, "retry_notifications"),
+    deadLetterNotifications: parseCount(row.dead_letter_notifications, "dead_letter_notifications"),
+    openInquiries: parseCount(row.open_inquiries, "open_inquiries"),
+    billingHolds: parseCount(row.billing_holds, "billing_holds"),
+    lastP1At: parseNullableTimestamp(row.last_p1_at, "last_p1_at"),
+  };
+}
+
+function parseOpsIssue(row: unknown): OpsIssue {
+  if (!isRecord(row)) throw new Error("invalid_ops_issue_row");
+  const eventId = requireString(row.event_id, "event_id");
+  const eventType = requireValue(row.event_type, isOpsEventType, "event_type");
+  const severity = row.severity === "P1" || row.severity === "P2" ? row.severity : null;
+  if (!severity) throw new Error("invalid_ops_issue_severity");
+  const entityKind = row.entity_kind === null || row.entity_kind === undefined
+    ? undefined
+    : requireValue(row.entity_kind, isOpsEntityKind, "entity_kind");
+  const entityId = row.entity_id === null || row.entity_id === undefined
+    ? undefined
+    : requireString(row.entity_id, "entity_id");
+  return {
+    eventId,
+    eventType,
+    severity,
+    occurredAt: requireTimestamp(row.occurred_at, "occurred_at"),
+    ...(entityKind ? { entityKind } : {}),
+    ...(entityId ? { entityId } : {}),
+  };
+}
+
+function parseOpsInquiryIssue(row: unknown): OpsInquiryIssue {
+  if (!isRecord(row)) throw new Error("invalid_ops_inquiry_issue_row");
+  const status = row.status === "open" || row.status === "answered" ? row.status : null;
+  if (!status) throw new Error("invalid_ops_inquiry_issue_status");
+  return {
+    id: requireString(row.id, "inquiry_id"),
+    status,
+    createdAt: requireTimestamp(row.created_at, "inquiry_created_at"),
+  };
+}
+
+function getRpcRow(value: unknown, name: string) {
+  if (Array.isArray(value)) {
+    if (value.length !== 1) throw new Error(`invalid_${name}_result`);
+    return value[0];
+  }
+  return value;
+}
+
+function parseCount(value: unknown, field: string) {
+  const parsed = typeof value === "number"
+    ? value
+    : typeof value === "string" && /^\d+$/.test(value)
+      ? Number(value)
+      : NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`invalid_ops_${field}`);
+  return parsed;
+}
+
+function requireTimestamp(value: unknown, field: string) {
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) {
+    throw new Error(`invalid_ops_${field}`);
+  }
+  return value;
+}
+
+function parseNullableTimestamp(value: unknown, field: string) {
+  if (value === null || value === undefined) return null;
+  return requireTimestamp(value, field);
 }
 
 function assertOpsEventEnums(event: OpsEvent) {

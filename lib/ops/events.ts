@@ -13,7 +13,7 @@ export const opsEventTypes = [
 
 export type OpsEventType = (typeof opsEventTypes)[number];
 export type OpsSeverity = "P1" | "P2" | "P3";
-export type OpsSource = "export" | "billing" | "runtime" | "admin";
+export type OpsSource = "export" | "billing" | "runtime" | "admin" | "ops";
 export type OpsEntityKind = "export_job" | "payment" | "template" | "runtime";
 export type OpsDetailValue = string | number | boolean | null;
 
@@ -56,7 +56,7 @@ export function isOpsSeverity(value: unknown): value is OpsSeverity {
 }
 
 export function isOpsSource(value: unknown): value is OpsSource {
-  return value === "export" || value === "billing" || value === "runtime" || value === "admin";
+  return value === "export" || value === "billing" || value === "runtime" || value === "admin" || value === "ops";
 }
 
 export function isOpsEntityKind(value: unknown): value is OpsEntityKind {
