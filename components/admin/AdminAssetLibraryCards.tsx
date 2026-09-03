@@ -184,7 +184,7 @@ export function AdminAssetDockCard({
   );
 }
 
-export function AdminAssetSkeletonGrid({ columns = 3 }: { columns?: 3 | 4 | 5 }) {
+export function AdminAssetSkeletonGrid({ columns = 5 }: { columns?: 3 | 4 | 5 }) {
   return (
     <div className={`grid gap-3 sm:grid-cols-2 ${columns === 3 ? "xl:grid-cols-3" : columns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
       {Array.from({ length: 6 }).map((_, index) => (
