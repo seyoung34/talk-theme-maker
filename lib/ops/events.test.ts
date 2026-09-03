@@ -33,4 +33,14 @@ describe("ops events", () => {
     });
     expect(event.adminPath).toBeUndefined();
   });
+
+  it("rejects unsupported enum values at event construction time", () => {
+    expect(() => createOpsEvent({
+      eventId: "event-2",
+      type: "runtime.unknown" as never,
+      severity: "P1",
+      source: "runtime",
+      summary: "Health check failed",
+    })).toThrow("invalid_ops_event_type");
+  });
 });

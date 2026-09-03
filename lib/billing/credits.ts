@@ -16,6 +16,7 @@ export type ExportPlatform = "android" | "ios";
 export type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
 export type ExportStage = "queued" | "preparing" | "building" | "packaging" | "finalizing" | "completed" | "failed";
 export type ExportBackend = "worker" | "cloud_run";
+export type ExportJobStatus = "pending" | "succeeded" | "failed";
 
 type ReservationRow = { export_job_id: string; balance: number };
 type ExportIdentityRow = { export_number: number; application_id: string | null; theme_identifier: string | null; export_name: string | null };
@@ -242,6 +243,60 @@ export async function failExportJob({
   return Number(data ?? 0);
 }
 
+export async function failExportJobIfPending({
+  userId,
+  exportJobId,
+  errorCode,
+  errorMessage,
+  durationMs,
+}: {
+  userId: string;
+  exportJobId: string;
+  errorCode: string;
+  errorMessage: string;
+  durationMs: number;
+}) {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("fail_export_job_if_pending", {
+    p_user_id: userId,
+    p_export_job_id: exportJobId,
+    p_error_code: errorCode,
+    p_error_message: errorMessage,
+    p_duration_ms: durationMs,
+  });
+  if (error) throw error;
+
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    transitioned?: unknown;
+    status?: unknown;
+    balance?: unknown;
+  } | null;
+  if (!row || typeof row.transitioned !== "boolean" || !isExportJobStatus(row.status)) {
+    throw new Error("export_job_settlement_result_invalid");
+  }
+  return {
+    transitioned: row.transitioned,
+    status: row.status,
+    balance: Number(row.balance ?? 0),
+  };
+}
+
+export async function getExportJobStatus({ userId, exportJobId }: { userId: string; exportJobId: string }) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("export_jobs")
+    .select("status")
+    .eq("id", exportJobId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const status = (data as { status?: unknown }).status;
+  if (!isExportJobStatus(status)) throw new Error("export_job_status_invalid");
+  return status;
+}
+
 export function isInsufficientCreditsError(error: unknown) {
   return hasErrorMessage(error, "insufficient_credits");
 }
@@ -257,4 +312,8 @@ function hasErrorMessage(error: unknown, value: string) {
 
 function hasErrorCode(error: unknown, value: string) {
   return typeof error === "object" && error !== null && "code" in error && String(error.code) === value;
+}
+
+function isExportJobStatus(value: unknown): value is ExportJobStatus {
+  return value === "pending" || value === "succeeded" || value === "failed";
 }

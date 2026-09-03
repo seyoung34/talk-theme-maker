@@ -64,6 +64,11 @@ export function isOpsEntityKind(value: unknown): value is OpsEntityKind {
 }
 
 export function createOpsEvent(input: CreateOpsEventInput): OpsEvent {
+  if (!isOpsEventType(input.type)) throw new Error("invalid_ops_event_type");
+  if (!isOpsSeverity(input.severity)) throw new Error("invalid_ops_event_severity");
+  if (!isOpsSource(input.source)) throw new Error("invalid_ops_event_source");
+  if (input.entity && !isOpsEntityKind(input.entity.kind)) throw new Error("invalid_ops_event_entity_kind");
+
   const eventId = normalizeRequired(input.eventId ?? crypto.randomUUID(), "eventId", 240);
   const occurredAt = input.occurredAt ?? new Date().toISOString();
   if (!Number.isFinite(Date.parse(occurredAt))) throw new Error("invalid_ops_event_time");

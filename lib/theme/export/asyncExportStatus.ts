@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
-import { completeExportJob, failExportJob } from "@/lib/billing/credits";
+import { completeExportJob, failExportJob, failExportJobIfPending } from "@/lib/billing/credits";
 import { createExportFailureEvent } from "@/lib/ops/eventFactories";
 import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
 import { getBuilderAccessToken, readBuilderConfig, type BuilderConfig } from "@/lib/theme/export/buildJobClient";
@@ -37,32 +37,10 @@ type ResultJson =
   | { status: "failed"; export_job_id?: string; errorCode: string };
 
 export async function resolveExportStatus(userId: string, exportJobId: string, platform: AsyncExportPlatform): Promise<AsyncExportStatusResult> {
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("export_jobs")
-    .select("id,user_id,platform,status,stage,file_name,error,error_code,created_at")
-    .eq("id", exportJobId)
-    .eq("user_id", userId)
-    .eq("platform", platform)
-    .maybeSingle();
-  if (error) throw error;
-  const row = data as ExportJobRow | null;
+  const row = await readExportJob(userId, exportJobId, platform);
   if (!row) return { kind: "not_found" };
 
-  if (row.status === "succeeded") {
-    if (!row.file_name) return { kind: "failed", error: "내보내기 결과 파일을 찾지 못했습니다.", reason: "server_error" };
-    return { kind: "completed", downloadUrl: await signOutputUrl(platform, exportJobId, row.file_name), fileName: row.file_name };
-  }
-  if (row.status === "failed") {
-    scheduleOpsEvent(createExportFailureEvent({
-      platform,
-      exportJobId,
-      errorCode: row.error_code ?? fallbackBuildFailureReason(platform),
-      durationMs: Date.now() - new Date(row.created_at).getTime(),
-      watchdog: row.error_code === "build_watchdog_timeout",
-    }));
-    return { kind: "failed", error: row.error ?? "내보내기 작업에 실패했습니다.", reason: row.error_code ?? fallbackBuildFailureReason(platform) };
-  }
+  if (row.status !== "pending") return resolveSettledExportStatus(row, platform, exportJobId);
 
   const config = readPlatformBuilderConfig(platform);
   const accessToken = await getBuilderAccessToken(config);
@@ -70,22 +48,40 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
 
   if (!result) {
     const watchdogStaleMs = getWatchdogStaleMs(platform);
-    if (Date.now() - new Date(row.created_at).getTime() > watchdogStaleMs) {
-      await failExportJob({
+    const durationMs = Date.now() - new Date(row.created_at).getTime();
+    if (durationMs > watchdogStaleMs) {
+      const settlement = await failExportJobIfPending({
         userId,
         exportJobId,
         errorCode: "build_watchdog_timeout",
         errorMessage: "내보내기 작업이 시간 내에 끝나지 않았습니다.",
-        durationMs: Date.now() - new Date(row.created_at).getTime(),
-      }).catch(() => undefined);
-      scheduleOpsEvent(createExportFailureEvent({
-        platform,
-        exportJobId,
-        errorCode: "build_watchdog_timeout",
-        durationMs: Date.now() - new Date(row.created_at).getTime(),
-        watchdog: true,
-      }));
-      return { kind: "failed", error: "내보내기 작업이 시간 내에 끝나지 않았습니다.", reason: "build_watchdog_timeout" };
+        durationMs,
+      }).catch((settleError) => {
+        console.error("[export-watchdog] transition_failed", {
+          exportJobId,
+          platform,
+          name: settleError instanceof Error ? settleError.name : "unknown",
+        });
+        return null;
+      });
+      if (settlement?.transitioned) {
+        scheduleOpsEvent(createExportFailureEvent({
+          platform,
+          exportJobId,
+          errorCode: "build_watchdog_timeout",
+          durationMs,
+          watchdog: true,
+        }));
+        return { kind: "failed", error: "내보내기 작업이 시간 내에 끝나지 않았습니다.", reason: "build_watchdog_timeout" };
+      }
+
+      // Another status request may have completed or failed the job while this request was
+      // downloading the result. Re-read before deciding what the caller should see and never
+      // publish a watchdog alert for a transition this invocation did not win.
+      const latestRow = await readExportJob(userId, exportJobId, platform);
+      if (!latestRow) return { kind: "not_found" };
+      if (latestRow.status !== "pending") return resolveSettledExportStatus(latestRow, platform, exportJobId);
+      return { kind: "pending", stage: latestRow.stage };
     }
     return { kind: "pending", stage: row.stage };
   }
@@ -111,6 +107,36 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
     watchdog: errorCode === "build_watchdog_timeout",
   }));
   return { kind: "failed", error: errorMessage, reason: errorCode };
+}
+
+async function readExportJob(userId: string, exportJobId: string, platform: AsyncExportPlatform) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("export_jobs")
+    .select("id,user_id,platform,status,stage,file_name,error,error_code,created_at")
+    .eq("id", exportJobId)
+    .eq("user_id", userId)
+    .eq("platform", platform)
+    .maybeSingle();
+  if (error) throw error;
+  return data as ExportJobRow | null;
+}
+
+async function resolveSettledExportStatus(row: ExportJobRow, platform: AsyncExportPlatform, exportJobId: string): Promise<AsyncExportStatusResult> {
+  if (row.status === "succeeded") {
+    if (!row.file_name) return { kind: "failed", error: "내보내기 결과 파일을 찾지 못했습니다.", reason: "server_error" };
+    return { kind: "completed", downloadUrl: await signOutputUrl(platform, exportJobId, row.file_name), fileName: row.file_name };
+  }
+
+  const errorCode = row.error_code ?? fallbackBuildFailureReason(platform);
+  scheduleOpsEvent(createExportFailureEvent({
+    platform,
+    exportJobId,
+    errorCode,
+    durationMs: Date.now() - new Date(row.created_at).getTime(),
+    watchdog: errorCode === "build_watchdog_timeout",
+  }));
+  return { kind: "failed", error: row.error ?? "내보내기 작업에 실패했습니다.", reason: errorCode };
 }
 
 export async function resolveExportDownload(userId: string, exportJobId: string, platform: AsyncExportPlatform): Promise<AsyncExportDownloadResult> {

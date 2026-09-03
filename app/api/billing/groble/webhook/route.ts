@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import {
-  createGrobleWebhookProcessingEvent,
   createGrobleWebhookRejectedEvent,
   createGrobleWebhookTemporaryFailureEvent,
 } from "@/lib/ops/eventFactories";
@@ -95,15 +94,6 @@ export async function POST(request: Request) {
     const event = parseGrobleWebhook(rawBody);
     parsedEvent = event;
     const result = await processGrobleWebhookEvent(event, idempotencyKey);
-    const resultCode = result?.result;
-    if (resultCode === "rejected" || resultCode === "review_required") {
-      scheduleOpsEvent(createGrobleWebhookProcessingEvent({
-        eventId: event.eventId,
-        eventType: event.eventType,
-        result: resultCode,
-        occurredAt: event.occurredAt,
-      }));
-    }
     return NextResponse.json({ received: true, result: result?.result ?? "processed" });
   } catch (error) {
     if (error instanceof GrobleWebhookError) {

@@ -12,6 +12,7 @@ describe("POST /api/billing/groble/webhook", () => {
   const secret = "test-secret";
   let processGrobleWebhookEvent: ReturnType<typeof vi.fn>;
   let recordGrobleWebhookRejection: ReturnType<typeof vi.fn>;
+  let scheduleOpsEvent: ReturnType<typeof vi.fn>;
   let requireGrobleServerConfig: ReturnType<typeof vi.fn>;
   let warn: ReturnType<typeof vi.spyOn>;
   let error: ReturnType<typeof vi.spyOn>;
@@ -63,15 +64,18 @@ describe("POST /api/billing/groble/webhook", () => {
     vi.resetModules();
     processGrobleWebhookEvent = vi.fn(async () => ({ result: "processed" }));
     recordGrobleWebhookRejection = vi.fn(async () => undefined);
+    scheduleOpsEvent = vi.fn();
     requireGrobleServerConfig = vi.fn(() => ({ grobleWebhookSecret: secret, grobleWebhookPreviousSecret: undefined }));
     warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     error = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.doMock("@/lib/billing/paymentRepository", () => ({ processGrobleWebhookEvent, recordGrobleWebhookRejection }));
+    vi.doMock("@/lib/ops/dispatcher", () => ({ scheduleOpsEvent }));
     vi.doMock("@/lib/supabase/config", () => ({ requireGrobleServerConfig }));
   });
 
   afterEach(() => {
     vi.doUnmock("@/lib/billing/paymentRepository");
+    vi.doUnmock("@/lib/ops/dispatcher");
     vi.doUnmock("@/lib/supabase/config");
     vi.restoreAllMocks();
   });
@@ -83,6 +87,16 @@ describe("POST /api/billing/groble/webhook", () => {
     expect(await response.json()).toEqual({ received: true, result: "processed" });
     expect(processGrobleWebhookEvent).toHaveBeenCalledOnce();
     expect(recordGrobleWebhookRejection).not.toHaveBeenCalled();
+  });
+
+  it("거절·검토 상태 알림은 DB 트랜잭션 outbox에 맡긴다", async () => {
+    processGrobleWebhookEvent.mockResolvedValue({ result: "review_required" });
+
+    const response = await deliver(completedPayload());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ received: true, result: "review_required" });
+    expect(scheduleOpsEvent).not.toHaveBeenCalled();
   });
 
   it("서명이 틀리면 401이고 격리 테이블을 건드리지 않는다", async () => {

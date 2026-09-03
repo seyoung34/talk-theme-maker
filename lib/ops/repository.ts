@@ -17,7 +17,10 @@ export type ClaimedOpsNotification = {
 
 export type OpsDeliveryStatus = "sent" | "retry" | "dead_letter";
 
+const telegramDeliveryLeaseSeconds = 180;
+
 export async function enqueueOpsEvent(event: OpsEvent): Promise<"inserted" | "duplicate"> {
+  assertOpsEventEnums(event);
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("enqueue_ops_event", {
     p_event_id: event.eventId,
@@ -45,7 +48,7 @@ export async function claimOpsNotificationBatch(input: { limit?: number; leaseSe
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("claim_ops_notification_batch", {
     p_limit: input.limit ?? 10,
-    p_lease_seconds: input.leaseSeconds ?? 60,
+    p_lease_seconds: input.leaseSeconds ?? telegramDeliveryLeaseSeconds,
   });
   if (error) throw error;
 
@@ -137,6 +140,13 @@ function parseClaimedNotification(row: unknown): ClaimedOpsNotification {
   }
   const leaseId = requireString(row.lease_id, "lease_id");
   return { event, attemptCount, leaseId };
+}
+
+function assertOpsEventEnums(event: OpsEvent) {
+  if (!isOpsEventType(event.type)) throw new Error("invalid_ops_event_type");
+  if (!isOpsSeverity(event.severity)) throw new Error("invalid_ops_event_severity");
+  if (!isOpsSource(event.source)) throw new Error("invalid_ops_event_source");
+  if (event.entity && !isOpsEntityKind(event.entity.kind)) throw new Error("invalid_ops_event_entity_kind");
 }
 
 function parsePayload(value: unknown) {
