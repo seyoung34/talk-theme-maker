@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertTriangle, Check, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDownUp, Check, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
@@ -34,7 +34,14 @@ import {
 } from "@/lib/theme/adminAssets";
 import { createAdminAssetSaveTargets, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs } from "@/lib/theme/adminAssetWorkspace";
 import { useAdminAssetLibrary } from "@/components/admin/hooks/useAdminAssetLibrary";
-import { isAdminAssetListSortKey, toAdminAssetListItem, type AdminAssetListItem } from "@/lib/theme/adminAssetList";
+import {
+  getAdminAssetListDefaultSortDirection,
+  isAdminAssetListSortKey,
+  toAdminAssetListItem,
+  type AdminAssetListItem,
+  type AdminAssetListSortDirection,
+  type AdminAssetListSortKey,
+} from "@/lib/theme/adminAssetList";
 import { bubbleSlotFromRole } from "@/lib/theme/project/state";
 import { generateBubbleAsset, type BubbleFamilyDesignSpec, type GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
@@ -137,7 +144,7 @@ export default function AdminAssetsClient() {
   const [uploadProgress, setUploadProgress] = useState<AdminAssetUploadProgress | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [imageEditOpen, setImageEditOpen] = useState(false);
-  const [assetGridColumns, setAssetGridColumns] = useState<3 | 4 | 5>(3);
+  const [assetGridColumns, setAssetGridColumns] = useState<3 | 4 | 5>(5);
   const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
   const [bubbleBuilderInitial, setBubbleBuilderInitial] = useState<AdminBubbleBuilderInitial | null>(null);
@@ -188,6 +195,8 @@ export default function AdminAssetsClient() {
     setSearch: setAssetSearch,
     sort: assetSort,
     setSort: setAssetSort,
+    sortDirection: assetSortDirection,
+    setSortDirection: setAssetSortDirection,
   } = useAdminAssetLibrary({ assetKind, onError: notifyLibraryError });
   // 등록 화면에서는 슬롯을 선택하지 않는다. 기존 저장 계약(slot_role)과 말풍선 편집기의
   // 기준 크기를 위해 kind별 첫 슬롯만 내부 대표값으로 사용한다.
@@ -264,11 +273,11 @@ export default function AdminAssetsClient() {
     () =>
       visibleAssets.map((asset) => ({
         asset,
-        warnings: getAdminAssetGuidanceForSlots(activeKindSlots, asset.assetKind ?? assetKind, asset.analysis ?? null, asset.fileName),
+        warnings: getAdminAssetGuidanceForSlots(activeKindSlots, asset.assetKind ?? assetKind, asset.analysis ?? null),
       })),
     [activeKindSlots, assetKind, visibleAssets],
   );
-  const guidanceItems = useMemo(() => getAdminAssetGuidanceForSlots(activeKindSlots, assetKind, analysis, file?.name), [activeKindSlots, analysis, assetKind, file]);
+  const guidanceItems = useMemo(() => getAdminAssetGuidanceForSlots(activeKindSlots, assetKind, analysis), [activeKindSlots, analysis, assetKind]);
 
   useEffect(() => {
     if (assetKind !== "bubble" || !analysis) return;
@@ -1206,17 +1215,31 @@ export default function AdminAssetsClient() {
                       value={assetSort}
                       onChange={(event) => {
                         const value = event.currentTarget.value;
-                        if (isAdminAssetListSortKey(value)) setAssetSort(value);
+                        if (isAdminAssetListSortKey(value)) {
+                          setAssetSort(value);
+                          setAssetSortDirection(getAdminAssetListDefaultSortDirection(value));
+                        }
                       }}
                       aria-label="정렬 기준"
                       className="h-[34px] appearance-none rounded-full border border-[var(--color-outline-variant)] bg-white pl-3 pr-8 text-xs font-black text-[var(--color-on-surface-variant)] outline-none transition hover:bg-[var(--color-surface-low)]"
                     >
-                      <option value="updated">최근 수정순</option>
-                      <option value="created">최근 등록순</option>
+                      <option value="updated">수정순</option>
+                      <option value="created">등록순</option>
                       <option value="title">이름순</option>
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" />
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setAssetSortDirection(assetSortDirection === "asc" ? "desc" : "asc")}
+                    aria-label={`정렬 방향: ${assetSortDirection === "asc" ? "오름차순" : "내림차순"}`}
+                    aria-pressed={assetSortDirection === "asc"}
+                    title={`현재 ${getAdminAssetSortDirectionLabel(assetSort, assetSortDirection)} · 클릭하면 ${getAdminAssetSortDirectionLabel(assetSort, assetSortDirection === "asc" ? "desc" : "asc")}으로 변경`}
+                    className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 text-xs font-black text-[var(--color-on-surface-variant)] outline-none transition hover:bg-[var(--color-surface-low)] focus-visible:ring-2 focus-visible:ring-[var(--color-info)]"
+                  >
+                    <ArrowDownUp className="size-3.5" aria-hidden="true" />
+                    <span>{getAdminAssetSortDirectionLabel(assetSort, assetSortDirection)}</span>
+                  </button>
                   {assetsTruncated ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1.5 text-[11px] font-black text-amber-800">
                       <AlertTriangle size={11} aria-hidden="true" /> 500개까지만 불러왔습니다
@@ -1287,7 +1310,7 @@ export default function AdminAssetsClient() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0"><span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Library</span><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{getAdminAssetKindLabel(assetKind)} · {assetSearch.trim() ? `검색 ${filteredAssets.length} / ` : ""}{assetsTruncated ? `${assets.length}개 이상` : `${assets.length}개`}</p></div>
               <div className="relative min-w-[220px] flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" /><input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.currentTarget.value)} placeholder="후보 검색" className="h-10 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-xs font-semibold outline-none focus:bg-white" aria-label="관리 후보 검색" /></div>
-              <div className="flex flex-wrap gap-1">{([["updated", "수정순"], ["created", "등록순"], ["title", "이름순"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setAssetSort(value)} aria-pressed={assetSort === value} className={`rounded-full px-2.5 py-1.5 text-[11px] font-black ${assetSort === value ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{label}</button>)}</div>
+              <div className="flex flex-wrap gap-1">{([["updated", "수정순"], ["created", "등록순"], ["title", "이름순"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => { setAssetSort(value); setAssetSortDirection(getAdminAssetListDefaultSortDirection(value)); }} aria-pressed={assetSort === value} className={`rounded-full px-2.5 py-1.5 text-[11px] font-black ${assetSort === value ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{label}</button>)}</div>
             </div>
             <div className="flex min-h-[132px] gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
               {isLoadingAssets && assets.length === 0 ? <span className="grid min-w-48 place-items-center rounded-2xl bg-[var(--color-surface-low)] text-xs font-bold text-[var(--color-on-surface-variant)]">후보를 불러오는 중</span> : null}
@@ -1418,12 +1441,17 @@ function bubbleVariantFromRole(role: string): "first" | "group" | null {
 /** 정사각으로 볼 비율 폭. 예전 `shapes`의 "square" 판정과 같은 경계다. */
 const squareAspectRatioRange = { min: 0.85, max: 1.18 } as const;
 
+function getAdminAssetSortDirectionLabel(sort: AdminAssetListSortKey, direction: AdminAssetListSortDirection): string {
+  if (sort === "title") return direction === "asc" ? "가나다순" : "가나다 역순";
+  return direction === "asc" ? "오래된순" : "최근순";
+}
+
 /**
  * 업로드 이미지에 대한 경고.
  *
- * 크기와 파일명만 본다. 예전에는 캔버스 픽셀 스캔에서 얻은 형태·투명도도 함께 봤지만, 그
- * 비용을 업로드마다 치를 만한 경고가 아니었다. 정사각 여부는 비율로, 9-patch 여부는 파일명
- * 확장자로 같은 결론을 낼 수 있어 그대로 남긴다.
+ * 크기와 비율만 본다. 예전에는 캔버스 픽셀 스캔에서 얻은 형태·투명도도 함께 봤지만, 그
+ * 비용을 업로드마다 치를 만한 경고가 아니었다. 말풍선의 9-patch/stretch는 저장된 조정값과
+ * 전용 편집기에서 확인하므로 목록 카드마다 반복해서 경고하지 않는다.
  *
  * **사라진 것은 투명 배경 경고 하나다.** 알파 채널 비율은 픽셀을 읽지 않으면 알 수 없다.
  */
@@ -1431,7 +1459,6 @@ function getAdminAssetGuidance(
   slot: ThemeAssetSlot | undefined,
   assetKind: AdminAssetKind,
   analysis: AdminAssetAnalysis | null,
-  fileName?: string,
 ) {
   if (!slot || !analysis) return [];
   const items: string[] = [];
@@ -1445,7 +1472,6 @@ function getAdminAssetGuidance(
 
   const aspectRatio = width / height;
   const isSquarish = aspectRatio > squareAspectRatioRange.min && aspectRatio < squareAspectRatioRange.max;
-  const isNinePatchFile = Boolean(fileName?.toLowerCase().endsWith(".9.png"));
 
   if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher" || assetKind === "passcode_indicator") && !isSquarish) {
     items.push("아이콘·프로필·암호 표시 이미지는 정사각형에 가까울수록 잘리지 않고 안정적으로 보입니다.");
@@ -1453,19 +1479,12 @@ function getAdminAssetGuidance(
   if ((assetKind === "background" || assetKind === "passcode" || slot.role.includes("background")) && aspectRatio > 1.2) {
     items.push("배경 이미지는 세로 화면에서 사용됩니다. 가로형 이미지는 상하 영역이 비거나 잘릴 수 있습니다.");
   }
-  if (assetKind === "bubble" && !isNinePatchFile && slot.platform === "android") {
-    items.push("Android 말풍선은 9-patch 또는 stretch 조정값이 중요합니다. 저장 전 말풍선 조정값을 확인하세요.");
-  }
   if (Math.min(width, height) < 48) {
     items.push("이미지 한쪽 변이 48px 미만입니다. 고해상도 기기에서 흐릿하게 보일 수 있습니다.");
   }
   if (assetKind === "background" && Math.max(width, height) < 720) {
     items.push("배경 이미지는 최소 720px 이상의 긴 변을 권장합니다.");
   }
-  if (slot.platform === "android" && assetKind === "bubble" && !slot.fileName?.endsWith(".9.png")) {
-    items.push("현재 슬롯 파일명이 9-patch가 아닙니다. export 결과에서 말풍선 늘어남을 반드시 확인하세요.");
-  }
-
   return Array.from(new Set(items));
 }
 
@@ -1473,9 +1492,8 @@ function getAdminAssetGuidanceForSlots(
   slots: readonly ThemeAssetSlot[],
   assetKind: AdminAssetKind,
   analysis: AdminAssetAnalysis | null,
-  fileName?: string,
 ) {
-  return Array.from(new Set(slots.flatMap((slot) => getAdminAssetGuidance(slot, assetKind, analysis, fileName))));
+  return Array.from(new Set(slots.flatMap((slot) => getAdminAssetGuidance(slot, assetKind, analysis))));
 }
 
 function AdminAssetEditDialog({

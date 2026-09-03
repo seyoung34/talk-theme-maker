@@ -7,6 +7,7 @@ import {
   filterAdminAssetListItems,
   sortAdminAssetListItems,
   type AdminAssetListItem,
+  type AdminAssetListSortDirection,
   type AdminAssetListSortKey,
 } from "@/lib/theme/adminAssetList";
 
@@ -38,6 +39,8 @@ export type AdminAssetLibrary = {
   readonly setSearch: (value: string) => void;
   readonly sort: AdminAssetListSortKey;
   readonly setSort: (value: AdminAssetListSortKey) => void;
+  readonly sortDirection: AdminAssetListSortDirection;
+  readonly setSortDirection: (value: AdminAssetListSortDirection) => void;
   readonly refresh: () => Promise<void>;
 };
 
@@ -50,7 +53,8 @@ export function useAdminAssetLibrary(input: {
   const [truncated, setTruncated] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<AdminAssetListSortKey>("updated");
+  const [sort, setSort] = useState<AdminAssetListSortKey>("created");
+  const [sortDirection, setSortDirection] = useState<AdminAssetListSortDirection>("desc");
   const requestSeqRef = useRef(0);
 
   /**
@@ -91,9 +95,9 @@ export function useAdminAssetLibrary(input: {
   }, [refresh]);
 
   const visibleAssets = useMemo(
-    () => filterAdminAssetListItems(sortAdminAssetListItems(assets, sort), search),
-    [assets, search, sort],
+    () => filterAdminAssetListItems(sortAdminAssetListItems(assets, sort, sortDirection), search),
+    [assets, search, sort, sortDirection],
   );
 
-  return { assets, setAssets, visibleAssets, truncated, isLoading, search, setSearch, sort, setSort, refresh };
+  return { assets, setAssets, visibleAssets, truncated, isLoading, search, setSearch, sort, setSort, sortDirection, setSortDirection, refresh };
 }

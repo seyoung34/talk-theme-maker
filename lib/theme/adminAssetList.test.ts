@@ -4,6 +4,8 @@ import {
   describeAdminAssetScope,
   getAdminAssetScopeLabel,
   filterAdminAssetListItems,
+  getAdminAssetListDefaultSortDirection,
+  isAdminAssetListSortDirection,
   isAdminAssetListSortKey,
   sortAdminAssetListItems,
   toAdminAssetListItem,
@@ -125,6 +127,12 @@ describe("sortAdminAssetListItems", () => {
     expect(sortAdminAssetListItems([older, newer, middle], "title").map((item) => item.id)).toEqual(["c", "b", "a"]);
   });
 
+  it("정렬 방향을 바꾸면 각 기준의 역순을 보여준다", () => {
+    expect(sortAdminAssetListItems([older, newer, middle], "updated", "asc").map((item) => item.id)).toEqual(["b", "c", "a"]);
+    expect(sortAdminAssetListItems([older, newer, middle], "created", "asc").map((item) => item.id)).toEqual(["b", "a", "c"]);
+    expect(sortAdminAssetListItems([older, newer, middle], "title", "desc").map((item) => item.id)).toEqual(["a", "b", "c"]);
+  });
+
   /** 동률에서 순서가 흔들리면 리렌더마다 카드가 자리를 바꾼다. */
   it("동률은 id로 고정한다", () => {
     const tied = [listItem({ id: "z", title: "같음" }), listItem({ id: "a", title: "같음" })];
@@ -142,6 +150,13 @@ describe("sortAdminAssetListItems", () => {
   it("정렬 키가 아닌 값은 받지 않는다", () => {
     expect(isAdminAssetListSortKey("title")).toBe(true);
     expect(isAdminAssetListSortKey("priority")).toBe(false);
+  });
+
+  it("기준별 기본 방향과 입력 검증을 제공한다", () => {
+    expect(getAdminAssetListDefaultSortDirection("created")).toBe("desc");
+    expect(getAdminAssetListDefaultSortDirection("title")).toBe("asc");
+    expect(isAdminAssetListSortDirection("asc")).toBe(true);
+    expect(isAdminAssetListSortDirection("descending")).toBe(false);
   });
 });
 

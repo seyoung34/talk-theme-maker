@@ -141,8 +141,20 @@ export function getAdminAssetScopeLabel(scope: AdminAssetScope): string {
 export const adminAssetListSortKeys = ["updated", "created", "title"] as const;
 export type AdminAssetListSortKey = (typeof adminAssetListSortKeys)[number];
 
+export const adminAssetListSortDirections = ["asc", "desc"] as const;
+export type AdminAssetListSortDirection = (typeof adminAssetListSortDirections)[number];
+
 export function isAdminAssetListSortKey(value: unknown): value is AdminAssetListSortKey {
   return typeof value === "string" && (adminAssetListSortKeys as readonly string[]).includes(value);
+}
+
+export function isAdminAssetListSortDirection(value: unknown): value is AdminAssetListSortDirection {
+  return typeof value === "string" && (adminAssetListSortDirections as readonly string[]).includes(value);
+}
+
+/** 기준을 바꿀 때 사용할 자연스러운 기본 방향. 날짜는 최신, 이름은 가나다 순이다. */
+export function getAdminAssetListDefaultSortDirection(sort: AdminAssetListSortKey): AdminAssetListSortDirection {
+  return sort === "title" ? "asc" : "desc";
 }
 
 /**
@@ -152,13 +164,17 @@ export function isAdminAssetListSortKey(value: unknown): value is AdminAssetList
  * 페이지 안에서만 성립해서 목록이 거짓말을 한다.
  *
  * 이름은 한국어 정렬(`ko`)을 쓰고, 어느 기준이든 마지막에 `id`로 고정한다. 동률에서 순서가
- * 흔들리면 리렌더마다 카드가 자리를 바꾼다.
+ * 흔들리면 리렌더마다 카드가 자리를 바꾼다. 방향을 생략하면 기존의 자연스러운 방향
+ * (날짜는 최신순, 이름은 가나다순)을 유지한다.
  */
 export function sortAdminAssetListItems<T extends Pick<AdminAssetListItem, "id" | "title" | "createdAt" | "updatedAt">>(
   items: readonly T[],
   sort: AdminAssetListSortKey,
+  direction: AdminAssetListSortDirection = getAdminAssetListDefaultSortDirection(sort),
 ): T[] {
-  return [...items].sort((left, right) => compareBySort(left, right, sort) || left.id.localeCompare(right.id));
+  const naturalDirection = getAdminAssetListDefaultSortDirection(sort);
+  const directionFactor = direction === naturalDirection ? 1 : -1;
+  return [...items].sort((left, right) => directionFactor * compareBySort(left, right, sort) || left.id.localeCompare(right.id));
 }
 
 function compareBySort(
