@@ -32,6 +32,9 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "cf:build": "opennextjs-cloudflare build",
+    "cf:build:workers": "node scripts/verify-workers-context.mjs workers && npm run cf:build",
+    "cf:build:production": "node scripts/verify-workers-context.mjs build && npm run cf:build",
+    "cf:deploy:production": "node scripts/verify-workers-context.mjs deploy && wrangler deploy --strict",
     "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview"
   },
   "dependencies": {
