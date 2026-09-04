@@ -28,6 +28,32 @@
 - Direct commits to `main` are reserved for explicitly approved release or maintenance actions. Urgent hotfixes should still be developed on a branch and merged promptly.
 - Never force-update or delete `main`.
 
+### Production deployment
+
+- The normal production path is `work/N` (or a named task branch) → PR → required `verify` →
+  `main` merge → Cloudflare Workers Builds. Do not run a production deploy from an Orca lane,
+  local shell, or the local `main` worktree.
+- Configure the Cloudflare Workers Builds production trigger to listen only to `main`, use
+  `npm run cf:build:workers` as its build command, and use `npm run cf:deploy:production` as
+  its production deploy command. `cf:build:workers` supports non-main preview builds but only
+  allows production values when the branch is `main`; do not enable a second production deploy
+  path in GitHub Actions or the dashboard.
+- `npm run cf:build` is the local Cloudflare build/preview command. The `:production` build and
+  deploy scripts intentionally fail unless Cloudflare Workers Builds provides `WORKERS_CI=1` and
+  `WORKERS_CI_BRANCH=main`. These checks reduce mistakes but are not a security boundary; local
+  production deploy credentials must be removed through Cloudflare IAM.
+- Local validation may use `wrangler dev`, `wrangler types`, `npm run cf:build`, and
+  `wrangler deploy --dry-run`. Local validation must not use `wrangler deploy`,
+  `wrangler versions deploy`, `wrangler rollback`, or production Secret mutation commands.
+- `NEXT_PUBLIC_*` values are build-time inputs and must be configured in the production Workers
+  Builds trigger. Non-secret Worker variables stay in `wrangler.jsonc`; tokens and credentials
+  stay in Cloudflare Worker Secrets. Do not use `--keep-vars` as a blanket fix for configuration
+  drift.
+- A manual production deploy is break-glass only: explicit user approval, clean `main` checkout,
+  fresh production build, `--dry-run`, health check, version/rollback record, and short-lived
+  credential removal are mandatory. Production deployment, IAM changes, and Secret changes remain
+  approval-gated.
+
 ## System Theme Asset Production
 
 - Visual planning, generation runs, prompts, provenance, and asset-level QA now live in the standalone `E:\TalkTheme-Factory` repository. Do not start or store factory runs in this application repository.
@@ -57,6 +83,10 @@ CI (`.github/workflows/ci.yml`) runs the full set on every PR, so local runs sta
 - `adminAssetDomain.ts` / `adminAssets.ts` contract changes: `npm run check:admin-asset-domain`.
 - New or changed `supabase/migrations/*.sql`: `npx supabase db reset` against the local stack. See "Local Database".
 - TypeScript logic/API changes: `npx tsc --noEmit`.
+- Production deployment guard changes: `npm test -- scripts/verify-workers-context.test.ts`,
+  plus the local negative checks for `npm run cf:build:workers`,
+  `npm run cf:build:production`, and
+  `npm run cf:deploy:production`. Do not execute a real production deploy during local validation.
 - Changes to `lib/theme` pure functions or other unit-tested logic: `npm test` (Vitest). Add/extend a `*.test.ts` beside the changed module when practical.
 - Code quality / catching unused vars and hook-deps issues: `npm run lint` (ESLint flat config; `next/core-web-vitals` + `next/typescript`). CI gates on `--max-warnings 42`, the count when CI was introduced: `error` must stay 0 and warnings must not grow. Lower the baseline in `ci.yml` as warnings get cleaned up; never raise it.
 - Broad route/config/export packaging changes or release confidence pass: `npm run build`.
