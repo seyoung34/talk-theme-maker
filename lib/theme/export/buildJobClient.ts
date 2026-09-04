@@ -164,10 +164,14 @@ export async function getBuilderAccessToken(config: BuilderConfig) {
  * 대상 SA마다 WIF 주체(`principal://…/subject/cloudflare-worker-prod`)에
  * `roles/iam.workloadIdentityUser`가 걸려 있어야 한다. 그 역할이 `getAccessToken`을 포함한다.
  */
-export async function getImpersonatedAccessToken(serviceAccount: string, config: GcpOidcConfig) {
+export async function getImpersonatedAccessToken(
+  serviceAccount: string,
+  config: GcpOidcConfig,
+  options: { scopes?: string[]; signal?: AbortSignal } = {},
+) {
   const oidcToken = await signCloudflareOidcToken(config);
-  const federatedToken = await exchangeStsToken(config.wifAudience, oidcToken);
-  return impersonateServiceAccount(serviceAccount, federatedToken);
+  const federatedToken = await exchangeStsToken(config.wifAudience, oidcToken, options.signal);
+  return impersonateServiceAccount(serviceAccount, federatedToken, options.scopes ?? [GCP_SCOPE], options.signal);
 }
 
 async function signCloudflareOidcToken(config: GcpOidcConfig) {
@@ -194,7 +198,7 @@ async function signCloudflareOidcToken(config: GcpOidcConfig) {
   return `${signingInput}.${base64UrlEncode(new Uint8Array(signature))}`;
 }
 
-async function exchangeStsToken(audience: string, subjectToken: string) {
+async function exchangeStsToken(audience: string, subjectToken: string, signal?: AbortSignal) {
   const response = await fetchWithTimeout("https://sts.googleapis.com/v1/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -206,6 +210,7 @@ async function exchangeStsToken(audience: string, subjectToken: string) {
       subjectToken,
       subjectTokenType: "urn:ietf:params:oauth:token-type:jwt",
     }),
+    signal,
   }, {
     code: "sts_exchange_request_failed",
     message: "GCP 토큰 교환 요청에 실패했습니다.",
@@ -218,13 +223,19 @@ async function exchangeStsToken(audience: string, subjectToken: string) {
   return payload.access_token;
 }
 
-async function impersonateServiceAccount(serviceAccount: string, federatedToken: string) {
+async function impersonateServiceAccount(
+  serviceAccount: string,
+  federatedToken: string,
+  scopes: string[],
+  signal?: AbortSignal,
+) {
   const response = await fetchWithTimeout(
     `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(serviceAccount)}:generateAccessToken`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${federatedToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ scope: [GCP_SCOPE] }),
+      body: JSON.stringify({ scope: scopes }),
+      signal,
     },
     {
       code: "impersonation_request_failed",
@@ -317,6 +328,12 @@ async function fetchWithTimeout(
 ) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
+  const externalSignal = init.signal;
+  const abortFromExternalSignal = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener("abort", abortFromExternalSignal, { once: true });
+  }
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } catch (error) {
@@ -324,6 +341,7 @@ async function fetchWithTimeout(
     throw new BuildEnqueueError(options.code, options.message, detail.slice(0, 240));
   } finally {
     clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
   }
 }
 

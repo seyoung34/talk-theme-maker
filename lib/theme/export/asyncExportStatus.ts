@@ -5,6 +5,7 @@ import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
 import { getBuilderAccessToken, readBuilderConfig, type BuilderConfig } from "@/lib/theme/export/buildJobClient";
 
 const signedUrlTtlSeconds = 300;
+const resultJsonRequestTimeoutMs = 15_000;
 
 export type AsyncExportPlatform = "android" | "ios";
 
@@ -180,13 +181,22 @@ function isAlreadySettled(error: unknown) {
 
 async function downloadResultJson(config: BuilderConfig, accessToken: string, exportJobId: string): Promise<ResultJson | null> {
   const objectName = `${exportJobId}/result.json`;
-  const response = await fetch(
-    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(config.outputBucket)}/o/${encodeURIComponent(objectName)}?alt=media`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error("gcs_result_read_failed");
-  return (await response.json()) as ResultJson;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), resultJsonRequestTimeoutMs);
+  try {
+    const response = await fetch(
+      `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(config.outputBucket)}/o/${encodeURIComponent(objectName)}?alt=media`,
+      { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal },
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error("gcs_result_read_failed");
+    return (await response.json()) as ResultJson;
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error("gcs_result_read_timeout");
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function outputObjectExists(config: BuilderConfig, accessToken: string, objectPath: string) {

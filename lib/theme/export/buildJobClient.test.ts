@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runBuilderJob, type BuilderConfig } from "@/lib/theme/export/buildJobClient";
+import { getImpersonatedAccessToken, runBuilderJob, type BuilderConfig } from "@/lib/theme/export/buildJobClient";
 
 const builderConfig: BuilderConfig = {
   projectId: "project-78d94000-bff9-4358-821",
@@ -54,6 +54,34 @@ describe("Cloud Run builder enqueue", () => {
       name: "BuildEnqueueError",
       code: "job_run_failed",
       detail: "HTTP 404",
+    });
+  });
+
+  it("allows read-only APIs to request a narrower impersonated scope", async () => {
+    const keyPair = await crypto.subtle.generateKey(
+      { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const privateJwk = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "federated-token" }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ accessToken: "analytics-token" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getImpersonatedAccessToken(
+      "ga4-admin@project.iam.gserviceaccount.com",
+      {
+        wifAudience: builderConfig.wifAudience,
+        oidcIssuer: builderConfig.oidcIssuer,
+        oidcSubject: builderConfig.oidcSubject,
+        oidcPrivateJwk: { ...privateJwk, kid: "test-key" },
+      },
+      { scopes: ["https://www.googleapis.com/auth/analytics.readonly"] },
+    )).resolves.toBe("analytics-token");
+
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      scope: ["https://www.googleapis.com/auth/analytics.readonly"],
     });
   });
 });

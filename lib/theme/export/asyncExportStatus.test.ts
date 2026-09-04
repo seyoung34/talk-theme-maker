@@ -44,6 +44,7 @@ describe("resolveExportStatus watchdog transition", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   function pendingRow() {
@@ -89,5 +90,29 @@ describe("resolveExportStatus watchdog transition", () => {
     expect(result).toMatchObject({ kind: "failed", reason: "build_watchdog_timeout" });
     expect(mocks.scheduleOpsEvent).toHaveBeenCalledOnce();
     expect(mocks.scheduleOpsEvent.mock.calls[0][0]).toMatchObject({ type: "export.watchdog_timeout" });
+  });
+
+  it("keeps the GCS timeout active until the result body finishes", async () => {
+    vi.useFakeTimers();
+    let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          streamController = controller;
+          controller.enqueue(new TextEncoder().encode("{"));
+        },
+      });
+      init?.signal?.addEventListener("abort", () => {
+        streamController?.error(new DOMException("The operation was aborted.", "AbortError"));
+      });
+      return new Response(stream, { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow(), error: null });
+
+    const request = resolveExportStatus("user-1", "job-1", "android");
+    const rejection = expect(request).rejects.toThrow("gcs_result_read_timeout");
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    await rejection;
   });
 });
