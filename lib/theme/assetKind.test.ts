@@ -2,21 +2,34 @@ import { describe, expect, it } from "vitest";
 import { getUploadAssetKind, inferLegacyThemeAssetKind, inferThemeAssetKind, type ThemeAssetKind } from "@/lib/theme/assetKind";
 import { getThemeSlots } from "@/lib/theme/templates";
 import { inferAdminAssetKind } from "@/lib/theme/adminAssetDomain";
-import type { ThemePlatform } from "@/lib/theme/types";
+import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
 const platforms: ThemePlatform[] = ["android", "ios"];
-const allKinds: ThemeAssetKind[] = ["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"];
+const allKinds: ThemeAssetKind[] = ["background", "icon", "bubble", "profile", "launcher", "passcode"];
 
 /**
  * 검사 순서가 규칙의 일부다.
  *
  * 아래로 갈수록 조건이 넓어서, 순서를 바꾸면 조용히 분류가 달라진다. 특히 잠금화면 표시(작은
- * 아이콘)와 잠금화면 배경(3:4 전체 이미지)은 모양도 용도도 다른데 이름이 겹친다.
+ * 아이콘)와 잠금화면 배경(3:4 전체 이미지)은 모양도 용도도 다른데 `passcode_` 접두사를 공유한다.
  */
 describe("inferThemeAssetKind 검사 순서", () => {
-  it("잠금화면 표시를 잠금화면 배경보다 먼저 가른다", () => {
+  it("잠금화면 표시를 일반 아이콘으로 가르고 잠금화면 배경보다 먼저 검사한다", () => {
     const indicator = { role: "passcode_indicator_1", group: "keypad", section: "passcode", kind: "image" } as const;
-    expect(inferThemeAssetKind(indicator)).toBe("passcode_indicator");
+    expect(inferThemeAssetKind(indicator)).toBe("icon");
+  });
+
+  it("암호 표시 1~4의 입력 전·완료 슬롯을 모두 일반 아이콘으로 분류한다", () => {
+    for (const position of [1, 2, 3, 4]) {
+      for (const checked of ["", "_checked"]) {
+        expect(inferThemeAssetKind({
+          role: ("passcode_indicator_" + position + checked) as ThemeResourceRole,
+          group: "keypad",
+          section: "passcode",
+          kind: "image",
+        })).toBe("icon");
+      }
+    }
   });
 
   it("잠금화면 배경은 배경이 아니라 잠금화면이다", () => {
@@ -110,8 +123,8 @@ describe("inferLegacyThemeAssetKind", () => {
     expect(inferLegacyThemeAssetKind("chat_background")).toBe("background");
   });
 
-  it("잠금화면 표시 우선순위는 여기서도 같다", () => {
-    expect(inferLegacyThemeAssetKind("passcode_indicator_1")).toBe("passcode_indicator");
+  it("잠금화면 표시는 여기서도 일반 아이콘이다", () => {
+    expect(inferLegacyThemeAssetKind("passcode_indicator_1")).toBe("icon");
     expect(inferLegacyThemeAssetKind("passcode_background")).toBe("passcode");
   });
 });

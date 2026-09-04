@@ -156,6 +156,25 @@ describe("GET /api/theme-assets/recommended", () => {
     expect(payload.items.map((item: { id: string }) => item.id)).toEqual(["kind-target"]);
   });
 
+  it("일반 icon kind 후보를 암호 표시 슬롯에 추천한다", async () => {
+    const iconRow = {
+      ...sourceRow("icon-target", [{ targetKind: "asset_kind", priority: 0 }]),
+      asset_kind: "icon",
+      slot_role: "theme_icon",
+    };
+    const GET = await load([[
+      iconRow,
+    ]]);
+
+    const response = await GET({
+      nextUrl: new URL("http://localhost/api/theme-assets/recommended?platform=android&assetKind=icon&slotRole=passcode_indicator_1"),
+    } as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.items.map((item: { id: string }) => item.id)).toEqual(["icon-target"]);
+  });
+
   it("slotRole이 없으면 exact_role target은 빼고 kind 전체 후보만 내려준다", async () => {
     const GET = await load([[
       sourceRow("kind-target", [{ targetKind: "asset_kind", priority: 0 }]),

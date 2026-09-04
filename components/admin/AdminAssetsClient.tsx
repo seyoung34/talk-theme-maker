@@ -49,7 +49,7 @@ import { getThemeSlots } from "@/lib/theme/templates";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
-const assetKindOrder: AdminAssetKind[] = ["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"];
+const assetKindOrder: AdminAssetKind[] = ["background", "icon", "bubble", "profile", "launcher", "passcode"];
 
 const ACCEPTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -1473,7 +1473,7 @@ function getAdminAssetGuidance(
   const aspectRatio = width / height;
   const isSquarish = aspectRatio > squareAspectRatioRange.min && aspectRatio < squareAspectRatioRange.max;
 
-  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher" || assetKind === "passcode_indicator") && !isSquarish) {
+  if ((assetKind === "icon" || assetKind === "profile" || assetKind === "launcher") && !isSquarish) {
     items.push("아이콘·프로필·암호 표시 이미지는 정사각형에 가까울수록 잘리지 않고 안정적으로 보입니다.");
   }
   if ((assetKind === "background" || assetKind === "passcode" || slot.role.includes("background")) && aspectRatio > 1.2) {

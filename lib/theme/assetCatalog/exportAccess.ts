@@ -101,7 +101,6 @@ const allowedAssetKinds = new Set<AdminAssetKind>([
   "profile",
   "launcher",
   "passcode",
-  "passcode_indicator",
 ]);
 
 /**
