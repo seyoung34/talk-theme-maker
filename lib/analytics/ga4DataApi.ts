@@ -129,22 +129,35 @@ async function getDefaultAccessToken(config: Ga4VisitorConfig, signal?: AbortSig
 }
 
 function parseReport(value: unknown): Ga4VisitorResult {
-  if (!isRecord(value)) throw new Ga4DataApiError("invalid_response", "GA4 Data API 응답 형식이 올바르지 않습니다.");
-  const rows = Array.isArray(value.rows) ? value.rows : [];
-  const row = rows.find(isRecord);
-  const metricValues = Array.isArray(row?.metricValues) ? row.metricValues : [];
+  if (!isRecord(value) || !Array.isArray(value.rows)) {
+    throw new Ga4DataApiError("invalid_response", "GA4 Data API 응답 형식이 올바르지 않습니다.");
+  }
+  if (value.rows.length === 0) {
+    return { status: "ok", visitors: 0, sessions: 0, newUsers: 0 };
+  }
+
+  const row = value.rows[0];
+  if (!isRecord(row) || !Array.isArray(row.metricValues) || row.metricValues.length < 3) {
+    throw new Ga4DataApiError("invalid_response", "GA4 Data API 응답의 측정값 형식이 올바르지 않습니다.");
+  }
+
   return {
     status: "ok",
-    visitors: parseMetric(metricValues[0]),
-    sessions: parseMetric(metricValues[1]),
-    newUsers: parseMetric(metricValues[2]),
+    visitors: parseMetric(row.metricValues[0]),
+    sessions: parseMetric(row.metricValues[1]),
+    newUsers: parseMetric(row.metricValues[2]),
   };
 }
 
 function parseMetric(value: unknown) {
-  if (!isRecord(value) || typeof value.value !== "string") return 0;
+  if (!isRecord(value) || typeof value.value !== "string" || !/^\d+$/.test(value.value.trim())) {
+    throw new Ga4DataApiError("invalid_response", "GA4 Data API 측정값이 올바르지 않습니다.");
+  }
   const parsed = Number(value.value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Ga4DataApiError("invalid_response", "GA4 Data API 측정값이 올바르지 않습니다.");
+  }
+  return parsed;
 }
 
 function emptyGa4Result(status: Exclude<Ga4VisitorStatus, "ok">): Ga4VisitorResult {

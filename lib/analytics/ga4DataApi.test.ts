@@ -68,6 +68,41 @@ describe("GA4 Data API visitor reader", () => {
     });
   });
 
+  it.each([
+    { name: "a row without metric values", payload: { rows: [{}] } },
+    { name: "a row with too few metric values", payload: { rows: [{ metricValues: [{ value: "1" }, { value: "2" }] }] } },
+    { name: "a row with an invalid metric value", payload: { rows: [{ metricValues: [{ value: "1" }, { value: "NaN" }, { value: "3" }] }] } },
+  ])("reports $name as unavailable instead of inventing zeroes", async ({ payload }) => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+
+    await expect(readGa4DailyVisitors("2026-09-02", {
+      env: {
+        GA4_PROPERTY_ID: "545151038",
+        GA4_SERVICE_ACCOUNT_EMAIL: "ga4-admin@project.iam.gserviceaccount.com",
+      },
+      fetchImpl,
+      getAccessToken: vi.fn().mockResolvedValue("short-lived-token"),
+    })).resolves.toEqual({
+      status: "unavailable",
+      visitors: null,
+      sessions: null,
+      newUsers: null,
+    });
+  });
+
+  it("reports zeroes only when GA4 explicitly returns an empty rows array", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ rows: [] }), { status: 200 }));
+
+    await expect(readGa4DailyVisitors("2026-09-02", {
+      env: {
+        GA4_PROPERTY_ID: "545151038",
+        GA4_SERVICE_ACCOUNT_EMAIL: "ga4-admin@project.iam.gserviceaccount.com",
+      },
+      fetchImpl,
+      getAccessToken: vi.fn().mockResolvedValue("short-lived-token"),
+    })).resolves.toEqual({ status: "ok", visitors: 0, sessions: 0, newUsers: 0 });
+  });
+
   it("rejects malformed optional configuration before a network call", () => {
     expect(() => readGa4VisitorConfig({
       GA4_PROPERTY_ID: "not-a-property",

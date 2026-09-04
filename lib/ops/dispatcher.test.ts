@@ -52,11 +52,20 @@ describe("operations notification dispatcher", () => {
   });
 
   it("requeues a dead-letter delivery before draining an idempotent duplicate", async () => {
-    await expect(tryPublishOpsEvent(event)).resolves.toMatchObject({
+    await expect(tryPublishOpsEvent(event, { recoverDeadLetter: true })).resolves.toMatchObject({
       status: "duplicate",
       requeued: true,
       drainResult: { status: "drained", claimed: 0 },
     });
     expect(mocks.requeueOpsNotification).toHaveBeenCalledWith({ eventId: event.eventId });
+  });
+
+  it("does not resurrect a dead-letter delivery for a normal duplicate publish", async () => {
+    await expect(tryPublishOpsEvent(event)).resolves.toMatchObject({
+      status: "duplicate",
+      requeued: false,
+      drainResult: { status: "drained", claimed: 0 },
+    });
+    expect(mocks.requeueOpsNotification).not.toHaveBeenCalled();
   });
 });

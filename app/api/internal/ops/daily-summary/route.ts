@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   try {
     const summary = await readOpsDailySummary(day);
     const event = createOpsDailySummaryEvent(summary);
-    const publish = await tryPublishOpsEvent(event);
+    const publish = await tryPublishOpsEvent(event, { recoverDeadLetter: true });
     if (publish.status === "disabled") {
       return NextResponse.json({ error: "Telegram 알림이 비활성화되어 있습니다.", reason: "disabled" }, { status: 503 });
     }
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "일일 요약을 발송 대기열에 넣지 못했습니다.", reason: "publish_failed" }, { status: 502 });
     }
 
-    // duplicate 재실행 시 dead-letter delivery를 복구한 뒤 회수한다.
+    // 운영자가 명시적으로 일일 요약을 재실행한 경우에만 dead-letter delivery를 복구한다.
     const drain = publish.status === "inserted" || publish.status === "duplicate"
       ? publish.drainResult
       : undefined;

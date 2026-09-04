@@ -84,4 +84,44 @@ describe("Cloud Run builder enqueue", () => {
       scope: ["https://www.googleapis.com/auth/analytics.readonly"],
     });
   });
+
+  it("keeps an external abort active while reading the STS response body", async () => {
+    const keyPair = await crypto.subtle.generateKey(
+      { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const privateJwk = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
+    const response = new Response(null, { status: 200 });
+    let markJsonStarted!: () => void;
+    const jsonStarted = new Promise<void>((resolve) => {
+      markJsonStarted = resolve;
+    });
+    vi.spyOn(response, "json").mockImplementation(() => {
+      markJsonStarted();
+      return new Promise<unknown>(() => {});
+    });
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(response);
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+    const tokenPromise = getImpersonatedAccessToken(
+      "ga4-admin@project.iam.gserviceaccount.com",
+      {
+        wifAudience: builderConfig.wifAudience,
+        oidcIssuer: builderConfig.oidcIssuer,
+        oidcSubject: builderConfig.oidcSubject,
+        oidcPrivateJwk: { ...privateJwk, kid: "test-key" },
+      },
+      { scopes: ["https://www.googleapis.com/auth/analytics.readonly"], signal: controller.signal },
+    );
+
+    await jsonStarted;
+    controller.abort();
+
+    await expect(tokenPromise).rejects.toMatchObject({
+      name: "BuildEnqueueError",
+      code: "sts_exchange_request_failed",
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });

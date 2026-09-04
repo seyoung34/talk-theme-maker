@@ -21,6 +21,8 @@
     "GROBLE_CHECKOUT_ENABLED": "1",
     // 운영자 Telegram 알림은 production에서 활성화한다. 배포마다 대시보드 값이 사라지지 않도록 소스에 고정한다.
     "TELEGRAM_NOTIFICATIONS_ENABLED": "1",
+    // GA4_PROPERTY_ID와 GA4_SERVICE_ACCOUNT_EMAIL은 production Worker Secret으로 관리한다.
+    // 평문 vars에 넣지 않아도 OpenNext가 Secret을 process.env로 주입하므로 배포 때 값을 보존한다.
     // 관리자 저장의 catalog write-shadow는 기존 운영 동작을 유지한다.
     "ASSET_CATALOG_WRITE_ENABLED": "1",
     // Phase 5 변환 canary. 범위 밖 logical asset은 기존 File/legacy 경로를 유지한다.

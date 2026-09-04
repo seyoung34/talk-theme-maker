@@ -199,24 +199,31 @@ async function signCloudflareOidcToken(config: GcpOidcConfig) {
 }
 
 async function exchangeStsToken(audience: string, subjectToken: string, signal?: AbortSignal) {
-  const response = await fetchWithTimeout("https://sts.googleapis.com/v1/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grantType: "urn:ietf:params:oauth:grant-type:token-exchange",
-      audience,
-      scope: GCP_SCOPE,
-      requestedTokenType: "urn:ietf:params:oauth:token-type:access_token",
-      subjectToken,
-      subjectTokenType: "urn:ietf:params:oauth:token-type:jwt",
+  const { response, payload } = await fetchWithTimeout(
+    "https://sts.googleapis.com/v1/token",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grantType: "urn:ietf:params:oauth:grant-type:token-exchange",
+        audience,
+        scope: GCP_SCOPE,
+        requestedTokenType: "urn:ietf:params:oauth:token-type:access_token",
+        subjectToken,
+        subjectTokenType: "urn:ietf:params:oauth:token-type:jwt",
+      }),
+      signal,
+    },
+    {
+      code: "sts_exchange_request_failed",
+      message: "GCP 토큰 교환 요청에 실패했습니다.",
+      timeoutMs: gcpRequestTimeoutMs,
+    },
+    async (response) => ({
+      response,
+      payload: await readJsonOrNull<{ access_token?: string }>(response),
     }),
-    signal,
-  }, {
-    code: "sts_exchange_request_failed",
-    message: "GCP 토큰 교환 요청에 실패했습니다.",
-    timeoutMs: gcpRequestTimeoutMs,
-  });
-  const payload = (await response.json().catch(() => null)) as { access_token?: string } | null;
+  );
   if (!response.ok || !payload?.access_token) {
     throw new BuildEnqueueError("sts_exchange_failed", "GCP 토큰 교환에 실패했습니다.");
   }
@@ -229,7 +236,7 @@ async function impersonateServiceAccount(
   scopes: string[],
   signal?: AbortSignal,
 ) {
-  const response = await fetchWithTimeout(
+  const { response, payload } = await fetchWithTimeout(
     `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(serviceAccount)}:generateAccessToken`,
     {
       method: "POST",
@@ -242,8 +249,11 @@ async function impersonateServiceAccount(
       message: "빌더 서비스 계정 인증 요청에 실패했습니다.",
       timeoutMs: gcpRequestTimeoutMs,
     },
+    async (response) => ({
+      response,
+      payload: await readJsonOrNull<{ accessToken?: string }>(response),
+    }),
   );
-  const payload = (await response.json().catch(() => null)) as { accessToken?: string } | null;
   if (!response.ok || !payload?.accessToken) {
     throw new BuildEnqueueError("impersonation_failed", "빌더 서비스 계정 인증에 실패했습니다.");
   }
@@ -325,7 +335,19 @@ async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit,
   options: { code: string; message: string; timeoutMs: number },
-) {
+): Promise<Response>;
+async function fetchWithTimeout<T>(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  options: { code: string; message: string; timeoutMs: number },
+  consumeResponse: (response: Response) => Promise<T>,
+): Promise<T>;
+async function fetchWithTimeout<T>(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  options: { code: string; message: string; timeoutMs: number },
+  consumeResponse?: (response: Response) => Promise<T>,
+): Promise<Response | T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
   const externalSignal = init.signal;
@@ -335,7 +357,10 @@ async function fetchWithTimeout(
     else externalSignal.addEventListener("abort", abortFromExternalSignal, { once: true });
   }
   try {
-    return await fetch(input, { ...init, signal: controller.signal });
+    const response = await fetch(input, { ...init, signal: controller.signal });
+    return consumeResponse
+      ? await awaitWithAbort(consumeResponse(response), controller.signal)
+      : response;
   } catch (error) {
     const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
     throw new BuildEnqueueError(options.code, options.message, detail.slice(0, 240));
@@ -343,6 +368,52 @@ async function fetchWithTimeout(
     clearTimeout(timeoutId);
     externalSignal?.removeEventListener("abort", abortFromExternalSignal);
   }
+}
+
+async function readJsonOrNull<T>(response: Response): Promise<T | null> {
+  try {
+    return await response.json() as T;
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    return null;
+  }
+}
+
+async function awaitWithAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const resolveOnce = (value: T) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+    const rejectOnce = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const onAbort = () => rejectOnce(createAbortError());
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    operation.then(resolveOnce, rejectOnce);
+  });
+}
+
+function createAbortError() {
+  const error = new Error("The operation was aborted.");
+  error.name = "AbortError";
+  return error;
+}
+
+function isAbortError(error: unknown): error is Error {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 async function readHttpErrorDetail(response: Response) {

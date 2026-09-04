@@ -73,6 +73,7 @@ describe("daily operations summary route", () => {
     });
     expect(mocks.readOpsDailySummary).toHaveBeenCalledWith("2026-09-02");
     expect(mocks.createOpsDailySummaryEvent).toHaveBeenCalledWith(summary);
+    expect(mocks.tryPublishOpsEvent).toHaveBeenCalledWith({ eventId: "daily-event" }, { recoverDeadLetter: true });
   });
 
   it("drains existing delivery work when the date event is already present", async () => {
@@ -86,6 +87,7 @@ describe("daily operations summary route", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.readOpsDailySummary).toHaveBeenCalledWith("2026-09-01");
+    expect(mocks.tryPublishOpsEvent).toHaveBeenCalledWith({ eventId: "daily-event" }, { recoverDeadLetter: true });
     await expect(response.json()).resolves.toMatchObject({
       notification: { status: "duplicate", requeued: true, drain: { sent: 1 } },
     });
