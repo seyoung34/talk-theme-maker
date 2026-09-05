@@ -37,7 +37,7 @@ vi.mock("@/lib/theme/export/buildJobClient", () => ({
 }));
 vi.mock("@/lib/ops/dispatcher", () => ({ scheduleOpsEvent: mocks.scheduleOpsEvent }));
 
-describe("resolveExportStatus watchdog transition", () => {
+describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
   beforeEach(() => {
     for (const mock of Object.values(mocks)) mock.mockReset();
     const query = { select: vi.fn(), eq: vi.fn(), maybeSingle: mocks.maybeSingle };
@@ -54,6 +54,7 @@ describe("resolveExportStatus watchdog transition", () => {
     });
     mocks.getBuilderAccessToken.mockResolvedValue("builder-token");
     vi.stubEnv("ANDROID_EXPORT_WATCHDOG_MS", "1");
+    vi.stubEnv("IOS_EXPORT_WATCHDOG_MS", "1");
   });
 
   afterEach(() => {
@@ -154,6 +155,26 @@ describe("resolveExportStatus watchdog transition", () => {
     const result = await resolveExportStatus("user-1", "job-1", "android");
 
     expect(result).toEqual({ kind: "pending", stage: "queued" });
+    expect(mocks.claimExportRecovery).toHaveBeenCalledWith({ userId: "user-1", exportJobId: "job-1", expectedAttempt: 0 });
+    expect(mocks.runBuilderJob).toHaveBeenCalledWith(expect.anything(), "builder-token", expect.objectContaining({
+      exportJobId: "job-1",
+      attempt: 1,
+    }));
+  });
+
+  it("uses the same one-time recovery retry for an iOS export", async () => {
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow({ platform: "ios", enqueue_state: "input_ready" }), error: null });
+    mocks.findBuilderExecution.mockResolvedValue(null);
+    mocks.inspectBuilderInput.mockResolvedValue({ complete: true, expectedObjectNames: [], actualObjectNames: [], missingObjectNames: [] });
+    mocks.claimExportRecovery.mockResolvedValue({ claimed: true, status: "pending", enqueueState: "triggering", enqueueAttempt: 1 });
+    mocks.runBuilderJob.mockResolvedValue({ operationName: "operations/ios-recovered" });
+    mocks.updateExportJobEnqueueState.mockResolvedValue(true);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+
+    const result = await resolveExportStatus("user-1", "job-1", "ios");
+
+    expect(result).toEqual({ kind: "pending", stage: "queued" });
+    expect(mocks.readBuilderConfig).toHaveBeenCalledWith({ platform: "ios" });
     expect(mocks.claimExportRecovery).toHaveBeenCalledWith({ userId: "user-1", exportJobId: "job-1", expectedAttempt: 0 });
     expect(mocks.runBuilderJob).toHaveBeenCalledWith(expect.anything(), "builder-token", expect.objectContaining({
       exportJobId: "job-1",

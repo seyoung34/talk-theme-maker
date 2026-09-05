@@ -81,12 +81,10 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
     const watchdogStaleMs = getWatchdogStaleMs(platform);
     const durationMs = Date.now() - new Date(row.created_at).getTime();
     if (durationMs > watchdogStaleMs) {
-      if (platform === "android") {
-        const recovery = await reconcileAndroidEnqueue({ userId, exportJobId, row, config, accessToken, durationMs });
-        if (recovery.kind === "pending") return { kind: "pending", stage: recovery.stage };
-        if (recovery.kind === "failed") return recovery.result;
-        if (recovery.kind === "settled") return recovery.result;
-      }
+      const recovery = await reconcileExportEnqueue({ userId, exportJobId, platform, row, config, accessToken, durationMs });
+      if (recovery.kind === "pending") return { kind: "pending", stage: recovery.stage };
+      if (recovery.kind === "failed") return recovery.result;
+      if (recovery.kind === "settled") return recovery.result;
       const settlement = await failExportJobIfPending({
         userId,
         exportJobId,
@@ -150,15 +148,16 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
   return { kind: "failed", error: errorMessage, reason: errorCode };
 }
 
-type AndroidEnqueueRecoveryResult =
+type ExportEnqueueRecoveryResult =
   | { kind: "pending"; stage: string }
   | { kind: "continue" }
   | { kind: "failed"; result: Extract<AsyncExportStatusResult, { kind: "failed" }> }
   | { kind: "settled"; result: AsyncExportStatusResult };
 
-async function reconcileAndroidEnqueue({
+async function reconcileExportEnqueue({
   userId,
   exportJobId,
+  platform,
   row,
   config,
   accessToken,
@@ -166,11 +165,12 @@ async function reconcileAndroidEnqueue({
 }: {
   userId: string;
   exportJobId: string;
+  platform: AsyncExportPlatform;
   row: ExportJobRow;
   config: BuilderConfig;
   accessToken: string;
   durationMs: number;
-}): Promise<AndroidEnqueueRecoveryResult> {
+}): Promise<ExportEnqueueRecoveryResult> {
   // A stored operation/execution means the original trigger reached Cloud Run.
   // Never issue another run request in that case; result.json remains the
   // source of truth for completion.
@@ -208,7 +208,7 @@ async function reconcileAndroidEnqueue({
     return settleRecoveryFailure({
       userId,
       exportJobId,
-      platform: "android",
+      platform,
       errorCode: "input_upload_incomplete",
       errorMessage: "빌드 입력 업로드가 완료되지 않아 내보내기를 진행하지 못했습니다.",
       durationMs,
@@ -218,10 +218,10 @@ async function reconcileAndroidEnqueue({
   if (row.enqueue_attempt >= 1) return { kind: "continue" };
   const claim = await claimExportRecovery({ userId, exportJobId, expectedAttempt: row.enqueue_attempt });
   if (!claim.claimed) {
-    const latestRow = await readExportJob(userId, exportJobId, "android");
+    const latestRow = await readExportJob(userId, exportJobId, platform);
     if (!latestRow) return { kind: "settled", result: { kind: "not_found" } };
     if (latestRow.status !== "pending") {
-      return { kind: "settled", result: await resolveSettledExportStatus(latestRow, "android", exportJobId) };
+      return { kind: "settled", result: await resolveSettledExportStatus(latestRow, platform, exportJobId) };
     }
     return { kind: "pending", stage: latestRow.stage };
   }
@@ -243,7 +243,7 @@ async function reconcileAndroidEnqueue({
       lastHeartbeatAt: now,
       recoveryReason: run.operationName ? null : "missing_cloud_run_operation_name",
     });
-    if (!updated) return { kind: "settled", result: await resolveRecoverySettlement(userId, exportJobId) };
+    if (!updated) return { kind: "settled", result: await resolveRecoverySettlement(userId, exportJobId, platform) };
     return { kind: "pending", stage: "queued" };
   } catch (error) {
     if (error instanceof BuildEnqueueError && error.ambiguous) {
@@ -259,7 +259,7 @@ async function reconcileAndroidEnqueue({
     return settleRecoveryFailure({
       userId,
       exportJobId,
-      platform: "android",
+      platform,
       errorCode: "enqueue_recovery_failed",
       errorMessage: "빌드 작업을 다시 시작하지 못했습니다.",
       durationMs,
@@ -292,7 +292,7 @@ async function settleRecoveryFailure({
   errorCode: string;
   errorMessage: string;
   durationMs: number;
-}): Promise<AndroidEnqueueRecoveryResult> {
+}): Promise<ExportEnqueueRecoveryResult> {
   const settlement = await failExportJobIfPending({
     userId,
     exportJobId,
@@ -304,14 +304,14 @@ async function settleRecoveryFailure({
     scheduleExportFailureEvent(platform, exportJobId, errorCode, durationMs);
     return { kind: "failed", result: { kind: "failed", error: errorMessage, reason: errorCode } };
   }
-  return { kind: "settled", result: await resolveRecoverySettlement(userId, exportJobId) };
+  return { kind: "settled", result: await resolveRecoverySettlement(userId, exportJobId, platform) };
 }
 
-async function resolveRecoverySettlement(userId: string, exportJobId: string): Promise<AsyncExportStatusResult> {
-  const latestRow = await readExportJob(userId, exportJobId, "android");
+async function resolveRecoverySettlement(userId: string, exportJobId: string, platform: AsyncExportPlatform): Promise<AsyncExportStatusResult> {
+  const latestRow = await readExportJob(userId, exportJobId, platform);
   if (!latestRow) return { kind: "not_found" };
   if (latestRow.status === "pending") return { kind: "pending", stage: latestRow.stage };
-  return resolveSettledExportStatus(latestRow, "android", exportJobId);
+  return resolveSettledExportStatus(latestRow, platform, exportJobId);
 }
 
 async function resolveCancellation(userId: string, exportJobId: string, platform: AsyncExportPlatform, row: ExportJobRow) {
