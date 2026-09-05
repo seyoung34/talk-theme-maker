@@ -102,14 +102,14 @@ describe("Cloud Run builder enqueue", () => {
   it("continues through the execution list when a busy job pushes the match to a later page", async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        executions: [{ name: "executions/newer", createTime: "2026-09-05T01:00:00Z", template: { containers: [] } }],
+        executions: [{ name: "executions/newer", createTime: "2026-09-05T01:00:00Z", template: { template: { containers: [] } } }],
         nextPageToken: "next-page",
       }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         executions: [{
           name: "executions/matching",
           createTime: "2026-09-04T23:00:00Z",
-          template: { containers: [{ env: [{ name: "EXPORT_JOB_ID", value: "job-id" }] }] },
+          template: { template: { containers: [{ env: [{ name: "EXPORT_JOB_ID", value: "job-id" }] }] } },
         }],
       }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
