@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getImpersonatedAccessToken, runBuilderJob, type BuilderConfig } from "@/lib/theme/export/buildJobClient";
+import { findBuilderExecution, getImpersonatedAccessToken, runBuilderJob, type BuilderConfig } from "@/lib/theme/export/buildJobClient";
 
 const builderConfig: BuilderConfig = {
   projectId: "project-78d94000-bff9-4358-821",
@@ -15,7 +15,10 @@ const builderConfig: BuilderConfig = {
 };
 
 describe("Cloud Run builder enqueue", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
 
   it("uses the global Cloud Run API endpoint for a regional job", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
@@ -55,6 +58,67 @@ describe("Cloud Run builder enqueue", () => {
       code: "job_run_failed",
       detail: "HTTP 404",
     });
+  });
+
+  it("returns the Cloud Run operation and tags the execution with the export", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ name: "operations/export-1" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(runBuilderJob(builderConfig, "access-token", {
+      inputUri: "gs://kt-theme-build-input-dev/job-id",
+      outputUri: "gs://kt-theme-build-output-dev/job-id",
+      exportJobId: "job-id",
+      attempt: 1,
+    })).resolves.toEqual({ operationName: "operations/export-1" });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body.overrides.containerOverrides[0].env).toEqual([
+      { name: "GCS_INPUT_URI", value: "gs://kt-theme-build-input-dev/job-id" },
+      { name: "GCS_OUTPUT_URI", value: "gs://kt-theme-build-output-dev/job-id" },
+      { name: "EXPORT_JOB_ID", value: "job-id" },
+      { name: "EXPORT_ENQUEUE_ATTEMPT", value: "1" },
+    ]);
+  });
+
+  it("marks a response-body timeout as ambiguous after Cloud Run may have accepted it", async () => {
+    vi.useFakeTimers();
+    const response = new Response(null, { status: 200 });
+    vi.spyOn(response, "text").mockImplementation(() => new Promise<string>(() => {}));
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(response));
+
+    const request = runBuilderJob(builderConfig, "access-token", {
+      inputUri: "gs://kt-theme-build-input-dev/job-id",
+      outputUri: "gs://kt-theme-build-output-dev/job-id",
+    });
+    const rejection = expect(request).rejects.toMatchObject({
+      name: "BuildEnqueueError",
+      code: "job_run_request_failed",
+      ambiguous: true,
+    });
+    await vi.advanceTimersByTimeAsync(15_000);
+    await rejection;
+  });
+
+  it("continues through the execution list when a busy job pushes the match to a later page", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        executions: [{ name: "executions/newer", createTime: "2026-09-05T01:00:00Z", template: { containers: [] } }],
+        nextPageToken: "next-page",
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        executions: [{
+          name: "executions/matching",
+          createTime: "2026-09-04T23:00:00Z",
+          template: { containers: [{ env: [{ name: "EXPORT_JOB_ID", value: "job-id" }] }] },
+        }],
+      }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(findBuilderExecution(builderConfig, "access-token", "job-id", { createdAt: "2026-09-04T22:00:00Z" })).resolves.toEqual({
+      name: "executions/matching",
+      createTime: "2026-09-04T23:00:00Z",
+    });
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("pageToken=next-page");
   });
 
   it("allows read-only APIs to request a narrower impersonated scope", async () => {

@@ -10,6 +10,7 @@ import {
   prepareExportJobIdentity,
   reserveCreditForExport,
   type ExportMode,
+  updateExportJobEnqueueState,
   updateExportJobStage,
 } from "@/lib/billing/credits";
 import { AndroidBuildEnqueueError, enqueueAndroidBuild } from "@/lib/theme/android/buildJobClient";
@@ -76,6 +77,7 @@ export async function handleAsyncAndroidExportRequest(
     if (!identity.applicationId) throw new AndroidExportRequestError("missing_application_id", "Android 앱 식별자를 발급하지 못했습니다.");
     validateAndroidApplicationId(identity.applicationId);
     await updateExportJobStage({ userId, exportJobId, stage: "preparing" });
+    await updateExportJobEnqueueState({ userId, exportJobId, state: "uploading" });
 
     await enqueueAndroidBuild({
       exportJobId,
@@ -84,6 +86,30 @@ export async function handleAsyncAndroidExportRequest(
       options: { mode, exportName, versionName, applicationId: identity.applicationId },
       manifest: resolved.manifest,
       files,
+    }, {
+      attempt: 0,
+      progress: {
+        onInputReady: async () => {
+          await requirePendingEnqueueState({ userId: userId!, exportJobId: exportJobId!, state: "input_ready", inputCompletedAt: new Date().toISOString() });
+        },
+        onTriggering: async () => {
+          await requirePendingEnqueueState({ userId: userId!, exportJobId: exportJobId!, state: "triggering" });
+        },
+        onTriggered: async (result) => {
+          const now = new Date().toISOString();
+          await updateExportJobEnqueueState({
+            userId: userId!,
+            exportJobId: exportJobId!,
+            state: result.operationName ? "triggered" : "trigger_ambiguous",
+            builderOperationName: result.operationName,
+            triggeredAt: now,
+            lastHeartbeatAt: now,
+            recoveryReason: result.operationName ? null : "missing_cloud_run_operation_name",
+          }).catch((stateError) => {
+            console.error("[android-export] triggered_state_update_failed", { name: stateError instanceof Error ? stateError.name : "unknown" });
+          });
+        },
+      },
     });
 
     logAndroidExport("info", "enqueued", {
@@ -103,6 +129,31 @@ export async function handleAsyncAndroidExportRequest(
       { status: 202 },
     );
   } catch (error) {
+    if (error instanceof AndroidBuildEnqueueError && error.code === "build_cancelled") {
+      logAndroidExport("info", "cancelled_during_enqueue", { exportJobId, mode, durationMs: elapsedMs(startedAt) });
+      return NextResponse.json({ exportJobId, status: "cancelled" }, { status: 202 });
+    }
+    if (error instanceof AndroidBuildEnqueueError && error.ambiguous && userId && exportJobId) {
+      await updateExportJobEnqueueState({
+        userId,
+        exportJobId,
+        state: "trigger_ambiguous",
+        triggeredAt: new Date().toISOString(),
+        recoveryReason: "ambiguous_cloud_run_response",
+      }).catch((stateError) => {
+        console.error("[android-export] ambiguous_state_update_failed", {
+          exportJobId,
+          name: stateError instanceof Error ? stateError.name : "unknown",
+        });
+      });
+      logAndroidExport("warn", "enqueue_ambiguous", {
+        exportJobId,
+        mode,
+        durationMs: elapsedMs(startedAt),
+        errorCode: error.code,
+      });
+      return NextResponse.json({ exportJobId, status: "queued", recoveryPending: true }, { status: 202 });
+    }
     const failure = classifyFailure(error);
     const durationMs = elapsedMs(startedAt);
     let refunded = false;
@@ -132,6 +183,35 @@ export async function handleAsyncAndroidExportRequest(
     }
     return NextResponse.json({ error: failure.message, reason: failure.code, ...(refunded ? { refunded: true } : {}) }, { status: failure.status });
   }
+}
+
+async function requirePendingEnqueueState({
+  userId,
+  exportJobId,
+  state,
+  builderOperationName,
+  inputCompletedAt,
+  triggeredAt,
+  lastHeartbeatAt,
+}: {
+  userId: string;
+  exportJobId: string;
+  state: Parameters<typeof updateExportJobEnqueueState>[0]["state"];
+  builderOperationName?: string | null;
+  inputCompletedAt?: string | null;
+  triggeredAt?: string | null;
+  lastHeartbeatAt?: string | null;
+}) {
+  const updated = await updateExportJobEnqueueState({
+    userId,
+    exportJobId,
+    state,
+    builderOperationName,
+    inputCompletedAt,
+    triggeredAt,
+    lastHeartbeatAt,
+  });
+  if (!updated) throw new AndroidBuildEnqueueError("build_cancelled", "내보내기 작업이 취소되었습니다.");
 }
 
 async function readFormData(request: Request) {

@@ -81,10 +81,35 @@ async function setStage(db: DbClient | null, exportJobId: string | undefined, st
   if (!db || !exportJobId) return;
   try {
     // 빌더에는 생성된 DB 스키마 타입이 없어 update 페이로드가 never로 추론된다. 런타임엔 영향 없음.
-    await db.from("export_jobs").update({ stage } as never).eq("id", exportJobId).eq("status", "pending");
+    await db.from("export_jobs").update({
+      stage,
+      last_heartbeat_at: new Date().toISOString(),
+      ...(stage === "building" ? { enqueue_state: "running" } : {}),
+    } as never).eq("id", exportJobId).eq("status", "pending");
   } catch {
     log("info", "stage_update_skipped", { stage });
   }
+}
+
+class BuildCancelledError extends Error {
+  readonly code = "build_cancelled";
+
+  constructor() {
+    super("Export was cancelled.");
+    this.name = "BuildCancelledError";
+  }
+}
+
+async function assertBuildNotCancelled(db: DbClient | null, exportJobId: string | undefined) {
+  if (!db || !exportJobId) return;
+  const { data, error } = await db
+    .from("export_jobs")
+    .select("status,cancel_requested_at")
+    .eq("id", exportJobId)
+    .maybeSingle();
+  if (error) throw new Error("cancellation_check_failed");
+  const row = data as { status?: string; cancel_requested_at?: string | null } | null;
+  if (!row || row.status !== "pending" || row.cancel_requested_at) throw new BuildCancelledError();
 }
 
 try {
@@ -107,16 +132,36 @@ async function main() {
   const options = readOptions(bundle);
 
   try {
+    await assertBuildNotCancelled(db, exportJobId);
+    await markBuilderStarted(db, exportJobId);
     await setStage(db, exportJobId, "preparing");
     const files = await readInputFiles(bundle, source, templateAssetsRoot);
+    await assertBuildNotCancelled(db, exportJobId);
     await setStage(db, exportJobId, "building");
+    await assertBuildNotCancelled(db, exportJobId);
     const result = await buildApk(files, options);
+    await assertBuildNotCancelled(db, exportJobId);
     await setStage(db, exportJobId, "finalizing");
+    await assertBuildNotCancelled(db, exportJobId);
     await writeOutput(source, result);
     log("info", "completed", { mode: source.mode, outputFileName: result.outputFileName });
   } catch (error) {
     await writeFailureResult(source, error);
     throw error;
+  }
+}
+
+async function markBuilderStarted(db: DbClient | null, exportJobId: string | undefined) {
+  if (!db || !exportJobId) return;
+  const now = new Date().toISOString();
+  try {
+    await db.from("export_jobs").update({
+      enqueue_state: "running",
+      builder_started_at: now,
+      last_heartbeat_at: now,
+    } as never).eq("id", exportJobId).eq("status", "pending");
+  } catch {
+    log("info", "builder_start_update_skipped", {});
   }
 }
 

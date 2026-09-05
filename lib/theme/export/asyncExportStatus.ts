@@ -1,8 +1,23 @@
 import { createAdminClient } from "@/lib/supabase/server";
-import { completeExportJob, failExportJob, failExportJobIfPending } from "@/lib/billing/credits";
+import {
+  cancelExportJob,
+  claimExportRecovery,
+  completeExportJob,
+  failExportJobIfPending,
+  updateExportJobEnqueueState,
+  type ExportEnqueueState,
+} from "@/lib/billing/credits";
 import { createExportFailureEvent } from "@/lib/ops/eventFactories";
 import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
-import { getBuilderAccessToken, readBuilderConfig, type BuilderConfig } from "@/lib/theme/export/buildJobClient";
+import {
+  BuildEnqueueError,
+  findBuilderExecution,
+  getBuilderAccessToken,
+  inspectBuilderInput,
+  readBuilderConfig,
+  runBuilderJob,
+  type BuilderConfig,
+} from "@/lib/theme/export/buildJobClient";
 
 const signedUrlTtlSeconds = 300;
 const resultJsonRequestTimeoutMs = 15_000;
@@ -31,6 +46,16 @@ type ExportJobRow = {
   error: string | null;
   error_code: string | null;
   created_at: string;
+  enqueue_state: ExportEnqueueState;
+  enqueue_attempt: number;
+  builder_operation_name: string | null;
+  builder_execution_name: string | null;
+  input_completed_at: string | null;
+  triggered_at: string | null;
+  builder_started_at: string | null;
+  last_heartbeat_at: string | null;
+  recovery_reason: string | null;
+  cancel_requested_at: string | null;
 };
 
 type ResultJson =
@@ -43,6 +68,11 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
 
   if (row.status !== "pending") return resolveSettledExportStatus(row, platform, exportJobId);
 
+  // A cancellation request is settled before doing more external work. The
+  // RPC is conditional, so a builder/result transition that won the race is
+  // preserved and no second refund is issued.
+  if (row.cancel_requested_at) return resolveCancellation(userId, exportJobId, platform, row);
+
   const config = readPlatformBuilderConfig(platform);
   const accessToken = await getBuilderAccessToken(config);
   const result = await downloadResultJson(config, accessToken, exportJobId);
@@ -51,6 +81,12 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
     const watchdogStaleMs = getWatchdogStaleMs(platform);
     const durationMs = Date.now() - new Date(row.created_at).getTime();
     if (durationMs > watchdogStaleMs) {
+      if (platform === "android") {
+        const recovery = await reconcileAndroidEnqueue({ userId, exportJobId, row, config, accessToken, durationMs });
+        if (recovery.kind === "pending") return { kind: "pending", stage: recovery.stage };
+        if (recovery.kind === "failed") return recovery.result;
+        if (recovery.kind === "settled") return recovery.result;
+      }
       const settlement = await failExportJobIfPending({
         userId,
         exportJobId,
@@ -89,17 +125,208 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
 
   const durationMs = Date.now() - new Date(row.created_at).getTime();
   if (result.status === "success") {
-    await completeExportJob({ userId, exportJobId, fileName: result.fileName, outputBytes: result.bytes, durationMs }).catch((settleError) => {
+    try {
+      await completeExportJob({ userId, exportJobId, fileName: result.fileName, outputBytes: result.bytes, durationMs });
+    } catch (settleError) {
       if (!isAlreadySettled(settleError)) throw settleError;
-    });
+      const latestRow = await readExportJob(userId, exportJobId, platform);
+      if (!latestRow) return { kind: "not_found" };
+      if (latestRow.status === "pending" && latestRow.cancel_requested_at) return resolveCancellation(userId, exportJobId, platform, latestRow);
+      if (latestRow.status !== "succeeded") return { kind: "pending", stage: latestRow.stage };
+    }
     return { kind: "completed", downloadUrl: await signOutputUrl(platform, exportJobId, result.fileName), fileName: result.fileName };
   }
 
   const errorMessage = "내보내기 작업에 실패했습니다.";
   const errorCode = result.errorCode || fallbackBuildFailureReason(platform);
-  await failExportJob({ userId, exportJobId, errorCode, errorMessage, durationMs }).catch((settleError) => {
-    if (!isAlreadySettled(settleError)) throw settleError;
+  const settlement = await failExportJobIfPending({ userId, exportJobId, errorCode, errorMessage, durationMs });
+  if (!settlement.transitioned) {
+    const latestRow = await readExportJob(userId, exportJobId, platform);
+    if (!latestRow) return { kind: "not_found" };
+    if (latestRow.status !== "failed") return resolveSettledExportStatus(latestRow, platform, exportJobId);
+  } else {
+    scheduleExportFailureEvent(platform, exportJobId, errorCode, durationMs);
+  }
+  return { kind: "failed", error: errorMessage, reason: errorCode };
+}
+
+type AndroidEnqueueRecoveryResult =
+  | { kind: "pending"; stage: string }
+  | { kind: "continue" }
+  | { kind: "failed"; result: Extract<AsyncExportStatusResult, { kind: "failed" }> }
+  | { kind: "settled"; result: AsyncExportStatusResult };
+
+async function reconcileAndroidEnqueue({
+  userId,
+  exportJobId,
+  row,
+  config,
+  accessToken,
+  durationMs,
+}: {
+  userId: string;
+  exportJobId: string;
+  row: ExportJobRow;
+  config: BuilderConfig;
+  accessToken: string;
+  durationMs: number;
+}): Promise<AndroidEnqueueRecoveryResult> {
+  // A stored operation/execution means the original trigger reached Cloud Run.
+  // Never issue another run request in that case; result.json remains the
+  // source of truth for completion.
+  if (row.builder_operation_name || row.builder_execution_name || row.enqueue_state === "triggered" || (row.enqueue_state === "running" && !row.builder_started_at)) {
+    if (row.builder_execution_name) {
+      await updateExportJobEnqueueState({
+        userId,
+        exportJobId,
+        state: "running",
+        lastHeartbeatAt: new Date().toISOString(),
+      });
+    }
+    return { kind: "continue" };
+  }
+
+  const execution = await findBuilderExecution(config, accessToken, exportJobId, { createdAt: row.created_at });
+  if (execution) {
+    await updateExportJobEnqueueState({
+      userId,
+      exportJobId,
+      state: "running",
+      builderExecutionName: execution.name,
+      builderStartedAt: execution.createTime ?? new Date().toISOString(),
+      lastHeartbeatAt: new Date().toISOString(),
+    });
+    return { kind: "pending", stage: "building" };
+  }
+
+  // The migration backfills old rows as `running`/`triggered`; those rows do
+  // not carry EXPORT_JOB_ID and must not receive a speculative duplicate run.
+  if (!isRecoveryEligible(row)) return { kind: "continue" };
+
+  const inspection = await inspectBuilderInput(config, accessToken, exportJobId);
+  if (!inspection.complete) {
+    return settleRecoveryFailure({
+      userId,
+      exportJobId,
+      platform: "android",
+      errorCode: "input_upload_incomplete",
+      errorMessage: "빌드 입력 업로드가 완료되지 않아 내보내기를 진행하지 못했습니다.",
+      durationMs,
+    });
+  }
+
+  if (row.enqueue_attempt >= 1) return { kind: "continue" };
+  const claim = await claimExportRecovery({ userId, exportJobId, expectedAttempt: row.enqueue_attempt });
+  if (!claim.claimed) {
+    const latestRow = await readExportJob(userId, exportJobId, "android");
+    if (!latestRow) return { kind: "settled", result: { kind: "not_found" } };
+    if (latestRow.status !== "pending") {
+      return { kind: "settled", result: await resolveSettledExportStatus(latestRow, "android", exportJobId) };
+    }
+    return { kind: "pending", stage: latestRow.stage };
+  }
+
+  try {
+    const run = await runBuilderJob(config, accessToken, {
+      inputUri: `gs://${config.inputBucket}/${exportJobId}`,
+      outputUri: `gs://${config.outputBucket}/${exportJobId}`,
+      exportJobId,
+      attempt: claim.enqueueAttempt,
+    });
+    const now = new Date().toISOString();
+    const updated = await updateExportJobEnqueueState({
+      userId,
+      exportJobId,
+      state: run.operationName ? "triggered" : "trigger_ambiguous",
+      builderOperationName: run.operationName,
+      triggeredAt: now,
+      lastHeartbeatAt: now,
+      recoveryReason: run.operationName ? null : "missing_cloud_run_operation_name",
+    });
+    if (!updated) return { kind: "settled", result: await resolveRecoverySettlement(userId, exportJobId) };
+    return { kind: "pending", stage: "queued" };
+  } catch (error) {
+    if (error instanceof BuildEnqueueError && error.ambiguous) {
+      await updateExportJobEnqueueState({
+        userId,
+        exportJobId,
+        state: "trigger_ambiguous",
+        triggeredAt: new Date().toISOString(),
+        recoveryReason: "ambiguous_cloud_run_response",
+      }).catch(() => undefined);
+      return { kind: "pending", stage: "queued" };
+    }
+    return settleRecoveryFailure({
+      userId,
+      exportJobId,
+      platform: "android",
+      errorCode: "enqueue_recovery_failed",
+      errorMessage: "빌드 작업을 다시 시작하지 못했습니다.",
+      durationMs,
+    });
+  }
+}
+
+function isRecoveryEligible(row: ExportJobRow) {
+  return row.enqueue_attempt < 1 && [
+    "reserved",
+    "uploading",
+    "input_ready",
+    "triggering",
+    "trigger_ambiguous",
+    "reconciling",
+  ].includes(row.enqueue_state);
+}
+
+async function settleRecoveryFailure({
+  userId,
+  exportJobId,
+  platform,
+  errorCode,
+  errorMessage,
+  durationMs,
+}: {
+  userId: string;
+  exportJobId: string;
+  platform: AsyncExportPlatform;
+  errorCode: string;
+  errorMessage: string;
+  durationMs: number;
+}): Promise<AndroidEnqueueRecoveryResult> {
+  const settlement = await failExportJobIfPending({
+    userId,
+    exportJobId,
+    errorCode,
+    errorMessage,
+    durationMs,
   });
+  if (settlement.transitioned) {
+    scheduleExportFailureEvent(platform, exportJobId, errorCode, durationMs);
+    return { kind: "failed", result: { kind: "failed", error: errorMessage, reason: errorCode } };
+  }
+  return { kind: "settled", result: await resolveRecoverySettlement(userId, exportJobId) };
+}
+
+async function resolveRecoverySettlement(userId: string, exportJobId: string): Promise<AsyncExportStatusResult> {
+  const latestRow = await readExportJob(userId, exportJobId, "android");
+  if (!latestRow) return { kind: "not_found" };
+  if (latestRow.status === "pending") return { kind: "pending", stage: latestRow.stage };
+  return resolveSettledExportStatus(latestRow, "android", exportJobId);
+}
+
+async function resolveCancellation(userId: string, exportJobId: string, platform: AsyncExportPlatform, row: ExportJobRow) {
+  const settlement = await cancelExportJob({
+    userId,
+    exportJobId,
+    durationMs: Math.max(0, Date.now() - new Date(row.created_at).getTime()),
+  });
+  if (settlement.status === "pending") return { kind: "pending", stage: row.stage } as const;
+  const latestRow = await readExportJob(userId, exportJobId, platform);
+  if (!latestRow) return { kind: "not_found" } as const;
+  return resolveSettledExportStatus(latestRow, platform, exportJobId);
+}
+
+function scheduleExportFailureEvent(platform: AsyncExportPlatform, exportJobId: string, errorCode: string, durationMs: number) {
   scheduleOpsEvent(createExportFailureEvent({
     platform,
     exportJobId,
@@ -107,14 +334,13 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
     durationMs,
     watchdog: errorCode === "build_watchdog_timeout",
   }));
-  return { kind: "failed", error: errorMessage, reason: errorCode };
 }
 
 async function readExportJob(userId: string, exportJobId: string, platform: AsyncExportPlatform) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("export_jobs")
-    .select("id,user_id,platform,status,stage,file_name,error,error_code,created_at")
+    .select("id,user_id,platform,status,stage,file_name,error,error_code,created_at,enqueue_state,enqueue_attempt,builder_operation_name,builder_execution_name,input_completed_at,triggered_at,builder_started_at,last_heartbeat_at,recovery_reason,cancel_requested_at")
     .eq("id", exportJobId)
     .eq("user_id", userId)
     .eq("platform", platform)
@@ -130,13 +356,9 @@ async function resolveSettledExportStatus(row: ExportJobRow, platform: AsyncExpo
   }
 
   const errorCode = row.error_code ?? fallbackBuildFailureReason(platform);
-  scheduleOpsEvent(createExportFailureEvent({
-    platform,
-    exportJobId,
-    errorCode,
-    durationMs: Date.now() - new Date(row.created_at).getTime(),
-    watchdog: errorCode === "build_watchdog_timeout",
-  }));
+  if (errorCode !== "build_cancelled") {
+    scheduleExportFailureEvent(platform, exportJobId, errorCode, Date.now() - new Date(row.created_at).getTime());
+  }
   return { kind: "failed", error: row.error ?? "내보내기 작업에 실패했습니다.", reason: errorCode };
 }
 
@@ -176,7 +398,7 @@ function fallbackBuildFailureReason(platform: AsyncExportPlatform) {
 }
 
 function isAlreadySettled(error: unknown) {
-  return error instanceof Error && error.message.includes("export_job_not_pending");
+  return error instanceof Error && (error.message.includes("export_job_not_pending") || error.message.includes("export_job_cancel_requested"));
 }
 
 async function downloadResultJson(config: BuilderConfig, accessToken: string, exportJobId: string): Promise<ResultJson | null> {
@@ -190,13 +412,44 @@ async function downloadResultJson(config: BuilderConfig, accessToken: string, ex
     );
     if (response.status === 404) return null;
     if (!response.ok) throw new Error("gcs_result_read_failed");
-    return (await response.json()) as ResultJson;
+    return (await awaitWithAbort(response.json(), controller.signal)) as ResultJson;
   } catch (error) {
     if (controller.signal.aborted) throw new Error("gcs_result_read_timeout");
     throw error;
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+async function awaitWithAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const resolveOnce = (value: T) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(value);
+    };
+    const rejectOnce = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const onAbort = () => {
+      const error = new Error("The operation was aborted.");
+      error.name = "AbortError";
+      rejectOnce(error);
+    };
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    operation.then(resolveOnce, rejectOnce);
+  });
 }
 
 async function outputObjectExists(config: BuilderConfig, accessToken: string, objectPath: string) {

@@ -7,8 +7,14 @@ const mocks = vi.hoisted(() => ({
   completeExportJob: vi.fn(),
   failExportJob: vi.fn(),
   failExportJobIfPending: vi.fn(),
+  cancelExportJob: vi.fn(),
+  claimExportRecovery: vi.fn(),
+  updateExportJobEnqueueState: vi.fn(),
   getBuilderAccessToken: vi.fn(),
   readBuilderConfig: vi.fn(),
+  findBuilderExecution: vi.fn(),
+  inspectBuilderInput: vi.fn(),
+  runBuilderJob: vi.fn(),
   scheduleOpsEvent: vi.fn(),
 }));
 
@@ -17,12 +23,17 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/billing/credits", () => ({
   completeExportJob: mocks.completeExportJob,
-  failExportJob: mocks.failExportJob,
   failExportJobIfPending: mocks.failExportJobIfPending,
+  cancelExportJob: mocks.cancelExportJob,
+  claimExportRecovery: mocks.claimExportRecovery,
+  updateExportJobEnqueueState: mocks.updateExportJobEnqueueState,
 }));
 vi.mock("@/lib/theme/export/buildJobClient", () => ({
   getBuilderAccessToken: mocks.getBuilderAccessToken,
   readBuilderConfig: mocks.readBuilderConfig,
+  findBuilderExecution: mocks.findBuilderExecution,
+  inspectBuilderInput: mocks.inspectBuilderInput,
+  runBuilderJob: mocks.runBuilderJob,
 }));
 vi.mock("@/lib/ops/dispatcher", () => ({ scheduleOpsEvent: mocks.scheduleOpsEvent }));
 
@@ -34,6 +45,10 @@ describe("resolveExportStatus watchdog transition", () => {
     query.eq.mockReturnValue(query);
     mocks.from.mockReturnValue(query);
     mocks.readBuilderConfig.mockReturnValue({
+      projectId: "project",
+      inputBucket: "input-bucket",
+      jobRegion: "asia-northeast3",
+      jobName: "android-builder",
       outputBucket: "output-bucket",
       builderServiceAccount: "builder@example.iam.gserviceaccount.com",
     });
@@ -47,7 +62,7 @@ describe("resolveExportStatus watchdog transition", () => {
     vi.useRealTimers();
   });
 
-  function pendingRow() {
+  function pendingRow(overrides: Record<string, unknown> = {}) {
     return {
       id: "job-1",
       user_id: "user-1",
@@ -58,6 +73,17 @@ describe("resolveExportStatus watchdog transition", () => {
       error: null,
       error_code: null,
       created_at: new Date(Date.now() - 10_000).toISOString(),
+      enqueue_state: "running",
+      enqueue_attempt: 0,
+      builder_operation_name: null,
+      builder_execution_name: null,
+      input_completed_at: null,
+      triggered_at: null,
+      builder_started_at: null,
+      last_heartbeat_at: null,
+      recovery_reason: null,
+      cancel_requested_at: null,
+      ...overrides,
     };
   }
 
@@ -114,5 +140,37 @@ describe("resolveExportStatus watchdog transition", () => {
     await vi.advanceTimersByTimeAsync(15_000);
 
     await rejection;
+  });
+
+  it("uses the one recovery retry only after the input is complete and no execution exists", async () => {
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow({ enqueue_state: "input_ready" }), error: null });
+    mocks.findBuilderExecution.mockResolvedValue(null);
+    mocks.inspectBuilderInput.mockResolvedValue({ complete: true, expectedObjectNames: [], actualObjectNames: [], missingObjectNames: [] });
+    mocks.claimExportRecovery.mockResolvedValue({ claimed: true, status: "pending", enqueueState: "triggering", enqueueAttempt: 1 });
+    mocks.runBuilderJob.mockResolvedValue({ operationName: "operations/recovered" });
+    mocks.updateExportJobEnqueueState.mockResolvedValue(true);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+
+    const result = await resolveExportStatus("user-1", "job-1", "android");
+
+    expect(result).toEqual({ kind: "pending", stage: "queued" });
+    expect(mocks.claimExportRecovery).toHaveBeenCalledWith({ userId: "user-1", exportJobId: "job-1", expectedAttempt: 0 });
+    expect(mocks.runBuilderJob).toHaveBeenCalledWith(expect.anything(), "builder-token", expect.objectContaining({
+      exportJobId: "job-1",
+      attempt: 1,
+    }));
+  });
+
+  it("settles a requested cancellation without publishing a failure alert", async () => {
+    mocks.maybeSingle
+      .mockResolvedValueOnce({ data: pendingRow({ cancel_requested_at: new Date().toISOString() }), error: null })
+      .mockResolvedValueOnce({ data: pendingRow({ status: "failed", stage: "failed", error: "내보내기 작업이 취소되었습니다.", error_code: "build_cancelled" }), error: null });
+    mocks.cancelExportJob.mockResolvedValue({ transitioned: true, status: "failed", balance: 1 });
+
+    const result = await resolveExportStatus("user-1", "job-1", "android");
+
+    expect(result).toMatchObject({ kind: "failed", reason: "build_cancelled" });
+    expect(mocks.cancelExportJob).toHaveBeenCalledOnce();
+    expect(mocks.scheduleOpsEvent).not.toHaveBeenCalled();
   });
 });

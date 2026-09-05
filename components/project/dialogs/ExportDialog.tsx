@@ -2,6 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { Archive, Download, LoaderCircle, Package, X } from "lucide-react";
@@ -12,13 +13,15 @@ import type { ThemePlatform } from "@/lib/theme/types";
 export function ExportDialog({
   isExporting, isExportQueued, isPreparingExport, preparationError, downloadResult, platform, exportMode, exportName, progressStep,
   elapsedSeconds, accountState, isAccountLoading, onClose, onModeChange, onNameChange,
-  onLogin, onBuyCredits, onRetryPreparation, onSubmit,
+  onLogin, onBuyCredits, onRetryPreparation, onSubmit, isCancellingExport, onCancelExport,
 }: {
   isExporting: boolean; isExportQueued: boolean; isPreparingExport: boolean; preparationError: string | null; downloadResult: ExportDownloadResult | null; platform: ThemePlatform; exportMode: ExportMode;
   exportName: string; progressStep: number; elapsedSeconds: number; accountState: AccountState | null;
   isAccountLoading: boolean; onClose: () => void; onModeChange: (mode: ExportMode) => void; onNameChange: (value: string) => void;
   onLogin: () => void; onBuyCredits: () => void; onRetryPreparation: () => void; onSubmit: () => void;
+  isCancellingExport: boolean; onCancelExport: () => void;
 }) {
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const steps = getExportProgressSteps(exportMode);
   const exportNameError = platform === "ios" && (exportName.trim().length === 0 || exportName.trim().length > 80) ? "테마 이름은 1~80자로 입력해 주세요." : null;
   const canSubmit = exportName.trim().length > 0 && !exportNameError;
@@ -42,6 +45,10 @@ export function ExportDialog({
       : isExportQueued
         ? "파일은 백그라운드에서 생성됩니다. 이 창을 닫으면 마이페이지에서 결과를 확인할 수 있습니다."
     : "완성된 테마 파일을 받아 카카오톡에 적용합니다.";
+
+  useEffect(() => {
+    if (!isExporting || !isExportQueued) setCancelConfirmOpen(false);
+  }, [isExporting, isExportQueued]);
 
   return (
     <Dialog.Root open onOpenChange={(open) => { if (!open && canCloseWhileExporting) onClose(); }}>
@@ -79,7 +86,14 @@ export function ExportDialog({
               <p className="mt-3 text-xs font-medium leading-5 text-[#64748b]">{persistenceNotice.browserDetailed} {persistenceNotice.exportTemporary} <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#2563eb] underline underline-offset-2">자세히 보기</Link></p>
             </>}
           </div>
-          <div className="flex items-center justify-end gap-2 border-t border-[#e2e8f0] bg-white px-5 py-4"><button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={!canCloseWhileExporting}>{downloadResult || isExportQueued ? "닫기" : "취소"}</button>{preparationError ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white" onClick={onRetryPreparation}>다시 시도</button> : !isPreparingExport && !downloadResult && !isExporting ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit} disabled={isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}>{ctaLabel}</button> : null}</div>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#e2e8f0] bg-white px-5 py-4">
+            <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={onClose} disabled={!canCloseWhileExporting}>{downloadResult || isExportQueued ? "닫기" : "취소"}</button>
+            {isExportQueued && isExporting ? cancelConfirmOpen ? <>
+              <span className="mr-auto text-xs font-semibold text-[#64748b]">작업을 취소하고 크레딧을 환불할까요?</span>
+              <button type="button" className="rounded-xl border border-[#d1d5db] bg-white px-4 py-2 text-sm font-semibold text-[#334155]" onClick={() => setCancelConfirmOpen(false)} disabled={isCancellingExport}>계속 만들기</button>
+              <button type="button" className="rounded-xl bg-[#dc2626] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" onClick={onCancelExport} disabled={isCancellingExport}>{isCancellingExport ? "취소 처리 중" : "취소하고 환불"}</button>
+            </> : <button type="button" className="rounded-xl border border-[#fecaca] bg-[#fff7f7] px-4 py-2 text-sm font-semibold text-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-50" onClick={() => setCancelConfirmOpen(true)} disabled={isCancellingExport}>내보내기 취소</button> : preparationError ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white" onClick={onRetryPreparation}>다시 시도</button> : !isPreparingExport && !downloadResult && !isExporting ? <button type="button" className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50" onClick={!isLoggedIn ? onLogin : !hasCredits ? onBuyCredits : onSubmit} disabled={isAccountLoading || (isLoggedIn && hasCredits && !canSubmit)}>{ctaLabel}</button> : null}
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

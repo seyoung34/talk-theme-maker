@@ -512,6 +512,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     exportName,
     exportProgressStep,
     isAccountLoading,
+    isCancellingExport,
     isExporting,
     isExportQueued,
     isPreparingExport,
@@ -522,6 +523,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setExportMode,
     setExportName,
     submitExport,
+    cancelExport,
   } = useProjectExport({
     activeTemplate,
     bubbleGeometry,
@@ -1469,6 +1471,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           elapsedSeconds={exportElapsedSeconds}
           accountState={accountState}
           isAccountLoading={isAccountLoading}
+          isCancellingExport={isCancellingExport}
           onClose={() => {
             if (!isExporting || isExportQueued) {
               setExportDialogOpen(false);
@@ -1485,6 +1488,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           }}
           onRetryPreparation={() => void openExportDialog()}
           onSubmit={() => void submitExport()}
+          onCancelExport={() => void cancelExport()}
         />
       ) : null}
       {isAdminMode && systemSaveDialogOpen ? (

@@ -5,7 +5,7 @@ import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { claimSignupBonusFromClient } from "@/lib/billing/signupBonusClient";
 import { readJsonResponse } from "@/lib/shared/api/http";
-import { createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAsyncExportStatus, triggerDownload } from "@/components/project/exportClient";
+import { cancelAsyncExport, createExportFormData, getDownloadFileName, getExportNotice, getExportProgressSteps, pollAsyncExportStatus, triggerDownload } from "@/components/project/exportClient";
 import { getExportFailureReasonFromStatus, isNetworkError, toExportFailureReason, type ExportFailureReason } from "@/lib/theme/export/failureReason";
 import { UploadSourceUnavailableError } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotColors, SlotUploads } from "@/components/project/projectModel";
@@ -58,10 +58,14 @@ export function useProjectExport({
 }: UseProjectExportOptions) {
   const exportPreparingRef = useRef(false);
   const exportSubmittingRef = useRef(false);
+  const exportCancellingRef = useRef(false);
+  const exportPollAbortRef = useRef<AbortController | null>(null);
   const [isPreparingExport, setIsPreparingExport] = useState(false);
   const [exportPreparationError, setExportPreparationError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [isExportQueued, setIsExportQueued] = useState(false);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const [isCancellingExport, setIsCancellingExport] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportDownloadResult, setExportDownloadResult] = useState<ExportDownloadResult | null>(null);
   const [exportMode, setExportMode] = useState<ExportMode>("apk");
@@ -101,6 +105,8 @@ export function useProjectExport({
     setExportDialogOpen(true);
     setExportDownloadResult(null);
     setIsExportQueued(false);
+    setExportJobId(null);
+    setIsCancellingExport(false);
     setExportName(displayTemplateName);
     setExportMode(platform === "android" ? "apk" : "ktheme");
     setExportProgressStep(0);
@@ -127,6 +133,8 @@ export function useProjectExport({
     setExportDialogOpen(true);
     setExportDownloadResult(null);
     setIsExportQueued(false);
+    setExportJobId(null);
+    setIsCancellingExport(false);
     setExportName(options.name);
     setExportMode(options.exportMode);
     setExportProgressStep(0);
@@ -157,6 +165,8 @@ export function useProjectExport({
     try {
       setIsExporting(true);
       setIsExportQueued(false);
+      setExportJobId(null);
+      setIsCancellingExport(false);
       setExportProgressStep(0);
       setExportElapsedSeconds(0);
       setNotice({ tone: "info", message: getExportNotice(exportMode) });
@@ -214,10 +224,13 @@ export function useProjectExport({
       if (response.status === 202) {
         const queued = await readJsonResponse<{ exportJobId: string; exportNumber?: number; error?: string }>(response);
         setIsExportQueued(true);
+        setExportJobId(queued.exportJobId);
+        const pollAbortController = new AbortController();
+        exportPollAbortRef.current = pollAbortController;
         const stepLabels = getExportProgressSteps(exportMode);
         const outcome = await pollAsyncExportStatus(platform, queued.exportJobId, () => {
           setExportProgressStep((current) => Math.min(current + 1, stepLabels.length - 2));
-        });
+        }, pollAbortController.signal);
 
         if (progressTimer) {
           window.clearInterval(progressTimer);
@@ -227,6 +240,11 @@ export function useProjectExport({
           failureReason = outcome.reason;
           await refreshAccountState();
           throw new Error(outcome.error);
+        }
+        if (outcome.status === "cancelled") {
+          await refreshAccountState();
+          setNotice({ tone: "info", message: "내보내기를 취소했고 크레딧을 환불했습니다." });
+          return;
         }
 
         setExportProgressStep(stepLabels.length - 1);
@@ -279,8 +297,11 @@ export function useProjectExport({
     } finally {
       if (progressTimer) window.clearInterval(progressTimer);
       exportSubmittingRef.current = false;
+      exportPollAbortRef.current = null;
       setIsExporting(false);
       setIsExportQueued(false);
+      setExportJobId(null);
+      setIsCancellingExport(false);
     }
   }, [
     accountState?.credits,
@@ -307,17 +328,46 @@ export function useProjectExport({
     templateId,
   ]);
 
+  const cancelExport = useCallback(async () => {
+    if (!exportJobId || !isExportQueued || exportCancellingRef.current) return;
+    exportCancellingRef.current = true;
+    setIsCancellingExport(true);
+    try {
+      const result = await cancelAsyncExport(platform, exportJobId);
+      if (result.cancelled) {
+        exportPollAbortRef.current?.abort();
+        if (result.status === "cancelled") {
+          await refreshAccountState();
+          setNotice({ tone: "info", message: "내보내기를 취소했고 크레딧을 환불했습니다." });
+        } else {
+          setNotice({ tone: "info", message: "내보내기 취소를 접수했습니다. 크레딧은 작업 종료 후 환불됩니다." });
+        }
+      } else if (result.status === "completed") {
+        setNotice({ tone: "info", message: "내보내기가 이미 완료되어 취소할 수 없습니다." });
+      } else {
+        setNotice({ tone: "info", message: "내보내기가 이미 종료되어 취소할 수 없습니다." });
+      }
+    } catch (error) {
+      setNotice({ tone: "error", message: error instanceof Error ? error.message : "내보내기 취소를 처리하지 못했습니다." });
+    } finally {
+      exportCancellingRef.current = false;
+      setIsCancellingExport(false);
+    }
+  }, [exportJobId, isExportQueued, platform, refreshAccountState, setNotice]);
+
   return {
     accountState,
     exportDialogOpen,
     exportDownloadResult,
     exportElapsedSeconds,
+    exportJobId,
     exportMode,
     exportName,
     exportProgressStep,
     isAccountLoading,
     isExporting,
     isExportQueued,
+    isCancellingExport,
     isPreparingExport,
     openExportDialog,
     resumeExportDialog,
@@ -327,5 +377,6 @@ export function useProjectExport({
     setExportMode,
     setExportName,
     submitExport,
+    cancelExport,
   };
 }

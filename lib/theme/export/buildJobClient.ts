@@ -44,10 +44,19 @@ export class BuildEnqueueError extends Error {
     public readonly code: string,
     message: string,
     public readonly detail?: string,
+    options: { ambiguous?: boolean } = {},
   ) {
     super(message);
     this.name = "BuildEnqueueError";
+    this.ambiguous = options.ambiguous ?? false;
   }
+
+  /**
+   * The request may have reached Cloud Run even though its response was not
+   * received. Such a failure must be reconciled instead of being refunded
+   * immediately, because the job may still be running.
+   */
+  readonly ambiguous: boolean;
 }
 
 export type BuilderConfig = {
@@ -65,6 +74,36 @@ export type BuilderConfig = {
 };
 
 export type BuilderPlatform = "android" | "ios";
+
+export type BuilderRunResult = {
+  operationName: string | null;
+};
+
+export type EnqueueBuildProgress = {
+  onInputUploadStarted?: () => void | Promise<void>;
+  onInputReady?: () => void | Promise<void>;
+  onTriggering?: () => void | Promise<void>;
+  onTriggered?: (result: BuilderRunResult) => void | Promise<void>;
+};
+
+export type EnqueueBuildOptions = {
+  platform?: BuilderPlatform;
+  jobNameEnv?: string;
+  attempt?: number;
+  progress?: EnqueueBuildProgress;
+};
+
+export type BuilderInputInspection = {
+  complete: boolean;
+  expectedObjectNames: string[];
+  actualObjectNames: string[];
+  missingObjectNames: string[];
+};
+
+export type BuilderExecution = {
+  name: string;
+  createTime?: string;
+};
 
 export function getBuilderJobNameEnv(platform: BuilderPlatform) {
   return platform === "ios" ? "GCP_IOS_BUILD_JOB_NAME" : "GCP_BUILD_JOB_NAME";
@@ -112,11 +151,12 @@ export function readBuilderConfig(options: { platform?: BuilderPlatform; jobName
   };
 }
 
-export async function enqueueBuild(bundle: ExportBuildBundle, options: { platform?: BuilderPlatform; jobNameEnv?: string } = {}) {
+export async function enqueueBuild(bundle: ExportBuildBundle, options: EnqueueBuildOptions = {}): Promise<BuilderRunResult> {
   const config = readBuilderConfig(options);
   const accessToken = await getBuilderAccessToken(config);
   const prefix = bundle.exportJobId;
   const inputArchive = options.platform === "ios" ? createInputArchive(bundle.files) : null;
+  await options.progress?.onInputUploadStarted?.();
 
   const bundleJson = JSON.stringify({
     export_job_id: bundle.exportJobId,
@@ -146,11 +186,17 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: { platfor
     );
   }
   await Promise.all(uploads);
+  await options.progress?.onInputReady?.();
 
-  await runBuilderJob(config, accessToken, {
+  await options.progress?.onTriggering?.();
+  const result = await runBuilderJob(config, accessToken, {
     inputUri: `gs://${config.inputBucket}/${prefix}`,
     outputUri: `gs://${config.outputBucket}/${prefix}`,
+    exportJobId: bundle.exportJobId,
+    attempt: options.attempt ?? 0,
   });
+  await options.progress?.onTriggered?.(result);
+  return result;
 }
 
 // 자체 OIDC JWT → STS 토큰 교환 → 대상 SA impersonation 순으로 단명 액세스 토큰을 얻는다.
@@ -270,16 +316,22 @@ export async function uploadObject(bucket: string, objectName: string, bytes: Ui
     code: "gcs_upload_request_failed",
     message: "빌드 입력 업로드 요청에 실패했습니다.",
     timeoutMs: gcpRequestTimeoutMs,
+  }, async (response) => {
+    await response.arrayBuffer();
+    return response;
   });
   if (!response.ok) {
     throw new BuildEnqueueError("gcs_upload_failed", "빌드 입력 업로드에 실패했습니다.", `HTTP ${response.status}`);
   }
-  await response.arrayBuffer();
 }
 
-export async function runBuilderJob(config: BuilderConfig, accessToken: string, uris: { inputUri: string; outputUri: string }) {
+export async function runBuilderJob(
+  config: BuilderConfig,
+  accessToken: string,
+  uris: { inputUri: string; outputUri: string; exportJobId?: string; attempt?: number },
+): Promise<BuilderRunResult> {
   const url = buildRunJobUrl(config);
-  const response = await fetchWithTimeout(url, {
+  const { response, body } = await fetchWithTimeout(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -289,6 +341,8 @@ export async function runBuilderJob(config: BuilderConfig, accessToken: string, 
             env: [
               { name: "GCS_INPUT_URI", value: uris.inputUri },
               { name: "GCS_OUTPUT_URI", value: uris.outputUri },
+              ...(uris.exportJobId ? [{ name: "EXPORT_JOB_ID", value: uris.exportJobId }] : []),
+              { name: "EXPORT_ENQUEUE_ATTEMPT", value: String(uris.attempt ?? 0) },
             ],
           },
         ],
@@ -298,11 +352,154 @@ export async function runBuilderJob(config: BuilderConfig, accessToken: string, 
     code: "job_run_request_failed",
     message: "Cloud Run 작업 실행 요청에 실패했습니다.",
     timeoutMs: cloudRunRequestTimeoutMs,
-  });
+    ambiguousOnConsumeError: true,
+  }, async (response) => ({ response, body: await response.text() }));
   if (!response.ok) {
-    throw new BuildEnqueueError("job_run_failed", "빌드 작업 실행에 실패했습니다.", await readHttpErrorDetail(response));
+    throw new BuildEnqueueError("job_run_failed", "빌드 작업 실행에 실패했습니다.", readHttpErrorDetail(response.status, body));
   }
-  await response.arrayBuffer();
+  const payload = parseJsonOrNull<{ name?: unknown }>(body);
+  return { operationName: typeof payload?.name === "string" && payload.name.trim() ? payload.name.trim() : null };
+}
+
+/**
+ * Inspect the input prefix before using the one recovery retry. This keeps a
+ * request that died during a partial upload from being retried with another
+ * incomplete bundle.
+ */
+export async function inspectBuilderInput(
+  config: BuilderConfig,
+  accessToken: string,
+  exportJobId: string,
+): Promise<BuilderInputInspection> {
+  const bundleObjectName = `${exportJobId}/bundle.json`;
+  const bundleUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(config.inputBucket)}/o/${encodeURIComponent(bundleObjectName)}?alt=media`;
+  const { response: bundleResponse, body: bundleBody } = await fetchWithTimeout(bundleUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }, {
+    code: "gcs_input_inspection_failed",
+    message: "빌드 입력 상태를 확인하지 못했습니다.",
+    timeoutMs: gcpRequestTimeoutMs,
+  }, async (response) => ({ response, body: await response.text() }));
+
+  if (bundleResponse.status === 404) {
+    return {
+      complete: false,
+      expectedObjectNames: [bundleObjectName],
+      actualObjectNames: [],
+      missingObjectNames: [bundleObjectName],
+    };
+  }
+  if (!bundleResponse.ok) {
+    throw new BuildEnqueueError("gcs_input_inspection_failed", "빌드 입력 상태를 확인하지 못했습니다.", readHttpErrorDetail(bundleResponse.status, bundleBody));
+  }
+
+  const bundle = parseJsonOrNull<{
+    files_archive?: unknown;
+    manifest?: unknown;
+  }>(bundleBody);
+  if (!bundle || (bundle.files_archive !== undefined && typeof bundle.files_archive !== "string") || !Array.isArray(bundle.manifest)) {
+    throw new BuildEnqueueError("input_bundle_invalid", "빌드 입력 번들이 올바르지 않습니다.");
+  }
+
+  const expectedObjectNames = [bundleObjectName];
+  if (typeof bundle.files_archive === "string" && bundle.files_archive.trim()) {
+    expectedObjectNames.push(`${exportJobId}/${bundle.files_archive}`);
+  } else {
+    const fields = new Set<string>();
+    for (const item of bundle.manifest) {
+      if (isRecord(item) && typeof item.field === "string" && item.field.trim()) fields.add(item.field);
+    }
+    for (const field of fields) expectedObjectNames.push(`${exportJobId}/files/${field}`);
+  }
+
+  const query = new URLSearchParams({ prefix: `${exportJobId}/`, maxResults: "1000" });
+  const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(config.inputBucket)}/o?${query.toString()}`;
+  const { response: listResponse, payload } = await fetchWithTimeout(listUrl, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }, {
+    code: "gcs_input_inspection_failed",
+    message: "빌드 입력 상태를 확인하지 못했습니다.",
+    timeoutMs: gcpRequestTimeoutMs,
+  }, async (response) => ({
+    response,
+    payload: await readJsonOrNull<{ items?: Array<{ name?: unknown }> }>(response),
+  }));
+  if (!listResponse.ok) {
+    throw new BuildEnqueueError("gcs_input_inspection_failed", "빌드 입력 상태를 확인하지 못했습니다.", `HTTP ${listResponse.status}`);
+  }
+  if (!isRecord(payload) || (payload.items !== undefined && !Array.isArray(payload.items))) {
+    throw new BuildEnqueueError("gcs_input_inspection_failed", "빌드 입력 상태를 확인하지 못했습니다.", "invalid GCS object list response");
+  }
+
+  const actualObjectNames = (payload.items ?? [])
+    .filter(isRecord)
+    .map((item) => item.name)
+    .filter((name): name is string => typeof name === "string");
+  const actualObjects = new Set(actualObjectNames);
+  const missingObjectNames = expectedObjectNames.filter((name) => !actualObjects.has(name));
+  return { complete: missingObjectNames.length === 0, expectedObjectNames, actualObjectNames, missingObjectNames };
+}
+
+/** Find an execution created by this export after an ambiguous run response. */
+export async function findBuilderExecution(
+  config: BuilderConfig,
+  accessToken: string,
+  exportJobId: string,
+  options: { createdAt?: string } = {},
+): Promise<BuilderExecution | null> {
+  const projectId = validatePathSegment(config.projectId, "GCP_PROJECT_ID");
+  const jobRegion = validatePathSegment(config.jobRegion, "GCP_BUILD_JOB_REGION");
+  const jobName = validatePathSegment(config.jobName, config.jobNameEnv ?? "GCP_BUILD_JOB_NAME");
+  let pageToken: string | undefined;
+  for (let page = 0; page < 10; page += 1) {
+    const query = new URLSearchParams({ pageSize: "100" });
+    if (pageToken) query.set("pageToken", pageToken);
+    const url = `https://run.googleapis.com/v2/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(jobRegion)}/jobs/${encodeURIComponent(jobName)}/executions?${query.toString()}`;
+    const { response, payload } = await fetchWithTimeout(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }, {
+      code: "builder_execution_lookup_failed",
+      message: "빌드 실행 상태를 확인하지 못했습니다.",
+      timeoutMs: cloudRunRequestTimeoutMs,
+    }, async (response) => ({
+      response,
+      payload: await readJsonOrNull<{ executions?: unknown[]; nextPageToken?: unknown }>(response),
+    }));
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new BuildEnqueueError("builder_execution_lookup_failed", "빌드 실행 상태를 확인하지 못했습니다.", `HTTP ${response.status}`);
+    }
+    if (!isRecord(payload) || (payload.executions !== undefined && !Array.isArray(payload.executions)) || (payload.nextPageToken !== undefined && typeof payload.nextPageToken !== "string")) {
+      throw new BuildEnqueueError("builder_execution_lookup_failed", "빌드 실행 상태를 확인하지 못했습니다.", "invalid Cloud Run execution list response");
+    }
+
+    const executions = payload.executions ?? [];
+    for (const value of executions) {
+      if (!isRecord(value) || typeof value.name !== "string") continue;
+      if (executionBelongsToExport(value, exportJobId)) {
+        return {
+          name: value.name,
+          createTime: typeof value.createTime === "string" ? value.createTime : undefined,
+        };
+      }
+    }
+
+    const nextPageToken = payload.nextPageToken || undefined;
+    if (!nextPageToken) return null;
+
+    // Cloud Run returns executions newest first. Once every usable timestamp in
+    // this page predates the export reservation, older pages cannot contain its
+    // execution. This also keeps a busy job from making recovery unbounded.
+    if (options.createdAt && executions.length > 0 && executions.every((value) => {
+      if (!isRecord(value) || typeof value.createTime !== "string") return false;
+      const executionTime = Date.parse(value.createTime);
+      const exportTime = Date.parse(options.createdAt!);
+      return Number.isFinite(executionTime) && Number.isFinite(exportTime) && executionTime < exportTime;
+    })) return null;
+
+    pageToken = nextPageToken;
+  }
+  return null;
 }
 
 function requireEnv(name: string) {
@@ -334,18 +531,18 @@ function validatePathSegment(value: string, envName: string) {
 async function fetchWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit,
-  options: { code: string; message: string; timeoutMs: number },
+  options: FetchTimeoutOptions,
 ): Promise<Response>;
 async function fetchWithTimeout<T>(
   input: RequestInfo | URL,
   init: RequestInit,
-  options: { code: string; message: string; timeoutMs: number },
+  options: FetchTimeoutOptions,
   consumeResponse: (response: Response) => Promise<T>,
 ): Promise<T>;
 async function fetchWithTimeout<T>(
   input: RequestInfo | URL,
   init: RequestInit,
-  options: { code: string; message: string; timeoutMs: number },
+  options: FetchTimeoutOptions,
   consumeResponse?: (response: Response) => Promise<T>,
 ): Promise<Response | T> {
   const controller = new AbortController();
@@ -363,12 +560,21 @@ async function fetchWithTimeout<T>(
       : response;
   } catch (error) {
     const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    throw new BuildEnqueueError(options.code, options.message, detail.slice(0, 240));
+    throw new BuildEnqueueError(options.code, options.message, detail.slice(0, 240), {
+      ambiguous: Boolean(consumeResponse && options.ambiguousOnConsumeError),
+    });
   } finally {
     clearTimeout(timeoutId);
     externalSignal?.removeEventListener("abort", abortFromExternalSignal);
   }
 }
+
+type FetchTimeoutOptions = {
+  code: string;
+  message: string;
+  timeoutMs: number;
+  ambiguousOnConsumeError?: boolean;
+};
 
 async function readJsonOrNull<T>(response: Response): Promise<T | null> {
   try {
@@ -416,9 +622,36 @@ function isAbortError(error: unknown): error is Error {
   return error instanceof Error && error.name === "AbortError";
 }
 
-async function readHttpErrorDetail(response: Response) {
-  const body = (await response.text().catch(() => "")).trim().replace(/\s+/g, " ");
-  return `HTTP ${response.status}${body ? `: ${body}` : ""}`.slice(0, 800);
+function readHttpErrorDetail(status: number, body: string) {
+  const normalizedBody = body.trim().replace(/\s+/g, " ");
+  return `HTTP ${status}${normalizedBody ? `: ${normalizedBody}` : ""}`.slice(0, 800);
+}
+
+function parseJsonOrNull<T>(body: string): T | null {
+  if (!body.trim()) return null;
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    return null;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function executionBelongsToExport(value: Record<string, unknown>, exportJobId: string) {
+  const template = isRecord(value.template) ? value.template : null;
+  const containers = template && Array.isArray(template.containers) ? template.containers : [];
+  for (const container of containers) {
+    if (!isRecord(container) || !Array.isArray(container.env)) continue;
+    for (const env of container.env) {
+      if (!isRecord(env) || typeof env.name !== "string" || typeof env.value !== "string") continue;
+      if (env.name === "EXPORT_JOB_ID" && env.value === exportJobId) return true;
+      if (env.name === "GCS_INPUT_URI" && env.value.endsWith(`/${exportJobId}`)) return true;
+    }
+  }
+  return false;
 }
 
 function readPrivateJwk() {

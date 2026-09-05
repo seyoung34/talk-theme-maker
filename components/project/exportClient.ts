@@ -60,6 +60,7 @@ const exportPollTimeoutMs = 12 * 60 * 1000;
 
 export type AsyncExportOutcome =
   | { status: "completed"; downloadUrl: string; fileName: string }
+  | { status: "cancelled" }
   | { status: "failed"; error: string; reason: ExportFailureReason };
 
 // 비동기 export 큐잉 후 완료/실패까지 플랫폼별 status 엔드포인트를 폴링한다.
@@ -67,11 +68,19 @@ export async function pollAsyncExportStatus(
   platform: "android" | "ios",
   exportJobId: string,
   onStage?: (stage: string) => void,
+  signal?: AbortSignal,
 ): Promise<AsyncExportOutcome> {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < exportPollTimeoutMs) {
-    const response = await fetch(`/api/export/${platform}/status?jobId=${encodeURIComponent(exportJobId)}`, { cache: "no-store" });
+    if (signal?.aborted) return { status: "cancelled" };
+    let response: Response;
+    try {
+      response = await fetch(`/api/export/${platform}/status?jobId=${encodeURIComponent(exportJobId)}`, { cache: "no-store", signal });
+    } catch (error) {
+      if (signal?.aborted) return { status: "cancelled" };
+      throw error;
+    }
     const payload = (await response.json().catch(() => null)) as
       | { status: "pending"; stage: string }
       | { status: "completed"; downloadUrl: string; fileName: string }
@@ -90,10 +99,51 @@ export async function pollAsyncExportStatus(
       }
     }
 
-    await new Promise((resolve) => setTimeout(resolve, getExportPollIntervalMs(Date.now() - startedAt)));
+    await waitForExportPoll(getExportPollIntervalMs(Date.now() - startedAt), signal);
   }
 
   return { status: "failed", error: "내보내기 상태 확인 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.", reason: "poll_timeout" };
+}
+
+export type AsyncExportCancellationResult = {
+  status: "cancelled" | "cancelling" | "completed" | "failed";
+  cancelled: boolean;
+  refunded?: boolean;
+  balance?: number;
+  error?: string;
+};
+
+export async function cancelAsyncExport(platform: "android" | "ios", exportJobId: string): Promise<AsyncExportCancellationResult> {
+  const response = await fetch(`/api/export/${platform}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ exportJobId }),
+  });
+  const payload = await response.json().catch(() => null) as AsyncExportCancellationResult | { error?: string } | null;
+  if (!response.ok && response.status !== 409) {
+    throw new Error(payload && "error" in payload && payload.error ? payload.error : "내보내기 취소를 처리하지 못했습니다.");
+  }
+  if (!payload || !("status" in payload) || !("cancelled" in payload) || typeof payload.status !== "string" || typeof payload.cancelled !== "boolean") {
+    throw new Error("내보내기 취소 응답이 올바르지 않습니다.");
+  }
+  return payload as AsyncExportCancellationResult;
+}
+
+function waitForExportPoll(delayMs: number, signal?: AbortSignal) {
+  return new Promise<void>((resolve) => {
+    let timer = 0;
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    };
+    timer = window.setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+  });
 }
 
 // 기존 Android 호출부와 외부 테스트의 이름을 유지한다.
