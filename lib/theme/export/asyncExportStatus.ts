@@ -138,6 +138,7 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
       const latestRow = await readExportJob(userId, exportJobId, platform);
       if (!latestRow) return { kind: "not_found" };
       if (latestRow.status === "pending" && latestRow.cancel_requested_at) return resolveCancellation(userId, exportJobId, platform, latestRow);
+      if (latestRow.status === "failed") return resolveSettledExportStatus(latestRow, platform, exportJobId);
       if (latestRow.status !== "succeeded") return { kind: "pending", stage: latestRow.stage };
     }
     return { kind: "completed", downloadUrl: await signOutputUrl(platform, exportJobId, result.fileName), fileName: result.fileName };

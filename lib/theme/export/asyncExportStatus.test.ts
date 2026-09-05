@@ -109,6 +109,35 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
     expect(mocks.scheduleOpsEvent).not.toHaveBeenCalled();
   });
 
+  it("returns a concurrently cancelled job as failed instead of pending", async () => {
+    mocks.maybeSingle
+      .mockResolvedValueOnce({ data: pendingRow(), error: null })
+      .mockResolvedValueOnce({
+        data: pendingRow({
+          status: "failed",
+          stage: "failed",
+          error: "내보내기 작업이 취소되었습니다.",
+          error_code: "build_cancelled",
+        }),
+        error: null,
+      });
+    mocks.completeExportJob.mockRejectedValue(new Error("export_job_not_pending"));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      status: "success",
+      export_job_id: "job-1",
+      output_path: "job-1/theme.apk",
+      fileName: "theme.apk",
+      bytes: 123,
+    }), { status: 200 })));
+
+    await expect(resolveExportStatus("user-1", "job-1", "android")).resolves.toEqual({
+      kind: "failed",
+      error: "내보내기 작업이 취소되었습니다.",
+      reason: "build_cancelled",
+    });
+    expect(mocks.scheduleOpsEvent).not.toHaveBeenCalled();
+  });
+
   it("sends the watchdog alert only when this call wins the failure transition", async () => {
     mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow(), error: null });
     mocks.failExportJobIfPending.mockResolvedValue({ transitioned: true, status: "failed", balance: 0 });
