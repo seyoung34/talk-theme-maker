@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createOpsEvent, type OpsEvent } from "@/lib/ops/events";
 import {
+  acknowledgeOpsTelegramCommandUpdate,
+  claimOpsTelegramCommandUpdate,
   claimOpsNotificationBatch,
   enqueueOpsEvent,
   getOpsDailySummary,
   getOpsStatusSnapshot,
+  markOpsTelegramCommandUpdateSent,
   requeueOpsNotification,
+  releaseOpsTelegramCommandUpdate,
 } from "@/lib/ops/repository";
 
 const mocks = vi.hoisted(() => ({ rpc: vi.fn() }));
@@ -133,5 +137,34 @@ describe("ops repository contract guards", () => {
       p_event_id: "ops.daily_summary:2026-09-02",
       p_channel: "telegram",
     });
+  });
+
+  it("uses the persisted Telegram update claim before command delivery", async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: "claimed", error: null });
+
+    await expect(claimOpsTelegramCommandUpdate(123)).resolves.toBe("claimed");
+    expect(mocks.rpc).toHaveBeenCalledWith("claim_ops_telegram_command_update", { p_update_id: 123 });
+  });
+
+  it("rejects an invalid Telegram update id before calling the RPC", async () => {
+    await expect(claimOpsTelegramCommandUpdate(-1)).rejects.toThrow("invalid_ops_telegram_update_id");
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("uses explicit terminal and release RPCs for Telegram command updates", async () => {
+    mocks.rpc
+      .mockResolvedValueOnce({ data: true, error: null })
+      .mockResolvedValueOnce({ data: true, error: null })
+      .mockResolvedValueOnce({ data: true, error: null });
+
+    await expect(markOpsTelegramCommandUpdateSent({ updateId: 123, providerMessageId: "42" })).resolves.toBe(true);
+    await expect(acknowledgeOpsTelegramCommandUpdate({ updateId: 123, reason: "telegram_invalid_response" })).resolves.toBe(true);
+    await expect(releaseOpsTelegramCommandUpdate(123)).resolves.toBe(true);
+
+    expect(mocks.rpc.mock.calls).toEqual([
+      ["mark_ops_telegram_command_update_sent", { p_update_id: 123, p_provider_message_id: "42" }],
+      ["acknowledge_ops_telegram_command_update", { p_update_id: 123, p_reason: "telegram_invalid_response" }],
+      ["release_ops_telegram_command_update", { p_update_id: 123 }],
+    ]);
   });
 });

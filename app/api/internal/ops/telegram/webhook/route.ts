@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { getOpsCommandReply, parseOpsTelegramCommand } from "@/lib/ops/commands";
 import { authorizeTelegramWebhookRequest } from "@/lib/ops/internalAuth";
-import { readTelegramOperatorText } from "@/lib/ops/telegramWebhook";
+import {
+  acknowledgeOpsTelegramCommandUpdate,
+  claimOpsTelegramCommandUpdate,
+  markOpsTelegramCommandUpdateSent,
+  releaseOpsTelegramCommandUpdate,
+} from "@/lib/ops/repository";
+import { readTelegramOperatorText, readTelegramUpdateId } from "@/lib/ops/telegramWebhook";
 import { isTelegramNotificationsEnabled, readTelegramConfig, sendTelegramMessage, TelegramError } from "@/lib/ops/telegram";
 
 const maxWebhookBodyBytes = 64 * 1024;
@@ -55,10 +61,31 @@ export async function POST(request: Request) {
   const parsed = parseOpsTelegramCommand(text);
   if (parsed === null) return NextResponse.json({ ok: true, ignored: "not_command" });
 
+  const updateId = readTelegramUpdateId(update);
+  if (updateId === null) {
+    return NextResponse.json({ error: "Telegram update_id가 올바르지 않습니다.", reason: "invalid_update_id" }, { status: 400 });
+  }
+
+  let claim;
+  try {
+    claim = await claimOpsTelegramCommandUpdate(updateId);
+  } catch (error) {
+    console.error("[telegram-webhook] update_claim_failed", {
+      updateId,
+      command: parsed.name,
+      name: error instanceof Error ? error.name : "unknown_error",
+    });
+    return NextResponse.json({ error: "Telegram 명령을 접수하지 못했습니다.", reason: "command_claim_failed" }, { status: 503 });
+  }
+  if (claim !== "claimed") {
+    return NextResponse.json({ ok: true, command: parsed.name, duplicate: true, state: claim });
+  }
+
+  let providerMessageId: string | null;
   try {
     const reply = await getOpsCommandReply(parsed, { telegramStatus: "configured" });
     const result = await sendTelegramMessage(config, reply);
-    return NextResponse.json({ ok: true, command: parsed.name, providerMessageId: result.providerMessageId });
+    providerMessageId = result.providerMessageId;
   } catch (error) {
     console.error("[telegram-webhook] command_failed", {
       command: parsed.name,
@@ -66,10 +93,48 @@ export async function POST(request: Request) {
       retryable: error instanceof TelegramError ? error.retryable : undefined,
     });
     if (error instanceof TelegramError && !error.retryable) {
-      return NextResponse.json({ ok: true, acknowledged: true, reason: "permanent_provider_failure" });
+      try {
+        await acknowledgeOpsTelegramCommandUpdate({ updateId, reason: error.code });
+        return NextResponse.json({ ok: true, acknowledged: true, reason: "permanent_provider_failure" });
+      } catch (acknowledgementError) {
+        console.error("[telegram-webhook] permanent_failure_acknowledgement_failed", {
+          updateId,
+          command: parsed.name,
+          name: acknowledgementError instanceof Error ? acknowledgementError.name : "unknown_error",
+        });
+        return NextResponse.json({ error: "Telegram 명령 처리 상태를 기록하지 못했습니다.", reason: "command_record_failed" }, { status: 503 });
+      }
+    }
+    try {
+      await releaseOpsTelegramCommandUpdate(updateId);
+    } catch (releaseError) {
+      console.error("[telegram-webhook] retry_release_failed", {
+        updateId,
+        command: parsed.name,
+        name: releaseError instanceof Error ? releaseError.name : "unknown_error",
+      });
+      return NextResponse.json({ error: "Telegram 명령 재시도 상태를 기록하지 못했습니다.", reason: "command_record_failed" }, { status: 503 });
     }
     return NextResponse.json({ error: "Telegram 명령을 처리하지 못했습니다.", reason: "command_failed" }, { status: 502 });
   }
+
+  // Do not release the claim after Telegram accepted the reply: a lost HTTP
+  // response must not make the same update send a second operator message.
+  try {
+    const recorded = await markOpsTelegramCommandUpdateSent({ updateId, providerMessageId });
+    if (!recorded) {
+      console.error("[telegram-webhook] sent_reply_not_recorded", { updateId, command: parsed.name });
+      return NextResponse.json({ error: "Telegram 명령 응답을 기록하지 못했습니다.", reason: "command_record_failed" }, { status: 503 });
+    }
+  } catch (error) {
+    console.error("[telegram-webhook] sent_reply_record_failed", {
+      updateId,
+      command: parsed.name,
+      name: error instanceof Error ? error.name : "unknown_error",
+    });
+    return NextResponse.json({ error: "Telegram 명령 응답을 기록하지 못했습니다.", reason: "command_record_failed" }, { status: 503 });
+  }
+  return NextResponse.json({ ok: true, command: parsed.name, providerMessageId });
 }
 
 async function readBoundedBody(request: Request) {

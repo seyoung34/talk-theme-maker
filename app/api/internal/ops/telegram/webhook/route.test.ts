@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => {
 
   return {
     getOpsCommandReply: vi.fn(),
+    claimOpsTelegramCommandUpdate: vi.fn(),
+    markOpsTelegramCommandUpdateSent: vi.fn(),
+    releaseOpsTelegramCommandUpdate: vi.fn(),
+    acknowledgeOpsTelegramCommandUpdate: vi.fn(),
     isTelegramNotificationsEnabled: vi.fn(),
     readTelegramConfig: vi.fn(),
     sendTelegramMessage: vi.fn(),
@@ -34,6 +38,13 @@ vi.mock("@/lib/ops/telegram", () => ({
   sendTelegramMessage: mocks.sendTelegramMessage,
 }));
 
+vi.mock("@/lib/ops/repository", () => ({
+  acknowledgeOpsTelegramCommandUpdate: mocks.acknowledgeOpsTelegramCommandUpdate,
+  claimOpsTelegramCommandUpdate: mocks.claimOpsTelegramCommandUpdate,
+  markOpsTelegramCommandUpdateSent: mocks.markOpsTelegramCommandUpdateSent,
+  releaseOpsTelegramCommandUpdate: mocks.releaseOpsTelegramCommandUpdate,
+}));
+
 beforeEach(() => {
   vi.stubEnv("TELEGRAM_WEBHOOK_SECRET", "webhook-secret");
   mocks.isTelegramNotificationsEnabled.mockReset().mockReturnValue(true);
@@ -42,6 +53,10 @@ beforeEach(() => {
     chatId: "987654321",
   });
   mocks.getOpsCommandReply.mockReset().mockResolvedValue("상태 응답");
+  mocks.claimOpsTelegramCommandUpdate.mockReset().mockResolvedValue("claimed");
+  mocks.markOpsTelegramCommandUpdateSent.mockReset().mockResolvedValue(true);
+  mocks.releaseOpsTelegramCommandUpdate.mockReset().mockResolvedValue(true);
+  mocks.acknowledgeOpsTelegramCommandUpdate.mockReset().mockResolvedValue(true);
   mocks.sendTelegramMessage.mockReset().mockResolvedValue({ providerMessageId: "42" });
 });
 
@@ -82,6 +97,7 @@ describe("Telegram webhook route", () => {
     mocks.sendTelegramMessage.mockRejectedValueOnce(new mocks.TelegramError("telegram_invalid_response", false));
 
     const response = await POST(request({
+      update_id: 1,
       message: { chat: { id: 987654321, type: "private" }, text: "/status" },
     }));
 
@@ -91,16 +107,19 @@ describe("Telegram webhook route", () => {
       acknowledged: true,
       reason: "permanent_provider_failure",
     });
+    expect(mocks.acknowledgeOpsTelegramCommandUpdate).toHaveBeenCalledWith({ updateId: 1, reason: "telegram_invalid_response" });
   });
 
   it("returns 5xx for a retryable provider failure", async () => {
     mocks.sendTelegramMessage.mockRejectedValueOnce(new mocks.TelegramError("telegram_request_timeout", true));
 
     const response = await POST(request({
+      update_id: 1,
       message: { chat: { id: 987654321, type: "private" }, text: "/status" },
     }));
 
     expect(response.status).toBe(502);
+    expect(mocks.releaseOpsTelegramCommandUpdate).toHaveBeenCalledWith(1);
   });
 
   it("ignores messages outside the configured private operator chat", async () => {
@@ -125,6 +144,49 @@ describe("Telegram webhook route", () => {
       expect.objectContaining({ chatId: "987654321" }),
       "상태 응답",
     );
+    expect(mocks.markOpsTelegramCommandUpdateSent).toHaveBeenCalledWith({ updateId: 1, providerMessageId: "42" });
+  });
+
+  it("acknowledges a retried update without running the command or sending another reply", async () => {
+    mocks.claimOpsTelegramCommandUpdate
+      .mockResolvedValueOnce("claimed")
+      .mockResolvedValueOnce("duplicate");
+    const update = {
+      update_id: 10,
+      message: { chat: { id: 987654321, type: "private" }, text: "/status" },
+    };
+
+    const first = await POST(request(update));
+    const retry = await POST(request(update));
+
+    expect(first.status).toBe(200);
+    await expect(retry.json()).resolves.toMatchObject({ ok: true, command: "status", duplicate: true, state: "duplicate" });
+    expect(mocks.getOpsCommandReply).toHaveBeenCalledOnce();
+    expect(mocks.sendTelegramMessage).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the claim when reply delivery succeeded but recording the result fails", async () => {
+    mocks.markOpsTelegramCommandUpdateSent.mockResolvedValueOnce(false);
+
+    const response = await POST(request({
+      update_id: 11,
+      message: { chat: { id: 987654321, type: "private" }, text: "/status" },
+    }));
+
+    expect(response.status).toBe(503);
+    expect(mocks.sendTelegramMessage).toHaveBeenCalledOnce();
+    expect(mocks.releaseOpsTelegramCommandUpdate).not.toHaveBeenCalled();
+  });
+
+  it("rejects a command without a valid update id before claiming or sending it", async () => {
+    const response = await POST(request({
+      update_id: "not-an-id",
+      message: { chat: { id: 987654321, type: "private" }, text: "/status" },
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mocks.claimOpsTelegramCommandUpdate).not.toHaveBeenCalled();
+    expect(mocks.sendTelegramMessage).not.toHaveBeenCalled();
   });
 
   it("ignores ordinary text instead of treating it as an operator action", async () => {

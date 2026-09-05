@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readTelegramOperatorText } from "@/lib/ops/telegramWebhook";
+import { readTelegramOperatorText, readTelegramUpdateId } from "@/lib/ops/telegramWebhook";
 
 describe("Telegram operator update filter", () => {
   it("accepts only private messages from the configured chat", () => {
@@ -19,5 +19,12 @@ describe("Telegram operator update filter", () => {
     expect(readTelegramOperatorText({
       message: { chat: { id: 987654321, type: "private" }, text: "/" + "a".repeat(512) },
     }, "987654321")).toBeNull();
+  });
+
+  it("accepts only Telegram's non-negative integer update id", () => {
+    expect(readTelegramUpdateId({ update_id: 1 })).toBe(1);
+    expect(readTelegramUpdateId({ update_id: -1 })).toBeNull();
+    expect(readTelegramUpdateId({ update_id: "1" })).toBeNull();
+    expect(readTelegramUpdateId({})).toBeNull();
   });
 });

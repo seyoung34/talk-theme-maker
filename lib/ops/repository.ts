@@ -16,6 +16,7 @@ export type ClaimedOpsNotification = {
 };
 
 export type OpsDeliveryStatus = "sent" | "retry" | "dead_letter";
+export type OpsTelegramCommandUpdateClaim = "claimed" | "in_progress" | "duplicate";
 
 export type OpsDailySummaryCounts = {
   signups: number;
@@ -150,6 +151,51 @@ export async function requeueOpsNotification(input: { eventId: string; channel?:
   if (error) throw error;
   const result = Array.isArray(data) ? data[0] : data;
   return result === true;
+}
+
+/** Claim one Telegram update before executing its command or sending a reply. */
+export async function claimOpsTelegramCommandUpdate(updateId: number): Promise<OpsTelegramCommandUpdateClaim> {
+  assertTelegramUpdateId(updateId);
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("claim_ops_telegram_command_update", { p_update_id: updateId });
+  if (error) throw error;
+  const result = Array.isArray(data) ? data[0] : data;
+  if (result !== "claimed" && result !== "in_progress" && result !== "duplicate") {
+    throw new Error("invalid_ops_telegram_command_update_claim");
+  }
+  return result;
+}
+
+export async function markOpsTelegramCommandUpdateSent(input: { updateId: number; providerMessageId: string | null }) {
+  assertTelegramUpdateId(input.updateId);
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("mark_ops_telegram_command_update_sent", {
+    p_update_id: input.updateId,
+    p_provider_message_id: input.providerMessageId,
+  });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) === true;
+}
+
+/** Release only a reply that was definitely not sent, so Telegram may retry it. */
+export async function releaseOpsTelegramCommandUpdate(updateId: number) {
+  assertTelegramUpdateId(updateId);
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("release_ops_telegram_command_update", { p_update_id: updateId });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) === true;
+}
+
+export async function acknowledgeOpsTelegramCommandUpdate(input: { updateId: number; reason: string }) {
+  assertTelegramUpdateId(input.updateId);
+  if (!/^[a-z][a-z0-9_]{0,79}$/.test(input.reason)) throw new Error("invalid_ops_telegram_command_update_reason");
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("acknowledge_ops_telegram_command_update", {
+    p_update_id: input.updateId,
+    p_reason: input.reason,
+  });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) === true;
 }
 
 export async function getOpsDailySummary(input: { startAt: string; endAt: string }): Promise<OpsDailySummaryCounts> {
@@ -324,6 +370,10 @@ function parseCount(value: unknown, field: string) {
       : NaN;
   if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`invalid_ops_${field}`);
   return parsed;
+}
+
+function assertTelegramUpdateId(value: number) {
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error("invalid_ops_telegram_update_id");
 }
 
 function requireTimestamp(value: unknown, field: string) {
