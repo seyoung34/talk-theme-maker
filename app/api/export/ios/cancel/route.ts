@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   try {
     const settlement = await cancelExportJob({ userId: user.id, exportJobId, durationMs: 0 });
     if (settlement.transitioned) {
-      return NextResponse.json({ status: "cancelled", refunded: true, balance: settlement.balance });
+      return NextResponse.json({ status: "cancelled", cancelled: true, refunded: true, balance: settlement.balance });
     }
     return settledCancellationResponse(settlement.status);
   } catch (error) {
