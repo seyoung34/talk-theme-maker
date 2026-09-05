@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveExportStatus } from "@/lib/theme/export/asyncExportStatus";
+import { recoverStalePendingExportBeforeReservation, resolveExportStatus } from "@/lib/theme/export/asyncExportStatus";
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -40,9 +40,11 @@ vi.mock("@/lib/ops/dispatcher", () => ({ scheduleOpsEvent: mocks.scheduleOpsEven
 describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
   beforeEach(() => {
     for (const mock of Object.values(mocks)) mock.mockReset();
-    const query = { select: vi.fn(), eq: vi.fn(), maybeSingle: mocks.maybeSingle };
+    const query = { select: vi.fn(), eq: vi.fn(), order: vi.fn(), limit: vi.fn(), maybeSingle: mocks.maybeSingle };
     query.select.mockReturnValue(query);
     query.eq.mockReturnValue(query);
+    query.order.mockReturnValue(query);
+    query.limit.mockReturnValue(query);
     mocks.from.mockReturnValue(query);
     mocks.readBuilderConfig.mockReturnValue({
       projectId: "project",
@@ -144,7 +146,10 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
   });
 
   it("uses the one recovery retry only after the input is complete and no execution exists", async () => {
-    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow({ enqueue_state: "input_ready" }), error: null });
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow({
+      created_at: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+      enqueue_state: "input_ready",
+    }), error: null });
     mocks.findBuilderExecution.mockResolvedValue(null);
     mocks.inspectBuilderInput.mockResolvedValue({ complete: true, expectedObjectNames: [], actualObjectNames: [], missingObjectNames: [] });
     mocks.claimExportRecovery.mockResolvedValue({ claimed: true, status: "pending", enqueueState: "triggering", enqueueAttempt: 1 });
@@ -162,8 +167,65 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
     }));
   });
 
+  it("starts recovery at the ten-minute reservation cutoff without failing an active build", async () => {
+    vi.stubEnv("ANDROID_EXPORT_WATCHDOG_MS", "1500000");
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow({
+      created_at: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+      enqueue_state: "input_ready",
+    }), error: null });
+    mocks.findBuilderExecution.mockResolvedValue(null);
+    mocks.inspectBuilderInput.mockResolvedValue({ complete: true, expectedObjectNames: [], actualObjectNames: [], missingObjectNames: [] });
+    mocks.claimExportRecovery.mockResolvedValue({ claimed: true, status: "pending", enqueueState: "triggering", enqueueAttempt: 1 });
+    mocks.runBuilderJob.mockResolvedValue({ operationName: "operations/recovered-at-reservation-cutoff" });
+    mocks.updateExportJobEnqueueState.mockResolvedValue(true);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+
+    const result = await resolveExportStatus("user-1", "job-1", "android");
+
+    expect(result).toEqual({ kind: "pending", stage: "queued" });
+    expect(mocks.runBuilderJob).toHaveBeenCalledOnce();
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+  });
+
+  it("recovers a stale pending export before a new reservation is attempted", async () => {
+    const createdAt = new Date(Date.now() - 11 * 60 * 1000).toISOString();
+    mocks.maybeSingle
+      .mockResolvedValueOnce({ data: { id: "job-1", platform: "android", created_at: createdAt }, error: null })
+      .mockResolvedValueOnce({ data: pendingRow({ created_at: createdAt, enqueue_state: "input_ready" }), error: null });
+    mocks.findBuilderExecution.mockResolvedValue(null);
+    mocks.inspectBuilderInput.mockResolvedValue({ complete: true, expectedObjectNames: [], actualObjectNames: [], missingObjectNames: [] });
+    mocks.claimExportRecovery.mockResolvedValue({ claimed: true, status: "pending", enqueueState: "triggering", enqueueAttempt: 1 });
+    mocks.runBuilderJob.mockResolvedValue({ operationName: "operations/recovered-before-reservation" });
+    mocks.updateExportJobEnqueueState.mockResolvedValue(true);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+
+    await recoverStalePendingExportBeforeReservation("user-1");
+
+    expect(mocks.runBuilderJob).toHaveBeenCalledOnce();
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+  });
+
+  it("keeps an already-triggered build pending until the longer watchdog timeout", async () => {
+    vi.stubEnv("ANDROID_EXPORT_WATCHDOG_MS", "1500000");
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow({
+      created_at: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+      enqueue_state: "triggered",
+      builder_operation_name: "operations/active-build",
+    }), error: null });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+
+    const result = await resolveExportStatus("user-1", "job-1", "android");
+
+    expect(result).toEqual({ kind: "pending", stage: "building" });
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+  });
+
   it("uses the same one-time recovery retry for an iOS export", async () => {
-    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow({ platform: "ios", enqueue_state: "input_ready" }), error: null });
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow({
+      platform: "ios",
+      created_at: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+      enqueue_state: "input_ready",
+    }), error: null });
     mocks.findBuilderExecution.mockResolvedValue(null);
     mocks.inspectBuilderInput.mockResolvedValue({ complete: true, expectedObjectNames: [], actualObjectNames: [], missingObjectNames: [] });
     mocks.claimExportRecovery.mockResolvedValue({ claimed: true, status: "pending", enqueueState: "triggering", enqueueAttempt: 1 });

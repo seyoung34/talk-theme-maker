@@ -14,6 +14,7 @@ import {
 } from "@/lib/billing/credits";
 import { elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
 import { settleFailedExportJob } from "@/lib/theme/export/asyncExportRoute";
+import { recoverStalePendingExportBeforeReservation } from "@/lib/theme/export/asyncExportStatus";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
 import { IosExportRequestError, validateExportName, validateIosPackage } from "@/lib/theme/ios/packageValidation";
 import { enqueueIosBuild, IosBuildEnqueueError } from "@/lib/theme/ios/buildJobClient";
@@ -69,6 +70,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
       return { path: entry.path, bytes: new Uint8Array(), pngSignatureVerified: catalogObject?.pngSignatureVerified === true };
     }));
 
+    await recoverStalePendingExportBeforeReservation(userId);
     const reservation = await reserveCreditForExport({
       userId,
       platform: "ios",

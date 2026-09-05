@@ -17,6 +17,7 @@ import { AndroidBuildEnqueueError, enqueueAndroidBuild } from "@/lib/theme/andro
 import { AndroidExportRequestError, readAndroidBundleUpload } from "@/lib/theme/android/requestShared";
 import { AndroidValidationError, validateAndroidApplicationId, validateAndroidVersionName } from "@/lib/theme/android/validation";
 import { settleFailedExportJob } from "@/lib/theme/export/asyncExportRoute";
+import { recoverStalePendingExportBeforeReservation } from "@/lib/theme/export/asyncExportStatus";
 import { elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
 import { CatalogExportResolutionError, resolveCatalogManifestForExport } from "@/lib/theme/assetCatalog/workerResolve";
@@ -61,6 +62,7 @@ export async function handleAsyncAndroidExportRequest(
     const themeId = typeof themeIdRaw === "string" && themeIdRaw.trim() ? themeIdRaw.trim().slice(0, 120) : "unknown";
     const { manifest, files, inputBytes } = await readAndroidBundleUpload(formData, manifestRaw);
     const resolved = await resolveCatalogManifestForExport({ manifest, uploadedInputBytes: inputBytes, platform: "android", userId });
+    await recoverStalePendingExportBeforeReservation(userId);
     const reservation = await reserveCreditForExport({
       userId,
       platform: "android",

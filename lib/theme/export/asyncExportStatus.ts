@@ -21,6 +21,9 @@ import {
 
 const signedUrlTtlSeconds = 300;
 const resultJsonRequestTimeoutMs = 15_000;
+// This matches reserve_export_credit's stale-reservation cutoff. Recovery must
+// begin before a new export reservation is allowed to settle the old job.
+const enqueueRecoveryStaleMs = 10 * 60 * 1000;
 
 export type AsyncExportPlatform = "android" | "ios";
 
@@ -78,13 +81,18 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
   const result = await downloadResultJson(config, accessToken, exportJobId);
 
   if (!result) {
-    const watchdogStaleMs = getWatchdogStaleMs(platform);
     const durationMs = Date.now() - new Date(row.created_at).getTime();
-    if (durationMs > watchdogStaleMs) {
+    if (durationMs > enqueueRecoveryStaleMs) {
       const recovery = await reconcileExportEnqueue({ userId, exportJobId, platform, row, config, accessToken, durationMs });
       if (recovery.kind === "pending") return { kind: "pending", stage: recovery.stage };
       if (recovery.kind === "failed") return recovery.result;
       if (recovery.kind === "settled") return recovery.result;
+    }
+
+    // The recovery threshold is deliberately earlier than the terminal
+    // watchdog. Existing Cloud Run work must remain observable until its
+    // normal timeout rather than being failed at the reservation cutoff.
+    if (durationMs > getWatchdogStaleMs(platform)) {
       const settlement = await failExportJobIfPending({
         userId,
         exportJobId,
@@ -347,6 +355,29 @@ async function readExportJob(userId: string, exportJobId: string, platform: Asyn
     .maybeSingle();
   if (error) throw error;
   return data as ExportJobRow | null;
+}
+
+/**
+ * A new export request must give an eligible interrupted job its one recovery
+ * attempt before reserve_export_credit examines stale reservations. The RPC
+ * separately preserves input-complete/triggered jobs, so this cannot refund a
+ * job that has just been recovered.
+ */
+export async function recoverStalePendingExportBeforeReservation(userId: string) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("export_jobs")
+    .select("id,platform,created_at")
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+
+  const row = data as Pick<ExportJobRow, "id" | "platform" | "created_at"> | null;
+  if (!row || Date.now() - new Date(row.created_at).getTime() <= enqueueRecoveryStaleMs) return;
+  await resolveExportStatus(userId, row.id, row.platform);
 }
 
 async function resolveSettledExportStatus(row: ExportJobRow, platform: AsyncExportPlatform, exportJobId: string): Promise<AsyncExportStatusResult> {
