@@ -150,7 +150,8 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
   if (!settlement.transitioned) {
     const latestRow = await readExportJob(userId, exportJobId, platform);
     if (!latestRow) return { kind: "not_found" };
-    if (latestRow.status !== "failed") return resolveSettledExportStatus(latestRow, platform, exportJobId);
+    if (latestRow.status !== "pending") return resolveSettledExportStatus(latestRow, platform, exportJobId);
+    return { kind: "pending", stage: latestRow.stage };
   } else {
     scheduleExportFailureEvent(platform, exportJobId, errorCode, durationMs);
   }

@@ -641,11 +641,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function executionBelongsToExport(value: Record<string, unknown>, exportJobId: string) {
-  // Cloud Run v2 Execution responses expose the task template as
-  // execution.template.template, unlike Job responses where the containers
-  // are directly under the job template.
-  const executionTemplate = isRecord(value.template) ? value.template : null;
-  const taskTemplate = executionTemplate && isRecord(executionTemplate.template) ? executionTemplate.template : null;
+  // Execution.template is a Cloud Run v2 TaskTemplate. Job.template is an
+  // ExecutionTemplate, but the execution-list endpoint returns Executions.
+  const taskTemplate = isRecord(value.template) ? value.template : null;
   const containers = taskTemplate && Array.isArray(taskTemplate.containers) ? taskTemplate.containers : [];
   for (const container of containers) {
     if (!isRecord(container) || !Array.isArray(container.env)) continue;
