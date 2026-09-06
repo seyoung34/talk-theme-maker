@@ -7,6 +7,7 @@ import {
   markOpsNotificationDeadLetter,
   markOpsNotificationRetry,
   markOpsNotificationSent,
+  requeueOpsNotification,
 } from "@/lib/ops/repository";
 import type { OpsEvent } from "@/lib/ops/events";
 
@@ -21,12 +22,26 @@ export type TelegramDrainResult = {
   deadLettered: number;
 };
 
-export async function tryPublishOpsEvent(event: OpsEvent) {
+export type TryPublishOpsEventOptions = {
+  /**
+   * Explicit recovery path for an operator rerun. Normal duplicate publishes must not
+   * reset a dead-letter delivery's attempt count and bypass its stop policy.
+   */
+  recoverDeadLetter?: boolean;
+};
+
+export async function tryPublishOpsEvent(event: OpsEvent, options: TryPublishOpsEventOptions = {}) {
   if (!isTelegramNotificationsEnabled()) return { status: "disabled" as const };
 
   try {
     const enqueueResult = await enqueueOpsEvent(event);
-    if (enqueueResult === "duplicate") return { status: "duplicate" as const };
+    if (enqueueResult === "duplicate") {
+      const requeued = options.recoverDeadLetter
+        ? await requeueOpsNotification({ eventId: event.eventId })
+        : false;
+      const drainResult = await drainTelegramNotifications({ limit: 1 });
+      return { status: "duplicate" as const, requeued, drainResult };
+    }
     const drainResult = await drainTelegramNotifications({ limit: 1 });
     return { status: enqueueResult, drainResult };
   } catch (error) {

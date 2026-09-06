@@ -61,6 +61,15 @@ function getDbClientOrNull(): DbClient | null {
   return createClient(supabaseUrl, supabaseServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
+class BuildCancelledError extends Error {
+  readonly code = "build_cancelled";
+
+  constructor() {
+    super("Export was cancelled.");
+    this.name = "BuildCancelledError";
+  }
+}
+
 try {
   await main();
 } catch (error) {
@@ -80,14 +89,20 @@ async function main() {
   }
 
   try {
+    await assertBuildNotCancelled(db, exportJobId);
+    await markBuilderStarted(db, exportJobId);
     await setStage(db, exportJobId, "preparing");
     const options = readOptions(bundle);
     const entries = await readInputEntries(bundle, source, templateAssetsRoot);
+    await assertBuildNotCancelled(db, exportJobId);
     const identifiedEntries = applyServerThemeIdentifier(entries, options.themeIdentifier);
     validateIosPackage(identifiedEntries);
     await setStage(db, exportJobId, "packaging");
+    await assertBuildNotCancelled(db, exportJobId);
     const result = createZipResult(identifiedEntries, options);
+    await assertBuildNotCancelled(db, exportJobId);
     await setStage(db, exportJobId, "finalizing");
+    await assertBuildNotCancelled(db, exportJobId);
     await writeOutput(source, result);
     log("info", "completed", {
       platform: "ios",
@@ -100,6 +115,32 @@ async function main() {
   } catch (error) {
     await writeFailureResult(source, error);
     throw error;
+  }
+}
+
+async function assertBuildNotCancelled(db: DbClient | null, exportJobId: string | undefined) {
+  if (!db || !exportJobId) return;
+  const { data, error } = await db
+    .from("export_jobs")
+    .select("status,cancel_requested_at")
+    .eq("id", exportJobId)
+    .maybeSingle();
+  if (error) throw new Error("cancellation_check_failed");
+  const row = data as { status?: string; cancel_requested_at?: string | null } | null;
+  if (!row || row.status !== "pending" || row.cancel_requested_at) throw new BuildCancelledError();
+}
+
+async function markBuilderStarted(db: DbClient | null, exportJobId: string | undefined) {
+  if (!db || !exportJobId) return;
+  const now = new Date().toISOString();
+  try {
+    await db.from("export_jobs").update({
+      enqueue_state: "running",
+      builder_started_at: now,
+      last_heartbeat_at: now,
+    } as never).eq("id", exportJobId).eq("status", "pending");
+  } catch {
+    log("info", "builder_start_update_skipped", { platform: "ios", export_job_id: exportJobId });
   }
 }
 

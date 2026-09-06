@@ -30,4 +30,6 @@ docker run --rm -v "${PWD}\services\ios-builder\fixtures\basic:/in:ro" -v "${PWD
 <job-id>/result.json
 ```
 
+Android와 공유하는 비공개 input bucket은 중단된 enqueue를 복구할 수 있도록 각 export prefix를 최소 3일 보관해야 합니다. output bucket의 기존 7일 정책은 유지합니다. lifecycle 설정은 production GCP에서 별도로 적용합니다.
+
 `SUPABASE_URL`과 `SUPABASE_SERVICE_ROLE_KEY`가 설정되면 builder가 `export_jobs`의 소유자와 `platform='ios'`를 확인하고 작업 단계도 best-effort로 갱신합니다.

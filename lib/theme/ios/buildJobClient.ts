@@ -2,6 +2,8 @@ import {
   BuildEnqueueError,
   enqueueBuild,
   type BuildInputFile,
+  type BuilderRunResult,
+  type EnqueueBuildProgress,
   type ExportManifestItem,
 } from "@/lib/theme/export/buildJobClient";
 
@@ -18,17 +20,20 @@ export type IosBuildBundle = {
 };
 
 export class IosBuildEnqueueError extends BuildEnqueueError {
-  constructor(code: string, message: string, detail?: string) {
-    super(code, message, detail);
+  constructor(code: string, message: string, detail?: string, options: { ambiguous?: boolean } = {}) {
+    super(code, message, detail, options);
     this.name = "IosBuildEnqueueError";
   }
 }
 
-export async function enqueueIosBuild(bundle: IosBuildBundle) {
+export async function enqueueIosBuild(
+  bundle: IosBuildBundle,
+  options: { attempt?: number; progress?: EnqueueBuildProgress } = {},
+): Promise<BuilderRunResult> {
   try {
-    await enqueueBuild(bundle, { platform: "ios" });
+    return await enqueueBuild(bundle, { platform: "ios", ...options });
   } catch (error) {
-    if (error instanceof BuildEnqueueError) throw new IosBuildEnqueueError(error.code, error.message, error.detail);
+    if (error instanceof BuildEnqueueError) throw new IosBuildEnqueueError(error.code, error.message, error.detail, { ambiguous: error.ambiguous });
     throw error;
   }
 }

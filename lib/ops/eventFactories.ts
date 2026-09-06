@@ -4,6 +4,7 @@ import {
   type OpsEvent,
   type OpsSeverity,
 } from "@/lib/ops/events";
+import type { OpsDailySummary } from "@/lib/ops/dailySummary";
 
 export function createExportFailureEvent(input: {
   platform: "android" | "ios";
@@ -145,6 +146,41 @@ export function createExportRefundFailureEvent(input: {
       errorCode: input.errorCode,
     },
     dedupeKey: `billing:refund:${input.platform}:${input.exportJobId}:${input.errorCode}`,
+    adminPath: "/admin",
+  });
+}
+
+export function createOpsDailySummaryEvent(input: OpsDailySummary, occurredAt = new Date().toISOString()) {
+  return createOpsEvent({
+    eventId: deterministicOpsEventId("ops.daily_summary", input.day),
+    type: "ops.daily_summary",
+    severity: "P3",
+    source: "ops",
+    occurredAt,
+    summary: `TalkTheme ${input.day} 운영 요약`,
+    details: {
+      summaryDay: input.day,
+      visitorStatus: input.visitors.status,
+      visitorCount: input.visitors.visitors,
+      sessionCount: input.visitors.sessions,
+      newUserCount: input.visitors.newUsers,
+      signupCount: input.signups,
+      paymentsPaid: input.paymentsPaid,
+      paymentsPaidAmount: input.paymentsPaidAmount,
+      paymentFailures: input.paymentFailures,
+      refundsCount: input.refundsCount,
+      refundsAmount: input.refundsAmount,
+      refundsReviewRequired: input.refundsReviewRequired,
+      exportsSucceeded: input.exportsSucceeded,
+      exportsFailed: input.exportsFailed,
+      exportsPending: input.exportsPending,
+      inquiriesNew: input.newInquiries,
+      inquiriesOpen: input.openInquiries,
+      p1Issues: input.p1Issues,
+      p2Issues: input.p2Issues,
+      deadLetterNotifications: input.deadLetterNotifications,
+    },
+    dedupeKey: `ops:daily-summary:${input.day}`,
     adminPath: "/admin",
   });
 }

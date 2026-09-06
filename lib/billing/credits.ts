@@ -17,6 +17,17 @@ export type ExportMode = "project" | "apk" | "apk-zip" | "theme-zip" | "ktheme";
 export type ExportStage = "queued" | "preparing" | "building" | "packaging" | "finalizing" | "completed" | "failed";
 export type ExportBackend = "worker" | "cloud_run";
 export type ExportJobStatus = "pending" | "succeeded" | "failed";
+export type ExportEnqueueState =
+  | "reserved"
+  | "uploading"
+  | "input_ready"
+  | "triggering"
+  | "trigger_ambiguous"
+  | "triggered"
+  | "running"
+  | "reconciling"
+  | "cancel_requested"
+  | "settled";
 
 type ReservationRow = { export_job_id: string; balance: number };
 type ExportIdentityRow = { export_number: number; application_id: string | null; theme_identifier: string | null; export_name: string | null };
@@ -174,6 +185,130 @@ export async function markExportJobBackend({
   if (error) throw error;
 }
 
+export async function updateExportJobEnqueueState({
+  userId,
+  exportJobId,
+  state,
+  builderOperationName,
+  builderExecutionName,
+  inputCompletedAt,
+  triggeredAt,
+  builderStartedAt,
+  lastHeartbeatAt,
+  recoveryReason,
+}: {
+  userId: string;
+  exportJobId: string;
+  state: ExportEnqueueState;
+  builderOperationName?: string | null;
+  builderExecutionName?: string | null;
+  inputCompletedAt?: string | null;
+  triggeredAt?: string | null;
+  builderStartedAt?: string | null;
+  lastHeartbeatAt?: string | null;
+  recoveryReason?: string | null;
+}) {
+  const admin = createAdminClient();
+  const payload = {
+    enqueue_state: state,
+    ...(builderOperationName !== undefined ? { builder_operation_name: builderOperationName } : {}),
+    ...(builderExecutionName !== undefined ? { builder_execution_name: builderExecutionName } : {}),
+    ...(inputCompletedAt !== undefined ? { input_completed_at: inputCompletedAt } : {}),
+    ...(triggeredAt !== undefined ? { triggered_at: triggeredAt } : {}),
+    ...(builderStartedAt !== undefined ? { builder_started_at: builderStartedAt } : {}),
+    ...(lastHeartbeatAt !== undefined ? { last_heartbeat_at: lastHeartbeatAt } : {}),
+    ...(recoveryReason !== undefined ? { recovery_reason: recoveryReason } : {}),
+  };
+  const { data, error } = await admin
+    .from("export_jobs")
+    .update(payload as never)
+    .eq("id", exportJobId)
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
+export async function requestExportCancellation({ userId, exportJobId }: { userId: string; exportJobId: string }) {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("request_export_cancellation", {
+    p_user_id: userId,
+    p_export_job_id: exportJobId,
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    requested?: unknown;
+    status?: unknown;
+    balance?: unknown;
+  } | null;
+  if (!row || typeof row.requested !== "boolean" || !isExportJobStatus(row.status)) {
+    throw new Error("export_cancellation_result_invalid");
+  }
+  return {
+    requested: row.requested,
+    status: row.status,
+    balance: Number(row.balance ?? 0),
+  };
+}
+
+export async function cancelExportJob({ userId, exportJobId, durationMs }: { userId: string; exportJobId: string; durationMs: number }) {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("cancel_export_job", {
+    p_user_id: userId,
+    p_export_job_id: exportJobId,
+    p_duration_ms: durationMs,
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    transitioned?: unknown;
+    status?: unknown;
+    balance?: unknown;
+  } | null;
+  if (!row || typeof row.transitioned !== "boolean" || !isExportJobStatus(row.status)) {
+    throw new Error("export_cancellation_settlement_invalid");
+  }
+  return {
+    transitioned: row.transitioned,
+    status: row.status,
+    balance: Number(row.balance ?? 0),
+  };
+}
+
+export async function claimExportRecovery({
+  userId,
+  exportJobId,
+  expectedAttempt,
+}: {
+  userId: string;
+  exportJobId: string;
+  expectedAttempt: number;
+}) {
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("claim_export_recovery", {
+    p_user_id: userId,
+    p_export_job_id: exportJobId,
+    p_expected_attempt: expectedAttempt,
+  });
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as {
+    claimed?: unknown;
+    status?: unknown;
+    enqueue_state?: unknown;
+    enqueue_attempt?: unknown;
+  } | null;
+  if (!row || typeof row.claimed !== "boolean" || !isExportJobStatus(row.status) || !isExportEnqueueState(row.enqueue_state)) {
+    throw new Error("export_recovery_claim_invalid");
+  }
+  return {
+    claimed: row.claimed,
+    status: row.status,
+    enqueueState: row.enqueue_state,
+    enqueueAttempt: Number(row.enqueue_attempt ?? 0),
+  };
+}
+
 export async function updateExportJobStage({
   userId,
   exportJobId,
@@ -316,4 +451,17 @@ function hasErrorCode(error: unknown, value: string) {
 
 function isExportJobStatus(value: unknown): value is ExportJobStatus {
   return value === "pending" || value === "succeeded" || value === "failed";
+}
+
+function isExportEnqueueState(value: unknown): value is ExportEnqueueState {
+  return value === "reserved"
+    || value === "uploading"
+    || value === "input_ready"
+    || value === "triggering"
+    || value === "trigger_ambiguous"
+    || value === "triggered"
+    || value === "running"
+    || value === "reconciling"
+    || value === "cancel_requested"
+    || value === "settled";
 }

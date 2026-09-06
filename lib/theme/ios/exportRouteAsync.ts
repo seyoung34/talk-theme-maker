@@ -9,10 +9,12 @@ import {
   markExportJobBackend,
   prepareExportJobIdentity,
   reserveCreditForExport,
+  updateExportJobEnqueueState,
   updateExportJobStage,
 } from "@/lib/billing/credits";
 import { elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
 import { settleFailedExportJob } from "@/lib/theme/export/asyncExportRoute";
+import { recoverStalePendingExportBeforeReservation } from "@/lib/theme/export/asyncExportStatus";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
 import { IosExportRequestError, validateExportName, validateIosPackage } from "@/lib/theme/ios/packageValidation";
 import { enqueueIosBuild, IosBuildEnqueueError } from "@/lib/theme/ios/buildJobClient";
@@ -68,6 +70,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
       return { path: entry.path, bytes: new Uint8Array(), pngSignatureVerified: catalogObject?.pngSignatureVerified === true };
     }));
 
+    await recoverStalePendingExportBeforeReservation(userId);
     const reservation = await reserveCreditForExport({
       userId,
       platform: "ios",
@@ -90,12 +93,35 @@ export async function handleAsyncIosExportRequest(request: Request) {
     const files = requestedEntries.flatMap((entry, index) => isCatalogRequestedEntry(entry) ? [] : [{ field: `file-${index}`, bytes: entry.bytes }]);
 
     await updateExportJobStage({ userId, exportJobId, stage: "preparing" });
+    await updateExportJobEnqueueState({ userId, exportJobId, state: "uploading" });
     await enqueueIosBuild({
       exportJobId,
       userId,
       options: { mode, exportName, themeIdentifier: identity.themeIdentifier },
       manifest: resolved.manifest,
       files,
+    }, {
+      progress: {
+        onInputReady: async () => {
+          await requirePendingEnqueueState({ userId: userId!, exportJobId: exportJobId!, state: "input_ready", inputCompletedAt: new Date().toISOString() });
+        },
+        onTriggering: async () => {
+          await requirePendingEnqueueState({ userId: userId!, exportJobId: exportJobId!, state: "triggering" });
+        },
+        onTriggered: async (result) => {
+          await updateExportJobEnqueueState({
+            userId: userId!,
+            exportJobId: exportJobId!,
+            state: result.operationName ? "triggered" : "trigger_ambiguous",
+            builderOperationName: result.operationName,
+            triggeredAt: new Date().toISOString(),
+            lastHeartbeatAt: new Date().toISOString(),
+            recoveryReason: result.operationName ? null : "missing_cloud_run_operation_name",
+          }).catch((stateError) => {
+            console.error("[ios-export] triggered_state_update_failed", { name: stateError instanceof Error ? stateError.name : "unknown" });
+          });
+        },
+      },
     });
 
     console.info(`[ios-export] ${JSON.stringify({
@@ -117,6 +143,21 @@ export async function handleAsyncIosExportRequest(request: Request) {
       { status: 202 },
     );
   } catch (error) {
+    if (error instanceof IosBuildEnqueueError && error.code === "build_cancelled") {
+      console.info(`[ios-export] ${JSON.stringify({ event: "cancelled_during_enqueue", exportJobId, mode })}`);
+      return NextResponse.json({ exportJobId, status: "cancelled" }, { status: 202 });
+    }
+    if (error instanceof IosBuildEnqueueError && error.ambiguous && userId && exportJobId) {
+      await updateExportJobEnqueueState({
+        userId,
+        exportJobId,
+        state: "trigger_ambiguous",
+        triggeredAt: new Date().toISOString(),
+        recoveryReason: "ambiguous_cloud_run_response",
+      }).catch(() => undefined);
+      console.warn(`[ios-export] ${JSON.stringify({ event: "enqueue_ambiguous", exportJobId, mode })}`);
+      return NextResponse.json({ exportJobId, status: "queued", recoveryPending: true }, { status: 202 });
+    }
     const durationMs = elapsedMs(startedAt);
     const failure = classifyFailure(error);
     let refunded = false;
@@ -149,6 +190,21 @@ export async function handleAsyncIosExportRequest(request: Request) {
     }
     return NextResponse.json({ error: failure.message, reason: failure.code, ...(refunded ? { refunded: true } : {}) }, { status: failure.status });
   }
+}
+
+async function requirePendingEnqueueState({
+  userId,
+  exportJobId,
+  state,
+  inputCompletedAt,
+}: {
+  userId: string;
+  exportJobId: string;
+  state: Parameters<typeof updateExportJobEnqueueState>[0]["state"];
+  inputCompletedAt?: string | null;
+}) {
+  const updated = await updateExportJobEnqueueState({ userId, exportJobId, state, inputCompletedAt });
+  if (!updated) throw new IosBuildEnqueueError("build_cancelled", "내보내기 작업이 취소되었습니다.");
 }
 
 function classifyFailure(error: unknown) {

@@ -371,7 +371,6 @@ export function getAdminAssetKindLabel(kind: AdminAssetKind): string {
     profile: "프로필",
     launcher: "런처 아이콘",
     passcode: "잠금화면 배경",
-    passcode_indicator: "암호 표시",
   };
   return labels[kind];
 }
@@ -655,7 +654,6 @@ export function legacyRoleFromKind(kind?: AdminAssetKind): ThemeResourceRole {
   // export 접근 조회(`requireResourceRole`)가 그 행 전체를 거절한다.
   if (kind === "profile") return "profile_image_1";
   if (kind === "launcher") return "launcher_foreground";
-  if (kind === "passcode_indicator") return "passcode_indicator_1";
   if (kind === "passcode") return "passcode_background";
   if (kind === "background") return "main_background";
   return "theme_icon";
@@ -669,8 +667,7 @@ function parseOptionalAssetKind(value: unknown): AdminAssetKind | undefined {
     value === "bubble" ||
     value === "profile" ||
     value === "launcher" ||
-    value === "passcode" ||
-    value === "passcode_indicator"
+    value === "passcode"
   ) return value;
   throw new AdminAssetDomainError("INVALID_CANONICAL_ASSET_ROW");
 }

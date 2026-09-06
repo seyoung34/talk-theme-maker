@@ -25,7 +25,7 @@ import { themeAssetsBucketName } from "@/lib/theme/remoteAssets";
 
 export const dynamic = "force-dynamic";
 
-const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"]);
+const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode"]);
 
 /** `asset_kind`가 비어 있는 옛 행. backfill 전에도 관리자가 찾을 수 있어야 한다. */
 const legacyAssetKind = "legacy";

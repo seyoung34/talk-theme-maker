@@ -111,7 +111,6 @@ describe("legacyRoleFromKind", () => {
     expect(legacyRoleFromKind("profile")).toBe("profile_image_1");
     expect(legacyRoleFromKind("launcher")).toBe("launcher_foreground");
     expect(legacyRoleFromKind("passcode")).toBe("passcode_background");
-    expect(legacyRoleFromKind("passcode_indicator")).toBe("passcode_indicator_1");
     expect(legacyRoleFromKind("icon")).toBe("theme_icon");
   });
 
@@ -126,7 +125,7 @@ describe("legacyRoleFromKind", () => {
         getThemeSlots(platform).filter((slot) => slot.kind !== "color").map((slot) => slot.role),
       ),
     );
-    for (const kind of ["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"] as const) {
+    for (const kind of ["background", "icon", "bubble", "profile", "launcher", "passcode"] as const) {
       expect(imageRoles.has(legacyRoleFromKind(kind))).toBe(true);
     }
   });

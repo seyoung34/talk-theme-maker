@@ -4,7 +4,30 @@ import {
   createGrobleWebhookProcessingEvent,
   createGrobleWebhookRejectedEvent,
   createExportRefundFailureEvent,
+  createOpsDailySummaryEvent,
 } from "@/lib/ops/eventFactories";
+
+const dailySummary = {
+  day: "2026-09-02",
+  startAt: "2026-09-01T15:00:00.000Z",
+  endAt: "2026-09-02T15:00:00.000Z",
+  signups: 2,
+  paymentsPaid: 1,
+  paymentsPaidAmount: 4900,
+  paymentFailures: 0,
+  refundsCount: 0,
+  refundsAmount: 0,
+  refundsReviewRequired: 0,
+  exportsSucceeded: 3,
+  exportsFailed: 1,
+  exportsPending: 1,
+  newInquiries: 1,
+  openInquiries: 1,
+  p1Issues: 0,
+  p2Issues: 1,
+  deadLetterNotifications: 0,
+  visitors: { status: "ok" as const, visitors: 8, sessions: 10, newUsers: 4 },
+};
 
 describe("operational event factories", () => {
   it("creates a deterministic P1 watchdog event without user data", () => {
@@ -83,5 +106,24 @@ describe("operational event factories", () => {
       source: "billing",
       entity: { kind: "export_job", id: "job-456" },
     });
+  });
+
+  it("creates one P3 event per KST summary day with aggregate-only details", () => {
+    const event = createOpsDailySummaryEvent(dailySummary, "2026-09-03T00:00:00.000Z");
+
+    expect(event).toMatchObject({
+      eventId: "ops.daily_summary:2026-09-02",
+      type: "ops.daily_summary",
+      severity: "P3",
+      source: "ops",
+      dedupeKey: "ops:daily-summary:2026-09-02",
+      details: {
+        summaryDay: "2026-09-02",
+        visitorCount: 8,
+        signupCount: 2,
+        paymentsPaidAmount: 4900,
+      },
+    });
+    expect(JSON.stringify(event)).not.toContain("email");
   });
 });

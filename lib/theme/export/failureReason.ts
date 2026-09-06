@@ -70,6 +70,8 @@ export const exportFailureReasons = [
   "gradle_timeout",
   "build_cancelled",
   "build_watchdog_timeout",
+  "input_upload_incomplete",
+  "enqueue_recovery_failed",
   "ownership_check_failed",
   "ownership_mismatch",
   "export_job_not_found",

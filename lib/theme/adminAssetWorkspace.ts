@@ -214,11 +214,18 @@ function resolveMatchTargets(asset: AdminAssetMatchInput): readonly AdminAssetTa
 function isCompatibleRole(assetKind: AdminAssetKind, targetRole: string, requestedRole: string): boolean {
   if (assetKind === "bubble") return targetRole.startsWith("bubble_") && requestedRole.startsWith("bubble_");
   if (assetKind === "background") return isSharedBackgroundRole(targetRole) && isSharedBackgroundRole(requestedRole);
-  if (assetKind === "icon") return targetRole.startsWith("tab_icon_") && requestedRole.startsWith("tab_icon_");
-  if (assetKind === "passcode_indicator") return targetRole.startsWith("passcode_indicator") && requestedRole.startsWith("passcode_indicator");
+  // kind 전체 target이 도입되기 전에는 아이콘 에셋이 대표 슬롯(theme_icon) 또는 특정 탭
+  // 아이콘의 exact_role로 저장됐다. 같은 정사각형 아이콘 계열인 암호 표시 슬롯에서도
+  // 이런 기존 후보를 잃지 않도록 exact-role 호환성을 열되, 출력 규격이 다른 splash는
+  // 이 경로에 포함하지 않는다.
+  if (assetKind === "icon") return isSharedIconRole(targetRole) && isSharedIconRole(requestedRole);
   return false;
 }
 
 function isSharedBackgroundRole(role: string): boolean {
   return role === "main_background" || role === "chat_background" || role === "tab_background_image";
+}
+
+function isSharedIconRole(role: string): boolean {
+  return role === "theme_icon" || role.startsWith("tab_icon_") || role.startsWith("passcode_indicator_");
 }

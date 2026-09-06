@@ -9,6 +9,7 @@ import type { AccountExportDto, AccountMeResponse, CreditLedgerEntryDto, ExportD
 import { creditLedgerFetchLimit, creditLedgerPageSize, describeCreditLedgerEntry, formatCreditLedgerAmount } from "@/lib/billing/creditLedger";
 import { chunkIntoPages } from "@/lib/shared/paging";
 import { getExportDownloadState } from "@/lib/theme/android/outputRetention";
+import { cancelAsyncExport } from "@/components/project/exportClient";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createClient } from "@/lib/supabase/client";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
@@ -281,6 +282,7 @@ function ExportRow({ item, onRefreshed }: { item: AccountExportDto; onRefreshed:
  */
 function ExportRowAction({ item, onRefreshed }: { item: AccountExportDto; onRefreshed: () => void }) {
   const [isWorking, setIsWorking] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const downloadState = getExportDownloadState({
     platform: item.platform,
@@ -330,13 +332,43 @@ function ExportRowAction({ item, onRefreshed }: { item: AccountExportDto; onRefr
     }
   };
 
+  const cancel = async () => {
+    if (isWorking) return;
+    if (!cancelConfirmOpen) {
+      setCancelConfirmOpen(true);
+      return;
+    }
+    setIsWorking(true);
+    setError(null);
+    try {
+      const result = await cancelAsyncExport(getExportApiPlatform(item.platform), item.id);
+      if (result.cancelled) {
+        onRefreshed();
+      } else {
+        setError(result.error ?? "이미 종료된 내보내기라 취소할 수 없습니다.");
+      }
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : "내보내기 취소를 처리하지 못했습니다.");
+    } finally {
+      setIsWorking(false);
+      setCancelConfirmOpen(false);
+    }
+  };
+
   if (item.status === "pending" && (item.platform === "android" || item.platform === "ios")) {
     return (
       <div className="mt-2">
-        <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[#cfe0ff] bg-white px-3 text-xs font-extrabold text-[#2f6bbf] transition hover:bg-[#f4f9ff] disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]" onClick={() => void refreshStatus()} disabled={isWorking}>
-          <RefreshCw size={14} className={isWorking ? "animate-spin" : undefined} aria-hidden="true" />
-          {isWorking ? "확인 중" : "상태 확인"}
-        </button>
+        {cancelConfirmOpen ? <>
+          <span className="mr-1 text-[11px] font-bold text-[var(--color-outline)]">취소하고 크레딧을 환불할까요?</span>
+          <button type="button" className="inline-flex min-h-9 items-center rounded-full border border-[#dbe8fb] bg-white px-3 text-xs font-extrabold text-[var(--color-on-surface-variant)] disabled:opacity-55" onClick={() => setCancelConfirmOpen(false)} disabled={isWorking}>돌아가기</button>
+          <button type="button" className="ml-1 inline-flex min-h-9 items-center rounded-full bg-[#dc2626] px-3 text-xs font-extrabold text-white disabled:opacity-55" onClick={() => void cancel()} disabled={isWorking}>{isWorking ? "취소 중" : "취소하고 환불"}</button>
+        </> : <>
+          <button type="button" className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-[#cfe0ff] bg-white px-3 text-xs font-extrabold text-[#2f6bbf] transition hover:bg-[#f4f9ff] disabled:opacity-55 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]" onClick={() => void refreshStatus()} disabled={isWorking}>
+            <RefreshCw size={14} className={isWorking ? "animate-spin" : undefined} aria-hidden="true" />
+            {isWorking ? "확인 중" : "상태 확인"}
+          </button>
+          <button type="button" className="ml-1 inline-flex min-h-9 items-center rounded-full border border-[#fecaca] bg-[#fff7f7] px-3 text-xs font-extrabold text-[#b91c1c] disabled:opacity-55" onClick={() => void cancel()} disabled={isWorking}>내보내기 취소</button>
+        </>}
         {error ? <p className="mt-1.5 text-[11px] font-bold text-[var(--color-error)]" role="alert">{error}</p> : null}
       </div>
     );

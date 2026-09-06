@@ -8,15 +8,16 @@ import type { ThemeResourceRole } from "@/lib/theme/types";
  * 같은 이미지가 관리자 목록과 사용자 목록에서 다른 종류로 보인다.
  *
  * DB 제약과 이 목록이 어긋나면 저장이 실패한다 —
- * `202606180001_supabase_theme_storage.sql`, `20260809090000_admin_asset_passcode_indicator_kind.sql`.
+ * `202606180001_supabase_theme_storage.sql`, `20260904090000_admin_asset_passcode_indicator_to_icon.sql`.
  */
-export type ThemeAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode" | "passcode_indicator";
+export type ThemeAssetKind = "background" | "icon" | "bubble" | "profile" | "launcher" | "passcode";
 
 /**
  * 슬롯이 어떤 종류의 에셋을 받는가.
  *
  * **검사 순서가 규칙의 일부다.** 아래로 갈수록 넓은 조건이라 순서를 바꾸면 분류가 달라진다.
- * 특히 `passcode_indicator`를 `passcode_`보다 먼저 봐야 하고, 배경 판정은 가장 마지막이다.
+ * 특히 `passcode_indicator`는 아이콘 후보를 쓰므로 `passcode_`보다 먼저 아이콘으로 가르고,
+ * 배경 판정은 가장 마지막이다.
  * 그래서 이 규칙을 복제하지 않는다 — 복제본은 순서를 잃는다.
  */
 export function inferThemeAssetKind(slot: Pick<ThemeAssetSlot, "role" | "group" | "section" | "kind">): ThemeAssetKind {
@@ -24,9 +25,9 @@ export function inferThemeAssetKind(slot: Pick<ThemeAssetSlot, "role" | "group" 
   if (slot.role === "theme_icon" || slot.role.startsWith("tab_icon_")) return "icon";
   if (slot.role === "profile_image" || slot.role.startsWith("profile_image_")) return "profile";
   if (slot.role.startsWith("bubble_")) return "bubble";
-  // 잠금화면 표시(점/아이콘)는 3:4 전체 배경 이미지와 모양·용도가 전혀 달라서(정사각형에
-  // 가까운 작은 아이콘) 배경과 같은 kind를 쓰면 후보가 서로 뒤섞인다 — 반드시 배경보다 먼저 검사한다.
-  if (slot.role.startsWith("passcode_indicator")) return "passcode_indicator";
+  // 잠금화면 표시(점/아이콘)는 passcode 배경과 모양·용도가 전혀 다른 아이콘이다. 별도
+  // kind로 나누지 않고 일반 아이콘 후보를 함께 쓰되, passcode_* 배경 검사보다 먼저 가른다.
+  if (slot.role.startsWith("passcode_indicator")) return "icon";
   if (slot.role.startsWith("passcode_")) return "passcode";
   if (slot.group === "background" || slot.role === "tab_background_image") return "background";
   return "icon";
@@ -43,7 +44,7 @@ export function inferLegacyThemeAssetKind(role: ThemeResourceRole): ThemeAssetKi
   if (role === "theme_icon" || role.startsWith("tab_icon_")) return "icon";
   if (role === "profile_image" || role.startsWith("profile_image_")) return "profile";
   if (role.startsWith("bubble_")) return "bubble";
-  if (role.startsWith("passcode_indicator")) return "passcode_indicator";
+  if (role.startsWith("passcode_indicator")) return "icon";
   if (role.startsWith("passcode_")) return "passcode";
   return "background";
 }

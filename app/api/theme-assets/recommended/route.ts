@@ -13,7 +13,7 @@ import { findMatchingCatalogRef } from "@/lib/theme/assetCatalog/recommendedCata
 import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
 
 const bucketName = "theme-assets";
-const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode", "passcode_indicator"]);
+const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode"]);
 /** 한 번의 PostgREST 요청 크기. 추천 결과를 정확히 정렬하려면 모든 source를 읽어야 한다. */
 const sourceBatchSize = 200;
 const recommendedPageCacheTtlSeconds = 30;

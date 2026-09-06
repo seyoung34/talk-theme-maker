@@ -133,6 +133,9 @@ In GCS mode, the builder uploads the APK and a `result.json` file under `GCS_OUT
 - No export status polling or credit settlement.
 - Installation verification still requires a connected emulator or physical Android device outside Docker.
 - GCS bucket creation, IAM, and lifecycle policy are infrastructure steps outside this image.
+- The private input bucket shared by Android and iOS must retain each export prefix for at least 3 days so the export sweep can inspect and retry an interrupted enqueue. Keep the output bucket's existing 7-day policy. Apply the input policy in the production GCP project before enabling recovery; this repository does not change bucket lifecycle settings automatically.
+
+The repository keeps the intended input policy in `input-bucket-lifecycle.json`. After checking the current production rules, an operator can apply it with `gcloud storage buckets update gs://<input-bucket> --lifecycle-file=services/android-builder/input-bucket-lifecycle.json`. This command replaces the bucket lifecycle configuration, so preserve any unrelated rules before applying it.
 
 ## Notes
 

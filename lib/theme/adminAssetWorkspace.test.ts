@@ -61,6 +61,22 @@ describe("admin asset workspace slots", () => {
     expect(getAdminAssetCandidateMatchRank(slot!, generic, "ios")).toBe(1);
   });
 
+  it("기존 icon exact target도 암호 표시 슬롯에서 호환 후보로 노출한다", () => {
+    const indicator = { role: "passcode_indicator_1" as const, kind: "icon" as const };
+    const legacyThemeIcon = asset({
+      slotRole: "theme_icon",
+      targets: [{ platform: "all", slotRole: "theme_icon", targetKind: "exact_role", priority: 0, enabled: true }],
+    });
+    const splash = asset({
+      slotRole: "splash",
+      targets: [{ platform: "all", slotRole: "splash", targetKind: "exact_role", priority: 0, enabled: true }],
+    });
+
+    const compatibility = { allowCompatibleExactRole: true } as const;
+    expect(getAdminAssetCandidateMatchRank(indicator, legacyThemeIcon, "android", compatibility)).toBe(1);
+    expect(getAdminAssetCandidateMatchRank(indicator, splash, "android", compatibility)).toBeUndefined();
+  });
+
   it("does not expose a bubble candidate targeted to another exact bubble role", () => {
     const bubble = { ...androidIcon, id: "android-bubble-me-1", role: "bubble_me_1", group: "bubbles", section: "chatroom", label: "내 말풍선 1", kind: "ninepatch" } as const satisfies ThemeAssetSlot;
     const [slot] = createAdminAssetWorkspaceSlots({ android: [bubble], ios: [] });
