@@ -28,6 +28,40 @@
 - Direct commits to `main` are reserved for explicitly approved release or maintenance actions. Urgent hotfixes should still be developed on a branch and merged promptly.
 - Never force-update or delete `main`.
 
+### Orca worktrees
+
+Parallel work is isolated by worktree, not by branch name — two agents sharing one folder
+collide whatever the branches are called. Orca owns the worktree metadata (id, terminals,
+agents, comments, linked PRs), so create and remove worktrees with the Orca CLI rather than
+plain `git worktree`, and use the full `<repo-id>::<path>` id it returns.
+
+- Preflight before editing anything: `orca worktree current` and `git branch --show-current`.
+  Folder names are not reliable — sibling folders can hold different branches, and Orca's
+  "primary worktree" means the default checkout folder, not the `main` branch.
+- `orca worktree create --name <n> --base-branch main --setup skip` creates the branch as
+  `<git-user>/<n>`, not `<n>`; there is no flag to set the branch name. Rename it immediately
+  (`git branch -m chore/<n>`) to keep the `feature/*`, `fix/*`, `chore/*` convention, then
+  confirm with `orca worktree list`. `orca worktree show` may briefly return the pre-rename ref.
+- `orca worktree rm` deletes the git branch together with the worktree. Archive anything worth
+  keeping first: `git tag -a archive/<name> <ref> -m "<why>"`. Archive tags stay local; do not push them.
+- Keep the worktree comment current: `available`, or `working: <task> (PR #N)` with the branch.
+  Comments are the shared signal between sessions — `docs/control/STATUS.md` is git-ignored and
+  invisible to other worktrees.
+- Before deleting a branch, list the candidates and check each one. A cherry-picked branch is
+  not an ancestor of `main`, so `git merge-base --is-ancestor` reports it unmerged even when its
+  content is already in `main`; confirm with `git cherry main <branch>`, which compares patch-ids.
+  Never pass `-d`/`-D` to a list you have not read.
+
+When more than one worktree is active:
+
+- Serialize everything that touches the local database. `supabase/migrations` edits,
+  `npx supabase db reset`, and integration tests against the local stack run one worktree at a
+  time — the Docker stack is shared.
+- Keep `.next`, `.open-next`, `.wrangler`, and E2E output per worktree. Do not symlink them.
+- Fix ports so servers do not collide: dev `3000`/`3001`, E2E `E2E_PORT` `3210`/`3211`.
+- Copy `.env.local` and `.env.supabase-local` into each new worktree. Both are gitignored, so a
+  new worktree starts without them.
+
 ### Production deployment
 
 - The normal production path is a task branch (`feature/*`, `fix/*`, `chore/*`) → PR → required
