@@ -15,7 +15,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const requestedDay = new URL(request.url).searchParams.get("date");
+  const searchParams = new URL(request.url).searchParams;
+  const requestedDay = searchParams.get("date");
+  // Scheduler retries must retain dead-letter stop policy. An operator-triggered
+  // rerun keeps the existing recovery behavior unless it opts out explicitly.
+  const recoverDeadLetter = searchParams.get("recover_dead_letter") !== "0";
   let day: string;
   if (requestedDay === null) {
     day = getPreviousOpsDay();
@@ -38,7 +42,7 @@ export async function POST(request: Request) {
   try {
     const summary = await readOpsDailySummary(day);
     const event = createOpsDailySummaryEvent(summary);
-    const publish = await tryPublishOpsEvent(event, { recoverDeadLetter: true });
+    const publish = await tryPublishOpsEvent(event, { recoverDeadLetter });
     if (publish.status === "disabled") {
       return NextResponse.json({ error: "Telegram 알림이 비활성화되어 있습니다.", reason: "disabled" }, { status: 503 });
     }
