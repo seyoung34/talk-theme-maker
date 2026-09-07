@@ -30,9 +30,9 @@
 
 ### Production deployment
 
-- The normal production path is `work/N` (or a named task branch) → PR → required `verify` →
-  `main` merge → Cloudflare Workers Builds. Do not run a production deploy from an Orca lane,
-  local shell, or the local `main` worktree.
+- The normal production path is a task branch (`feature/*`, `fix/*`, `chore/*`) → PR → required
+  `verify` → `main` merge → Cloudflare Workers Builds. Do not run a production deploy from an
+  Orca worktree, local shell, or the local `main` worktree.
 - Configure the Cloudflare Workers Builds production trigger to listen only to `main`, use
   `npm run cf:build:workers` as its build command, and use `npm run cf:deploy:production` as
   its production deploy command. `cf:build:workers` supports non-main preview builds but only
