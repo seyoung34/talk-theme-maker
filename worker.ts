@@ -2,15 +2,15 @@
 // @ts-ignore `.open-next/worker.js` is generated at build time.
 import { default as openNextWorker } from "./.open-next/worker.js";
 import {
-  runScheduledExportSweep,
-  type ExportSweepController,
-  type ExportSweepEnvironment,
+  runScheduledOps,
+  type ScheduledOpsController,
+  type ScheduledOpsEnvironment,
 } from "./lib/ops/exportSweepScheduler";
 
 const worker = {
   fetch: openNextWorker.fetch,
-  scheduled(controller: ExportSweepController, env: ExportSweepEnvironment) {
-    return runScheduledExportSweep(controller, env);
+  scheduled(controller: ScheduledOpsController, env: ScheduledOpsEnvironment) {
+    return runScheduledOps(controller, env);
   },
 };
 

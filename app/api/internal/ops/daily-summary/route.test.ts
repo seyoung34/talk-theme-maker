@@ -93,6 +93,16 @@ describe("daily operations summary route", () => {
     });
   });
 
+  it("does not recover a dead-letter delivery for a scheduled retry", async () => {
+    const response = await POST(new Request(
+      "https://talktheme.test/api/internal/ops/daily-summary?recover_dead_letter=0",
+      { method: "POST" },
+    ));
+
+    expect(response.status).toBe(200);
+    expect(mocks.tryPublishOpsEvent).toHaveBeenCalledWith({ eventId: "daily-event" }, { recoverDeadLetter: false });
+  });
+
   it("returns 400 for an invalid calendar date without creating an event", async () => {
     mocks.validateCompletedOpsDay.mockReturnValueOnce({ ok: false, reason: "invalid_date" });
 

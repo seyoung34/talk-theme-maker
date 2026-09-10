@@ -54,7 +54,8 @@
     }
   },
   "triggers": {
-    // Export 상태 조회와 watchdog 환급을 5분마다 실행한다. Cron 시간은 UTC 기준이다.
-    "crons": ["*/5 * * * *"]
+    // Telegram outbox 전송과 export 상태 조회/watchdog 환급을 5분마다 실행한다.
+    // Cron 시간은 UTC 기준이며, 23:00 UTC는 다음 날 08:00 KST다.
+    "crons": ["*/5 * * * *", "0 23 * * *"]
   }
 }

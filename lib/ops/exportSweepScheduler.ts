@@ -1,45 +1,104 @@
+import { getPreviousOpsDay } from "@/lib/ops/dailySummary";
+
 const exportSweepUrl = "https://internal/api/internal/ops/export/sweep";
+const telegramDrainUrl = "https://internal/api/internal/ops/telegram/drain";
+const dailySummaryUrl = "https://internal/api/internal/ops/daily-summary";
 const opsTokenHeader = "x-ops-notifications-token";
 
-export type ExportSweepController = {
+// Cloudflare Cron is UTC. 23:00 UTC is 08:00 KST on the following calendar day.
+export const dailySummaryCron = "0 23 * * *";
+
+export type ScheduledOpsController = {
   cron?: string;
+  scheduledTime: number;
   noRetry(): void;
 };
 
-export type ExportSweepService = {
+export type ScheduledOpsService = {
   fetch(request: Request): Promise<Response>;
 };
 
-export type ExportSweepEnvironment = {
-  WORKER_SELF_REFERENCE?: ExportSweepService;
+export type ScheduledOpsEnvironment = {
+  WORKER_SELF_REFERENCE?: ScheduledOpsService;
   OPS_NOTIFICATIONS_DRAIN_TOKEN?: string;
 };
 
-export async function runScheduledExportSweep(
-  controller: ExportSweepController,
-  env: ExportSweepEnvironment,
+type ScheduledOperation = {
+  event: "daily_summary" | "telegram_drain" | "export_sweep";
+  url: string;
+};
+
+export async function runScheduledOps(
+  controller: ScheduledOpsController,
+  env: ScheduledOpsEnvironment,
 ) {
   const token = env.OPS_NOTIFICATIONS_DRAIN_TOKEN?.trim();
   if (!token || !env.WORKER_SELF_REFERENCE) {
     controller.noRetry();
-    console.error("[scheduled-export-sweep] configuration_missing");
+    console.error("[scheduled-ops] configuration_missing");
     return { status: "skipped" as const, reason: "configuration_missing" as const };
   }
 
-  const response = await env.WORKER_SELF_REFERENCE.fetch(new Request(exportSweepUrl, {
-    method: "POST",
-    headers: { [opsTokenHeader]: token },
-  }));
-  await response.body?.cancel();
+  // The daily trigger overlaps the five-minute cron at 23:00 UTC. Keep its retry
+  // scope to the summary itself; maintenance remains the five-minute cron's job.
+  const operations: ScheduledOperation[] = controller.cron === dailySummaryCron
+    ? [{ event: "daily_summary", url: getDailySummaryUrl(controller.scheduledTime) }]
+    : [
+      { event: "telegram_drain", url: telegramDrainUrl },
+      { event: "export_sweep", url: exportSweepUrl },
+    ];
 
-  if (!response.ok) {
-    throw new Error(`export_sweep_failed_http_${response.status}`);
+  const failures: string[] = [];
+  for (const operation of operations) {
+    try {
+      const response = await env.WORKER_SELF_REFERENCE.fetch(new Request(operation.url, {
+        method: "POST",
+        headers: { [opsTokenHeader]: token },
+      }));
+      const disabledTelegramDrain = await isDisabledTelegramDrain(operation, response);
+      await response.body?.cancel();
+
+      if (!response.ok && !disabledTelegramDrain) {
+        failures.push(`${operation.event}_failed_http_${response.status}`);
+      }
+    } catch (error) {
+      failures.push(
+        error instanceof Error
+          ? `${operation.event}_failed_${error.message}`
+          : `${operation.event}_failed_unknown`,
+      );
+    }
+  }
+
+  if (failures.length > 0) {
+    console.error(JSON.stringify({
+      event: "scheduled_ops_failed",
+      cron: controller.cron ?? null,
+      failures,
+    }));
+    throw new Error(failures.join(","));
   }
 
   console.log(JSON.stringify({
-    event: "export_sweep_completed",
+    event: "scheduled_ops_completed",
     cron: controller.cron ?? null,
-    status: response.status,
+    operations: operations.map(({ event }) => event),
   }));
-  return { status: "completed" as const, httpStatus: response.status };
+  return { status: "completed" as const, operations: operations.map(({ event }) => event) };
+}
+
+function getDailySummaryUrl(scheduledTime: number) {
+  const day = getPreviousOpsDay(new Date(scheduledTime));
+  return `${dailySummaryUrl}?date=${encodeURIComponent(day)}&recover_dead_letter=0`;
+}
+
+async function isDisabledTelegramDrain(operation: ScheduledOperation, response: Response) {
+  if (operation.event !== "telegram_drain" || response.status !== 503) return false;
+
+  try {
+    const body: unknown = await response.clone().json();
+    return typeof body === "object" && body !== null && "reason" in body && body.reason === "disabled";
+  } catch {
+    return false;
+  }
 }
