@@ -342,7 +342,9 @@ Android `android-common-theme-icon`과 iOS `ios-common-theme-icon`의 필수 slo
 | `launcher_icon` | `android-launcher-icon` | 일반 launcher raster |
 | `launcher_round` | `android-launcher-round` | round launcher raster |
 
-네 slot 모두 필수다. `theme_icon`은 Android launcher family와 별도 리소스이므로 하나가 다른 하나를 대체하지 않는다.
+네 slot 모두 필수다. `theme_icon`은 Android launcher family와 별도의 canonical 출력 role로 유지하지만,
+일반 사용자 편집에서는 Android `launcher_background`의 테마 아이콘 source에서 파생한다. 따라서 사용자는
+플랫폼별 raw role을 여러 개 입력하지 않고 `테마 아이콘` 하나만 설정한다.
 
 - background는 crop돼도 끊기지 않는 단순한 색/패턴으로 만든다.
 - foreground는 실제 alpha를 사용하고 핵심 motif를 adaptive icon safe zone 안에 둔다.

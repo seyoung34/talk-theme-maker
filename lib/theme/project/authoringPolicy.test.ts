@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { getAuthoringSlots, getAuthoringSlotVisibility, getDerivedAssetSourceRole } from "@/lib/theme/project/authoringPolicy";
+import { getAuthoringSlots, getAuthoringSlotVisibility, getDerivedAssetSourceRole, getThemeIconSourceRole } from "@/lib/theme/project/authoringPolicy";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
+import { getThemeSlots } from "@/lib/theme/templates";
 
 const slots = [
   { id: "source", platform: "android", role: "launcher_background", section: "common", group: "icon", kind: "image", label: "테마 아이콘", required: true, note: "" },
@@ -9,6 +10,18 @@ const slots = [
 ] as ThemeAssetSlot[];
 
 describe("authoring policy", () => {
+  it("플랫폼별 canonical role을 하나의 테마 아이콘 입력으로 추상화한다", () => {
+    const androidSlots = getThemeSlots("android");
+    const iosSlots = getThemeSlots("ios");
+    const androidSource = androidSlots.find((slot) => slot.role === getThemeIconSourceRole("android"));
+    const iosSource = iosSlots.find((slot) => slot.role === getThemeIconSourceRole("ios"));
+
+    expect(androidSource).toMatchObject({ group: "icon", label: "테마 아이콘" });
+    expect(iosSource).toMatchObject({ group: "icon", label: "테마 아이콘" });
+    expect(getAuthoringSlots(androidSlots, "android", "user").map((slot) => slot.role)).not.toContain("theme_icon");
+    expect(getAuthoringSlots(iosSlots, "ios", "user").map((slot) => slot.role)).toContain("theme_icon");
+  });
+
   it("일반 편집기에서는 파생 role을 숨기고 관리자는 고급 영역에서 본다", () => {
     expect(getAuthoringSlots(slots, "android", "user").map((slot) => slot.role)).toEqual(["launcher_background", "splash"]);
     expect(getAuthoringSlots(slots, "android", "admin").map((slot) => slot.role)).toEqual(["launcher_background", "launcher_icon", "splash"]);
