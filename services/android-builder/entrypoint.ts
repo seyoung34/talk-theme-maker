@@ -20,6 +20,7 @@ import {
   isCatalogManifestItem,
   type CatalogManifestItem,
 } from "../../lib/theme/export/catalogSource.js";
+import { INPUT_ARCHIVE_FILE_NAME, readInputArchive } from "../../lib/theme/export/inputArchive.js";
 import { transformCatalogImage } from "../shared/catalogImageTransform.js";
 
 type BundleManifestItem =
@@ -37,6 +38,7 @@ type LocalBundle = {
     applicationId?: string;
   };
   manifest?: BundleManifestItem[];
+  files_archive?: string;
 };
 
 type BundleOptions = AndroidExportProjectOptions & { exportName: string };
@@ -218,6 +220,12 @@ async function readInputFiles(bundle: LocalBundle, source: BuildSource, assetsRo
     download: ({ objectKey, generation }) => downloadCatalogObject(objectKey, generation),
     sha256Hex: (bytes) => createHash("sha256").update(bytes).digest("hex"),
   });
+  // The Worker packs uploaded files into one archive object. Jobs enqueued before
+  // that change still carry per-file objects, so keep the `files/<field>` fallback.
+  const archiveByField =
+    source.mode === "gcs" && bundle.files_archive
+      ? readInputArchive(await downloadBytes(resolveGcsInputArchive(source)))
+      : null;
 
   for (const item of manifest) {
     const normalizedPath = normalizeExportPath(item.path);
@@ -250,9 +258,14 @@ async function readInputFiles(bundle: LocalBundle, source: BuildSource, assetsRo
     }
 
     const cacheKey = `field:${item.field}`;
+    const archivedBytes = archiveByField?.get(normalizeInputFileField(item.field));
+    if (archiveByField && !archivedBytes) throw new Error(`Input archive is missing field: ${item.field}`);
     const bytes =
       bytesBySource.get(cacheKey) ??
-      (source.mode === "gcs" ? await downloadBytes(resolveGcsInputFile(source, item.field)) : new Uint8Array(await readFile(resolveInputFilePath(source.inputDir, item.field))));
+      (archivedBytes ??
+        (source.mode === "gcs"
+          ? await downloadBytes(resolveGcsInputFile(source, item.field))
+          : new Uint8Array(await readFile(resolveInputFilePath(source.inputDir, item.field)))));
     bytesBySource.set(cacheKey, bytes);
     files.push({ path: normalizedPath, bytes });
   }
@@ -266,6 +279,7 @@ function isLocalBundle(value: unknown): value is LocalBundle {
   if (bundle.export_job_id !== undefined && typeof bundle.export_job_id !== "string") return false;
   if (bundle.user_id !== undefined && typeof bundle.user_id !== "string") return false;
   if (bundle.theme_id !== undefined && typeof bundle.theme_id !== "string") return false;
+  if (bundle.files_archive !== undefined && typeof bundle.files_archive !== "string") return false;
   if (bundle.options !== undefined && (typeof bundle.options !== "object" || bundle.options === null)) return false;
   if (bundle.manifest !== undefined && !Array.isArray(bundle.manifest)) return false;
   return (bundle.manifest ?? []).every(isManifestItem);
@@ -298,6 +312,10 @@ function resolveGcsInputFile(source: Extract<BuildSource, { mode: "gcs" }>, fiel
     bucket: source.input.bucket,
     object: joinGcsPath(source.inputPrefix, "files", relativePath),
   };
+}
+
+function resolveGcsInputArchive(source: Extract<BuildSource, { mode: "gcs" }>): GcsObjectRef {
+  return { bucket: source.input.bucket, object: joinGcsPath(source.inputPrefix, INPUT_ARCHIVE_FILE_NAME) };
 }
 
 function normalizeInputFileField(field: string) {
@@ -403,6 +421,11 @@ function validateGcsBundle(bundle: LocalBundle, exportJobId: string) {
   if (!nonEmptyString(bundle.user_id)) throw new Error("GCS bundle requires user_id.");
   if (!nonEmptyString(bundle.theme_id)) throw new Error("GCS bundle requires theme_id.");
   if (!Array.isArray(bundle.manifest)) throw new Error("GCS bundle requires manifest.");
+  // Only the archive name the Worker writes is accepted; anything else would let a
+  // bundle point the builder at an arbitrary object in the input prefix.
+  if (bundle.files_archive !== undefined && bundle.files_archive !== INPUT_ARCHIVE_FILE_NAME) {
+    throw new Error("GCS bundle has an invalid files_archive.");
+  }
 }
 
 async function readJsonFromGcs(ref: GcsObjectRef): Promise<unknown> {

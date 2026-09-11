@@ -1,4 +1,3 @@
-import { mapWithConcurrency } from "@/lib/shared/concurrency";
 import { createInputArchive, INPUT_ARCHIVE_FILE_NAME } from "@/lib/theme/export/inputArchive";
 import type { ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
 
@@ -8,7 +7,6 @@ import type { ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/regis
 const GCP_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const defaultCloudflareSubject = "cloudflare-worker-prod";
 const oidcTokenTtlSeconds = 5 * 60;
-const uploadConcurrency = 8;
 const gcpRequestTimeoutMs = 30_000;
 const cloudRunRequestTimeoutMs = 15_000;
 
@@ -155,7 +153,11 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: EnqueueBu
   const config = readBuilderConfig(options);
   const accessToken = await getBuilderAccessToken(config);
   const prefix = bundle.exportJobId;
-  const inputArchive = options.platform === "ios" ? createInputArchive(bundle.files) : null;
+  // One archive object instead of one object per file. A Worker request is capped at
+  // 50 subrequests and an Android theme can carry 40+ files, so per-file uploads
+  // crossed that ceiling and killed the request mid-upload — before the catch block
+  // could even record the failure. iOS has used this path since it was introduced.
+  const inputArchive = createInputArchive(bundle.files);
   await options.progress?.onInputUploadStarted?.();
 
   const bundleJson = JSON.stringify({
@@ -170,22 +172,13 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: EnqueueBu
       ...(bundle.options.themeIdentifier ? { themeIdentifier: bundle.options.themeIdentifier } : {}),
     },
     manifest: bundle.manifest,
-    ...(inputArchive ? { files_archive: INPUT_ARCHIVE_FILE_NAME } : {}),
+    files_archive: INPUT_ARCHIVE_FILE_NAME,
   });
 
-  const uploads: Promise<unknown>[] = [
+  await Promise.all([
     uploadObject(config.inputBucket, `${prefix}/bundle.json`, new TextEncoder().encode(bundleJson), "application/json", accessToken),
-  ];
-  if (inputArchive) {
-    uploads.push(uploadObject(config.inputBucket, `${prefix}/${INPUT_ARCHIVE_FILE_NAME}`, inputArchive, "application/octet-stream", accessToken));
-  } else {
-    uploads.push(
-      mapWithConcurrency(bundle.files, uploadConcurrency, (file) =>
-        uploadObject(config.inputBucket, `${prefix}/files/${file.field}`, file.bytes, "application/octet-stream", accessToken),
-      ),
-    );
-  }
-  await Promise.all(uploads);
+    uploadObject(config.inputBucket, `${prefix}/${INPUT_ARCHIVE_FILE_NAME}`, inputArchive, "application/octet-stream", accessToken),
+  ]);
   await options.progress?.onInputReady?.();
 
   await options.progress?.onTriggering?.();
