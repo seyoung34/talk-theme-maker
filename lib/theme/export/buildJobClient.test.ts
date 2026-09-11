@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { findBuilderExecution, getImpersonatedAccessToken, runBuilderJob, type BuilderConfig } from "@/lib/theme/export/buildJobClient";
+import { enqueueBuild, findBuilderExecution, getImpersonatedAccessToken, runBuilderJob, type BuilderConfig } from "@/lib/theme/export/buildJobClient";
+import { INPUT_ARCHIVE_FILE_NAME, readInputArchive } from "@/lib/theme/export/inputArchive";
 
 const builderConfig: BuilderConfig = {
   projectId: "project-78d94000-bff9-4358-821",
@@ -187,5 +188,119 @@ describe("Cloud Run builder enqueue", () => {
       code: "sts_exchange_request_failed",
     });
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+// A Cloudflare Worker request is capped at 50 subrequests. Uploading one GCS object
+// per input file used to cross that ceiling on themes with 40+ files: the request was
+// killed mid-upload, and the catch block could not even record the failure because
+// writing it needed one more subrequest. Both platforms now upload a single archive,
+// so the subrequest count must stay flat as the file count grows.
+describe("builder input upload", () => {
+  const uploadEndpoint = "https://storage.googleapis.com/upload/storage/v1/b/";
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  async function stubBuilderEnv() {
+    const keyPair = await crypto.subtle.generateKey(
+      { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
+      true,
+      ["sign", "verify"],
+    );
+    const privateJwk = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
+    vi.stubEnv("GCP_PROJECT_ID", builderConfig.projectId);
+    vi.stubEnv("GCP_PROJECT_NUMBER", "779222832316");
+    vi.stubEnv("CLOUDFLARE_OIDC_ISSUER", builderConfig.oidcIssuer);
+    vi.stubEnv("CLOUDFLARE_OIDC_PRIVATE_JWK", JSON.stringify({ ...privateJwk, kid: "test-key" }));
+    vi.stubEnv("GCP_BUILDER_SA_EMAIL", builderConfig.builderServiceAccount);
+    vi.stubEnv("GCP_BUILD_INPUT_BUCKET", builderConfig.inputBucket);
+    vi.stubEnv("GCP_BUILD_OUTPUT_BUCKET", builderConfig.outputBucket);
+    vi.stubEnv("GCP_BUILD_JOB_REGION", builderConfig.jobRegion);
+    vi.stubEnv("GCP_BUILD_JOB_NAME", "android-builder");
+  }
+
+  function stubBuilderFetch() {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith("https://sts.googleapis.com/")) {
+        return new Response(JSON.stringify({ access_token: "federated-token" }), { status: 200 });
+      }
+      if (url.startsWith("https://iamcredentials.googleapis.com/")) {
+        return new Response(JSON.stringify({ accessToken: "builder-token" }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ name: "operations/run-1" }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function bundleWithFiles(fileCount: number) {
+    const files = Array.from({ length: fileCount }, (_, index) => ({
+      field: `file-${index}`,
+      bytes: new Uint8Array([index, index + 1]),
+    }));
+    return {
+      exportJobId: "1ce75780-2643-4f5b-87b5-4d7025239856",
+      userId: "user-1",
+      themeId: "theme-1",
+      options: { mode: "apk", exportName: "기본 템플릿", applicationId: "com.kakao.talk.theme.u1.e000001" },
+      manifest: files.map((file) => ({ path: `res/drawable/${file.field}.png`, field: file.field })),
+      files,
+    };
+  }
+
+  it("uploads two objects for an Android build regardless of how many files it carries", async () => {
+    await stubBuilderEnv();
+    const fetchMock = stubBuilderFetch();
+
+    // 42 files is the count that failed in production on 2026-09-11.
+    await enqueueBuild(bundleWithFiles(42), { platform: "android" });
+
+    const uploadUrls = fetchMock.mock.calls
+      .map((call) => String(call[0]))
+      .filter((url) => url.startsWith(uploadEndpoint));
+    expect(uploadUrls).toHaveLength(2);
+    expect(uploadUrls.some((url) => url.includes(encodeURIComponent("bundle.json")))).toBe(true);
+    expect(uploadUrls.some((url) => url.includes(encodeURIComponent(INPUT_ARCHIVE_FILE_NAME)))).toBe(true);
+  });
+
+  it("keeps the whole enqueue well under the 50 subrequest cap as files grow", async () => {
+    await stubBuilderEnv();
+    const fetchMock = stubBuilderFetch();
+
+    await enqueueBuild(bundleWithFiles(200), { platform: "android" });
+
+    // auth (2) + uploads (2) + Cloud Run run (1). Nothing here may scale with file count.
+    expect(fetchMock.mock.calls).toHaveLength(5);
+  });
+
+  it("packs every input file into the archive it uploads", async () => {
+    await stubBuilderEnv();
+    const fetchMock = stubBuilderFetch();
+
+    await enqueueBuild(bundleWithFiles(3), { platform: "android" });
+
+    const archiveCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes(encodeURIComponent(INPUT_ARCHIVE_FILE_NAME)),
+    );
+    const archive = readInputArchive(archiveCall?.[1]?.body as Uint8Array);
+    expect([...archive.keys()].sort()).toEqual(["file-0", "file-1", "file-2"]);
+    expect(archive.get("file-1")).toEqual(new Uint8Array([1, 2]));
+  });
+
+  it("tells the builder which archive to read", async () => {
+    await stubBuilderEnv();
+    const fetchMock = stubBuilderFetch();
+
+    await enqueueBuild(bundleWithFiles(2), { platform: "android" });
+
+    const bundleCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes(encodeURIComponent("bundle.json")),
+    );
+    const uploaded = JSON.parse(new TextDecoder().decode(bundleCall?.[1]?.body as Uint8Array));
+    expect(uploaded.files_archive).toBe(INPUT_ARCHIVE_FILE_NAME);
   });
 });
