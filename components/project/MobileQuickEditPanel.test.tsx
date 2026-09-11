@@ -1,8 +1,9 @@
 import { type MutableRefObject } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MobileQuickEditPanel } from "@/components/project/MobileQuickEditPanel";
+import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { getInitialSlotCandidateSelections } from "@/lib/theme/project/state";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
 
@@ -19,22 +20,41 @@ const selections = getInitialSlotCandidateSelections(slots, "basic", template);
 const tabIconSlot = slots.find((slot) => slot.role === "tab_icon_friends")!;
 const bubbleSlot = slots.find((slot) => slot.editableInBubbleEditor)!;
 
-function renderPanel(overrides: {
+function adminAssetsFor(slotRole: string, count: number): Array<AdminAssetCandidate & { previewUrl?: string }> {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `asset-${index}`,
+    slotRole,
+    platform: "android",
+    title: `에셋 ${index}`,
+    tags: [],
+    fileName: `asset-${index}.png`,
+    mimeType: "image/png",
+    storagePath: `admin-assets/asset-${index}/image.png`,
+    previewUrl: `https://cdn.example.com/asset-${index}.webp`,
+    createdAt: 0,
+    updatedAt: 0,
+    enabled: true,
+  })) as Array<AdminAssetCandidate & { previewUrl?: string }>;
+}
+
+type Overrides = {
   slot?: typeof tabIconSlot;
   hasMoreAdminAssets?: boolean;
   isLoadingAdminAssets?: boolean;
   candidateGridExpanded?: boolean;
   onLoadMoreAdminAssets?: () => void;
-} = {}) {
-  const onLoadMoreAdminAssets = overrides.onLoadMoreAdminAssets ?? vi.fn();
-  render(
+  adminAssets?: Array<AdminAssetCandidate & { previewUrl?: string }>;
+};
+
+function panelElement(overrides: Overrides, onLoadMoreAdminAssets: () => void) {
+  return (
     <MobileQuickEditPanel
       slot={overrides.slot ?? tabIconSlot}
       slots={slots}
       uploads={{}}
       colors={{}}
       selections={selections}
-      adminAssets={[]}
+      adminAssets={overrides.adminAssets ?? []}
       hasMoreAdminAssets={overrides.hasMoreAdminAssets ?? true}
       isLoadingAdminAssets={overrides.isLoadingAdminAssets ?? false}
       onLoadMoreAdminAssets={onLoadMoreAdminAssets}
@@ -66,12 +86,29 @@ function renderPanel(overrides: {
       onCopyBubbleToPair={vi.fn()}
       candidateGridExpanded={overrides.candidateGridExpanded ?? false}
       onToggleCandidateGrid={vi.fn()}
-    />,
+    />
   );
-  return { onLoadMoreAdminAssets };
+}
+
+function renderPanel(overrides: Overrides = {}) {
+  const onLoadMoreAdminAssets = overrides.onLoadMoreAdminAssets ?? vi.fn();
+  const view = render(panelElement(overrides, onLoadMoreAdminAssets));
+  return {
+    onLoadMoreAdminAssets,
+    rerender: (next: Overrides) => view.rerender(panelElement({ ...overrides, ...next }, onLoadMoreAdminAssets)),
+  };
 }
 
 const loadMoreTile = () => screen.queryByRole("button", { name: "추천 에셋 더 보기" });
+const currentPagerLabel = () => screen.getByText(/^후보 \d+\/\d+ 페이지$/).textContent;
+
+/** happy-dom은 레이아웃이 없어 clientWidth가 0이다. 페이저의 스크롤 핸들러가 폭으로 나눈다. */
+function swipeToPage(page: number, pageWidth = 320) {
+  const pager = screen.getByLabelText("말풍선 후보 페이지");
+  Object.defineProperty(pager, "clientWidth", { configurable: true, value: pageWidth });
+  pager.scrollLeft = pageWidth * page;
+  fireEvent.scroll(pager);
+}
 
 describe("MobileQuickEditPanel 추천 에셋 더 보기", () => {
   afterEach(cleanup);
@@ -112,5 +149,26 @@ describe("MobileQuickEditPanel 추천 에셋 더 보기", () => {
     await user.click(tile);
 
     expect(onLoadMoreAdminAssets).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 마지막 페이지에서 타일을 누르면 방금 받아온 후보가 그 자리부터 채워진다. 보고 있던
+   * 페이지를 지켜야 새 후보가 바로 보인다. 페이지 수를 이펙트 deps에 두면 후보가 늘 때마다
+   * 선택 후보 페이지로 튕겨서, 사용자가 다시 끝까지 넘겨야 했다.
+   */
+  it("더 불러와 페이지 수가 늘어도 보고 있던 페이지를 지킨다", () => {
+    const { rerender } = renderPanel({
+      slot: bubbleSlot,
+      candidateGridExpanded: true,
+      adminAssets: adminAssetsFor(bubbleSlot.role, 40),
+    });
+
+    swipeToPage(2);
+    const beforeLoad = currentPagerLabel();
+    expect(beforeLoad).toMatch(/^후보 3\//);
+
+    rerender({ adminAssets: adminAssetsFor(bubbleSlot.role, 80) });
+
+    expect(currentPagerLabel()).toMatch(/^후보 3\//);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type MutableRefObject } from "react";
 import { ImageOff, LoaderCircle, Maximize2, Minimize2, Plus, Sliders, X } from "lucide-react";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import { getCandidateLayoutKind, getMobileCandidatePageCount, getMobileCandidatePageIndex, mobileCandidatePageSize } from "@/components/project/candidateLayout";
@@ -475,16 +475,33 @@ function ImageControls({
     applyCandidate(candidate);
   };
 
-  useEffect(() => {
-    if (!usePagedCandidateGrid) return;
-    const nextPage = Math.min(candidatePageCount - 1, getMobileCandidatePageIndex(selectedPagerItemIndex));
-    setCandidatePage(nextPage);
+  const scrollToPage = useCallback((page: number) => {
+    setCandidatePage(page);
     const frame = window.requestAnimationFrame(() => {
       const pager = candidatePagerRef.current;
-      if (pager) pager.scrollTo({ left: pager.clientWidth * nextPage, behavior: "auto" });
+      if (pager) pager.scrollTo({ left: pager.clientWidth * page, behavior: "auto" });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [candidatePageCount, selectedPagerItemIndex, slot.id, usePagedCandidateGrid]);
+  }, []);
+
+  /**
+   * 슬롯이나 선택이 바뀔 때만 선택한 후보의 페이지로 옮긴다.
+   *
+   * 페이지 **수**는 일부러 보지 않는다. "더 보기"로 후보가 늘어나도 되돌아가지 않아야 한다 —
+   * 새 후보는 방금 타일이 있던 자리부터 채워지므로 보고 있던 페이지가 곧 첫 새 페이지다.
+   * 예전에는 `candidatePageCount`가 deps에 있어서, 마지막 페이지에서 타일을 누르면 방금 받아온
+   * 후보를 보지 못한 채 선택 후보 페이지(대개 1페이지)로 튕겼다.
+   */
+  useEffect(() => {
+    if (!usePagedCandidateGrid) return;
+    return scrollToPage(getMobileCandidatePageIndex(selectedPagerItemIndex));
+  }, [scrollToPage, selectedPagerItemIndex, slot.id, usePagedCandidateGrid]);
+
+  // 후보가 줄어 보고 있던 페이지가 사라진 경우에만 마지막 페이지로 당긴다.
+  useEffect(() => {
+    if (!usePagedCandidateGrid || candidatePage < candidatePageCount) return;
+    return scrollToPage(Math.max(0, candidatePageCount - 1));
+  }, [candidatePage, candidatePageCount, scrollToPage, usePagedCandidateGrid]);
 
   const renderUploadTile = (expanded: boolean) => (
     <button
