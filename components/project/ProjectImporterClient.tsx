@@ -1315,6 +1315,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       colors={colors}
       selections={candidateSelections}
       adminAssets={adminAssetsWithPreview}
+      hasMoreAdminAssets={Boolean(adminAssetCursor)}
+      isLoadingAdminAssets={isLoadingAdminAssets}
+      onLoadMoreAdminAssets={() => void loadMoreAdminAssets()}
       allowTemplateAssetRemoval={isAdminMode}
       templateId={templateId}
       template={activeTemplate}

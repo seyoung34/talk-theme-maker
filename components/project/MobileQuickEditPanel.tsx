@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type MutableRefObject } from "react";
-import { ImageOff, Maximize2, Minimize2, Plus, Sliders, X } from "lucide-react";
+import { ImageOff, LoaderCircle, Maximize2, Minimize2, Plus, Sliders, X } from "lucide-react";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import { getCandidateLayoutKind, getMobileCandidatePageCount, getMobileCandidatePageIndex, mobileCandidatePageSize } from "@/components/project/candidateLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
@@ -43,6 +43,10 @@ type MobileQuickEditPanelProps = {
   colors: SlotColors;
   selections: SlotCandidateSelections;
   adminAssets: Array<AdminAssetCandidate & { previewUrl?: string }>;
+  /** 추천 에셋 다음 페이지 커서가 남아 있는지. 없으면 "더 보기" 타일을 그리지 않는다. */
+  hasMoreAdminAssets: boolean;
+  isLoadingAdminAssets: boolean;
+  onLoadMoreAdminAssets: () => void;
   allowTemplateAssetRemoval: boolean;
   templateId: ThemeTemplateId;
   template: ThemeTemplate;
@@ -410,6 +414,9 @@ function ImageControls({
   templateId,
   template,
   candidateGridExpanded = false,
+  hasMoreAdminAssets,
+  isLoadingAdminAssets,
+  onLoadMoreAdminAssets,
 }: MobileQuickEditPanelProps & {
   slot: ThemeAssetSlot;
   candidates: SlotCandidate[];
@@ -449,9 +456,12 @@ function ImageControls({
    * 그래서 이 분기는 "말풍선 그룹인가"가 아니라 **"아래에 편집 UI가 붙는가"** 를 뜻한다.
    */
   const usePagedCandidateGrid = candidateGridExpanded && slot.editableInBubbleEditor;
-  const candidatePagerItems: Array<{ kind: "upload" } | { kind: "candidate"; candidate: SlotCandidate }> = [
+  // "더 보기"도 페이저 항목으로 넣는다. 페이지 수 계산이 항목 개수만 보므로 마지막 페이지가
+  // 가득 찼을 때 새 페이지가 자동으로 생긴다.
+  const candidatePagerItems: Array<{ kind: "upload" } | { kind: "candidate"; candidate: SlotCandidate } | { kind: "loadMore" }> = [
     { kind: "upload" },
     ...orderedCandidates.map((candidate) => ({ kind: "candidate" as const, candidate })),
+    ...(hasMoreAdminAssets ? [{ kind: "loadMore" as const }] : []),
   ];
   const candidatePageCount = getMobileCandidatePageCount(candidatePagerItems.length);
   const candidatePages = Array.from({ length: candidatePageCount }, (_, pageIndex) =>
@@ -487,6 +497,26 @@ function ImageControls({
         <Plus size={20} strokeWidth={2.4} aria-hidden="true" />
       </span>
       <span className="truncate text-[10px] font-bold">업로드</span>
+    </button>
+  );
+
+  const renderLoadMoreTile = (expanded: boolean) => (
+    <button
+      key="candidate-load-more"
+      type="button"
+      className={`grid min-w-0 place-items-center gap-1 rounded-xl border border-dashed border-[#cbd5e1] bg-[#f8fafc] p-1.5 text-center text-[#475569] transition hover:border-[#93c5fd] hover:bg-[#eff6ff] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb] disabled:opacity-50 ${expanded ? "h-full grid-rows-[minmax(0,1fr)_auto]" : compactCardClassName}`}
+      onClick={onLoadMoreAdminAssets}
+      disabled={isLoadingAdminAssets}
+      aria-label="추천 에셋 더 보기"
+    >
+      <span className={`grid w-full place-items-center rounded-lg bg-white/80 ${previewAspectClassName}`}>
+        {isLoadingAdminAssets ? (
+          <LoaderCircle size={20} strokeWidth={2.4} className="motion-safe:animate-spin" aria-hidden="true" />
+        ) : (
+          <Plus size={20} strokeWidth={2.4} aria-hidden="true" />
+        )}
+      </span>
+      <span className="truncate text-[10px] font-bold">{isLoadingAdminAssets ? "불러오는 중" : "더 보기"}</span>
     </button>
   );
 
@@ -548,7 +578,11 @@ function ImageControls({
           >
             {candidatePages.map((pageItems, pageIndex) => (
               <div key={`candidate-page-${pageIndex}`} role="group" aria-label={`${pageIndex + 1}/${candidatePageCount} 페이지`} className="grid w-full shrink-0 snap-start grid-cols-4 auto-rows-[100px] gap-2 min-[430px]:auto-rows-[112px]">
-                {pageItems.map((item) => item.kind === "upload" ? renderUploadTile(true) : renderCandidateTile(item.candidate, true))}
+                {pageItems.map((item) => {
+                  if (item.kind === "upload") return renderUploadTile(true);
+                  if (item.kind === "loadMore") return renderLoadMoreTile(true);
+                  return renderCandidateTile(item.candidate, true);
+                })}
                 {Array.from({ length: mobileCandidatePageSize - pageItems.length }, (_, emptyIndex) => (
                   <span key={`candidate-page-${pageIndex}-empty-${emptyIndex}`} aria-hidden="true" />
                 ))}
@@ -568,6 +602,7 @@ function ImageControls({
         <div className={candidateGridExpanded ? expandedCollectionClassName : "flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"}>
           {renderUploadTile(candidateGridExpanded)}
           {orderedCandidates.map((candidate) => renderCandidateTile(candidate, candidateGridExpanded))}
+          {hasMoreAdminAssets ? renderLoadMoreTile(candidateGridExpanded) : null}
         </div>
       )}
 
