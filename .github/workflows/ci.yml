@@ -32,14 +32,19 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      # 루트는 moduleResolution "bundler" + `@/` 별칭이고, Cloud Run 빌더는 NodeNext + paths:{}다.
+      # 루트는 moduleResolution "bundler" + `@/` 별칭이고, Cloud Run 빌더 둘은 NodeNext + paths:{}다.
       # 같은 소스를 서로 다른 규칙으로 해석하므로 루트 검사만으로는 빌더가 깨진 것을 알 수 없다.
-      # 실제로 2026-08-25부터 09-11까지 빌더 이미지를 만들 수 없는 상태였는데 CI는 계속 초록이었다
-      # (Dockerfile이 `tsc -p ...`를 돌리고 exit code로 실패하는데, 그 단계가 CI에 없었다).
-      # 수 초면 끝나고 Android SDK·Gradle 없이 같은 경계를 검사한다.
+      # 실제로 2026-08-25부터 09-11까지 Android 빌더 이미지를 만들 수 없는 상태였는데 CI는 계속
+      # 초록이었다 (Dockerfile이 `tsc -p ...`를 돌리고 exit code로 실패하는데 그 단계가 CI에 없었다).
+      # 두 빌더를 한 단계로 묶지 않는 이유는 실패했을 때 어느 쪽인지 바로 보이게 하기 위해서다.
+      # 각각 수 초면 끝나고 Android SDK·Xcode·Gradle 없이 같은 경계를 검사한다.
       - name: Typecheck Android builder
         if: '!cancelled()'
         run: npx tsc -p services/android-builder/tsconfig.json --noEmit
+
+      - name: Typecheck iOS builder
+        if: '!cancelled()'
+        run: npx tsc -p services/ios-builder/tsconfig.json --noEmit
 
       # Baseline is the warning count at the time CI was introduced. Errors always fail.
       # Lower this number as warnings get cleaned up; never raise it.
