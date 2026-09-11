@@ -13,7 +13,7 @@ function target(assetId: string, input: TargetInput) {
   return {
     id: `${assetId}-${input.targetKind}-${input.priority}`,
     asset_id: assetId,
-    platform: "android",
+    platform: "all",
     slot_role: input.slotRole ?? null,
     target_kind: input.targetKind,
     priority: input.priority,
@@ -42,6 +42,14 @@ function sourceRow(id: string, targets: readonly TargetInput[]) {
     admin_asset_targets: targets.map((item) => target(id, item)),
     admin_asset_bubble_specs: [],
     admin_asset_variants: [],
+  };
+}
+
+function sourceKindRow(id: string, assetKind: "background" | "bubble" | "icon", targets: readonly TargetInput[]) {
+  return {
+    ...sourceRow(id, targets),
+    asset_kind: assetKind,
+    slot_role: targets.find((item) => item.slotRole)?.slotRole ?? (assetKind === "bubble" ? "bubble_me_1" : "theme_icon"),
   };
 }
 
@@ -173,6 +181,102 @@ describe("GET /api/theme-assets/recommended", () => {
 
     expect(response.status).toBe(200);
     expect(payload.items.map((item: { id: string }) => item.id)).toEqual(["icon-target"]);
+  });
+
+  it("같은 family 역할은 페이지 순서와 cursor를 공유하고 서버 작업을 재사용한다", async () => {
+    const rows = [
+      sourceKindRow("11111111-1111-4111-8111-111111111111", "background", [
+        { targetKind: "exact_role", slotRole: "chat_background", priority: 5 },
+      ]),
+      sourceKindRow("22222222-2222-4222-8222-222222222222", "background", [
+        { targetKind: "exact_role", slotRole: "main_background", priority: 4 },
+      ]),
+      sourceKindRow("33333333-3333-4333-8333-333333333333", "background", [
+        { targetKind: "asset_kind", priority: 3 },
+      ]),
+    ];
+    const GET = await load([rows, rows]);
+    const request = (role: string, cursor?: string) => GET({
+      nextUrl: new URL(`http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=${role}&limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`),
+    } as never);
+
+    const firstMain = await (await request("main_background")).json();
+    const firstChat = await (await request("chat_background")).json();
+    expect(firstChat.items.map((item: { id: string }) => item.id)).toEqual(firstMain.items.map((item: { id: string }) => item.id));
+    expect(firstChat.nextCursor).toBe(firstMain.nextCursor);
+
+    const secondTab = await (await request("tab_background_image", firstMain.nextCursor)).json();
+    const secondMain = await (await request("main_background", firstMain.nextCursor)).json();
+    expect(secondTab.items.map((item: { id: string }) => item.id)).toEqual(secondMain.items.map((item: { id: string }) => item.id));
+    expect(secondTab.nextCursor).toBe(secondMain.nextCursor);
+    expect(rangeStarts).toEqual([0, 0]);
+    expect(signedPaths).toHaveLength(2);
+    expect(findActiveByKeys).toHaveBeenCalledTimes(4);
+  });
+
+  it.each([
+    ["android", "bubble", "bubble_me_1", "bubble_you_2"],
+    ["ios", "bubble", "bubble_me_1", "bubble_me_1_selected"],
+    ["android", "icon", "theme_icon", "passcode_indicator_1"],
+  ] as const)("%s %s family의 역할별 요청이 같은 첫 페이지를 만든다", async (platform, assetKind, firstRole, secondRole) => {
+    const rows = [
+      sourceKindRow("11111111-aaaa-4111-8111-111111111111", assetKind, [
+        { targetKind: "exact_role", slotRole: firstRole, priority: 2 },
+      ]),
+      sourceKindRow("22222222-bbbb-4222-8222-222222222222", assetKind, [
+        { targetKind: "exact_role", slotRole: secondRole, priority: 1 },
+      ]),
+      sourceKindRow("33333333-cccc-4333-8333-333333333333", assetKind, [
+        { targetKind: "asset_kind", priority: 0 },
+      ]),
+    ];
+    const GET = await load([rows]);
+    const request = (role: string) => GET({
+      nextUrl: new URL(`http://localhost/api/theme-assets/recommended?platform=${platform}&assetKind=${assetKind}&slotRole=${role}&limit=2`),
+    } as never);
+
+    const first = await (await request(firstRole)).json();
+    const second = await (await request(secondRole)).json();
+
+    expect(second.items.map((item: { id: string }) => item.id)).toEqual(first.items.map((item: { id: string }) => item.id));
+    expect(second.nextCursor).toBe(first.nextCursor);
+    expect(rangeStarts).toEqual([0]);
+  });
+
+  it("family 밖 icon 역할은 서로 다른 추천 풀을 유지한다", async () => {
+    const rows = [
+      sourceKindRow("44444444-4444-4444-8444-444444444444", "icon", [
+        { targetKind: "exact_role", slotRole: "theme_icon", priority: 2 },
+      ]),
+      sourceKindRow("55555555-5555-4555-8555-555555555555", "icon", [
+        { targetKind: "exact_role", slotRole: "splash", priority: 2 },
+      ]),
+    ];
+    const GET = await load([rows, rows]);
+
+    const family = await (await GET({
+      nextUrl: new URL("http://localhost/api/theme-assets/recommended?platform=android&assetKind=icon&slotRole=theme_icon"),
+    } as never)).json();
+    const splash = await (await GET({
+      nextUrl: new URL("http://localhost/api/theme-assets/recommended?platform=android&assetKind=icon&slotRole=splash"),
+    } as never)).json();
+
+    expect(family.items.map((item: { id: string }) => item.id)).toEqual(["44444444-4444-4444-8444-444444444444"]);
+    expect(splash.items.map((item: { id: string }) => item.id)).toEqual(["55555555-5555-4555-8555-555555555555"]);
+    expect(rangeStarts).toEqual([0, 0]);
+  });
+
+  it("더 이상 쓰지 않는 rank 2 cursor는 첫 페이지 요청으로 복구한다", async () => {
+    const GET = await load([[
+      sourceRow("66666666-6666-4666-8666-666666666666", [{ targetKind: "asset_kind", priority: 0 }]),
+    ]]);
+    const legacyCursor = encodeURIComponent("2|0|0|77777777-7777-4777-8777-777777777777");
+    const response = await GET({
+      nextUrl: new URL(`http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=main_background&cursor=${legacyCursor}`),
+    } as never);
+
+    expect((await response.json()).items.map((item: { id: string }) => item.id))
+      .toEqual(["66666666-6666-4666-8666-666666666666"]);
   });
 
   it("slotRole이 없으면 exact_role target은 빼고 kind 전체 후보만 내려준다", async () => {

@@ -241,6 +241,7 @@ describe("시스템 템플릿과 추천 에셋 후보 병합", () => {
     const recommended = {
       ...adminAsset("stale-recommendation"),
       recommendationContext: {
+        poolKey: "android|bubble|family:bubble",
         platform: "android" as const,
         assetKind: "bubble" as const,
         slotRole: "bubble_me_1",
@@ -250,6 +251,35 @@ describe("시스템 템플릿과 추천 에셋 후보 병합", () => {
     const candidates = buildSlotCandidates(targetSlot, {}, {}, {}, "basic", template, slots, [recommended]);
 
     expect(candidates.some((candidate) => candidate.id === recommended.id && candidate.source === "admin")).toBe(false);
+  });
+
+  it("pool key가 같을 때만 다른 역할에서 받은 추천 응답을 재사용한다", () => {
+    const chat = slots.find((candidate) => candidate.role === "chat_background")!;
+    const shared = {
+      ...adminAsset("shared-background"),
+      assetKind: "background" as const,
+      recommendationContext: {
+        poolKey: "android|background|family:background",
+        platform: "android" as const,
+        assetKind: "background" as const,
+        slotRole: "main_background",
+      },
+    };
+    const isolated = {
+      ...shared,
+      id: "isolated-icon",
+      recommendationContext: {
+        poolKey: "android|icon|role:splash",
+        platform: "android" as const,
+        assetKind: "icon" as const,
+        slotRole: "splash",
+      },
+    };
+
+    const candidates = buildSlotCandidates(chat, {}, {}, {}, "basic", template, slots, [shared, isolated]);
+
+    expect(candidates.some((candidate) => candidate.id === shared.id && candidate.source === "admin")).toBe(true);
+    expect(candidates.some((candidate) => candidate.id === isolated.id && candidate.source === "admin")).toBe(false);
   });
 });
 

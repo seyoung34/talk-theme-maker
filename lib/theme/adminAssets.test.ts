@@ -118,11 +118,32 @@ describe("admin asset storage persistence", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     for (const moduleName of [
       "@/lib/supabase/client",
       "@/lib/theme/assetCatalog/shadowPublishClient",
       "@/lib/theme/remoteAssets",
     ]) vi.doUnmock(moduleName);
+  });
+
+  it("추천 요청은 공유 풀 대표 role의 캐시 가능한 URL을 사용한다", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ items: [], nextCursor: undefined }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { listRecommendedAssetCandidatePage } = await load();
+
+    await listRecommendedAssetCandidatePage({
+      platform: "android",
+      assetKind: "background",
+      slotRole: "chat_background",
+      limit: 24,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/theme-assets/recommended?platform=android&assetKind=background&limit=24&slotRole=main_background",
+    );
   });
 
   /**
