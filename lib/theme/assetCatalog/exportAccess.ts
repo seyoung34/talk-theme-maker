@@ -78,9 +78,9 @@ const imageRolesByPlatform: Readonly<Record<ThemePlatform, ReadonlySet<ThemeReso
 /**
  * role → 그 슬롯이 받는 에셋 종류.
  *
- * `inferLegacyAssetKind(role)`로 대신하면 안 된다. 그 함수는 `group`을 보지 못해 `splash`나
- * `find_add_friend`를 배경으로 분류하는데, 피커가 쓰는 `inferThemeAssetKind(slot)`은 아이콘으로
- * 본다. 두 판정이 갈라지면 피커에서 고를 수 있는 에셋이 내보내기에서 403이 된다.
+ * `inferLegacyAssetKind(role)`로 대신하면 안 된다. 그 함수는 `group`을 보지 못해
+ * `find_add_friend` 같은 role을 배경으로 분류하지만, 피커가 쓰는 `inferThemeAssetKind(slot)`은
+ * 아이콘으로 본다. 두 판정이 갈라지면 피커에서 고를 수 있는 에셋이 내보내기에서 403이 된다.
  *
  * 슬롯을 못 찾을 때만 role 기반 추정으로 떨어진다 — 발행된 템플릿에는 지금 manifest에 없는
  * 옛 role이 남아 있을 수 있고, 그 경우 종전 판정을 유지하는 편이 안전하다.

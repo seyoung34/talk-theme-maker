@@ -14,6 +14,10 @@ const allKinds: ThemeAssetKind[] = ["background", "icon", "bubble", "profile", "
  * 아이콘)와 잠금화면 배경(3:4 전체 이미지)은 모양도 용도도 다른데 `passcode_` 접두사를 공유한다.
  */
 describe("inferThemeAssetKind 검사 순서", () => {
+  it.each(["splash", "splash_landscape"] as const)("%s는 실행 화면 그룹에 있어도 배경으로 분류한다", (role) => {
+    expect(inferThemeAssetKind({ role, group: "launcher", section: "common", kind: "image" })).toBe("background");
+  });
+
   it("잠금화면 표시를 일반 아이콘으로 가르고 잠금화면 배경보다 먼저 검사한다", () => {
     const indicator = { role: "passcode_indicator_1", group: "keypad", section: "passcode", kind: "image" } as const;
     expect(inferThemeAssetKind(indicator)).toBe("icon");

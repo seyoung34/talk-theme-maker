@@ -17,11 +17,13 @@ export type ThemeAssetKind = "background" | "icon" | "bubble" | "profile" | "lau
  *
  * **검사 순서가 규칙의 일부다.** 아래로 갈수록 넓은 조건이라 순서를 바꾸면 분류가 달라진다.
  * 특히 `passcode_indicator`는 아이콘 후보를 쓰므로 `passcode_`보다 먼저 아이콘으로 가르고,
- * 배경 판정은 가장 마지막이다.
+ * 실행 스플래시는 편집기에서 launcher 그룹에 놓이지만 전체 화면 이미지이므로 배경으로 가른 뒤,
+ * 일반 배경 판정은 가장 마지막에 한다.
  * 그래서 이 규칙을 복제하지 않는다 — 복제본은 순서를 잃는다.
  */
 export function inferThemeAssetKind(slot: Pick<ThemeAssetSlot, "role" | "group" | "section" | "kind">): ThemeAssetKind {
   if (slot.role.startsWith("launcher_")) return "launcher";
+  if (slot.role === "splash" || slot.role === "splash_landscape") return "background";
   if (slot.role === "theme_icon" || slot.role.startsWith("tab_icon_")) return "icon";
   if (slot.role === "profile_image" || slot.role.startsWith("profile_image_")) return "profile";
   if (slot.role.startsWith("bubble_")) return "bubble";
