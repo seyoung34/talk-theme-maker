@@ -185,6 +185,28 @@ export function createOpsDailySummaryEvent(input: OpsDailySummary, occurredAt = 
   });
 }
 
+/** A one-time follow-up for a morning summary whose GA4 data was still processing. */
+export function createOpsDailySummaryGa4CorrectionEvent(input: Pick<OpsDailySummary, "day" | "visitors">, occurredAt = new Date().toISOString()) {
+  return createOpsEvent({
+    eventId: deterministicOpsEventId("ops.daily_summary", input.day, "ga4-correction"),
+    type: "ops.daily_summary",
+    severity: "P3",
+    source: "ops",
+    occurredAt,
+    dedupeKey: `ops:daily-summary:${input.day}:ga4-correction`,
+    summary: `TalkTheme ${input.day} 방문자 보정`,
+    details: {
+      summaryMode: "ga4_correction",
+      summaryDay: input.day,
+      visitorStatus: input.visitors.status,
+      visitorCount: input.visitors.visitors,
+      sessionCount: input.visitors.sessions,
+      newUserCount: input.visitors.newUsers,
+    },
+    adminPath: "/admin",
+  });
+}
+
 function capitalize(value: string) {
   return value.slice(0, 1).toUpperCase() + value.slice(1);
 }
