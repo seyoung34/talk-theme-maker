@@ -117,6 +117,13 @@ CI (`.github/workflows/ci.yml`) runs the full set on every PR, so local runs sta
 - `adminAssetDomain.ts` / `adminAssets.ts` contract changes: `npm run check:admin-asset-domain`.
 - New or changed `supabase/migrations/*.sql`: `npx supabase db reset` against the local stack. See "Local Database".
 - TypeScript logic/API changes: `npx tsc --noEmit`.
+- Anything reachable from `services/android-builder/entrypoint.ts` — which includes
+  `lib/theme/android/buildCore.ts`, `lib/theme/export/catalogTransform.ts`, and
+  `services/shared/*`: `npx tsc -p services/android-builder/tsconfig.json --noEmit`.
+  The builder compiles with `moduleResolution: NodeNext` and `paths: {}`, so relative imports
+  need explicit `.js` extensions and `@/` aliases do not resolve. The root check uses "bundler"
+  resolution and catches neither. Keep browser-only code (DOM APIs, `templates.ts`) out of that
+  import graph; shared pure rules belong in modules like `lib/theme/android/rasterPlan.ts`.
 - Production deployment guard changes: `npm test -- scripts/verify-workers-context.test.ts`,
   plus the local negative checks for `npm run cf:build:workers`,
   `npm run cf:build:production`, and

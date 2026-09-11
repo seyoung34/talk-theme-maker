@@ -1,70 +1,16 @@
-import type { ThemeAssetSlot } from "@/lib/theme/templates";
-import type { ThemeResourceRole } from "@/lib/theme/types";
+import type { AndroidRasterPlan } from "@/lib/theme/android/rasterPlan";
 
-export type AndroidRasterPlan = {
-  width: number;
-  height: number;
-  mode: "cover" | "transparent";
-};
-
-const adaptiveIconSizes = {
-  mdpi: 108,
-  hdpi: 162,
-  xhdpi: 216,
-  xxhdpi: 324,
-  xxxhdpi: 432,
-} as const;
-
-const legacyIconSizes = {
-  mdpi: 48,
-  hdpi: 72,
-  xhdpi: 96,
-  xxhdpi: 144,
-  xxxhdpi: 192,
-} as const;
-
-const derivedLauncherRoles = new Set<ThemeResourceRole>([
-  "theme_icon",
-  "launcher_icon",
-  "launcher_round",
-  "launcher_foreground",
-]);
-
-export function isAndroidDerivedLauncherRole(role: ThemeResourceRole) {
-  return derivedLauncherRoles.has(role);
-}
-
-export function getAndroidRasterPlan(slot: Pick<ThemeAssetSlot, "role">, targetPath: string, transparentForeground = false): AndroidRasterPlan | undefined {
-  const density = readAndroidDensity(targetPath);
-
-  if (slot.role === "theme_icon") return { width: 144, height: 144, mode: "cover" };
-  if (slot.role === "launcher_background") {
-    const size = density ? adaptiveIconSizes[density] : 432;
-    return { width: size, height: size, mode: "cover" };
-  }
-  if (slot.role === "launcher_icon" || slot.role === "launcher_round") {
-    const size = density ? legacyIconSizes[density] : 192;
-    return { width: size, height: size, mode: "cover" };
-  }
-  if (slot.role === "launcher_foreground") {
-    const size = density ? adaptiveIconSizes[density] : 432;
-    return { width: size, height: size, mode: transparentForeground ? "transparent" : "cover" };
-  }
-  if (slot.role === "splash") {
-    const size = targetPath.includes("drawable-xhdpi/") ? { width: 720, height: 1280 } : { width: 1440, height: 2560 };
-    return { ...size, mode: "cover" };
-  }
-  if (slot.role === "splash_landscape") {
-    const size = targetPath.includes("drawable-land-xhdpi/") ? { width: 1280, height: 720 } : { width: 2560, height: 1440 };
-    return { ...size, mode: "cover" };
-  }
-  return undefined;
-}
-
-export function readAndroidDensity(targetPath: string): keyof typeof adaptiveIconSizes | undefined {
-  const match = targetPath.match(/(?:mipmap|drawable)(?:-land)?-(mdpi|hdpi|xhdpi|xxhdpi|xxxhdpi)(?:\/|$)/);
-  return match?.[1] as keyof typeof adaptiveIconSizes | undefined;
-}
+// 크기·역할 규칙은 브라우저 전용 코드와 한 파일에 둘 수 없다. Cloud Run 빌더가 같은 규칙을
+// 써야 하는데, 이 파일은 DOM API를 쓰고 `@/` 별칭으로 `templates.ts`를 끌어온다. 빌더의
+// NodeNext 컴파일은 그 별칭을 해석하지 못해 깨진다. 순수 규칙은 `rasterPlan.ts`에 두고
+// 여기서는 브라우저 렌더링만 맡는다. 기존 import 경로를 유지하려고 재노출한다.
+export {
+  getAndroidRasterPlan,
+  isAndroidDerivedLauncherRole,
+  readAndroidDensity,
+  type AndroidRasterPlan,
+  type AndroidRasterPlanSlot,
+} from "@/lib/theme/android/rasterPlan";
 
 export async function renderAndroidImageBlob(source: Blob | undefined, plan: AndroidRasterPlan) {
   if (typeof document === "undefined" || typeof Image === "undefined") {

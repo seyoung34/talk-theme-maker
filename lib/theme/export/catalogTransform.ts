@@ -1,4 +1,7 @@
-import { getAndroidRasterPlan } from "../android/assetCompiler";
+// 상대 경로 + `.js`로 가져온다. 이 모듈은 Cloud Run Android 빌더의 NodeNext 컴파일에 들어가고,
+// 그쪽은 `@/` 별칭을 해석하지 못한다. 브라우저 전용 `assetCompiler`를 경유해서도 안 된다 —
+// 그 파일이 `templates.ts`를 별칭으로 끌어오기 때문이다.
+import { getAndroidRasterPlan } from "../android/rasterPlan.js";
 import type { BubbleGeometry, Markers, ThemeResourceRole } from "../types.js";
 
 export type CatalogTransformDimensions = {
