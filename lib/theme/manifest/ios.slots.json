@@ -1384,7 +1384,7 @@
     "group": "icon",
     "screen": "profile",
     "kind": "image",
-    "label": "테마 대표 아이콘",
+    "label": "테마 아이콘",
     "fileName": "commonIcoTheme.png",
     "path": "Images/commonIcoTheme.png",
     "required": true,

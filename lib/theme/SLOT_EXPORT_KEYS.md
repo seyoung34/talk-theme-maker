@@ -133,7 +133,7 @@
 |---|---|---|---|---|
 | 친구 추가 버튼 | 이미지 | `find_add_friend` | `src/main/theme/drawable-xxhdpi/theme_find_add_friend_button_image.png` | `Images/findBtnAddFriend.png`<br>`ButtonStyle-AddFriend` › `-ios-image` |
 | 친구 추가 버튼 눌림 | 이미지 | `find_add_friend_pressed` | `src/main/theme/drawable-xxhdpi/theme_find_add_friend_button_pressed_image.png` | — |
-| 런처 배경 | 이미지 | `launcher_background` | `src/main/res/mipmap-xxxhdpi/ic_launcher_background.png` | — |
+| 테마 아이콘 | 이미지 | `launcher_background` | `src/main/res/mipmap-xxxhdpi/ic_launcher_background.png` | — |
 | 런처 전경 | 이미지 | `launcher_foreground` | `src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png` | — |
 | 런처 아이콘 | 이미지 | `launcher_icon` | `src/main/res/mipmap-xxxhdpi/ic_launcher.png` | — |
 | 런처 라운드 아이콘 | 이미지 | `launcher_round` | `src/main/res/mipmap-xxxhdpi/ic_launcher_round.png` | — |
