@@ -199,9 +199,23 @@ describe("Cloud Run builder enqueue", () => {
 describe("builder input upload", () => {
   const uploadEndpoint = "https://storage.googleapis.com/upload/storage/v1/b/";
 
+  function archiveCall(fetchMock: { mock: { calls: Parameters<typeof fetch>[] } }) {
+    return fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes(encodeURIComponent(INPUT_ARCHIVE_FILE_NAME)),
+    );
+  }
+
+  function readArchiveBody(fetchMock: { mock: { calls: Parameters<typeof fetch>[] } }) {
+    const url = archiveCall(fetchMock)?.[0];
+    const uploaded = url === undefined ? undefined : uploadedBodies.get(String(url));
+    if (!uploaded) throw new Error("archive body was not uploaded");
+    return uploaded;
+  }
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   async function stubBuilderEnv() {
@@ -222,9 +236,21 @@ describe("builder input upload", () => {
     vi.stubEnv("GCP_BUILD_JOB_NAME", "android-builder");
   }
 
+  // Real fetch consumes a streaming body; a mock that does not would leave the archive
+  // pipe unresolved and hang `await written`. Draining here keeps the bytes available to
+  // assertions while matching what the runtime actually does.
+  const uploadedBodies = new Map<string, Uint8Array>();
+
   function stubBuilderFetch() {
-    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+    uploadedBodies.clear();
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
       const url = String(input);
+      const body = init?.body;
+      if (body instanceof ReadableStream) {
+        uploadedBodies.set(url, await drainStream(body as ReadableStream<Uint8Array>));
+      } else if (ArrayBuffer.isView(body)) {
+        uploadedBodies.set(url, new Uint8Array(body.buffer, body.byteOffset, body.byteLength));
+      }
       if (url.startsWith("https://sts.googleapis.com/")) {
         return new Response(JSON.stringify({ access_token: "federated-token" }), { status: 200 });
       }
@@ -235,6 +261,23 @@ describe("builder input upload", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     return fetchMock;
+  }
+
+  async function drainStream(stream: ReadableStream<Uint8Array>) {
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    const joined = new Uint8Array(chunks.reduce((sum, chunk) => sum + chunk.length, 0));
+    let offset = 0;
+    for (const chunk of chunks) {
+      joined.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return joined;
   }
 
   function bundleWithFiles(fileCount: number) {
@@ -283,12 +326,71 @@ describe("builder input upload", () => {
 
     await enqueueBuild(bundleWithFiles(3), { platform: "android" });
 
-    const archiveCall = fetchMock.mock.calls.find((call) =>
-      String(call[0]).includes(encodeURIComponent(INPUT_ARCHIVE_FILE_NAME)),
-    );
-    const archive = readInputArchive(archiveCall?.[1]?.body as Uint8Array);
+    const archive = readInputArchive(readArchiveBody(fetchMock));
     expect([...archive.keys()].sort()).toEqual(["file-0", "file-1", "file-2"]);
     expect(archive.get("file-1")).toEqual(new Uint8Array([1, 2]));
+  });
+
+  it("streams the archive instead of handing fetch one buffer", async () => {
+    await stubBuilderEnv();
+    const fetchMock = stubBuilderFetch();
+
+    await enqueueBuild(bundleWithFiles(4), { platform: "android" });
+
+    // The Worker has ~50MB of FormData and decoded files alive already; a second copy of
+    // the archive is what pushes a large export toward the 128MB limit.
+    const body = archiveCall(fetchMock)?.[1]?.body;
+    expect(body).toBeInstanceOf(ReadableStream);
+    expect(ArrayBuffer.isView(body)).toBe(false);
+  });
+
+  it("sets duplex on the stream body so Node's fetch accepts it", async () => {
+    await stubBuilderEnv();
+    const fetchMock = stubBuilderFetch();
+
+    // No FixedLengthStream here, which is exactly the `npm run dev` / Node shape. Without
+    // `duplex` that runtime throws "duplex option is required when sending a body" before
+    // the request is opened, so the upload would fail without ever reaching GCS.
+    expect((globalThis as Record<string, unknown>).FixedLengthStream).toBeUndefined();
+    await enqueueBuild(bundleWithFiles(3), { platform: "android" });
+
+    const init = archiveCall(fetchMock)?.[1] as (RequestInit & { duplex?: string }) | undefined;
+    expect(init?.duplex).toBe("half");
+  });
+
+  it("omits duplex when the Workers runtime supplies a FixedLengthStream body", async () => {
+    await stubBuilderEnv();
+    const fetchMock = stubBuilderFetch();
+    class StubFixedLengthStream {
+      readable: ReadableStream<Uint8Array>;
+      writable: WritableStream<Uint8Array>;
+      constructor() {
+        const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+        this.readable = readable;
+        this.writable = writable;
+      }
+    }
+    vi.stubGlobal("FixedLengthStream", StubFixedLengthStream);
+
+    await enqueueBuild(bundleWithFiles(3), { platform: "android" });
+
+    // Workers sets Content-Length from the stream itself; `duplex` is a Node requirement
+    // and has no meaning there.
+    const init = archiveCall(fetchMock)?.[1] as (RequestInit & { duplex?: string }) | undefined;
+    expect(init?.duplex).toBeUndefined();
+  });
+
+  it("rejects an oversized field before it opens the upload request", async () => {
+    await stubBuilderEnv();
+    const fetchMock = stubBuilderFetch();
+
+    const bundle = bundleWithFiles(1);
+    bundle.files[0].field = "f".repeat(4097);
+
+    await expect(enqueueBuild(bundle, { platform: "android" })).rejects.toThrow("input_archive_field_too_large");
+    // Auth may have run, but nothing was uploaded: a length that only failed mid-stream
+    // would abort a request GCS had already accepted.
+    expect(fetchMock.mock.calls.filter((call) => String(call[0]).startsWith(uploadEndpoint))).toHaveLength(0);
   });
 
   it("tells the builder which archive to read", async () => {

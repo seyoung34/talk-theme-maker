@@ -1,4 +1,5 @@
-import { createInputArchive, INPUT_ARCHIVE_FILE_NAME } from "@/lib/theme/export/inputArchive";
+import { createFixedLengthBody } from "@/lib/theme/export/fixedLengthBody";
+import { createInputArchiveStream, INPUT_ARCHIVE_FILE_NAME, measureInputArchive } from "@/lib/theme/export/inputArchive";
 import type { ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
 
 // Cloudflare Worker → GCP를 Workload Identity Federation(OIDC)으로 인증하고,
@@ -157,7 +158,10 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: EnqueueBu
   // 50 subrequests and an Android theme can carry 40+ files, so per-file uploads
   // crossed that ceiling and killed the request mid-upload — before the catch block
   // could even record the failure. iOS has used this path since it was introduced.
-  const inputArchive = createInputArchive(bundle.files);
+  //
+  // The archive is streamed rather than built in memory. Measuring first both sizes the
+  // fixed-length body and rejects an oversized field or total before any request starts.
+  const inputArchiveBytes = measureInputArchive(bundle.files);
   await options.progress?.onInputUploadStarted?.();
 
   const bundleJson = JSON.stringify({
@@ -177,7 +181,14 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: EnqueueBu
 
   await Promise.all([
     uploadObject(config.inputBucket, `${prefix}/bundle.json`, new TextEncoder().encode(bundleJson), "application/json", accessToken),
-    uploadObject(config.inputBucket, `${prefix}/${INPUT_ARCHIVE_FILE_NAME}`, inputArchive, "application/octet-stream", accessToken),
+    uploadStreamedObject(
+      config.inputBucket,
+      `${prefix}/${INPUT_ARCHIVE_FILE_NAME}`,
+      createInputArchiveStream(bundle.files),
+      inputArchiveBytes,
+      "application/octet-stream",
+      accessToken,
+    ),
   ]);
   await options.progress?.onInputReady?.();
 
@@ -299,8 +310,80 @@ async function impersonateServiceAccount(
   return payload.accessToken;
 }
 
+/**
+ * `duplex` is required by Node's fetch for a streaming body and is absent from `lib.dom`.
+ * Declaring it here keeps the rest of the init type-checked.
+ */
+type StreamingRequestInit = RequestInit & { duplex?: "half" };
+
+function uploadObjectUrl(bucket: string, objectName: string) {
+  return `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+}
+
+/**
+ * Uploads `source` without ever holding the whole object in memory.
+ *
+ * A 50MB export already keeps the FormData and every decoded file alive against a 128MB
+ * Worker limit; materialising the archive on top of that is what this avoids. The GCS
+ * subrequest count is unchanged — still one request per object.
+ */
+export async function uploadStreamedObject(
+  bucket: string,
+  objectName: string,
+  source: ReadableStream<Uint8Array>,
+  contentLength: number,
+  contentType: string,
+  accessToken: string,
+) {
+  const { body, written, fixedLength } = createFixedLengthBody(source, contentLength);
+  // Node's fetch rejects a stream body outright without `duplex` — "duplex option is
+  // required when sending a body" — which would break `npm run dev` and any non-Workers
+  // runtime before the request is even opened. `lib.dom` does not declare the field, so it
+  // is added through a local type rather than a cast that would drop checking on the rest.
+  const init: StreamingRequestInit = {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": contentType },
+    body: body as unknown as BodyInit,
+    // A `FixedLengthStream` body is a Workers construct that needs no such flag, so this is
+    // set only on the fallback path.
+    ...(fixedLength ? {} : { duplex: "half" as const }),
+  };
+
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(uploadObjectUrl(bucket, objectName), init, {
+      code: "gcs_upload_request_failed",
+      message: "빌드 입력 업로드 요청에 실패했습니다.",
+      timeoutMs: gcpRequestTimeoutMs,
+    }, async (settled) => {
+      await settled.arrayBuffer();
+      return settled;
+    });
+  } catch (error) {
+    // Settle the pipe before propagating so it cannot outlive the request.
+    await written.catch(() => {});
+    throw error;
+  }
+
+  // Checked before the status: a write that stopped early can still leave an object GCS
+  // accepts, and a truncated archive would only fail much later inside the builder.
+  try {
+    await written;
+  } catch (error) {
+    throw new BuildEnqueueError(
+      "gcs_upload_stream_failed",
+      "빌드 입력 업로드에 실패했습니다.",
+      error instanceof Error ? error.message : undefined,
+    );
+  }
+
+  if (!response.ok) {
+    throw new BuildEnqueueError("gcs_upload_failed", "빌드 입력 업로드에 실패했습니다.", `HTTP ${response.status}`);
+  }
+}
+
 export async function uploadObject(bucket: string, objectName: string, bytes: Uint8Array, contentType: string, accessToken: string) {
-  const url = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+  const url = uploadObjectUrl(bucket, objectName);
   const response = await fetchWithTimeout(url, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": contentType },
