@@ -464,7 +464,7 @@ const sharedBackgroundUploadRoles: readonly ThemeResourceRole[] = ["main_backgro
 
 /**
  * 관리자와 사용자 업로드는 같은 asset kind 어휘를 쓰되, 공유 가능성까지 kind 하나로 판단하지 않는다.
- * 관리용 kind에는 스플래시·테마 아이콘·탭 바 9-patch처럼 크기와 출력 방식이 다른 슬롯도 함께
+ * 관리용 kind에는 스플래시·일반 배경·탭 바 9-patch처럼 크기와 출력 방식이 다른 슬롯도 함께
  * 들어간다. 사용자가 자주 재사용하는 전체 화면 배경·탭 아이콘·기본 말풍선만 좁은 공유 그룹으로
  * 열어 잘못된 내보내기를 막는다.
  */

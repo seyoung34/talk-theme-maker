@@ -110,11 +110,24 @@ describe("useProjectAssetUploads - 말풍선 슬롯 간 추천 에셋 공유", (
     await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(2));
   });
 
+  it("실행 스플래시는 background kind로 추천을 요청한다", async () => {
+    listRecommendedAssetCandidatePage.mockClear();
+    const { result } = renderWithSlot(splash);
+
+    await vi.waitFor(() => expect(result.current.isLoadingAdminAssets).toBe(false));
+
+    expect(listRecommendedAssetCandidatePage).toHaveBeenCalledWith(expect.objectContaining({
+      platform: "android",
+      assetKind: "background",
+      slotRole: "splash",
+    }));
+  });
+
   /**
    * 같은 풀 안에서 슬롯만 옮긴 뒤 첫 요청이 실패하면, 예전에는 그 자리에서 곧바로 다시 요청했다.
    * 클라이언트가 `slotRole`을 풀 대표 역할로 정규화해 보내므로 그 재요청은 방금 실패한 것과 같은
    * URL이라 똑같이 실패하고 알림만 두 번 뜬다 — 이 테스트가 그 회귀를 잡는다.
-   */
+  */
   it("같은 풀에서 슬롯을 옮긴 뒤 첫 요청이 실패해도 즉시 재요청하지 않고 알림도 한 번만 띄운다", async () => {
     listRecommendedAssetCandidatePage.mockClear();
     const pending = deferredPage();

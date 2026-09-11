@@ -84,7 +84,6 @@ describe("catalog export access", () => {
    * 아이콘이 내보내기에서 403이 된다.
    */
   it.each([
-    ["splash", "android"],
     ["find_add_friend", "android"],
     ["find_add_friend", "ios"],
   ] as const)("%s(%s) 슬롯은 슬롯 정의 기준 kind로 판정한다", (resourceRole, platform) => {
@@ -97,6 +96,18 @@ describe("catalog export access", () => {
       admin_asset_targets: [{ asset_id: assetId, platform: "all", slot_role: null, target_kind: "asset_kind", priority: 0, enabled: true }],
     });
     expect(isAdminAssetAllowedForExport({ asset: icon, platform, resourceRole })).toBe(true);
+  });
+
+  it.each(["splash", "splash_landscape"] as const)("%s 슬롯은 배경 에셋을 허용한다", (resourceRole) => {
+    const background = mapAdminAssetExportAccessRow({
+      id: assetId,
+      slot_role: "main_background",
+      platform: "all",
+      asset_kind: "background",
+      enabled: true,
+      admin_asset_targets: [{ asset_id: assetId, platform: "all", slot_role: null, target_kind: "asset_kind", priority: 0, enabled: true }],
+    });
+    expect(isAdminAssetAllowedForExport({ asset: background, platform: "android", resourceRole })).toBe(true);
   });
 
   it("호환되는 말풍선 role은 기존 추천 target 규칙처럼 허용한다", () => {

@@ -50,13 +50,12 @@ describe("getSharedUploadPeers", () => {
     ]);
   });
 
-  it("탭 아이콘끼리만 공유하고 같은 icon kind의 테마 아이콘·스플래시는 제외한다", () => {
+  it("탭 아이콘끼리만 공유하고 같은 icon kind의 테마 아이콘은 제외한다", () => {
     const tabIcon = slots.find((slot) => slot.role === "tab_icon_friends")!;
     const iconPeers = getSharedUploadPeers(tabIcon, slots);
     expect(iconPeers.length).toBeGreaterThan(0);
     expect(iconPeers.every((peer) => peer.role.startsWith("tab_icon_"))).toBe(true);
     expect(iconPeers.map((peer) => peer.role)).not.toContain("theme_icon");
-    expect(iconPeers.map((peer) => peer.role)).not.toContain("splash");
   });
 
   it("같은 관리 kind여도 출력 규격이 다른 슬롯은 공유하지 않는다", () => {
