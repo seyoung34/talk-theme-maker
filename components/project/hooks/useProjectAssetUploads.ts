@@ -1,16 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { inferAdminAssetKind, listRecommendedAssetCandidatePage, type AdminAssetCandidate, type AdminAssetKind } from "@/lib/theme/adminAssets";
+import { getAdminAssetRecommendationPool } from "@/lib/theme/adminAssetWorkspace";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
-import type { ThemePlatform } from "@/lib/theme/types";
+import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
-/**
- * 추천 API 응답 항목.
- *
- * `thumbnailUrl`은 R2 축소본이 있을 때만 붙는다. 타일은 이걸 그리고, 원본(`previewUrl`)은
- * 이미지 편집기를 열 때만 받는다. 없으면 화면이 기존대로 `previewUrl`로 그린다.
- */
+const recommendedPoolCacheTtlMs = 5 * 60 * 1000;
+const recommendedPoolRequestTimeoutMs = 30 * 1000;
+const recommendedPoolCacheMaxEntries = 12;
+
 type RecommendedAdminAsset = AdminAssetCandidate & {
   readonly thumbnailUrl?: string;
   readonly recommendationContext?: AdminAssetLoadContext;
@@ -28,65 +27,135 @@ type UseProjectAssetUploadsOptions = {
 };
 
 type AdminAssetLoadContext = {
+  readonly poolKey: string;
   readonly platform: ThemePlatform;
   readonly assetKind: AdminAssetKind;
-  readonly slotRole: string;
+  readonly slotRole: ThemeResourceRole;
 };
 
-function isSameAdminAssetLoadContext(left: AdminAssetLoadContext | null, right: AdminAssetLoadContext) {
-  if (!left || left.platform !== right.platform || left.assetKind !== right.assetKind) return false;
-  // 네 기본 말풍선은 하나의 추천 풀을 공유한다. 그 밖의 kind는 slotRole까지 일치해야
-  // 이전 요청의 결과를 다른 슬롯에 재사용하지 않는다.
-  return right.assetKind === "bubble" || left.slotRole === right.slotRole;
+type AdminAssetPoolEntry = {
+  readonly context: AdminAssetLoadContext;
+  readonly items: readonly RecommendedAdminAsset[];
+  readonly nextCursor?: string;
+  readonly status: "loading" | "ready" | "error" | "expired";
+  readonly loadedAt: number;
+  readonly lastAccessedAt: number;
+  readonly requestStartedAt?: number;
+  readonly requestId: number;
+};
+
+function isReusablePoolEntry(entry: AdminAssetPoolEntry | undefined, now: number): entry is AdminAssetPoolEntry {
+  if (!entry || entry.status === "error") return false;
+  if (entry.status === "loading") return now - (entry.requestStartedAt ?? 0) < recommendedPoolRequestTimeoutMs;
+  return now - entry.loadedAt < recommendedPoolCacheTtlMs;
+}
+
+function pruneRecommendedPoolCache(cache: Map<string, AdminAssetPoolEntry>, protectedKey: string) {
+  while (cache.size > recommendedPoolCacheMaxEntries) {
+    const oldest = [...cache.entries()]
+      .filter(([key, entry]) => key !== protectedKey && (entry.status !== "loading" || !isReusablePoolEntry(entry, Date.now())))
+      .sort((left, right) => left[1].lastAccessedAt - right[1].lastAccessedAt)[0];
+    if (!oldest) return;
+    cache.delete(oldest[0]);
+  }
 }
 
 export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: UseProjectAssetUploadsOptions) {
-    // thumbnailUrl은 추천 API가 R2 축소본이 있을 때만 붙인다. 없으면 화면이 previewUrl로 그린다.
-  const [adminAssets, setAdminAssets] = useState<RecommendedAdminAsset[]>([]);
-  const [adminAssetCursor, setAdminAssetCursor] = useState<string>();
-  const [isLoadingAdminAssets, setIsLoadingAdminAssets] = useState(false);
-  /** 마지막으로 성공적으로 완료된 추천 요청의 컨텍스트. pending/실패 요청은 기록하지 않는다. */
-  const [loadedFor, setLoadedFor] = useState<AdminAssetLoadContext | null>(null);
+  const poolCacheRef = useRef(new Map<string, AdminAssetPoolEntry>());
+  const requestIdRef = useRef(0);
+  const mountedRef = useRef(true);
+  const currentPoolKeyRef = useRef<string | undefined>(undefined);
   const setNoticeRef = useRef(setNotice);
+  const [, setCacheRevision] = useState(0);
+  const [expiryRevision, setExpiryRevision] = useState(0);
 
   useEffect(() => {
     setNoticeRef.current = setNotice;
   }, [setNotice]);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const selectedSlotRole = selectedSlot?.role;
   const selectedAssetKind = selectedSlot && selectedSlot.kind !== "color" ? inferAdminAssetKind(selectedSlot) : undefined;
-  const currentLoadContext = useMemo(
-    () => selectedAssetKind && selectedSlotRole
-      ? { platform, assetKind: selectedAssetKind, slotRole: selectedSlotRole }
-      : null,
-    [platform, selectedAssetKind, selectedSlotRole],
-  );
-  const hasLoadedCurrentContext = Boolean(currentLoadContext && isSameAdminAssetLoadContext(loadedFor, currentLoadContext));
+  const currentLoadContext = useMemo<AdminAssetLoadContext | null>(() => {
+    if (!selectedAssetKind || !selectedSlotRole) return null;
+    const pool = getAdminAssetRecommendationPool({ role: selectedSlotRole, kind: selectedAssetKind }, platform);
+    return { poolKey: pool.key, platform, assetKind: selectedAssetKind, slotRole: selectedSlotRole };
+  }, [platform, selectedAssetKind, selectedSlotRole]);
+  /**
+   * 비동기 오류가 슬롯 전환 직후 도착해도 현재 풀에만 알림을 띄우기 위한 latest-value ref다.
+   *
+   * 렌더 중에 쓰면 커밋되지 않은 렌더(중단된 concurrent 렌더, StrictMode 이중 호출)의 풀 키가
+   * 남아 알림이 엉뚱한 풀로 간다. 그렇다고 passive effect로 미루면 커밋과 effect flush 사이가
+   * 비는데, 방금 떠난 풀의 요청이 하필 그 틈에 실패하면 여전히 엉뚱한 풀 키로 판정한다.
+   * 커밋 직후 동기적으로 도는 layout effect가 그 창을 닫는다.
+   */
+  useLayoutEffect(() => {
+    currentPoolKeyRef.current = currentLoadContext?.poolKey;
+  }, [currentLoadContext]);
 
+  const currentEntry = currentLoadContext ? poolCacheRef.current.get(currentLoadContext.poolKey) : undefined;
+  const visibleEntry = currentEntry?.status === "loading" || currentEntry?.status === "ready" ? currentEntry : undefined;
   const adminAssetsWithPreview = useMemo(
-    () => hasLoadedCurrentContext ? adminAssets.map((asset) => ({ ...asset, previewUrl: asset.previewUrl ?? "" })) : [],
-    [adminAssets, hasLoadedCurrentContext],
+    () => visibleEntry?.items.map((asset) => ({ ...asset, previewUrl: asset.previewUrl ?? "" })) ?? [],
+    [visibleEntry],
   );
+  const adminAssetCursor = visibleEntry?.nextCursor;
+  const isLoadingAdminAssets = visibleEntry?.status === "loading";
 
   useEffect(() => {
-    let active = true;
-    if (!currentLoadContext) {
-      setLoadedFor(null);
-      setAdminAssets([]);
-      setAdminAssetCursor(undefined);
-      setIsLoadingAdminAssets(false);
-      return () => { active = false; };
+    // A pagination request keeps the first page's freshness epoch. Its status becomes
+    // loading while it is in flight, so retain this deadline as long as it has a real
+    // first-page completion time. An initial first-page request has loadedAt: 0.
+    if (!currentLoadContext || !currentEntry?.loadedAt || (currentEntry.status !== "ready" && currentEntry.status !== "loading")) return;
+
+    const { loadedAt } = currentEntry;
+    const delay = Math.max(0, loadedAt + recommendedPoolCacheTtlMs - Date.now());
+    const timeout = window.setTimeout(() => {
+      const entry = poolCacheRef.current.get(currentLoadContext.poolKey);
+      if (
+        !entry
+        || entry.loadedAt !== loadedAt
+        || (entry.status !== "ready" && entry.status !== "loading")
+        || Date.now() - entry.loadedAt < recommendedPoolCacheTtlMs
+      ) return;
+
+      // Do not paint an expired page while the first-page refresh is being scheduled.
+      poolCacheRef.current.set(currentLoadContext.poolKey, { ...entry, status: "expired" });
+      setExpiryRevision((current) => current + 1);
+      setCacheRevision((current) => current + 1);
+    }, delay);
+
+    return () => window.clearTimeout(timeout);
+  }, [currentEntry, currentLoadContext]);
+
+  useEffect(() => {
+    if (!currentLoadContext) return;
+
+    const now = Date.now();
+    const cached = poolCacheRef.current.get(currentLoadContext.poolKey);
+    if (isReusablePoolEntry(cached, now)) {
+      poolCacheRef.current.set(currentLoadContext.poolKey, { ...cached, context: currentLoadContext, lastAccessedAt: now });
+      return;
     }
 
-    if (hasLoadedCurrentContext) {
-      setIsLoadingAdminAssets(false);
-      return () => { active = false; };
-    }
+    const requestId = ++requestIdRef.current;
+    poolCacheRef.current.set(currentLoadContext.poolKey, {
+      context: currentLoadContext,
+      items: [],
+      status: "loading",
+      loadedAt: 0,
+      lastAccessedAt: now,
+      requestStartedAt: now,
+      requestId,
+    });
+    setCacheRevision((current) => current + 1);
 
-    // 슬롯이 바뀌면 새 응답이 올 때까지 이전 후보와 cursor를 노출하지 않는다.
-    setAdminAssets([]);
-    setAdminAssetCursor(undefined);
-    setIsLoadingAdminAssets(true);
     listRecommendedAssetCandidatePage({
       platform: currentLoadContext.platform,
       assetKind: currentLoadContext.assetKind,
@@ -94,48 +163,97 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
       limit: 24,
     })
       .then((page) => {
-        if (!active) return;
-        setAdminAssets(page.items.map((item) => ({ ...item, recommendationContext: currentLoadContext })));
-        setAdminAssetCursor(page.nextCursor);
-        setLoadedFor(currentLoadContext);
+        if (!mountedRef.current) return;
+        const entry = poolCacheRef.current.get(currentLoadContext.poolKey);
+        if (!entry || entry.requestId !== requestId) return;
+        const completedAt = Date.now();
+        poolCacheRef.current.set(currentLoadContext.poolKey, {
+          context: currentLoadContext,
+          items: page.items.map((item) => ({ ...item, recommendationContext: currentLoadContext })),
+          nextCursor: page.nextCursor,
+          status: "ready",
+          loadedAt: completedAt,
+          lastAccessedAt: completedAt,
+          requestId,
+        });
+        pruneRecommendedPoolCache(poolCacheRef.current, currentLoadContext.poolKey);
+        setCacheRevision((current) => current + 1);
       })
+      /**
+       * 실패는 풀에 기록만 하고 여기서 다시 요청하지 않는다.
+       *
+       * 같은 풀 안에서 슬롯만 바뀐 경우 클라이언트는 `slotRole`을 풀 대표 역할로 정규화해 보내므로,
+       * 재요청 URL이 방금 실패한 것과 바이트단위로 같다. 그래서 거의 항상 같이 실패하고 똑같은 알림만
+       * 한 번 더 띄운다. error 풀은 재사용 대상이 아니므로, 다음 슬롯 전환이나 풀 재진입이
+       * 자연스럽게 다시 요청한다.
+       */
       .catch((error) => {
-        if (!active) return;
+        if (!mountedRef.current) return;
+        const entry = poolCacheRef.current.get(currentLoadContext.poolKey);
+        if (!entry || entry.requestId !== requestId) return;
         console.error(error);
-        setLoadedFor(null);
-        setAdminAssets([]);
-        setAdminAssetCursor(undefined);
-        setNoticeRef.current({ tone: "error", message: "추천 에셋을 불러오지 못했습니다." });
-      })
-      .finally(() => { if (active) setIsLoadingAdminAssets(false); });
-    return () => { active = false; };
-  }, [currentLoadContext, hasLoadedCurrentContext]);
+        poolCacheRef.current.set(currentLoadContext.poolKey, { ...entry, status: "error" });
+        if (currentPoolKeyRef.current === currentLoadContext.poolKey) {
+          setNoticeRef.current({ tone: "error", message: "추천 에셋을 불러오지 못했습니다." });
+        }
+        setCacheRevision((current) => current + 1);
+      });
+  }, [currentLoadContext, expiryRevision]);
 
   const loadMoreAdminAssets = useCallback(async () => {
-    if (!currentLoadContext || !hasLoadedCurrentContext || !adminAssetCursor || isLoadingAdminAssets) return;
+    if (!currentLoadContext) return;
+    const entry = poolCacheRef.current.get(currentLoadContext.poolKey);
+    if (!entry || entry.status !== "ready" || !entry.nextCursor) return;
+
+    const requestId = ++requestIdRef.current;
+    const cursor = entry.nextCursor;
+    const requestStartedAt = Date.now();
+    poolCacheRef.current.set(currentLoadContext.poolKey, { ...entry, status: "loading", requestId, requestStartedAt, lastAccessedAt: requestStartedAt });
+    setCacheRevision((current) => current + 1);
     try {
-      setIsLoadingAdminAssets(true);
       const page = await listRecommendedAssetCandidatePage({
         platform: currentLoadContext.platform,
         assetKind: currentLoadContext.assetKind,
         slotRole: currentLoadContext.slotRole,
-        cursor: adminAssetCursor,
+        cursor,
         limit: 24,
       });
-      setAdminAssets((current) => [
-        ...current,
-        ...page.items
-          .filter((item) => !current.some((existing) => existing.id === item.id))
-          .map((item) => ({ ...item, recommendationContext: currentLoadContext })),
-      ]);
-      setAdminAssetCursor(page.nextCursor);
+      if (!mountedRef.current) return;
+      const pending = poolCacheRef.current.get(currentLoadContext.poolKey);
+      if (!pending || pending.requestId !== requestId) return;
+      const existingIds = new Set(pending.items.map((item) => item.id));
+      const completedAt = Date.now();
+      const expired = completedAt - pending.loadedAt >= recommendedPoolCacheTtlMs;
+      poolCacheRef.current.set(currentLoadContext.poolKey, {
+        ...pending,
+        context: currentLoadContext,
+        items: [
+          ...pending.items,
+          ...page.items
+            .filter((item) => !existingIds.has(item.id))
+            .map((item) => ({ ...item, recommendationContext: currentLoadContext })),
+        ],
+        nextCursor: page.nextCursor,
+        status: expired ? "expired" : "ready",
+        // Paging must never extend the first page's freshness epoch.
+        loadedAt: pending.loadedAt,
+        lastAccessedAt: completedAt,
+      });
+      if (expired) setExpiryRevision((current) => current + 1);
+      pruneRecommendedPoolCache(poolCacheRef.current, currentLoadContext.poolKey);
+      setCacheRevision((current) => current + 1);
     } catch (error) {
+      if (!mountedRef.current) return;
+      const pending = poolCacheRef.current.get(currentLoadContext.poolKey);
+      if (!pending || pending.requestId !== requestId) return;
       console.error(error);
-      setNotice({ tone: "error", message: "추천 에셋을 더 불러오지 못했습니다." });
-    } finally {
-      setIsLoadingAdminAssets(false);
+      poolCacheRef.current.set(currentLoadContext.poolKey, { ...pending, status: "ready" });
+      if (currentPoolKeyRef.current === currentLoadContext.poolKey) {
+        setNoticeRef.current({ tone: "error", message: "추천 에셋을 더 불러오지 못했습니다." });
+      }
+      setCacheRevision((current) => current + 1);
     }
-  }, [adminAssetCursor, currentLoadContext, hasLoadedCurrentContext, isLoadingAdminAssets, setNotice]);
+  }, [currentLoadContext]);
 
   return {
     adminAssetCursor,

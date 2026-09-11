@@ -1,5 +1,5 @@
-import type { AdminAssetCandidate, AdminAssetKind, AdminAssetPlatform, AdminAssetTarget, AdminAssetTargetInput } from "@/lib/theme/adminAssetDomain";
-import { getAdminAssetKindLabel, inferAdminAssetKind } from "@/lib/theme/adminAssetDomain";
+import type { AdminAssetCandidate, AdminAssetKind, AdminAssetPlatform, AdminAssetRecommendationPool, AdminAssetTarget, AdminAssetTargetInput } from "@/lib/theme/adminAssetDomain";
+import { getAdminAssetKindLabel, getAdminAssetRecommendationFamily, inferAdminAssetKind } from "@/lib/theme/adminAssetDomain";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeResourceRole } from "@/lib/theme/types";
 
@@ -11,7 +11,10 @@ export type AdminAssetWorkspaceSlot = {
   readonly variants: Partial<Record<ThemePlatform, ThemeAssetSlot>>;
 };
 
-export type AdminAssetMatchRank = 0 | 1 | 2;
+export type AdminAssetMatchRank = 0 | 1;
+
+export { getAdminAssetRecommendationPool } from "@/lib/theme/adminAssetDomain";
+export type { AdminAssetRecommendationPool } from "@/lib/theme/adminAssetDomain";
 
 /**
  * 판정에 필요한 슬롯. `role`은 없을 수 있다 — 추천 API는 슬롯을 지정하지 않고 kind 전체를
@@ -36,6 +39,29 @@ export type AdminAssetTargetMatch = {
   readonly target: AdminAssetTarget;
   readonly rank: AdminAssetMatchRank;
 };
+
+/**
+ * 한 추천 풀의 안정된 정렬에 사용할 target을 고른다.
+ *
+ * 같은 family 안의 legacy exact target은 모두 rank 0으로 평탄화하고 kind 전체 target은
+ * rank 1로 둔다. 기존 `selectAdminAssetTargetMatch`는 export 접근 판정에도 쓰이므로 변경하지
+ * 않는다. 이 함수가 넓히는 것은 추천 순서가 아니라 이미 호환으로 허용된 풀의 기준점뿐이다.
+ */
+export function selectAdminAssetRecommendationPoolTargetMatch(
+  pool: AdminAssetRecommendationPool,
+  asset: AdminAssetMatchInput,
+): AdminAssetTargetMatch | undefined {
+  let best: AdminAssetTargetMatch | undefined;
+  for (const target of resolveMatchTargets(asset)) {
+    if (target.platform !== "all" && target.platform !== pool.platform) continue;
+    const rank = getRecommendationPoolTargetMatchRank(pool, target, asset.assetKind);
+    if (rank === undefined) continue;
+    if (!best || rank < best.rank || (rank === best.rank && target.priority > best.target.priority)) {
+      best = { target, rank };
+    }
+  }
+  return best;
+}
 
 /**
  * 이 에셋을 이 슬롯에 추천할 근거가 되는 target 하나와 그 순위.
@@ -190,6 +216,20 @@ function getTargetMatchRank(
   return target.targetKind === "asset_kind" && assetKind === slot.kind ? 1 : undefined;
 }
 
+function getRecommendationPoolTargetMatchRank(
+  pool: AdminAssetRecommendationPool,
+  target: Pick<AdminAssetTarget, "targetKind" | "slotRole">,
+  assetKind?: AdminAssetKind,
+): AdminAssetMatchRank | undefined {
+  if (target.targetKind === "exact_role") {
+    if (!target.slotRole) return undefined;
+    if (pool.family) return getAdminAssetRecommendationFamily(pool.kind, target.slotRole) === pool.family ? 0 : undefined;
+    return target.slotRole === pool.role ? 0 : undefined;
+  }
+  if (target.slotRole) return undefined;
+  return target.targetKind === "asset_kind" && assetKind === pool.kind ? 1 : undefined;
+}
+
 /**
  * child target이 아직 없는 legacy 행만 부모 컬럼으로 target 하나를 만든다.
  *
@@ -212,20 +252,6 @@ function resolveMatchTargets(asset: AdminAssetMatchInput): readonly AdminAssetTa
 }
 
 function isCompatibleRole(assetKind: AdminAssetKind, targetRole: string, requestedRole: string): boolean {
-  if (assetKind === "bubble") return targetRole.startsWith("bubble_") && requestedRole.startsWith("bubble_");
-  if (assetKind === "background") return isSharedBackgroundRole(targetRole) && isSharedBackgroundRole(requestedRole);
-  // kind 전체 target이 도입되기 전에는 아이콘 에셋이 대표 슬롯(theme_icon) 또는 특정 탭
-  // 아이콘의 exact_role로 저장됐다. 같은 정사각형 아이콘 계열인 암호 표시 슬롯에서도
-  // 이런 기존 후보를 잃지 않도록 exact-role 호환성을 열되, 출력 규격이 다른 splash는
-  // 이 경로에 포함하지 않는다.
-  if (assetKind === "icon") return isSharedIconRole(targetRole) && isSharedIconRole(requestedRole);
-  return false;
-}
-
-function isSharedBackgroundRole(role: string): boolean {
-  return role === "main_background" || role === "chat_background" || role === "tab_background_image";
-}
-
-function isSharedIconRole(role: string): boolean {
-  return role === "theme_icon" || role.startsWith("tab_icon_") || role.startsWith("passcode_indicator_");
+  const targetFamily = getAdminAssetRecommendationFamily(assetKind, targetRole);
+  return targetFamily !== undefined && targetFamily === getAdminAssetRecommendationFamily(assetKind, requestedRole);
 }

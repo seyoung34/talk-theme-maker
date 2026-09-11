@@ -3,7 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createTtlCache } from "@/lib/shared/ttlCache";
 import { createAdminClient } from "@/lib/supabase/server";
 import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAssetPlatformVariant, type AdminAssetCandidate, type AdminAssetKind, type AdminAssetTarget } from "@/lib/theme/adminAssets";
-import { selectAdminAssetTargetMatch } from "@/lib/theme/adminAssetWorkspace";
+import {
+  getAdminAssetRecommendationPool,
+  selectAdminAssetRecommendationPoolTargetMatch,
+  selectAdminAssetTargetMatch,
+  type AdminAssetRecommendationPool,
+} from "@/lib/theme/adminAssetWorkspace";
 import type { ThemeResourceRole } from "@/lib/theme/types";
 import { adminLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { buildPickerThumbnailIndex, filterPickerThumbnailRowsForCurrentAssets, selectPickerThumbnailUrl, type PickerThumbnailAssetRef, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
@@ -17,6 +22,15 @@ const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "l
 /** 한 번의 PostgREST 요청 크기. 추천 결과를 정확히 정렬하려면 모든 source를 읽어야 한다. */
 const sourceBatchSize = 200;
 const recommendedPageCacheTtlSeconds = 30;
+/**
+ * cursor 형식 버전.
+ *
+ * cursor는 `matchRank` 위에서 자르므로, 랭킹 규칙이 바뀌면 예전 cursor의 rank 숫자는 새 정렬에서
+ * 다른 지점을 가리킨다. rank만 검사하면 예전 rank 0/1 cursor가 "유효한 값"으로 통과해 조용히
+ * 후보를 건너뛴다. 버전 토큰을 앞에 붙여 규칙이 바뀔 때마다 올리고, 토큰이 맞지 않는 cursor는
+ * 전부 첫 페이지로 되돌린다.
+ */
+const recommendedCursorVersion = "v2";
 
 const recommendedAssetSelect = [
   "id",
@@ -42,7 +56,7 @@ const recommendedAssetSelect = [
 
 type RecommendedResponseItem = AdminAssetCandidate & {
   readonly target: AdminAssetTarget;
-  readonly matchRank: 0 | 1 | 2;
+  readonly matchRank: 0 | 1;
   /**
    * 피커 타일 전용 축소본(R2).
    *
@@ -58,11 +72,11 @@ type RecommendedResponseItem = AdminAssetCandidate & {
 type RankedAsset = {
   readonly asset: ReturnType<typeof mapCanonicalAdminAssetRow>;
   readonly target: AdminAssetTarget;
-  readonly matchRank: 0 | 1 | 2;
+  readonly matchRank: 0 | 1;
 };
 
 type Cursor = {
-  readonly matchRank: 0 | 1 | 2;
+  readonly matchRank: 0 | 1;
   readonly priority: number;
   readonly updatedAt: number;
   readonly id: string;
@@ -79,9 +93,8 @@ type RecommendedPagePayload = {
  * 비싼 부분(원본 배치 조회·랭킹·서명 URL 배치·썸네일 색인)은 30초 재사용해도 안전하다. 서명 URL은
  * TTL이 10분이라 이 창보다 훨씬 길고, 썸네일은 화면에만 쓰인다.
  *
- * catalog ref만 매 요청 다시 읽는다. 그 값은 export가 어떤 **바이트**를 가져올지 정하므로,
- * 관리자가 같은 Storage 경로에 새 이미지를 올린 직후 30초 동안 예전 object id를 물려주면
- * 피커는 새 그림을 보여 주면서 결과물에는 옛 그림이 들어간다.
+ * 서버까지 도달한 요청은 catalog ref만 다시 읽는다. 브라우저와 클라이언트 풀 캐시가 응답을
+ * 보유하는 동안에는 함께 재사용되므로, 그 신선도 상한은 각 캐시의 hard expiry가 정한다.
  */
 type RecommendedPageBase = {
   readonly entries: readonly {
@@ -89,7 +102,7 @@ type RecommendedPageBase = {
     readonly candidate: AdminAssetCandidate;
     readonly usesPlatformVariant: boolean;
     readonly target: AdminAssetTarget;
-    readonly matchRank: 0 | 1 | 2;
+    readonly matchRank: 0 | 1;
     readonly thumbnailUrl?: string;
   }[];
   readonly nextCursor?: string;
@@ -116,7 +129,8 @@ export async function GET(request: NextRequest) {
 
     // 편집기에서 슬롯을 고를 때마다 호출되는 경로다. 등록 후보 집합을 짧게 재사용해
     // 슬롯 클릭마다 원본 전체를 다시 읽지 않게 한다.
-    const cacheKey = [platform, assetKind, slotRole ?? "", limit, cursor ? cursorParam : ""].join("|");
+    const recommendationPool = slotRole ? getAdminAssetRecommendationPool({ role: slotRole, kind: assetKind }, platform) : undefined;
+    const cacheKey = [recommendationPool?.key ?? `${platform}|${assetKind}|all`, limit, cursor ? cursorParam : ""].join("|");
     const admin = createAdminClient();
     const cached = recommendedPageCache.get(cacheKey);
     if (cached) return jsonRecommendedPage(await attachCatalogRefs(admin, cached, platform));
@@ -125,7 +139,7 @@ export async function GET(request: NextRequest) {
 
     const ranked = (data)
       .map((row: unknown) => mapCanonicalAdminAssetRow(row))
-      .flatMap((asset) => rankAsset(asset, platform, slotRole, assetKind))
+      .flatMap((asset) => rankAsset(asset, platform, assetKind, recommendationPool))
       .sort(compareRankedAssets);
     const cursorFiltered = cursor ? ranked.filter((item) => compareRankedAssetToCursor(item, cursor) > 0) : ranked;
     const page = cursorFiltered.slice(0, limit);
@@ -223,11 +237,10 @@ async function readActiveAdminCatalogRecords(admin: ReturnType<typeof createAdmi
 }
 
 /**
- * 캐시된 페이지에 **현재** catalog ref를 붙인다.
+ * 서버 메모리 캐시의 페이지에 요청 시점의 catalog ref를 붙인다.
  *
- * registry 조회만 매 요청 다시 도는 이유는 이 값이 화면이 아니라 export가 가져올 바이트를
- * 정하기 때문이다. 관리자가 같은 Storage 경로에 새 이미지를 올린 직후 예전 object id를
- * 물려주면, 피커는 새 그림을 보여 주면서 결과물에는 옛 그림이 들어간다.
+ * 라우트에 도달한 요청에서는 registry만 다시 조회한다. 단, `private, max-age=30` 응답과
+ * 클라이언트 풀 캐시는 그 시점의 ref도 함께 보유한다.
  */
 async function attachCatalogRefs(
   admin: ReturnType<typeof createAdminClient>,
@@ -264,21 +277,19 @@ function jsonRecommendedPage(payload: RecommendedPagePayload) {
 /**
  * 이 에셋을 요청 슬롯에 추천할 수 있으면 근거 target 하나와 순위를 붙여 돌려준다.
  *
- * 판정 자체는 `selectAdminAssetTargetMatch`가 한다 — export 게이트와 **같은 함수**여야 피커에
- * 보이는 것과 결과물에 넣을 수 있는 것이 어긋나지 않는다.
+ * role이 있는 요청은 호환 family의 모든 exact target을 같은 rank로 평탄화한다. 허용 범위는
+ * export 게이트가 사용하는 `selectAdminAssetTargetMatch(..., allowCompatibleExactRole: true)`와
+ * 동일하고, 여기서는 어느 family 멤버에서 요청해도 정렬과 cursor가 같게 만드는 일만 더 한다.
  */
 function rankAsset(
   asset: ReturnType<typeof mapCanonicalAdminAssetRow>,
   platform: "android" | "ios",
-  slotRole: ThemeResourceRole | undefined,
   assetKind: AdminAssetKind,
+  recommendationPool: AdminAssetRecommendationPool | undefined,
 ): readonly RankedAsset[] {
-  const match = selectAdminAssetTargetMatch(
-    { ...(slotRole ? { role: slotRole } : {}), kind: assetKind },
-    asset,
-    platform,
-    { allowCompatibleExactRole: true },
-  );
+  const match = recommendationPool
+    ? selectAdminAssetRecommendationPoolTargetMatch(recommendationPool, asset)
+    : selectAdminAssetTargetMatch({ kind: assetKind }, asset, platform);
   return match ? [{ asset, target: match.target, matchRank: match.rank }] : [];
 }
 
@@ -339,16 +350,23 @@ function compareRankedAssetToCursor(item: RankedAsset, cursor: Cursor): number {
 }
 
 function encodeCursor(item: RankedAsset): string {
-  return [item.matchRank, item.target.priority, item.asset.updatedAt, item.asset.id].join("|");
+  return [recommendedCursorVersion, item.matchRank, item.target.priority, item.asset.updatedAt, item.asset.id].join("|");
 }
 
+/**
+ * 버전이 다르거나 형식이 깨진 cursor는 첫 페이지로 되돌린다.
+ *
+ * 랭킹 변경 전에 발급된 cursor는 버전 토큰이 없어 rank 값과 무관하게 전부 거부된다. 그 탭은
+ * 새로고침 없이도 1페이지부터 다시 시작하며, 클라이언트의 ID 중복 제거가 재노출을 흡수한다.
+ */
 function decodeCursor(value: string | null): Cursor | null {
   if (!value) return null;
-  const [matchRankValue, priorityValue, updatedAtValue, id] = value.split("|");
+  const [version, matchRankValue, priorityValue, updatedAtValue, id] = value.split("|");
+  if (version !== recommendedCursorVersion) return null;
   const matchRank = Number(matchRankValue);
   const priority = Number(priorityValue);
   const updatedAt = Number(updatedAtValue);
-  if ((matchRank !== 0 && matchRank !== 1 && matchRank !== 2) || !Number.isInteger(priority) || !Number.isFinite(updatedAt) || !id || !/^[0-9a-f-]{36}$/i.test(id)) {
+  if ((matchRank !== 0 && matchRank !== 1) || !Number.isInteger(priority) || !Number.isFinite(updatedAt) || !id || !/^[0-9a-f-]{36}$/i.test(id)) {
     return null;
   }
   return { matchRank, priority, updatedAt, id };

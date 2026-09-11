@@ -12,6 +12,57 @@ export type AdminAssetKind = ThemeAssetKind;
 export type AdminAssetPlatform = ThemePlatform | "all";
 export type AdminAssetTargetKind = "exact_role" | "asset_kind";
 
+export type AdminAssetRecommendationFamily = "bubble" | "background" | "icon";
+
+export type AdminAssetRecommendationPool = {
+  readonly key: string;
+  readonly platform: ThemePlatform;
+  readonly kind: AdminAssetKind;
+  readonly role: ThemeResourceRole;
+  readonly family?: AdminAssetRecommendationFamily;
+};
+
+/** 호환 family는 안정된 key/대표 role을 공유하고 규격이 다른 슬롯은 role 전용 풀로 남긴다. */
+export function getAdminAssetRecommendationPool(
+  slot: { readonly role: ThemeResourceRole; readonly kind: AdminAssetKind },
+  platform: ThemePlatform,
+): AdminAssetRecommendationPool {
+  const family = getAdminAssetRecommendationFamily(slot.kind, slot.role);
+  return {
+    key: [platform, slot.kind, family ? `family:${family}` : `role:${slot.role}`].join("|"),
+    platform,
+    kind: slot.kind,
+    role: family ? getRecommendationPoolRepresentativeRole(family) : slot.role,
+    ...(family ? { family } : {}),
+  };
+}
+
+export function getAdminAssetRecommendationFamily(
+  assetKind: AdminAssetKind,
+  role: string,
+): AdminAssetRecommendationFamily | undefined {
+  if (assetKind === "bubble" && role.startsWith("bubble_")) return "bubble";
+  if (assetKind === "background" && isSharedBackgroundRole(role)) return "background";
+  // kind 전체 target 도입 전의 theme/tab icon을 암호 표시에서도 재사용하되, 규격이 다른
+  // splash와 친구 추가 이미지는 같은 family로 묶지 않는다.
+  if (assetKind === "icon" && isSharedIconRole(role)) return "icon";
+  return undefined;
+}
+
+function getRecommendationPoolRepresentativeRole(family: AdminAssetRecommendationFamily): ThemeResourceRole {
+  if (family === "bubble") return "bubble_me_1";
+  if (family === "background") return "main_background";
+  return "theme_icon";
+}
+
+function isSharedBackgroundRole(role: string): boolean {
+  return role === "main_background" || role === "chat_background" || role === "tab_background_image";
+}
+
+function isSharedIconRole(role: string): boolean {
+  return role === "theme_icon" || role.startsWith("tab_icon_") || role.startsWith("passcode_indicator_");
+}
+
 /**
  * 업로드 이미지의 크기.
  *
@@ -177,7 +228,7 @@ export type CanonicalAdminAsset = {
 
 export type AdminAssetRecommendationItem = CanonicalAdminAsset & {
   readonly target: AdminAssetTarget;
-  readonly matchRank: 0 | 1 | 2;
+  readonly matchRank: 0 | 1;
   readonly previewUrl?: string;
 };
 
@@ -448,7 +499,7 @@ export function isValidBubbleAdjustment(value: AdminBubbleAdjustment): boolean {
  * 고정할 필요가 없다 — `bubble_me_1`용으로 만든 그림도 `bubble_you_1`에서 반전해 쓸 수 있다. 그래서
  * 두 형태를 모두 허용한다.
  *
- * - 그룹 target: `targetKind: "asset_kind"`(슬롯 없음) 하나만 — 네 기본 말풍선 슬롯이 공유하는 후보가 된다.
+ * - 그룹 target: `targetKind: "asset_kind"`(슬롯 없음) 하나만 — Android 4개/iOS 8개 말풍선 역할이 공유하는 후보가 된다.
  * - 슬롯 전용 target: 모든 target이 `slot`에 대한 `exact_role` — 특정 슬롯에만 고정하고 싶을 때를 위해 남겨 둔다.
  */
 export function isValidBubbleBuilderTargets(targets: readonly AdminAssetTargetInput[], slotRole: ThemeResourceRole): boolean {

@@ -14,6 +14,7 @@ import {
 import { getDerivedColorRule } from "@/lib/theme/project/colorInheritance";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { describeAdminAssetAnalysis, getAdminAssetKindLabel, inferAdminAssetKind, type AdminAssetCandidate, type AdminAssetKind } from "@/lib/theme/adminAssets";
+import { getAdminAssetRecommendationPool } from "@/lib/theme/adminAssetWorkspace";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
 import type { ThemeAssetSlot, ThemeTemplate, ThemeTemplateId } from "@/lib/theme/templates";
 import type { ThemePlatform, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
@@ -279,6 +280,7 @@ export function buildSlotCandidates(
  * 에셋이 실제로는 내보내기 허용 대상인 상태가 된다.
  */
 type AdminAssetRecommendationContext = {
+  readonly poolKey: string;
   readonly platform: ThemePlatform;
   readonly assetKind: AdminAssetKind;
   readonly slotRole: string;
@@ -291,14 +293,14 @@ type AdminAssetCandidateWithRecommendationContext = AdminAssetCandidate & {
 };
 
 function buildAdminCandidates(slot: ThemeAssetSlot, selectedUploadId: string | undefined, adminAssets: AdminAssetCandidateWithRecommendationContext[]): SlotCandidate[] {
+  const slotKind = inferAdminAssetKind(slot);
+  const poolKey = getAdminAssetRecommendationPool({ role: slot.role, kind: slotKind }, slot.platform).key;
   return adminAssets
     .filter((asset) => {
       const context = asset.recommendationContext;
       if (!context) return true;
-      if (context.platform !== slot.platform || context.assetKind !== inferAdminAssetKind(slot)) return false;
-      // bubble 후보 풀은 네 기본 말풍선 슬롯이 공유한다. 나머지는 요청한 role의 응답만
-      // 현재 패널에 허용해, 슬롯 전환 중 이전 응답이 잘못 적용되지 않게 한다.
-      return context.assetKind === "bubble" || context.slotRole === slot.role;
+      if (context.platform !== slot.platform || context.assetKind !== slotKind) return false;
+      return context.poolKey === poolKey;
     })
     .map((asset) => ({
       id: asset.id,

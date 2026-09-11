@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAdminAssetSaveTargets, createAdminAssetWorkspaceSlots, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs, getAdminAssetCandidateMatchRank, getAdminAssetSlotLabel, getAdminAssetWorkspaceSlotVariant, selectAdminAssetTargetMatch } from "@/lib/theme/adminAssetWorkspace";
+import { createAdminAssetSaveTargets, createAdminAssetWorkspaceSlots, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs, getAdminAssetCandidateMatchRank, getAdminAssetRecommendationPool, getAdminAssetSlotLabel, getAdminAssetWorkspaceSlotVariant, selectAdminAssetRecommendationPoolTargetMatch, selectAdminAssetTargetMatch } from "@/lib/theme/adminAssetWorkspace";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssetDomain";
 import { getThemeSlots, type ThemeAssetSlot } from "@/lib/theme/templates";
 
@@ -43,6 +43,43 @@ function asset(overrides: Partial<AdminAssetCandidate> = {}): AdminAssetCandidat
 }
 
 describe("admin asset workspace slots", () => {
+  it("호환 family는 대표 role과 pool key를 공유하고 그 밖의 슬롯은 분리한다", () => {
+    expect(getAdminAssetRecommendationPool({ role: "bubble_you_2", kind: "bubble" }, "android"))
+      .toMatchObject({ key: "android|bubble|family:bubble", role: "bubble_me_1" });
+    expect(getAdminAssetRecommendationPool({ role: "bubble_me_1_selected", kind: "bubble" }, "ios").key)
+      .toBe("ios|bubble|family:bubble");
+    expect(getAdminAssetRecommendationPool({ role: "chat_background", kind: "background" }, "android"))
+      .toMatchObject({ key: "android|background|family:background", role: "main_background" });
+    expect(getAdminAssetRecommendationPool({ role: "passcode_indicator_1", kind: "icon" }, "android"))
+      .toMatchObject({ key: "android|icon|family:icon", role: "theme_icon" });
+    expect(getAdminAssetRecommendationPool({ role: "splash", kind: "icon" }, "android").key)
+      .toBe("android|icon|role:splash");
+    expect(getAdminAssetRecommendationPool({ role: "profile_image_1", kind: "profile" }, "android").key)
+      .toBe("android|profile|role:profile_image_1");
+  });
+
+  it("추천 풀에서는 호환 exact target을 같은 rank로 평탄화한다", () => {
+    const pool = getAdminAssetRecommendationPool({ role: "theme_icon", kind: "icon" }, "android");
+    const compatible = asset({
+      targets: [{ platform: "all", slotRole: "passcode_indicator_1", targetKind: "exact_role", priority: 3, enabled: true }],
+    });
+    const incompatible = asset({
+      targets: [{ platform: "all", slotRole: "splash", targetKind: "exact_role", priority: 9, enabled: true }],
+    });
+
+    expect(selectAdminAssetRecommendationPoolTargetMatch(pool, compatible)).toMatchObject({ rank: 0, target: { priority: 3 } });
+    expect(selectAdminAssetRecommendationPoolTargetMatch(pool, incompatible)).toBeUndefined();
+  });
+
+  it("추천 풀도 target 플랫폼 경계를 유지한다", () => {
+    const pool = getAdminAssetRecommendationPool({ role: "theme_icon", kind: "icon" }, "android");
+    const iosOnly = asset({
+      targets: [{ platform: "ios", slotRole: "theme_icon", targetKind: "exact_role", priority: 1, enabled: true }],
+    });
+
+    expect(selectAdminAssetRecommendationPoolTargetMatch(pool, iosOnly)).toBeUndefined();
+  });
+
   it("merges the same role while preserving both platform variants", () => {
     const [slot] = createAdminAssetWorkspaceSlots({ android: [androidIcon], ios: [iosIcon] });
 

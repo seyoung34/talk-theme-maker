@@ -15,6 +15,7 @@ import {
   assertValidAdminAssetCandidateInput,
   canonicalAdminAssetToCandidate,
   createAdminAssetPersistencePayload,
+  getAdminAssetRecommendationPool,
   isValidBubbleAdjustment,
   isValidBubbleBuilderTargets,
   mapCanonicalAdminAssetRow,
@@ -36,6 +37,7 @@ export {
   bubbleSpecToAdjustment,
   canonicalAdminAssetToCandidate,
   createDefaultBubbleAdjustment,
+  getAdminAssetRecommendationPool,
   getAdminAssetKindLabel,
   inferAdminAssetKind,
   legacyRoleFromKind,
@@ -100,9 +102,12 @@ export async function listRecommendedAssetCandidatePage(options: Required<Pick<A
     assetKind: options.assetKind,
     limit: String(Math.min(50, Math.max(1, options.limit ?? 24))),
   });
-  if (options.slotRole) params.set("slotRole", options.slotRole);
+  if (options.slotRole) {
+    const pool = getAdminAssetRecommendationPool({ role: options.slotRole, kind: options.assetKind }, options.platform);
+    params.set("slotRole", pool.role);
+  }
   if (options.cursor) params.set("cursor", options.cursor);
-  const response = await fetch(`/api/theme-assets/recommended?${params.toString()}`, { cache: "no-store" });
+  const response = await fetch(`/api/theme-assets/recommended?${params.toString()}`);
   const payload = await readJsonResponse<AdminAssetPage & { readonly error?: string }>(response);
   if (!response.ok) throw new Error(payload.error ?? "추천 에셋을 불러오지 못했습니다.");
   return { items: payload.items ?? [], nextCursor: payload.nextCursor };
