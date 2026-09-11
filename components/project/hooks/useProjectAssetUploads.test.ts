@@ -290,6 +290,41 @@ describe("useProjectAssetUploads - 말풍선 슬롯 간 추천 에셋 공유", (
     await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(3));
   });
 
+  it("더 보기 중 첫 페이지 hard expiry가 오면 기존 후보를 숨기고 새 첫 페이지를 한 번만 요청한다", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const more = deferredPage();
+    const refresh = deferredPage();
+    listRecommendedAssetCandidatePage
+      .mockResolvedValueOnce({ items: [{ id: "old", title: "이전 후보" } as AdminAssetCandidate], nextCursor: "page-2" })
+      .mockReturnValueOnce(more.promise)
+      .mockReturnValueOnce(refresh.promise);
+    const { result } = renderWithSlot(bubbleMe1);
+
+    await vi.waitFor(() => expect(result.current.adminAssetCursor).toBe("page-2"));
+    let loadMorePromise!: Promise<void>;
+    act(() => { loadMorePromise = result.current.loadMoreAdminAssets(); });
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(3));
+    expect(listRecommendedAssetCandidatePage.mock.calls.filter(([options]) => !options.cursor)).toHaveLength(2);
+    expect(result.current.adminAssetsWithPreview).toEqual([]);
+    expect(result.current.isLoadingAdminAssets).toBe(true);
+
+    await act(async () => {
+      more.resolve({ items: [{ id: "late", title: "늦은 후보" } as AdminAssetCandidate], nextCursor: undefined });
+      await loadMorePromise;
+    });
+    expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(3);
+    expect(result.current.adminAssetsWithPreview).toEqual([]);
+
+    await act(async () => {
+      refresh.resolve({ items: [{ id: "fresh", title: "새 후보" } as AdminAssetCandidate], nextCursor: undefined });
+      await refresh.promise;
+    });
+    expect(result.current.adminAssetsWithPreview.map((item) => item.id)).toEqual(["fresh"]);
+  });
+
   it("한 슬롯에 그대로 있어도 hard expiry에서 첫 페이지를 정확히 한 번 새로 요청한다", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);

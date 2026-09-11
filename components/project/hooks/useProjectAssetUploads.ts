@@ -109,17 +109,19 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
   const isLoadingAdminAssets = visibleEntry?.status === "loading";
 
   useEffect(() => {
-    if (!currentLoadContext || currentEntry?.status !== "ready") return;
+    // A pagination request keeps the first page's freshness epoch. Its status becomes
+    // loading while it is in flight, so retain this deadline as long as it has a real
+    // first-page completion time. An initial first-page request has loadedAt: 0.
+    if (!currentLoadContext || !currentEntry?.loadedAt || (currentEntry.status !== "ready" && currentEntry.status !== "loading")) return;
 
-    const { loadedAt, requestId } = currentEntry;
+    const { loadedAt } = currentEntry;
     const delay = Math.max(0, loadedAt + recommendedPoolCacheTtlMs - Date.now());
     const timeout = window.setTimeout(() => {
       const entry = poolCacheRef.current.get(currentLoadContext.poolKey);
       if (
         !entry
-        || entry.status !== "ready"
         || entry.loadedAt !== loadedAt
-        || entry.requestId !== requestId
+        || (entry.status !== "ready" && entry.status !== "loading")
         || Date.now() - entry.loadedAt < recommendedPoolCacheTtlMs
       ) return;
 
