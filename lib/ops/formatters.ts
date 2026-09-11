@@ -188,6 +188,12 @@ function formatValue(value: OpsDetailValue) {
 
 function formatDailySummaryEvent(event: OpsEvent, options: { siteUrl?: string }) {
   const details = event.details;
+  if (details.summaryMode === "ga4_correction") {
+    const visitorLine = readVisitorStatus(details.visitorStatus) === "ok"
+      ? `${formatNullableCount(readNullableCount(details.visitorCount))}명 · 세션 ${formatNullableCount(readNullableCount(details.sessionCount))} · 신규 ${formatNullableCount(readNullableCount(details.newUserCount))}`
+      : `집계 대기 (${formatVisitorStatus(readVisitorStatus(details.visitorStatus))})`;
+    return `📈 ${event.summary}\n\n기준일: ${readString(details.summaryDay) ?? formatKoreanDate(event.occurredAt)} (KST)\n방문자(GA4 동의 기준): ${visitorLine}`;
+  }
   const message = formatDailySummaryValues({
     title: event.summary,
     day: readString(details.summaryDay) ?? formatKoreanDate(event.occurredAt),

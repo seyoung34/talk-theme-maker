@@ -53,10 +53,16 @@ describe("scheduled ops", () => {
       WORKER_SELF_REFERENCE: { fetch },
     })).resolves.toEqual({
       status: "completed",
-      operations: ["ga4_correction", "daily_summary"],
+      operations: ["ga4_correction", "ga4_correction", "ga4_correction", "ga4_correction", "ga4_correction", "ga4_correction", "ga4_correction", "daily_summary"],
     });
     expect(fetch.mock.calls.map(([request]) => request.url)).toEqual([
       "https://internal/api/internal/ops/daily-summary?date=2026-08-30&mode=ga4_correction&recover_dead_letter=0",
+      "https://internal/api/internal/ops/daily-summary?date=2026-08-29&mode=ga4_correction&recover_dead_letter=0",
+      "https://internal/api/internal/ops/daily-summary?date=2026-08-28&mode=ga4_correction&recover_dead_letter=0",
+      "https://internal/api/internal/ops/daily-summary?date=2026-08-27&mode=ga4_correction&recover_dead_letter=0",
+      "https://internal/api/internal/ops/daily-summary?date=2026-08-26&mode=ga4_correction&recover_dead_letter=0",
+      "https://internal/api/internal/ops/daily-summary?date=2026-08-25&mode=ga4_correction&recover_dead_letter=0",
+      "https://internal/api/internal/ops/daily-summary?date=2026-08-24&mode=ga4_correction&recover_dead_letter=0",
       "https://internal/api/internal/ops/daily-summary?date=2026-09-01&recover_dead_letter=0",
     ]);
   });

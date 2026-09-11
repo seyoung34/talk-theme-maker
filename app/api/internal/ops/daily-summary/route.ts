@@ -49,7 +49,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ day, notification: { status: "not_needed" } });
     }
     const summary = await readOpsDailySummary(day);
-    if (correction && summary.visitors.status === "pending") {
+    // A correction is meaningful only after GA4 has produced final metrics. Keeping
+    // every other state deferred lets the scheduled retry window try again later.
+    if (correction && summary.visitors.status !== "ok") {
       return NextResponse.json({ day, summary, notification: { status: "deferred" } }, { status: 202 });
     }
     const event = correction ? createOpsDailySummaryGa4CorrectionEvent(summary) : createOpsDailySummaryEvent(summary);

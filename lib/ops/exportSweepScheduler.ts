@@ -43,7 +43,7 @@ export async function runScheduledOps(
   // scope to the summary itself; maintenance remains the five-minute cron's job.
   const operations: ScheduledOperation[] = controller.cron === dailySummaryCron
     ? [
-      { event: "ga4_correction", url: getGa4CorrectionUrl(controller.scheduledTime) },
+      ...getGa4CorrectionUrls(controller.scheduledTime).map((url) => ({ event: "ga4_correction" as const, url })),
       { event: "daily_summary", url: getDailySummaryUrl(controller.scheduledTime) },
     ]
     : [
@@ -95,10 +95,12 @@ function getDailySummaryUrl(scheduledTime: number) {
   return `${dailySummaryUrl}?date=${encodeURIComponent(day)}&recover_dead_letter=0`;
 }
 
-function getGa4CorrectionUrl(scheduledTime: number) {
-  // A 48-hour GA4 freshness window has elapsed by 08:00 KST three days later.
-  const correctionDay = getPreviousOpsDay(new Date(scheduledTime - 2 * 24 * 60 * 60 * 1000));
-  return `${dailySummaryUrl}?date=${encodeURIComponent(correctionDay)}&mode=ga4_correction&recover_dead_letter=0`;
+function getGa4CorrectionUrls(scheduledTime: number) {
+  // Retry pending summaries for one week after GA4's 48-hour freshness window.
+  return Array.from({ length: 7 }, (_, index) => {
+    const correctionDay = getPreviousOpsDay(new Date(scheduledTime - (2 + index) * 24 * 60 * 60 * 1000));
+    return `${dailySummaryUrl}?date=${encodeURIComponent(correctionDay)}&mode=ga4_correction&recover_dead_letter=0`;
+  });
 }
 
 async function isDisabledTelegramDrain(operation: ScheduledOperation, response: Response) {
