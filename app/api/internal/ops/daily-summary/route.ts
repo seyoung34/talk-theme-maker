@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { authorizeOpsInternalRequest } from "@/lib/ops/internalAuth";
-import { createOpsDailySummaryEvent } from "@/lib/ops/eventFactories";
+import { createOpsDailySummaryEvent, createOpsDailySummaryGa4CorrectionEvent } from "@/lib/ops/eventFactories";
 import { tryPublishOpsEvent } from "@/lib/ops/dispatcher";
 import { getPreviousOpsDay, readOpsDailySummary, validateCompletedOpsDay } from "@/lib/ops/dailySummary";
+import { getOpsDailySummaryVisitorStatus } from "@/lib/ops/repository";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
 
   const searchParams = new URL(request.url).searchParams;
   const requestedDay = searchParams.get("date");
+  const correction = searchParams.get("mode") === "ga4_correction";
   // Scheduler retries must retain dead-letter stop policy. An operator-triggered
   // rerun keeps the existing recovery behavior unless it opts out explicitly.
   const recoverDeadLetter = searchParams.get("recover_dead_letter") !== "0";
@@ -40,8 +42,17 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (correction && requestedDay === null) {
+      return NextResponse.json({ error: "방문자 보정에는 기준일이 필요합니다.", reason: "date_required" }, { status: 400 });
+    }
+    if (correction && await getOpsDailySummaryVisitorStatus(day) !== "pending") {
+      return NextResponse.json({ day, notification: { status: "not_needed" } });
+    }
     const summary = await readOpsDailySummary(day);
-    const event = createOpsDailySummaryEvent(summary);
+    if (correction && summary.visitors.status === "pending") {
+      return NextResponse.json({ day, summary, notification: { status: "deferred" } }, { status: 202 });
+    }
+    const event = correction ? createOpsDailySummaryGa4CorrectionEvent(summary) : createOpsDailySummaryEvent(summary);
     const publish = await tryPublishOpsEvent(event, { recoverDeadLetter });
     if (publish.status === "disabled") {
       return NextResponse.json({ error: "Telegram 알림이 비활성화되어 있습니다.", reason: "disabled" }, { status: 503 });

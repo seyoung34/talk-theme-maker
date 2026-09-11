@@ -103,6 +103,18 @@ describe("GA4 Data API visitor reader", () => {
     })).resolves.toEqual({ status: "ok", visitors: 0, sessions: 0, newUsers: 0 });
   });
 
+  it("waits for GA4 processing before calling an omitted row set a zero", async () => {
+    const options = {
+      env: { GA4_PROPERTY_ID: "545151038", GA4_SERVICE_ACCOUNT_EMAIL: "ga4-admin@project.iam.gserviceaccount.com" },
+      fetchImpl: vi.fn<typeof fetch>(async () => new Response(JSON.stringify({}), { status: 200 })),
+      getAccessToken: vi.fn().mockResolvedValue("short-lived-token"),
+    };
+    await expect(readGa4DailyVisitors("2026-09-10", { ...options, now: new Date("2026-09-11T00:00:00+09:00") }))
+      .resolves.toEqual({ status: "pending", visitors: null, sessions: null, newUsers: null });
+    await expect(readGa4DailyVisitors("2026-09-10", { ...options, now: new Date("2026-09-13T00:00:00+09:00") }))
+      .resolves.toEqual({ status: "ok", visitors: 0, sessions: 0, newUsers: 0 });
+  });
+
   it("rejects malformed optional configuration before a network call", () => {
     expect(() => readGa4VisitorConfig({
       GA4_PROPERTY_ID: "not-a-property",

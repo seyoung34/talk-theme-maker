@@ -11,7 +11,7 @@ export type Ga4VisitorConfig = {
   serviceAccountEmail: string;
 };
 
-export type Ga4VisitorStatus = "ok" | "not_configured" | "invalid_config" | "unavailable";
+export type Ga4VisitorStatus = "ok" | "pending" | "not_configured" | "invalid_config" | "unavailable";
 
 export type Ga4VisitorResult = {
   status: Ga4VisitorStatus;
@@ -59,6 +59,7 @@ export async function readGa4DailyVisitors(
     fetchImpl?: typeof fetch;
     getAccessToken?: (config: Ga4VisitorConfig, signal?: AbortSignal) => Promise<string>;
     timeoutMs?: number;
+    now?: Date;
   } = {},
 ): Promise<Ga4VisitorResult> {
   let config: Ga4VisitorConfig | null;
@@ -110,7 +111,7 @@ export async function readGa4DailyVisitors(
         response.status,
       );
     }
-    return parseReport(payload);
+    return parseReport(payload, day, options.now ?? new Date());
   } catch (error) {
     logGa4Failure(error);
     return emptyGa4Result("unavailable");
@@ -128,8 +129,16 @@ async function getDefaultAccessToken(config: Ga4VisitorConfig, signal?: AbortSig
   return accessToken;
 }
 
-function parseReport(value: unknown): Ga4VisitorResult {
-  if (!isRecord(value) || !Array.isArray(value.rows)) {
+function parseReport(value: unknown, day: string, now: Date): Ga4VisitorResult {
+  if (!isRecord(value)) {
+    throw new Ga4DataApiError("invalid_response", "GA4 Data API 응답 형식이 올바르지 않습니다.");
+  }
+  // GA4 omits `rows` for both an empty day and for data that is still being processed.
+  // Until the standard 48-hour freshness window has passed, do not report a false zero.
+  if (value.rows === undefined) return isGa4DayFinal(day, now)
+    ? { status: "ok", visitors: 0, sessions: 0, newUsers: 0 }
+    : emptyGa4Result("pending");
+  if (!Array.isArray(value.rows)) {
     throw new Ga4DataApiError("invalid_response", "GA4 Data API 응답 형식이 올바르지 않습니다.");
   }
   if (value.rows.length === 0) {
@@ -147,6 +156,11 @@ function parseReport(value: unknown): Ga4VisitorResult {
     sessions: parseMetric(row.metricValues[1]),
     newUsers: parseMetric(row.metricValues[2]),
   };
+}
+
+function isGa4DayFinal(day: string, now: Date) {
+  const end = new Date(`${day}T00:00:00+09:00`).getTime() + 24 * 60 * 60 * 1000;
+  return Number.isFinite(end) && now.getTime() >= end + 48 * 60 * 60 * 1000;
 }
 
 function parseMetric(value: unknown) {

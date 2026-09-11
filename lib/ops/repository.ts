@@ -208,6 +208,19 @@ export async function getOpsDailySummary(input: { startAt: string; endAt: string
   return parseOpsDailySummary(getRpcRow(data, "ops_daily_summary"));
 }
 
+export async function getOpsDailySummaryVisitorStatus(day: string) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ops_events")
+    .select("payload")
+    .eq("event_id", `ops.daily_summary:${day}`)
+    .maybeSingle();
+  if (error) throw error;
+  if (!isRecord(data) || !isRecord(data.payload) || !isRecord(data.payload.details)) return undefined;
+  const status = data.payload.details.visitorStatus;
+  return typeof status === "string" ? status : undefined;
+}
+
 export async function getOpsStatusSnapshot(): Promise<OpsStatusSnapshot> {
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("get_ops_status_snapshot", {});

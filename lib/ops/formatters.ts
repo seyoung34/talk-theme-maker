@@ -240,6 +240,8 @@ function formatDailySummaryValues(input: {
 }) {
   const visitorLine = input.visitorStatus === "ok"
     ? `${formatNullableCount(input.visitors)}명 · 세션 ${formatNullableCount(input.sessions)} · 신규 ${formatNullableCount(input.newUsers)}`
+    : input.visitorStatus === "pending"
+      ? "집계 대기 (GA4 처리 중)"
     : `집계 불가 (${formatVisitorStatus(input.visitorStatus)})`;
   const refundReview = input.refundsReviewRequired > 0 ? ` · 검토 ${input.refundsReviewRequired}건` : "";
   return [
@@ -282,6 +284,7 @@ function readVisitorStatus(value: OpsDetailValue | undefined) {
 }
 
 function formatVisitorStatus(value: string) {
+  if (value === "pending") return "GA4 처리 중";
   if (value === "not_configured") return "GA4 미연동";
   if (value === "invalid_config") return "GA4 설정 오류";
   return "GA4 조회 실패";

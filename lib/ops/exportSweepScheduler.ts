@@ -24,7 +24,7 @@ export type ScheduledOpsEnvironment = {
 };
 
 type ScheduledOperation = {
-  event: "daily_summary" | "telegram_drain" | "export_sweep";
+  event: "daily_summary" | "ga4_correction" | "telegram_drain" | "export_sweep";
   url: string;
 };
 
@@ -42,7 +42,10 @@ export async function runScheduledOps(
   // The daily trigger overlaps the five-minute cron at 23:00 UTC. Keep its retry
   // scope to the summary itself; maintenance remains the five-minute cron's job.
   const operations: ScheduledOperation[] = controller.cron === dailySummaryCron
-    ? [{ event: "daily_summary", url: getDailySummaryUrl(controller.scheduledTime) }]
+    ? [
+      { event: "ga4_correction", url: getGa4CorrectionUrl(controller.scheduledTime) },
+      { event: "daily_summary", url: getDailySummaryUrl(controller.scheduledTime) },
+    ]
     : [
       { event: "telegram_drain", url: telegramDrainUrl },
       { event: "export_sweep", url: exportSweepUrl },
@@ -90,6 +93,12 @@ export async function runScheduledOps(
 function getDailySummaryUrl(scheduledTime: number) {
   const day = getPreviousOpsDay(new Date(scheduledTime));
   return `${dailySummaryUrl}?date=${encodeURIComponent(day)}&recover_dead_letter=0`;
+}
+
+function getGa4CorrectionUrl(scheduledTime: number) {
+  // A 48-hour GA4 freshness window has elapsed by 08:00 KST three days later.
+  const correctionDay = getPreviousOpsDay(new Date(scheduledTime - 2 * 24 * 60 * 60 * 1000));
+  return `${dailySummaryUrl}?date=${encodeURIComponent(correctionDay)}&mode=ga4_correction&recover_dead_letter=0`;
 }
 
 async function isDisabledTelegramDrain(operation: ScheduledOperation, response: Response) {
