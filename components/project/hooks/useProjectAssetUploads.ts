@@ -37,7 +37,7 @@ type AdminAssetPoolEntry = {
   readonly context: AdminAssetLoadContext;
   readonly items: readonly RecommendedAdminAsset[];
   readonly nextCursor?: string;
-  readonly status: "loading" | "ready" | "error";
+  readonly status: "loading" | "ready" | "error" | "expired";
   readonly loadedAt: number;
   readonly lastAccessedAt: number;
   readonly requestStartedAt?: number;
@@ -67,6 +67,7 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
   const currentPoolKeyRef = useRef<string | undefined>(undefined);
   const setNoticeRef = useRef(setNotice);
   const [, setCacheRevision] = useState(0);
+  const [expiryRevision, setExpiryRevision] = useState(0);
 
   useEffect(() => {
     setNoticeRef.current = setNotice;
@@ -99,13 +100,37 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
   }, [currentLoadContext]);
 
   const currentEntry = currentLoadContext ? poolCacheRef.current.get(currentLoadContext.poolKey) : undefined;
-  const visibleEntry = currentEntry?.status !== "error" ? currentEntry : undefined;
+  const visibleEntry = currentEntry?.status === "loading" || currentEntry?.status === "ready" ? currentEntry : undefined;
   const adminAssetsWithPreview = useMemo(
     () => visibleEntry?.items.map((asset) => ({ ...asset, previewUrl: asset.previewUrl ?? "" })) ?? [],
     [visibleEntry],
   );
   const adminAssetCursor = visibleEntry?.nextCursor;
   const isLoadingAdminAssets = visibleEntry?.status === "loading";
+
+  useEffect(() => {
+    if (!currentLoadContext || currentEntry?.status !== "ready") return;
+
+    const { loadedAt, requestId } = currentEntry;
+    const delay = Math.max(0, loadedAt + recommendedPoolCacheTtlMs - Date.now());
+    const timeout = window.setTimeout(() => {
+      const entry = poolCacheRef.current.get(currentLoadContext.poolKey);
+      if (
+        !entry
+        || entry.status !== "ready"
+        || entry.loadedAt !== loadedAt
+        || entry.requestId !== requestId
+        || Date.now() - entry.loadedAt < recommendedPoolCacheTtlMs
+      ) return;
+
+      // Do not paint an expired page while the first-page refresh is being scheduled.
+      poolCacheRef.current.set(currentLoadContext.poolKey, { ...entry, status: "expired" });
+      setExpiryRevision((current) => current + 1);
+      setCacheRevision((current) => current + 1);
+    }, delay);
+
+    return () => window.clearTimeout(timeout);
+  }, [currentEntry, currentLoadContext]);
 
   useEffect(() => {
     if (!currentLoadContext) return;
@@ -171,7 +196,7 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
         }
         setCacheRevision((current) => current + 1);
       });
-  }, [currentLoadContext]);
+  }, [currentLoadContext, expiryRevision]);
 
   const loadMoreAdminAssets = useCallback(async () => {
     if (!currentLoadContext) return;
@@ -196,6 +221,7 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
       if (!pending || pending.requestId !== requestId) return;
       const existingIds = new Set(pending.items.map((item) => item.id));
       const completedAt = Date.now();
+      const expired = completedAt - pending.loadedAt >= recommendedPoolCacheTtlMs;
       poolCacheRef.current.set(currentLoadContext.poolKey, {
         ...pending,
         context: currentLoadContext,
@@ -206,10 +232,12 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
             .map((item) => ({ ...item, recommendationContext: currentLoadContext })),
         ],
         nextCursor: page.nextCursor,
-        status: "ready",
-        loadedAt: completedAt,
+        status: expired ? "expired" : "ready",
+        // Paging must never extend the first page's freshness epoch.
+        loadedAt: pending.loadedAt,
         lastAccessedAt: completedAt,
       });
+      if (expired) setExpiryRevision((current) => current + 1);
       pruneRecommendedPoolCache(poolCacheRef.current, currentLoadContext.poolKey);
       setCacheRevision((current) => current + 1);
     } catch (error) {
