@@ -22,6 +22,15 @@ const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "l
 /** 한 번의 PostgREST 요청 크기. 추천 결과를 정확히 정렬하려면 모든 source를 읽어야 한다. */
 const sourceBatchSize = 200;
 const recommendedPageCacheTtlSeconds = 30;
+/**
+ * cursor 형식 버전.
+ *
+ * cursor는 `matchRank` 위에서 자르므로, 랭킹 규칙이 바뀌면 예전 cursor의 rank 숫자는 새 정렬에서
+ * 다른 지점을 가리킨다. rank만 검사하면 예전 rank 0/1 cursor가 "유효한 값"으로 통과해 조용히
+ * 후보를 건너뛴다. 버전 토큰을 앞에 붙여 규칙이 바뀔 때마다 올리고, 토큰이 맞지 않는 cursor는
+ * 전부 첫 페이지로 되돌린다.
+ */
+const recommendedCursorVersion = "v2";
 
 const recommendedAssetSelect = [
   "id",
@@ -341,17 +350,22 @@ function compareRankedAssetToCursor(item: RankedAsset, cursor: Cursor): number {
 }
 
 function encodeCursor(item: RankedAsset): string {
-  return [item.matchRank, item.target.priority, item.asset.updatedAt, item.asset.id].join("|");
+  return [recommendedCursorVersion, item.matchRank, item.target.priority, item.asset.updatedAt, item.asset.id].join("|");
 }
 
+/**
+ * 버전이 다르거나 형식이 깨진 cursor는 첫 페이지로 되돌린다.
+ *
+ * 랭킹 변경 전에 발급된 cursor는 버전 토큰이 없어 rank 값과 무관하게 전부 거부된다. 그 탭은
+ * 새로고침 없이도 1페이지부터 다시 시작하며, 클라이언트의 ID 중복 제거가 재노출을 흡수한다.
+ */
 function decodeCursor(value: string | null): Cursor | null {
   if (!value) return null;
-  const [matchRankValue, priorityValue, updatedAtValue, id] = value.split("|");
+  const [version, matchRankValue, priorityValue, updatedAtValue, id] = value.split("|");
+  if (version !== recommendedCursorVersion) return null;
   const matchRank = Number(matchRankValue);
   const priority = Number(priorityValue);
   const updatedAt = Number(updatedAtValue);
-  // 예전 rank 2 cursor나 형식이 잘못된 cursor는 첫 페이지로 복구한다. 랭킹 배포 전에 열린
-  // 탭도 새로고침 없이 안전하게 다시 시작하며, 클라이언트의 ID 중복 제거가 재노출을 흡수한다.
   if ((matchRank !== 0 && matchRank !== 1) || !Number.isInteger(priority) || !Number.isFinite(updatedAt) || !id || !/^[0-9a-f-]{36}$/i.test(id)) {
     return null;
   }

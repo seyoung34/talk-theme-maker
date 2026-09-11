@@ -27,11 +27,23 @@ const passcodeIndicator = slots.find((slot) => slot.role === "passcode_indicator
 const splash = slots.find((slot) => slot.role === "splash")!;
 
 function renderWithSlot(selectedSlot: ThemeAssetSlot | undefined) {
-  return renderHook(
+  const setNotice = vi.fn();
+  const view = renderHook(
     (props: { selectedSlot: ThemeAssetSlot | undefined }) =>
-      useProjectAssetUploads({ platform: "android", selectedSlot: props.selectedSlot, setNotice: vi.fn() }),
+      useProjectAssetUploads({ platform: "android", selectedSlot: props.selectedSlot, setNotice }),
     { initialProps: { selectedSlot } },
   );
+  return { ...view, setNotice };
+}
+
+function deferredPage() {
+  let resolve!: (page: AdminAssetPage) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<AdminAssetPage>((resolvePage, rejectPage) => {
+    resolve = resolvePage;
+    reject = rejectPage;
+  });
+  return { promise, resolve, reject };
 }
 
 /**
@@ -94,16 +106,65 @@ describe("useProjectAssetUploads - 말풍선 슬롯 간 추천 에셋 공유", (
     await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(2));
   });
 
-  it("첫 요청이 실패한 뒤 다른 말풍선 슬롯으로 옮기면 다시 요청한다", async () => {
+  /**
+   * 같은 풀 안에서 슬롯만 옮긴 뒤 첫 요청이 실패하면, 예전에는 그 자리에서 곧바로 다시 요청했다.
+   * 클라이언트가 `slotRole`을 풀 대표 역할로 정규화해 보내므로 그 재요청은 방금 실패한 것과 같은
+   * URL이라 똑같이 실패하고 알림만 두 번 뜬다 — 이 테스트가 그 회귀를 잡는다.
+   */
+  it("같은 풀에서 슬롯을 옮긴 뒤 첫 요청이 실패해도 즉시 재요청하지 않고 알림도 한 번만 띄운다", async () => {
     listRecommendedAssetCandidatePage.mockClear();
-    listRecommendedAssetCandidatePage
-      .mockRejectedValueOnce(new Error("temporary failure"))
-      .mockResolvedValue({ items: [], nextCursor: undefined });
-    const { rerender } = renderWithSlot(bubbleMe1);
+    const pending = deferredPage();
+    listRecommendedAssetCandidatePage.mockReturnValueOnce(pending.promise);
+    const { rerender, setNotice } = renderWithSlot(bubbleMe1);
 
     await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(1));
     rerender({ selectedSlot: bubbleMe2 });
+    await act(async () => {
+      pending.reject(new Error("temporary failure"));
+      await pending.promise.catch(() => {});
+    });
+
+    expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(1);
+    expect(setNotice).toHaveBeenCalledTimes(1);
+    expect(setNotice).toHaveBeenCalledWith({ tone: "error", message: "추천 에셋을 불러오지 못했습니다." });
+  });
+
+  it("실패가 도착한 뒤 다른 말풍선 슬롯으로 옮기면 다시 요청한다", async () => {
+    listRecommendedAssetCandidatePage.mockClear();
+    const pending = deferredPage();
+    listRecommendedAssetCandidatePage
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({ items: [], nextCursor: undefined });
+    const { rerender, setNotice } = renderWithSlot(bubbleMe1);
+
+    await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      pending.reject(new Error("temporary failure"));
+      await pending.promise.catch(() => {});
+    });
+    expect(setNotice).toHaveBeenCalledTimes(1);
+
+    rerender({ selectedSlot: bubbleMe2 });
     await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(2));
+  });
+
+  it("다른 풀로 옮긴 뒤 도착한 이전 풀의 실패는 알림을 띄우지 않는다", async () => {
+    listRecommendedAssetCandidatePage.mockClear();
+    const pending = deferredPage();
+    listRecommendedAssetCandidatePage
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({ items: [], nextCursor: undefined });
+    const { rerender, setNotice } = renderWithSlot(bubbleMe1);
+
+    await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(1));
+    rerender({ selectedSlot: splash });
+    await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      pending.reject(new Error("temporary failure"));
+      await pending.promise.catch(() => {});
+    });
+
+    expect(setNotice).not.toHaveBeenCalled();
   });
 
   it("더 보기에서는 기존 페이지 뒤에 새 후보를 이어 붙인다", async () => {

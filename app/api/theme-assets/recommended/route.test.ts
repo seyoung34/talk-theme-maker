@@ -266,17 +266,39 @@ describe("GET /api/theme-assets/recommended", () => {
     expect(rangeStarts).toEqual([0, 0]);
   });
 
-  it("더 이상 쓰지 않는 rank 2 cursor는 첫 페이지 요청으로 복구한다", async () => {
+  /**
+   * 랭킹 평탄화 전에 발급된 cursor는 버전 토큰이 없다. rank 값만 보면 그중 0과 1은 새 계산에서도
+   * "유효한 값"이라 그대로 통과하고, 정렬이 바뀐 탓에 조용히 후보를 건너뛴다 — 이 테스트가 그 회귀를 잡는다.
+   */
+  it.each(["0", "1", "2"])("버전 토큰이 없는 rank %s cursor는 첫 페이지 요청으로 복구한다", async (legacyRank) => {
     const GET = await load([[
       sourceRow("66666666-6666-4666-8666-666666666666", [{ targetKind: "asset_kind", priority: 0 }]),
     ]]);
-    const legacyCursor = encodeURIComponent("2|0|0|77777777-7777-4777-8777-777777777777");
+    const legacyCursor = encodeURIComponent(`${legacyRank}|0|0|77777777-7777-4777-8777-777777777777`);
     const response = await GET({
       nextUrl: new URL(`http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=main_background&cursor=${legacyCursor}`),
     } as never);
 
     expect((await response.json()).items.map((item: { id: string }) => item.id))
       .toEqual(["66666666-6666-4666-8666-666666666666"]);
+  });
+
+  it("발급하는 cursor에 버전 토큰을 붙이고 그 cursor로 다음 페이지를 이어 준다", async () => {
+    const rows = [
+      sourceRow("11111111-1111-4111-8111-111111111111", [{ targetKind: "exact_role", slotRole: "main_background", priority: 5 }]),
+      sourceRow("22222222-2222-4222-8222-222222222222", [{ targetKind: "asset_kind", priority: 3 }]),
+    ];
+    const GET = await load([rows, rows]);
+    const request = (cursor?: string) => GET({
+      nextUrl: new URL(`http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=main_background&limit=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`),
+    } as never);
+
+    const first = await (await request()).json();
+    expect(first.items.map((item: { id: string }) => item.id)).toEqual(["11111111-1111-4111-8111-111111111111"]);
+    expect(first.nextCursor.split("|")[0]).toBe("v2");
+
+    const second = await (await request(first.nextCursor)).json();
+    expect(second.items.map((item: { id: string }) => item.id)).toEqual(["22222222-2222-4222-8222-222222222222"]);
   });
 
   it("slotRole이 없으면 exact_role target은 빼고 kind 전체 후보만 내려준다", async () => {

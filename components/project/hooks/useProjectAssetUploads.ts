@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { inferAdminAssetKind, listRecommendedAssetCandidatePage, type AdminAssetCandidate, type AdminAssetKind } from "@/lib/theme/adminAssets";
 import { getAdminAssetRecommendationPool } from "@/lib/theme/adminAssetWorkspace";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
@@ -67,7 +67,6 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
   const currentPoolKeyRef = useRef<string | undefined>(undefined);
   const setNoticeRef = useRef(setNotice);
   const [, setCacheRevision] = useState(0);
-  const [retryRevision, setRetryRevision] = useState(0);
 
   useEffect(() => {
     setNoticeRef.current = setNotice;
@@ -87,8 +86,17 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
     const pool = getAdminAssetRecommendationPool({ role: selectedSlotRole, kind: selectedAssetKind }, platform);
     return { poolKey: pool.key, platform, assetKind: selectedAssetKind, slotRole: selectedSlotRole };
   }, [platform, selectedAssetKind, selectedSlotRole]);
-  // 비동기 오류가 슬롯 전환 직후 도착해도 현재 풀에만 알림을 띄우기 위한 latest-value ref다.
-  currentPoolKeyRef.current = currentLoadContext?.poolKey;
+  /**
+   * 비동기 오류가 슬롯 전환 직후 도착해도 현재 풀에만 알림을 띄우기 위한 latest-value ref다.
+   *
+   * 렌더 중에 쓰면 커밋되지 않은 렌더(중단된 concurrent 렌더, StrictMode 이중 호출)의 풀 키가
+   * 남아 알림이 엉뚱한 풀로 간다. 그렇다고 passive effect로 미루면 커밋과 effect flush 사이가
+   * 비는데, 방금 떠난 풀의 요청이 하필 그 틈에 실패하면 여전히 엉뚱한 풀 키로 판정한다.
+   * 커밋 직후 동기적으로 도는 layout effect가 그 창을 닫는다.
+   */
+  useLayoutEffect(() => {
+    currentPoolKeyRef.current = currentLoadContext?.poolKey;
+  }, [currentLoadContext]);
 
   const currentEntry = currentLoadContext ? poolCacheRef.current.get(currentLoadContext.poolKey) : undefined;
   const visibleEntry = currentEntry?.status !== "error" ? currentEntry : undefined;
@@ -144,20 +152,26 @@ export function useProjectAssetUploads({ platform, selectedSlot, setNotice }: Us
         pruneRecommendedPoolCache(poolCacheRef.current, currentLoadContext.poolKey);
         setCacheRevision((current) => current + 1);
       })
+      /**
+       * 실패는 풀에 기록만 하고 여기서 다시 요청하지 않는다.
+       *
+       * 같은 풀 안에서 슬롯만 바뀐 경우 클라이언트는 `slotRole`을 풀 대표 역할로 정규화해 보내므로,
+       * 재요청 URL이 방금 실패한 것과 바이트단위로 같다. 그래서 거의 항상 같이 실패하고 똑같은 알림만
+       * 한 번 더 띄운다. error 풀은 재사용 대상이 아니므로, 다음 슬롯 전환이나 풀 재진입이
+       * 자연스럽게 다시 요청한다.
+       */
       .catch((error) => {
         if (!mountedRef.current) return;
         const entry = poolCacheRef.current.get(currentLoadContext.poolKey);
         if (!entry || entry.requestId !== requestId) return;
-        const retryForNewContext = entry.context.slotRole !== currentLoadContext.slotRole;
         console.error(error);
         poolCacheRef.current.set(currentLoadContext.poolKey, { ...entry, status: "error" });
         if (currentPoolKeyRef.current === currentLoadContext.poolKey) {
           setNoticeRef.current({ tone: "error", message: "추천 에셋을 불러오지 못했습니다." });
         }
         setCacheRevision((current) => current + 1);
-        if (retryForNewContext) setRetryRevision((current) => current + 1);
       });
-  }, [currentLoadContext, retryRevision]);
+  }, [currentLoadContext]);
 
   const loadMoreAdminAssets = useCallback(async () => {
     if (!currentLoadContext) return;
