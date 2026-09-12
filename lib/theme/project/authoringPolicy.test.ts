@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAuthoringSlots, getAuthoringSlotVisibility, getDerivedAssetSourceRole, getThemeIconSourceRole } from "@/lib/theme/project/authoringPolicy";
+import { getAdminCompatibilitySlots, getAuthoringSlots, getDerivedAssetSourceRole, getThemeIconSourceRole } from "@/lib/theme/project/authoringPolicy";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import { getThemeSlots } from "@/lib/theme/templates";
 
@@ -18,15 +18,24 @@ describe("authoring policy", () => {
 
     expect(androidSource).toMatchObject({ group: "icon", label: "테마 아이콘" });
     expect(iosSource).toMatchObject({ group: "icon", label: "테마 아이콘" });
-    expect(getAuthoringSlots(androidSlots, "android", "user").map((slot) => slot.role)).not.toContain("theme_icon");
-    expect(getAuthoringSlots(iosSlots, "ios", "user").map((slot) => slot.role)).toContain("theme_icon");
+    expect(getAuthoringSlots(androidSlots, "android").map((slot) => slot.role)).not.toContain("theme_icon");
+    expect(getAuthoringSlots(iosSlots, "ios").map((slot) => slot.role)).toContain("theme_icon");
   });
 
-  it("일반 편집기에서는 파생 role을 숨기고 관리자는 고급 영역에서 본다", () => {
-    expect(getAuthoringSlots(slots, "android", "user").map((slot) => slot.role)).toEqual(["launcher_background", "splash"]);
-    expect(getAuthoringSlots(slots, "android", "admin").map((slot) => slot.role)).toEqual(["launcher_background", "launcher_icon", "splash"]);
-    expect(getAuthoringSlotVisibility(slots[1], "user")).toBe("hidden");
-    expect(getAuthoringSlotVisibility(slots[1], "admin")).toBe("advanced");
+  it("기본 편집 슬롯은 audience와 무관하고 호환 role은 별도 목록으로 분리한다", () => {
+    expect(getAuthoringSlots(slots, "android").map((slot) => slot.role)).toEqual(["launcher_background", "splash"]);
+    expect(getAdminCompatibilitySlots(slots, "android").map((slot) => slot.role)).toEqual(["launcher_icon"]);
+  });
+
+  it("실제 Android 테마 아이콘 기본 UX는 하나의 입력만 제공한다", () => {
+    const androidSlots = getThemeSlots("android");
+    expect(getAuthoringSlots(androidSlots, "android").filter((slot) => slot.group === "icon").map((slot) => slot.role)).toEqual(["launcher_background"]);
+    expect(getAdminCompatibilitySlots(androidSlots, "android").filter((slot) => slot.group === "icon").map((slot) => slot.role)).toEqual([
+      "theme_icon",
+      "launcher_icon",
+      "launcher_round",
+      "launcher_foreground",
+    ]);
   });
 
   it("Android launcher 호환 role은 launcher_background에서 파생된다", () => {

@@ -68,7 +68,7 @@ import { adminAssetToFile, type AdminAssetCandidate } from "@/lib/theme/adminAss
 import { getAdminCatalogUploadRef } from "@/lib/theme/assetCatalog/clientRef";
 import { createThemeProjectAnalysis } from "@/lib/theme/project/diagnostics";
 import { getBubblePairRole, getSlotCandidates } from "@/lib/theme/project/state";
-import { getAuthoringSlots } from "@/lib/theme/project/authoringPolicy";
+import { getAdminCompatibilitySlots, getAuthoringSlots } from "@/lib/theme/project/authoringPolicy";
 import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 import type { EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
@@ -280,7 +280,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const activeTemplate = getThemeTemplate(templateId);
   const displayTemplateName = activeUserTemplate?.name ?? activeSystemTemplate?.title ?? activeTemplate.name;
   const slots = useMemo(() => getThemeSlots(platform), [platform]);
-  const authoringSlots = useMemo(() => getAuthoringSlots(slots, platform, mode), [mode, platform, slots]);
+  // 기본 편집 surface는 일반·관리자 모드가 같다. 관리자는 필요한 경우에만 원본 호환 슬롯을
+  // 별도 접기 영역에서 연다.
+  const authoringSlots = useMemo(() => getAuthoringSlots(slots, platform), [platform, slots]);
+  const adminCompatibilitySlots = useMemo(
+    () => (isAdminMode ? getAdminCompatibilitySlots(slots, platform) : []),
+    [isAdminMode, platform, slots],
+  );
+  const selectableSlots = useMemo(
+    () => [...authoringSlots, ...adminCompatibilitySlots],
+    [adminCompatibilitySlots, authoringSlots],
+  );
   const handleAutosaveSaved = useCallback(() => {
     setNotice((current) => current?.message === "이 템플릿을 변경하면 기존 최근 작업이 새 작업으로 교체됩니다." ? null : current);
     persistEditorSession(mode, {
@@ -439,7 +449,17 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   }, [activeGroup, groups]);
 
   const visibleSlots = useMemo(() => authoringSlots.filter((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, activeGroup)), [activeGroup, activeSection, authoringSlots]);
-  const selectedSlot = authoringSlots.find((slot) => slot.id === selectedSlotId) ?? visibleSlots[0] ?? authoringSlots[0];
+  const visibleCompatibilitySlots = useMemo(
+    () => adminCompatibilitySlots.filter((slot) => isSlotVisibleInSection(slot, activeSection) && isSlotVisibleInGroup(slot, activeGroup)),
+    [activeGroup, activeSection, adminCompatibilitySlots],
+  );
+  const selectedSlot = selectableSlots.find((slot) => slot.id === selectedSlotId) ?? visibleSlots[0] ?? authoringSlots[0];
+  // 고급 호환 슬롯은 명시적으로 선택했을 때만 공통 리소스 미리보기에 더한다. 기본 미리보기의
+  // 정보 밀도는 일반 편집기와 같게 유지한다.
+  const previewEditorSlots = useMemo(
+    () => (selectedSlot && adminCompatibilitySlots.some((slot) => slot.id === selectedSlot.id) ? [...authoringSlots, selectedSlot] : authoringSlots),
+    [adminCompatibilitySlots, authoringSlots, selectedSlot],
+  );
 
   useEffect(() => {
     setCandidateOpen(false);
@@ -1231,7 +1251,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     template: activeTemplate,
     templateId,
     slots,
-    editorSlots: authoringSlots,
+    editorSlots: previewEditorSlots,
     colors,
     selections: candidateSelections,
     bubbleEdits: renderedPreviewBubbleEdits,
@@ -1672,6 +1692,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                         activeGroup={activeGroup}
                         onSelectGroup={selectGroup}
                         slots={visibleSlots}
+                        compatibilitySlots={visibleCompatibilitySlots}
                         allSlots={slots}
                         selectedSlotId={selectedSlot?.id}
                         uploads={uploads}
@@ -1715,6 +1736,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                   activeGroup={activeGroup}
                   onSelectGroup={selectGroup}
                   slots={visibleSlots}
+                  compatibilitySlots={visibleCompatibilitySlots}
                   allSlots={slots}
                   selectedSlotId={selectedSlot?.id}
                   uploads={uploads}
@@ -1791,7 +1813,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
                 template={activeTemplate}
                 templateId={templateId}
                 slots={slots}
-                editorSlots={authoringSlots}
+                editorSlots={previewEditorSlots}
                 colors={colors}
                 selections={candidateSelections}
                 bubbleEdits={renderedPreviewBubbleEdits}
