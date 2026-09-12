@@ -52,9 +52,9 @@ import {
   getInitialSlotCandidateSelections,
   getSectionGroups,
   getSelectedCandidate,
-  getSelectedUpload,
   getSharedUploadPeers,
   getSharedSlotUploadEntries,
+  planSharedUploadCopy,
   planUploadRemoval,
   getSlotFile,
   groupLabels,
@@ -1035,16 +1035,21 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const copyBubbleToPair = async (sourceSlot: ThemeAssetSlot, targetSlot: ThemeAssetSlot) => {
 
-    const sourceUpload = getSelectedUpload(sourceSlot, uploads, candidateSelections, slots);
+    const uploadPlan = planSharedUploadCopy(sourceSlot, targetSlot, uploads, candidateSelections, slots);
     const sourceCandidate = getSelectedCandidate(sourceSlot, candidateSelections, templateId, activeTemplate);
     const copiedAt = Date.now();
 
     try {
-      if (sourceUpload) {
+      if (uploadPlan) {
         // 말풍선 슬롯은 업로드를 공유하므로 target bucket에 사본을 만들지 않는다. 사본을 만들면
         // 원본과 별개 항목이 되어 저장·내보내기에서 두 번 취급되고, 한쪽만 지워도 다른 쪽이 남는다.
         // 같은 업로드 ID를 target의 선택으로 기록하는 것이 곧 "같은 말풍선"이다.
-        setCandidateSelections((current) => ({ ...current, [targetSlot.id]: sourceUpload.id }));
+        // 추천(admin) 에셋만 예외다 — peer 공유에서 제외되므로 target bucket에도 entry를 넣어야
+        // 선택이 해석된다. 같은 추천 에셋을 두 슬롯에서 각각 고른 상태와 같은 모양이다.
+        if (uploadPlan.kind === "duplicate") {
+          setUploads((current) => ({ ...current, [targetSlot.id]: [...(current[targetSlot.id] ?? []), uploadPlan.entry] }));
+        }
+        setCandidateSelections((current) => ({ ...current, [targetSlot.id]: uploadPlan.uploadId }));
       } else if (sourceCandidate?.assetUrl) {
         const matchingTargetCandidate = getSlotCandidates(targetSlot, templateId, activeTemplate).find((candidate) => candidate.assetUrl === sourceCandidate.assetUrl);
         if (matchingTargetCandidate) {

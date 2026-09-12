@@ -102,6 +102,7 @@ export {
   getSharedUploadPeers,
   getSharedSlotUploadEntries,
   isSlotReady,
+  planSharedUploadCopy,
   planUploadRemoval,
   slotStatusLabel,
   uploadEntryFileName,
