@@ -594,6 +594,46 @@ export function getSelectedUploadRef(
   );
 }
 
+/**
+ * 공유 풀의 업로드 하나를 다른 슬롯의 선택으로 넘길 때 필요한 작업.
+ *
+ * - `reference`: target이 선택 ID만 기록하면 owner bucket에서 그대로 읽힌다. 사본을 만들면
+ *   원본과 별개 항목이 되어 저장·내보내기에서 두 번 취급되고, 한쪽만 지워도 다른 쪽이 남는다.
+ * - `duplicate`: target이 owner bucket을 읽을 수 없으므로 target bucket에 entry가 있어야 한다.
+ *   `source: "admin"` entry가 여기 해당한다 — `getSelectedUploadRef`가 peer bucket의 admin entry를
+ *   제외하기 때문이다. ID만 기록하면 선택이 해석되지 않아 미리보기와 내보내기가 조용히 기본
+ *   이미지로 되돌아간다.
+ *
+ * 판정은 canonical reader에게 그대로 물어서 얻는다. 공유 필터 규칙을 여기에 다시 쓰면 한쪽만
+ * 바뀌었을 때 계획과 해석이 어긋난다.
+ */
+export type SharedUploadCopyPlan =
+  | { kind: "reference"; uploadId: string }
+  | { kind: "duplicate"; uploadId: string; entry: SlotUploadEntry };
+
+export function planSharedUploadCopy(
+  sourceSlot: ThemeAssetSlot | undefined,
+  targetSlot: ThemeAssetSlot | undefined,
+  uploads: SlotUploads,
+  selections: SlotCandidateSelections,
+  allSlots: ThemeAssetSlot[],
+): SharedUploadCopyPlan | undefined {
+  if (!targetSlot) return undefined;
+  const selected = getSelectedUploadRef(sourceSlot, uploads, selections, allSlots);
+  if (!selected) return undefined;
+
+  const uploadId = selected.entry.id;
+  const resolvedForTarget = getSelectedUploadRef(
+    targetSlot,
+    uploads,
+    { ...selections, [targetSlot.id]: uploadId },
+    allSlots,
+  );
+  return resolvedForTarget
+    ? { kind: "reference", uploadId }
+    : { kind: "duplicate", uploadId, entry: selected.entry };
+}
+
 /** 공유 풀 안에서 이 업로드를 현재 선택으로 쓰고 있는 슬롯들. */
 export function findUploadReferenceSlots(
   uploadId: string,

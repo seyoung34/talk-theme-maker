@@ -6,6 +6,7 @@ import {
   getSelectedSharedSlotEntry,
   getSharedUploadPeers,
   getSharedSlotUploadEntries,
+  planSharedUploadCopy,
   planUploadRemoval,
   sharedBubbleUploadRoles,
 } from "@/lib/theme/project/state";
@@ -192,6 +193,68 @@ describe("getSelectedSharedSlotEntry", () => {
     const resolved = getSelectedSharedSlotEntry(me1, refs, { [me1.id]: "shared" }, slots);
 
     expect(resolved).toEqual({ ownerSlotId: me2.id, entry: refs[me2.id][0] });
+  });
+});
+
+describe("planSharedUploadCopy", () => {
+  // "같은 말풍선 적용"이 쓰는 계획. 사용자 업로드는 ID만 넘기면 되지만 추천(admin) 에셋은
+  // peer 공유에서 빠지므로 target bucket에 entry가 없으면 선택이 해석되지 않는다.
+  it("사용자 업로드는 사본 없이 ID만 넘긴다", () => {
+    const uploads = { [me1.id]: [upload("user-bubble")] };
+    const selections = { [me1.id]: "user-bubble" };
+
+    expect(planSharedUploadCopy(me1, me2, uploads, selections, slots)).toEqual({
+      kind: "reference",
+      uploadId: "user-bubble",
+    });
+  });
+
+  it("추천 에셋은 target bucket에 넣을 entry까지 돌려준다", () => {
+    const admin = upload("admin-bubble", "admin");
+    const uploads = { [me1.id]: [admin] };
+    const selections = { [me1.id]: "admin-bubble" };
+
+    expect(planSharedUploadCopy(me1, me2, uploads, selections, slots)).toEqual({
+      kind: "duplicate",
+      uploadId: "admin-bubble",
+      entry: admin,
+    });
+  });
+
+  it("계획을 적용하면 추천 에셋도 target에서 해석된다", () => {
+    // 회귀 가드: ID만 기록하면 target이 업로드를 못 찾아 기본 이미지로 조용히 되돌아갔다.
+    const admin = upload("admin-bubble", "admin");
+    const uploads = { [me1.id]: [admin] };
+    const selections = { [me1.id]: "admin-bubble" };
+
+    const plan = planSharedUploadCopy(me1, me2, uploads, selections, slots)!;
+    const nextUploads = plan.kind === "duplicate"
+      ? { ...uploads, [me2.id]: [...(uploads[me2.id] ?? []), plan.entry] }
+      : uploads;
+    const nextSelections = { ...selections, [me2.id]: plan.uploadId };
+
+    expect(getSelectedUpload(me2, nextUploads, nextSelections, slots)?.id).toBe("admin-bubble");
+    expect(getSelectedUpload(me1, nextUploads, nextSelections, slots)?.id).toBe("admin-bubble");
+  });
+
+  it("target이 이미 같은 업로드를 자기 bucket에 갖고 있으면 사본을 만들지 않는다", () => {
+    const admin = upload("admin-bubble", "admin");
+    const uploads = { [me1.id]: [admin], [me2.id]: [admin] };
+    const selections = { [me1.id]: "admin-bubble" };
+
+    expect(planSharedUploadCopy(me1, me2, uploads, selections, slots)).toEqual({
+      kind: "reference",
+      uploadId: "admin-bubble",
+    });
+  });
+
+  it("source에 선택된 업로드가 없으면 계획이 없다", () => {
+    expect(planSharedUploadCopy(me1, me2, { [me1.id]: [upload("a")] }, {}, slots)).toBeUndefined();
+  });
+
+  it("target 슬롯이 없으면 계획이 없다", () => {
+    const uploads = { [me1.id]: [upload("user-bubble")] };
+    expect(planSharedUploadCopy(me1, undefined, uploads, { [me1.id]: "user-bubble" }, slots)).toBeUndefined();
   });
 });
 
