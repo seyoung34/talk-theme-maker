@@ -14,6 +14,7 @@ export function MobileGroupSlotList({
   activeGroup,
   onSelectGroup,
   slots,
+  compatibilitySlots = [],
   allSlots,
   selectedSlotId,
   uploads,
@@ -31,6 +32,8 @@ export function MobileGroupSlotList({
   onSelectGroup: (group: ThemeSlotGroup) => void;
   /** 이 그룹에서 **그릴** 슬롯. 섹션·그룹으로 이미 걸러져 있다. */
   slots: ThemeAssetSlot[];
+  /** 관리자만 여는 원본/호환 슬롯. 기본 편집 슬롯과 별도 disclosure로 그린다. */
+  compatibilitySlots?: ThemeAssetSlot[];
   /** 값을 **해석할 때** 쓰는 전체 슬롯 목록. 연동 기준 슬롯은 다른 그룹에 있을 수 있다. */
   allSlots: ThemeAssetSlot[];
   selectedSlotId?: string;
@@ -46,11 +49,16 @@ export function MobileGroupSlotList({
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [compatibilityOpen, setCompatibilityOpen] = useState(false);
   const basicSlots = slots.filter((slot) => slot.optionLevel !== "advanced");
   const advancedSlots = slots.filter((slot) => slot.optionLevel === "advanced");
-  const selectedSlot = slots.find((slot) => slot.id === selectedSlotId);
+  const selectedSlot = [...slots, ...compatibilitySlots].find((slot) => slot.id === selectedSlotId);
   const selectedStatus = selectedSlot ? slotStatusLabel(selectedSlot, uploads, colors, selections, templateId, template, allSlots) : undefined;
   const selectedWarning = selectedSlot ? contrastWarnings[selectedSlot.id] : undefined;
+
+  useEffect(() => {
+    if (compatibilitySlots.some((slot) => slot.id === selectedSlotId)) setCompatibilityOpen(true);
+  }, [compatibilitySlots, selectedSlotId]);
 
   return (
     <div className="grid gap-2">
@@ -64,6 +72,7 @@ export function MobileGroupSlotList({
               onSelectGroup(group);
               setPickerOpen(false);
               setAdvancedOpen(false);
+              setCompatibilityOpen(false);
             }}
           >
             {groupLabels[group]}
@@ -136,6 +145,39 @@ export function MobileGroupSlotList({
                       }}
                     />
                   )) : null}
+                </div>
+              ) : null}
+              {compatibilitySlots.length > 0 ? (
+                <div className="grid gap-1 mt-1 border-t border-[#dbe3ed] pt-1">
+                  <button
+                    type="button"
+                    className="flex min-h-9 items-center justify-between rounded-lg px-2 text-left text-[11.5px] font-bold text-[#64748b] transition hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2563eb]"
+                    aria-expanded={compatibilityOpen}
+                    onClick={() => setCompatibilityOpen((current) => !current)}
+                  >
+                    <span>고급 호환 에셋</span>
+                    <ChevronDown size={14} className={`shrink-0 text-[#94a3b8] transition-transform ${compatibilityOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+                  </button>
+                  {compatibilityOpen ? (
+                    <>
+                      <p className="px-2 pb-1 text-[10.5px] font-medium leading-relaxed text-[#64748b]">이전 Android 리소스와 개별 호환 출력을 점검할 때만 수정하세요.</p>
+                      {compatibilitySlots.map((slot) => (
+                        <MobileSlotOption
+                          key={slot.id}
+                          slot={slot}
+                          selected={selectedSlotId === slot.id}
+                          status={slotStatusLabel(slot, uploads, colors, selections, templateId, template, allSlots)}
+                          appliedTitle={getAppliedCandidateTitle(slot, uploads, colors, selections, templateId, template, allSlots, adminAssets)}
+                          warning={contrastWarnings[slot.id]}
+                          linked={isSlotColorLinked(slot, colors, selections, templateId, template, allSlots)}
+                          onSelect={() => {
+                            onSelectSlot(slot);
+                            setPickerOpen(false);
+                          }}
+                        />
+                      ))}
+                    </>
+                  ) : null}
                 </div>
               ) : null}
             </div>

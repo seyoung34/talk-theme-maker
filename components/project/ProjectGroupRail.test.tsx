@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ProjectGroupRail } from "@/components/project/ProjectGroupRail";
 import { getInitialSlotCandidateSelections } from "@/lib/theme/project/state";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
@@ -19,13 +19,16 @@ const unread = slots.find((slot) => slot.role === "chat_unread_count_color")!;
 const chatBackground = slots.find((slot) => slot.role === "chat_background_color")!;
 const bubbleSlots = slots.filter((slot) => slot.section === "chatroom" && slot.group === "bubbles");
 
-function renderRail(allSlots: typeof slots) {
+const compatibilitySlot = { ...bubbleSlots[0], id: "compatibility-slot", label: "호환 테스트 에셋" };
+
+function renderRail(allSlots: typeof slots, compatibilitySlots = [] as typeof slots) {
   return render(
     <ProjectGroupRail
       groups={["bubbles"]}
       activeGroup="bubbles"
       onSelectGroup={vi.fn()}
       slots={bubbleSlots}
+      compatibilitySlots={compatibilitySlots}
       allSlots={allSlots}
       uploads={{}}
       colors={{ [chatBackground.id]: "#111111" }}
@@ -51,5 +54,13 @@ describe("ProjectGroupRail", () => {
     // 회귀했을 때 위 테스트가 왜 깨지는지 남겨 두는 대조군이다.
     renderRail(bubbleSlots);
     expect(screen.queryByText(/^연동 · /)).toBeNull();
+  });
+
+  it("호환 에셋은 기본 목록과 분리해 사용자가 열었을 때만 보인다", () => {
+    renderRail(slots, [compatibilitySlot]);
+    expect(screen.queryByText("호환 테스트 에셋")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /고급 호환 에셋/ }));
+    expect(screen.getByText("호환 테스트 에셋")).toBeTruthy();
   });
 });
