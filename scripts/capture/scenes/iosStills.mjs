@@ -12,7 +12,7 @@
 import path from "node:path";
 
 /** 잘라 둔 스크린샷이 있는 곳. 원본은 `가이드 자료/`에 그대로 두고 이쪽만 쓴다. */
-export const iosStillsDir = "E:\\TalkTheme-자료\\가이드 자료-crop";
+export const iosStillsDir = "E:\\TalkTheme-자료\\가이드 자료\\가이드 자료-crop";
 const base = "KakaoTalk_20260815_033419862";
 
 const shot = (suffix) => path.join(iosStillsDir, suffix ? `${base}_${suffix}.png` : `${base}.png`);
