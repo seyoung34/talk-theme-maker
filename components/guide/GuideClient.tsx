@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as Tabs from "@radix-ui/react-tabs";
-import { AlertTriangle, Apple, Check, ChevronRight, CircleAlert, Images, Smartphone } from "lucide-react";
+import { AlertTriangle, Apple, Check, ChevronRight, Images, Smartphone } from "lucide-react";
 import { guideContent, type EasyStep, type GuidePlatform, type GuideSection } from "@/lib/guide/content";
 import { EasyStepMediaFrame } from "@/components/guide/EasyStepMedia";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
@@ -306,29 +306,6 @@ function GuideSectionBlock({ section }: { section: GuideSection }) {
             </ol>
           ) : null}
 
-          {section.specifications ? (
-            <div className="mt-7 overflow-hidden rounded-[20px] border border-[#e3ecf7] bg-white">
-              <div className="hidden grid-cols-[140px_220px_minmax(0,1fr)] border-b border-[#e3ecf7] bg-[#f7fbff] px-4 py-2.5 text-[10px] font-black tracking-[0.12em] text-[#94a3b8] sm:grid">
-                <span>항목</span><span>규격</span><span>설명</span>
-              </div>
-              <dl className="divide-y divide-[#e3ecf7]">
-                {section.specifications.map((item) => (
-                  <div key={item.subject} className="grid gap-1 px-4 py-4 sm:grid-cols-[140px_220px_minmax(0,1fr)] sm:gap-0">
-                    <dt className="text-xs font-extrabold text-[var(--color-on-background)]">{item.subject}</dt>
-                    <dd className="break-all font-mono text-[11px] font-bold text-[#2f6bbf] sm:pr-5">{item.value}</dd>
-                    <dd className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{item.description}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          ) : null}
-
-          {section.caution ? (
-            <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[#f5da8e] bg-[#fff8e1] px-4 py-3 text-[#8a6a10]">
-              <CircleAlert className="mt-0.5 shrink-0" size={17} aria-hidden="true" />
-              <p className="text-xs font-bold leading-5">{section.caution}</p>
-            </div>
-          ) : null}
         </div>
       </div>
     </section>
