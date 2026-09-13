@@ -42,6 +42,39 @@ function highlightFilter(rect) {
 }
 
 /**
+ * 가릴 구간을 모자이크로 덮는 필터 사슬을 만든다.
+ *
+ * 원본을 고쳐 굽지 않고 **장면 파일에 좌표로 선언한다.** iOS 스크린샷은 모자이크를 원본에
+ * 직접 칠해 두었는데, 그러면 어디를 왜 가렸는지가 코드에 남지 않고 세기를 바꾸려면 원본을
+ * 다시 만들어야 한다.
+ *
+ * 축소했다 `neighbor`로 되키우는 방식이다. `boxblur`는 흐릴 뿐이라 글자 모양이 남는다.
+ *
+ * **매 단계 `split`이 필요하다.** 라벨이 붙은 출력은 한 번만 소비할 수 있어서, 원본을 깔개와
+ * 모자이크 재료로 동시에 쓰려면 미리 둘로 나눠야 한다. 나누지 않으면 필터 그래프가 조용히
+ * 엉뚱한 결과를 낸다 — iOS 자르기에서 실제로 겪었다.
+ */
+function mosaicChain(regions) {
+  const parts = [];
+  let label = "0:v";
+  regions.forEach((region, index) => {
+    const x = Math.round(region.x);
+    const y = Math.round(region.y);
+    const w = Math.round(region.w);
+    const h = Math.round(region.h);
+    // 블록이 클수록 거칠다. 글자 획이 살아나지 않을 만큼은 되어야 한다.
+    const block = region.block ?? 14;
+    const cols = Math.max(1, Math.round(w / block));
+    const rows = Math.max(1, Math.round(h / block));
+    parts.push(`[${label}]split=2[base${index}][src${index}]`);
+    parts.push(`[src${index}]crop=${w}:${h}:${x}:${y},scale=${cols}:${rows},scale=${w}:${h}:flags=neighbor[mos${index}]`);
+    parts.push(`[base${index}][mos${index}]overlay=${x}:${y}[out${index}]`);
+    label = `out${index}`;
+  });
+  return { parts, label };
+}
+
+/**
  * 장면 하나를 합성해 한 장으로 굽는다.
  *
  * `-frames:v 1`이 필요하다. PNG 입력은 한 장짜리 스트림이지만 필터가 붙으면 ffmpeg가 계속 쓰려
@@ -55,9 +88,19 @@ async function composeStill(ffmpeg, shot, target) {
    * 오류도 경고도 없어서 길이 계산을 세 번 다시 확인한 뒤에야 포맷을 의심했다.
    */
   const filters = [];
+  // 강조 박스는 모자이크 뒤에 그린다. 가릴 곳과 가리킬 곳이 겹쳐도 테두리가 남아야 한다.
   if (shot.highlight) filters.push(highlightFilter(shot.highlight));
   filters.push("format=rgb24");
-  await execFileAsync(ffmpeg, ["-y", "-v", "error", "-i", shot.file, "-vf", filters.join(","), "-frames:v", "1", target]);
+
+  const args = ["-y", "-v", "error", "-i", shot.file];
+  if (shot.mosaic?.length) {
+    const { parts, label } = mosaicChain(shot.mosaic);
+    parts.push(`[${label}]${filters.join(",")}[composed]`);
+    args.push("-filter_complex", parts.join(";"), "-map", "[composed]");
+  } else {
+    args.push("-vf", filters.join(","));
+  }
+  await execFileAsync(ffmpeg, [...args, "-frames:v", "1", target]);
 }
 
 /**
