@@ -13,6 +13,7 @@ describe("AnalyticsProvider", () => {
 
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_GA_MEASUREMENT_ID", "G-TEST123");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://talktheme.shop");
     document.cookie = "talktheme_analytics_consent=; Path=/; Max-Age=0";
     window.localStorage.clear();
     window.sessionStorage.clear();
