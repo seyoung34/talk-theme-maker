@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Popover from "@radix-ui/react-popover";
 import { CircleUserRound, LayoutDashboard, LoaderCircle, LogIn, LogOut, UserRound, X } from "lucide-react";
-import { markInternalTraffic } from "@/lib/analytics/ga4";
+import { clearInternalTraffic, markInternalTraffic } from "@/lib/analytics/ga4";
 import type { SessionResponse } from "@/lib/billing/apiTypes";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createClient } from "@/lib/supabase/client";
@@ -47,12 +47,17 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
       .then((payload) => {
         if (!active) return;
         setSession(payload);
-        // 관리자로 확인된 기기는 이후 방문부터 내부 트래픽으로 표시한다(차단이 아니라 표시).
-        // 로그아웃해도 유지되므로 노트북·폰에서 한 번씩 로그인하면 그 뒤로는 자동이다.
+        // 내부 사용자의 권위 있는 기준은 admin_profiles다. 관리자 확인 기기는 이후 방문부터
+        // 내부 트래픽으로 표시하되, 일반 사용자로 바뀌었거나 로그아웃한 기기는 표시를 지운다.
+        // `/admin` 경로 자체는 세션 왕복보다 먼저 보내는 첫 page_view도 별도로 내부 표시한다.
         if (payload.isAdmin) markInternalTraffic();
+        else clearInternalTraffic();
       })
       .catch(() => {
-        if (active) setSession({ user: null, isAdmin: false });
+        if (active) {
+          clearInternalTraffic();
+          setSession({ user: null, isAdmin: false });
+        }
       });
     return () => {
       active = false;
@@ -75,6 +80,7 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
       setSignOutError("로그아웃하지 못했습니다. 잠시 후 다시 시도해 주세요.");
       return;
     }
+    clearInternalTraffic();
     setSession({ user: null, isAdmin: false });
     setShowSignOutConfirm(false);
     router.replace("/login");

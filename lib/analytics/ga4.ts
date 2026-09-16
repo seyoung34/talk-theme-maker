@@ -6,6 +6,7 @@ export const analyticsConsentChangedEvent = "talktheme:analytics-consent-changed
 const analyticsConsentCookieName = "talktheme_analytics_consent";
 export const analyticsInternalStorageKey = "talktheme:analytics-internal:v1";
 const analyticsInternalCookieName = "talktheme_analytics_internal";
+export const productionAnalyticsSiteUrl = "https://talktheme.shop";
 const acquisitionStorageKey = "talktheme:analytics-acquisition:v1";
 const funnelContextStorageKey = "talktheme:analytics-funnel-context:v1";
 /**
@@ -131,8 +132,17 @@ declare global {
 }
 
 export function getAnalyticsMeasurementId() {
+  // `NEXT_PUBLIC_*` 값은 build time에 브라우저 번들로 들어가므로 local 빌드의 실수를 막는다.
+  // Workers preview가 production 값을 상속하는 경우는 bootstrap/event 전송 단계에서 현재 origin을
+  // 다시 확인한다.
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "");
+  if (siteUrl !== productionAnalyticsSiteUrl) return null;
   const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim();
   return measurementId && /^G-[A-Z0-9]+$/i.test(measurementId) ? measurementId : null;
+}
+
+export function isAnalyticsEnabledForOrigin(origin: string) {
+  return origin === productionAnalyticsSiteUrl && getAnalyticsMeasurementId() !== null;
 }
 
 export function getAnalyticsConsent(): AnalyticsConsent | null {
@@ -161,8 +171,9 @@ export function saveAnalyticsConsent(consent: AnalyticsConsent) {
  *
  * **표시는 계정이 아니라 기기에 남긴다.** `page_view`는 페이지가 뜨자마자 나가는데 관리자 여부는
  * `/api/session` 응답이 와야 알 수 있어서, 매 방문마다 로그인 확인을 기다리면 첫 이벤트를 놓친다.
- * 관리자로 확인된 시점에 이 기기를 한 번 표시해 두면 이후 방문은 로그아웃 상태여도 계속 붙는다.
- * 놓치는 건 각 기기에서 관리자로 처음 로그인하기 이전의 이벤트뿐이고, 그것도 한 번뿐이다.
+ * 관리자로 확인된 시점에 이 기기를 표시해 두면 같은 세션의 후속 이벤트와 다음 페이지의
+ * 첫 이벤트를 놓치지 않는다. 이후 `/api/session`에서 admin_profiles 사용자가 아니라고
+ * 확인되면 SiteHeader가 표시를 지운다.
  *
  * 동의 플래그와 같은 이유로 localStorage와 1년짜리 자사 쿠키에 이중으로 쓴다.
  * 프라이버시 확장 프로그램이 localStorage를 막는 경우가 있다.
@@ -180,6 +191,20 @@ export function markInternalTraffic() {
     // Privacy extensions can block localStorage. The first-party cookie below is the fallback.
   }
   document.cookie = `${analyticsInternalCookieName}=1; Path=/; Max-Age=31536000; SameSite=Lax; Secure`;
+}
+
+export function clearInternalTraffic() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(analyticsInternalStorageKey);
+  } catch {
+    // Privacy extensions can block localStorage. The cookie below is still cleared.
+  }
+  document.cookie = `${analyticsInternalCookieName}=; Path=/; Max-Age=0; SameSite=Lax; Secure`;
+}
+
+export function isInternalAnalyticsPath(pathname: string) {
+  return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
 function readStoredInternalTraffic() {
@@ -201,7 +226,7 @@ export function getKnownCampaignKey(value: string | null) {
 
 export function getAnalyticsBootstrapScript(measurementId: string) {
   const safeMeasurementId = /^G-[A-Z0-9]+$/i.test(measurementId) ? measurementId : "";
-  return `(function(){var id=${JSON.stringify(safeMeasurementId)};if(!id)return;var key=${JSON.stringify(analyticsConsentStorageKey)};var cookie=${JSON.stringify(analyticsConsentCookieName)};var stored=null;try{stored=localStorage.getItem(key);}catch(e){}if(stored!=="granted"&&stored!=="denied"){var match=document.cookie.split(";").map(function(v){return v.trim();}).find(function(v){return v.indexOf(cookie+"=")===0;});stored=match?match.slice(cookie.length+1):null;}window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};window.gtag("consent","default",{analytics_storage:stored==="granted"?"granted":"denied",ad_storage:"denied",ad_user_data:"denied",ad_personalization:"denied"});window.gtag("js",new Date());window.gtag("config",id,{send_page_view:false});var tag=document.createElement("script");tag.async=true;tag.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id);document.head.appendChild(tag);})();`;
+  return `(function(){var id=${JSON.stringify(safeMeasurementId)};if(!id||window.location.origin!==${JSON.stringify(productionAnalyticsSiteUrl)})return;var key=${JSON.stringify(analyticsConsentStorageKey)};var cookie=${JSON.stringify(analyticsConsentCookieName)};var stored=null;try{stored=localStorage.getItem(key);}catch(e){}if(stored!=="granted"&&stored!=="denied"){var match=document.cookie.split(";").map(function(v){return v.trim();}).find(function(v){return v.indexOf(cookie+"=")===0;});stored=match?match.slice(cookie.length+1):null;}window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};window.gtag("consent","default",{analytics_storage:stored==="granted"?"granted":"denied",ad_storage:"denied",ad_user_data:"denied",ad_personalization:"denied"});window.gtag("js",new Date());window.gtag("config",id,{send_page_view:false});var tag=document.createElement("script");tag.async=true;tag.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id);document.head.appendChild(tag);})();`;
 }
 
 export function updateAnalyticsConsent(consent: AnalyticsConsent) {
@@ -210,7 +235,8 @@ export function updateAnalyticsConsent(consent: AnalyticsConsent) {
 }
 
 export function trackAnalyticsEvent<Name extends AnalyticsEventName>(name: Name, params: AnalyticsEventMap[Name]) {
-  if (getAnalyticsConsent() !== "granted" || !getAnalyticsMeasurementId() || typeof window === "undefined") return;
+  if (typeof window === "undefined" || !isAnalyticsEnabledForOrigin(window.location.origin)) return;
+  if (getAnalyticsConsent() !== "granted") return;
   if (name === "template_started" || name === "editor_ready") {
     saveFunnelContext(params);
   }
@@ -219,7 +245,7 @@ export function trackAnalyticsEvent<Name extends AnalyticsEventName>(name: Name,
   // 여기서 또 넣으면 중복이라 비워 두지만, page_location 에 실을 값은 따로 읽어야 한다.
   const acquisition = name === "page_view" ? {} : getAcquisitionContext(window.location.pathname);
   // GA4 데이터 필터가 읽는 파라미터 이름이다. params 뒤에 둬서 이벤트 쪽에서 덮어쓸 수 없게 한다.
-  const trafficType = isInternalTraffic() ? { traffic_type: "internal" } : {};
+  const trafficType = isInternalTraffic() || isInternalAnalyticsPath(window.location.pathname) ? { traffic_type: "internal" } : {};
   // GA4 는 이 값 안의 utm_* 로 세션 소스·매체·캠페인을 정한다. 원본 쿼리 대신 허용 목록을
   // 통과한 세 값만 다시 붙인다.
   const campaignQuery = buildCampaignQuery(getAcquisitionContext(window.location.pathname));

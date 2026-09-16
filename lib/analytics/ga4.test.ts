@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   analyticsConsentStorageKey,
   analyticsInternalStorageKey,
+  clearInternalTraffic,
   getAcquisitionContext,
   getAnalyticsBootstrapScript,
+  getAnalyticsMeasurementId,
+  isInternalAnalyticsPath,
   isInternalTraffic,
   markInternalTraffic,
+  productionAnalyticsSiteUrl,
   saveAnalyticsConsent,
   trackAnalyticsEvent,
   trackPurchaseOnce,
@@ -16,6 +20,8 @@ describe("GA4 analytics", () => {
 
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_GA_MEASUREMENT_ID", "G-TEST123");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", productionAnalyticsSiteUrl);
+    (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(productionAnalyticsSiteUrl);
     window.localStorage.clear();
     window.sessionStorage.clear();
     // 동의·내부 트래픽 플래그는 쿠키에도 남는다. 지우지 않으면 앞 테스트가 뒤 테스트에 샌다.
@@ -31,6 +37,7 @@ describe("GA4 analytics", () => {
   it("queues denied consent before the GA config command", () => {
     const script = getAnalyticsBootstrapScript("G-TEST123");
 
+    expect(script.indexOf(`window.location.origin!=="${productionAnalyticsSiteUrl}"`)).toBeLessThan(script.indexOf("window.dataLayer=window.dataLayer||[]"));
     expect(script.indexOf('"consent","default"')).toBeLessThan(script.indexOf('"config",id'));
     expect(script.indexOf('"config",id')).toBeLessThan(script.indexOf('tag.src="https://www.googletagmanager.com/gtag/js'));
     expect(script).toContain('analytics_storage:stored==="granted"?"granted":"denied"');
@@ -41,6 +48,15 @@ describe("GA4 analytics", () => {
     trackAnalyticsEvent("template_started", { template_key: "basic", template_source: "base", platform: "android" });
 
     expect(gtag).not.toHaveBeenCalled();
+  });
+
+  it("does not send analytics from a preview origin even if the build has production analytics settings", () => {
+    (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL("https://preview-talktheme.workers.dev/template");
+    saveAnalyticsConsent("granted");
+
+    trackAnalyticsEvent("page_view", { page_path: "/template" });
+
+    expect(gtag).not.toHaveBeenCalledWith("event", "page_view", expect.anything());
   });
 
   it("adds the saved template context to downstream events", () => {
@@ -141,6 +157,22 @@ describe("GA4 analytics", () => {
     expect(gtag).toHaveBeenCalledWith("event", "page_view", expect.objectContaining({ traffic_type: "internal" }));
   });
 
+  it("tags every admin path as internal before the session lookup completes", () => {
+    saveAnalyticsConsent("granted");
+    window.history.replaceState({}, "", "/admin/theme-assets");
+
+    expect(isInternalAnalyticsPath(window.location.pathname)).toBe(true);
+    trackAnalyticsEvent("page_view", { page_path: "/admin/theme-assets" });
+
+    expect(gtag).toHaveBeenCalledWith("event", "page_view", expect.objectContaining({ traffic_type: "internal" }));
+  });
+
+  it("does not enable the production measurement ID on a non-production site URL", () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000");
+
+    expect(getAnalyticsMeasurementId()).toBeNull();
+  });
+
   it("leaves normal visitor events untagged", () => {
     window.localStorage.setItem(analyticsConsentStorageKey, "granted");
 
@@ -154,6 +186,13 @@ describe("GA4 analytics", () => {
     window.localStorage.removeItem(analyticsInternalStorageKey);
 
     expect(isInternalTraffic()).toBe(true);
+  });
+
+  it("clears the device mark when the current session is not an admin", () => {
+    markInternalTraffic();
+    clearInternalTraffic();
+
+    expect(isInternalTraffic()).toBe(false);
   });
 
   it("sends a purchase transaction only once per tab", () => {

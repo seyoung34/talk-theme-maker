@@ -12,7 +12,7 @@ import { getExportDownloadState } from "@/lib/theme/android/outputRetention";
 import { cancelAsyncExport } from "@/components/project/exportClient";
 import { readJsonResponse } from "@/lib/shared/api/http";
 import { createClient } from "@/lib/supabase/client";
-import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
+import { clearInternalTraffic, trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { claimSignupBonusFromClient } from "@/lib/billing/signupBonusClient";
 import { deleteLocalUserThemeData } from "@/lib/theme/project/deleteLocalUserData";
 
@@ -101,6 +101,7 @@ export default function AccountClient() {
         console.error("Failed to clear local user theme data after account deletion", error);
       });
       await createClient().auth.signOut().catch(() => undefined);
+      clearInternalTraffic();
       window.location.assign("/login?accountDeleted=1");
     } catch (error) {
       setDeletionError(error instanceof Error && error.message ? error.message : "회원탈퇴를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");

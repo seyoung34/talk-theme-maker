@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Cookie } from "lucide-react";
-import { getAcquisitionContext, getAnalyticsConsent, getAnalyticsMeasurementId, saveAnalyticsConsent, trackAnalyticsEvent, updateAnalyticsConsent, type AnalyticsConsent } from "@/lib/analytics/ga4";
+import { getAcquisitionContext, getAnalyticsConsent, isAnalyticsEnabledForOrigin, saveAnalyticsConsent, trackAnalyticsEvent, updateAnalyticsConsent, type AnalyticsConsent } from "@/lib/analytics/ga4";
 
 export const landingConsentDelayMs = 3000;
 const analyticsConsentUiExemptPaths = new Set(["/edit"]);
@@ -23,8 +23,8 @@ function AnalyticsPageTracker({ consent }: { consent: AnalyticsConsent | null })
 }
 
 export default function AnalyticsProvider() {
-  const measurementId = getAnalyticsMeasurementId();
   const pathname = usePathname();
+  const [isAnalyticsEnabled, setIsAnalyticsEnabled] = useState(false);
   const [consent, setConsent] = useState<AnalyticsConsent | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isConsentPromptReady, setIsConsentPromptReady] = useState(pathname !== "/");
@@ -33,6 +33,7 @@ export default function AnalyticsProvider() {
   const shouldShowConsentUi = !analyticsConsentUiExemptPaths.has(pathname);
 
   useEffect(() => {
+    setIsAnalyticsEnabled(isAnalyticsEnabledForOrigin(window.location.origin));
     const initialConsent = getAnalyticsConsent();
     setConsent(initialConsent);
   }, []);
@@ -55,7 +56,7 @@ export default function AnalyticsProvider() {
     setIsSettingsOpen(false);
   };
 
-  if (!measurementId) return null;
+  if (!isAnalyticsEnabled) return null;
 
   return (
     <>
