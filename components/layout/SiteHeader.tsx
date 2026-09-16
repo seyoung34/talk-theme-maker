@@ -80,6 +80,7 @@ export default function SiteHeader({ currentPath }: SiteHeaderProps) {
       setSignOutError("로그아웃하지 못했습니다. 잠시 후 다시 시도해 주세요.");
       return;
     }
+    clearInternalTraffic();
     setSession({ user: null, isAdmin: false });
     setShowSignOutConfirm(false);
     router.replace("/login");

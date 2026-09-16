@@ -4,6 +4,7 @@ import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
+import { clearInternalTraffic } from "@/lib/analytics/ga4";
 import { createClient } from "@/lib/supabase/client";
 
 function getUpdatePasswordErrorMessage(error: unknown) {
@@ -41,6 +42,7 @@ export default function UpdatePasswordClient() {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
       await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+      clearInternalTraffic();
       router.replace(`/login?returnTo=${encodeURIComponent(returnTo)}&passwordUpdated=1`);
       router.refresh();
     } catch (error) {

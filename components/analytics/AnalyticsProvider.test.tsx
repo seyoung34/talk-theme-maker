@@ -14,6 +14,7 @@ describe("AnalyticsProvider", () => {
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_GA_MEASUREMENT_ID", "G-TEST123");
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://talktheme.shop");
+    (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL("https://talktheme.shop");
     document.cookie = "talktheme_analytics_consent=; Path=/; Max-Age=0";
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -102,6 +103,19 @@ describe("AnalyticsProvider", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "분석 쿠키 동의" })).toBeNull());
     expect(screen.queryByRole("button", { name: "분석 쿠키 설정" })).toBeNull();
+    expect(gtag).not.toHaveBeenCalledWith("event", "page_view", expect.anything());
+  });
+
+  it("does not show analytics consent UI or send events on a preview origin", async () => {
+    (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL("https://preview-talktheme.workers.dev/template");
+    window.localStorage.setItem(analyticsConsentStorageKey, "granted");
+
+    render(createElement(AnalyticsProvider));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "분석 쿠키 동의" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "분석 쿠키 설정" })).toBeNull();
+    });
     expect(gtag).not.toHaveBeenCalledWith("event", "page_view", expect.anything());
   });
 });

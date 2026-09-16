@@ -2,7 +2,7 @@
 
 import { ExternalLink, Info, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getAnalyticsConsent, getAnalyticsMeasurementId, analyticsConsentChangedEvent } from "@/lib/analytics/ga4";
+import { getAnalyticsConsent, isAnalyticsEnabledForOrigin, analyticsConsentChangedEvent } from "@/lib/analytics/ga4";
 import { buildAndroidExternalBrowserIntent, detectInAppBrowser, isAndroidUserAgent, type InAppBrowser } from "@/lib/browser/inAppBrowser";
 
 const dismissedStorageKey = "talktheme:in-app-browser-notice-dismissed:v2";
@@ -45,10 +45,10 @@ export default function InAppBrowserNotice({ ready, hasRecentWork }: InAppBrowse
   }, []);
 
   useEffect(() => {
-    const measurementId = getAnalyticsMeasurementId();
+    const analyticsEnabled = isAnalyticsEnabledForOrigin(window.location.origin);
     const syncConsent = () => {
-      // GA4가 설정되지 않은 환경에는 쿠키 동의 배너가 없으므로 바로 표시한다.
-      setHasResolvedAnalyticsConsent(!measurementId || getAnalyticsConsent() !== null);
+      // GA4가 비활성인 origin에는 동의 배너가 없으므로 바로 표시한다.
+      setHasResolvedAnalyticsConsent(!analyticsEnabled || getAnalyticsConsent() !== null);
     };
     syncConsent();
     window.addEventListener(analyticsConsentChangedEvent, syncConsent);

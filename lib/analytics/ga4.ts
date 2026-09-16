@@ -132,13 +132,17 @@ declare global {
 }
 
 export function getAnalyticsMeasurementId() {
-  // `NEXT_PUBLIC_*` 값은 build time에 브라우저 번들로 들어간다. preview/local에 운영
-  // 측정 ID를 실수로 넣어도 개발 트래픽이 운영 속성으로 가지 않도록 canonical production
-  // origin에서 만든 빌드에서만 GA4를 켠다.
+  // `NEXT_PUBLIC_*` 값은 build time에 브라우저 번들로 들어가므로 local 빌드의 실수를 막는다.
+  // Workers preview가 production 값을 상속하는 경우는 bootstrap/event 전송 단계에서 현재 origin을
+  // 다시 확인한다.
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim().replace(/\/+$/, "");
   if (siteUrl !== productionAnalyticsSiteUrl) return null;
   const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim();
   return measurementId && /^G-[A-Z0-9]+$/i.test(measurementId) ? measurementId : null;
+}
+
+export function isAnalyticsEnabledForOrigin(origin: string) {
+  return origin === productionAnalyticsSiteUrl && getAnalyticsMeasurementId() !== null;
 }
 
 export function getAnalyticsConsent(): AnalyticsConsent | null {
@@ -222,7 +226,7 @@ export function getKnownCampaignKey(value: string | null) {
 
 export function getAnalyticsBootstrapScript(measurementId: string) {
   const safeMeasurementId = /^G-[A-Z0-9]+$/i.test(measurementId) ? measurementId : "";
-  return `(function(){var id=${JSON.stringify(safeMeasurementId)};if(!id)return;var key=${JSON.stringify(analyticsConsentStorageKey)};var cookie=${JSON.stringify(analyticsConsentCookieName)};var stored=null;try{stored=localStorage.getItem(key);}catch(e){}if(stored!=="granted"&&stored!=="denied"){var match=document.cookie.split(";").map(function(v){return v.trim();}).find(function(v){return v.indexOf(cookie+"=")===0;});stored=match?match.slice(cookie.length+1):null;}window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};window.gtag("consent","default",{analytics_storage:stored==="granted"?"granted":"denied",ad_storage:"denied",ad_user_data:"denied",ad_personalization:"denied"});window.gtag("js",new Date());window.gtag("config",id,{send_page_view:false});var tag=document.createElement("script");tag.async=true;tag.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id);document.head.appendChild(tag);})();`;
+  return `(function(){var id=${JSON.stringify(safeMeasurementId)};if(!id||window.location.origin!==${JSON.stringify(productionAnalyticsSiteUrl)})return;var key=${JSON.stringify(analyticsConsentStorageKey)};var cookie=${JSON.stringify(analyticsConsentCookieName)};var stored=null;try{stored=localStorage.getItem(key);}catch(e){}if(stored!=="granted"&&stored!=="denied"){var match=document.cookie.split(";").map(function(v){return v.trim();}).find(function(v){return v.indexOf(cookie+"=")===0;});stored=match?match.slice(cookie.length+1):null;}window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};window.gtag("consent","default",{analytics_storage:stored==="granted"?"granted":"denied",ad_storage:"denied",ad_user_data:"denied",ad_personalization:"denied"});window.gtag("js",new Date());window.gtag("config",id,{send_page_view:false});var tag=document.createElement("script");tag.async=true;tag.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(id);document.head.appendChild(tag);})();`;
 }
 
 export function updateAnalyticsConsent(consent: AnalyticsConsent) {
@@ -231,7 +235,8 @@ export function updateAnalyticsConsent(consent: AnalyticsConsent) {
 }
 
 export function trackAnalyticsEvent<Name extends AnalyticsEventName>(name: Name, params: AnalyticsEventMap[Name]) {
-  if (getAnalyticsConsent() !== "granted" || !getAnalyticsMeasurementId() || typeof window === "undefined") return;
+  if (typeof window === "undefined" || !isAnalyticsEnabledForOrigin(window.location.origin)) return;
+  if (getAnalyticsConsent() !== "granted") return;
   if (name === "template_started" || name === "editor_ready") {
     saveFunnelContext(params);
   }

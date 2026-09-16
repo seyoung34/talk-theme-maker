@@ -21,6 +21,7 @@ describe("GA4 analytics", () => {
   beforeEach(() => {
     vi.stubEnv("NEXT_PUBLIC_GA_MEASUREMENT_ID", "G-TEST123");
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", productionAnalyticsSiteUrl);
+    (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL(productionAnalyticsSiteUrl);
     window.localStorage.clear();
     window.sessionStorage.clear();
     // 동의·내부 트래픽 플래그는 쿠키에도 남는다. 지우지 않으면 앞 테스트가 뒤 테스트에 샌다.
@@ -36,6 +37,7 @@ describe("GA4 analytics", () => {
   it("queues denied consent before the GA config command", () => {
     const script = getAnalyticsBootstrapScript("G-TEST123");
 
+    expect(script.indexOf(`window.location.origin!=="${productionAnalyticsSiteUrl}"`)).toBeLessThan(script.indexOf("window.dataLayer=window.dataLayer||[]"));
     expect(script.indexOf('"consent","default"')).toBeLessThan(script.indexOf('"config",id'));
     expect(script.indexOf('"config",id')).toBeLessThan(script.indexOf('tag.src="https://www.googletagmanager.com/gtag/js'));
     expect(script).toContain('analytics_storage:stored==="granted"?"granted":"denied"');
@@ -46,6 +48,15 @@ describe("GA4 analytics", () => {
     trackAnalyticsEvent("template_started", { template_key: "basic", template_source: "base", platform: "android" });
 
     expect(gtag).not.toHaveBeenCalled();
+  });
+
+  it("does not send analytics from a preview origin even if the build has production analytics settings", () => {
+    (window as unknown as { happyDOM: { setURL(url: string): void } }).happyDOM.setURL("https://preview-talktheme.workers.dev/template");
+    saveAnalyticsConsent("granted");
+
+    trackAnalyticsEvent("page_view", { page_path: "/template" });
+
+    expect(gtag).not.toHaveBeenCalledWith("event", "page_view", expect.anything());
   });
 
   it("adds the saved template context to downstream events", () => {
