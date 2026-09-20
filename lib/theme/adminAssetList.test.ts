@@ -68,6 +68,17 @@ describe("toAdminAssetListItem", () => {
     expect(item).not.toHaveProperty("file");
   });
 
+  /**
+   * 게시(write-shadow)는 실패를 삼키므로 미등록이 조용히 남는다. 그 사실이 카드에 드러나야
+   * 운영자가 재게시할 수 있다. 다만 **조회 실패와 미등록은 달라서** 셋을 구분해 둔다.
+   */
+  it("catalog 등록 여부는 준 값만 그대로 싣고, 모르면 필드를 만들지 않는다", () => {
+    expect(toAdminAssetListItem(candidate(), { catalogRegistered: true }).catalogRegistered).toBe(true);
+    expect(toAdminAssetListItem(candidate(), { catalogRegistered: false }).catalogRegistered).toBe(false);
+    // 조회가 실패했을 때 "등록됨"으로도 "미등록"으로도 단정하지 않는다.
+    expect(toAdminAssetListItem(candidate())).not.toHaveProperty("catalogRegistered");
+  });
+
   it("말풍선 조정값은 내용 대신 보유 여부만 남긴다", () => {
     const withAdjustment = toAdminAssetListItem(candidate({ bubbleAdjustment: { markers: {} as never } }));
     const without = toAdminAssetListItem(candidate());

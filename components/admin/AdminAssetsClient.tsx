@@ -34,6 +34,7 @@ import {
 } from "@/lib/theme/adminAssets";
 import { createAdminAssetSaveTargets, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs } from "@/lib/theme/adminAssetWorkspace";
 import { useAdminAssetLibrary } from "@/components/admin/hooks/useAdminAssetLibrary";
+import { shadowPublishThemeAsset } from "@/lib/theme/assetCatalog/shadowPublishClient";
 import {
   getAdminAssetListDefaultSortDirection,
   isAdminAssetListSortKey,
@@ -143,6 +144,7 @@ export default function AdminAssetsClient() {
   const [isLoadingEditAsset, setIsLoadingEditAsset] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<AdminAssetUploadProgress | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
+  const [republishingAssetId, setRepublishingAssetId] = useState<string | null>(null);
   const [imageEditOpen, setImageEditOpen] = useState(false);
   const [assetGridColumns, setAssetGridColumns] = useState<3 | 4 | 5>(5);
   const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
@@ -197,6 +199,7 @@ export default function AdminAssetsClient() {
     setSort: setAssetSort,
     sortDirection: assetSortDirection,
     setSortDirection: setAssetSortDirection,
+    refresh: refreshAssets,
   } = useAdminAssetLibrary({ assetKind, onError: notifyLibraryError });
   // 등록 화면에서는 슬롯을 선택하지 않는다. 기존 저장 계약(slot_role)과 말풍선 편집기의
   // 기준 크기를 위해 kind별 첫 슬롯만 내부 대표값으로 사용한다.
@@ -584,6 +587,50 @@ export default function AdminAssetsClient() {
     });
     return () => { cancelled = true; };
   }, [assetPendingDelete]);
+
+  /**
+   * catalog registry에 빠진 에셋을 다시 게시한다.
+   *
+   * 저장 경로의 write-shadow는 기다리지 않고 부르며 실패를 삼킨다. 여러 장을 연달아 올리다
+   * 화면을 벗어나면 몇 건이 조용히 빠지는데, 그때 손으로 복구할 길이 이것뿐이다. 저장 정책을
+   * 바꾸지 않고(게시 실패는 저장 실패가 아니다) 빠진 것만 다시 채운다.
+   *
+   * 원본은 목록이 준 signed URL에서 받는다. 미등록 에셋은 축소본이 없어 이 URL이 항상 온다.
+   */
+  const republishCatalog = async (asset: AdminAssetListItem) => {
+    if (republishingAssetId || deletingAssetId) return;
+    if (!asset.previewUrl) {
+      setNotice("원본 주소를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
+      return;
+    }
+    try {
+      setRepublishingAssetId(asset.id);
+      const response = await fetch(asset.previewUrl);
+      if (!response.ok) throw new Error(`원본을 내려받지 못했습니다 (HTTP ${response.status})`);
+      const blob = await response.blob();
+      const outcome = await shadowPublishThemeAsset({
+        kind: "admin",
+        sourceId: asset.id,
+        canonical: new File([blob], asset.fileName, { type: asset.mimeType || blob.type }),
+      });
+      // 실패 갈래를 먼저 처리한다. `published | already-active`는 판별자가 두 값이라 음성
+      // 분기에서 좁혀지지 않아, 성공을 먼저 걸러 내면 `reason` 접근이 타입 오류가 된다.
+      if (outcome.status === "skipped") {
+        setNotice(`catalog에 등록하지 못했습니다: ${outcome.reason}`);
+        return;
+      }
+      if (outcome.status === "disabled") {
+        setNotice("catalog 병행 기록이 꺼져 있습니다. ASSET_CATALOG_WRITE_ENABLED 설정을 확인해 주세요.");
+        return;
+      }
+      setNotice(`${asset.title} 을(를) catalog에 등록했습니다.`);
+      await refreshAssets();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "catalog에 등록하지 못했습니다.");
+    } finally {
+      setRepublishingAssetId(null);
+    }
+  };
 
   const remove = async (asset: AdminAssetListItem) => {
     if (deletingAssetId) return;
@@ -1265,7 +1312,7 @@ export default function AdminAssetsClient() {
               ) : filteredAssets.length > 0 ? (
                 <div className={`grid gap-3 sm:grid-cols-2 ${assetGridColumns === 3 ? "xl:grid-cols-3" : assetGridColumns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
                   {filteredAssets.map(({ asset, warnings }) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} deleting={deletingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />
+                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} deleting={deletingAssetId === asset.id} republishing={republishingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} onRepublish={() => void republishCatalog(asset)} />
                   ))}
                 </div>
               ) : (

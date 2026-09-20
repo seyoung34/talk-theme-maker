@@ -4,7 +4,7 @@ import { getCurrentAdmin } from "@/lib/supabase/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow } from "@/lib/theme/adminAssets";
 import { toAdminAssetListItem, type AdminAssetListItem, type AdminAssetListPayload } from "@/lib/theme/adminAssetList";
-import { adminLogicalAssetId, canonicalVariantKey } from "@/lib/theme/assetCatalog/logicalAssetId";
+import { adminLogicalAssetId, adminLogicalAssetPrefix, canonicalVariantKey } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { buildPickerThumbnailIndex, filterPickerThumbnailRowsForCurrentAssets, type PickerThumbnailAssetRef, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
 import { themeAssetsBucketName } from "@/lib/theme/remoteAssets";
@@ -80,11 +80,14 @@ export async function GET(request: NextRequest) {
     const needsFallback = candidates.filter((candidate) => !pickThumbnailUrl(thumbnails, candidate.id));
     const signedUrls = await createSignedUrlMap(admin, needsFallback.map((candidate) => candidate.storagePath));
 
+    const registeredIds = await readCatalogRegisteredAssetIds(admin, candidates);
+
     const items: AdminAssetListItem[] = candidates.map((candidate) => {
       const thumbnailUrl = pickThumbnailUrl(thumbnails, candidate.id);
       return toAdminAssetListItem(candidate, {
         ...(thumbnailUrl ? { thumbnailUrl } : {}),
         ...(thumbnailUrl ? {} : { previewUrl: signedUrls.get(candidate.storagePath) }),
+        ...(registeredIds ? { catalogRegistered: registeredIds.has(candidate.id) } : {}),
       });
     });
 
@@ -126,6 +129,40 @@ async function readListRows(
   }
 
   return { rows, truncated: true };
+}
+
+/**
+ * 이 목록에 실린 에셋 중 catalog registry에 `active` 행이 있는 것.
+ *
+ * 썸네일 색인과 따로 두는 이유는 **조건이 다르기 때문이다.** 썸네일은 R2 origin이 없으면
+ * 아예 건너뛰고 `r2_previews`까지 읽어야 하지만, 등록 여부는 R2 설정과 무관하고 id만 있으면
+ * 된다. 하나로 합치면 R2가 꺼진 환경에서 모든 에셋이 미등록으로 보인다.
+ *
+ * 실패하면 `undefined`를 돌려준다. 목록을 막지 않되 "등록됨"으로도 속이지 않는다.
+ */
+async function readCatalogRegisteredAssetIds(
+  admin: ReturnType<typeof createAdminClient>,
+  assets: readonly { id: string }[],
+): Promise<Set<string> | undefined> {
+  if (!assets.length) return new Set();
+  try {
+    const { data, error } = await admin
+      .from("theme_asset_objects")
+      .select("logical_asset_id")
+      .eq("status", "active")
+      .in("logical_asset_id", assets.map((asset) => adminLogicalAssetId(asset.id)));
+    if (error) throw error;
+    const registered = new Set<string>();
+    for (const row of data ?? []) {
+      const logicalAssetId = (row as { logical_asset_id?: unknown }).logical_asset_id;
+      if (typeof logicalAssetId !== "string" || !logicalAssetId.startsWith(adminLogicalAssetPrefix)) continue;
+      registered.add(logicalAssetId.slice(adminLogicalAssetPrefix.length));
+    }
+    return registered;
+  } catch (error) {
+    console.warn("Admin asset catalog registration lookup failed.", JSON.stringify(serializeError(error)));
+    return undefined;
+  }
 }
 
 /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, LoaderCircle, Pencil } from "lucide-react";
+import { AlertTriangle, LoaderCircle, Pencil, RefreshCw } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import {
@@ -106,16 +106,23 @@ export function AdminAssetCard({
   slots,
   warnings,
   deleting,
+  republishing,
   onEdit,
   onDelete,
+  onRepublish,
 }: {
   asset: AdminAssetListItem;
   slots: readonly ThemeAssetSlot[];
   warnings: string[];
   deleting: boolean;
+  republishing: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onRepublish: () => void;
 }) {
+  // `undefined`는 "확인하지 못했다"는 뜻이라 배지를 띄우지 않는다. 조회 장애를 미등록으로
+  // 보여 주면 운영자가 멀쩡한 에셋을 다시 올린다.
+  const needsCatalogPublish = asset.catalogRegistered === false;
   const tileUrl = adminAssetListTileUrl(asset);
   const scopeLabel = getAdminAssetScopeLabel(describeAdminAssetScope(asset.targets));
   return (
@@ -138,6 +145,7 @@ export function AdminAssetCard({
             <span key={platform} className="rounded-full bg-[var(--color-surface-low)] px-2 py-0.5 text-[10px] font-black text-[var(--color-on-surface-variant)]">{platform === "android" ? "Android 전용본" : "iOS 전용본"}</span>
           ))}
           {warnings.length > 0 ? <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800"><AlertTriangle size={11} aria-hidden="true" />확인 {warnings.length}</span> : null}
+          {needsCatalogPublish ? <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black text-red-800" title="catalog registry에 active 항목이 없습니다. 내보내기가 기존 업로드 경로로 동작합니다."><AlertTriangle size={11} aria-hidden="true" />catalog 미등록</span> : null}
         </div>
         <strong className="block truncate text-sm font-black text-[var(--color-on-surface)]">{asset.title}</strong>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : getAdminAssetSlotLabel(asset.slotRole, slots)}</span>
@@ -155,6 +163,18 @@ export function AdminAssetCard({
           {deleting ? "삭제 중" : "삭제"}
         </button>
       </div>
+      {needsCatalogPublish ? (
+        <button
+          type="button"
+          className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 transition hover:-translate-y-0.5 hover:bg-red-100 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]"
+          disabled={deleting || republishing}
+          onClick={onRepublish}
+          title="원본을 다시 올려 catalog registry에 등록합니다."
+        >
+          {republishing ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+          {republishing ? "등록 중" : "catalog 등록"}
+        </button>
+      ) : null}
     </article>
   );
 }
