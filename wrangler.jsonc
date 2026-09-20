@@ -28,8 +28,19 @@
     // Phase 5 변환 canary. 범위 밖 logical asset은 기존 File/legacy 경로를 유지한다.
     "ASSET_CATALOG_EXPORT_ENABLED_ANDROID": "1",
     "ASSET_CATALOG_EXPORT_ENABLED_IOS": "1",
-    "ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST": "admin:de7633d1-e8fe-43e3-9e11-2ac929015d73",
-    "ASSET_CATALOG_EXPORT_IOS_ASSET_ALLOWLIST": "admin:de7633d1-e8fe-43e3-9e11-2ac929015d73"
+    // canary 축을 논리 asset에서 계정으로 옮긴다. asset 축은 추천 에셋이 늘 때마다 사람이 등록해야
+    // 하고 누락이 조용한 미적용으로 끝나는 반면, 변환 지원 여부는 `clientRef.ts`가 이미 자동
+    // 판정한다. 계정 축은 1회 설정으로 같은 폭발 반경을 유지한다.
+    // 빈 문자열은 "제한 없음"이다(`exportGate.ts`의 readAllowlist). 변수를 지우지 않는 이유는
+    // 긴급 축소 수단을 남겨 두기 위해서다.
+    "ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST": "",
+    "ASSET_CATALOG_EXPORT_IOS_ASSET_ALLOWLIST": "",
+    // 대응하는 NEXT_PUBLIC_* 값은 Workers Builds 트리거에 있고 **같은 값이어야 한다.** 서버만 계정을
+    // 좁히면 구 번들 브라우저는 모든 사용자에게 producer가 켜진 채로 남고, 추천 API는 요청 사용자를
+    // 모르므로 ref를 내려준다. 그 ref는 Worker에서 catalog_export_disabled 503으로 거절되는데
+    // 폴백할 바이트가 없어 export가 통째로 실패한다.
+    "ASSET_CATALOG_EXPORT_ANDROID_USER_ALLOWLIST": "60e92d91-7260-46f4-ace6-dd1bd153392b",
+    "ASSET_CATALOG_EXPORT_IOS_USER_ALLOWLIST": "60e92d91-7260-46f4-ace6-dd1bd153392b"
   },
   "services": [
     {
