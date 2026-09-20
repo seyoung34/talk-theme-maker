@@ -39,6 +39,7 @@ import {
   getAdminAssetListDefaultSortDirection,
   isAdminAssetListSortKey,
   toAdminAssetListItem,
+  withPreviousCatalogRegistration,
   type AdminAssetListItem,
   type AdminAssetListSortDirection,
   type AdminAssetListSortKey,
@@ -385,6 +386,33 @@ export default function AdminAssetsClient() {
   const toListItem = (asset: AdminAssetCandidate) =>
     toAdminAssetListItem(asset, asset.previewUrl ? { previewUrl: asset.previewUrl } : {});
 
+  /**
+   * 저장 결과를 목록에 반영하는 **유일한 경로**.
+   *
+   * 저장 갈래가 넷이다(빌더 신규·빌더 재생성·정보 수정·다중 업로드). 갈래마다 목록 갱신을 손으로
+   * 쓰면 하나만 빠져도 조용히 어긋난다 — 실제로 catalog 등록 표시가 그렇게 빠졌다. 갱신 규칙을
+   * 여기 한 곳에 모아 갈래가 늘어도 같은 처리를 받게 한다.
+   *
+   * 하는 일은 둘이다.
+   *   - 이미 있던 항목은 자리를 지키며 교체하고, 새 항목은 앞에 붙인다.
+   *   - 저장 응답에 없는 catalog 등록 여부는 직전 값을 남기고, 병행 기록이 끝나면 목록을 다시
+   *     읽어 서버 판정으로 덮는다. 기다리지 않고 읽으면 진행 중인 게시가 미등록으로 보였다가
+   *     바뀐다.
+   */
+  const applySavedAssets = (savedAssets: readonly AdminAssetCandidate[], saveKind: AdminAssetKind) => {
+    if (savedAssets.length === 0) return;
+    setAssets((current) => {
+      const previousById = new Map(current.map((item) => [item.id, item]));
+      const nextById = new Map(savedAssets.map((asset) => [asset.id, withPreviousCatalogRegistration(toListItem(asset), previousById.get(asset.id))]));
+      const replaced = current.map((item) => nextById.get(item.id) ?? item);
+      const added = savedAssets.filter((asset) => !previousById.has(asset.id)).map((asset) => nextById.get(asset.id)!);
+      return [...added.slice().reverse(), ...replaced];
+    });
+    void whenShadowPublishesSettle().then(() => {
+      if (assetKindRef.current === saveKind) void refreshAssets();
+    });
+  };
+
   const startSidebarResize = (side: SidebarResize["side"], event: React.PointerEvent<HTMLButtonElement>) => {
     if (side === "left" && isLeftSidebarCollapsed) return;
     event.preventDefault();
@@ -418,7 +446,7 @@ export default function AdminAssetsClient() {
           enabled: true,
         });
         if (!isCurrentSave()) return;
-        setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? toListItem(updatedAsset) : asset)));
+        applySavedAssets([updatedAsset], saveKind);
         setEditingAsset(updatedAsset);
         setBubbleBuilderDraft(null);
         for (const pending of pendingFiles) URL.revokeObjectURL(pending.previewUrl);
@@ -443,7 +471,7 @@ export default function AdminAssetsClient() {
           bubbleSpec: assetKind === "bubble" ? bubbleSpec : undefined,
         });
         if (!isCurrentSave()) return;
-        setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? toListItem(updatedAsset) : asset)));
+        applySavedAssets([updatedAsset], saveKind);
         setEditingAsset(updatedAsset);
         setNotice("에셋 정보를 저장했습니다.");
       } catch (error) {
@@ -488,7 +516,7 @@ export default function AdminAssetsClient() {
         setPendingFiles([]);
         setUploadProgress(null);
         setNotice("관리 후보를 추가했습니다.");
-        setAssets((current) => [toListItem(savedAsset), ...current.filter((item) => item.id !== savedAsset.id)]);
+        applySavedAssets([savedAsset], saveKind);
         return;
       }
 
@@ -539,19 +567,7 @@ export default function AdminAssetsClient() {
 
       if (!isCurrentSave()) return;
       if (savedAssets.length > 0) {
-        setAssets((current) => [...savedAssets.slice().reverse().map(toListItem), ...current.filter((item) => !savedAssets.some((saved) => saved.id === item.id))]);
-        /**
-         * 낙관적 항목에는 catalog 등록 여부가 없다(서버만 아는 값이다). 그대로 두면 방금 저장한
-         * 에셋이 "확인 못 함"으로 남아, 게시가 빠져도 배지와 복구 버튼이 뜨지 않는다. 화면을
-         * 떠나지 않은 운영자는 그 사실을 영영 모른다.
-         *
-         * 게시가 끝난 뒤 목록을 다시 읽어 서버 판정으로 덮는다. 기다리지 않고 읽으면 아직
-         * 진행 중인 게시가 미등록으로 보였다가 바뀐다. 실패는 이미 삼켜져 있으므로 여기서
-         * 오류를 따로 다루지 않는다.
-         */
-        void whenShadowPublishesSettle().then(() => {
-          if (isCurrentSave()) void refreshAssets();
-        });
+        applySavedAssets(savedAssets, saveKind);
       }
 
       if (failedItems.length === 0) {

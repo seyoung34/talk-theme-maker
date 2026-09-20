@@ -123,6 +123,18 @@ export function toAdminAssetListItem(
   };
 }
 
+/**
+ * 저장 직후 낙관적 항목에 **이전에 알고 있던 catalog 등록 여부를 남긴다.**
+ *
+ * 저장 응답에는 이 값이 없다(서버 목록만 아는 값이다). 그대로 덮으면 이미 "미등록"으로 떠 있던
+ * 카드가 수정 한 번에 배지와 복구 버튼을 잃고 "확인 못 함"으로 되돌아간다. 다음 목록 조회가
+ * 정답을 가져올 때까지 직전 판정을 유지하는 편이, 알던 사실을 잊는 것보다 낫다.
+ */
+export function withPreviousCatalogRegistration(next: AdminAssetListItem, previous?: AdminAssetListItem): AdminAssetListItem {
+  if (next.catalogRegistered !== undefined || previous?.catalogRegistered === undefined) return next;
+  return { ...next, catalogRegistered: previous.catalogRegistered };
+}
+
 /** 목록 카드가 배경으로 그릴 URL. 축소본이 우선이고, 없으면 원본 폴백이다. */
 export function adminAssetListTileUrl(item: Pick<AdminAssetListItem, "thumbnailUrl" | "previewUrl">): string | undefined {
   return item.thumbnailUrl ?? item.previewUrl;

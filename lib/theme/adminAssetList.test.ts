@@ -9,6 +9,7 @@ import {
   isAdminAssetListSortKey,
   sortAdminAssetListItems,
   toAdminAssetListItem,
+  withPreviousCatalogRegistration,
   type AdminAssetListItem,
 } from "@/lib/theme/adminAssetList";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssetDomain";
@@ -77,6 +78,31 @@ describe("toAdminAssetListItem", () => {
     expect(toAdminAssetListItem(candidate(), { catalogRegistered: false }).catalogRegistered).toBe(false);
     // 조회가 실패했을 때 "등록됨"으로도 "미등록"으로도 단정하지 않는다.
     expect(toAdminAssetListItem(candidate())).not.toHaveProperty("catalogRegistered");
+  });
+
+  /**
+   * 저장 응답에는 catalog 등록 여부가 없다. 그대로 덮으면 이미 "미등록"으로 떠 있던 카드가
+   * 수정 한 번에 배지와 복구 버튼을 잃는다.
+   */
+  it("직전에 알던 catalog 등록 여부를 저장 직후 항목에 남긴다", () => {
+    const previous = toAdminAssetListItem(candidate(), { catalogRegistered: false });
+    const saved = toAdminAssetListItem(candidate());
+
+    expect(withPreviousCatalogRegistration(saved, previous).catalogRegistered).toBe(false);
+  });
+
+  it("새 값이 있으면 직전 값으로 덮지 않는다", () => {
+    const previous = toAdminAssetListItem(candidate(), { catalogRegistered: false });
+    const saved = toAdminAssetListItem(candidate(), { catalogRegistered: true });
+
+    expect(withPreviousCatalogRegistration(saved, previous).catalogRegistered).toBe(true);
+  });
+
+  it("직전 항목이 없거나 그쪽도 모르면 필드를 만들지 않는다", () => {
+    const saved = toAdminAssetListItem(candidate());
+
+    expect(withPreviousCatalogRegistration(saved, undefined)).not.toHaveProperty("catalogRegistered");
+    expect(withPreviousCatalogRegistration(saved, toAdminAssetListItem(candidate()))).not.toHaveProperty("catalogRegistered");
   });
 
   it("말풍선 조정값은 내용 대신 보유 여부만 남긴다", () => {
