@@ -8,6 +8,7 @@ import { adminLogicalAssetId, canonicalVariantKey } from "@/lib/theme/assetCatal
 import { buildPickerThumbnailIndex, filterPickerThumbnailRowsForCurrentAssets, type PickerThumbnailAssetRef, type PickerThumbnailIndex, type PickerThumbnailRow } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
 import { themeAssetsBucketName } from "@/lib/theme/remoteAssets";
+import type { AdminAssetPlatform } from "@/lib/theme/adminAssetDomain";
 import type { ThemePlatform } from "@/lib/theme/types";
 
 /**
@@ -184,14 +185,32 @@ function isFullyRegistered(asset: AdminAssetCandidate, index: CatalogRowIndex): 
   const byRowId = index.get(adminLogicalAssetId(asset.id));
   if (!byRowId) return false;
 
-  const platforms: ThemePlatform[] = asset.platform === "all" ? ["android", "ios"] : [asset.platform];
-  return platforms.every((platform) => {
+  return requiredPlatforms(asset).every((platform) => {
     const variant = (asset.variants ?? []).find((item) => item.platform === platform);
     if (variant) return Boolean(variant.assetObjectId && byRowId.get(variant.assetObjectId) === platform);
     if (!asset.assetObjectId) return false;
     const variantKey = byRowId.get(asset.assetObjectId);
     return variantKey === canonicalVariantKey || variantKey === platform;
   });
+}
+
+/**
+ * 이 에셋이 catalog로 나가야 하는 플랫폼.
+ *
+ * `asset.platform`은 `selectRepresentativeTarget`이 고른 **타깃 하나**의 값이라 실제 적용 범위보다
+ * 좁을 수 있다. 타깃이 여럿이면(예: exact_role은 android, kind 타깃은 ios) 대표만 보고 판정할 때
+ * 반대 플랫폼의 누락을 놓치고 배지가 사라진다. export는 매칭되는 타깃마다 판정하므로 여기서도
+ * 타깃에서 도출한다.
+ *
+ * 꺼진 타깃은 export가 쓰지 않으므로 제외한다. 쓸 타깃이 하나도 없으면 대표 값으로 돌아간다.
+ */
+function requiredPlatforms(asset: AdminAssetCandidate): ThemePlatform[] {
+  const fromTargets = (asset.targets ?? []).filter((target) => target.enabled).flatMap((target) => expandPlatform(target.platform));
+  return Array.from(new Set(fromTargets.length ? fromTargets : expandPlatform(asset.platform)));
+}
+
+function expandPlatform(platform: AdminAssetPlatform): ThemePlatform[] {
+  return platform === "all" ? ["android", "ios"] : [platform];
 }
 
 /** `logical_asset_id` → (행 `id` → `variant_key`). */

@@ -184,6 +184,32 @@ describe("GET /api/admin/theme-assets", () => {
     expect(payload.items[0].catalogRegistered).toBe(false);
   });
 
+  /**
+   * `asset.platform`은 `selectRepresentativeTarget`이 고른 **타깃 하나**의 값이다. 타깃이 여럿이면
+   * 대표보다 넓은 적용 범위가 생기는데, 대표만 보면 반대 플랫폼의 누락을 놓친다. export는
+   * 매칭되는 타깃마다 판정하므로 여기서도 타깃 전체를 봐야 한다.
+   */
+  it("대표 타깃이 좁아도 활성 타깃 전체를 기준으로 판정한다", async () => {
+    // 대표는 exact_role(android). 그런데 kind 타깃이 ios까지 열어 두었고 ios는 게시되지 않았다.
+    registryRows = [{ id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: {} }];
+    const GET = await load([[
+      row(assetId, {
+        asset_object_id: null,
+        admin_asset_targets: [
+          { id: `${assetId}-exact`, asset_id: assetId, platform: "android", slot_role: "main_background", target_kind: "exact_role", priority: 0, enabled: true },
+          { id: `${assetId}-kind`, asset_id: assetId, platform: "ios", slot_role: null, target_kind: "asset_kind", priority: 1, enabled: true },
+        ],
+        admin_asset_variants: [
+          { id: "v-a", asset_id: assetId, platform: "android", storage_path: `admin-assets/${assetId}/a.png`, asset_object_id: "android-registry", file_name: "a.png", mime_type: "image/png" },
+        ],
+      }),
+    ]]);
+
+    const payload = await (await GET(request("assetKind=background"))).json();
+
+    expect(payload.items[0].catalogRegistered).toBe(false);
+  });
+
   it("전용본 두 개가 모두 게시되면 등록으로 친다", async () => {
     registryRows = [
       { id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: {} },
