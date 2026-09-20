@@ -27,11 +27,43 @@ export type ShadowPublishOutcome =
   | { readonly status: "skipped"; readonly reason: string };
 
 /**
+ * 아직 끝나지 않은 병행 기록.
+ *
+ * 저장 경로는 이 함수를 `void`로 부르고 진행한다(그게 설계다). 그런데 그 직후 목록을 다시
+ * 읽으면 게시가 끝나기 전이라 방금 저장한 에셋이 **미등록으로 보였다가 나중에 바뀐다.**
+ * 반대로 기다리지 않고 낙관적 항목만 그리면 게시가 실패해도 화면이 영영 모른다.
+ *
+ * 그래서 진행 중인 게시를 여기서 세어 두고, 목록을 새로 읽기 직전에만 잠깐 기다리게 한다.
+ * 저장 자체는 여전히 막지 않는다.
+ */
+const inFlightPublishes = new Set<Promise<unknown>>();
+
+/**
+ * 진행 중인 병행 기록이 모두 끝날 때까지 기다린다. 실패는 이미 함수 안에서 삼켜지므로
+ * 여기서는 throw하지 않는다.
+ *
+ * `timeoutMs`가 있는 이유는 게시 요청이 네트워크에서 멈출 수 있기 때문이다. 그때 목록
+ * 새로고침까지 함께 멈추면 화면이 굳는다. 기다림을 포기해도 다음 조회가 정답을 가져온다.
+ */
+export async function whenShadowPublishesSettle(timeoutMs = 10_000): Promise<void> {
+  if (inFlightPublishes.size === 0) return;
+  const settled = Promise.allSettled([...inFlightPublishes]).then(() => undefined);
+  await Promise.race([settled, new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
+}
+
+/**
  * catalog에 병행 기록한다. 절대 throw하지 않는다.
  *
  * 호출부가 `await`하지 않아도 되지만, 하더라도 저장 흐름을 막지 않도록 결과만 돌려준다.
  */
-export async function shadowPublishThemeAsset(input: ShadowPublishInput): Promise<ShadowPublishOutcome> {
+export function shadowPublishThemeAsset(input: ShadowPublishInput): Promise<ShadowPublishOutcome> {
+  const publishing = runShadowPublish(input);
+  inFlightPublishes.add(publishing);
+  void publishing.finally(() => inFlightPublishes.delete(publishing));
+  return publishing;
+}
+
+async function runShadowPublish(input: ShadowPublishInput): Promise<ShadowPublishOutcome> {
   try {
     // catalog는 export 원본 저장소라 PNG만 받는다. 다른 포맷은 애초에 보내지 않는다.
     if (input.canonical.type && input.canonical.type !== "image/png") {

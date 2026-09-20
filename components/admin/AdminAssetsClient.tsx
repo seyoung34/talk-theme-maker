@@ -34,7 +34,7 @@ import {
 } from "@/lib/theme/adminAssets";
 import { createAdminAssetSaveTargets, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs } from "@/lib/theme/adminAssetWorkspace";
 import { useAdminAssetLibrary } from "@/components/admin/hooks/useAdminAssetLibrary";
-import { shadowPublishThemeAsset } from "@/lib/theme/assetCatalog/shadowPublishClient";
+import { shadowPublishThemeAsset, whenShadowPublishesSettle } from "@/lib/theme/assetCatalog/shadowPublishClient";
 import {
   getAdminAssetListDefaultSortDirection,
   isAdminAssetListSortKey,
@@ -540,6 +540,18 @@ export default function AdminAssetsClient() {
       if (!isCurrentSave()) return;
       if (savedAssets.length > 0) {
         setAssets((current) => [...savedAssets.slice().reverse().map(toListItem), ...current.filter((item) => !savedAssets.some((saved) => saved.id === item.id))]);
+        /**
+         * 낙관적 항목에는 catalog 등록 여부가 없다(서버만 아는 값이다). 그대로 두면 방금 저장한
+         * 에셋이 "확인 못 함"으로 남아, 게시가 빠져도 배지와 복구 버튼이 뜨지 않는다. 화면을
+         * 떠나지 않은 운영자는 그 사실을 영영 모른다.
+         *
+         * 게시가 끝난 뒤 목록을 다시 읽어 서버 판정으로 덮는다. 기다리지 않고 읽으면 아직
+         * 진행 중인 게시가 미등록으로 보였다가 바뀐다. 실패는 이미 삼켜져 있으므로 여기서
+         * 오류를 따로 다루지 않는다.
+         */
+        void whenShadowPublishesSettle().then(() => {
+          if (isCurrentSave()) void refreshAssets();
+        });
       }
 
       if (failedItems.length === 0) {
