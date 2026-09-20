@@ -148,6 +148,20 @@ describe("GET /api/admin/theme-assets", () => {
   });
 
   /**
+   * 재저장은 `asset_object_id`를 비운다. 그 뒤 게시가 끊기면 **쓸 수 없는 옛 revision의
+   * active 행만** 남는데, 논리 ID만 보면 그걸 "등록됨"으로 읽어 복구가 필요한 카드에서
+   * 배지와 재게시 버튼이 사라진다.
+   */
+  it("현재 포인터와 맞지 않는 옛 active 행은 등록으로 치지 않는다", async () => {
+    registryRows = [{ id: "stale-registry", logical_asset_id: `admin:${assetId}`, variant_key: "canonical", r2_previews: {} }];
+    const GET = await load([[row(assetId, { asset_object_id: null })]]);
+
+    const payload = await (await GET(request("assetKind=background"))).json();
+
+    expect(payload.items[0].catalogRegistered).toBe(false);
+  });
+
+  /**
    * 등록 여부는 R2 설정과 무관하다. 썸네일 색인과 한 조회로 합치면 R2가 꺼진 환경에서
    * 멀쩡한 에셋이 전부 미등록으로 보인다.
    */

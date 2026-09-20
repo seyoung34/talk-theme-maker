@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow } from "@/lib/theme/adminAssets";
 import { toAdminAssetListItem, type AdminAssetListItem, type AdminAssetListPayload } from "@/lib/theme/adminAssetList";
 import { adminLogicalAssetId, adminLogicalAssetPrefix, canonicalVariantKey } from "@/lib/theme/assetCatalog/logicalAssetId";
-import { buildPickerThumbnailIndex, filterPickerThumbnailRowsForCurrentAssets, type PickerThumbnailAssetRef, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
+import { buildPickerThumbnailIndex, filterPickerThumbnailRowsForCurrentAssets, type PickerThumbnailAssetRef, type PickerThumbnailIndex, type PickerThumbnailRow } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
 import { themeAssetsBucketName } from "@/lib/theme/remoteAssets";
 
@@ -76,11 +76,13 @@ export async function GET(request: NextRequest) {
     const { rows, truncated } = await readListRows(admin, assetKind);
     const candidates = rows.map((row) => canonicalAdminAssetToCandidate(mapCanonicalAdminAssetRow(row)));
 
-    const thumbnails = await readThumbnailIndex(admin, candidates);
+    // 썸네일과 등록 여부는 같은 행에서 나온다. 한 번만 읽고 둘로 나눈다 — 따로 읽으면
+    // 두 표시가 서로 다른 시점의 registry를 보고 어긋날 수 있다.
+    const catalogRows = await readActiveCatalogRows(admin, candidates);
+    const thumbnails = catalogRows && getR2PreviewOrigin() ? buildPickerThumbnailIndex(catalogRows) : {};
+    const registeredIds = catalogRows ? toRegisteredAdminAssetIds(catalogRows) : undefined;
     const needsFallback = candidates.filter((candidate) => !pickThumbnailUrl(thumbnails, candidate.id));
     const signedUrls = await createSignedUrlMap(admin, needsFallback.map((candidate) => candidate.storagePath));
-
-    const registeredIds = await readCatalogRegisteredAssetIds(admin, candidates);
 
     const items: AdminAssetListItem[] = candidates.map((candidate) => {
       const thumbnailUrl = pickThumbnailUrl(thumbnails, candidate.id);
@@ -132,50 +134,20 @@ async function readListRows(
 }
 
 /**
- * 이 목록에 실린 에셋 중 catalog registry에 `active` 행이 있는 것.
+ * 이 목록에 실린 에셋의 **현재** catalog object 행.
  *
- * 썸네일 색인과 따로 두는 이유는 **조건이 다르기 때문이다.** 썸네일은 R2 origin이 없으면
- * 아예 건너뛰고 `r2_previews`까지 읽어야 하지만, 등록 여부는 R2 설정과 무관하고 id만 있으면
- * 된다. 하나로 합치면 R2가 꺼진 환경에서 모든 에셋이 미등록으로 보인다.
+ * `filterPickerThumbnailRowsForCurrentAssets`로 거르는 것이 핵심이다. 논리 ID만 보면 재저장으로
+ * 버려진 옛 revision의 active 행까지 잡힌다. 재저장은 `asset_object_id`를 비우므로
+ * (`adminAssets.ts`), 그 뒤 게시가 끊기면 **쓸 수 없는 옛 행만 남는데** 그것을 "등록됨"으로 읽으면
+ * 복구가 필요한 카드에서 배지와 재게시 버튼이 사라진다.
  *
  * 실패하면 `undefined`를 돌려준다. 목록을 막지 않되 "등록됨"으로도 속이지 않는다.
  */
-async function readCatalogRegisteredAssetIds(
-  admin: ReturnType<typeof createAdminClient>,
-  assets: readonly { id: string }[],
-): Promise<Set<string> | undefined> {
-  if (!assets.length) return new Set();
-  try {
-    const { data, error } = await admin
-      .from("theme_asset_objects")
-      .select("logical_asset_id")
-      .eq("status", "active")
-      .in("logical_asset_id", assets.map((asset) => adminLogicalAssetId(asset.id)));
-    if (error) throw error;
-    const registered = new Set<string>();
-    for (const row of data ?? []) {
-      const logicalAssetId = (row as { logical_asset_id?: unknown }).logical_asset_id;
-      if (typeof logicalAssetId !== "string" || !logicalAssetId.startsWith(adminLogicalAssetPrefix)) continue;
-      registered.add(logicalAssetId.slice(adminLogicalAssetPrefix.length));
-    }
-    return registered;
-  } catch (error) {
-    console.warn("Admin asset catalog registration lookup failed.", JSON.stringify(serializeError(error)));
-    return undefined;
-  }
-}
-
-/**
- * 이 목록에 실린 에셋의 R2 축소본 색인.
- *
- * 실패해도 목록을 막지 않는다 — 썸네일이 없으면 아래에서 원본 signed URL로 떨어지므로
- * registry 장애가 관리 화면 전체를 세우지 않는다.
- */
-async function readThumbnailIndex(
+async function readActiveCatalogRows(
   admin: ReturnType<typeof createAdminClient>,
   assets: readonly PickerThumbnailAssetRef[],
-): Promise<PickerThumbnailIndex> {
-  if (!assets.length || !getR2PreviewOrigin()) return {};
+): Promise<PickerThumbnailRow[] | undefined> {
+  if (!assets.length) return [];
   try {
     const { data, error } = await admin
       .from("theme_asset_objects")
@@ -183,11 +155,22 @@ async function readThumbnailIndex(
       .eq("status", "active")
       .in("logical_asset_id", assets.map((asset) => adminLogicalAssetId(asset.id)));
     if (error) throw error;
-    return buildPickerThumbnailIndex(filterPickerThumbnailRowsForCurrentAssets(data ?? [], assets));
+    return filterPickerThumbnailRowsForCurrentAssets(data ?? [], assets);
   } catch (error) {
-    console.warn("Admin asset thumbnail lookup failed; falling back to signed originals.", JSON.stringify(serializeError(error)));
-    return {};
+    console.warn("Admin asset catalog lookup failed; falling back to signed originals.", JSON.stringify(serializeError(error)));
+    return undefined;
   }
+}
+
+/** 현재 포인터와 맞는 행을 가진 관리자 에셋 id. */
+function toRegisteredAdminAssetIds(rows: readonly PickerThumbnailRow[]): Set<string> {
+  const registered = new Set<string>();
+  for (const row of rows) {
+    const logicalAssetId = typeof row.logical_asset_id === "string" ? row.logical_asset_id : "";
+    if (!logicalAssetId.startsWith(adminLogicalAssetPrefix)) continue;
+    registered.add(logicalAssetId.slice(adminLogicalAssetPrefix.length));
+  }
+  return registered;
 }
 
 /**

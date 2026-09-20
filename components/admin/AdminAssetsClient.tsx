@@ -599,6 +599,12 @@ export default function AdminAssetsClient() {
    */
   const republishCatalog = async (asset: AdminAssetListItem) => {
     if (republishingAssetId || deletingAssetId) return;
+    // 카드가 이미 막는 경우지만 여기서도 확인한다. 이 경로는 부모 canonical만 올릴 수 있어서,
+    // 플랫폼 전용본이 있는 에셋에 쓰면 쓰이지 않는 행을 만들고 배지만 사라진다.
+    if (asset.mimeType !== "image/png" || asset.variantPlatforms.length > 0) {
+      setNotice("이 에셋은 수정 화면에서 다시 저장해야 catalog에 등록됩니다.");
+      return;
+    }
     if (!asset.previewUrl) {
       setNotice("원본 주소를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
       return;
