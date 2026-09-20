@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import type { SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
+import { disabledImageCandidateId } from "@/lib/theme/project/state";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
 
 function visual(overrides: Partial<TemplatePreviewVisual> = {}): TemplatePreviewVisual {
@@ -100,6 +101,81 @@ describe("createSystemTemplatePreviewVisual", () => {
     });
 
     expect(result.myBubbleImage).toBe("https://example.com/shared-bubble.png");
+  });
+
+  it("이미지 사용 안 함으로 둔 슬롯은 bucket에 남은 고아 업로드를 쓰지 않는다", () => {
+    // 회귀 가드: "사용 안 함"도 선택이 없을 때와 같은 undefined로 해석돼 첫 항목 폴백을 탔고,
+    // 운영자가 해제해 둔 다른 템플릿 배경이 카드 썸네일에 구워졌다. 편집기는 같은 슬롯을
+    // 비워 그리므로 발행물만 조용히 어긋난다.
+    const template = getThemeTemplate("basic");
+    const slots = getThemeSlots("android");
+    const mainBackground = slots.find((slot) => slot.role === "main_background")!;
+    const orphanPath = "system-templates/other-template/main-background.png";
+    const summary: SystemTemplateSummary = {
+      id: "template-id",
+      title: "배경 없는 템플릿",
+      baseTemplateId: "basic",
+      platform: "android",
+      status: "published",
+      visibility: "public",
+      pricingType: "free",
+      tags: [],
+      createdAt: 1,
+      updatedAt: 1,
+      uploadCount: 1,
+      colorCount: 0,
+      colors: {},
+      candidateSelections: { [mainBackground.id]: disabledImageCandidateId },
+      uploadRefs: {
+        [mainBackground.id]: [{ id: "orphan", fileName: "other.png", mimeType: "image/png", size: 1, storagePath: orphanPath }],
+      },
+      previewMetadata: {},
+    };
+
+    const result = createSystemTemplatePreviewVisual({
+      template,
+      platform: "android",
+      summary,
+      signedUrls: { [orphanPath]: "https://example.com/other-template.png" },
+    });
+
+    expect(result.mainBackgroundImage).toBeUndefined();
+  });
+
+  it("선택이 아예 없으면 기존대로 첫 업로드로 떨어진다", () => {
+    const template = getThemeTemplate("basic");
+    const slots = getThemeSlots("android");
+    const mainBackground = slots.find((slot) => slot.role === "main_background")!;
+    const storagePath = "system-templates/template-id/main-background.png";
+    const summary: SystemTemplateSummary = {
+      id: "template-id",
+      title: "선택 없는 템플릿",
+      baseTemplateId: "basic",
+      platform: "android",
+      status: "published",
+      visibility: "public",
+      pricingType: "free",
+      tags: [],
+      createdAt: 1,
+      updatedAt: 1,
+      uploadCount: 1,
+      colorCount: 0,
+      colors: {},
+      candidateSelections: {},
+      uploadRefs: {
+        [mainBackground.id]: [{ id: "only", fileName: "bg.png", mimeType: "image/png", size: 1, storagePath }],
+      },
+      previewMetadata: {},
+    };
+
+    const result = createSystemTemplatePreviewVisual({
+      template,
+      platform: "android",
+      summary,
+      signedUrls: { [storagePath]: "https://example.com/main-background.png" },
+    });
+
+    expect(result.mainBackgroundImage).toBe("https://example.com/main-background.png");
   });
 
   it("기존 iOS preview metadata의 8자리 색상도 export와 같은 6자리 색상으로 정규화한다", () => {

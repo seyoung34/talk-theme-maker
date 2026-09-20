@@ -1,4 +1,4 @@
-import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
+import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedSharedSlotEntry, isImageSlotDisabled } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import { getThemeAssetSignedUrls } from "@/lib/theme/remoteAssets";
 import { previewUrlOf } from "@/lib/theme/assetCatalog/previewUrl";
@@ -256,6 +256,11 @@ function resolveImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary:
 
 function resolvePreviewUploadPath(slot: ThemeAssetSlot | undefined, uploadRefs: RemoteSlotUploads, selections: SystemTemplatePreviewSource["candidateSelections"]) {
   if (!slot) return undefined;
+  // "이미지 사용 안 함"은 선택이 없는 것이 아니라 **명시적 선택**이다. 아래 `getSelectedSharedSlotEntry`가
+  // 이 경우에도 undefined를 돌려주므로(`isImageSlotDisabled` 조기 반환), 먼저 거르지 않으면 첫 항목
+  // 폴백을 타서 운영자가 해제해 둔 고아 업로드가 카드·화면 미리보기에 구워진다. 편집기는 같은
+  // 슬롯을 비워 그리므로 발행물만 조용히 어긋난다.
+  if (isImageSlotDisabled(slot, selections)) return undefined;
   const entries = uploadRefs[slot.id] ?? [];
   // 선택된 항목이 있으면 그 항목만 본다. 경로가 없다고 다른 항목으로 넘어가면 운영자가 고른
   // 것과 다른 그림이 카드/화면 미리보기에 구워져 그대로 발행된다. 선택이 아예 없을 때만
