@@ -2,12 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getCurrentAdmin } from "@/lib/supabase/auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow } from "@/lib/theme/adminAssets";
+import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { toAdminAssetListItem, type AdminAssetListItem, type AdminAssetListPayload } from "@/lib/theme/adminAssetList";
-import { adminLogicalAssetId, adminLogicalAssetPrefix, canonicalVariantKey } from "@/lib/theme/assetCatalog/logicalAssetId";
+import { adminLogicalAssetId, canonicalVariantKey } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { buildPickerThumbnailIndex, filterPickerThumbnailRowsForCurrentAssets, type PickerThumbnailAssetRef, type PickerThumbnailIndex, type PickerThumbnailRow } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
 import { themeAssetsBucketName } from "@/lib/theme/remoteAssets";
+import type { ThemePlatform } from "@/lib/theme/types";
 
 /**
  * `/admin/assets` 목록.
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
     // 두 표시가 서로 다른 시점의 registry를 보고 어긋날 수 있다.
     const catalogRows = await readActiveCatalogRows(admin, candidates);
     const thumbnails = catalogRows && getR2PreviewOrigin() ? buildPickerThumbnailIndex(catalogRows) : {};
-    const registeredIds = catalogRows ? toRegisteredAdminAssetIds(catalogRows) : undefined;
+    const catalogIndex = catalogRows ? toCatalogRowIndex(catalogRows) : undefined;
     const needsFallback = candidates.filter((candidate) => !pickThumbnailUrl(thumbnails, candidate.id));
     const signedUrls = await createSignedUrlMap(admin, needsFallback.map((candidate) => candidate.storagePath));
 
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
       return toAdminAssetListItem(candidate, {
         ...(thumbnailUrl ? { thumbnailUrl } : {}),
         ...(thumbnailUrl ? {} : { previewUrl: signedUrls.get(candidate.storagePath) }),
-        ...(registeredIds ? { catalogRegistered: registeredIds.has(candidate.id) } : {}),
+        ...(catalogIndex ? { catalogRegistered: isFullyRegistered(candidate, catalogIndex) } : {}),
       });
     });
 
@@ -162,15 +163,51 @@ async function readActiveCatalogRows(
   }
 }
 
-/** 현재 포인터와 맞는 행을 가진 관리자 에셋 id. */
-function toRegisteredAdminAssetIds(rows: readonly PickerThumbnailRow[]): Set<string> {
-  const registered = new Set<string>();
+/**
+ * 이 에셋이 **모든 대상 플랫폼에서** catalog로 나갈 수 있는가.
+ *
+ * 논리 ID 하나에 `canonical`/`android`/`ios` 행이 함께 달리므로, 행이 하나라도 있으면 등록으로
+ * 치면 **절반만 게시된 에셋이 완료로 보인다.** 그 경우 나머지 플랫폼은 조용히 legacy 경로로
+ * 떨어지는데 카드에는 배지가 없어 고칠 방법이 사라진다.
+ *
+ * 판정 규칙은 export가 실제로 고르는 방식(`findMatchingCatalogRef`)을 그대로 따른다.
+ *   - 그 플랫폼 전용본이 있으면 → 그 variant 포인터에 같은 플랫폼 행이 있어야 한다.
+ *     canonical로 대체하지 않는다. 두 바이트가 다를 수 있어 export도 대체하지 않는다.
+ *   - 없으면 → 부모 포인터에 `canonical` 또는 그 플랫폼 행이 있어야 한다.
+ *
+ * 부모 canonical이 없는 빌더 후보는 정상 상태다. 그래서 부모를 항상 요구하지 않고, 전용본이
+ * 없는 플랫폼에 대해서만 본다.
+ */
+function isFullyRegistered(asset: AdminAssetCandidate, index: CatalogRowIndex): boolean {
+  // 행은 **자기 논리 에셋 안에서만** 센다. 행 id로만 찾으면 다른 에셋의 행이 포인터가 같다는
+  // 이유로 잡힐 수 있다.
+  const byRowId = index.get(adminLogicalAssetId(asset.id));
+  if (!byRowId) return false;
+
+  const platforms: ThemePlatform[] = asset.platform === "all" ? ["android", "ios"] : [asset.platform];
+  return platforms.every((platform) => {
+    const variant = (asset.variants ?? []).find((item) => item.platform === platform);
+    if (variant) return Boolean(variant.assetObjectId && byRowId.get(variant.assetObjectId) === platform);
+    if (!asset.assetObjectId) return false;
+    const variantKey = byRowId.get(asset.assetObjectId);
+    return variantKey === canonicalVariantKey || variantKey === platform;
+  });
+}
+
+/** `logical_asset_id` → (행 `id` → `variant_key`). */
+type CatalogRowIndex = ReadonlyMap<string, ReadonlyMap<string, string>>;
+
+function toCatalogRowIndex(rows: readonly PickerThumbnailRow[]): CatalogRowIndex {
+  const index = new Map<string, Map<string, string>>();
   for (const row of rows) {
+    if (typeof row.id !== "string" || typeof row.variant_key !== "string") continue;
     const logicalAssetId = typeof row.logical_asset_id === "string" ? row.logical_asset_id : "";
-    if (!logicalAssetId.startsWith(adminLogicalAssetPrefix)) continue;
-    registered.add(logicalAssetId.slice(adminLogicalAssetPrefix.length));
+    if (!logicalAssetId) continue;
+    const byRowId = index.get(logicalAssetId) ?? new Map<string, string>();
+    byRowId.set(row.id, row.variant_key);
+    index.set(logicalAssetId, byRowId);
   }
-  return registered;
+  return index;
 }
 
 /**

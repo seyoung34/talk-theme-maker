@@ -162,6 +162,50 @@ describe("GET /api/admin/theme-assets", () => {
   });
 
   /**
+   * 논리 ID 하나에 canonical/android/ios 행이 함께 달린다. 행이 하나라도 있으면 등록으로 치면
+   * **절반만 게시된 에셋이 완료로 보이고**, 나머지 플랫폼은 조용히 legacy로 떨어지는데 배지가
+   * 없어 고칠 방법이 사라진다.
+   */
+  it("한쪽 플랫폼만 게시된 전용본 에셋은 등록으로 치지 않는다", async () => {
+    registryRows = [{ id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: {} }];
+    const GET = await load([[
+      row(assetId, {
+        asset_kind: "bubble",
+        asset_object_id: null,
+        admin_asset_variants: [
+          { id: "v-a", asset_id: assetId, platform: "android", storage_path: `admin-assets/${assetId}/a.png`, asset_object_id: "android-registry", file_name: "a.png", mime_type: "image/png" },
+          { id: "v-i", asset_id: assetId, platform: "ios", storage_path: `admin-assets/${assetId}/i.png`, asset_object_id: null, file_name: "i.png", mime_type: "image/png" },
+        ],
+      }),
+    ]]);
+
+    const payload = await (await GET(request("assetKind=bubble"))).json();
+
+    expect(payload.items[0].catalogRegistered).toBe(false);
+  });
+
+  it("전용본 두 개가 모두 게시되면 등록으로 친다", async () => {
+    registryRows = [
+      { id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: {} },
+      { id: "ios-registry", logical_asset_id: `admin:${assetId}`, variant_key: "ios", r2_previews: {} },
+    ];
+    const GET = await load([[
+      row(assetId, {
+        asset_kind: "bubble",
+        asset_object_id: null,
+        admin_asset_variants: [
+          { id: "v-a", asset_id: assetId, platform: "android", storage_path: `admin-assets/${assetId}/a.png`, asset_object_id: "android-registry", file_name: "a.png", mime_type: "image/png" },
+          { id: "v-i", asset_id: assetId, platform: "ios", storage_path: `admin-assets/${assetId}/i.png`, asset_object_id: "ios-registry", file_name: "i.png", mime_type: "image/png" },
+        ],
+      }),
+    ]]);
+
+    const payload = await (await GET(request("assetKind=bubble"))).json();
+
+    expect(payload.items[0].catalogRegistered).toBe(true);
+  });
+
+  /**
    * 등록 여부는 R2 설정과 무관하다. 썸네일 색인과 한 조회로 합치면 R2가 꺼진 환경에서
    * 멀쩡한 에셋이 전부 미등록으로 보인다.
    */
