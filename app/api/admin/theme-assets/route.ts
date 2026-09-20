@@ -202,10 +202,16 @@ function isFullyRegistered(asset: AdminAssetCandidate, index: CatalogRowIndex): 
  * 반대 플랫폼의 누락을 놓치고 배지가 사라진다. export는 매칭되는 타깃마다 판정하므로 여기서도
  * 타깃에서 도출한다.
  *
- * 꺼진 타깃은 export가 쓰지 않으므로 제외한다. 쓸 타깃이 하나도 없으면 대표 값으로 돌아간다.
+ * `enabled`로 거르지 않는다. export의 판정(`getAdminAssetCandidateMatchRank`)이 그 컬럼을 보지
+ * 않기 때문이다 — "과거 운영 토글의 잔여 컬럼"이라 플랫폼/타깃 종류만 근거로 삼는다. 여기서만
+ * 걸러 내면 꺼진 타깃의 플랫폼이 등록 판정에서 빠지는데, export는 그 플랫폼을 그대로 골라
+ * legacy로 떨어뜨린다. 카드에는 배지가 없어 복구할 길이 사라진다.
+ *
+ * 타깃이 하나도 없는 legacy 행은 export도 `asset.platform`으로 타깃을 하나 지어내므로
+ * (`resolveMatchTargets`) 같은 폴백을 쓴다.
  */
 function requiredPlatforms(asset: AdminAssetCandidate): ThemePlatform[] {
-  const fromTargets = (asset.targets ?? []).filter((target) => target.enabled).flatMap((target) => expandPlatform(target.platform));
+  const fromTargets = (asset.targets ?? []).flatMap((target) => expandPlatform(target.platform));
   return Array.from(new Set(fromTargets.length ? fromTargets : expandPlatform(asset.platform)));
 }
 

@@ -210,6 +210,31 @@ describe("GET /api/admin/theme-assets", () => {
     expect(payload.items[0].catalogRegistered).toBe(false);
   });
 
+  /**
+   * export의 타깃 판정은 `enabled`를 보지 않는다 — "과거 운영 토글의 잔여 컬럼"이라 플랫폼과
+   * 타깃 종류만 근거로 삼는다(`adminAssetWorkspace.getAdminAssetCandidateMatchRank`). 여기서만
+   * 걸러 내면 꺼진 타깃의 플랫폼이 판정에서 빠지는데 export는 그 플랫폼을 그대로 고른다.
+   */
+  it("꺼진 타깃의 플랫폼도 등록 판정에 포함한다", async () => {
+    registryRows = [{ id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: {} }];
+    const GET = await load([[
+      row(assetId, {
+        asset_object_id: null,
+        admin_asset_targets: [
+          { id: `${assetId}-exact`, asset_id: assetId, platform: "android", slot_role: "main_background", target_kind: "exact_role", priority: 0, enabled: true },
+          { id: `${assetId}-kind`, asset_id: assetId, platform: "ios", slot_role: null, target_kind: "asset_kind", priority: 1, enabled: false },
+        ],
+        admin_asset_variants: [
+          { id: "v-a", asset_id: assetId, platform: "android", storage_path: `admin-assets/${assetId}/a.png`, asset_object_id: "android-registry", file_name: "a.png", mime_type: "image/png" },
+        ],
+      }),
+    ]]);
+
+    const payload = await (await GET(request("assetKind=background"))).json();
+
+    expect(payload.items[0].catalogRegistered).toBe(false);
+  });
+
   it("전용본 두 개가 모두 게시되면 등록으로 친다", async () => {
     registryRows = [
       { id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: {} },
