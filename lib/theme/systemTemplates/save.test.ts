@@ -139,6 +139,8 @@ describe("systemTemplateRepository.save storage transaction", () => {
     vi.doMock("@/lib/theme/systemTemplates/preview", () => ({
       createSystemTemplatePreviewVisual: vi.fn(() => ({})),
       previewRoles: [],
+      // 저장 경로가 미리보기 경로 해석기를 쓴다. 이 테스트는 storage 정리만 보므로 경로는 없다고 둔다.
+      resolvePreviewUploadPath: vi.fn(() => undefined),
       tabIconPreviewRoles: [],
     }));
     vi.doMock("@/lib/theme/systemTemplates/screenPreview", () => ({

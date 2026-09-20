@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
+import { createSystemTemplatePreviewVisual, getCorePreviewImageUrls, resolvePreviewUploadPath, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
 import type { SystemTemplateSummary } from "@/lib/theme/systemTemplates/types";
 import { disabledImageCandidateId } from "@/lib/theme/project/state";
 import { getThemeSlots, getThemeTemplate } from "@/lib/theme/templates";
@@ -62,6 +62,30 @@ describe("getCorePreviewImageUrls", () => {
   it("같은 URL은 한 번만 돌려준다", () => {
     const urls = getCorePreviewImageUrls(visual({ myBubbleImage: "bubble.png", friendBubbleImage: "bubble.png" }));
     expect(urls).toEqual(["bubble.png"]);
+  });
+});
+
+describe("resolvePreviewUploadPath", () => {
+  // 카드 썸네일을 굽는 supabaseRepository도 이 함수를 쓴다. 예전에는 같은 로직이 그쪽에
+  // 복제돼 있었고 한쪽만 고쳐 썸네일에만 버그가 남았다. 계약을 여기서 직접 고정한다.
+  const slots = getThemeSlots("android");
+  const mainBackground = slots.find((slot) => slot.role === "main_background")!;
+  const entry = { id: "orphan", fileName: "other.png", mimeType: "image/png", size: 1, storagePath: "system-templates/other/bg.png" };
+
+  it("이미지 사용 안 함이면 bucket에 남은 항목을 무시한다", () => {
+    const path = resolvePreviewUploadPath(mainBackground, { [mainBackground.id]: [entry] }, { [mainBackground.id]: disabledImageCandidateId });
+    expect(path).toBeUndefined();
+  });
+
+  it("선택이 아예 없으면 첫 항목으로 떨어진다", () => {
+    const path = resolvePreviewUploadPath(mainBackground, { [mainBackground.id]: [entry] }, {});
+    expect(path).toBe("system-templates/other/bg.png");
+  });
+
+  it("선택된 항목이 있으면 그 항목을 쓴다", () => {
+    const selected = { id: "picked", fileName: "picked.png", mimeType: "image/png", size: 1, storagePath: "system-templates/self/picked.png" };
+    const path = resolvePreviewUploadPath(mainBackground, { [mainBackground.id]: [entry, selected] }, { [mainBackground.id]: "picked" });
+    expect(path).toBe("system-templates/self/picked.png");
   });
 });
 
