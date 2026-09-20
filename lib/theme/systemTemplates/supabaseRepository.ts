@@ -3,12 +3,12 @@ import { getThemeAssetSignedUrls, sanitizeStoragePathPart, storagePathToFile, th
 import { createAdminThemeAssetSignedUrls } from "@/lib/theme/systemTemplates/adminSignedUrls";
 import { themeAssetCacheControl } from "@/lib/theme/themeAssetSigning";
 import { collectRemoteUploadPaths } from "@/lib/theme/systemTemplates/uploadRefPaths";
-import { getResolvedColor, getSelectedSharedSlotEntry, requireUploadFile } from "@/lib/theme/project/state";
+import { getResolvedColor, requireUploadFile } from "@/lib/theme/project/state";
 import type { SlotCandidateSelections, SlotUploadEntry, SlotUploads } from "@/lib/theme/project/state";
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import type { SystemTemplateDeleteResult, SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
-import { createSystemTemplatePreviewVisual, previewRoles, tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
+import { createSystemTemplatePreviewVisual, previewRoles, resolvePreviewUploadPath, tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
 import { findUnsignedPreviewAssets, generatePreviewScreens } from "@/lib/theme/systemTemplates/screenPreview";
 import { previewScreenIds, type PreviewScreenId } from "@/lib/theme/systemTemplates/previewScreenData";
 import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
@@ -1172,18 +1172,14 @@ async function renderAndUploadScreenPreviews({
   }
 }
 
+/**
+ * role로 슬롯을 찾아 `preview.ts`의 해석기에 넘긴다. **로직을 여기에 다시 쓰지 않는다.**
+ *
+ * 예전에는 같은 로직이 복제돼 있었고, "이미지 사용 안 함" 폴백 버그를 `preview.ts`에서만
+ * 고치는 바람에 카드 썸네일에는 그대로 남아 재생성해도 증상이 사라지지 않았다.
+ */
 function resolvePreviewStoragePath(slots: ThemeAssetSlot[], role: ThemeResourceRole, uploadRefs: RemoteSlotUploads, candidateSelections: SlotCandidateSelections) {
-  const slot = slots.find((item) => item.role === role);
-  if (!slot) return undefined;
-  const entries = uploadRefs[slot.id] ?? [];
-  // 선택된 항목이 있으면 그 항목만 본다. 경로가 없다고 다른 항목으로 넘어가면 운영자가 고른
-  // 것과 다른 그림이 카드/화면 미리보기에 구워져 그대로 발행된다. 선택이 아예 없을 때만
-  // 첫 항목으로 떨어진다.
-  const selected = getSelectedSharedSlotEntry(slot, uploadRefs, candidateSelections, slots);
-  if (selected) {
-    return selected.entry.storagePath ?? selected.entry.catalogMetadata?.legacyStoragePath;
-  }
-  return entries[0]?.storagePath ?? entries[0]?.catalogMetadata?.legacyStoragePath;
+  return resolvePreviewUploadPath(slots.find((item) => item.role === role), uploadRefs, candidateSelections);
 }
 
 export function normalizePreviewMetadata(value: SystemTemplatePreviewMetadata | null | undefined): SystemTemplatePreviewMetadata {

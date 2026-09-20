@@ -254,7 +254,14 @@ function resolveImage(slots: ThemeAssetSlot[], role: ThemeResourceRole, summary:
   return getSelectedCandidate(slot, summary.candidateSelections, templateId, template)?.previewUrl ?? getResolvedAssetUrl(slot, {}, summary.candidateSelections, templateId, template, slots);
 }
 
-function resolvePreviewUploadPath(slot: ThemeAssetSlot | undefined, uploadRefs: RemoteSlotUploads, selections: SystemTemplatePreviewSource["candidateSelections"]) {
+/**
+ * 미리보기용 업로드 경로 해석의 **단일 진입점**.
+ *
+ * 카드 썸네일을 굽는 `supabaseRepository.ts`도 이 함수를 쓴다. 예전에는 같은 로직이 그쪽에
+ * 복제돼 있었고, 한쪽만 고치는 바람에 "사용 안 함" 슬롯의 고아 업로드가 썸네일에만 계속
+ * 구워졌다. 복제하지 말고 여기를 고친다.
+ */
+export function resolvePreviewUploadPath(slot: ThemeAssetSlot | undefined, uploadRefs: RemoteSlotUploads, selections: SystemTemplatePreviewSource["candidateSelections"]) {
   if (!slot) return undefined;
   // "이미지 사용 안 함"은 선택이 없는 것이 아니라 **명시적 선택**이다. 아래 `getSelectedSharedSlotEntry`가
   // 이 경우에도 undefined를 돌려주므로(`isImageSlotDisabled` 조기 반환), 먼저 거르지 않으면 첫 항목
