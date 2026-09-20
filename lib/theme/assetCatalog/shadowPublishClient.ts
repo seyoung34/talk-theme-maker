@@ -47,8 +47,28 @@ const inFlightPublishes = new Set<Promise<unknown>>();
  */
 export async function whenShadowPublishesSettle(timeoutMs = 10_000): Promise<void> {
   if (inFlightPublishes.size === 0) return;
-  const settled = Promise.allSettled([...inFlightPublishes]).then(() => undefined);
-  await Promise.race([settled, new Promise<void>((resolve) => setTimeout(resolve, timeoutMs))]);
+
+  const pending = [...inFlightPublishes];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const finished = await Promise.race([
+    Promise.allSettled(pending).then(() => true as const),
+    new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), timeoutMs); }),
+  ]);
+  if (timer) clearTimeout(timer);
+  if (finished) return;
+
+  /**
+   * 제한 시간을 넘긴 요청은 추적에서 뺀다.
+   *
+   * 그대로 두면 **한 번 멈춘 요청이 이후 모든 새로고침을 늦춘다.** 다음 저장이 같은 promise를
+   * 다시 집어 또 10초를 기다리고, 그동안 catalog 상태는 낡은 채로 남는다. 기다림을 포기한
+   * 요청은 이미 이번 새로고침에서 제 몫을 다했으므로 한 번만 세면 된다.
+   *
+   * 요청 자체는 취소하지 않는다. 서버가 이미 기록을 끝냈을 수 있고, 늦게 끝나더라도 결과는
+   * 다음 목록 조회가 가져온다. 나중에 settle되면 등록해 둔 `finally`가 지우려 하지만 이미
+   * 빠진 뒤라 아무 일도 하지 않는다.
+   */
+  for (const publishing of pending) inFlightPublishes.delete(publishing);
 }
 
 /**

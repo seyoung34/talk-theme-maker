@@ -73,4 +73,23 @@ describe("whenShadowPublishesSettle", () => {
 
     await expect(whenShadowPublishesSettle(1)).resolves.toBeUndefined();
   });
+
+  /**
+   * 멈춘 요청을 계속 추적하면 다음 저장마다 같은 promise를 또 기다린다. 한 번 멈춘 요청이
+   * 이후 모든 새로고침을 늦추고 catalog 상태가 낡은 채로 남는다.
+   */
+  it("제한 시간을 넘긴 요청은 다음 기다림을 붙잡지 않는다", async () => {
+    stubThumbnailBaking();
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    const publishing = shadowPublishThemeAsset({ kind: "admin", sourceId: "asset-4", canonical: pngFile() });
+    void publishing.catch(() => undefined);
+
+    // 첫 기다림은 제한 시간을 다 쓴다.
+    await whenShadowPublishesSettle(30);
+
+    // 두 번째는 곧바로 끝나야 한다. 넉넉한 제한 시간을 줘도 걸리지 않는다.
+    const startedAt = Date.now();
+    await whenShadowPublishesSettle(5_000);
+    expect(Date.now() - startedAt).toBeLessThan(1_000);
+  });
 });
