@@ -72,23 +72,35 @@ export async function POST(request: Request) {
   const variantKey = readVariantKey(form);
   if (!variantKey) return NextResponse.json({ error: "variantKey가 올바르지 않습니다." }, { status: 400 });
 
-  // 이 write-shadow는 현재 추천 관리자 에셋만 지원한다. 시스템 템플릿 upload_refs는
-  // GCS publisher가 catalog ref와 DB bundle을 함께 갱신해야 하므로, 여기서 registry만 만들면
-  // 권한 근거가 없는 tpl:* active row가 남는다. 별도 publisher가 생길 때까지 명시적으로 막는다.
+  /**
+   * 시스템 템플릿 업로드는 **저장되기 전에** 게시한다.
+   *
+   * 그래서 관리자 에셋처럼 "원본 행이 이미 있는가"를 확인할 수 없다 — 확인하려는 행이 바로
+   * 이 게시 결과를 담아 곧 저장될 행이다. 대신 두 가지에 기댄다.
+   *   - 이 라우트는 관리자 인증을 통과해야 한다(위 `getCurrentAdmin`).
+   *   - 템플릿이 참조하지 않는 `tpl:*` 행은 **아무 권한도 주지 못한다.** export 판정은 발행된
+   *     템플릿의 `upload_refs`를 훑어 만들기 때문이다(`edgeRegistryStore.findTemplateAssetExportAccess`).
+   *     저장이 중간에 실패해 남는 행은 쓰이지 않는 채로 남을 뿐이다.
+   *
+   * 식별자는 편집기가 만든 업로드 항목 id라 UUID가 아니다(`android-common-splash:upload:1789…`).
+   * 모양만 검사해 registry에 쓰레기 논리 ID가 들어가지 않게 한다.
+   */
   if (source.kind === "template") {
-    return NextResponse.json({ error: "시스템 템플릿 에셋 게시 경로는 아직 지원하지 않습니다." }, { status: 409 });
-  }
+    if (!isTemplateUploadEntryId(source.sourceId)) {
+      return NextResponse.json({ error: "템플릿 업로드 식별자가 올바르지 않습니다." }, { status: 400 });
+    }
+  } else {
+    if (!isUuid(source.sourceId)) {
+      return NextResponse.json({ error: "관리자 에셋 식별자가 올바르지 않습니다." }, { status: 400 });
+    }
 
-  if (!isUuid(source.sourceId)) {
-    return NextResponse.json({ error: "관리자 에셋 식별자가 올바르지 않습니다." }, { status: 400 });
-  }
-
-  try {
-    const sourceExists = await adminPublishSourceExists(createAdminClient(), source.sourceId, variantKey);
-    if (!sourceExists) return NextResponse.json({ error: "관리자 에셋 또는 플랫폼 variant를 찾을 수 없습니다." }, { status: 404 });
-  } catch (error) {
-    console.error("Catalog publish source lookup failed", error);
-    return NextResponse.json({ error: "관리자 에셋을 확인하지 못했습니다." }, { status: 500 });
+    try {
+      const sourceExists = await adminPublishSourceExists(createAdminClient(), source.sourceId, variantKey);
+      if (!sourceExists) return NextResponse.json({ error: "관리자 에셋 또는 플랫폼 variant를 찾을 수 없습니다." }, { status: 404 });
+    } catch (error) {
+      console.error("Catalog publish source lookup failed", error);
+      return NextResponse.json({ error: "관리자 에셋을 확인하지 못했습니다." }, { status: 500 });
+    }
   }
 
   const canonical = form.get("canonical");
@@ -197,6 +209,22 @@ export async function POST(request: Request) {
       revision: result.record.revision,
       objectKey: result.record.gcsObjectKey,
       previewsSkipped: result.previewsSkipped,
+      /**
+       * 호출부가 catalog 참조를 **자기 저장 레코드에 적어 넣을 수 있도록** registry가 확정한
+       * 값을 함께 준다. 시스템 템플릿 저장은 이 값으로 `catalogMetadata`를 만든다. 호출부가
+       * 파일에서 다시 추론하면 registry와 어긋날 수 있고, 어긋나면 Builder가 dimension 대조에서
+       * 거절한다.
+       */
+      record: {
+        variantKey: result.record.variantKey,
+        fileName: result.record.fileName,
+        mimeType: result.record.mimeType,
+        size: result.record.sizeBytes,
+        sourceScale: result.record.sourceScale,
+        width: result.record.width,
+        height: result.record.height,
+        pngSignatureVerified: result.record.pngSignatureVerified,
+      },
     });
   } catch (error) {
     // 호출자 오류(잘못된 revision·PNG가 아님 등)와 인프라 실패를 구분해 돌려준다.
@@ -234,6 +262,19 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
 
 function isUuid(value: string) {
   return uuidPattern.test(value);
+}
+
+/**
+ * 편집기가 만든 업로드 항목 id의 모양.
+ *
+ * `android-common-splash:upload:1789237594950`처럼 슬롯 id·용도·타임스탬프를 콜론으로 잇거나,
+ * 추천 에셋에서 온 항목은 UUID 그대로다. 둘 다 통과시키되 registry 논리 ID에 들어가도 되는
+ * 문자만 허용한다.
+ */
+const templateUploadEntryIdPattern = /^[A-Za-z0-9][A-Za-z0-9:_.-]{0,199}$/;
+
+function isTemplateUploadEntryId(value: string) {
+  return templateUploadEntryIdPattern.test(value);
 }
 
 async function adminPublishSourceExists(

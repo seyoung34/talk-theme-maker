@@ -123,14 +123,35 @@ describe("POST /api/admin/theme-assets/publish", () => {
     ]) vi.doUnmock(moduleName);
   });
 
-  it("시스템 템플릿 source는 관리자 에셋 publish 경로에서 명시적으로 막는다", async () => {
+  /**
+   * 템플릿 업로드는 저장되기 전에 게시하므로 "원본 행이 이미 있는가"를 확인할 수 없다.
+   * 관리자 인증과 식별자 모양만 보고 통과시킨다. 템플릿이 참조하지 않는 행은 export 판정에서
+   * 아무 권한도 주지 못한다.
+   */
+  it("시스템 템플릿 source는 DB 조회 없이 게시한다", async () => {
     const POST = await load();
 
-    const response = await POST(request({ kind: "template", sourceId: "template-1", variantKey: "canonical" }));
+    const response = await POST(request({
+      kind: "template",
+      sourceId: "android-common-splash:upload:1789237594950",
+      variantKey: "canonical",
+      canonical: new File(["bytes"], "splash.png", { type: "image/png" }),
+    }));
 
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: "시스템 템플릿 에셋 게시 경로는 아직 지원하지 않습니다." });
+    expect(response.status).toBe(200);
     expect(createAdminClient).not.toHaveBeenCalled();
+    expect(publishThemeAsset).toHaveBeenCalledWith(
+      expect.objectContaining({ logicalAssetId: "tpl:android-common-splash:upload:1789237594950" }),
+      expect.anything(),
+    );
+  });
+
+  it("템플릿 업로드 식별자 모양이 아니면 게시하지 않는다", async () => {
+    const POST = await load();
+
+    const response = await POST(request({ kind: "template", sourceId: "bad id/with slash", variantKey: "canonical" }));
+
+    expect(response.status).toBe(400);
     expect(publishThemeAsset).not.toHaveBeenCalled();
   });
 

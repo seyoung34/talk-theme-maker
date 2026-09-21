@@ -21,8 +21,25 @@ export type ShadowPublishInput = {
   readonly canonical: File;
 };
 
+/**
+ * registry가 확정한 값. 호출부가 catalog 참조를 자기 저장 레코드에 적어 넣을 때 쓴다.
+ *
+ * 파일에서 다시 추론하지 않는다 — registry와 어긋나면 Builder가 dimension 대조에서 거절한다.
+ */
+export type ShadowPublishRecord = {
+  readonly variantKey: string;
+  readonly revision: number;
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly size: number;
+  readonly sourceScale: 1 | 2 | 3;
+  readonly width: number;
+  readonly height: number;
+  readonly pngSignatureVerified: boolean;
+};
+
 export type ShadowPublishOutcome =
-  | { readonly status: "published" | "already-active"; readonly previewsSkipped: boolean }
+  | { readonly status: "published" | "already-active"; readonly previewsSkipped: boolean; readonly record?: ShadowPublishRecord }
   | { readonly status: "disabled" }
   | { readonly status: "skipped"; readonly reason: string };
 
@@ -97,18 +114,25 @@ async function runShadowPublish(input: ShadowPublishInput): Promise<ShadowPublis
     if (input.variantKey) form.append("variantKey", input.variantKey);
     form.append("canonical", input.canonical);
 
-    const thumbnail = await bakePickerThumbnail(input.canonical);
-    if (thumbnail) form.append("preview", thumbnail, "picker.webp");
+    // 피커 썸네일은 추천 목록 타일용이다. 시스템 템플릿 업로드는 그 목록에 뜨지 않으므로
+    // 굽지 않는다 — 저장이 그만큼 빨라지고 쓰이지 않을 R2 객체도 만들지 않는다.
+    if (input.kind === "admin") {
+      const thumbnail = await bakePickerThumbnail(input.canonical);
+      if (thumbnail) form.append("preview", thumbnail, "picker.webp");
+    }
 
     const response = await fetch("/api/admin/theme-assets/publish", { method: "POST", body: form });
     const payload = (await response.json().catch(() => null)) as
-      | { status?: string; previewsSkipped?: boolean; error?: string }
+      | { status?: string; previewsSkipped?: boolean; error?: string; revision?: number; record?: Omit<ShadowPublishRecord, "revision"> }
       | null;
 
     if (!response.ok) return { status: "skipped", reason: payload?.error ?? `HTTP ${response.status}` };
     if (payload?.status === "disabled") return { status: "disabled" };
     if (payload?.status === "published" || payload?.status === "already-active") {
-      return { status: payload.status, previewsSkipped: Boolean(payload.previewsSkipped) };
+      const record = payload.record && typeof payload.revision === "number"
+        ? { ...payload.record, revision: payload.revision }
+        : undefined;
+      return { status: payload.status, previewsSkipped: Boolean(payload.previewsSkipped), ...(record ? { record } : {}) };
     }
     return { status: "skipped", reason: "unexpected-response" };
   } catch (error) {
