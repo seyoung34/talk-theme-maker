@@ -97,6 +97,34 @@ describe("BubbleBuilderDialog decoration input", () => {
     const secondLayer = await screen.findByRole("button", { name: /second-layer\.png/ });
     expect(firstLayer.compareDocumentPosition(secondLayer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it("blocks apply and close until a selected decoration has materialized", async () => {
+    const onOpenChange = vi.fn();
+    renderDialog({ onOpenChange });
+    const pending = deferredImageFile("slow-layer.png");
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input!, { target: { files: [pending.file] } });
+    await waitFor(() => expect(pending.arrayBuffer).toHaveBeenCalledTimes(1));
+
+    for (const button of screen.getAllByRole("button", { name: "적용하기" })) {
+      expect(button).toBeDisabled();
+    }
+    const closeButton = screen.getAllByRole("button", { name: "닫기" })[0];
+    expect(closeButton).toBeDisabled();
+    fireEvent.click(closeButton);
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    pending.resolve();
+    await screen.findByRole("button", { name: /slow-layer\.png/ });
+    await waitFor(() => {
+      for (const button of screen.getAllByRole("button", { name: "적용하기" })) {
+        expect(button).toBeEnabled();
+      }
+      expect(closeButton).toBeEnabled();
+    });
+  });
 });
 
 describe("BubbleBuilderDialog decoration warnings", () => {

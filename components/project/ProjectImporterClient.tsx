@@ -165,6 +165,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
   const uploadRequestTrackerRef = useRef(createLatestRequestTracker());
+  const invalidatePendingSlotUpload = useCallback((slotId: string) => uploadRequestTrackerRef.current.invalidate(slotId), []);
   const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
   const mobileEditTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileEditCloseButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -393,9 +394,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       skipDefaultSelectionResetRef.current = false;
       return;
     }
+    // 템플릿 전환은 각 슬롯의 후보를 한꺼번에 바꾸므로, 아직 읽는 파일이 나중에 옛 선택을
+    // 되살리지 않게 한다.
+    for (const slot of slots) invalidatePendingSlotUpload(slot.id);
     const initialSelections = getInitialSlotCandidateSelections(slots, templateId, activeTemplate);
     setCandidateSelections(initialSelections);
-  }, [activeTemplate, setCandidateSelections, slots, templateId]);
+  }, [activeTemplate, invalidatePendingSlotUpload, setCandidateSelections, slots, templateId]);
 
   const viewportMode = useViewportMode();
   const groups = useMemo(() => getSectionGroups(activeSection, authoringSlots), [activeSection, authoringSlots]);
@@ -904,6 +908,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const uploadEditedSlot = (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => {
+    invalidatePendingSlotUpload(slot.id);
     const uploadId = `${slot.id}:edited:${Date.now()}`;
     setUploads((current) => ({
       ...current,
@@ -1026,6 +1031,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const selectCandidate = (slot: ThemeAssetSlot, candidateId: string) => {
+    invalidatePendingSlotUpload(slot.id);
     const candidateChanged = candidateSelections[slot.id] !== candidateId;
     setCandidateSelections((current) => ({ ...current, [slot.id]: candidateId }));
     focusSlot(slot.id);
@@ -1048,7 +1054,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const copyBubbleToPair = async (sourceSlot: ThemeAssetSlot, targetSlot: ThemeAssetSlot) => {
-
+    invalidatePendingSlotUpload(targetSlot.id);
     const uploadPlan = planSharedUploadCopy(sourceSlot, targetSlot, uploads, candidateSelections, slots);
     const sourceCandidate = getSelectedCandidate(sourceSlot, candidateSelections, templateId, activeTemplate);
     const copiedAt = Date.now();
@@ -1112,6 +1118,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const selectAdminAsset = async (slot: ThemeAssetSlot, asset: AdminAssetCandidate) => {
+    invalidatePendingSlotUpload(slot.id);
     // canary 계정 여부는 export dialog에서 인증 상태를 확인한 뒤 확정된다. 선택 시에는
     // metadata와 File을 함께 보존해 비-canary 사용자가 catalog ref를 보내지 않고 기존
     // multipart 경로로 안전하게 fallback할 수 있게 한다.

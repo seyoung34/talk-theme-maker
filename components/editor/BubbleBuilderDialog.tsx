@@ -141,6 +141,8 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const baselineRef = useRef("");
   // FileList는 입력 순서가 곧 레이어 z-order다. 파일별 읽기 시간이 달라도 그 순서로 반영한다.
   const decorationInputQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingDecorationReadsRef = useRef(0);
+  const [pendingDecorationReads, setPendingDecorationReads] = useState(0);
 
   const layers = useMemo(() => spec.design.decorations ?? [], [spec.design.decorations]);
 
@@ -170,9 +172,16 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   }, []);
 
   const enqueueDecorationFile = useCallback((file: File | undefined) => {
+    pendingDecorationReadsRef.current += 1;
+    setPendingDecorationReads(pendingDecorationReadsRef.current);
     const task = decorationInputQueueRef.current.then(() => acceptDecorationFile(file));
     // 예기치 못한 예외가 나도 뒤에 고른 파일은 계속 처리한다.
     decorationInputQueueRef.current = task.catch(() => undefined);
+    const settle = () => {
+      pendingDecorationReadsRef.current = Math.max(0, pendingDecorationReadsRef.current - 1);
+      setPendingDecorationReads(pendingDecorationReadsRef.current);
+    };
+    void task.then(settle, settle);
     return task;
   }, [acceptDecorationFile]);
 
@@ -363,6 +372,10 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   }, []);
 
   const apply = async () => {
+    if (pendingDecorationReadsRef.current > 0) {
+      setError("꾸미기 이미지를 읽는 중입니다. 완료 후 적용해 주세요.");
+      return false;
+    }
     if (layers.some((layer) => !decorationFiles[layer.id])) {
       setError("저장된 장식 원본을 찾지 못했습니다. 이미지를 다시 선택하거나 장식을 제거해 주세요.");
       return false;
@@ -395,9 +408,10 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
    * 닫는 길이 셋이다 — ✕, Esc, 바깥 클릭. 셋 다 아무 말 없이 편집을 버렸고, 올린 꾸미기
    * 이미지까지 함께 사라졌다. 세 길을 모두 이 함수로 모은다.
    */
-  const dirty = getBubbleEditSignature(spec, decorationFiles) !== baselineRef.current;
+  const hasPendingDecorationReads = pendingDecorationReads > 0;
+  const dirty = hasPendingDecorationReads || getBubbleEditSignature(spec, decorationFiles) !== baselineRef.current;
   const requestClose = useCallback(() => {
-    if (isApplying) return;
+    if (isApplying || pendingDecorationReadsRef.current > 0) return;
     if (dirty) setCloseConfirmOpen(true);
     else onClose?.();
   }, [dirty, isApplying, onClose]);
@@ -493,7 +507,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   ] as const;
 
   const applyButton = (
-    <button type="button" disabled={isApplying} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void apply()}>{isApplying ? <LoaderCircle size={18} className="animate-spin" /> : <Sparkles size={18} />}{isApplying ? "만드는 중" : "적용하기"}</button>
+    <button type="button" disabled={isApplying || hasPendingDecorationReads} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void apply()}>{isApplying ? <LoaderCircle size={18} className="animate-spin" /> : <Sparkles size={18} />}{isApplying ? "만드는 중" : "적용하기"}</button>
   );
 
   const helpPopover = (
@@ -514,7 +528,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   );
 
   const closeButton = onClose
-    ? <button type="button" disabled={isApplying} onClick={requestClose} className="grid size-9 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50 min-[360px]:size-10" aria-label="닫기"><X size={20} /></button>
+    ? <button type="button" disabled={isApplying || hasPendingDecorationReads} onClick={requestClose} className="grid size-9 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50 min-[360px]:size-10" aria-label="닫기"><X size={20} /></button>
     : null;
 
   const preview = (
@@ -584,7 +598,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
           */}
           <button
             type="button"
-            disabled={isApplying}
+            disabled={isApplying || hasPendingDecorationReads}
             aria-label={isApplying ? "말풍선 만드는 중" : "적용하기"}
             className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-blue-600 px-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 min-[360px]:px-3.5"
             onClick={() => void apply()}

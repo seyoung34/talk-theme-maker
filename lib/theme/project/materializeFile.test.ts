@@ -27,4 +27,13 @@ describe("materializeFile", () => {
     expect(tracker.isCurrent("chat-background", replacement)).toBe(true);
     expect(tracker.isCurrent("profile-image", otherSlot)).toBe(true);
   });
+
+  it("invalidates an in-flight request when a later selection replaces it", () => {
+    const tracker = createLatestRequestTracker();
+    const upload = tracker.begin("chat-background");
+
+    tracker.invalidate("chat-background");
+
+    expect(tracker.isCurrent("chat-background", upload)).toBe(false);
+  });
 });

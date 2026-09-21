@@ -29,6 +29,9 @@ export function createLatestRequestTracker() {
       latestByKey.set(key, request);
       return request;
     },
+    invalidate(key: string) {
+      latestByKey.set(key, ++sequence);
+    },
     isCurrent(key: string, request: number) {
       return latestByKey.get(key) === request;
     },
