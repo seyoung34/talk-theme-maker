@@ -166,6 +166,24 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const skipDefaultSelectionResetRef = useRef(false);
   const uploadRequestTrackerRef = useRef(createLatestRequestTracker());
   const invalidatePendingSlotUpload = useCallback((slotId: string) => uploadRequestTrackerRef.current.invalidate(slotId), []);
+  // 파일 선택 직후에는 아직 초안에 File이 없으므로, 저장·내보내기·이탈이 그 빈 초안을 소비하지
+  // 않도록 실제 materialize 작업을 별도로 추적한다.
+  const pendingSlotReadTasksRef = useRef(new Set<Promise<void>>());
+  const [pendingSlotReadCount, setPendingSlotReadCount] = useState(0);
+  const trackPendingSlotRead = useCallback((task: Promise<void>) => {
+    pendingSlotReadTasksRef.current.add(task);
+    setPendingSlotReadCount(pendingSlotReadTasksRef.current.size);
+    const settle = () => {
+      pendingSlotReadTasksRef.current.delete(task);
+      setPendingSlotReadCount(pendingSlotReadTasksRef.current.size);
+    };
+    void task.then(settle, settle);
+  }, []);
+  const blockWhileSlotReadPending = useCallback(() => {
+    if (pendingSlotReadTasksRef.current.size === 0) return false;
+    setNotice({ tone: "warning", message: "선택한 이미지를 준비 중입니다. 완료된 뒤 다시 시도해 주세요." });
+    return true;
+  }, []);
   const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
   const mobileEditTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileEditCloseButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -573,7 +591,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   });
 
   const exportExitGuardActive = isExporting && !isExportQueued;
-  shouldConfirmExitRef.current = hasUnsavedChanges || exportExitGuardActive;
+  const hasPendingSlotReads = pendingSlotReadCount > 0;
+  shouldConfirmExitRef.current = hasUnsavedChanges || exportExitGuardActive || hasPendingSlotReads;
 
   /**
    * 다운로드의 단일 입구. 인앱 브라우저면 빌드가 시작되기 전에 한 번 안내한다.
@@ -582,12 +601,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
    * 알리면 크레딧이 이미 나간 상태가 되므로, 다이얼로그를 열기도 전에 끼어든다.
    */
   const requestExport = useCallback(() => {
+    if (blockWhileSlotReadPending()) return;
     if (inAppBrowser && !inAppExportAcknowledgedRef.current) {
       setInAppExportGateOpen(true);
       return;
     }
     void openExportDialog();
-  }, [inAppBrowser, openExportDialog]);
+  }, [blockWhileSlotReadPending, inAppBrowser, openExportDialog]);
 
   /**
    * `/edit`을 벗어나는 모든 경로(뒤로가기, 종료 확인, 헤더/액션바 종료 버튼, 탭 차단 화면)가 공유하는
@@ -601,6 +621,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
    * 함수가 유발한 popstate와 사용자가 실제로 누른 뒤로가기를 구분한다.
    */
   const leaveEditor = () => {
+    if (blockWhileSlotReadPending()) return;
     if (typeof window === "undefined") {
       router.replace(exitDestination);
       return;
@@ -615,6 +636,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     const handlePopState = () => {
       const wasProgrammaticExit = programmaticExitRef.current;
       programmaticExitRef.current = false;
+      if (pendingSlotReadTasksRef.current.size > 0) {
+        // 뒤로가기는 이미 guard entry를 하나 소비했으므로 즉시 되살리고, 파일이 초안에 들어갈
+        // 때까지는 이탈을 허용하지 않는다.
+        window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
+        blockWhileSlotReadPending();
+        return;
+      }
       if (wasProgrammaticExit || !shouldConfirmExitRef.current) {
         // leaveEditor()가 소비시킨 경우거나, 실제 뒤로가기인데 저장할 게 없는 경우 — 두 경우 모두
         // 가드 엔트리는 이미 소비됐으므로 새 엔트리를 추가하지 않는 replace로 목적지에 안착시킨다.
@@ -628,7 +656,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [exitDestination, router]);
+  }, [blockWhileSlotReadPending, exitDestination, router]);
 
   const navigateAfterExit = () => {
     setExitConfirmOpen(false);
@@ -636,6 +664,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     leaveEditor();
   };
   const requestExit = () => {
+    if (blockWhileSlotReadPending()) return;
     if (!shouldConfirmExitRef.current) {
       leaveEditor();
       return;
@@ -648,6 +677,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setExitSaveState("idle");
   };
   const confirmExit = async () => {
+    if (blockWhileSlotReadPending()) return;
     if (!hasUnsavedChanges) {
       navigateAfterExit();
       return;
@@ -875,36 +905,39 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     });
   };
 
-  const uploadSlot = async (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
+  const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
     const selectedFile = fileList?.[0];
     if (!selectedFile) return;
     const request = uploadRequestTrackerRef.current.begin(slot.id);
 
-    let file: File;
-    try {
-      file = await materializeFile(selectedFile);
-    } catch (error) {
+    const task = (async () => {
+      let file: File;
+      try {
+        file = await materializeFile(selectedFile);
+      } catch (error) {
+        if (!uploadRequestTrackerRef.current.isCurrent(slot.id, request)) return;
+        console.error(error);
+        setNotice({ tone: "error", message: "이미지 파일을 읽지 못했습니다. 파일을 다시 내려받거나 다른 이미지를 선택해 주세요." });
+        return;
+      }
       if (!uploadRequestTrackerRef.current.isCurrent(slot.id, request)) return;
-      console.error(error);
-      setNotice({ tone: "error", message: "이미지 파일을 읽지 못했습니다. 파일을 다시 내려받거나 다른 이미지를 선택해 주세요." });
-      return;
-    }
-    if (!uploadRequestTrackerRef.current.isCurrent(slot.id, request)) return;
 
-    const uploadId = `${slot.id}:upload:${Date.now()}`;
-    setUploads((current) => ({
-      ...current,
-      [slot.id]: [...(current[slot.id] ?? []), { id: uploadId, file, source: "user" as const }],
-    }));
-    dropRemoteUploadRef(slot.id);
-    // 말풍선 편집값은 이전 이미지의 픽셀 좌표라 새 그림에는 의미가 없다. 지우지 않으면
-    // 편집창이 저장값을 그대로 복원해서 텍스트 상자와 stretch 선이 엉뚱한 곳에 놓인다.
-    clearBubbleEdits(slot.id);
-    setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
-    focusSlot(slot.id);
-    revealSlot(slot);
-    trackAnalyticsEvent("slot_upload_completed", { slot_role: slot.role, section: slot.section, asset_source: "user" });
-    trackFirstValueReached("upload");
+      const uploadId = `${slot.id}:upload:${Date.now()}`;
+      setUploads((current) => ({
+        ...current,
+        [slot.id]: [...(current[slot.id] ?? []), { id: uploadId, file, source: "user" as const }],
+      }));
+      dropRemoteUploadRef(slot.id);
+      // 말풍선 편집값은 이전 이미지의 픽셀 좌표라 새 그림에는 의미가 없다. 지우지 않으면
+      // 편집창이 저장값을 그대로 복원해서 텍스트 상자와 stretch 선이 엉뚱한 곳에 놓인다.
+      clearBubbleEdits(slot.id);
+      setCandidateSelections((current) => ({ ...current, [slot.id]: uploadId }));
+      focusSlot(slot.id);
+      revealSlot(slot);
+      trackAnalyticsEvent("slot_upload_completed", { slot_role: slot.role, section: slot.section, asset_source: "user" });
+      trackFirstValueReached("upload");
+    })();
+    trackPendingSlotRead(task);
   };
 
   const uploadEditedSlot = (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => {
@@ -968,6 +1001,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       return;
     }
 
+    invalidatePendingSlotUpload(slot.id);
     const sourceChanged = removeUploadCandidate(
       slot.id,
       plan.ownerSlotId,
@@ -1173,6 +1207,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       setNotice({ tone: "error", message: "선택한 말풍선 슬롯과 생성 결과가 일치하지 않습니다." });
       return false;
     }
+    invalidatePendingSlotUpload(selectedSlot.id);
     const generatedAt = Date.now();
     const uploadId = `${selectedSlot.id}:bubble-builder:${result.spec.familyId}:${generatedAt}:${result.asset.variant}`;
 
@@ -1231,12 +1266,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const openSaveDialog = () => {
+    if (blockWhileSlotReadPending()) return;
     setSaveMode(activeUserTemplate ? "overwrite" : "saveAs");
     setSaveName(activeUserTemplate?.name ?? `${displayTemplateName} 복사본`);
     setSaveDialogOpen(true);
   };
 
   const openSystemSaveDialog = () => {
+    if (blockWhileSlotReadPending()) return;
     if (!isAdminMode) {
       setNotice({ tone: "warning", message: "시스템 템플릿 저장은 관리자 화면에서만 사용할 수 있습니다." });
       return;
@@ -1491,7 +1528,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           }}
           onModeChange={setSaveMode}
           onNameChange={setSaveName}
-          onSubmit={() => void saveCurrentTemplate()}
+          onSubmit={() => {
+            if (!blockWhileSlotReadPending()) void saveCurrentTemplate();
+          }}
         />
       ) : null}
       {inAppExportGateOpen && inAppBrowser ? (
@@ -1535,8 +1574,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             trackAnalyticsEvent("export_blocked_insufficient_credits", { platform, export_mode: exportMode, credits_remaining: accountState?.credits ?? 0 });
             void persistRecoveryThenNavigate("insufficient_credits", "credits", { exportMode, name: exportName });
           }}
-          onRetryPreparation={() => void openExportDialog()}
-          onSubmit={() => void submitExport()}
+          onRetryPreparation={() => {
+            if (!blockWhileSlotReadPending()) void openExportDialog();
+          }}
+          onSubmit={() => {
+            if (!blockWhileSlotReadPending()) void submitExport();
+          }}
           onCancelExport={() => void cancelExport()}
         />
       ) : null}
@@ -1562,7 +1605,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onPricingTypeChange={setSystemPricingType}
           onPriceAmountChange={setSystemPriceAmount}
           onCreditCostChange={setSystemCreditCost}
-          onSubmit={() => void saveSystemTemplate()}
+          onSubmit={() => {
+            if (!blockWhileSlotReadPending()) void saveSystemTemplate();
+          }}
         />
       ) : null}
       {exitConfirmOpen ? (
