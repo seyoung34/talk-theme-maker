@@ -135,6 +135,7 @@ export async function POST(request: Request) {
 
     const store = createRegistryStore();
     const canonicalBytes = new Uint8Array(await canonical.arrayBuffer());
+    const canonicalSha256 = await sha256Hex(canonicalBytes);
     const publishOnce = (attempt: number) => publishThemeAsset(
       {
         logicalAssetId: source.logicalAssetId,
@@ -167,32 +168,39 @@ export async function POST(request: Request) {
      * 않는다. 그 경우 충돌은 경합이 아니라 호출자가 이미 있는 revision을 지정한 것이다.
      */
     /**
-     * 같은 바이트가 이미 active면 **새 revision을 만들지 않고 그것을 재사용한다.**
+     * revision 결정은 **시도할 때마다 현재 registry 상태에서 다시 도출한다.**
      *
-     * revision은 "내용의 이름"이다. 같은 내용에 번호를 새로 붙이면 두 가지가 깨진다.
-     *   - 저장할 때마다 revision이 늘고 직전 것이 retire된다. 같은 템플릿을 동시에 두 번
-     *     저장하면 늦게 활성화된 쪽이 먼저 저장된 쪽의 참조를 죽여, 그 참조를 들고 있는
-     *     upload_refs가 export에서 `catalog_asset_revision_mismatch`로 실패한다.
-     *   - 내용이 같은 객체와 R2 파생물이 계속 쌓인다.
+     * 여기가 이 루프의 핵심이다. 예전에는 루프 밖에서 한 번 정한 번호를 재시도에서 그대로
+     * 들고 가 "번호만 올리기"를 했다. 그러면 같은 바이트를 동시에 저장한 두 요청이 둘 다
+     * revision 1을 집고, 진 쪽이 재시도에서 revision 2를 만들어 1을 retire시킨다. 1을 참조로
+     * 저장한 템플릿은 나중에 `catalog_asset_revision_mismatch`로 내보내기가 깨진다.
      *
-     * 재사용하면 `publishThemeAsset`의 same-sha active 분기를 타 `already-active`로 끝나고,
-     * 비어 있던 preview가 있으면 그것만 채운다. 내용이 다르면 종전대로 다음 번호를 집는다.
+     * DB가 이미 두 가지를 보장한다 — `unique (logical_asset_id, revision, variant_key)`와
+     * `(logical_asset_id, variant_key) where status = 'active'` 부분 유니크 인덱스. 그래서
+     * 경합은 반드시 23505로 드러나고, **재시도가 상태를 다시 읽기만 하면** 두 요청이 같은
+     * 결론으로 수렴한다. 진 쪽은 이긴 쪽이 만든 active를 보고 같은 내용임을 확인해 그 revision을
+     * 재사용한다.
+     *
+     * 내용이 다른 동시 저장은 마지막 쓰기가 이긴다. 그건 의도가 갈리는 경우라 이 계층에서
+     * 정할 수 없고, 진 쪽은 복구 가능한 409로 다시 고르게 된다.
      */
-    const activeRecord = revision === undefined
-      ? await store.findActive({ logicalAssetId: source.logicalAssetId, variantKey })
-      : null;
-    const reusableRevision = activeRecord && activeRecord.sha256 === await sha256Hex(canonicalBytes)
-      ? activeRecord.revision
-      : undefined;
+    const resolveRevisionForAttempt = async () => {
+      if (revision !== undefined) return revision;
+
+      // 같은 내용이 이미 active면 그 번호가 답이다. revision은 "내용의 이름"이라, 같은 내용에
+      // 새 번호를 붙이면 직전 것이 retire되고 그것을 가리키던 참조가 죽는다.
+      const active = await store.findActive({ logicalAssetId: source.logicalAssetId, variantKey });
+      if (active && active.sha256 === canonicalSha256) return active.revision;
+
+      // 상태와 무관한 최대 revision을 본다. active만 보면 다른 publish가 만들어 둔 staged 행이
+      // 보이지 않아 같은 번호를 다시 집고, 재시도가 영원히 같은 충돌을 반복한다.
+      const latestRevision = await store.findLatestRevision({ logicalAssetId: source.logicalAssetId, variantKey });
+      return latestRevision + 1;
+    };
 
     let result;
     for (let attemptIndex = 0; ; attemptIndex += 1) {
-      // 상태와 무관한 최대 revision을 본다. active만 보면 다른 publish가 만들어 둔 staged 행이
-      // 보이지 않아 같은 번호를 다시 집고, 재시도가 영원히 같은 충돌을 반복한다.
-      const latestRevision = revision === undefined && reusableRevision === undefined
-        ? await store.findLatestRevision({ logicalAssetId: source.logicalAssetId, variantKey })
-        : 0;
-      const nextRevision = revision ?? reusableRevision ?? (latestRevision + 1);
+      const nextRevision = await resolveRevisionForAttempt();
       attemptedRevision = nextRevision;
       try {
         result = await publishOnce(nextRevision);

@@ -172,6 +172,37 @@ describe("POST /api/admin/theme-assets/publish", () => {
     expect(publishThemeAsset).toHaveBeenCalledWith(expect.objectContaining({ revision: 7 }), expect.anything());
   });
 
+  /**
+   * 같은 바이트를 동시에 저장하면 둘 다 active를 못 보고 revision 1을 집는다. 진 쪽이 재시도에서
+   * **상태를 다시 읽지 않으면** revision 2를 만들어 1을 retire시키고, 1을 참조로 저장한 템플릿은
+   * 나중에 `catalog_asset_revision_mismatch`로 깨진다. 재시도는 번호를 올리는 게 아니라 판단을
+   * 다시 내리는 것이어야 한다.
+   */
+  it("경합으로 재시도하면 상태를 다시 읽어 같은 revision으로 수렴한다", async () => {
+    const canonical = new File(["png-bytes"], "background.png", { type: "image/png" });
+    const sha256 = createHash("sha256").update("png-bytes").digest("hex");
+    // 첫 시도: active 없음 → revision 1. 그 사이 다른 요청이 같은 내용으로 1을 활성화한다.
+    activeRecord = null;
+    const conflict = Object.assign(new Error("duplicate key"), { code: "23505" });
+    publishThemeAsset
+      .mockRejectedValueOnce(conflict)
+      .mockImplementationOnce(async () => ({
+        status: "already-active",
+        record: { id: "registry-1", logicalAssetId: `admin:${adminAssetId}`, revision: 1, variantKey: "canonical", gcsObjectKey: "catalog/v1/aa/object.png", fileName: "background.png", mimeType: "image/png", sizeBytes: 9, sourceScale: 1, width: 10, height: 10, pngSignatureVerified: true },
+        previewsSkipped: false,
+        orphanCandidates: [],
+      }));
+    registryStore.findActive.mockImplementationOnce(async () => null).mockImplementation(async () => ({ revision: 1, sha256 }));
+    const POST = await load();
+
+    const response = await POST(request({ kind: "admin", sourceId: adminAssetId, variantKey: "canonical", canonical }));
+
+    expect(response.status).toBe(200);
+    // 두 번째 시도는 2가 아니라 1이어야 한다.
+    expect(publishThemeAsset.mock.calls.map((call) => (call[0] as { revision: number }).revision)).toEqual([1, 1]);
+    expect(await response.json()).toMatchObject({ status: "already-active", revision: 1 });
+  });
+
   it("내용이 다르면 종전대로 다음 revision을 집는다", async () => {
     const canonical = new File(["png-bytes"], "background.png", { type: "image/png" });
     activeRecord = { revision: 7, sha256: "0".repeat(64) };
