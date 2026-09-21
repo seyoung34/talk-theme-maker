@@ -124,10 +124,10 @@ describe("catalog export access", () => {
 
   /**
    * `profile_image_full_*`은 기본 에셋이 없어 항상 `profile_image_*`의 선택을 상속하고,
-   * manifest에는 상속받는 쪽 role이 실린다. 프로필에는 호환 family가 없어서 이 규칙이
-   * 없으면 "슬롯 지정" 범위로 등록된 추천 에셋이 내보내기에서만 403이 된다.
+   * manifest에는 상속받는 쪽 role이 실린다. 프로필이 호환 family에 들어가기 전에는
+   * "슬롯 지정" 범위로 등록된 추천 에셋이 피커·미리보기를 통과하고 내보내기에서만 403이 됐다.
    */
-  describe("상속 슬롯은 원본 role의 target으로 허용한다", () => {
+  describe("프로필 호환 family", () => {
     const profile = mapAdminAssetExportAccessRow({
       id: assetId,
       slot_role: "profile_image_1",
@@ -141,27 +141,20 @@ describe("catalog export access", () => {
       return isAdminAssetAllowedForExport({ asset: profile, platform: "android", resourceRole: resourceRole as never });
     }
 
-    it("전체 프로필 이미지는 기본 프로필 이미지의 target을 따른다", () => {
+    it("상속으로 같은 그림이 들어가는 전체 프로필 이미지를 허용한다", () => {
       expect(allows("profile_image_1")).toBe(true);
       expect(allows("profile_image_full_1")).toBe(true);
     });
 
-    // 상속 관계가 아닌 슬롯까지 열리면 "슬롯 지정"이 사실상 kind 전체가 된다.
-    it("상속 관계가 없는 슬롯은 그대로 막는다", () => {
-      expect(allows("profile_image_2")).toBe(false);
-      expect(allows("profile_image_full_2")).toBe(false);
+    // 말풍선·배경·아이콘과 같은 정책이다. 프로필 슬롯끼리는 서로 후보를 공유한다.
+    it("같은 family의 다른 프로필 슬롯도 허용한다", () => {
+      expect(allows("profile_image_2")).toBe(true);
+      expect(allows("profile_image_full_3")).toBe(true);
     });
 
-    it("focused 탭 아이콘도 기본 아이콘의 target을 따른다", () => {
-      const icon = mapAdminAssetExportAccessRow({
-        id: assetId,
-        slot_role: "tab_icon_friends",
-        platform: "android",
-        asset_kind: "icon",
-        enabled: true,
-        admin_asset_targets: [{ asset_id: assetId, platform: "android", slot_role: "tab_icon_friends", target_kind: "exact_role", priority: 0, enabled: true }],
-      });
-      expect(isAdminAssetAllowedForExport({ asset: icon, platform: "android", resourceRole: "tab_icon_friends_focused" })).toBe(true);
+    it("family 밖으로는 넘어가지 못한다", () => {
+      expect(allows("main_background")).toBe(false);
+      expect(allows("tab_icon_friends")).toBe(false);
     });
   });
 

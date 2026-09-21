@@ -12,7 +12,7 @@ export type AdminAssetKind = ThemeAssetKind;
 export type AdminAssetPlatform = ThemePlatform | "all";
 export type AdminAssetTargetKind = "exact_role" | "asset_kind";
 
-export type AdminAssetRecommendationFamily = "bubble" | "background" | "icon";
+export type AdminAssetRecommendationFamily = "bubble" | "background" | "icon" | "profile";
 
 export type AdminAssetRecommendationPool = {
   readonly key: string;
@@ -46,12 +46,24 @@ export function getAdminAssetRecommendationFamily(
   // kind 전체 target 도입 전의 theme/tab icon을 암호 표시에서도 재사용하되, 규격이 다른
   // splash와 친구 추가 이미지는 같은 family로 묶지 않는다.
   if (assetKind === "icon" && isSharedIconRole(role)) return "icon";
+  /**
+   * 프로필은 권장 크기가 갈리지만(기본 220×220, 전체 보기 320×320) 같은 family로 묶는다.
+   *
+   * `splash`·친구 추가 이미지를 icon family에서 뺀 것과 다른 판단인 이유는, 프로필 슬롯이
+   * 이미 서로의 그림을 쓰고 있기 때문이다. `profile_image_full_*`은 기본 에셋이 없어 항상
+   * `profile_image_*`의 선택을 상속하고(`getImageAssetFallbackRole`), 프로필에는 Android
+   * raster plan이 없어(`android/rasterPlan.ts`) 그 원본이 크기 변환 없이 그대로 두 경로에
+   * 들어간다. 즉 family가 새로 만드는 규격 조합은 없고, 반대로 묶지 않으면 상속으로 들어간
+   * 그림이 내보내기 ACL에서만 거부된다.
+   */
+  if (assetKind === "profile" && isSharedProfileRole(role)) return "profile";
   return undefined;
 }
 
 function getRecommendationPoolRepresentativeRole(family: AdminAssetRecommendationFamily): ThemeResourceRole {
   if (family === "bubble") return "bubble_me_1";
   if (family === "background") return "main_background";
+  if (family === "profile") return "profile_image_1";
   return "theme_icon";
 }
 
@@ -61,6 +73,10 @@ function isSharedBackgroundRole(role: string): boolean {
 
 function isSharedIconRole(role: string): boolean {
   return role === "theme_icon" || role.startsWith("tab_icon_") || role.startsWith("passcode_indicator_");
+}
+
+function isSharedProfileRole(role: string): boolean {
+  return role === "profile_image" || role.startsWith("profile_image_");
 }
 
 /**
