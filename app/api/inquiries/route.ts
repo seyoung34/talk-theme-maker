@@ -59,7 +59,6 @@ export async function POST(request: Request) {
     scheduleOpsEvent(createInquiryCreatedEvent({
       inquiryId,
       category: body.category!,
-      title: body.title!.trim(),
     }));
   } else {
     console.error("접수한 문의의 식별자를 받지 못했습니다.");

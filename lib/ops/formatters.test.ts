@@ -73,14 +73,14 @@ describe("Telegram message formatter", () => {
       occurredAt: "2026-09-21T01:00:00.000Z",
       entity: { kind: "inquiry", id: "inquiry-1" },
       summary: "새 문의가 접수되었습니다.",
-      details: { inquiryId: "inquiry-1", category: "payment", title: "결제 오류" },
+      details: { inquiryId: "inquiry-1", category: "payment" },
       adminPath: "/admin/inquiries/inquiry-1",
     });
 
     const message = formatOpsEventForTelegram(event, { siteUrl: "https://talktheme.example" });
     expect(message).toContain("inquiry: inquiry-1");
     expect(message).toContain("문의 분류: payment");
-    expect(message).toContain("제목: 결제 오류");
+    expect(message).not.toContain("본문");
     expect(message).toContain("관리자 확인: https://talktheme.example/admin/inquiries/inquiry-1");
   });
 

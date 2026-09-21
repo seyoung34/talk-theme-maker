@@ -1,6 +1,6 @@
 -- Add operator Telegram notifications for newly opened inquiries and user follow-ups.
--- Inquiry bodies stay out of the ops payload; the event carries only a short, sanitized title
--- (for new inquiries), identifiers, and an internal admin link.
+-- Inquiry bodies and titles stay out of the ops payload; the event carries only identifiers,
+-- category metadata, and an internal admin link.
 
 alter table public.ops_events
   drop constraint if exists ops_events_event_type_check;

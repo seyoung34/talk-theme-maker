@@ -110,11 +110,10 @@ describe("operational event factories", () => {
     });
   });
 
-  it("creates a sanitized P2 event for a new inquiry", () => {
+  it("creates a P2 event for a new inquiry without storing the message body", () => {
     const event = createInquiryCreatedEvent({
       inquiryId: "8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
       category: "payment",
-      title: "결제 문의 owner@example.com 010-1234-5678",
     });
 
     expect(event).toMatchObject({
@@ -126,13 +125,11 @@ describe("operational event factories", () => {
       details: {
         inquiryId: "8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
         category: "payment",
-        title: "결제 문의 [redacted-email] [redacted-phone]",
       },
       dedupeKey: "inquiry:created:8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
       adminPath: "/admin/inquiries/8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
     });
-    expect(JSON.stringify(event)).not.toContain("owner@example.com");
-    expect(JSON.stringify(event)).not.toContain("010-1234-5678");
+    expect(JSON.stringify(event)).not.toContain("body");
   });
 
   it("deduplicates each user follow-up by message id", () => {

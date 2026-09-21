@@ -77,7 +77,6 @@ describe("POST /api/inquiries", () => {
     expect(mocks.createInquiryCreatedEvent).toHaveBeenCalledWith({
       inquiryId,
       category: "payment",
-      title: "결제 오류",
     });
     expect(mocks.scheduleOpsEvent).toHaveBeenCalledWith({ eventId: "inquiry-event" });
   });

@@ -153,7 +153,6 @@ export function createExportRefundFailureEvent(input: {
 export function createInquiryCreatedEvent(input: {
   inquiryId: string;
   category: string;
-  title: string;
 }) {
   return createOpsEvent({
     eventId: deterministicOpsEventId("inquiry.created", input.inquiryId),
@@ -165,7 +164,6 @@ export function createInquiryCreatedEvent(input: {
     details: {
       inquiryId: input.inquiryId,
       category: input.category,
-      title: input.title,
     },
     dedupeKey: `inquiry:created:${input.inquiryId}`,
     adminPath: `/admin/inquiries/${encodeURIComponent(input.inquiryId)}`,

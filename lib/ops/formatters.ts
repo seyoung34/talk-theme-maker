@@ -45,7 +45,6 @@ const detailLabels: Record<string, string> = {
   inquiryId: "문의 ID",
   messageId: "메시지 ID",
   category: "문의 분류",
-  title: "제목",
 };
 
 export function formatOpsEventForTelegram(event: OpsEvent, options: { siteUrl?: string } = {}) {
