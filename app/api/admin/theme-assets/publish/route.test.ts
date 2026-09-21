@@ -203,6 +203,27 @@ describe("POST /api/admin/theme-assets/publish", () => {
     expect(await response.json()).toMatchObject({ status: "already-active", revision: 1 });
   });
 
+  /**
+   * 경합 뒤에 만난 "내용이 다른 active"는 방금 다른 요청이 활성화한 것이다. 그쪽은 이미 그
+   * revision을 참조로 저장했을 수 있어, 여기서 번호를 올리면 그 참조를 죽인다. 진 쪽이 양보하고
+   * 호출부는 legacy로 저장한다.
+   */
+  it("경합 뒤 내용이 다른 active를 만나면 번호를 올리지 않고 양보한다", async () => {
+    const canonical = new File(["png-bytes"], "background.png", { type: "image/png" });
+    activeRecord = null;
+    const conflict = Object.assign(new Error("duplicate key"), { code: "23505" });
+    publishThemeAsset.mockRejectedValueOnce(conflict);
+    // 재시도 시점에는 다른 요청이 **다른 내용**으로 revision 1을 활성화해 둔 상태다.
+    registryStore.findActive.mockImplementationOnce(async () => null).mockImplementation(async () => ({ revision: 1, sha256: "0".repeat(64) }));
+    const POST = await load();
+
+    const response = await POST(request({ kind: "admin", sourceId: adminAssetId, variantKey: "canonical", canonical }));
+
+    expect(response.status).toBe(409);
+    // 두 번째 publish 시도 자체가 없어야 한다 — 시도하면 revision 2가 만들어진다.
+    expect(publishThemeAsset).toHaveBeenCalledTimes(1);
+  });
+
   it("내용이 다르면 종전대로 다음 revision을 집는다", async () => {
     const canonical = new File(["png-bytes"], "background.png", { type: "image/png" });
     activeRecord = { revision: 7, sha256: "0".repeat(64) };

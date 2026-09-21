@@ -27,6 +27,21 @@ import { maxCatalogObjectBytes } from "@/lib/theme/assetCatalog/registry";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * 경합에서 진 요청이 **양보**할 때 쓰는 신호.
+ *
+ * 재시도는 이긴 쪽과 같은 결론으로 수렴하기 위한 것이다. 내용이 같으면 그 revision을
+ * 재사용해 수렴하지만, 내용이 다르면 수렴할 방법이 없다. 그때 번호를 올려 앞질러 가면
+ * 이긴 쪽이 **이미 저장한 참조를 retire시켜** 그 템플릿의 내보내기를 깨뜨린다. 그래서 진
+ * 쪽은 게시를 포기한다 — 호출부는 legacy 경로로 저장하고, 필요하면 다시 저장하면 된다.
+ */
+class ConcurrentPublishConflict extends Error {
+  constructor(readonly activeRevision: number) {
+    super("catalog revision was activated with different bytes by a concurrent publish");
+    this.name = "ConcurrentPublishConflict";
+  }
+}
+
 /** 전환 기간에 병행 기록을 끌 수 있어야 한다. 값이 "1"일 때만 동작한다. */
 function isCatalogWriteEnabled() {
   return process.env.ASSET_CATALOG_WRITE_ENABLED?.trim() === "1";
@@ -184,13 +199,22 @@ export async function POST(request: Request) {
      * 내용이 다른 동시 저장은 마지막 쓰기가 이긴다. 그건 의도가 갈리는 경우라 이 계층에서
      * 정할 수 없고, 진 쪽은 복구 가능한 409로 다시 고르게 된다.
      */
-    const resolveRevisionForAttempt = async () => {
+    const resolveRevisionForAttempt = async (afterConflict: boolean) => {
       if (revision !== undefined) return revision;
 
       // 같은 내용이 이미 active면 그 번호가 답이다. revision은 "내용의 이름"이라, 같은 내용에
       // 새 번호를 붙이면 직전 것이 retire되고 그것을 가리키던 참조가 죽는다.
       const active = await store.findActive({ logicalAssetId: source.logicalAssetId, variantKey });
       if (active && active.sha256 === canonicalSha256) return active.revision;
+
+      /**
+       * 경합 뒤에 내용이 다른 active를 만났다 — 수렴할 수 없는 경우다.
+       *
+       * 첫 시도에서 만나는 "내용이 다른 active"는 평범한 재저장이라 다음 번호를 집는 것이 맞다.
+       * 그러나 23505를 맞고 재시도하는 중이라면 **방금 다른 요청이 활성화한 것**이고, 그쪽은
+       * 이미 그 revision을 참조로 저장했을 수 있다. 여기서 번호를 올리면 그 참조를 죽인다.
+       */
+      if (afterConflict && active) throw new ConcurrentPublishConflict(active.revision);
 
       // 상태와 무관한 최대 revision을 본다. active만 보면 다른 publish가 만들어 둔 staged 행이
       // 보이지 않아 같은 번호를 다시 집고, 재시도가 영원히 같은 충돌을 반복한다.
@@ -200,7 +224,7 @@ export async function POST(request: Request) {
 
     let result;
     for (let attemptIndex = 0; ; attemptIndex += 1) {
-      const nextRevision = await resolveRevisionForAttempt();
+      const nextRevision = await resolveRevisionForAttempt(attemptIndex > 0);
       attemptedRevision = nextRevision;
       try {
         result = await publishOnce(nextRevision);
@@ -255,6 +279,14 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     // 호출자 오류(잘못된 revision·PNG가 아님 등)와 인프라 실패를 구분해 돌려준다.
+    if (error instanceof ConcurrentPublishConflict) {
+      console.warn("Catalog publish yielded to a concurrent activation", JSON.stringify({
+        logicalAssetId: source.logicalAssetId,
+        variantKey,
+        activeRevision: error.activeRevision,
+      }));
+      return NextResponse.json({ error: "다른 저장이 같은 에셋을 먼저 갱신했습니다. 다시 저장해 주세요." }, { status: 409 });
+    }
     if (error instanceof CatalogPublishError) {
       return NextResponse.json({ error: "에셋을 게시할 수 없습니다.", reason: error.code }, { status: 400 });
     }
