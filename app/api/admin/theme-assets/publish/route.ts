@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getCurrentAdmin } from "@/lib/supabase/auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { CatalogPublishError } from "@/lib/theme/assetCatalog/publish";
+import { CatalogPublishError, sha256Hex } from "@/lib/theme/assetCatalog/publish";
 import { CatalogPublishFailure, publishThemeAsset, type PreviewPresetInput } from "@/lib/theme/assetCatalog/publishService";
 import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
 import { getCatalogPublisherAccessToken, putCatalogObject, readCatalogStorageConfig } from "@/lib/theme/assetCatalog/gcsCatalog";
@@ -166,14 +166,33 @@ export async function POST(request: Request) {
      * 재사용으로 처리하므로 같은 객체를 다시 올리지 않는다. 명시적 revision 요청은 재시도하지
      * 않는다. 그 경우 충돌은 경합이 아니라 호출자가 이미 있는 revision을 지정한 것이다.
      */
+    /**
+     * 같은 바이트가 이미 active면 **새 revision을 만들지 않고 그것을 재사용한다.**
+     *
+     * revision은 "내용의 이름"이다. 같은 내용에 번호를 새로 붙이면 두 가지가 깨진다.
+     *   - 저장할 때마다 revision이 늘고 직전 것이 retire된다. 같은 템플릿을 동시에 두 번
+     *     저장하면 늦게 활성화된 쪽이 먼저 저장된 쪽의 참조를 죽여, 그 참조를 들고 있는
+     *     upload_refs가 export에서 `catalog_asset_revision_mismatch`로 실패한다.
+     *   - 내용이 같은 객체와 R2 파생물이 계속 쌓인다.
+     *
+     * 재사용하면 `publishThemeAsset`의 same-sha active 분기를 타 `already-active`로 끝나고,
+     * 비어 있던 preview가 있으면 그것만 채운다. 내용이 다르면 종전대로 다음 번호를 집는다.
+     */
+    const activeRecord = revision === undefined
+      ? await store.findActive({ logicalAssetId: source.logicalAssetId, variantKey })
+      : null;
+    const reusableRevision = activeRecord && activeRecord.sha256 === await sha256Hex(canonicalBytes)
+      ? activeRecord.revision
+      : undefined;
+
     let result;
     for (let attemptIndex = 0; ; attemptIndex += 1) {
       // 상태와 무관한 최대 revision을 본다. active만 보면 다른 publish가 만들어 둔 staged 행이
       // 보이지 않아 같은 번호를 다시 집고, 재시도가 영원히 같은 충돌을 반복한다.
-      const latestRevision = revision === undefined
+      const latestRevision = revision === undefined && reusableRevision === undefined
         ? await store.findLatestRevision({ logicalAssetId: source.logicalAssetId, variantKey })
         : 0;
-      const nextRevision = revision ?? (latestRevision + 1);
+      const nextRevision = revision ?? reusableRevision ?? (latestRevision + 1);
       attemptedRevision = nextRevision;
       try {
         result = await publishOnce(nextRevision);

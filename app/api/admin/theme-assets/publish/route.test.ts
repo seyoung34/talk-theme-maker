@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const adminAssetId = "11111111-2222-4333-8444-555555555555";
@@ -18,7 +20,8 @@ describe("POST /api/admin/theme-assets/publish", () => {
   let readCatalogStorageConfig: ReturnType<typeof vi.fn>;
   let getCatalogPublisherAccessToken: ReturnType<typeof vi.fn>;
   let createRegistryStore: ReturnType<typeof vi.fn>;
-  let registryStore: { findLatestRevision: ReturnType<typeof vi.fn> };
+  let registryStore: { findLatestRevision: ReturnType<typeof vi.fn>; findActive: ReturnType<typeof vi.fn> };
+  let activeRecord: { revision: number; sha256: string } | null;
   let sourceExists = true;
   let linkExists = true;
   let sourceFilters: { table: string; column: string; value: unknown }[];
@@ -68,7 +71,11 @@ describe("POST /api/admin/theme-assets/publish", () => {
       CatalogPublishFailure: MockCatalogPublishFailure,
       publishThemeAsset,
     }));
-    vi.doMock("@/lib/theme/assetCatalog/publish", () => ({ CatalogPublishError: MockCatalogPublishError }));
+    vi.doMock("@/lib/theme/assetCatalog/publish", () => ({
+      CatalogPublishError: MockCatalogPublishError,
+      // 실제 구현과 같은 값이어야 "같은 바이트" 판정을 검증할 수 있다.
+      sha256Hex: vi.fn(async (bytes: Uint8Array) => createHash("sha256").update(Buffer.from(bytes)).digest("hex")),
+    }));
     vi.doMock("@/lib/theme/assetCatalog/registryStore", () => ({ createRegistryStore }));
     vi.doMock("@/lib/theme/assetCatalog/gcsCatalog", () => ({
       getCatalogPublisherAccessToken,
@@ -93,7 +100,8 @@ describe("POST /api/admin/theme-assets/publish", () => {
     updateFilters = [];
     vi.stubEnv("ASSET_CATALOG_WRITE_ENABLED", "1");
     getCurrentAdmin = vi.fn(async () => ({ configured: true, user: { id: "admin-1" }, profile: { user_id: "admin-1" } }));
-    registryStore = { findLatestRevision: vi.fn(async () => 0) };
+    activeRecord = null;
+    registryStore = { findLatestRevision: vi.fn(async () => 0), findActive: vi.fn(async () => activeRecord) };
     createRegistryStore = vi.fn(() => registryStore);
     createAdminClient = vi.fn(() => createAdminClientStub());
     publishThemeAsset = vi.fn(async () => ({
@@ -144,6 +152,35 @@ describe("POST /api/admin/theme-assets/publish", () => {
       expect.objectContaining({ logicalAssetId: "tpl:android-common-splash:upload:1789237594950" }),
       expect.anything(),
     );
+  });
+
+  /**
+   * revision은 "내용의 이름"이다. 같은 내용에 번호를 새로 붙이면 직전 것이 retire되고, 그 참조를
+   * 들고 있는 upload_refs가 export에서 `catalog_asset_revision_mismatch`로 실패한다. 같은 템플릿을
+   * 동시에 두 번 저장할 때 실제로 그 상황이 만들어진다.
+   */
+  it("같은 바이트가 이미 active면 새 revision을 만들지 않고 재사용한다", async () => {
+    const canonical = new File(["png-bytes"], "background.png", { type: "image/png" });
+    const sha256 = createHash("sha256").update("png-bytes").digest("hex");
+    activeRecord = { revision: 7, sha256 };
+    const POST = await load();
+
+    const response = await POST(request({ kind: "admin", sourceId: adminAssetId, variantKey: "canonical", canonical }));
+
+    expect(response.status).toBe(200);
+    expect(registryStore.findLatestRevision).not.toHaveBeenCalled();
+    expect(publishThemeAsset).toHaveBeenCalledWith(expect.objectContaining({ revision: 7 }), expect.anything());
+  });
+
+  it("내용이 다르면 종전대로 다음 revision을 집는다", async () => {
+    const canonical = new File(["png-bytes"], "background.png", { type: "image/png" });
+    activeRecord = { revision: 7, sha256: "0".repeat(64) };
+    const POST = await load();
+
+    await POST(request({ kind: "admin", sourceId: adminAssetId, variantKey: "canonical", canonical }));
+
+    expect(registryStore.findLatestRevision).toHaveBeenCalled();
+    expect(publishThemeAsset).toHaveBeenCalledWith(expect.objectContaining({ revision: 1 }), expect.anything());
   });
 
   it("템플릿 업로드 식별자 모양이 아니면 게시하지 않는다", async () => {
