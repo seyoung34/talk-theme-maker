@@ -18,6 +18,8 @@ describe("systemTemplateRepository.save storage transaction", () => {
   let bundleInsertCalls: Record<string, unknown>[];
   let bundleUpdateCalls: Record<string, unknown>[];
   let existingVariantStorage: { upload_refs: unknown; preview_metadata: unknown } | null;
+  let publishCalls: { kind: string; sourceId: string }[];
+  let publishOutcome: unknown;
   let generateThumbnail: ReturnType<typeof vi.fn>;
 
   function createClientStub() {
@@ -143,6 +145,13 @@ describe("systemTemplateRepository.save storage transaction", () => {
       resolvePreviewUploadPath: vi.fn(() => undefined),
       tabIconPreviewRoles: [],
     }));
+    vi.doMock("@/lib/theme/assetCatalog/shadowPublishClient", () => ({
+      shadowPublishThemeAsset: vi.fn(async (publishInput: { kind: string; sourceId: string }) => {
+        publishCalls.push({ kind: publishInput.kind, sourceId: publishInput.sourceId });
+        return publishOutcome;
+      }),
+      whenShadowPublishesSettle: vi.fn(async () => undefined),
+    }));
     vi.doMock("@/lib/theme/systemTemplates/screenPreview", () => ({
       findUnsignedPreviewAssets: vi.fn((paths: string[], signedUrls: Record<string, string>) => paths.filter((path) => !signedUrls[path])),
       generatePreviewScreens: vi.fn(async () => ({})),
@@ -185,6 +194,8 @@ describe("systemTemplateRepository.save storage transaction", () => {
     bundleInsertCalls = [];
     bundleUpdateCalls = [];
     existingVariantStorage = null;
+    publishCalls = [];
+    publishOutcome = { status: "skipped", reason: "not-png" };
     generateThumbnail = vi.fn(async () => null);
     const client = createClientStub();
     createClient = vi.fn(() => client);
@@ -198,7 +209,44 @@ describe("systemTemplateRepository.save storage transaction", () => {
       "@/lib/theme/systemTemplates/thumbnail",
       "@/lib/theme/systemTemplates/preview",
       "@/lib/theme/systemTemplates/screenPreview",
+      "@/lib/theme/assetCatalog/shadowPublishClient",
     ]) vi.doUnmock(moduleName);
+  });
+
+  /**
+   * 템플릿 업로드를 catalog에 게시하면 export가 GCS에서 바로 읽는다. 다만 미리보기 굽기는
+   * Storage 경로를 서명해 쓰므로 바이트는 그대로 Supabase에 두고 참조를 **더한다.**
+   */
+  it("게시에 성공하면 legacy 경로를 유지한 채 catalog 참조를 함께 저장한다", async () => {
+    publishOutcome = {
+      status: "published",
+      previewsSkipped: false,
+      record: { variantKey: "canonical", revision: 3, fileName: "background.png", mimeType: "image/png", size: 11, sourceScale: 1, width: 1080, height: 1920, pngSignatureVerified: true },
+    };
+    const repository = await load();
+
+    await repository.save(input());
+
+    expect(publishCalls).toEqual([{ kind: "template", sourceId: "upload-1" }]);
+    const refs = variantUpsertCalls[0]?.upload_refs as Record<string, Array<Record<string, unknown>>>;
+    const saved = refs[mainBackgroundSlotId][0];
+    expect(saved.catalog).toEqual({ kind: "catalog", assetId: "tpl:upload-1", revision: 3, variantKey: "canonical" });
+    expect(saved.storagePath).toEqual(expect.stringContaining("background.png"));
+    expect((saved.catalogMetadata as Record<string, unknown>).legacyStoragePath).toBe(saved.storagePath);
+  });
+
+  /** 게시 실패가 템플릿 저장 실패가 되면 안 된다. 참조 없이 기존 경로로 저장한다. */
+  it("게시에 실패하면 catalog 참조 없이 legacy로 저장한다", async () => {
+    publishOutcome = { status: "skipped", reason: "network down" };
+    const repository = await load();
+
+    await repository.save(input());
+
+    const refs = variantUpsertCalls[0]?.upload_refs as Record<string, Array<Record<string, unknown>>>;
+    const saved = refs[mainBackgroundSlotId][0];
+    expect(saved).not.toHaveProperty("catalog");
+    expect(saved).not.toHaveProperty("catalogMetadata");
+    expect(saved.storagePath).toEqual(expect.stringContaining("background.png"));
   });
 
   it("새 템플릿 bundle 저장 전에 실패하면 업로드한 private/public 경로를 정리한다", async () => {

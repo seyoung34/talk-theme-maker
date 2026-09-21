@@ -8,10 +8,12 @@ import type { SlotCandidateSelections, SlotUploadEntry, SlotUploads } from "@/li
 import { getPreviewColorRole, resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import type { SystemTemplateDeleteResult, SystemTemplateRepository } from "@/lib/theme/systemTemplates/repository";
 import { generateSystemTemplateThumbnail, thumbnailTabIconRoles } from "@/lib/theme/systemTemplates/thumbnail";
+import { shadowPublishThemeAsset } from "@/lib/theme/assetCatalog/shadowPublishClient";
+import { templateLogicalAssetId } from "@/lib/theme/assetCatalog/logicalAssetId";
 import { createSystemTemplatePreviewVisual, previewRoles, resolvePreviewUploadPath, tabIconPreviewRoles } from "@/lib/theme/systemTemplates/preview";
 import { findUnsignedPreviewAssets, generatePreviewScreens } from "@/lib/theme/systemTemplates/screenPreview";
 import { previewScreenIds, type PreviewScreenId } from "@/lib/theme/systemTemplates/previewScreenData";
-import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
+import { normalizeSystemTemplateVisibility, type BubblePreviewShape, type RemoteSlotUploads, type RemoteUploadEntry, type SystemTemplateMetadataRecord, type SystemTemplatePage, type SystemTemplatePreviewMetadata, type SystemTemplateRecord, type SystemTemplateSaveInput, type SystemTemplateSummary, type ThemeEditOverrides } from "@/lib/theme/systemTemplates/types";
 import { assertValidTemplateName } from "@/lib/theme/templateName";
 import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
 import { getThemeSlots, getThemeTemplate, type ThemeAssetSlot, type ThemeTemplateId } from "@/lib/theme/templates";
@@ -681,18 +683,71 @@ async function uploadSystemTemplateFiles(
             ...(entry.imageEdit.target ? { target: entry.imageEdit.target } : {}),
           }
         : undefined;
+      /**
+       * Supabase에 올린 **뒤에** catalog에도 게시한다.
+       *
+       * 순서와 이중 보관이 의도한 것이다. 미리보기 굽기(`collectPreviewPathsByRole`)는 Storage
+       * 경로를 서명해 쓰므로, catalog 참조만 남기면 카드·4화면이 그 슬롯을 템플릿 기본값으로
+       * 그린다. 그래서 바이트는 지금처럼 Supabase에 두고, 참조를 **더해** export만 창고에서
+       * 직접 읽게 한다. 관리자 추천 에셋이 이미 같은 모양이다.
+       *
+       * 실패하면 참조 없이 legacy 그대로 저장한다 — 게시 실패가 템플릿 저장 실패가 되면 안 된다.
+       * 변환본(`imageEdit`)은 원본과 바이트가 달라 애초에 보내지 않는다.
+       */
+      const published = imageEdit ? undefined : await publishTemplateUploadToCatalog(entry.id, uploadFile, storagePath);
+
       refs[slotId]?.push({
         id: entry.id,
         fileName: uploadFile.name,
         mimeType: uploadFile.type || "application/octet-stream",
         size: uploadFile.size,
         storagePath,
+        ...(published ?? {}),
         ...(imageEdit ? { imageEdit } : {}),
       });
     }
   }
 
   return refs;
+}
+
+/**
+ * 업로드 한 건을 catalog에 게시하고, 저장 레코드에 실을 참조를 돌려준다.
+ *
+ * 게시가 안 되면 `undefined`다. 호출부는 그대로 legacy 참조만 저장한다. 게시 실패를 저장
+ * 실패로 올리지 않는 것이 이 경로의 계약이다.
+ */
+async function publishTemplateUploadToCatalog(
+  entryId: string,
+  uploadFile: File,
+  legacyStoragePath: string,
+): Promise<Pick<RemoteUploadEntry, "catalog" | "catalogMetadata"> | undefined> {
+  const outcome = await shadowPublishThemeAsset({ kind: "template", sourceId: entryId, canonical: uploadFile });
+  if (outcome.status !== "published" && outcome.status !== "already-active") return undefined;
+  // registry 값을 못 받으면 참조를 만들지 않는다. 파일에서 추론한 값을 적으면 Builder가
+  // dimension 대조에서 거절한다.
+  if (!outcome.record) return undefined;
+
+  const { record } = outcome;
+  return {
+    catalog: {
+      kind: "catalog",
+      assetId: templateLogicalAssetId(entryId),
+      revision: record.revision,
+      variantKey: record.variantKey,
+    },
+    catalogMetadata: {
+      fileName: record.fileName,
+      mimeType: record.mimeType,
+      size: record.size,
+      sourceScale: record.sourceScale,
+      width: record.width,
+      height: record.height,
+      pngSignatureVerified: record.pngSignatureVerified,
+      // 미리보기 해석과 변환 fallback이 이 경로를 쓴다. 반드시 남긴다.
+      legacyStoragePath,
+    },
+  };
 }
 
 export function shouldPersistCatalogReference(entry: SlotUploadEntry): entry is SlotUploadEntry & {

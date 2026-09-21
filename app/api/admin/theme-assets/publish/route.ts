@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getCurrentAdmin } from "@/lib/supabase/auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { CatalogPublishError } from "@/lib/theme/assetCatalog/publish";
+import { CatalogPublishError, sha256Hex } from "@/lib/theme/assetCatalog/publish";
 import { CatalogPublishFailure, publishThemeAsset, type PreviewPresetInput } from "@/lib/theme/assetCatalog/publishService";
 import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
 import { getCatalogPublisherAccessToken, putCatalogObject, readCatalogStorageConfig } from "@/lib/theme/assetCatalog/gcsCatalog";
@@ -26,6 +26,21 @@ import { maxCatalogObjectBytes } from "@/lib/theme/assetCatalog/registry";
  */
 
 export const dynamic = "force-dynamic";
+
+/**
+ * 경합에서 진 요청이 **양보**할 때 쓰는 신호.
+ *
+ * 재시도는 이긴 쪽과 같은 결론으로 수렴하기 위한 것이다. 내용이 같으면 그 revision을
+ * 재사용해 수렴하지만, 내용이 다르면 수렴할 방법이 없다. 그때 번호를 올려 앞질러 가면
+ * 이긴 쪽이 **이미 저장한 참조를 retire시켜** 그 템플릿의 내보내기를 깨뜨린다. 그래서 진
+ * 쪽은 게시를 포기한다 — 호출부는 legacy 경로로 저장하고, 필요하면 다시 저장하면 된다.
+ */
+class ConcurrentPublishConflict extends Error {
+  constructor(readonly activeRevision: number) {
+    super("catalog revision was activated with different bytes by a concurrent publish");
+    this.name = "ConcurrentPublishConflict";
+  }
+}
 
 /** 전환 기간에 병행 기록을 끌 수 있어야 한다. 값이 "1"일 때만 동작한다. */
 function isCatalogWriteEnabled() {
@@ -72,23 +87,35 @@ export async function POST(request: Request) {
   const variantKey = readVariantKey(form);
   if (!variantKey) return NextResponse.json({ error: "variantKey가 올바르지 않습니다." }, { status: 400 });
 
-  // 이 write-shadow는 현재 추천 관리자 에셋만 지원한다. 시스템 템플릿 upload_refs는
-  // GCS publisher가 catalog ref와 DB bundle을 함께 갱신해야 하므로, 여기서 registry만 만들면
-  // 권한 근거가 없는 tpl:* active row가 남는다. 별도 publisher가 생길 때까지 명시적으로 막는다.
+  /**
+   * 시스템 템플릿 업로드는 **저장되기 전에** 게시한다.
+   *
+   * 그래서 관리자 에셋처럼 "원본 행이 이미 있는가"를 확인할 수 없다 — 확인하려는 행이 바로
+   * 이 게시 결과를 담아 곧 저장될 행이다. 대신 두 가지에 기댄다.
+   *   - 이 라우트는 관리자 인증을 통과해야 한다(위 `getCurrentAdmin`).
+   *   - 템플릿이 참조하지 않는 `tpl:*` 행은 **아무 권한도 주지 못한다.** export 판정은 발행된
+   *     템플릿의 `upload_refs`를 훑어 만들기 때문이다(`edgeRegistryStore.findTemplateAssetExportAccess`).
+   *     저장이 중간에 실패해 남는 행은 쓰이지 않는 채로 남을 뿐이다.
+   *
+   * 식별자는 편집기가 만든 업로드 항목 id라 UUID가 아니다(`android-common-splash:upload:1789…`).
+   * 모양만 검사해 registry에 쓰레기 논리 ID가 들어가지 않게 한다.
+   */
   if (source.kind === "template") {
-    return NextResponse.json({ error: "시스템 템플릿 에셋 게시 경로는 아직 지원하지 않습니다." }, { status: 409 });
-  }
+    if (!isTemplateUploadEntryId(source.sourceId)) {
+      return NextResponse.json({ error: "템플릿 업로드 식별자가 올바르지 않습니다." }, { status: 400 });
+    }
+  } else {
+    if (!isUuid(source.sourceId)) {
+      return NextResponse.json({ error: "관리자 에셋 식별자가 올바르지 않습니다." }, { status: 400 });
+    }
 
-  if (!isUuid(source.sourceId)) {
-    return NextResponse.json({ error: "관리자 에셋 식별자가 올바르지 않습니다." }, { status: 400 });
-  }
-
-  try {
-    const sourceExists = await adminPublishSourceExists(createAdminClient(), source.sourceId, variantKey);
-    if (!sourceExists) return NextResponse.json({ error: "관리자 에셋 또는 플랫폼 variant를 찾을 수 없습니다." }, { status: 404 });
-  } catch (error) {
-    console.error("Catalog publish source lookup failed", error);
-    return NextResponse.json({ error: "관리자 에셋을 확인하지 못했습니다." }, { status: 500 });
+    try {
+      const sourceExists = await adminPublishSourceExists(createAdminClient(), source.sourceId, variantKey);
+      if (!sourceExists) return NextResponse.json({ error: "관리자 에셋 또는 플랫폼 variant를 찾을 수 없습니다." }, { status: 404 });
+    } catch (error) {
+      console.error("Catalog publish source lookup failed", error);
+      return NextResponse.json({ error: "관리자 에셋을 확인하지 못했습니다." }, { status: 500 });
+    }
   }
 
   const canonical = form.get("canonical");
@@ -123,6 +150,7 @@ export async function POST(request: Request) {
 
     const store = createRegistryStore();
     const canonicalBytes = new Uint8Array(await canonical.arrayBuffer());
+    const canonicalSha256 = await sha256Hex(canonicalBytes);
     const publishOnce = (attempt: number) => publishThemeAsset(
       {
         logicalAssetId: source.logicalAssetId,
@@ -154,14 +182,49 @@ export async function POST(request: Request) {
      * 재사용으로 처리하므로 같은 객체를 다시 올리지 않는다. 명시적 revision 요청은 재시도하지
      * 않는다. 그 경우 충돌은 경합이 아니라 호출자가 이미 있는 revision을 지정한 것이다.
      */
-    let result;
-    for (let attemptIndex = 0; ; attemptIndex += 1) {
+    /**
+     * revision 결정은 **시도할 때마다 현재 registry 상태에서 다시 도출한다.**
+     *
+     * 여기가 이 루프의 핵심이다. 예전에는 루프 밖에서 한 번 정한 번호를 재시도에서 그대로
+     * 들고 가 "번호만 올리기"를 했다. 그러면 같은 바이트를 동시에 저장한 두 요청이 둘 다
+     * revision 1을 집고, 진 쪽이 재시도에서 revision 2를 만들어 1을 retire시킨다. 1을 참조로
+     * 저장한 템플릿은 나중에 `catalog_asset_revision_mismatch`로 내보내기가 깨진다.
+     *
+     * DB가 이미 두 가지를 보장한다 — `unique (logical_asset_id, revision, variant_key)`와
+     * `(logical_asset_id, variant_key) where status = 'active'` 부분 유니크 인덱스. 그래서
+     * 경합은 반드시 23505로 드러나고, **재시도가 상태를 다시 읽기만 하면** 두 요청이 같은
+     * 결론으로 수렴한다. 진 쪽은 이긴 쪽이 만든 active를 보고 같은 내용임을 확인해 그 revision을
+     * 재사용한다.
+     *
+     * 내용이 다른 동시 저장은 마지막 쓰기가 이긴다. 그건 의도가 갈리는 경우라 이 계층에서
+     * 정할 수 없고, 진 쪽은 복구 가능한 409로 다시 고르게 된다.
+     */
+    const resolveRevisionForAttempt = async (afterConflict: boolean) => {
+      if (revision !== undefined) return revision;
+
+      // 같은 내용이 이미 active면 그 번호가 답이다. revision은 "내용의 이름"이라, 같은 내용에
+      // 새 번호를 붙이면 직전 것이 retire되고 그것을 가리키던 참조가 죽는다.
+      const active = await store.findActive({ logicalAssetId: source.logicalAssetId, variantKey });
+      if (active && active.sha256 === canonicalSha256) return active.revision;
+
+      /**
+       * 경합 뒤에 내용이 다른 active를 만났다 — 수렴할 수 없는 경우다.
+       *
+       * 첫 시도에서 만나는 "내용이 다른 active"는 평범한 재저장이라 다음 번호를 집는 것이 맞다.
+       * 그러나 23505를 맞고 재시도하는 중이라면 **방금 다른 요청이 활성화한 것**이고, 그쪽은
+       * 이미 그 revision을 참조로 저장했을 수 있다. 여기서 번호를 올리면 그 참조를 죽인다.
+       */
+      if (afterConflict && active) throw new ConcurrentPublishConflict(active.revision);
+
       // 상태와 무관한 최대 revision을 본다. active만 보면 다른 publish가 만들어 둔 staged 행이
       // 보이지 않아 같은 번호를 다시 집고, 재시도가 영원히 같은 충돌을 반복한다.
-      const latestRevision = revision === undefined
-        ? await store.findLatestRevision({ logicalAssetId: source.logicalAssetId, variantKey })
-        : 0;
-      const nextRevision = revision ?? (latestRevision + 1);
+      const latestRevision = await store.findLatestRevision({ logicalAssetId: source.logicalAssetId, variantKey });
+      return latestRevision + 1;
+    };
+
+    let result;
+    for (let attemptIndex = 0; ; attemptIndex += 1) {
+      const nextRevision = await resolveRevisionForAttempt(attemptIndex > 0);
       attemptedRevision = nextRevision;
       try {
         result = await publishOnce(nextRevision);
@@ -197,9 +260,33 @@ export async function POST(request: Request) {
       revision: result.record.revision,
       objectKey: result.record.gcsObjectKey,
       previewsSkipped: result.previewsSkipped,
+      /**
+       * 호출부가 catalog 참조를 **자기 저장 레코드에 적어 넣을 수 있도록** registry가 확정한
+       * 값을 함께 준다. 시스템 템플릿 저장은 이 값으로 `catalogMetadata`를 만든다. 호출부가
+       * 파일에서 다시 추론하면 registry와 어긋날 수 있고, 어긋나면 Builder가 dimension 대조에서
+       * 거절한다.
+       */
+      record: {
+        variantKey: result.record.variantKey,
+        fileName: result.record.fileName,
+        mimeType: result.record.mimeType,
+        size: result.record.sizeBytes,
+        sourceScale: result.record.sourceScale,
+        width: result.record.width,
+        height: result.record.height,
+        pngSignatureVerified: result.record.pngSignatureVerified,
+      },
     });
   } catch (error) {
     // 호출자 오류(잘못된 revision·PNG가 아님 등)와 인프라 실패를 구분해 돌려준다.
+    if (error instanceof ConcurrentPublishConflict) {
+      console.warn("Catalog publish yielded to a concurrent activation", JSON.stringify({
+        logicalAssetId: source.logicalAssetId,
+        variantKey,
+        activeRevision: error.activeRevision,
+      }));
+      return NextResponse.json({ error: "다른 저장이 같은 에셋을 먼저 갱신했습니다. 다시 저장해 주세요." }, { status: 409 });
+    }
     if (error instanceof CatalogPublishError) {
       return NextResponse.json({ error: "에셋을 게시할 수 없습니다.", reason: error.code }, { status: 400 });
     }
@@ -234,6 +321,19 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
 
 function isUuid(value: string) {
   return uuidPattern.test(value);
+}
+
+/**
+ * 편집기가 만든 업로드 항목 id의 모양.
+ *
+ * `android-common-splash:upload:1789237594950`처럼 슬롯 id·용도·타임스탬프를 콜론으로 잇거나,
+ * 추천 에셋에서 온 항목은 UUID 그대로다. 둘 다 통과시키되 registry 논리 ID에 들어가도 되는
+ * 문자만 허용한다.
+ */
+const templateUploadEntryIdPattern = /^[A-Za-z0-9][A-Za-z0-9:_.-]{0,199}$/;
+
+function isTemplateUploadEntryId(value: string) {
+  return templateUploadEntryIdPattern.test(value);
 }
 
 async function adminPublishSourceExists(
