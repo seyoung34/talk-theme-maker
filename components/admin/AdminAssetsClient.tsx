@@ -34,10 +34,12 @@ import {
 } from "@/lib/theme/adminAssets";
 import { createAdminAssetSaveTargets, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs } from "@/lib/theme/adminAssetWorkspace";
 import { useAdminAssetLibrary } from "@/components/admin/hooks/useAdminAssetLibrary";
+import { shadowPublishThemeAsset, whenShadowPublishesSettle } from "@/lib/theme/assetCatalog/shadowPublishClient";
 import {
   getAdminAssetListDefaultSortDirection,
   isAdminAssetListSortKey,
   toAdminAssetListItem,
+  withPreviousCatalogRegistration,
   type AdminAssetListItem,
   type AdminAssetListSortDirection,
   type AdminAssetListSortKey,
@@ -143,11 +145,13 @@ export default function AdminAssetsClient() {
   const [isLoadingEditAsset, setIsLoadingEditAsset] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<AdminAssetUploadProgress | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
+  const [republishingAssetId, setRepublishingAssetId] = useState<string | null>(null);
   const [imageEditOpen, setImageEditOpen] = useState(false);
   const [assetGridColumns, setAssetGridColumns] = useState<3 | 4 | 5>(5);
   const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
   const [bubbleBuilderInitial, setBubbleBuilderInitial] = useState<AdminBubbleBuilderInitial | null>(null);
+  const [bubbleDecorationReadPending, setBubbleDecorationReadPending] = useState(false);
   const [bubbleGeometryMode, setBubbleGeometryMode] = useState<"generated" | "manual">("manual");
   const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
@@ -158,16 +162,32 @@ export default function AdminAssetsClient() {
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
   const assetKindRef = useRef<AdminAssetKind>(assetKind);
   const editRequestRef = useRef(0);
+  const bubbleDecorationReadPendingRef = useRef(false);
+
+  const handleBubbleDecorationReadPendingChange = useCallback((pending: boolean) => {
+    bubbleDecorationReadPendingRef.current = pending;
+    setBubbleDecorationReadPending(pending);
+  }, []);
+  const blockBubbleWorkspaceChange = useCallback(() => {
+    if (!bubbleDecorationReadPendingRef.current) return false;
+    setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 화면을 전환해 주세요.");
+    return true;
+  }, []);
+  const requestBubbleWorkspaceMode = useCallback((nextMode: BubbleWorkspaceMode) => {
+    if (blockBubbleWorkspaceChange()) return;
+    setBubbleWorkspaceMode(nextMode);
+  }, [blockBubbleWorkspaceChange]);
 
   const selectAssetKind = useCallback((nextKind: AdminAssetKind) => {
     if (assetKindRef.current === nextKind) return;
+    if (blockBubbleWorkspaceChange()) return;
     // kind을 바꾸는 순간 진행 중인 상세 조회를 무효화한다. React effect보다 먼저 ref를
     // 바꿔야 빠르게 완료된 이전 응답도 새 분류의 편집 상태에 섞이지 않는다.
     assetKindRef.current = nextKind;
     editRequestRef.current += 1;
     setIsLoadingEditAsset(false);
     setAssetKind(nextKind);
-  }, []);
+  }, [blockBubbleWorkspaceChange]);
 
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
@@ -197,6 +217,7 @@ export default function AdminAssetsClient() {
     setSort: setAssetSort,
     sortDirection: assetSortDirection,
     setSortDirection: setAssetSortDirection,
+    refresh: refreshAssets,
   } = useAdminAssetLibrary({ assetKind, onError: notifyLibraryError });
   // 등록 화면에서는 슬롯을 선택하지 않는다. 기존 저장 계약(slot_role)과 말풍선 편집기의
   // 기준 크기를 위해 kind별 첫 슬롯만 내부 대표값으로 사용한다.
@@ -261,7 +282,8 @@ export default function AdminAssetsClient() {
       !isSavingAsset &&
       (editingAsset ? title.trim() : bubbleBuilderDraft ? file : uploadableFiles.length > 0) &&
       (editingAsset || selectedSaveTargets.length > 0) &&
-      (assetKind !== "bubble" || bubbleSpec),
+      (assetKind !== "bubble" || bubbleSpec) &&
+      !bubbleDecorationReadPending,
   );
   /**
    * 카드에 얹을 경고.
@@ -355,6 +377,10 @@ export default function AdminAssetsClient() {
       const hasImage = Array.from(event.clipboardData?.files ?? []).some((item) => item.type.startsWith("image/"));
       if (!hasImage) return;
       event.preventDefault();
+      if (bubbleDecorationReadPendingRef.current) {
+        setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 추가해 주세요.");
+        return;
+      }
       const result = pickValidImageFiles(event.clipboardData?.files);
       const file = result.files[0];
       if (!file) {
@@ -382,6 +408,33 @@ export default function AdminAssetsClient() {
   const toListItem = (asset: AdminAssetCandidate) =>
     toAdminAssetListItem(asset, asset.previewUrl ? { previewUrl: asset.previewUrl } : {});
 
+  /**
+   * 저장 결과를 목록에 반영하는 **유일한 경로**.
+   *
+   * 저장 갈래가 넷이다(빌더 신규·빌더 재생성·정보 수정·다중 업로드). 갈래마다 목록 갱신을 손으로
+   * 쓰면 하나만 빠져도 조용히 어긋난다 — 실제로 catalog 등록 표시가 그렇게 빠졌다. 갱신 규칙을
+   * 여기 한 곳에 모아 갈래가 늘어도 같은 처리를 받게 한다.
+   *
+   * 하는 일은 둘이다.
+   *   - 이미 있던 항목은 자리를 지키며 교체하고, 새 항목은 앞에 붙인다.
+   *   - 저장 응답에 없는 catalog 등록 여부는 직전 값을 남기고, 병행 기록이 끝나면 목록을 다시
+   *     읽어 서버 판정으로 덮는다. 기다리지 않고 읽으면 진행 중인 게시가 미등록으로 보였다가
+   *     바뀐다.
+   */
+  const applySavedAssets = (savedAssets: readonly AdminAssetCandidate[], saveKind: AdminAssetKind) => {
+    if (savedAssets.length === 0) return;
+    setAssets((current) => {
+      const previousById = new Map(current.map((item) => [item.id, item]));
+      const nextById = new Map(savedAssets.map((asset) => [asset.id, withPreviousCatalogRegistration(toListItem(asset), previousById.get(asset.id))]));
+      const replaced = current.map((item) => nextById.get(item.id) ?? item);
+      const added = savedAssets.filter((asset) => !previousById.has(asset.id)).map((asset) => nextById.get(asset.id)!);
+      return [...added.slice().reverse(), ...replaced];
+    });
+    void whenShadowPublishesSettle().then(() => {
+      if (assetKindRef.current === saveKind) void refreshAssets();
+    });
+  };
+
   const startSidebarResize = (side: SidebarResize["side"], event: React.PointerEvent<HTMLButtonElement>) => {
     if (side === "left" && isLeftSidebarCollapsed) return;
     event.preventDefault();
@@ -391,10 +444,18 @@ export default function AdminAssetsClient() {
   };
 
   const requestSave = () => {
+    if (bubbleDecorationReadPendingRef.current) {
+      setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 저장해 주세요.");
+      return;
+    }
     if (canSaveAsset) setIsSaveConfirmOpen(true);
   };
 
   const submit = async () => {
+    if (bubbleDecorationReadPendingRef.current) {
+      setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 저장해 주세요.");
+      return;
+    }
     if (activeKindSlots.length === 0 || isSavingAsset || (!editingAsset && !bubbleBuilderDraft && uploadableFiles.length === 0 && !file)) return;
     const saveKind = assetKindRef.current;
     const isCurrentSave = () => assetKindRef.current === saveKind;
@@ -415,7 +476,7 @@ export default function AdminAssetsClient() {
           enabled: true,
         });
         if (!isCurrentSave()) return;
-        setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? toListItem(updatedAsset) : asset)));
+        applySavedAssets([updatedAsset], saveKind);
         setEditingAsset(updatedAsset);
         setBubbleBuilderDraft(null);
         for (const pending of pendingFiles) URL.revokeObjectURL(pending.previewUrl);
@@ -440,7 +501,7 @@ export default function AdminAssetsClient() {
           bubbleSpec: assetKind === "bubble" ? bubbleSpec : undefined,
         });
         if (!isCurrentSave()) return;
-        setAssets((current) => current.map((asset) => (asset.id === updatedAsset.id ? toListItem(updatedAsset) : asset)));
+        applySavedAssets([updatedAsset], saveKind);
         setEditingAsset(updatedAsset);
         setNotice("에셋 정보를 저장했습니다.");
       } catch (error) {
@@ -485,7 +546,7 @@ export default function AdminAssetsClient() {
         setPendingFiles([]);
         setUploadProgress(null);
         setNotice("관리 후보를 추가했습니다.");
-        setAssets((current) => [toListItem(savedAsset), ...current.filter((item) => item.id !== savedAsset.id)]);
+        applySavedAssets([savedAsset], saveKind);
         return;
       }
 
@@ -536,7 +597,7 @@ export default function AdminAssetsClient() {
 
       if (!isCurrentSave()) return;
       if (savedAssets.length > 0) {
-        setAssets((current) => [...savedAssets.slice().reverse().map(toListItem), ...current.filter((item) => !savedAssets.some((saved) => saved.id === item.id))]);
+        applySavedAssets(savedAssets, saveKind);
       }
 
       if (failedItems.length === 0) {
@@ -585,8 +646,59 @@ export default function AdminAssetsClient() {
     return () => { cancelled = true; };
   }, [assetPendingDelete]);
 
+  /**
+   * catalog registry에 빠진 에셋을 다시 게시한다.
+   *
+   * 저장 경로의 write-shadow는 기다리지 않고 부르며 실패를 삼킨다. 여러 장을 연달아 올리다
+   * 화면을 벗어나면 몇 건이 조용히 빠지는데, 그때 손으로 복구할 길이 이것뿐이다. 저장 정책을
+   * 바꾸지 않고(게시 실패는 저장 실패가 아니다) 빠진 것만 다시 채운다.
+   *
+   * 원본은 목록이 준 signed URL에서 받는다. 미등록 에셋은 축소본이 없어 이 URL이 항상 온다.
+   */
+  const republishCatalog = async (asset: AdminAssetListItem) => {
+    if (republishingAssetId || deletingAssetId) return;
+    // 카드가 이미 막는 경우지만 여기서도 확인한다. 이 경로는 부모 canonical만 올릴 수 있어서,
+    // 플랫폼 전용본이 있는 에셋에 쓰면 쓰이지 않는 행을 만들고 배지만 사라진다.
+    if (asset.mimeType !== "image/png" || asset.variantPlatforms.length > 0) {
+      setNotice("이 에셋은 수정 화면에서 다시 저장해야 catalog에 등록됩니다.");
+      return;
+    }
+    if (!asset.previewUrl) {
+      setNotice("원본 주소를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
+      return;
+    }
+    try {
+      setRepublishingAssetId(asset.id);
+      const response = await fetch(asset.previewUrl);
+      if (!response.ok) throw new Error(`원본을 내려받지 못했습니다 (HTTP ${response.status})`);
+      const blob = await response.blob();
+      const outcome = await shadowPublishThemeAsset({
+        kind: "admin",
+        sourceId: asset.id,
+        canonical: new File([blob], asset.fileName, { type: asset.mimeType || blob.type }),
+      });
+      // 실패 갈래를 먼저 처리한다. `published | already-active`는 판별자가 두 값이라 음성
+      // 분기에서 좁혀지지 않아, 성공을 먼저 걸러 내면 `reason` 접근이 타입 오류가 된다.
+      if (outcome.status === "skipped") {
+        setNotice(`catalog에 등록하지 못했습니다: ${outcome.reason}`);
+        return;
+      }
+      if (outcome.status === "disabled") {
+        setNotice("catalog 병행 기록이 꺼져 있습니다. ASSET_CATALOG_WRITE_ENABLED 설정을 확인해 주세요.");
+        return;
+      }
+      setNotice(`${asset.title} 을(를) catalog에 등록했습니다.`);
+      await refreshAssets();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "catalog에 등록하지 못했습니다.");
+    } finally {
+      setRepublishingAssetId(null);
+    }
+  };
+
   const remove = async (asset: AdminAssetListItem) => {
     if (deletingAssetId) return;
+    if (blockBubbleWorkspaceChange()) return;
     try {
       setDeletingAssetId(asset.id);
       await deleteAdminAssetCandidate(asset.id);
@@ -610,6 +722,7 @@ export default function AdminAssetsClient() {
   };
 
   const applyDroppedFiles = (files: FileList | File[] | null) => {
+    if (blockBubbleWorkspaceChange()) return;
     const result = pickValidImageFiles(files);
     if (result.files.length === 0) {
       setNotice(result.rejected[0] ?? "이미지 파일만 추가할 수 있습니다.");
@@ -651,6 +764,7 @@ export default function AdminAssetsClient() {
 
   const removePendingFile = (id: string) => {
     if (isSavingAsset) return;
+    if (blockBubbleWorkspaceChange()) return;
     const removed = pendingFiles.find((pending) => pending.id === id);
     if (!removed) return;
     URL.revokeObjectURL(removed.previewUrl);
@@ -703,6 +817,7 @@ export default function AdminAssetsClient() {
    */
   const beginInPlaceEdit = async (item: AdminAssetListItem) => {
     if (isSavingAsset || isLoadingEditAsset) return;
+    if (blockBubbleWorkspaceChange()) return;
     const requestId = ++editRequestRef.current;
     const requestedKind = assetKindRef.current;
     const isCurrentRequest = () => editRequestRef.current === requestId && assetKindRef.current === requestedKind;
@@ -771,13 +886,14 @@ export default function AdminAssetsClient() {
 
   const exitInPlaceEdit = () => {
     if (isSavingAsset) return;
+    if (blockBubbleWorkspaceChange()) return;
     editRequestRef.current += 1;
     setEditingAsset(null);
     setBubbleBuilderDraft(null);
     setBubbleBuilderInitial(null);
     setTitle("");
     clearFile();
-    setBubbleWorkspaceMode("library");
+    requestBubbleWorkspaceMode("library");
     setNotice("새 후보 등록으로 돌아왔습니다.");
   };
 
@@ -825,7 +941,7 @@ export default function AdminAssetsClient() {
     <main className="grid h-[100dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-slate-50 text-slate-950 [--color-background:#f8fafc] [--color-error-container:#fff1f2] [--color-info:#2563eb] [--color-info-container:#eff6ff] [--color-info-container-high:#dbeafe] [--color-info-outline:#93c5fd] [--color-info-outline-strong:#2563eb] [--color-info-strong:#1d4ed8] [--color-inverse-on-surface:#ffffff] [--color-inverse-surface:#1d4ed8] [--color-on-background:#0f172a] [--color-on-info-container:#172554] [--color-on-info-container-variant:#1e40af] [--color-on-surface:#0f172a] [--color-on-surface-variant:#475569] [--color-outline-variant:#dbeafe] [--color-surface-low:#f1f5f9]">
       <header className="flex min-h-12 items-center justify-between gap-4 border-b border-blue-100 bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.03)]">
         <div className="flex min-w-0 items-center gap-3">
-          <Link href="/admin" className="rounded-full px-2 py-1 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)]">← 관리자</Link>
+          <Link href="/admin" onClick={(event) => { if (blockBubbleWorkspaceChange()) event.preventDefault(); }} className="rounded-full px-2 py-1 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)]">← 관리자</Link>
           <span className="h-4 w-px bg-[var(--color-outline-variant)]" aria-hidden="true" />
           <h1 className="truncate font-[var(--font-display)] text-base font-semibold text-[var(--color-on-surface)]">에셋 워크스페이스</h1>
           <button type="button" onClick={() => setIsLeftSidebarCollapsed((current) => !current)} aria-label={isLeftSidebarCollapsed ? "좌측 패널 열기" : "좌측 패널 접기"} title={isLeftSidebarCollapsed ? "좌측 패널 열기" : "좌측 패널 접기"} className="hidden size-8 place-items-center rounded-lg border border-blue-100 text-blue-700 transition hover:bg-blue-50 lg:grid">
@@ -1078,8 +1194,8 @@ export default function AdminAssetsClient() {
               ) : null}
               {assetKind === "bubble" ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]" onClick={() => setBubbleWorkspaceMode("builder")}>말풍선 빌더 열기</button>
-                  <button type="button" className="rounded-lg border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]" onClick={() => { applyRecommendedBubbleAdjustment(); setBubbleWorkspaceMode("adjust"); }}>중앙에서 조정</button>
+                  <button type="button" className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]" onClick={() => requestBubbleWorkspaceMode("builder")}>말풍선 빌더 열기</button>
+                  <button type="button" className="rounded-lg border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]" onClick={() => { if (blockBubbleWorkspaceChange()) return; applyRecommendedBubbleAdjustment(); setBubbleWorkspaceMode("adjust"); }}>중앙에서 조정</button>
                 </div>
               ) : null}
               <div className="grid gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3">
@@ -1101,8 +1217,8 @@ export default function AdminAssetsClient() {
               {assetKind === "bubble" ? (
                 <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2">
                   <div className="pointer-events-auto inline-flex rounded-full border border-blue-200 bg-white/95 p-1 shadow-[0_8px_24px_rgba(37,99,235,0.16)] backdrop-blur">
-                    <button type="button" onClick={() => setBubbleWorkspaceMode("library")} aria-label="말풍선 후보 라이브러리 보기" aria-pressed={bubbleWorkspaceMode === "library"} title="후보 라이브러리" className={`grid size-8 place-items-center rounded-full transition ${bubbleWorkspaceMode === "library" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"}`}><Library size={15} aria-hidden="true" /></button>
-                    <button type="button" onClick={() => setBubbleWorkspaceMode("adjust")} aria-label="말풍선 편집 화면 보기" aria-pressed={bubbleWorkspaceMode !== "library"} title="말풍선 편집" className={`grid size-8 place-items-center rounded-full transition ${bubbleWorkspaceMode !== "library" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"}`}><SlidersHorizontal size={15} aria-hidden="true" /></button>
+                    <button type="button" onClick={() => requestBubbleWorkspaceMode("library")} aria-label="말풍선 후보 라이브러리 보기" aria-pressed={bubbleWorkspaceMode === "library"} title="후보 라이브러리" className={`grid size-8 place-items-center rounded-full transition ${bubbleWorkspaceMode === "library" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"}`}><Library size={15} aria-hidden="true" /></button>
+                    <button type="button" onClick={() => requestBubbleWorkspaceMode("adjust")} aria-label="말풍선 편집 화면 보기" aria-pressed={bubbleWorkspaceMode !== "library"} title="말풍선 편집" className={`grid size-8 place-items-center rounded-full transition ${bubbleWorkspaceMode !== "library" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"}`}><SlidersHorizontal size={15} aria-hidden="true" /></button>
                   </div>
                 </div>
               ) : null}
@@ -1123,8 +1239,9 @@ export default function AdminAssetsClient() {
                       initialSpec={bubbleBuilderDraft?.recipe ?? bubbleBuilderInitial?.recipe}
                       initialDecorationFiles={bubbleBuilderDraft?.decorations ?? bubbleBuilderInitial?.decorations}
                       closeOnApply={false}
-                      onClose={() => setBubbleWorkspaceMode("library")}
+                      onClose={() => requestBubbleWorkspaceMode("library")}
                       onApply={applyBubbleBuilder}
+                      onDecorationReadPendingChange={handleBubbleDecorationReadPendingChange}
                     />
                   ) : (
                     <div className="grid gap-4">
@@ -1182,7 +1299,7 @@ export default function AdminAssetsClient() {
                         onTextChange={setBubblePreviewText}
                       />
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => setBubbleWorkspaceMode("builder")} className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]">빌더로 다시 만들기</button>
+                        <button type="button" onClick={() => requestBubbleWorkspaceMode("builder")} className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]">빌더로 다시 만들기</button>
                       </div>
                     </div>
                   )}
@@ -1265,7 +1382,7 @@ export default function AdminAssetsClient() {
               ) : filteredAssets.length > 0 ? (
                 <div className={`grid gap-3 sm:grid-cols-2 ${assetGridColumns === 3 ? "xl:grid-cols-3" : assetGridColumns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
                   {filteredAssets.map(({ asset, warnings }) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} deleting={deletingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />
+                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} deleting={deletingAssetId === asset.id} republishing={republishingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} onRepublish={() => void republishCatalog(asset)} />
                   ))}
                 </div>
               ) : (

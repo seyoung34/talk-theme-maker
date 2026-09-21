@@ -132,6 +132,144 @@ describe("GET /api/admin/theme-assets", () => {
     expect(JSON.stringify(payload)).not.toContain("admin-assets/");
   });
 
+  /**
+   * 게시(write-shadow)는 저장 뒤에 기다리지 않고 부르며 실패를 삼킨다. 빠진 에셋이 조용히
+   * 남으므로 목록이 그 사실을 실어 날라야 운영자가 재게시할 수 있다.
+   */
+  it("registry에 active 행이 있는지 카드에 실어 준다", async () => {
+    const other = "22222222-2222-4222-8222-222222222222";
+    registryRows = [{ id: "registry-1", logical_asset_id: `admin:${assetId}`, variant_key: "canonical", r2_previews: {} }];
+    const GET = await load([[row(assetId), row(other)]]);
+
+    const payload = await (await GET(request("assetKind=background"))).json();
+
+    expect(payload.items.find((item: { id: string }) => item.id === assetId).catalogRegistered).toBe(true);
+    expect(payload.items.find((item: { id: string }) => item.id === other).catalogRegistered).toBe(false);
+  });
+
+  /**
+   * 재저장은 `asset_object_id`를 비운다. 그 뒤 게시가 끊기면 **쓸 수 없는 옛 revision의
+   * active 행만** 남는데, 논리 ID만 보면 그걸 "등록됨"으로 읽어 복구가 필요한 카드에서
+   * 배지와 재게시 버튼이 사라진다.
+   */
+  it("현재 포인터와 맞지 않는 옛 active 행은 등록으로 치지 않는다", async () => {
+    registryRows = [{ id: "stale-registry", logical_asset_id: `admin:${assetId}`, variant_key: "canonical", r2_previews: {} }];
+    const GET = await load([[row(assetId, { asset_object_id: null })]]);
+
+    const payload = await (await GET(request("assetKind=background"))).json();
+
+    expect(payload.items[0].catalogRegistered).toBe(false);
+  });
+
+  /**
+   * 논리 ID 하나에 canonical/android/ios 행이 함께 달린다. 행이 하나라도 있으면 등록으로 치면
+   * **절반만 게시된 에셋이 완료로 보이고**, 나머지 플랫폼은 조용히 legacy로 떨어지는데 배지가
+   * 없어 고칠 방법이 사라진다.
+   */
+  it("한쪽 플랫폼만 게시된 전용본 에셋은 등록으로 치지 않는다", async () => {
+    registryRows = [{ id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: {} }];
+    const GET = await load([[
+      row(assetId, {
+        asset_kind: "bubble",
+        asset_object_id: null,
+        admin_asset_variants: [
+          { id: "v-a", asset_id: assetId, platform: "android", storage_path: `admin-assets/${assetId}/a.png`, asset_object_id: "android-registry", file_name: "a.png", mime_type: "image/png" },
+          { id: "v-i", asset_id: assetId, platform: "ios", storage_path: `admin-assets/${assetId}/i.png`, asset_object_id: null, file_name: "i.png", mime_type: "image/png" },
+        ],
+      }),
+    ]]);
+
+    const payload = await (await GET(request("assetKind=bubble"))).json();
+
+    expect(payload.items[0].catalogRegistered).toBe(false);
+  });
+
+  /**
+   * `asset.platform`은 `selectRepresentativeTarget`이 고른 **타깃 하나**의 값이다. 타깃이 여럿이면
+   * 대표보다 넓은 적용 범위가 생기는데, 대표만 보면 반대 플랫폼의 누락을 놓친다. export는
+   * 매칭되는 타깃마다 판정하므로 여기서도 타깃 전체를 봐야 한다.
+   */
+  it("대표 타깃이 좁아도 활성 타깃 전체를 기준으로 판정한다", async () => {
+    // 대표는 exact_role(android). 그런데 kind 타깃이 ios까지 열어 두었고 ios는 게시되지 않았다.
+    registryRows = [{ id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: {} }];
+    const GET = await load([[
+      row(assetId, {
+        asset_object_id: null,
+        admin_asset_targets: [
+          { id: `${assetId}-exact`, asset_id: assetId, platform: "android", slot_role: "main_background", target_kind: "exact_role", priority: 0, enabled: true },
+          { id: `${assetId}-kind`, asset_id: assetId, platform: "ios", slot_role: null, target_kind: "asset_kind", priority: 1, enabled: true },
+        ],
+        admin_asset_variants: [
+          { id: "v-a", asset_id: assetId, platform: "android", storage_path: `admin-assets/${assetId}/a.png`, asset_object_id: "android-registry", file_name: "a.png", mime_type: "image/png" },
+        ],
+      }),
+    ]]);
+
+    const payload = await (await GET(request("assetKind=background"))).json();
+
+    expect(payload.items[0].catalogRegistered).toBe(false);
+  });
+
+  /**
+   * export의 타깃 판정은 `enabled`를 보지 않는다 — "과거 운영 토글의 잔여 컬럼"이라 플랫폼과
+   * 타깃 종류만 근거로 삼는다(`adminAssetWorkspace.getAdminAssetCandidateMatchRank`). 여기서만
+   * 걸러 내면 꺼진 타깃의 플랫폼이 판정에서 빠지는데 export는 그 플랫폼을 그대로 고른다.
+   */
+  it("꺼진 타깃의 플랫폼도 등록 판정에 포함한다", async () => {
+    registryRows = [{ id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: {} }];
+    const GET = await load([[
+      row(assetId, {
+        asset_object_id: null,
+        admin_asset_targets: [
+          { id: `${assetId}-exact`, asset_id: assetId, platform: "android", slot_role: "main_background", target_kind: "exact_role", priority: 0, enabled: true },
+          { id: `${assetId}-kind`, asset_id: assetId, platform: "ios", slot_role: null, target_kind: "asset_kind", priority: 1, enabled: false },
+        ],
+        admin_asset_variants: [
+          { id: "v-a", asset_id: assetId, platform: "android", storage_path: `admin-assets/${assetId}/a.png`, asset_object_id: "android-registry", file_name: "a.png", mime_type: "image/png" },
+        ],
+      }),
+    ]]);
+
+    const payload = await (await GET(request("assetKind=background"))).json();
+
+    expect(payload.items[0].catalogRegistered).toBe(false);
+  });
+
+  it("전용본 두 개가 모두 게시되면 등록으로 친다", async () => {
+    registryRows = [
+      { id: "android-registry", logical_asset_id: `admin:${assetId}`, variant_key: "android", r2_previews: {} },
+      { id: "ios-registry", logical_asset_id: `admin:${assetId}`, variant_key: "ios", r2_previews: {} },
+    ];
+    const GET = await load([[
+      row(assetId, {
+        asset_kind: "bubble",
+        asset_object_id: null,
+        admin_asset_variants: [
+          { id: "v-a", asset_id: assetId, platform: "android", storage_path: `admin-assets/${assetId}/a.png`, asset_object_id: "android-registry", file_name: "a.png", mime_type: "image/png" },
+          { id: "v-i", asset_id: assetId, platform: "ios", storage_path: `admin-assets/${assetId}/i.png`, asset_object_id: "ios-registry", file_name: "i.png", mime_type: "image/png" },
+        ],
+      }),
+    ]]);
+
+    const payload = await (await GET(request("assetKind=bubble"))).json();
+
+    expect(payload.items[0].catalogRegistered).toBe(true);
+  });
+
+  /**
+   * 등록 여부는 R2 설정과 무관하다. 썸네일 색인과 한 조회로 합치면 R2가 꺼진 환경에서
+   * 멀쩡한 에셋이 전부 미등록으로 보인다.
+   */
+  it("R2 origin이 없어도 등록 여부는 판정한다", async () => {
+    registryRows = [{ id: "registry-1", logical_asset_id: `admin:${assetId}`, variant_key: "canonical", r2_previews: {} }];
+    const GET = await load([[row(assetId)]]);
+
+    const payload = await (await GET(request("assetKind=background"))).json();
+
+    expect(payload.items[0].thumbnailUrl).toBeUndefined();
+    expect(payload.items[0].catalogRegistered).toBe(true);
+  });
+
   it("썸네일이 없는 에셋만 원본 signed URL로 폴백한다", async () => {
     registryRows = [{ id: "registry-1", logical_asset_id: `admin:${assetId}`, variant_key: "canonical", r2_previews: { picker: { objectKey: "preview/v1/ab/hash.webp" } } }];
     const GET = await load([[row(assetId), row("22222222-2222-4222-8222-222222222222")]], { r2Origin: "https://preview.test" });

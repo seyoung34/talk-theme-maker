@@ -18,6 +18,8 @@ const eslintConfig = [
       "out/**",
       "dist/**",
       "coverage/**",
+      // Android/iOS 빌더 로컬 실행 산출물. git도 무시하는 경로라 린트 대상이 아니다.
+      "tmp/**",
       "node_modules/**",
       "android-sample-theme/**",
       "next-env.d.ts",
