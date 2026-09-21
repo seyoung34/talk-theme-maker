@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { BubbleBuilderDialog } from "@/components/editor/BubbleBuilderDialog";
 import type { BubbleFamilyDesignSpec } from "@/lib/theme/bubbleBuilder";
@@ -58,28 +58,91 @@ function useMobileShell() {
 }
 
 describe("BubbleBuilderDialog decoration input", () => {
-  it("accepts an image pasted from the clipboard", () => {
+  it("accepts an image pasted from the clipboard", async () => {
     renderDialog();
     const file = new File(["image"], "clipboard-cat.png", { type: "image/png" });
 
     fireEvent.paste(window, { clipboardData: { files: [file] } });
 
     // 목록과 미리보기 라벨 양쪽에 나오므로 파일명이 여러 벌일 수 있다.
-    expect(screen.getAllByText("clipboard-cat.png").length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("clipboard-cat.png")).length).toBeGreaterThan(0);
   });
 
-  it("accepts an image dropped onto the upload zone", () => {
+  it("accepts an image dropped onto the upload zone", async () => {
     renderDialog();
     const file = new File(["image"], "dropped-dog.webp", { type: "image/webp" });
 
     fireEvent.drop(screen.getAllByTestId("bubble-decoration-dropzone")[0], { dataTransfer: { files: [file] } });
 
-    expect(screen.getAllByText("dropped-dog.webp").length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("dropped-dog.webp")).length).toBeGreaterThan(0);
+  });
+
+  it("keeps multiple selected decorations in FileList order while their bytes are read", async () => {
+    renderDialog();
+    const first = deferredImageFile("first-layer.png");
+    const second = deferredImageFile("second-layer.png");
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input!, { target: { files: [first.file, second.file] } });
+
+    await waitFor(() => expect(first.arrayBuffer).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(second.arrayBuffer).toHaveBeenCalledTimes(1));
+
+    first.resolve();
+    second.resolve();
+
+    const firstLayer = await screen.findByRole("button", { name: /first-layer\.png/ });
+    const secondLayer = await screen.findByRole("button", { name: /second-layer\.png/ });
+    expect(firstLayer.compareDocumentPosition(secondLayer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("blocks apply and close until a selected decoration has materialized", async () => {
+    const onOpenChange = vi.fn();
+    renderDialog({ onOpenChange });
+    const pending = deferredImageFile("slow-layer.png");
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input!, { target: { files: [pending.file] } });
+    await waitFor(() => expect(pending.arrayBuffer).toHaveBeenCalledTimes(1));
+
+    for (const button of screen.getAllByRole("button", { name: "적용하기" })) {
+      expect(button).toBeDisabled();
+    }
+    const closeButton = screen.getAllByRole("button", { name: "닫기" })[0];
+    expect(closeButton).toBeDisabled();
+    fireEvent.click(closeButton);
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    pending.resolve();
+    await screen.findByRole("button", { name: /slow-layer\.png/ });
+    await waitFor(() => {
+      for (const button of screen.getAllByRole("button", { name: "적용하기" })) {
+        expect(button).toBeEnabled();
+      }
+      expect(closeButton).toBeEnabled();
+    });
+  });
+
+  it("reports decoration materialization to the parent editor", async () => {
+    const onDecorationReadPendingChange = vi.fn();
+    renderDialog({ onDecorationReadPendingChange });
+    const pending = deferredImageFile("reported-layer.png");
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input!, { target: { files: [pending.file] } });
+    await waitFor(() => expect(onDecorationReadPendingChange).toHaveBeenCalledWith(true));
+
+    pending.resolve();
+    await screen.findByRole("button", { name: /reported-layer\.png/ });
+    await waitFor(() => expect(onDecorationReadPendingChange).toHaveBeenLastCalledWith(false));
   });
 });
 
 describe("BubbleBuilderDialog decoration warnings", () => {
-  it("warns when a decoration sits across the stretch line", () => {
+  it("warns when a decoration sits across the stretch line", async () => {
     renderDialog();
     // 미리 들어 있는 장식은 오른쪽 위에 몰려 있어 늘어나는 선을 지나가지 않는다.
     expect(screen.queryByText(/늘어나는 선/)).toBeNull();
@@ -87,7 +150,7 @@ describe("BubbleBuilderDialog decoration warnings", () => {
     // 새로 추가한 장식은 캔버스 가운데에서 시작하므로 선을 지나간다.
     fireEvent.paste(window, { clipboardData: { files: [new File(["image"], "centered.png", { type: "image/png" })] } });
 
-    expect(screen.getAllByText(/늘어나는 선/).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/늘어나는 선/)).length).toBeGreaterThan(0);
     expect(screen.getAllByText("늘어남").length).toBeGreaterThan(0);
   });
 
@@ -101,11 +164,11 @@ describe("BubbleBuilderDialog decoration warnings", () => {
    * 겹침 판정이 보는 것은 이미지의 사각형이라 실제로 걸친 것이 투명한 여백뿐일 수 있고,
    * 글자 위에 무늬를 얹는 것처럼 일부러 겹치는 디자인도 있다. 그래서 막지 않는다.
    */
-  it("keeps apply available while warnings are showing", () => {
+  it("keeps apply available while warnings are showing", async () => {
     renderDialog();
     fireEvent.paste(window, { clipboardData: { files: [new File(["image"], "centered.png", { type: "image/png" })] } });
 
-    expect(screen.getAllByText(/늘어나는 선/).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/늘어나는 선/)).length).toBeGreaterThan(0);
     for (const button of screen.getAllByRole("button", { name: "적용하기" })) {
       expect(button).toBeEnabled();
     }
@@ -239,10 +302,11 @@ describe("BubbleBuilderDialog close guard", () => {
     expect(screen.queryByText("적용하지 않은 변경 사항이 있어요")).toBeNull();
   });
 
-  it("asks before dropping an unapplied change", () => {
+  it("asks before dropping an unapplied change", async () => {
     const onOpenChange = vi.fn();
     renderDialog({ onOpenChange });
     fireEvent.paste(window, { clipboardData: { files: [new File(["image"], "cat.png", { type: "image/png" })] } });
+    await screen.findAllByText("cat.png");
 
     fireEvent.click(screen.getAllByRole("button", { name: "닫기" })[0]);
 
@@ -250,13 +314,14 @@ describe("BubbleBuilderDialog close guard", () => {
     expect(screen.getByText("적용하지 않은 변경 사항이 있어요")).toBeInTheDocument();
   });
 
-  it("keeps editing or discards from the confirm", () => {
+  it("keeps editing or discards from the confirm", async () => {
     const onOpenChange = vi.fn();
     renderDialog({ onOpenChange });
     fireEvent.paste(window, { clipboardData: { files: [new File(["image"], "cat.png", { type: "image/png" })] } });
+    await screen.findAllByText("cat.png");
     fireEvent.click(screen.getAllByRole("button", { name: "닫기" })[0]);
 
-    fireEvent.click(screen.getByRole("button", { name: "계속 편집하기" }));
+    fireEvent.click(await screen.findByRole("button", { name: "계속 편집하기" }));
     expect(onOpenChange).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getAllByRole("button", { name: "닫기" })[0]);
@@ -292,7 +357,7 @@ describe("BubbleBuilderDialog zoom controls", () => {
   });
 });
 
-function renderDialog(overrides: { onOpenChange?: () => void; spec?: BubbleFamilyDesignSpec } = {}) {
+function renderDialog(overrides: { onOpenChange?: () => void; onDecorationReadPendingChange?: (pending: boolean) => void; spec?: BubbleFamilyDesignSpec } = {}) {
   return render(
     <BubbleBuilderDialog
       open
@@ -303,6 +368,22 @@ function renderDialog(overrides: { onOpenChange?: () => void; spec?: BubbleFamil
       initialSpec={overrides.spec ?? spec}
       onOpenChange={overrides.onOpenChange ?? vi.fn()}
       onApply={vi.fn()}
+      onDecorationReadPendingChange={overrides.onDecorationReadPendingChange}
     />,
   );
+}
+
+function deferredImageFile(name: string) {
+  let resolveBuffer: ((bytes: ArrayBuffer) => void) | undefined;
+  const file = new File(["image"], name, { type: "image/png" });
+  const arrayBuffer = vi.fn(() => new Promise<ArrayBuffer>((resolve) => {
+    resolveBuffer = resolve;
+  }));
+  Object.defineProperty(file, "arrayBuffer", { value: arrayBuffer });
+
+  return {
+    file,
+    arrayBuffer,
+    resolve: () => resolveBuffer?.(new Uint8Array([1, 2, 3]).buffer),
+  };
 }

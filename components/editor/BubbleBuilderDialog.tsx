@@ -16,6 +16,7 @@ import {
   type BubblePreviewSize,
 } from "@/components/editor/bubblePreviewLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
+import { useUnsavedChangesWarning } from "@/components/project/hooks/useUnsavedChangesWarning";
 import { themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
 import {
   bubbleCanvasSizeRange,
@@ -44,6 +45,7 @@ import {
   type GeneratedBubbleDesign,
 } from "@/lib/theme/bubbleBuilder";
 import type { ThemePlatform } from "@/lib/theme/types";
+import { materializeFile } from "@/lib/theme/project/materializeFile";
 
 const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
@@ -60,6 +62,7 @@ type BubbleBuilderDialogProps = {
   initialDecorationFiles?: DecorationFiles;
   onOpenChange: (open: boolean) => void;
   onApply: (result: GeneratedBubbleDesign, decorationFiles: DecorationFiles) => boolean | Promise<boolean>;
+  onDecorationReadPendingChange?: (pending: boolean) => void;
 };
 
 /** 바깥(다이얼로그)에서 닫기를 요청하는 통로. Esc·바깥 클릭도 ✕와 같은 확인 절차를 타야 한다. */
@@ -123,7 +126,7 @@ export function getBubbleEditSignature(spec: BubbleFamilyDesignSpec, decorationF
 }
 
 
-export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, active = true, ref, fill = false, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
+export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, onDecorationReadPendingChange, active = true, ref, fill = false, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
   const [spec, setSpec] = useState(() => initialSpec ?? createBubbleFamilyDesignSpec(side));
   const [decorationFiles, setDecorationFiles] = useState<DecorationFiles>({});
   const [decorationUrls, setDecorationUrls] = useState<Partial<Record<string, string>>>({});
@@ -138,17 +141,39 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const isDesktop = useDesktopShell();
   const baselineRef = useRef("");
+  // FileList는 입력 순서가 곧 레이어 z-order다. 파일별 읽기 시간이 달라도 그 순서로 반영한다.
+  const decorationCommitQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingDecorationReadsRef = useRef(0);
+  const [pendingDecorationReads, setPendingDecorationReads] = useState(0);
+
+  const updatePendingDecorationReads = useCallback((next: number) => {
+    pendingDecorationReadsRef.current = next;
+    setPendingDecorationReads(next);
+    onDecorationReadPendingChange?.(next > 0);
+  }, [onDecorationReadPendingChange]);
 
   const layers = useMemo(() => spec.design.decorations ?? [], [spec.design.decorations]);
+  useUnsavedChangesWarning(pendingDecorationReads > 0);
+  useEffect(() => () => onDecorationReadPendingChange?.(false), [onDecorationReadPendingChange]);
 
-  const acceptDecorationFile = useCallback((file: File | undefined) => {
-    if (!file) return;
+  const materializeDecorationFile = useCallback(async (file: File | undefined) => {
+    if (!file) return null;
     if (!decorationMimeTypes.has(file.type)) {
       setError("PNG, JPG 또는 WebP 이미지 파일을 사용해 주세요.");
-      return;
+      return null;
     }
-    const layer = createBubbleDecorationLayer(crypto.randomUUID(), file.name);
-    setDecorationFiles((current) => ({ ...current, [layer.id]: file }));
+    try {
+      return await materializeFile(file);
+    } catch (error) {
+      console.error(error);
+      setError("이미지 파일을 읽지 못했습니다. 파일을 다시 선택해 주세요.");
+      return null;
+    }
+  }, []);
+
+  const commitDecorationFile = useCallback((materialized: File) => {
+    const layer = createBubbleDecorationLayer(crypto.randomUUID(), materialized.name);
+    setDecorationFiles((current) => ({ ...current, [layer.id]: materialized }));
     setSpec((current) => ({
       ...current,
       design: { ...current.design, decorations: [...(current.design.decorations ?? []), layer] },
@@ -157,6 +182,25 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
     setSelectedLayerId(layer.id);
     setError(undefined);
   }, []);
+
+  const enqueueDecorationFile = useCallback((file: File | undefined) => {
+    updatePendingDecorationReads(pendingDecorationReadsRef.current + 1);
+    // 읽기는 선택 순간 모두 시작한다. 순서를 보존해야 하는 것은 완료된 결과를 state에
+    // 붙이는 단계뿐이다.
+    const materialization = materializeDecorationFile(file);
+    const task = decorationCommitQueueRef.current
+      .then(() => materialization)
+      .then((materialized) => {
+        if (materialized) commitDecorationFile(materialized);
+      });
+    // 예기치 못한 예외가 나도 뒤에 고른 파일은 계속 처리한다.
+    decorationCommitQueueRef.current = task.catch(() => undefined);
+    const settle = () => {
+      updatePendingDecorationReads(Math.max(0, pendingDecorationReadsRef.current - 1));
+    };
+    void task.then(settle, settle);
+    return task;
+  }, [commitDecorationFile, materializeDecorationFile, updatePendingDecorationReads]);
 
   const removeLayer = useCallback((layerId: string) => {
     setSpec((current) => ({
@@ -245,11 +289,11 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
       const file = Array.from(event.clipboardData?.files ?? []).find((candidate) => decorationMimeTypes.has(candidate.type));
       if (!file) return;
       event.preventDefault();
-      acceptDecorationFile(file);
+      void enqueueDecorationFile(file);
     };
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, [acceptDecorationFile, active]);
+  }, [active, enqueueDecorationFile]);
 
   /**
    * Esc는 가장 안쪽 것부터 되돌린다.
@@ -345,6 +389,10 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   }, []);
 
   const apply = async () => {
+    if (pendingDecorationReadsRef.current > 0) {
+      setError("꾸미기 이미지를 읽는 중입니다. 완료 후 적용해 주세요.");
+      return false;
+    }
     if (layers.some((layer) => !decorationFiles[layer.id])) {
       setError("저장된 장식 원본을 찾지 못했습니다. 이미지를 다시 선택하거나 장식을 제거해 주세요.");
       return false;
@@ -377,9 +425,10 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
    * 닫는 길이 셋이다 — ✕, Esc, 바깥 클릭. 셋 다 아무 말 없이 편집을 버렸고, 올린 꾸미기
    * 이미지까지 함께 사라졌다. 세 길을 모두 이 함수로 모은다.
    */
-  const dirty = getBubbleEditSignature(spec, decorationFiles) !== baselineRef.current;
+  const hasPendingDecorationReads = pendingDecorationReads > 0;
+  const dirty = hasPendingDecorationReads || getBubbleEditSignature(spec, decorationFiles) !== baselineRef.current;
   const requestClose = useCallback(() => {
-    if (isApplying) return;
+    if (isApplying || pendingDecorationReadsRef.current > 0) return;
     if (dirty) setCloseConfirmOpen(true);
     else onClose?.();
   }, [dirty, isApplying, onClose]);
@@ -423,7 +472,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
         onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }}
         onDragOver={(event) => { event.preventDefault(); setDragActive(true); }}
         onDragLeave={(event) => { event.preventDefault(); if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false); }}
-        onDrop={(event) => { event.preventDefault(); setDragActive(false); acceptDecorationFile(Array.from(event.dataTransfer.files).find((file) => decorationMimeTypes.has(file.type)) ?? event.dataTransfer.files[0]); }}
+        onDrop={(event) => { event.preventDefault(); setDragActive(false); void enqueueDecorationFile(Array.from(event.dataTransfer.files).find((file) => decorationMimeTypes.has(file.type)) ?? event.dataTransfer.files[0]); }}
       >
         <label className={`${isDesktop ? "min-h-20 flex-col justify-center gap-1 rounded-xl text-center" : "min-h-12 flex-row gap-2.5 text-left"} flex cursor-pointer items-center text-blue-700 hover:bg-white/50`}>
           <span className={`${isDesktop ? "gap-2 text-sm" : "grid size-8 shrink-0 place-items-center rounded-md bg-white text-xs shadow-sm"} flex items-center font-black`}><ImagePlus size={isDesktop ? 19 : 17} /><span className={isDesktop ? "" : "sr-only"}>꾸미기 이미지 추가</span></span>
@@ -432,7 +481,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
             <span className={`${isDesktop ? "text-[11px]" : "truncate text-[10px]"} font-bold text-blue-600/80`}>{isDesktop ? "클릭해서 선택 · Ctrl+V 붙여넣기 · 파일 끌어놓기" : "선택 · 붙여넣기 · 끌어놓기"}</span>
             <span className={`${isDesktop ? "text-[10px]" : "text-[9px]"} font-medium text-slate-500`}>PNG · JPG · WebP · 여러 장 추가 가능</span>
           </span>
-          <input className="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={(event) => { for (const file of Array.from(event.currentTarget.files ?? [])) acceptDecorationFile(file); event.currentTarget.value = ""; }} />
+          <input className="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={(event) => { for (const file of Array.from(event.currentTarget.files ?? [])) void enqueueDecorationFile(file); event.currentTarget.value = ""; }} />
         </label>
       </div>
       {layers.length > 0 ? <>
@@ -475,7 +524,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   ] as const;
 
   const applyButton = (
-    <button type="button" disabled={isApplying} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void apply()}>{isApplying ? <LoaderCircle size={18} className="animate-spin" /> : <Sparkles size={18} />}{isApplying ? "만드는 중" : "적용하기"}</button>
+    <button type="button" disabled={isApplying || hasPendingDecorationReads} className="inline-flex min-h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => void apply()}>{isApplying ? <LoaderCircle size={18} className="animate-spin" /> : <Sparkles size={18} />}{isApplying ? "만드는 중" : "적용하기"}</button>
   );
 
   const helpPopover = (
@@ -496,7 +545,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   );
 
   const closeButton = onClose
-    ? <button type="button" disabled={isApplying} onClick={requestClose} className="grid size-9 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50 min-[360px]:size-10" aria-label="닫기"><X size={20} /></button>
+    ? <button type="button" disabled={isApplying || hasPendingDecorationReads} onClick={requestClose} className="grid size-9 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50 min-[360px]:size-10" aria-label="닫기"><X size={20} /></button>
     : null;
 
   const preview = (
@@ -566,7 +615,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
           */}
           <button
             type="button"
-            disabled={isApplying}
+            disabled={isApplying || hasPendingDecorationReads}
             aria-label={isApplying ? "말풍선 만드는 중" : "적용하기"}
             className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-blue-600 px-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 min-[360px]:px-3.5"
             onClick={() => void apply()}
