@@ -378,6 +378,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     destination: "login" | "credits",
     exportOptions: RecoveryExportOptions,
   ) => {
+    // export dialog 안에서도 붙여넣기 입력이 들어올 수 있다. 복구 초안을 먼저 직렬화하면
+    // 아직 materialize되지 않은 File이 빠진 채 이동하므로, pending read 동안에는 이동하지 않는다.
+    if (blockWhileSlotReadPending()) return;
     try {
       const recovery = await saveRecoveryDraft({
         resume: { reason },
@@ -405,7 +408,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       if (!continueWithoutRecovery) return;
       router.push(destination === "login" ? "/login?returnTo=%2Fedit&reason=export" : "/credits?entry=export_block&returnTo=%2Fedit");
     }
-  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, bubbleDecorationSources, bubbleDesigns, bubbleFlipX, bubbleGeometry, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
+  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, blockWhileSlotReadPending, bubbleDecorationSources, bubbleDesigns, bubbleFlipX, bubbleGeometry, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
 
   useEffect(() => {
     if (skipDefaultSelectionResetRef.current) {

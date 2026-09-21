@@ -87,10 +87,9 @@ describe("BubbleBuilderDialog decoration input", () => {
     fireEvent.change(input!, { target: { files: [first.file, second.file] } });
 
     await waitFor(() => expect(first.arrayBuffer).toHaveBeenCalledTimes(1));
-    expect(second.arrayBuffer).not.toHaveBeenCalled();
+    await waitFor(() => expect(second.arrayBuffer).toHaveBeenCalledTimes(1));
 
     first.resolve();
-    await waitFor(() => expect(second.arrayBuffer).toHaveBeenCalledTimes(1));
     second.resolve();
 
     const firstLayer = await screen.findByRole("button", { name: /first-layer\.png/ });

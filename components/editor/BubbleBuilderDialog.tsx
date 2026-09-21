@@ -140,26 +140,28 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const isDesktop = useDesktopShell();
   const baselineRef = useRef("");
   // FileList는 입력 순서가 곧 레이어 z-order다. 파일별 읽기 시간이 달라도 그 순서로 반영한다.
-  const decorationInputQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const decorationCommitQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingDecorationReadsRef = useRef(0);
   const [pendingDecorationReads, setPendingDecorationReads] = useState(0);
 
   const layers = useMemo(() => spec.design.decorations ?? [], [spec.design.decorations]);
 
-  const acceptDecorationFile = useCallback(async (file: File | undefined) => {
-    if (!file) return;
+  const materializeDecorationFile = useCallback(async (file: File | undefined) => {
+    if (!file) return null;
     if (!decorationMimeTypes.has(file.type)) {
       setError("PNG, JPG 또는 WebP 이미지 파일을 사용해 주세요.");
-      return;
+      return null;
     }
-    let materialized: File;
     try {
-      materialized = await materializeFile(file);
+      return await materializeFile(file);
     } catch (error) {
       console.error(error);
       setError("이미지 파일을 읽지 못했습니다. 파일을 다시 선택해 주세요.");
-      return;
+      return null;
     }
+  }, []);
+
+  const commitDecorationFile = useCallback((materialized: File) => {
     const layer = createBubbleDecorationLayer(crypto.randomUUID(), materialized.name);
     setDecorationFiles((current) => ({ ...current, [layer.id]: materialized }));
     setSpec((current) => ({
@@ -174,16 +176,23 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const enqueueDecorationFile = useCallback((file: File | undefined) => {
     pendingDecorationReadsRef.current += 1;
     setPendingDecorationReads(pendingDecorationReadsRef.current);
-    const task = decorationInputQueueRef.current.then(() => acceptDecorationFile(file));
+    // 읽기는 선택 순간 모두 시작한다. 순서를 보존해야 하는 것은 완료된 결과를 state에
+    // 붙이는 단계뿐이다.
+    const materialization = materializeDecorationFile(file);
+    const task = decorationCommitQueueRef.current
+      .then(() => materialization)
+      .then((materialized) => {
+        if (materialized) commitDecorationFile(materialized);
+      });
     // 예기치 못한 예외가 나도 뒤에 고른 파일은 계속 처리한다.
-    decorationInputQueueRef.current = task.catch(() => undefined);
+    decorationCommitQueueRef.current = task.catch(() => undefined);
     const settle = () => {
       pendingDecorationReadsRef.current = Math.max(0, pendingDecorationReadsRef.current - 1);
       setPendingDecorationReads(pendingDecorationReadsRef.current);
     };
     void task.then(settle, settle);
     return task;
-  }, [acceptDecorationFile]);
+  }, [commitDecorationFile, materializeDecorationFile]);
 
   const removeLayer = useCallback((layerId: string) => {
     setSpec((current) => ({
