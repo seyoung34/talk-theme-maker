@@ -742,7 +742,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   }, [draftSignature, initialLoadState.status]);
 
   // 작업 접수 전에는 결과물을 놓칠 수 있어 이탈을 경고한다. 큐에 들어간 Android 작업은 서버에서 계속 진행된다.
-  useUnsavedChangesWarning(hasUnsavedChanges || exportExitGuardActive);
+  useUnsavedChangesWarning(hasUnsavedChanges || exportExitGuardActive || hasPendingSlotReads);
 
   useEffect(() => {
     if (initialLoadState.status !== "ready" || !selectedSlot) return;
