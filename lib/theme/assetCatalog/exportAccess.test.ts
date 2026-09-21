@@ -122,6 +122,42 @@ describe("catalog export access", () => {
     expect(isAdminAssetAllowedForExport({ asset: bubble, platform: "ios", resourceRole: "bubble_me_2" })).toBe(true);
   });
 
+  /**
+   * `profile_image_full_*`은 기본 에셋이 없어 항상 `profile_image_*`의 선택을 상속하고,
+   * manifest에는 상속받는 쪽 role이 실린다. 프로필이 호환 family에 들어가기 전에는
+   * "슬롯 지정" 범위로 등록된 추천 에셋이 피커·미리보기를 통과하고 내보내기에서만 403이 됐다.
+   */
+  describe("프로필 호환 family", () => {
+    const profile = mapAdminAssetExportAccessRow({
+      id: assetId,
+      slot_role: "profile_image_1",
+      platform: "android",
+      asset_kind: "profile",
+      enabled: true,
+      admin_asset_targets: [{ asset_id: assetId, platform: "android", slot_role: "profile_image_1", target_kind: "exact_role", priority: 0, enabled: true }],
+    });
+
+    function allows(resourceRole: string) {
+      return isAdminAssetAllowedForExport({ asset: profile, platform: "android", resourceRole: resourceRole as never });
+    }
+
+    it("상속으로 같은 그림이 들어가는 전체 프로필 이미지를 허용한다", () => {
+      expect(allows("profile_image_1")).toBe(true);
+      expect(allows("profile_image_full_1")).toBe(true);
+    });
+
+    // 말풍선·배경·아이콘과 같은 정책이다. 프로필 슬롯끼리는 서로 후보를 공유한다.
+    it("같은 family의 다른 프로필 슬롯도 허용한다", () => {
+      expect(allows("profile_image_2")).toBe(true);
+      expect(allows("profile_image_full_3")).toBe(true);
+    });
+
+    it("family 밖으로는 넘어가지 못한다", () => {
+      expect(allows("main_background")).toBe(false);
+      expect(allows("tab_icon_friends")).toBe(false);
+    });
+  });
+
   it("published/public 템플릿의 upload entry를 export 접근으로 만든다", () => {
     const uploadEntryId = "android-bubble-me-1:upload:1";
     expect(mapTemplateAssetExportAccessRows([

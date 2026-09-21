@@ -151,6 +151,7 @@ export default function AdminAssetsClient() {
   const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
   const [bubbleBuilderInitial, setBubbleBuilderInitial] = useState<AdminBubbleBuilderInitial | null>(null);
+  const [bubbleDecorationReadPending, setBubbleDecorationReadPending] = useState(false);
   const [bubbleGeometryMode, setBubbleGeometryMode] = useState<"generated" | "manual">("manual");
   const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
@@ -161,16 +162,32 @@ export default function AdminAssetsClient() {
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
   const assetKindRef = useRef<AdminAssetKind>(assetKind);
   const editRequestRef = useRef(0);
+  const bubbleDecorationReadPendingRef = useRef(false);
+
+  const handleBubbleDecorationReadPendingChange = useCallback((pending: boolean) => {
+    bubbleDecorationReadPendingRef.current = pending;
+    setBubbleDecorationReadPending(pending);
+  }, []);
+  const blockBubbleWorkspaceChange = useCallback(() => {
+    if (!bubbleDecorationReadPendingRef.current) return false;
+    setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 화면을 전환해 주세요.");
+    return true;
+  }, []);
+  const requestBubbleWorkspaceMode = useCallback((nextMode: BubbleWorkspaceMode) => {
+    if (blockBubbleWorkspaceChange()) return;
+    setBubbleWorkspaceMode(nextMode);
+  }, [blockBubbleWorkspaceChange]);
 
   const selectAssetKind = useCallback((nextKind: AdminAssetKind) => {
     if (assetKindRef.current === nextKind) return;
+    if (blockBubbleWorkspaceChange()) return;
     // kind을 바꾸는 순간 진행 중인 상세 조회를 무효화한다. React effect보다 먼저 ref를
     // 바꿔야 빠르게 완료된 이전 응답도 새 분류의 편집 상태에 섞이지 않는다.
     assetKindRef.current = nextKind;
     editRequestRef.current += 1;
     setIsLoadingEditAsset(false);
     setAssetKind(nextKind);
-  }, []);
+  }, [blockBubbleWorkspaceChange]);
 
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
@@ -265,7 +282,8 @@ export default function AdminAssetsClient() {
       !isSavingAsset &&
       (editingAsset ? title.trim() : bubbleBuilderDraft ? file : uploadableFiles.length > 0) &&
       (editingAsset || selectedSaveTargets.length > 0) &&
-      (assetKind !== "bubble" || bubbleSpec),
+      (assetKind !== "bubble" || bubbleSpec) &&
+      !bubbleDecorationReadPending,
   );
   /**
    * 카드에 얹을 경고.
@@ -359,6 +377,10 @@ export default function AdminAssetsClient() {
       const hasImage = Array.from(event.clipboardData?.files ?? []).some((item) => item.type.startsWith("image/"));
       if (!hasImage) return;
       event.preventDefault();
+      if (bubbleDecorationReadPendingRef.current) {
+        setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 추가해 주세요.");
+        return;
+      }
       const result = pickValidImageFiles(event.clipboardData?.files);
       const file = result.files[0];
       if (!file) {
@@ -422,10 +444,18 @@ export default function AdminAssetsClient() {
   };
 
   const requestSave = () => {
+    if (bubbleDecorationReadPendingRef.current) {
+      setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 저장해 주세요.");
+      return;
+    }
     if (canSaveAsset) setIsSaveConfirmOpen(true);
   };
 
   const submit = async () => {
+    if (bubbleDecorationReadPendingRef.current) {
+      setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 저장해 주세요.");
+      return;
+    }
     if (activeKindSlots.length === 0 || isSavingAsset || (!editingAsset && !bubbleBuilderDraft && uploadableFiles.length === 0 && !file)) return;
     const saveKind = assetKindRef.current;
     const isCurrentSave = () => assetKindRef.current === saveKind;
@@ -668,6 +698,7 @@ export default function AdminAssetsClient() {
 
   const remove = async (asset: AdminAssetListItem) => {
     if (deletingAssetId) return;
+    if (blockBubbleWorkspaceChange()) return;
     try {
       setDeletingAssetId(asset.id);
       await deleteAdminAssetCandidate(asset.id);
@@ -691,6 +722,7 @@ export default function AdminAssetsClient() {
   };
 
   const applyDroppedFiles = (files: FileList | File[] | null) => {
+    if (blockBubbleWorkspaceChange()) return;
     const result = pickValidImageFiles(files);
     if (result.files.length === 0) {
       setNotice(result.rejected[0] ?? "이미지 파일만 추가할 수 있습니다.");
@@ -732,6 +764,7 @@ export default function AdminAssetsClient() {
 
   const removePendingFile = (id: string) => {
     if (isSavingAsset) return;
+    if (blockBubbleWorkspaceChange()) return;
     const removed = pendingFiles.find((pending) => pending.id === id);
     if (!removed) return;
     URL.revokeObjectURL(removed.previewUrl);
@@ -784,6 +817,7 @@ export default function AdminAssetsClient() {
    */
   const beginInPlaceEdit = async (item: AdminAssetListItem) => {
     if (isSavingAsset || isLoadingEditAsset) return;
+    if (blockBubbleWorkspaceChange()) return;
     const requestId = ++editRequestRef.current;
     const requestedKind = assetKindRef.current;
     const isCurrentRequest = () => editRequestRef.current === requestId && assetKindRef.current === requestedKind;
@@ -852,13 +886,14 @@ export default function AdminAssetsClient() {
 
   const exitInPlaceEdit = () => {
     if (isSavingAsset) return;
+    if (blockBubbleWorkspaceChange()) return;
     editRequestRef.current += 1;
     setEditingAsset(null);
     setBubbleBuilderDraft(null);
     setBubbleBuilderInitial(null);
     setTitle("");
     clearFile();
-    setBubbleWorkspaceMode("library");
+    requestBubbleWorkspaceMode("library");
     setNotice("새 후보 등록으로 돌아왔습니다.");
   };
 
@@ -906,7 +941,7 @@ export default function AdminAssetsClient() {
     <main className="grid h-[100dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-slate-50 text-slate-950 [--color-background:#f8fafc] [--color-error-container:#fff1f2] [--color-info:#2563eb] [--color-info-container:#eff6ff] [--color-info-container-high:#dbeafe] [--color-info-outline:#93c5fd] [--color-info-outline-strong:#2563eb] [--color-info-strong:#1d4ed8] [--color-inverse-on-surface:#ffffff] [--color-inverse-surface:#1d4ed8] [--color-on-background:#0f172a] [--color-on-info-container:#172554] [--color-on-info-container-variant:#1e40af] [--color-on-surface:#0f172a] [--color-on-surface-variant:#475569] [--color-outline-variant:#dbeafe] [--color-surface-low:#f1f5f9]">
       <header className="flex min-h-12 items-center justify-between gap-4 border-b border-blue-100 bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.03)]">
         <div className="flex min-w-0 items-center gap-3">
-          <Link href="/admin" className="rounded-full px-2 py-1 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)]">← 관리자</Link>
+          <Link href="/admin" onClick={(event) => { if (blockBubbleWorkspaceChange()) event.preventDefault(); }} className="rounded-full px-2 py-1 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)]">← 관리자</Link>
           <span className="h-4 w-px bg-[var(--color-outline-variant)]" aria-hidden="true" />
           <h1 className="truncate font-[var(--font-display)] text-base font-semibold text-[var(--color-on-surface)]">에셋 워크스페이스</h1>
           <button type="button" onClick={() => setIsLeftSidebarCollapsed((current) => !current)} aria-label={isLeftSidebarCollapsed ? "좌측 패널 열기" : "좌측 패널 접기"} title={isLeftSidebarCollapsed ? "좌측 패널 열기" : "좌측 패널 접기"} className="hidden size-8 place-items-center rounded-lg border border-blue-100 text-blue-700 transition hover:bg-blue-50 lg:grid">
@@ -1159,8 +1194,8 @@ export default function AdminAssetsClient() {
               ) : null}
               {assetKind === "bubble" ? (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]" onClick={() => setBubbleWorkspaceMode("builder")}>말풍선 빌더 열기</button>
-                  <button type="button" className="rounded-lg border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]" onClick={() => { applyRecommendedBubbleAdjustment(); setBubbleWorkspaceMode("adjust"); }}>중앙에서 조정</button>
+                  <button type="button" className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]" onClick={() => requestBubbleWorkspaceMode("builder")}>말풍선 빌더 열기</button>
+                  <button type="button" className="rounded-lg border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]" onClick={() => { if (blockBubbleWorkspaceChange()) return; applyRecommendedBubbleAdjustment(); setBubbleWorkspaceMode("adjust"); }}>중앙에서 조정</button>
                 </div>
               ) : null}
               <div className="grid gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3">
@@ -1182,8 +1217,8 @@ export default function AdminAssetsClient() {
               {assetKind === "bubble" ? (
                 <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2">
                   <div className="pointer-events-auto inline-flex rounded-full border border-blue-200 bg-white/95 p-1 shadow-[0_8px_24px_rgba(37,99,235,0.16)] backdrop-blur">
-                    <button type="button" onClick={() => setBubbleWorkspaceMode("library")} aria-label="말풍선 후보 라이브러리 보기" aria-pressed={bubbleWorkspaceMode === "library"} title="후보 라이브러리" className={`grid size-8 place-items-center rounded-full transition ${bubbleWorkspaceMode === "library" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"}`}><Library size={15} aria-hidden="true" /></button>
-                    <button type="button" onClick={() => setBubbleWorkspaceMode("adjust")} aria-label="말풍선 편집 화면 보기" aria-pressed={bubbleWorkspaceMode !== "library"} title="말풍선 편집" className={`grid size-8 place-items-center rounded-full transition ${bubbleWorkspaceMode !== "library" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"}`}><SlidersHorizontal size={15} aria-hidden="true" /></button>
+                    <button type="button" onClick={() => requestBubbleWorkspaceMode("library")} aria-label="말풍선 후보 라이브러리 보기" aria-pressed={bubbleWorkspaceMode === "library"} title="후보 라이브러리" className={`grid size-8 place-items-center rounded-full transition ${bubbleWorkspaceMode === "library" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"}`}><Library size={15} aria-hidden="true" /></button>
+                    <button type="button" onClick={() => requestBubbleWorkspaceMode("adjust")} aria-label="말풍선 편집 화면 보기" aria-pressed={bubbleWorkspaceMode !== "library"} title="말풍선 편집" className={`grid size-8 place-items-center rounded-full transition ${bubbleWorkspaceMode !== "library" ? "bg-blue-600 text-white shadow-sm" : "text-slate-500 hover:bg-blue-50 hover:text-blue-700"}`}><SlidersHorizontal size={15} aria-hidden="true" /></button>
                   </div>
                 </div>
               ) : null}
@@ -1204,8 +1239,9 @@ export default function AdminAssetsClient() {
                       initialSpec={bubbleBuilderDraft?.recipe ?? bubbleBuilderInitial?.recipe}
                       initialDecorationFiles={bubbleBuilderDraft?.decorations ?? bubbleBuilderInitial?.decorations}
                       closeOnApply={false}
-                      onClose={() => setBubbleWorkspaceMode("library")}
+                      onClose={() => requestBubbleWorkspaceMode("library")}
                       onApply={applyBubbleBuilder}
+                      onDecorationReadPendingChange={handleBubbleDecorationReadPendingChange}
                     />
                   ) : (
                     <div className="grid gap-4">
@@ -1263,7 +1299,7 @@ export default function AdminAssetsClient() {
                         onTextChange={setBubblePreviewText}
                       />
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={() => setBubbleWorkspaceMode("builder")} className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]">빌더로 다시 만들기</button>
+                        <button type="button" onClick={() => requestBubbleWorkspaceMode("builder")} className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]">빌더로 다시 만들기</button>
                       </div>
                     </div>
                   )}

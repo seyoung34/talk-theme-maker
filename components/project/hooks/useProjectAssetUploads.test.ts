@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
+import { inferAdminAssetKind } from "@/lib/theme/adminAssetDomain";
+import { getAdminAssetRecommendationPool } from "@/lib/theme/adminAssetWorkspace";
 import { getThemeSlots } from "@/lib/theme/templates";
 import type { AdminAssetCandidate, AdminAssetListOptions, AdminAssetPage } from "@/lib/theme/adminAssets";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
@@ -25,6 +27,24 @@ const chatBackground = slots.find((slot) => slot.role === "chat_background")!;
 const themeIcon = slots.find((slot) => slot.role === "theme_icon")!;
 const passcodeIndicator = slots.find((slot) => slot.role === "passcode_indicator_1")!;
 const splash = slots.find((slot) => slot.role === "splash")!;
+
+/** `useProjectAssetUploads`의 `recommendedPoolCacheMaxEntries`. 모듈 내부 상수라 여기서 되풀이한다. */
+const lruCacheMaxEntries = 12;
+
+/** 추천 풀 키가 서로 겹치지 않는 슬롯을 앞에서부터 고른다. */
+function pickSlotsWithDistinctPools(count: number): ThemeAssetSlot[] {
+  const seen = new Set<string>();
+  const picked: ThemeAssetSlot[] = [];
+  for (const slot of slots) {
+    if (slot.kind === "color") continue;
+    const { key } = getAdminAssetRecommendationPool({ role: slot.role, kind: inferAdminAssetKind(slot) }, "android");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    picked.push(slot);
+    if (picked.length === count) return picked;
+  }
+  throw new Error(`추천 풀이 서로 다른 슬롯이 ${count}개보다 적습니다.`);
+}
 
 function renderWithSlot(selectedSlot: ThemeAssetSlot | undefined) {
   const setNotice = vi.fn();
@@ -390,22 +410,10 @@ describe("useProjectAssetUploads - 말풍선 슬롯 간 추천 에셋 공유", (
   });
 
   it("LRU 한도를 넘으면 가장 오래 쓰지 않은 풀을 제거한다", async () => {
-    const roles = [
-      "passcode_background",
-      "profile_image_1",
-      "profile_image_2",
-      "profile_image_3",
-      "profile_image_full_1",
-      "profile_image_full_2",
-      "profile_image_full_3",
-      "find_add_friend",
-      "find_add_friend_pressed",
-      "splash",
-      "splash_landscape",
-      "launcher_icon",
-      "launcher_round",
-    ];
-    const isolatedSlots = roles.map((role) => slots.find((slot) => slot.role === role)!);
+    // 풀 키가 서로 다른 슬롯만 한도(12)보다 하나 많게 고른다. role을 손으로 적어 두면
+    // 호환 family가 바뀔 때마다(예: 프로필 6칸이 한 풀로 합쳐질 때) 목록이 조용히 줄어
+    // 한도를 못 넘기고, 이 테스트가 LRU가 아니라 캐시 적중을 확인하게 된다.
+    const isolatedSlots = pickSlotsWithDistinctPools(lruCacheMaxEntries + 1);
     const { rerender } = renderWithSlot(isolatedSlots[0]);
     await vi.waitFor(() => expect(listRecommendedAssetCandidatePage).toHaveBeenCalledTimes(1));
 
