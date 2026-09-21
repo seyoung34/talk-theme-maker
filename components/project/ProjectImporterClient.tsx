@@ -73,6 +73,7 @@ import { autoMainPaletteCandidateId } from "@/lib/theme/autoColor";
 import { clearRecoveryDraft, saveRecoveryDraft, type RecoveryExportOptions } from "@/lib/theme/project/recoveryDraft";
 import type { EditorAutosaveDraft } from "@/lib/theme/project/autosaveDraft";
 import { getBubbleDecorationLayers, getBubbleVariantGeometry, getIosBubbleGeometry } from "@/lib/theme/bubbleBuilder";
+import { createLatestRequestTracker, materializeFile } from "@/lib/theme/project/materializeFile";
 import type { BubbleBuilderSide, BubbleBuilderVariant, BubbleDesigns, BubbleFamilyDesignSpec, GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 import type { ImageEditState, ImageEditTarget } from "@/lib/theme/imageEdit";
 import { type SystemTemplatePricingType, type SystemTemplateStatus, type SystemTemplateVisibility } from "@/lib/theme/systemTemplates";
@@ -163,6 +164,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const programmaticExitRef = useRef(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
+  const uploadRequestTrackerRef = useRef(createLatestRequestTracker());
   const mobileEditSheetRef = useRef<HTMLDivElement | null>(null);
   const mobileEditTriggerButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileEditCloseButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -869,9 +871,21 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     });
   };
 
-  const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
-    const file = fileList?.[0];
-    if (!file) return;
+  const uploadSlot = async (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
+    const selectedFile = fileList?.[0];
+    if (!selectedFile) return;
+    const request = uploadRequestTrackerRef.current.begin(slot.id);
+
+    let file: File;
+    try {
+      file = await materializeFile(selectedFile);
+    } catch (error) {
+      if (!uploadRequestTrackerRef.current.isCurrent(slot.id, request)) return;
+      console.error(error);
+      setNotice({ tone: "error", message: "이미지 파일을 읽지 못했습니다. 파일을 다시 내려받거나 다른 이미지를 선택해 주세요." });
+      return;
+    }
+    if (!uploadRequestTrackerRef.current.isCurrent(slot.id, request)) return;
 
     const uploadId = `${slot.id}:upload:${Date.now()}`;
     setUploads((current) => ({

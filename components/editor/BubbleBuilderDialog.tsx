@@ -44,6 +44,7 @@ import {
   type GeneratedBubbleDesign,
 } from "@/lib/theme/bubbleBuilder";
 import type { ThemePlatform } from "@/lib/theme/types";
+import { materializeFile } from "@/lib/theme/project/materializeFile";
 
 const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
@@ -138,17 +139,27 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const isDesktop = useDesktopShell();
   const baselineRef = useRef("");
+  // FileList는 입력 순서가 곧 레이어 z-order다. 파일별 읽기 시간이 달라도 그 순서로 반영한다.
+  const decorationInputQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const layers = useMemo(() => spec.design.decorations ?? [], [spec.design.decorations]);
 
-  const acceptDecorationFile = useCallback((file: File | undefined) => {
+  const acceptDecorationFile = useCallback(async (file: File | undefined) => {
     if (!file) return;
     if (!decorationMimeTypes.has(file.type)) {
       setError("PNG, JPG 또는 WebP 이미지 파일을 사용해 주세요.");
       return;
     }
-    const layer = createBubbleDecorationLayer(crypto.randomUUID(), file.name);
-    setDecorationFiles((current) => ({ ...current, [layer.id]: file }));
+    let materialized: File;
+    try {
+      materialized = await materializeFile(file);
+    } catch (error) {
+      console.error(error);
+      setError("이미지 파일을 읽지 못했습니다. 파일을 다시 선택해 주세요.");
+      return;
+    }
+    const layer = createBubbleDecorationLayer(crypto.randomUUID(), materialized.name);
+    setDecorationFiles((current) => ({ ...current, [layer.id]: materialized }));
     setSpec((current) => ({
       ...current,
       design: { ...current.design, decorations: [...(current.design.decorations ?? []), layer] },
@@ -157,6 +168,13 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
     setSelectedLayerId(layer.id);
     setError(undefined);
   }, []);
+
+  const enqueueDecorationFile = useCallback((file: File | undefined) => {
+    const task = decorationInputQueueRef.current.then(() => acceptDecorationFile(file));
+    // 예기치 못한 예외가 나도 뒤에 고른 파일은 계속 처리한다.
+    decorationInputQueueRef.current = task.catch(() => undefined);
+    return task;
+  }, [acceptDecorationFile]);
 
   const removeLayer = useCallback((layerId: string) => {
     setSpec((current) => ({
@@ -245,11 +263,11 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
       const file = Array.from(event.clipboardData?.files ?? []).find((candidate) => decorationMimeTypes.has(candidate.type));
       if (!file) return;
       event.preventDefault();
-      acceptDecorationFile(file);
+      void enqueueDecorationFile(file);
     };
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, [acceptDecorationFile, active]);
+  }, [active, enqueueDecorationFile]);
 
   /**
    * Esc는 가장 안쪽 것부터 되돌린다.
@@ -423,7 +441,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
         onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }}
         onDragOver={(event) => { event.preventDefault(); setDragActive(true); }}
         onDragLeave={(event) => { event.preventDefault(); if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragActive(false); }}
-        onDrop={(event) => { event.preventDefault(); setDragActive(false); acceptDecorationFile(Array.from(event.dataTransfer.files).find((file) => decorationMimeTypes.has(file.type)) ?? event.dataTransfer.files[0]); }}
+        onDrop={(event) => { event.preventDefault(); setDragActive(false); void enqueueDecorationFile(Array.from(event.dataTransfer.files).find((file) => decorationMimeTypes.has(file.type)) ?? event.dataTransfer.files[0]); }}
       >
         <label className={`${isDesktop ? "min-h-20 flex-col justify-center gap-1 rounded-xl text-center" : "min-h-12 flex-row gap-2.5 text-left"} flex cursor-pointer items-center text-blue-700 hover:bg-white/50`}>
           <span className={`${isDesktop ? "gap-2 text-sm" : "grid size-8 shrink-0 place-items-center rounded-md bg-white text-xs shadow-sm"} flex items-center font-black`}><ImagePlus size={isDesktop ? 19 : 17} /><span className={isDesktop ? "" : "sr-only"}>꾸미기 이미지 추가</span></span>
@@ -432,7 +450,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
             <span className={`${isDesktop ? "text-[11px]" : "truncate text-[10px]"} font-bold text-blue-600/80`}>{isDesktop ? "클릭해서 선택 · Ctrl+V 붙여넣기 · 파일 끌어놓기" : "선택 · 붙여넣기 · 끌어놓기"}</span>
             <span className={`${isDesktop ? "text-[10px]" : "text-[9px]"} font-medium text-slate-500`}>PNG · JPG · WebP · 여러 장 추가 가능</span>
           </span>
-          <input className="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={(event) => { for (const file of Array.from(event.currentTarget.files ?? [])) acceptDecorationFile(file); event.currentTarget.value = ""; }} />
+          <input className="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={(event) => { for (const file of Array.from(event.currentTarget.files ?? [])) void enqueueDecorationFile(file); event.currentTarget.value = ""; }} />
         </label>
       </div>
       {layers.length > 0 ? <>
