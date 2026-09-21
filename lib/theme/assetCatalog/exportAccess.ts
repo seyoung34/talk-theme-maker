@@ -172,7 +172,16 @@ export function isCatalogExportResourceRole(value: unknown, platform: ThemePlatf
   return typeof value === "string" && imageRolesByPlatform[platform].has(value as ThemeResourceRole);
 }
 
-/** 현재 admin asset 정책으로 해당 catalog ref를 이 export 슬롯에서 사용할 수 있는지 판정한다. */
+/**
+ * 현재 admin asset 정책으로 해당 catalog ref를 이 export 슬롯에서 사용할 수 있는지 판정한다.
+ *
+ * 상속 슬롯(`profile_image_full_1`처럼 기본 에셋이 없어 항상 원본 슬롯의 선택을 따라가고
+ * manifest에는 자기 role이 실리는 자리)은 **호환 family**가 덮는다. 여기에 상속 규칙을 따로
+ * 두지 않는 이유는 서버가 상속 여부를 증명받지 못하기 때문이다 — export 요청에는 manifest만
+ * 실려 오므로 직접 선택과 구분할 수 없고, 구분할 수 없는 것을 근거로 권한을 나누면 규칙만
+ * 늘고 경계는 같다. 대신 `getAdminAssetRecommendationFamily`가 "이 슬롯들은 서로 교환
+ * 가능하다"를 한 곳에서 선언하고, 피커·추천 캐시·이 게이트가 그 선언을 공유한다.
+ */
 export function isAdminAssetAllowedForExport(input: {
   asset: AdminAssetExportAccess;
   platform: ThemePlatform;

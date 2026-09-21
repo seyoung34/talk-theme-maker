@@ -54,8 +54,8 @@ describe("admin asset workspace slots", () => {
       .toMatchObject({ key: "android|icon|family:icon", role: "theme_icon" });
     expect(getAdminAssetRecommendationPool({ role: "splash", kind: "icon" }, "android").key)
       .toBe("android|icon|role:splash");
-    expect(getAdminAssetRecommendationPool({ role: "profile_image_1", kind: "profile" }, "android").key)
-      .toBe("android|profile|role:profile_image_1");
+    expect(getAdminAssetRecommendationPool({ role: "profile_image_full_1", kind: "profile" }, "android"))
+      .toMatchObject({ key: "android|profile|family:profile", role: "profile_image_1" });
   });
 
   it("추천 풀에서는 호환 exact target을 같은 rank로 평탄화한다", () => {
