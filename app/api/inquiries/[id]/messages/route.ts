@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getRequestUser } from "@/lib/supabase/auth";
 import { inquiryRpcErrorResponse, validateInquiryMessage, type InquiryMessageBody } from "@/lib/inquiries/api";
 import { inquiryMessageSelectColumns, mapInquiryMessageRow } from "@/lib/inquiries/types";
+import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
+import { createInquiryUserReplyEvent } from "@/lib/ops/eventFactories";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,12 @@ export async function POST(request: Request, { params }: RouteContext) {
     p_body: body.body!.trim(),
   });
   if (error) return inquiryRpcErrorResponse(error, "메시지를 보내지 못했습니다.");
+
+  if (typeof messageId === "string" && messageId.trim()) {
+    scheduleOpsEvent(createInquiryUserReplyEvent({ inquiryId: id, messageId }));
+  } else {
+    console.error("추가한 문의 답변의 식별자를 받지 못했습니다.");
+  }
 
   const { data } = await supabase.from("inquiry_messages").select(inquiryMessageSelectColumns).eq("id", messageId).maybeSingle();
   return NextResponse.json({ message: data ? mapInquiryMessageRow(data) : { id: messageId } }, { status: 201 });

@@ -64,6 +64,26 @@ describe("Telegram message formatter", () => {
     expect(message).toContain("운영 이슈: P1 0건 · P2 1건");
   });
 
+  it("renders inquiry context without including a message body", () => {
+    const event = createOpsEvent({
+      eventId: "inquiry.created:inquiry-1",
+      type: "inquiry.created",
+      severity: "P2",
+      source: "admin",
+      occurredAt: "2026-09-21T01:00:00.000Z",
+      entity: { kind: "inquiry", id: "inquiry-1" },
+      summary: "새 문의가 접수되었습니다.",
+      details: { inquiryId: "inquiry-1", category: "payment" },
+      adminPath: "/admin/inquiries/inquiry-1",
+    });
+
+    const message = formatOpsEventForTelegram(event, { siteUrl: "https://talktheme.example" });
+    expect(message).toContain("inquiry: inquiry-1");
+    expect(message).toContain("문의 분류: payment");
+    expect(message).not.toContain("본문");
+    expect(message).toContain("관리자 확인: https://talktheme.example/admin/inquiries/inquiry-1");
+  });
+
   it("includes a bounded event ID for issues without an entity", () => {
     const eventId = `runtime.health_failed:${"x".repeat(160)}`;
     const message = formatOpsIssuesForTelegram({
