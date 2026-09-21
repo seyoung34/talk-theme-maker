@@ -2,12 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { getCurrentAdmin } from "@/lib/supabase/auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow } from "@/lib/theme/adminAssets";
+import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { toAdminAssetListItem, type AdminAssetListItem, type AdminAssetListPayload } from "@/lib/theme/adminAssetList";
 import { adminLogicalAssetId, canonicalVariantKey } from "@/lib/theme/assetCatalog/logicalAssetId";
-import { buildPickerThumbnailIndex, filterPickerThumbnailRowsForCurrentAssets, type PickerThumbnailAssetRef, type PickerThumbnailIndex } from "@/lib/theme/assetCatalog/pickerThumbnails";
+import { buildPickerThumbnailIndex, filterPickerThumbnailRowsForCurrentAssets, type PickerThumbnailAssetRef, type PickerThumbnailIndex, type PickerThumbnailRow } from "@/lib/theme/assetCatalog/pickerThumbnails";
 import { getR2PreviewOrigin } from "@/lib/theme/assetCatalog/previewUrl";
 import { themeAssetsBucketName } from "@/lib/theme/remoteAssets";
+import type { AdminAssetPlatform } from "@/lib/theme/adminAssetDomain";
+import type { ThemePlatform } from "@/lib/theme/types";
 
 /**
  * `/admin/assets` 목록.
@@ -76,7 +78,11 @@ export async function GET(request: NextRequest) {
     const { rows, truncated } = await readListRows(admin, assetKind);
     const candidates = rows.map((row) => canonicalAdminAssetToCandidate(mapCanonicalAdminAssetRow(row)));
 
-    const thumbnails = await readThumbnailIndex(admin, candidates);
+    // 썸네일과 등록 여부는 같은 행에서 나온다. 한 번만 읽고 둘로 나눈다 — 따로 읽으면
+    // 두 표시가 서로 다른 시점의 registry를 보고 어긋날 수 있다.
+    const catalogRows = await readActiveCatalogRows(admin, candidates);
+    const thumbnails = catalogRows && getR2PreviewOrigin() ? buildPickerThumbnailIndex(catalogRows) : {};
+    const catalogIndex = catalogRows ? toCatalogRowIndex(catalogRows) : undefined;
     const needsFallback = candidates.filter((candidate) => !pickThumbnailUrl(thumbnails, candidate.id));
     const signedUrls = await createSignedUrlMap(admin, needsFallback.map((candidate) => candidate.storagePath));
 
@@ -85,6 +91,7 @@ export async function GET(request: NextRequest) {
       return toAdminAssetListItem(candidate, {
         ...(thumbnailUrl ? { thumbnailUrl } : {}),
         ...(thumbnailUrl ? {} : { previewUrl: signedUrls.get(candidate.storagePath) }),
+        ...(catalogIndex ? { catalogRegistered: isFullyRegistered(candidate, catalogIndex) } : {}),
       });
     });
 
@@ -129,16 +136,20 @@ async function readListRows(
 }
 
 /**
- * 이 목록에 실린 에셋의 R2 축소본 색인.
+ * 이 목록에 실린 에셋의 **현재** catalog object 행.
  *
- * 실패해도 목록을 막지 않는다 — 썸네일이 없으면 아래에서 원본 signed URL로 떨어지므로
- * registry 장애가 관리 화면 전체를 세우지 않는다.
+ * `filterPickerThumbnailRowsForCurrentAssets`로 거르는 것이 핵심이다. 논리 ID만 보면 재저장으로
+ * 버려진 옛 revision의 active 행까지 잡힌다. 재저장은 `asset_object_id`를 비우므로
+ * (`adminAssets.ts`), 그 뒤 게시가 끊기면 **쓸 수 없는 옛 행만 남는데** 그것을 "등록됨"으로 읽으면
+ * 복구가 필요한 카드에서 배지와 재게시 버튼이 사라진다.
+ *
+ * 실패하면 `undefined`를 돌려준다. 목록을 막지 않되 "등록됨"으로도 속이지 않는다.
  */
-async function readThumbnailIndex(
+async function readActiveCatalogRows(
   admin: ReturnType<typeof createAdminClient>,
   assets: readonly PickerThumbnailAssetRef[],
-): Promise<PickerThumbnailIndex> {
-  if (!assets.length || !getR2PreviewOrigin()) return {};
+): Promise<PickerThumbnailRow[] | undefined> {
+  if (!assets.length) return [];
   try {
     const { data, error } = await admin
       .from("theme_asset_objects")
@@ -146,11 +157,82 @@ async function readThumbnailIndex(
       .eq("status", "active")
       .in("logical_asset_id", assets.map((asset) => adminLogicalAssetId(asset.id)));
     if (error) throw error;
-    return buildPickerThumbnailIndex(filterPickerThumbnailRowsForCurrentAssets(data ?? [], assets));
+    return filterPickerThumbnailRowsForCurrentAssets(data ?? [], assets);
   } catch (error) {
-    console.warn("Admin asset thumbnail lookup failed; falling back to signed originals.", JSON.stringify(serializeError(error)));
-    return {};
+    console.warn("Admin asset catalog lookup failed; falling back to signed originals.", JSON.stringify(serializeError(error)));
+    return undefined;
   }
+}
+
+/**
+ * 이 에셋이 **모든 대상 플랫폼에서** catalog로 나갈 수 있는가.
+ *
+ * 논리 ID 하나에 `canonical`/`android`/`ios` 행이 함께 달리므로, 행이 하나라도 있으면 등록으로
+ * 치면 **절반만 게시된 에셋이 완료로 보인다.** 그 경우 나머지 플랫폼은 조용히 legacy 경로로
+ * 떨어지는데 카드에는 배지가 없어 고칠 방법이 사라진다.
+ *
+ * 판정 규칙은 export가 실제로 고르는 방식(`findMatchingCatalogRef`)을 그대로 따른다.
+ *   - 그 플랫폼 전용본이 있으면 → 그 variant 포인터에 같은 플랫폼 행이 있어야 한다.
+ *     canonical로 대체하지 않는다. 두 바이트가 다를 수 있어 export도 대체하지 않는다.
+ *   - 없으면 → 부모 포인터에 `canonical` 또는 그 플랫폼 행이 있어야 한다.
+ *
+ * 부모 canonical이 없는 빌더 후보는 정상 상태다. 그래서 부모를 항상 요구하지 않고, 전용본이
+ * 없는 플랫폼에 대해서만 본다.
+ */
+function isFullyRegistered(asset: AdminAssetCandidate, index: CatalogRowIndex): boolean {
+  // 행은 **자기 논리 에셋 안에서만** 센다. 행 id로만 찾으면 다른 에셋의 행이 포인터가 같다는
+  // 이유로 잡힐 수 있다.
+  const byRowId = index.get(adminLogicalAssetId(asset.id));
+  if (!byRowId) return false;
+
+  return requiredPlatforms(asset).every((platform) => {
+    const variant = (asset.variants ?? []).find((item) => item.platform === platform);
+    if (variant) return Boolean(variant.assetObjectId && byRowId.get(variant.assetObjectId) === platform);
+    if (!asset.assetObjectId) return false;
+    const variantKey = byRowId.get(asset.assetObjectId);
+    return variantKey === canonicalVariantKey || variantKey === platform;
+  });
+}
+
+/**
+ * 이 에셋이 catalog로 나가야 하는 플랫폼.
+ *
+ * `asset.platform`은 `selectRepresentativeTarget`이 고른 **타깃 하나**의 값이라 실제 적용 범위보다
+ * 좁을 수 있다. 타깃이 여럿이면(예: exact_role은 android, kind 타깃은 ios) 대표만 보고 판정할 때
+ * 반대 플랫폼의 누락을 놓치고 배지가 사라진다. export는 매칭되는 타깃마다 판정하므로 여기서도
+ * 타깃에서 도출한다.
+ *
+ * `enabled`로 거르지 않는다. export의 판정(`getAdminAssetCandidateMatchRank`)이 그 컬럼을 보지
+ * 않기 때문이다 — "과거 운영 토글의 잔여 컬럼"이라 플랫폼/타깃 종류만 근거로 삼는다. 여기서만
+ * 걸러 내면 꺼진 타깃의 플랫폼이 등록 판정에서 빠지는데, export는 그 플랫폼을 그대로 골라
+ * legacy로 떨어뜨린다. 카드에는 배지가 없어 복구할 길이 사라진다.
+ *
+ * 타깃이 하나도 없는 legacy 행은 export도 `asset.platform`으로 타깃을 하나 지어내므로
+ * (`resolveMatchTargets`) 같은 폴백을 쓴다.
+ */
+function requiredPlatforms(asset: AdminAssetCandidate): ThemePlatform[] {
+  const fromTargets = (asset.targets ?? []).flatMap((target) => expandPlatform(target.platform));
+  return Array.from(new Set(fromTargets.length ? fromTargets : expandPlatform(asset.platform)));
+}
+
+function expandPlatform(platform: AdminAssetPlatform): ThemePlatform[] {
+  return platform === "all" ? ["android", "ios"] : [platform];
+}
+
+/** `logical_asset_id` → (행 `id` → `variant_key`). */
+type CatalogRowIndex = ReadonlyMap<string, ReadonlyMap<string, string>>;
+
+function toCatalogRowIndex(rows: readonly PickerThumbnailRow[]): CatalogRowIndex {
+  const index = new Map<string, Map<string, string>>();
+  for (const row of rows) {
+    if (typeof row.id !== "string" || typeof row.variant_key !== "string") continue;
+    const logicalAssetId = typeof row.logical_asset_id === "string" ? row.logical_asset_id : "";
+    if (!logicalAssetId) continue;
+    const byRowId = index.get(logicalAssetId) ?? new Map<string, string>();
+    byRowId.set(row.id, row.variant_key);
+    index.set(logicalAssetId, byRowId);
+  }
+  return index;
 }
 
 /**

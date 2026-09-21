@@ -62,6 +62,19 @@ export type AdminAssetListItem = {
    * 하는 폴백이다. 썸네일이 있으면 **주지 않는다** — 주는 순간 절감이 사라진다.
    */
   readonly previewUrl?: string;
+  /**
+   * catalog registry에 `active` 행이 있는가.
+   *
+   * 게시(write-shadow)는 저장 뒤에 **기다리지 않고** 부르고 실패를 삼킨다
+   * (`adminAssets.ts`의 `void shadowPublishThemeAsset`). 그래서 여러 장을 연달아 올리다
+   * 화면을 벗어나면 몇 건이 조용히 빠지고, 지금까지는 그 사실이 어디에도 드러나지 않았다.
+   * 카드가 이 값을 배지로 보여 운영자가 바로 알아채고 재게시할 수 있게 한다.
+   *
+   * `undefined`는 "등록됨"이 아니라 **확인하지 못했다**는 뜻이다. registry 조회가 실패하면
+   * 목록을 막지 않고 이 값을 비운다 — 조회 장애를 미등록으로 표시하면 운영자가 멀쩡한
+   * 에셋을 다시 올린다.
+   */
+  readonly catalogRegistered?: boolean;
 };
 
 export type AdminAssetListPayload = {
@@ -84,7 +97,7 @@ export type AdminAssetListPayload = {
  */
 export function toAdminAssetListItem(
   asset: AdminAssetCandidate,
-  urls: { readonly thumbnailUrl?: string; readonly previewUrl?: string } = {},
+  urls: { readonly thumbnailUrl?: string; readonly previewUrl?: string; readonly catalogRegistered?: boolean } = {},
 ): AdminAssetListItem {
   return {
     id: asset.id,
@@ -106,7 +119,20 @@ export function toAdminAssetListItem(
     variantPlatforms: (asset.variants ?? []).map((variant) => variant.platform),
     // 썸네일이 있으면 원본 URL을 함께 주지 않는다. 둘 다 주면 카드가 원본을 받을 수 있다.
     ...(urls.thumbnailUrl ? { thumbnailUrl: urls.thumbnailUrl } : urls.previewUrl ? { previewUrl: urls.previewUrl } : {}),
+    ...(urls.catalogRegistered === undefined ? {} : { catalogRegistered: urls.catalogRegistered }),
   };
+}
+
+/**
+ * 저장 직후 낙관적 항목에 **이전에 알고 있던 catalog 등록 여부를 남긴다.**
+ *
+ * 저장 응답에는 이 값이 없다(서버 목록만 아는 값이다). 그대로 덮으면 이미 "미등록"으로 떠 있던
+ * 카드가 수정 한 번에 배지와 복구 버튼을 잃고 "확인 못 함"으로 되돌아간다. 다음 목록 조회가
+ * 정답을 가져올 때까지 직전 판정을 유지하는 편이, 알던 사실을 잊는 것보다 낫다.
+ */
+export function withPreviousCatalogRegistration(next: AdminAssetListItem, previous?: AdminAssetListItem): AdminAssetListItem {
+  if (next.catalogRegistered !== undefined || previous?.catalogRegistered === undefined) return next;
+  return { ...next, catalogRegistered: previous.catalogRegistered };
 }
 
 /** 목록 카드가 배경으로 그릴 URL. 축소본이 우선이고, 없으면 원본 폴백이다. */
