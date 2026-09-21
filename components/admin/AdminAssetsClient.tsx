@@ -148,6 +148,7 @@ export default function AdminAssetsClient() {
   const [bubbleWorkspaceMode, setBubbleWorkspaceMode] = useState<BubbleWorkspaceMode>("library");
   const [bubbleBuilderDraft, setBubbleBuilderDraft] = useState<AdminBubbleBuilderDraft | null>(null);
   const [bubbleBuilderInitial, setBubbleBuilderInitial] = useState<AdminBubbleBuilderInitial | null>(null);
+  const [bubbleDecorationReadPending, setBubbleDecorationReadPending] = useState(false);
   const [bubbleGeometryMode, setBubbleGeometryMode] = useState<"generated" | "manual">("manual");
   const [isSaveConfirmOpen, setIsSaveConfirmOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
@@ -158,6 +159,12 @@ export default function AdminAssetsClient() {
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
   const assetKindRef = useRef<AdminAssetKind>(assetKind);
   const editRequestRef = useRef(0);
+  const bubbleDecorationReadPendingRef = useRef(false);
+
+  const handleBubbleDecorationReadPendingChange = useCallback((pending: boolean) => {
+    bubbleDecorationReadPendingRef.current = pending;
+    setBubbleDecorationReadPending(pending);
+  }, []);
 
   const selectAssetKind = useCallback((nextKind: AdminAssetKind) => {
     if (assetKindRef.current === nextKind) return;
@@ -261,7 +268,8 @@ export default function AdminAssetsClient() {
       !isSavingAsset &&
       (editingAsset ? title.trim() : bubbleBuilderDraft ? file : uploadableFiles.length > 0) &&
       (editingAsset || selectedSaveTargets.length > 0) &&
-      (assetKind !== "bubble" || bubbleSpec),
+      (assetKind !== "bubble" || bubbleSpec) &&
+      !bubbleDecorationReadPending,
   );
   /**
    * 카드에 얹을 경고.
@@ -391,10 +399,18 @@ export default function AdminAssetsClient() {
   };
 
   const requestSave = () => {
+    if (bubbleDecorationReadPendingRef.current) {
+      setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 저장해 주세요.");
+      return;
+    }
     if (canSaveAsset) setIsSaveConfirmOpen(true);
   };
 
   const submit = async () => {
+    if (bubbleDecorationReadPendingRef.current) {
+      setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 저장해 주세요.");
+      return;
+    }
     if (activeKindSlots.length === 0 || isSavingAsset || (!editingAsset && !bubbleBuilderDraft && uploadableFiles.length === 0 && !file)) return;
     const saveKind = assetKindRef.current;
     const isCurrentSave = () => assetKindRef.current === saveKind;
@@ -1125,6 +1141,7 @@ export default function AdminAssetsClient() {
                       closeOnApply={false}
                       onClose={() => setBubbleWorkspaceMode("library")}
                       onApply={applyBubbleBuilder}
+                      onDecorationReadPendingChange={handleBubbleDecorationReadPendingChange}
                     />
                   ) : (
                     <div className="grid gap-4">

@@ -16,6 +16,7 @@ import {
   type BubblePreviewSize,
 } from "@/components/editor/bubblePreviewLayout";
 import { ThemeColorPicker } from "@/components/project/ThemeColorPicker";
+import { useUnsavedChangesWarning } from "@/components/project/hooks/useUnsavedChangesWarning";
 import { themeColorRgbHex, themeColorToCss } from "@/lib/theme/color";
 import {
   bubbleCanvasSizeRange,
@@ -61,6 +62,7 @@ type BubbleBuilderDialogProps = {
   initialDecorationFiles?: DecorationFiles;
   onOpenChange: (open: boolean) => void;
   onApply: (result: GeneratedBubbleDesign, decorationFiles: DecorationFiles) => boolean | Promise<boolean>;
+  onDecorationReadPendingChange?: (pending: boolean) => void;
 };
 
 /** 바깥(다이얼로그)에서 닫기를 요청하는 통로. Esc·바깥 클릭도 ✕와 같은 확인 절차를 타야 한다. */
@@ -124,7 +126,7 @@ export function getBubbleEditSignature(spec: BubbleFamilyDesignSpec, decorationF
 }
 
 
-export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, active = true, ref, fill = false, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
+export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, onDecorationReadPendingChange, active = true, ref, fill = false, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
   const [spec, setSpec] = useState(() => initialSpec ?? createBubbleFamilyDesignSpec(side));
   const [decorationFiles, setDecorationFiles] = useState<DecorationFiles>({});
   const [decorationUrls, setDecorationUrls] = useState<Partial<Record<string, string>>>({});
@@ -144,7 +146,15 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   const pendingDecorationReadsRef = useRef(0);
   const [pendingDecorationReads, setPendingDecorationReads] = useState(0);
 
+  const updatePendingDecorationReads = useCallback((next: number) => {
+    pendingDecorationReadsRef.current = next;
+    setPendingDecorationReads(next);
+    onDecorationReadPendingChange?.(next > 0);
+  }, [onDecorationReadPendingChange]);
+
   const layers = useMemo(() => spec.design.decorations ?? [], [spec.design.decorations]);
+  useUnsavedChangesWarning(pendingDecorationReads > 0);
+  useEffect(() => () => onDecorationReadPendingChange?.(false), [onDecorationReadPendingChange]);
 
   const materializeDecorationFile = useCallback(async (file: File | undefined) => {
     if (!file) return null;
@@ -174,8 +184,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
   }, []);
 
   const enqueueDecorationFile = useCallback((file: File | undefined) => {
-    pendingDecorationReadsRef.current += 1;
-    setPendingDecorationReads(pendingDecorationReadsRef.current);
+    updatePendingDecorationReads(pendingDecorationReadsRef.current + 1);
     // 읽기는 선택 순간 모두 시작한다. 순서를 보존해야 하는 것은 완료된 결과를 state에
     // 붙이는 단계뿐이다.
     const materialization = materializeDecorationFile(file);
@@ -187,12 +196,11 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
     // 예기치 못한 예외가 나도 뒤에 고른 파일은 계속 처리한다.
     decorationCommitQueueRef.current = task.catch(() => undefined);
     const settle = () => {
-      pendingDecorationReadsRef.current = Math.max(0, pendingDecorationReadsRef.current - 1);
-      setPendingDecorationReads(pendingDecorationReadsRef.current);
+      updatePendingDecorationReads(Math.max(0, pendingDecorationReadsRef.current - 1));
     };
     void task.then(settle, settle);
     return task;
-  }, [commitDecorationFile, materializeDecorationFile]);
+  }, [commitDecorationFile, materializeDecorationFile, updatePendingDecorationReads]);
 
   const removeLayer = useCallback((layerId: string) => {
     setSpec((current) => ({

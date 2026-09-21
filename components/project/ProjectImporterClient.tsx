@@ -170,6 +170,12 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   // 않도록 실제 materialize 작업을 별도로 추적한다.
   const pendingSlotReadTasksRef = useRef(new Set<Promise<void>>());
   const [pendingSlotReadCount, setPendingSlotReadCount] = useState(0);
+  const pendingBubbleDecorationReadsRef = useRef(false);
+  const [pendingBubbleDecorationReads, setPendingBubbleDecorationReads] = useState(false);
+  const handleBubbleDecorationReadPendingChange = useCallback((pending: boolean) => {
+    pendingBubbleDecorationReadsRef.current = pending;
+    setPendingBubbleDecorationReads(pending);
+  }, []);
   const trackPendingSlotRead = useCallback((task: Promise<void>) => {
     pendingSlotReadTasksRef.current.add(task);
     setPendingSlotReadCount(pendingSlotReadTasksRef.current.size);
@@ -179,8 +185,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     };
     void task.then(settle, settle);
   }, []);
-  const blockWhileSlotReadPending = useCallback(() => {
-    if (pendingSlotReadTasksRef.current.size === 0) return false;
+  const blockWhileMaterializationPending = useCallback(() => {
+    if (pendingSlotReadTasksRef.current.size === 0 && !pendingBubbleDecorationReadsRef.current) return false;
     setNotice({ tone: "warning", message: "선택한 이미지를 준비 중입니다. 완료된 뒤 다시 시도해 주세요." });
     return true;
   }, []);
@@ -380,7 +386,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   ) => {
     // export dialog 안에서도 붙여넣기 입력이 들어올 수 있다. 복구 초안을 먼저 직렬화하면
     // 아직 materialize되지 않은 File이 빠진 채 이동하므로, pending read 동안에는 이동하지 않는다.
-    if (blockWhileSlotReadPending()) return;
+    if (blockWhileMaterializationPending()) return;
     try {
       const recovery = await saveRecoveryDraft({
         resume: { reason },
@@ -408,7 +414,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       if (!continueWithoutRecovery) return;
       router.push(destination === "login" ? "/login?returnTo=%2Fedit&reason=export" : "/credits?entry=export_block&returnTo=%2Fedit");
     }
-  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, blockWhileSlotReadPending, bubbleDecorationSources, bubbleDesigns, bubbleFlipX, bubbleGeometry, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
+  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, blockWhileMaterializationPending, bubbleDecorationSources, bubbleDesigns, bubbleFlipX, bubbleGeometry, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
 
   useEffect(() => {
     if (skipDefaultSelectionResetRef.current) {
@@ -595,7 +601,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
 
   const exportExitGuardActive = isExporting && !isExportQueued;
   const hasPendingSlotReads = pendingSlotReadCount > 0;
-  shouldConfirmExitRef.current = hasUnsavedChanges || exportExitGuardActive || hasPendingSlotReads;
+  const hasPendingMaterialization = hasPendingSlotReads || pendingBubbleDecorationReads;
+  shouldConfirmExitRef.current = hasUnsavedChanges || exportExitGuardActive || hasPendingMaterialization;
 
   /**
    * 다운로드의 단일 입구. 인앱 브라우저면 빌드가 시작되기 전에 한 번 안내한다.
@@ -604,13 +611,13 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
    * 알리면 크레딧이 이미 나간 상태가 되므로, 다이얼로그를 열기도 전에 끼어든다.
    */
   const requestExport = useCallback(() => {
-    if (blockWhileSlotReadPending()) return;
+    if (blockWhileMaterializationPending()) return;
     if (inAppBrowser && !inAppExportAcknowledgedRef.current) {
       setInAppExportGateOpen(true);
       return;
     }
     void openExportDialog();
-  }, [blockWhileSlotReadPending, inAppBrowser, openExportDialog]);
+  }, [blockWhileMaterializationPending, inAppBrowser, openExportDialog]);
 
   /**
    * `/edit`을 벗어나는 모든 경로(뒤로가기, 종료 확인, 헤더/액션바 종료 버튼, 탭 차단 화면)가 공유하는
@@ -624,7 +631,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
    * 함수가 유발한 popstate와 사용자가 실제로 누른 뒤로가기를 구분한다.
    */
   const leaveEditor = () => {
-    if (blockWhileSlotReadPending()) return;
+    if (blockWhileMaterializationPending()) return;
     if (typeof window === "undefined") {
       router.replace(exitDestination);
       return;
@@ -639,11 +646,11 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     const handlePopState = () => {
       const wasProgrammaticExit = programmaticExitRef.current;
       programmaticExitRef.current = false;
-      if (pendingSlotReadTasksRef.current.size > 0) {
+      if (pendingSlotReadTasksRef.current.size > 0 || pendingBubbleDecorationReadsRef.current) {
         // 뒤로가기는 이미 guard entry를 하나 소비했으므로 즉시 되살리고, 파일이 초안에 들어갈
         // 때까지는 이탈을 허용하지 않는다.
         window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
-        blockWhileSlotReadPending();
+        blockWhileMaterializationPending();
         return;
       }
       if (wasProgrammaticExit || !shouldConfirmExitRef.current) {
@@ -659,7 +666,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [blockWhileSlotReadPending, exitDestination, router]);
+  }, [blockWhileMaterializationPending, exitDestination, router]);
 
   const navigateAfterExit = () => {
     setExitConfirmOpen(false);
@@ -667,7 +674,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     leaveEditor();
   };
   const requestExit = () => {
-    if (blockWhileSlotReadPending()) return;
+    if (blockWhileMaterializationPending()) return;
     if (!shouldConfirmExitRef.current) {
       leaveEditor();
       return;
@@ -680,7 +687,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setExitSaveState("idle");
   };
   const confirmExit = async () => {
-    if (blockWhileSlotReadPending()) return;
+    if (blockWhileMaterializationPending()) return;
     if (!hasUnsavedChanges) {
       navigateAfterExit();
       return;
@@ -745,7 +752,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   }, [draftSignature, initialLoadState.status]);
 
   // 작업 접수 전에는 결과물을 놓칠 수 있어 이탈을 경고한다. 큐에 들어간 Android 작업은 서버에서 계속 진행된다.
-  useUnsavedChangesWarning(hasUnsavedChanges || exportExitGuardActive || hasPendingSlotReads);
+  useUnsavedChangesWarning(hasUnsavedChanges || exportExitGuardActive || hasPendingMaterialization);
 
   useEffect(() => {
     if (initialLoadState.status !== "ready" || !selectedSlot) return;
@@ -1269,14 +1276,14 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   };
 
   const openSaveDialog = () => {
-    if (blockWhileSlotReadPending()) return;
+    if (blockWhileMaterializationPending()) return;
     setSaveMode(activeUserTemplate ? "overwrite" : "saveAs");
     setSaveName(activeUserTemplate?.name ?? `${displayTemplateName} 복사본`);
     setSaveDialogOpen(true);
   };
 
   const openSystemSaveDialog = () => {
-    if (blockWhileSlotReadPending()) return;
+    if (blockWhileMaterializationPending()) return;
     if (!isAdminMode) {
       setNotice({ tone: "warning", message: "시스템 템플릿 저장은 관리자 화면에서만 사용할 수 있습니다." });
       return;
@@ -1488,7 +1495,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   // 1/3이라 색상 밀림은 일어나지 않는다. 면끼리의 차이라 축소에도 그대로 남는다.
   return (
     <main className="min-h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-auto bg-[#eef1f5] px-3 py-3 text-[#111827] md:px-4 md:py-4 lg:h-[100dvh] lg:overflow-hidden">
-      {selectedSlot && selectedBubbleSlot && selectedBubbleVariant ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} variant={selectedBubbleVariant} slotLabel={selectedSlot.label} platform={platform} initialSpec={selectedBubbleDesign} initialDecorationFiles={bubbleDecorationSources} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleDesign} /> : null}
+      {selectedSlot && selectedBubbleSlot && selectedBubbleVariant ? <BubbleBuilderDialog open={bubbleBuilderOpen} side={selectedBubbleSlot} variant={selectedBubbleVariant} slotLabel={selectedSlot.label} platform={platform} initialSpec={selectedBubbleDesign} initialDecorationFiles={bubbleDecorationSources} onOpenChange={setBubbleBuilderOpen} onApply={applyBubbleDesign} onDecorationReadPendingChange={handleBubbleDecorationReadPendingChange} /> : null}
       {notice ? <HeaderNotice notice={notice} onDismiss={dismissNotice} /> : null}
       {pendingAutosave ? (
         <AutosaveResumeDialog
@@ -1532,7 +1539,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onModeChange={setSaveMode}
           onNameChange={setSaveName}
           onSubmit={() => {
-            if (!blockWhileSlotReadPending()) void saveCurrentTemplate();
+            if (!blockWhileMaterializationPending()) void saveCurrentTemplate();
           }}
         />
       ) : null}
@@ -1578,10 +1585,10 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
             void persistRecoveryThenNavigate("insufficient_credits", "credits", { exportMode, name: exportName });
           }}
           onRetryPreparation={() => {
-            if (!blockWhileSlotReadPending()) void openExportDialog();
+            if (!blockWhileMaterializationPending()) void openExportDialog();
           }}
           onSubmit={() => {
-            if (!blockWhileSlotReadPending()) void submitExport();
+            if (!blockWhileMaterializationPending()) void submitExport();
           }}
           onCancelExport={() => void cancelExport()}
         />
@@ -1609,7 +1616,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           onPriceAmountChange={setSystemPriceAmount}
           onCreditCostChange={setSystemCreditCost}
           onSubmit={() => {
-            if (!blockWhileSlotReadPending()) void saveSystemTemplate();
+            if (!blockWhileMaterializationPending()) void saveSystemTemplate();
           }}
         />
       ) : null}

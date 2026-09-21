@@ -124,6 +124,21 @@ describe("BubbleBuilderDialog decoration input", () => {
       expect(closeButton).toBeEnabled();
     });
   });
+
+  it("reports decoration materialization to the parent editor", async () => {
+    const onDecorationReadPendingChange = vi.fn();
+    renderDialog({ onDecorationReadPendingChange });
+    const pending = deferredImageFile("reported-layer.png");
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+
+    fireEvent.change(input!, { target: { files: [pending.file] } });
+    await waitFor(() => expect(onDecorationReadPendingChange).toHaveBeenCalledWith(true));
+
+    pending.resolve();
+    await screen.findByRole("button", { name: /reported-layer\.png/ });
+    await waitFor(() => expect(onDecorationReadPendingChange).toHaveBeenLastCalledWith(false));
+  });
 });
 
 describe("BubbleBuilderDialog decoration warnings", () => {
@@ -342,7 +357,7 @@ describe("BubbleBuilderDialog zoom controls", () => {
   });
 });
 
-function renderDialog(overrides: { onOpenChange?: () => void; spec?: BubbleFamilyDesignSpec } = {}) {
+function renderDialog(overrides: { onOpenChange?: () => void; onDecorationReadPendingChange?: (pending: boolean) => void; spec?: BubbleFamilyDesignSpec } = {}) {
   return render(
     <BubbleBuilderDialog
       open
@@ -353,6 +368,7 @@ function renderDialog(overrides: { onOpenChange?: () => void; spec?: BubbleFamil
       initialSpec={overrides.spec ?? spec}
       onOpenChange={overrides.onOpenChange ?? vi.fn()}
       onApply={vi.fn()}
+      onDecorationReadPendingChange={overrides.onDecorationReadPendingChange}
     />,
   );
 }
