@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getRequestUser } from "@/lib/supabase/auth";
 import { inquiryRpcErrorResponse, validateInquiryCreate, type InquiryCreateBody } from "@/lib/inquiries/api";
 import { inquirySelectColumns, mapInquiryRow } from "@/lib/inquiries/types";
+import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
+import { createInquiryCreatedEvent } from "@/lib/ops/eventFactories";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +54,16 @@ export async function POST(request: Request) {
     p_export_job_id: body.exportJobId || null,
   });
   if (error) return inquiryRpcErrorResponse(error, "문의를 접수하지 못했습니다.");
+
+  if (typeof inquiryId === "string" && inquiryId.trim()) {
+    scheduleOpsEvent(createInquiryCreatedEvent({
+      inquiryId,
+      category: body.category!,
+      title: body.title!.trim(),
+    }));
+  } else {
+    console.error("접수한 문의의 식별자를 받지 못했습니다.");
+  }
 
   const { data, error: readError } = await supabase.from("inquiries").select(inquirySelectColumns).eq("id", inquiryId).maybeSingle();
   if (readError || !data) {

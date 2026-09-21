@@ -4,6 +4,8 @@ import {
   createGrobleWebhookProcessingEvent,
   createGrobleWebhookRejectedEvent,
   createExportRefundFailureEvent,
+  createInquiryCreatedEvent,
+  createInquiryUserReplyEvent,
   createOpsDailySummaryEvent,
 } from "@/lib/ops/eventFactories";
 
@@ -105,6 +107,50 @@ describe("operational event factories", () => {
       severity: "P1",
       source: "billing",
       entity: { kind: "export_job", id: "job-456" },
+    });
+  });
+
+  it("creates a sanitized P2 event for a new inquiry", () => {
+    const event = createInquiryCreatedEvent({
+      inquiryId: "8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
+      category: "payment",
+      title: "결제 문의 owner@example.com 010-1234-5678",
+    });
+
+    expect(event).toMatchObject({
+      eventId: "inquiry.created:8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
+      type: "inquiry.created",
+      severity: "P2",
+      source: "admin",
+      entity: { kind: "inquiry", id: "8c7202d6-8c50-44e4-936d-c12bfba9f1d8" },
+      details: {
+        inquiryId: "8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
+        category: "payment",
+        title: "결제 문의 [redacted-email] [redacted-phone]",
+      },
+      dedupeKey: "inquiry:created:8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
+      adminPath: "/admin/inquiries/8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
+    });
+    expect(JSON.stringify(event)).not.toContain("owner@example.com");
+    expect(JSON.stringify(event)).not.toContain("010-1234-5678");
+  });
+
+  it("deduplicates each user follow-up by message id", () => {
+    const event = createInquiryUserReplyEvent({
+      inquiryId: "8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
+      messageId: "4bc5f1f7-3d7b-4e7f-9a5e-2e4b5fd31d7e",
+    });
+
+    expect(event).toMatchObject({
+      eventId: "inquiry.user_replied:4bc5f1f7-3d7b-4e7f-9a5e-2e4b5fd31d7e",
+      type: "inquiry.user_replied",
+      severity: "P2",
+      entity: { kind: "inquiry", id: "8c7202d6-8c50-44e4-936d-c12bfba9f1d8" },
+      details: {
+        inquiryId: "8c7202d6-8c50-44e4-936d-c12bfba9f1d8",
+        messageId: "4bc5f1f7-3d7b-4e7f-9a5e-2e4b5fd31d7e",
+      },
+      dedupeKey: "inquiry:user-replied:4bc5f1f7-3d7b-4e7f-9a5e-2e4b5fd31d7e",
     });
   });
 

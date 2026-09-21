@@ -8,13 +8,15 @@ export const opsEventTypes = [
   "billing.refund_failed",
   "runtime.health_failed",
   "admin.template_published",
+  "inquiry.created",
+  "inquiry.user_replied",
   "ops.daily_summary",
 ] as const;
 
 export type OpsEventType = (typeof opsEventTypes)[number];
 export type OpsSeverity = "P1" | "P2" | "P3";
 export type OpsSource = "export" | "billing" | "runtime" | "admin" | "ops";
-export type OpsEntityKind = "export_job" | "payment" | "template" | "runtime";
+export type OpsEntityKind = "export_job" | "payment" | "template" | "runtime" | "inquiry";
 export type OpsDetailValue = string | number | boolean | null;
 
 export type OpsEvent = {
@@ -60,7 +62,7 @@ export function isOpsSource(value: unknown): value is OpsSource {
 }
 
 export function isOpsEntityKind(value: unknown): value is OpsEntityKind {
-  return value === "export_job" || value === "payment" || value === "template" || value === "runtime";
+  return value === "export_job" || value === "payment" || value === "template" || value === "runtime" || value === "inquiry";
 }
 
 export function createOpsEvent(input: CreateOpsEventInput): OpsEvent {
