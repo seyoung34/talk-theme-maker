@@ -165,28 +165,44 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const skipDefaultSelectionResetRef = useRef(false);
   const uploadRequestTrackerRef = useRef(createLatestRequestTracker());
-  const invalidatePendingSlotUpload = useCallback((slotId: string) => uploadRequestTrackerRef.current.invalidate(slotId), []);
   // 파일 선택 직후에는 아직 초안에 File이 없으므로, 저장·내보내기·이탈이 그 빈 초안을 소비하지
   // 않도록 실제 materialize 작업을 별도로 추적한다.
-  const pendingSlotReadTasksRef = useRef(new Set<Promise<void>>());
+  const pendingSlotReadTasksRef = useRef(new Map<string, Set<Promise<void>>>());
+  const pendingSlotReadCountRef = useRef(0);
   const [pendingSlotReadCount, setPendingSlotReadCount] = useState(0);
+  const updatePendingSlotReadCount = useCallback(() => {
+    const count = [...pendingSlotReadTasksRef.current.values()].reduce((total, tasks) => total + tasks.size, 0);
+    pendingSlotReadCountRef.current = count;
+    setPendingSlotReadCount(count);
+  }, []);
+  const invalidatePendingSlotUpload = useCallback((slotId: string) => {
+    uploadRequestTrackerRef.current.invalidate(slotId);
+    pendingSlotReadTasksRef.current.delete(slotId);
+    updatePendingSlotReadCount();
+  }, [updatePendingSlotReadCount]);
   const pendingBubbleDecorationReadsRef = useRef(false);
   const [pendingBubbleDecorationReads, setPendingBubbleDecorationReads] = useState(false);
   const handleBubbleDecorationReadPendingChange = useCallback((pending: boolean) => {
     pendingBubbleDecorationReadsRef.current = pending;
     setPendingBubbleDecorationReads(pending);
   }, []);
-  const trackPendingSlotRead = useCallback((task: Promise<void>) => {
-    pendingSlotReadTasksRef.current.add(task);
-    setPendingSlotReadCount(pendingSlotReadTasksRef.current.size);
+  const trackPendingSlotRead = useCallback((slotId: string, task: Promise<void>) => {
+    const tasks = pendingSlotReadTasksRef.current.get(slotId) ?? new Set<Promise<void>>();
+    tasks.add(task);
+    pendingSlotReadTasksRef.current.set(slotId, tasks);
+    updatePendingSlotReadCount();
     const settle = () => {
-      pendingSlotReadTasksRef.current.delete(task);
-      setPendingSlotReadCount(pendingSlotReadTasksRef.current.size);
+      const currentTasks = pendingSlotReadTasksRef.current.get(slotId);
+      if (currentTasks) {
+        currentTasks.delete(task);
+        if (currentTasks.size === 0) pendingSlotReadTasksRef.current.delete(slotId);
+        updatePendingSlotReadCount();
+      }
     };
     void task.then(settle, settle);
-  }, []);
+  }, [updatePendingSlotReadCount]);
   const blockWhileMaterializationPending = useCallback(() => {
-    if (pendingSlotReadTasksRef.current.size === 0 && !pendingBubbleDecorationReadsRef.current) return false;
+    if (pendingSlotReadCountRef.current === 0 && !pendingBubbleDecorationReadsRef.current) return false;
     setNotice({ tone: "warning", message: "선택한 이미지를 준비 중입니다. 완료된 뒤 다시 시도해 주세요." });
     return true;
   }, []);
@@ -646,7 +662,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     const handlePopState = () => {
       const wasProgrammaticExit = programmaticExitRef.current;
       programmaticExitRef.current = false;
-      if (pendingSlotReadTasksRef.current.size > 0 || pendingBubbleDecorationReadsRef.current) {
+      if (pendingSlotReadCountRef.current > 0 || pendingBubbleDecorationReadsRef.current) {
         // 뒤로가기는 이미 guard entry를 하나 소비했으므로 즉시 되살리고, 파일이 초안에 들어갈
         // 때까지는 이탈을 허용하지 않는다.
         window.history.pushState({ kakaoThemeEditorExitGuard: true }, "", window.location.href);
@@ -918,6 +934,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const uploadSlot = (slot: ThemeAssetSlot, fileList: FileList | readonly File[] | null) => {
     const selectedFile = fileList?.[0];
     if (!selectedFile) return;
+    // 새 파일 선택은 같은 슬롯의 이전 읽기와 그 결과를 모두 대체한다.
+    invalidatePendingSlotUpload(slot.id);
     const request = uploadRequestTrackerRef.current.begin(slot.id);
 
     const task = (async () => {
@@ -947,7 +965,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       trackAnalyticsEvent("slot_upload_completed", { slot_role: slot.role, section: slot.section, asset_source: "user" });
       trackFirstValueReached("upload");
     })();
-    trackPendingSlotRead(task);
+    trackPendingSlotRead(slot.id, task);
   };
 
   const uploadEditedSlot = (slot: ThemeAssetSlot, file: File, editState: ImageEditState, sourceFile: File, target?: ImageEditTarget) => {
