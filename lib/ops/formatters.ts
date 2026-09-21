@@ -42,6 +42,9 @@ const detailLabels: Record<string, string> = {
   p1Issues: "P1 이슈",
   p2Issues: "P2 이슈",
   deadLetterNotifications: "Dead-letter 알림",
+  inquiryId: "문의 ID",
+  messageId: "메시지 ID",
+  category: "문의 분류",
 };
 
 export function formatOpsEventForTelegram(event: OpsEvent, options: { siteUrl?: string } = {}) {

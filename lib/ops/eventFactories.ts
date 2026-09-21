@@ -150,6 +150,46 @@ export function createExportRefundFailureEvent(input: {
   });
 }
 
+export function createInquiryCreatedEvent(input: {
+  inquiryId: string;
+  category: string;
+}) {
+  return createOpsEvent({
+    eventId: deterministicOpsEventId("inquiry.created", input.inquiryId),
+    type: "inquiry.created",
+    severity: "P2",
+    source: "admin",
+    entity: { kind: "inquiry", id: input.inquiryId },
+    summary: "새 문의가 접수되었습니다.",
+    details: {
+      inquiryId: input.inquiryId,
+      category: input.category,
+    },
+    dedupeKey: `inquiry:created:${input.inquiryId}`,
+    adminPath: `/admin/inquiries/${encodeURIComponent(input.inquiryId)}`,
+  });
+}
+
+export function createInquiryUserReplyEvent(input: {
+  inquiryId: string;
+  messageId: string;
+}) {
+  return createOpsEvent({
+    eventId: deterministicOpsEventId("inquiry.user_replied", input.messageId),
+    type: "inquiry.user_replied",
+    severity: "P2",
+    source: "admin",
+    entity: { kind: "inquiry", id: input.inquiryId },
+    summary: "문의에 사용자 답변이 추가되었습니다.",
+    details: {
+      inquiryId: input.inquiryId,
+      messageId: input.messageId,
+    },
+    dedupeKey: `inquiry:user-replied:${input.messageId}`,
+    adminPath: `/admin/inquiries/${encodeURIComponent(input.inquiryId)}`,
+  });
+}
+
 export function createOpsDailySummaryEvent(input: OpsDailySummary, occurredAt = new Date().toISOString()) {
   return createOpsEvent({
     eventId: deterministicOpsEventId("ops.daily_summary", input.day),
