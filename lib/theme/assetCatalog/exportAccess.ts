@@ -172,23 +172,47 @@ export function isCatalogExportResourceRole(value: unknown, platform: ThemePlatf
   return typeof value === "string" && imageRolesByPlatform[platform].has(value as ThemeResourceRole);
 }
 
-/** 현재 admin asset 정책으로 해당 catalog ref를 이 export 슬롯에서 사용할 수 있는지 판정한다. */
+/**
+ * 현재 admin asset 정책으로 해당 catalog ref를 이 export 슬롯에서 사용할 수 있는지 판정한다.
+ *
+ * 요청 role이 다른 슬롯을 **상속**하는 자리면 원본 role로도 한 번 더 본다. 상속 슬롯은
+ * 사용자가 직접 고르는 자리가 아니다 — `profile_image_full_1`처럼 기본 에셋이 없어 항상
+ * `profile_image_1`의 선택을 따라가고, manifest에는 상속받는 쪽 role이 실린다
+ * (`buildAndroidThemeExportFiles`). 그래서 이 확장이 없으면 `exact_role: profile_image_1`로
+ * 등록된(= "슬롯 지정" 범위의) 추천 에셋이 피커·미리보기는 통과하고 내보내기에서만
+ * `catalog_asset_not_allowed` 403이 된다.
+ *
+ * 말풍선·배경·아이콘은 호환 family가 이미 같은 구멍을 막고 있어 프로필만 드러났지만, 규칙은
+ * family가 아니라 상속 관계 자체로 닫는다. `getImageAssetFallbackRole`이 정의한 한 단계
+ * 상속만 열리므로 허용 범위는 "그 슬롯이 어차피 따라가는 자리"를 넘지 않는다.
+ * 템플릿 멤버십 판정(`isTemplateRoleAllowed`)도 같은 이유로 같은 상속을 허용한다.
+ */
 export function isAdminAssetAllowedForExport(input: {
   asset: AdminAssetExportAccess;
   platform: ThemePlatform;
   resourceRole: ThemeResourceRole;
 }) {
   const { asset, platform, resourceRole } = input;
+  if (matchesAdminAssetTarget(asset, platform, resourceRole)) return true;
 
-  /**
-   * 플랫폼 판정은 target이 한다. enabled는 과거 추천 토글의 잔여 컬럼이므로 현재 후보
-   * 가용성에서는 사용하지 않는다.
-   *
-   * 대표 target(`selectRepresentativeTarget`)의 platform을 여기서 한 번 더 보면, `exact_role(android)`
-   * 과 `asset_kind(all)`을 함께 가진 에셋이 iOS에서 거부된다 — 대표로 뽑히는 쪽이 `exact_role`이라
-   * platform이 android로 좁혀지기 때문이다. target을 전부 훑는 아래 판정이 `all`/플랫폼 일치를
-   * 이미 검사하고, target이 없는 legacy 행은 `asset.platform`으로 만든 target으로 똑같이 막힌다.
-   */
+  const inherited = getImageAssetFallbackRole(resourceRole);
+  return inherited !== undefined && matchesAdminAssetTarget(asset, platform, inherited);
+}
+
+/**
+ * 플랫폼 판정은 target이 한다. enabled는 과거 추천 토글의 잔여 컬럼이므로 현재 후보
+ * 가용성에서는 사용하지 않는다.
+ *
+ * 대표 target(`selectRepresentativeTarget`)의 platform을 여기서 한 번 더 보면, `exact_role(android)`
+ * 과 `asset_kind(all)`을 함께 가진 에셋이 iOS에서 거부된다 — 대표로 뽑히는 쪽이 `exact_role`이라
+ * platform이 android로 좁혀지기 때문이다. target을 전부 훑는 아래 판정이 `all`/플랫폼 일치를
+ * 이미 검사하고, target이 없는 legacy 행은 `asset.platform`으로 만든 target으로 똑같이 막힌다.
+ */
+function matchesAdminAssetTarget(
+  asset: AdminAssetExportAccess,
+  platform: ThemePlatform,
+  resourceRole: ThemeResourceRole,
+) {
   return getAdminAssetCandidateMatchRank(
     { role: resourceRole, kind: resolveExportSlotKind(platform, resourceRole) },
     {

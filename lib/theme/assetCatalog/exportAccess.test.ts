@@ -122,6 +122,49 @@ describe("catalog export access", () => {
     expect(isAdminAssetAllowedForExport({ asset: bubble, platform: "ios", resourceRole: "bubble_me_2" })).toBe(true);
   });
 
+  /**
+   * `profile_image_full_*`은 기본 에셋이 없어 항상 `profile_image_*`의 선택을 상속하고,
+   * manifest에는 상속받는 쪽 role이 실린다. 프로필에는 호환 family가 없어서 이 규칙이
+   * 없으면 "슬롯 지정" 범위로 등록된 추천 에셋이 내보내기에서만 403이 된다.
+   */
+  describe("상속 슬롯은 원본 role의 target으로 허용한다", () => {
+    const profile = mapAdminAssetExportAccessRow({
+      id: assetId,
+      slot_role: "profile_image_1",
+      platform: "android",
+      asset_kind: "profile",
+      enabled: true,
+      admin_asset_targets: [{ asset_id: assetId, platform: "android", slot_role: "profile_image_1", target_kind: "exact_role", priority: 0, enabled: true }],
+    });
+
+    function allows(resourceRole: string) {
+      return isAdminAssetAllowedForExport({ asset: profile, platform: "android", resourceRole: resourceRole as never });
+    }
+
+    it("전체 프로필 이미지는 기본 프로필 이미지의 target을 따른다", () => {
+      expect(allows("profile_image_1")).toBe(true);
+      expect(allows("profile_image_full_1")).toBe(true);
+    });
+
+    // 상속 관계가 아닌 슬롯까지 열리면 "슬롯 지정"이 사실상 kind 전체가 된다.
+    it("상속 관계가 없는 슬롯은 그대로 막는다", () => {
+      expect(allows("profile_image_2")).toBe(false);
+      expect(allows("profile_image_full_2")).toBe(false);
+    });
+
+    it("focused 탭 아이콘도 기본 아이콘의 target을 따른다", () => {
+      const icon = mapAdminAssetExportAccessRow({
+        id: assetId,
+        slot_role: "tab_icon_friends",
+        platform: "android",
+        asset_kind: "icon",
+        enabled: true,
+        admin_asset_targets: [{ asset_id: assetId, platform: "android", slot_role: "tab_icon_friends", target_kind: "exact_role", priority: 0, enabled: true }],
+      });
+      expect(isAdminAssetAllowedForExport({ asset: icon, platform: "android", resourceRole: "tab_icon_friends_focused" })).toBe(true);
+    });
+  });
+
   it("published/public 템플릿의 upload entry를 export 접근으로 만든다", () => {
     const uploadEntryId = "android-bubble-me-1:upload:1";
     expect(mapTemplateAssetExportAccessRows([
