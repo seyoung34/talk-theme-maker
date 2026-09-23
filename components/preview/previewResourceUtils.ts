@@ -102,25 +102,30 @@ export async function blobForThemePreview(file: ThemeProjectFile): Promise<Blob 
 }
 
 /**
- * "이 래퍼가 가리키는 이미지가 무엇인가"에 대한 단 하나의 답.
+ * 이 래퍼가 가리킬 수 있는 **모든** 주소. 캐시 키의 재료다.
  *
- * 캐시 키를 만드는 쪽마다 기준이 달라지면, 화면은 새 이미지를 그리는데 캐시는 옛 이미지에서
- * 나온 파싱 결과나 색 팔레트를 계속 내주는 어긋남이 생긴다. catalog 참조로만 저장된 항목은
- * `file`도 `sourceUrl`도 없어서, 여기서 `previewUrl`을 빼면 같은 슬롯의 서로 다른 이미지가
- * 통째로 같은 키가 된다 — `size`도 0으로 같기 때문에 구분할 것이 남지 않는다.
+ * 우선순위로 하나만 고르면 안 된다. 소비처마다 읽는 순서가 다르기 때문이다 —
+ * `imageUrlForThemeFile`과 `blobForThemePreview`는 `previewUrl`을 먼저 읽고,
+ * 팔레트 추출은 원본을 먼저 읽는다. 키가 한쪽 우선순위만 따르면, 다른 우선순위를 쓰는
+ * 소비처에서 화면은 새 이미지인데 캐시는 옛 이미지의 파싱 결과나 색을 계속 내준다.
+ * 전부 담으면 "무엇을 읽든 그 주소가 바뀌면 키도 바뀐다"가 보장된다.
  *
- * 우선순위는 그리는 쪽과 같다: 바이트 → 원본 URL → 미리보기 URL.
+ * catalog 참조로만 저장된 항목은 `file`도 `sourceUrl`도 없어서, `previewUrl`을 빼면 같은
+ * 슬롯의 서로 다른 이미지가 통째로 같은 키가 된다 — `size`도 0으로 같아 구분할 것이 없다.
+ *
  * 서명 URL은 재발급될 때마다 쿼리가 바뀌므로 경로만 본다 — 쿼리까지 넣으면 같은 바이트를
- * 재발급 때마다 다시 파싱한다.
+ * 재발급 때마다 다시 파싱한다. 이 저장소의 에셋은 수정할 때마다 revision UUID가 들어간 새
+ * 경로를 받고 미리보기는 content-addressed라, 같은 경로에 다른 바이트가 오지 않는다.
+ * 같은 경로를 덮어쓰는 저장 경로가 생기면 이 전제를 다시 봐야 한다.
  */
 export function themeFileRemoteIdentity(file: ThemeProjectFile) {
-  const remote = file.sourceUrl ?? file.previewUrl;
-  return remote ? remote.split("?")[0] : "";
+  const remotes = [file.sourceUrl, file.previewUrl].map((url) => url?.split("?")[0] ?? "");
+  return remotes.some(Boolean) ? remotes.join("|") : "";
 }
 
-// 파싱 결과 캐시용 키.
+// 파싱 결과 캐시용 키. 바이트와 주소를 모두 담는다 — 위와 같은 이유로 둘 중 하나만 고르지 않는다.
 export function themeFileCacheKey(file: ThemeProjectFile) {
-  return `${file.path}:${file.size}:${file.file?.lastModified ?? themeFileRemoteIdentity(file)}`;
+  return `${file.path}:${file.size}:${file.file?.lastModified ?? ""}:${themeFileRemoteIdentity(file)}`;
 }
 
 export function readFileAsDataUrl(file: File): Promise<string> {

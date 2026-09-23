@@ -73,10 +73,34 @@ describe("themeFileCacheKey", () => {
       .toBe(themeFileCacheKey(catalogOnly("https://signed.test/a.webp?token=2")));
   });
 
-  it("원본 URL이 있으면 그쪽을 우선한다", () => {
-    const withSource = projectFile({ path: "res/chat_bg.png", sourceUrl: "blob:same", previewUrl: "https://cdn.test/a.webp" });
-    const otherPreview = projectFile({ path: "res/chat_bg.png", sourceUrl: "blob:same", previewUrl: "https://cdn.test/b.webp" });
+  /**
+   * 소비처마다 읽는 순서가 다르다 — 그리기와 말풍선 파싱은 previewUrl을 먼저 읽고, 팔레트
+   * 추출은 원본을 먼저 읽는다. 키가 한쪽 우선순위만 따르면 다른 쪽에서 어긋난다. 그래서
+   * 후보 주소를 전부 담고, 이 테스트가 두 소비처의 입력이 달라질 때 키도 달라지는지 본다.
+   */
+  describe("소비처가 읽는 주소가 달라지면 키도 달라진다", () => {
+    const readForRender = (file: ThemeProjectFile) => file.previewUrl ?? file.sourceUrl;
+    const readForPalette = (file: ThemeProjectFile) => file.sourceUrl ?? file.previewUrl;
 
-    expect(themeFileCacheKey(withSource)).toBe(themeFileCacheKey(otherPreview));
+    const pairs: [string, ThemeProjectFile, ThemeProjectFile][] = [
+      [
+        "원본이 같고 미리보기만 다르다",
+        projectFile({ path: "res/chat_bg.png", sourceUrl: "https://storage.test/a.png", previewUrl: "https://cdn.test/a.webp" }),
+        projectFile({ path: "res/chat_bg.png", sourceUrl: "https://storage.test/a.png", previewUrl: "https://cdn.test/b.webp" }),
+      ],
+      [
+        "미리보기가 같고 원본만 다르다",
+        projectFile({ path: "res/chat_bg.png", sourceUrl: "https://storage.test/a.png", previewUrl: "https://cdn.test/a.webp" }),
+        projectFile({ path: "res/chat_bg.png", sourceUrl: "https://storage.test/b.png", previewUrl: "https://cdn.test/a.webp" }),
+      ],
+    ];
+
+    for (const [label, left, right] of pairs) {
+      it(label, () => {
+        // 최소한 한쪽 소비처는 실제로 다른 바이트를 읽는 상황이어야 이 단언에 의미가 있다.
+        expect(readForRender(left) !== readForRender(right) || readForPalette(left) !== readForPalette(right)).toBe(true);
+        expect(themeFileCacheKey(left)).not.toBe(themeFileCacheKey(right));
+      });
+    }
   });
 });
