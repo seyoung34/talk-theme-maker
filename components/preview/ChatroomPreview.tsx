@@ -4,7 +4,7 @@ import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
 import { ArrowLeft, SendHorizontal, Menu, Phone, Plus, Search, Smile } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getResolvedColor, type BubbleEditState, type SlotCandidateSelections } from "@/components/project/projectModel";
-import { blobForThemeFile, blobForThemePreview, findBestFile, getThemeFileSourceName, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
+import { blobForThemeFile, blobForThemePreview, findBestFile, getThemeFileSourceName, loadCrossOriginImage, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { loadCachedBubbleAsset } from "@/lib/theme/preview/bubbleAssetCache";
 import { drawBubble, getAutoBubbleSize } from "@/lib/theme/preview/bubbleCanvas";
@@ -168,7 +168,7 @@ export function ChatroomPreview({
 
     async function load() {
       if (!backgroundImageUrl) return;
-      const nextBackgroundImage = await loadImage(backgroundImageUrl);
+      const nextBackgroundImage = await loadCrossOriginImage(backgroundImageUrl);
       if (!cancelled) setBackgroundImage(nextBackgroundImage);
     }
 
@@ -710,15 +710,6 @@ function selectPreviewFiles(analysis: ThemeProjectAnalysis) {
     bubble_you_1: findBestFile(analysis, "bubble_you_1"),
     bubble_you_2: findBestFile(analysis, "bubble_you_2"),
   };
-}
-
-function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Image load failed."));
-    image.src = src;
-  });
 }
 
 function hexToRgba(hex: string, alpha: number) {

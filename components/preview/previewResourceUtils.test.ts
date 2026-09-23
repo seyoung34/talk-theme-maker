@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { findBestFile, getThemeFileSourceName, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { findBestFile, getThemeFileSourceName, loadCrossOriginImage, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 
 function projectFile(overrides: Partial<ThemeProjectFile> = {}): ThemeProjectFile {
@@ -102,5 +102,42 @@ describe("themeFileCacheKey", () => {
         expect(themeFileCacheKey(left)).not.toBe(themeFileCacheKey(right));
       });
     }
+  });
+});
+
+/**
+ * catalog 참조 슬롯은 바이트 대신 서명된 원격 URL만 들고 있다. `crossOrigin` 없이 그 이미지를
+ * 캔버스에 그리면 캔버스가 오염돼 `getImageData`·`toDataURL`이 SecurityError로 막힌다.
+ * 실제로 시스템 템플릿을 catalog 참조로 바꾼 뒤 채팅방 헤더 글자색 판정이 이 오류로 실패했다.
+ *
+ * `src`를 대입하는 순간 로드가 시작되므로, 그 **전에** 설정돼 있어야 한다.
+ */
+describe("loadCrossOriginImage", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("src를 대입하기 전에 crossOrigin을 anonymous로 설정한다", async () => {
+    const order: string[] = [];
+    let crossOrigin: string | null = null;
+
+    class ImageStub {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set crossOrigin(value: string) {
+        crossOrigin = value;
+        order.push("crossOrigin");
+      }
+      set src(_value: string) {
+        order.push("src");
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal("Image", ImageStub);
+
+    await loadCrossOriginImage("https://cdn.test/a.webp");
+
+    expect(crossOrigin).toBe("anonymous");
+    expect(order).toEqual(["crossOrigin", "src"]);
   });
 });

@@ -70,7 +70,7 @@ export async function imageUrlForPreview(file: File, stripNinePatch: boolean) {
 }
 
 async function stripNinePatchUrl(dataUrlOrUrl: string) {
-  const image = await loadImage(dataUrlOrUrl);
+  const image = await loadCrossOriginImage(dataUrlOrUrl);
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, image.naturalWidth - 2);
   canvas.height = Math.max(1, image.naturalHeight - 2);
@@ -137,9 +137,22 @@ export function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
+/**
+ * 원격 이미지를 **픽셀을 읽을 수 있는 상태로** 불러온다.
+ *
+ * `crossOrigin`을 지정하지 않고 다른 도메인의 이미지를 캔버스에 그리면 캔버스가 오염돼
+ * `getImageData`와 `toDataURL`이 SecurityError로 막힌다. 바이트를 들고 있을 때는 드러나지
+ * 않는다 — blob이나 data URL은 오염시키지 않기 때문이다. catalog 참조 슬롯은 바이트 대신
+ * 서명된 원격 URL만 들고 있어서 이 경로를 그대로 탄다. 실제로 시스템 템플릿을 catalog
+ * 참조로 바꾼 뒤 채팅방 헤더 글자색 판정이 "canvas has been tainted"로 실패했다.
+ *
+ * `thumbnail.ts`와 `previewCanvas.ts`가 이미 쓰는 규칙과 같다. blob·data URL에서는 무시되고,
+ * 같은 출처에서도 무해하다.
+ */
+export function loadCrossOriginImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
+    image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("Image load failed."));
     image.src = src;
