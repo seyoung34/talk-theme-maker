@@ -42,6 +42,7 @@
  *   node scripts/backfill-system-template-catalog-refs.mjs
  *   node scripts/backfill-system-template-catalog-refs.mjs --variant <id>
  *   node scripts/backfill-system-template-catalog-refs.mjs --apply
+ *   node scripts/backfill-system-template-catalog-refs.mjs --restore <backup.json> --apply
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -52,6 +53,8 @@ const args = process.argv.slice(2);
 const apply = args.includes("--apply");
 const variantFilter = args.includes("--variant") ? args[args.indexOf("--variant") + 1] : undefined;
 const envFile = args.includes("--env") ? args[args.indexOf("--env") + 1] : ".env.local";
+/** 적용을 되돌릴 백업 JSON 경로. `--apply`와 함께 써야 실제로 쓴다. */
+const restorePath = args.includes("--restore") ? args[args.indexOf("--restore") + 1] : undefined;
 /** 리포트·백업은 저장소를 더럽히지 않도록 기본적으로 임시 디렉터리에 쓴다. */
 const outDir = args.includes("--out") ? args[args.indexOf("--out") + 1] : resolve(tmpdir(), "talktheme-backfill");
 
@@ -97,6 +100,30 @@ async function patch(path, body) {
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(`PATCH ${path} -> ${response.status} ${await response.text()}`);
+}
+
+/**
+ * 백업 파일의 `upload_refs`를 그대로 되돌린다.
+ *
+ * 되돌릴 일이 두 번 있었다. 그때마다 일회성 스크립트를 썼는데, 급할 때 다시 짜는 것이
+ * 가장 나쁜 조건이라 여기에 남긴다. `--apply` 없이는 무엇이 바뀌는지만 출력한다.
+ */
+if (restorePath) {
+  const backup = JSON.parse(readFileSync(resolve(process.cwd(), restorePath), "utf8"));
+  const targets = variantFilter ? backup.filter((row) => row.id === variantFilter) : backup;
+  if (targets.length === 0) {
+    console.error(`복원 대상이 없습니다: ${restorePath}${variantFilter ? ` (variant ${variantFilter})` : ""}`);
+    process.exit(1);
+  }
+
+  console.log(`${apply ? "RESTORE" : "RESTORE (DRY-RUN)"} — variant ${targets.length}개  출처: ${restorePath}`);
+  for (const row of targets) {
+    const slots = Object.keys(row.upload_refs ?? {}).length;
+    console.log(`  ${row.platform} ${row.id}  슬롯 ${slots}개`);
+    if (apply) await patch(`system_template_variants?id=eq.${row.id}`, { upload_refs: row.upload_refs });
+  }
+  console.log(apply ? "복원 완료." : "\n실제로 되돌리려면 --apply 를 붙여 다시 실행하세요.");
+  process.exit(0);
 }
 
 /** 플랫폼 전용 파생물이 생기면 그것을 먼저 쓰고, 없으면 canonical로 떨어진다. */
