@@ -101,10 +101,26 @@ export async function blobForThemePreview(file: ThemeProjectFile): Promise<Blob 
   return blobForThemeFile(file);
 }
 
-// 파싱 결과 캐시용 키. 서명 URL은 재발급될 때마다 쿼리가 바뀌므로 경로만 본다.
+/**
+ * "이 래퍼가 가리키는 이미지가 무엇인가"에 대한 단 하나의 답.
+ *
+ * 캐시 키를 만드는 쪽마다 기준이 달라지면, 화면은 새 이미지를 그리는데 캐시는 옛 이미지에서
+ * 나온 파싱 결과나 색 팔레트를 계속 내주는 어긋남이 생긴다. catalog 참조로만 저장된 항목은
+ * `file`도 `sourceUrl`도 없어서, 여기서 `previewUrl`을 빼면 같은 슬롯의 서로 다른 이미지가
+ * 통째로 같은 키가 된다 — `size`도 0으로 같기 때문에 구분할 것이 남지 않는다.
+ *
+ * 우선순위는 그리는 쪽과 같다: 바이트 → 원본 URL → 미리보기 URL.
+ * 서명 URL은 재발급될 때마다 쿼리가 바뀌므로 경로만 본다 — 쿼리까지 넣으면 같은 바이트를
+ * 재발급 때마다 다시 파싱한다.
+ */
+export function themeFileRemoteIdentity(file: ThemeProjectFile) {
+  const remote = file.sourceUrl ?? file.previewUrl;
+  return remote ? remote.split("?")[0] : "";
+}
+
+// 파싱 결과 캐시용 키.
 export function themeFileCacheKey(file: ThemeProjectFile) {
-  const remotePath = file.sourceUrl ? file.sourceUrl.split("?")[0] : "";
-  return `${file.path}:${file.size}:${file.file?.lastModified ?? remotePath}`;
+  return `${file.path}:${file.size}:${file.file?.lastModified ?? themeFileRemoteIdentity(file)}`;
 }
 
 export function readFileAsDataUrl(file: File): Promise<string> {

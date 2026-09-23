@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findBestFile, getThemeFileSourceName } from "@/components/preview/previewResourceUtils";
+import { findBestFile, getThemeFileSourceName, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
 
 function projectFile(overrides: Partial<ThemeProjectFile> = {}): ThemeProjectFile {
@@ -52,5 +52,31 @@ describe("findBestFile", () => {
     const file = projectFile({ path: "res/tab.png" });
 
     expect(findBestFile(analysis(file), "tab_icon_now")).toBeUndefined();
+  });
+});
+
+/**
+ * catalog 참조로만 저장된 항목은 `file`도 `sourceUrl`도 없고 `size`가 0이다. 키가 `previewUrl`을
+ * 보지 않으면 같은 슬롯의 서로 다른 이미지가 통째로 같은 키가 되어, 이미지를 바꿔도 캐시가
+ * 이전 이미지의 결과를 계속 내준다.
+ */
+describe("themeFileCacheKey", () => {
+  const catalogOnly = (previewUrl: string) => projectFile({ path: "res/chat_bg.png", previewUrl });
+
+  it("previewUrl만 다른 두 이미지를 구분한다", () => {
+    expect(themeFileCacheKey(catalogOnly("https://cdn.test/a.webp")))
+      .not.toBe(themeFileCacheKey(catalogOnly("https://cdn.test/b.webp")));
+  });
+
+  it("서명이 재발급돼도(쿼리만 변경) 같은 키를 유지한다", () => {
+    expect(themeFileCacheKey(catalogOnly("https://signed.test/a.webp?token=1")))
+      .toBe(themeFileCacheKey(catalogOnly("https://signed.test/a.webp?token=2")));
+  });
+
+  it("원본 URL이 있으면 그쪽을 우선한다", () => {
+    const withSource = projectFile({ path: "res/chat_bg.png", sourceUrl: "blob:same", previewUrl: "https://cdn.test/a.webp" });
+    const otherPreview = projectFile({ path: "res/chat_bg.png", sourceUrl: "blob:same", previewUrl: "https://cdn.test/b.webp" });
+
+    expect(themeFileCacheKey(withSource)).toBe(themeFileCacheKey(otherPreview));
   });
 });
