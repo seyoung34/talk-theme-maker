@@ -28,6 +28,16 @@
  * - `imageEdit`가 있는 항목은 건너뛴다. 변환본은 원본과 바이트가 다르다.
  * - **`storagePath`를 그대로 남긴다.** 저장 경로(PR #31)가 쓰는 형태와 같게 맞춘 것이다.
  * - `catalogMetadata.legacyStoragePath`도 함께 남겨 미리보기 굽기와 변환 fallback이 동작한다.
+ * - **`--apply`에는 `--project <ref>`가 필요하다.** 기본 env가 운영을 가리키므로 대상을 손으로 한 번 더 적게 한다.
+ * - **복원은 백업 이후의 편집을 덮어쓰지 않는다.** 항목 구성이 달라진 variant는 건너뛴다(`--force`로 해제).
+ * - **적용 직후 참조를 검증한다.** 쓰는 동안 재게시가 끼어들면 참조가 retire된 revision을 가리킬 수 있다.
+ *
+ * 동시성
+ * ------
+ * revision은 실행 시작 시점의 active 값이다. 적용 중에 같은 자산이 재게시되면 방금 쓴 참조가
+ * 어긋난다. **적용 중에는 템플릿 저장·게시를 멈춘다.** 멱등 재실행은 이것을 고치지 못한다 —
+ * 이미 catalog인 항목은 건너뛰기 때문이다. 어긋난 참조는 `--verify`로 찾고, 해당 variant를
+ * 복원하거나 자산을 다시 게시한 뒤 재실행한다.
  *
  * 먼저 적용했다가 되돌린 기록
  * --------------------------
@@ -41,8 +51,9 @@
  * ------
  *   node scripts/backfill-system-template-catalog-refs.mjs
  *   node scripts/backfill-system-template-catalog-refs.mjs --variant <id>
- *   node scripts/backfill-system-template-catalog-refs.mjs --apply
- *   node scripts/backfill-system-template-catalog-refs.mjs --restore <backup.json> --apply
+ *   node scripts/backfill-system-template-catalog-refs.mjs --verify
+ *   node scripts/backfill-system-template-catalog-refs.mjs --apply --project <ref>
+ *   node scripts/backfill-system-template-catalog-refs.mjs --restore <backup.json> --apply --project <ref>
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -55,6 +66,16 @@ const variantFilter = args.includes("--variant") ? args[args.indexOf("--variant"
 const envFile = args.includes("--env") ? args[args.indexOf("--env") + 1] : ".env.local";
 /** 적용을 되돌릴 백업 JSON 경로. `--apply`와 함께 써야 실제로 쓴다. */
 const restorePath = args.includes("--restore") ? args[args.indexOf("--restore") + 1] : undefined;
+/** 기록된 catalog 참조가 지금도 active revision을 가리키는지만 확인하고 끝낸다. 쓰지 않는다. */
+const verifyOnly = args.includes("--verify");
+/**
+ * 쓰기 대상 프로젝트 재확인. `--apply`에는 반드시 붙인다.
+ *
+ * 기본 env 파일이 운영을 가리키므로, 어느 프로젝트에 쓰는지 한 번 더 손으로 적게 한다.
+ */
+const confirmedProject = args.includes("--project") ? args[args.indexOf("--project") + 1] : undefined;
+/** 복원 시 백업 이후의 편집을 알고도 덮어쓴다. 대조에서 걸린 variant에만 의미가 있다. */
+const force = args.includes("--force");
 /** 리포트·백업은 저장소를 더럽히지 않도록 기본적으로 임시 디렉터리에 쓴다. */
 const outDir = args.includes("--out") ? args[args.indexOf("--out") + 1] : resolve(tmpdir(), "talktheme-backfill");
 
@@ -86,6 +107,14 @@ if (!baseUrl || !secret) {
 }
 
 const headers = { apikey: secret, authorization: `Bearer ${secret}` };
+const projectRef = new URL(baseUrl).hostname.split(".")[0];
+
+if (apply && confirmedProject !== projectRef) {
+  console.error(`쓰기 대상 확인이 필요합니다.`);
+  console.error(`  대상 프로젝트: ${projectRef}  (${envFile})`);
+  console.error(`  같은 값을 --project 로 다시 지정하세요:  --project ${projectRef}`);
+  process.exit(1);
+}
 
 async function get(path) {
   const response = await fetch(`${baseUrl}/rest/v1/${path}`, { headers });
@@ -102,11 +131,85 @@ async function patch(path, body) {
   if (!response.ok) throw new Error(`PATCH ${path} -> ${response.status} ${await response.text()}`);
 }
 
+/** 키 순서에 흔들리지 않는 직렬화. 대조용이다. */
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+/** 이 스크립트가 덮어쓰는 필드. 복원 대조에서는 제외한다 — 여기가 달라진 것은 당연하다. */
+const backfillWrittenFields = ["catalog", "catalogMetadata", "fileName", "mimeType", "size"];
+
 /**
- * 백업 파일의 `upload_refs`를 그대로 되돌린다.
+ * "어떤 항목이 있었는가"만 남긴 지문.
  *
- * 되돌릴 일이 두 번 있었다. 그때마다 일회성 스크립트를 썼는데, 급할 때 다시 짜는 것이
+ * 복원은 백업을 통째로 PATCH하므로, 백업을 뜬 뒤에 그 variant를 편집했다면 그 편집까지
+ * 사라진다. 이 지문이 같다면 달라진 것은 이 스크립트가 쓴 필드뿐이므로 되돌려도 안전하고,
+ * 다르면 백업 이후에 다른 변경이 있었다는 뜻이다.
+ */
+function refsIdentity(refs) {
+  const out = {};
+  for (const [slotId, entries] of Object.entries(refs ?? {})) {
+    out[slotId] = (entries ?? []).map((entry) => {
+      const rest = { ...entry };
+      for (const field of backfillWrittenFields) delete rest[field];
+      return rest;
+    });
+  }
+  return stableStringify(out);
+}
+
+/**
+ * 기록된 catalog 참조가 지금도 active revision을 가리키는지 확인한다.
+ *
+ * 참조를 쓰는 동안 같은 자산이 재게시되면, 방금 쓴 참조가 retire된 revision을 가리킬 수 있다.
+ * 멱등 재실행은 이것을 고치지 못한다 — 이미 catalog인 항목은 건너뛰기 때문이다. 그래서
+ * 적용 직후와 `--verify`에서 따로 확인한다. 어긋난 참조는 내보내기가
+ * `catalog_asset_revision_mismatch`로 실패한다.
+ */
+async function verifyCatalogRefs(rows) {
+  const fresh = await get("theme_asset_objects?select=logical_asset_id,revision,variant_key,status&limit=5000");
+  const activeKeys = new Set(
+    fresh.filter((record) => record.status === "active").map((record) => `${record.logical_asset_id}|${record.variant_key}|${record.revision}`),
+  );
+  const stale = [];
+  let checked = 0;
+  for (const row of rows) {
+    for (const [slotId, entries] of Object.entries(row.upload_refs ?? {})) {
+      for (const entry of entries ?? []) {
+        if (!entry.catalog) continue;
+        checked += 1;
+        const key = `${entry.catalog.assetId}|${entry.catalog.variantKey}|${entry.catalog.revision}`;
+        if (!activeKeys.has(key)) stale.push({ variantId: row.id, slotId, key });
+      }
+    }
+  }
+  return { checked, stale };
+}
+
+function reportVerification({ checked, stale }) {
+  console.log(`\n참조 검증: ${checked}건 확인 · 어긋남 ${stale.length}건`);
+  for (const item of stale.slice(0, 20)) {
+    console.log(`  STALE  ${item.variantId} / ${item.slotId}  ${item.key}`);
+  }
+  if (stale.length > 20) console.log(`  … 외 ${stale.length - 20}건`);
+  if (stale.length > 0) {
+    console.log("  이 참조들은 내보내기에서 catalog_asset_revision_mismatch로 실패한다.");
+    console.log("  해당 variant를 복원하거나, 해당 자산을 다시 게시한 뒤 재실행한다.");
+  }
+}
+
+/**
+ * 백업 파일의 `upload_refs`를 되돌린다.
+ *
+ * 되돌릴 일이 세 번 있었다. 그때마다 일회성 스크립트를 썼는데, 급할 때 다시 짜는 것이
  * 가장 나쁜 조건이라 여기에 남긴다. `--apply` 없이는 무엇이 바뀌는지만 출력한다.
+ *
+ * 백업 이후에 다른 편집이 있었으면 그 variant는 건너뛴다. 오래된 백업을 통째로 덮어쓰는 것이
+ * 이 모드의 유일한 위험이다.
  */
 if (restorePath) {
   const backup = JSON.parse(readFileSync(resolve(process.cwd(), restorePath), "utf8"));
@@ -116,14 +219,31 @@ if (restorePath) {
     process.exit(1);
   }
 
+  const current = await get(`system_template_variants?select=id,upload_refs&id=in.(${targets.map((row) => row.id).join(",")})`);
+  const currentById = new Map(current.map((row) => [row.id, row]));
+
   console.log(`${apply ? "RESTORE" : "RESTORE (DRY-RUN)"} — variant ${targets.length}개  출처: ${restorePath}`);
+  let blocked = 0;
   for (const row of targets) {
+    const live = currentById.get(row.id);
     const slots = Object.keys(row.upload_refs ?? {}).length;
-    console.log(`  ${row.platform} ${row.id}  슬롯 ${slots}개`);
+    if (!live) {
+      console.log(`  건너뜀 ${row.platform} ${row.id}  — 현재 DB에 없는 variant`);
+      blocked += 1;
+      continue;
+    }
+    const drifted = refsIdentity(live.upload_refs) !== refsIdentity(row.upload_refs);
+    if (drifted && !force) {
+      console.log(`  건너뜀 ${row.platform} ${row.id}  — 백업 이후 다른 편집이 있다(--force로 덮어쓸 수 있다)`);
+      blocked += 1;
+      continue;
+    }
+    console.log(`  ${row.platform} ${row.id}  슬롯 ${slots}개${drifted ? "  [강제: 백업 이후 편집을 덮어쓴다]" : ""}`);
     if (apply) await patch(`system_template_variants?id=eq.${row.id}`, { upload_refs: row.upload_refs });
   }
+  if (blocked > 0) console.log(`\n건너뛴 variant ${blocked}개.`);
   console.log(apply ? "복원 완료." : "\n실제로 되돌리려면 --apply 를 붙여 다시 실행하세요.");
-  process.exit(0);
+  process.exit(blocked > 0 ? 1 : 0);
 }
 
 /** 플랫폼 전용 파생물이 생기면 그것을 먼저 쓰고, 없으면 canonical로 떨어진다. */
@@ -189,6 +309,13 @@ const variantQuery = variantFilter
 const variants = await get(variantQuery);
 const bundles = await get("system_template_bundles?select=id,title&limit=200");
 const titleById = new Map(bundles.map((bundle) => [bundle.id, bundle.title]));
+
+if (verifyOnly) {
+  console.log(`VERIFY — variant ${variants.length}개`);
+  const result = await verifyCatalogRefs(variants);
+  reportVerification(result);
+  process.exit(result.stale.length > 0 ? 1 : 0);
+}
 
 const totals = { converted: 0, skipped: {}, variantsChanged: 0 };
 const plans = [];
@@ -267,9 +394,18 @@ writeFileSync(
 );
 console.log(`\n백업: ${backupPath}`);
 
+const written = [];
 for (const { variant, nextRefs, changed } of plans) {
   if (changed === 0) continue;
   await patch(`system_template_variants?id=eq.${variant.id}`, { upload_refs: nextRefs });
+  written.push({ id: variant.id, upload_refs: nextRefs });
   console.log(`  적용 ${titleById.get(variant.bundle_id)} / ${variant.platform} (${changed}건)`);
 }
+
+// revision은 실행 시작 시점에 읽은 값이다. 쓰는 동안 재게시가 끼어들었으면 방금 쓴 참조가
+// 이미 retire됐을 수 있다. 조용히 넘어가면 내보내기 시점에야 드러난다.
+const verification = await verifyCatalogRefs(written);
+reportVerification(verification);
+
 console.log("완료.");
+if (verification.stale.length > 0) process.exit(1);
