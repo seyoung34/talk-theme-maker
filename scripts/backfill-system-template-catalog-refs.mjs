@@ -26,7 +26,11 @@
  * - `--apply` 시 변경 전 `upload_refs` 전체를 JSON으로 백업한다.
  * - 멱등하다. 이미 catalog인 항목은 건너뛴다.
  * - `imageEdit`가 있는 항목은 건너뛴다. 변환본은 원본과 바이트가 다르다.
- * - `legacyStoragePath`를 남겨 미리보기와 변환 fallback이 계속 동작한다.
+ * - **`storagePath`를 그대로 남긴다.** 저장 경로(PR #31)가 쓰는 형태와 같게 맞춘 것이다. 떼어 내면
+ *   편집기가 바이트를 못 받아 슬롯 이미지가 빈다 — 편집기는 부트스트랩에서 서명한 슬롯 외에는
+ *   `catalog.previewUrl`이 없고, 그때 기댈 곳이 `storagePath`뿐이다. 실제로 떼고 적용했다가
+ *   탭 아이콘이 비는 것을 확인하고 되돌렸다.
+ * - `catalogMetadata.legacyStoragePath`도 함께 남겨 미리보기 굽기와 변환 fallback이 동작한다.
  *
  * 사용법
  * ------
@@ -110,6 +114,7 @@ function convertEntry(entry, activeByLogical, platform) {
 
   const legacyStoragePath = entry.storagePath ?? entry.catalogMetadata?.legacyStoragePath;
   const next = {
+    ...entry,
     id: entry.id,
     fileName: record.file_name,
     mimeType: record.mime_type,
