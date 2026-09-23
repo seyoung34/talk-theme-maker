@@ -91,6 +91,36 @@ describe("useProjectAutoColors - 배경 이미지 팔레트 추출", () => {
 
     await vi.waitFor(() => expect(extractThemeImagePalette).toHaveBeenCalledTimes(2));
   });
+
+  /**
+   * catalog 참조로만 저장된 항목은 `file`도 `sourceUrl`도 없고 `size`가 0이다. 키가
+   * `previewUrl`을 보지 않으면 같은 슬롯의 서로 다른 배경이 같은 키가 되어, 이미지를 바꿔도
+   * 추출이 다시 돌지 않고 이전 이미지의 색이 자동 맞춤에 그대로 남는다.
+   */
+  it("previewUrl만 있는 이미지를 교체하면 다시 추출한다", async () => {
+    extractThemeImagePalette.mockClear();
+    const catalogOnly = (previewUrl: string) => ({ path: "main_background/img.png", name: "img.png", size: 0, previewUrl });
+    const { rerender } = renderWithAnalysis(buildAnalysis(catalogOnly("https://cdn.test/a.webp")));
+
+    await vi.waitFor(() => expect(extractThemeImagePalette).toHaveBeenCalledTimes(1));
+
+    rerender({ analysis: buildAnalysis(catalogOnly("https://cdn.test/b.webp")) });
+
+    await vi.waitFor(() => expect(extractThemeImagePalette).toHaveBeenCalledTimes(2));
+  });
+
+  it("같은 이미지의 서명이 재발급되면(쿼리만 변경) 다시 추출하지 않는다", async () => {
+    extractThemeImagePalette.mockClear();
+    const signed = (token: string) => ({ path: "main_background/img.png", name: "img.png", size: 0, previewUrl: `https://signed.test/a.webp?token=${token}` });
+    const { rerender } = renderWithAnalysis(buildAnalysis(signed("1")));
+
+    await vi.waitFor(() => expect(extractThemeImagePalette).toHaveBeenCalledTimes(1));
+
+    rerender({ analysis: buildAnalysis(signed("2")) });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(extractThemeImagePalette).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("shouldReleaseAutoBackgroundLink", () => {

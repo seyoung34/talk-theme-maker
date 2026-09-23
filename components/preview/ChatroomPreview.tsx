@@ -157,7 +157,10 @@ export function ChatroomPreview({
     }
 
     setBackgroundImage(null);
-    setBackgroundImageUrl(backgroundFile.sourceUrl ?? null);
+    // catalog 참조 슬롯에는 `sourceUrl`이 없다 — 바이트를 내려받지 않는 것이 그 최적화의 목적이고,
+    // 업로드를 고른 상태라 template 기본 URL도 잡히지 않는다. 남는 서명된 `previewUrl`을 쓰지 않으면
+    // 채팅방 배경만 빈 채로 남는다. 우선순위는 `imageUrlForThemeFile`과 같게 둔다.
+    setBackgroundImageUrl(backgroundFile.previewUrl ?? backgroundFile.sourceUrl ?? null);
   }, [backgroundFileSignature]);
 
   useEffect(() => {
@@ -207,10 +210,21 @@ export function ChatroomPreview({
             // 여기서 적용하면 마커를 드래그할 때마다 원본을 다시 받아 다시 파싱하게 된다.
             // 파싱 결과에 slot이 담기므로 캐시 키에도 있어야 한다. 같은 파일을 me/you에 함께 쓰면
             // 파일만으로 키를 만들 때 한쪽 자산이 반대쪽에 그대로 재사용된다.
-            nextAssets[slot.id] = await loadCachedBubbleAsset(`${themeFileCacheKey(file)}:${file.previewUrl ?? ""}:${bubbleSlot}`, async () => {
+            nextAssets[slot.id] = await loadCachedBubbleAsset(`${themeFileCacheKey(file)}:${bubbleSlot}`, async () => {
               const previewBlob = await blobForThemePreview(file);
               if (!previewBlob) throw new Error(`bubble preview source missing: ${file.path}`);
               const sourceName = getThemeFileSourceName(file);
+              /**
+               * 나인패치 판정은 **미리보기 바이트의 이름**으로 한다. 원본 이름으로 판정하면 안 된다 —
+               * 미리보기는 원본과 다른 파일일 수 있고(축소된 R2 webp 등), 그 바이트에 1px 마커가
+               * 온전히 남아 있다는 보장이 없다.
+               *
+               * 그래서 `.9.png` 원본을 catalog 참조로만 들고 있는 항목은 마커가 아트워크로 보일 수
+               * 있다. 현재 그 조합은 나오지 않는다 — 시스템 템플릿 말풍선 업로드는 평범한 PNG이고
+               * (마커는 `bubbleEdits`에 따로 저장된다), 추천 에셋은 선택 시 `File`을 함께 보존해
+               * previewUrl만 남지 않는다. 앞으로 `.9.png` 원본이 catalog 전용으로 들어오면 이 판정을
+               * 다시 봐야 한다.
+               */
               const previewAsset = await loadNinePatchBlob(previewBlob, file.previewName ?? sourceName, bubbleSlot);
               if (!file.previewUrl || !file.sourceUrl || !isAndroidNinePatchSourceName(sourceName)) return previewAsset;
 

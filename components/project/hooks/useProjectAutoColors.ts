@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { buildSlotContrastWarnings } from "@/components/project/slotContrast";
 import { getResolvedColor, type SlotCandidateSelections, type SlotColors } from "@/components/project/projectModel";
-import { findBestFile } from "@/components/preview/previewResourceUtils";
+import { findBestFile, themeFileRemoteIdentity } from "@/components/preview/previewResourceUtils";
 import { autoMainPaletteCandidateId, buildBubbleTextRecommendations, buildMainPaletteRecommendations } from "@/lib/theme/autoColor";
 import { extractThemeImagePalette, type ImageColorPalette } from "@/lib/theme/colorPalette";
 import type { ThemeProjectAnalysis, ThemeProjectFile } from "@/lib/theme/project/types";
@@ -171,7 +171,10 @@ export function useProjectAutoColors({
 
 function getThemeFilePaletteKey(file: ThemeProjectFile) {
   if (file.file) return `${file.path}:${file.file.name}:${file.file.size}:${file.file.lastModified}`;
-  return `${file.path}:${file.sourceUrl ?? "embedded"}:${file.size}`;
+  // 어느 이미지인지는 `themeFileRemoteIdentity` 하나로 판정한다. 여기서만 `sourceUrl`을 보면
+  // catalog 참조로만 저장된 항목끼리는 `path`도 `size`(0)도 같아서 키가 구분되지 않고,
+  // 이미지를 바꿔도 추출이 다시 돌지 않아 이전 이미지의 색이 남는다.
+  return `${file.path}:${themeFileRemoteIdentity(file) || "embedded"}:${file.size}`;
 }
 
 /**
