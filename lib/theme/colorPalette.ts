@@ -33,7 +33,18 @@ export function compositeOverBackground(pixels: Uint8ClampedArray, backgroundCol
 }
 
 export async function extractThemeImagePalette(file: ThemeProjectFile, options: { backgroundColor?: string } = {}): Promise<ImageColorPalette> {
-  const blob = file.file ?? (file.sourceUrl ? await fetch(file.sourceUrl).then((response) => {
+  /**
+   * 바이트 → 원본 URL → 미리보기 URL 순으로 찾는다.
+   *
+   * catalog 참조 슬롯에는 앞의 둘이 없다. 바이트를 내려받지 않는 것이 그 최적화의 목적이고,
+   * 업로드를 고른 상태라 template 기본 URL도 잡히지 않는다. 미리보기까지 보지 않으면 자동 색상이
+   * "분석할 배경 이미지가 없습니다"로 실패한다.
+   *
+   * 미리보기는 축소본일 수 있지만 팔레트 추출에는 문제가 없다 — 이 함수는 픽셀을 리샘플해 대표색을
+   * 고르므로 해상도가 아니라 색 분포가 근거다. 원본이 있으면 여전히 원본을 먼저 쓴다.
+   */
+  const remoteUrl = file.sourceUrl ?? file.previewUrl;
+  const blob = file.file ?? (remoteUrl ? await fetch(remoteUrl).then((response) => {
     if (!response.ok) throw new Error("배경 이미지를 불러오지 못했습니다.");
     return response.blob();
   }) : null);

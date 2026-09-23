@@ -157,7 +157,10 @@ export function ChatroomPreview({
     }
 
     setBackgroundImage(null);
-    setBackgroundImageUrl(backgroundFile.sourceUrl ?? null);
+    // catalog 참조 슬롯에는 `sourceUrl`이 없다 — 바이트를 내려받지 않는 것이 그 최적화의 목적이고,
+    // 업로드를 고른 상태라 template 기본 URL도 잡히지 않는다. 남는 서명된 `previewUrl`을 쓰지 않으면
+    // 채팅방 배경만 빈 채로 남는다. 우선순위는 `imageUrlForThemeFile`과 같게 둔다.
+    setBackgroundImageUrl(backgroundFile.previewUrl ?? backgroundFile.sourceUrl ?? null);
   }, [backgroundFileSignature]);
 
   useEffect(() => {

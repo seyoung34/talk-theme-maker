@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { compositeOverBackground } from "@/lib/theme/colorPalette";
+import { afterEach, vi } from "vitest";
+import { compositeOverBackground, extractThemeImagePalette } from "@/lib/theme/colorPalette";
+import type { ThemeProjectFile } from "@/lib/theme/project/types";
 
 function pixel(red: number, green: number, blue: number, alpha: number) {
   return [red, green, blue, alpha];
@@ -63,5 +65,47 @@ describe("compositeOverBackground", () => {
     }
     // 배경(빨강)은 한 표도 없다. 예전 방식에서는 8표 중 7표가 빨강이었다.
     expect(opaque).toEqual([[0, 0, 255]]);
+  });
+});
+
+/**
+ * catalog 참조 슬롯에는 바이트도 원본 URL도 없다. 미리보기 URL까지 보지 않으면 자동 색상이
+ * "분석할 배경 이미지가 없습니다"로 실패한다. 미리보기 후보 판정이 이 파일들을 통과시키게
+ * 바뀌었으므로, 색상 경로도 같은 입력을 다룰 수 있어야 한다.
+ */
+describe("extractThemeImagePalette 소스 선택", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  function projectFile(overrides: Partial<ThemeProjectFile>): ThemeProjectFile {
+    return { path: "res/bg.png", name: "bg.png", size: 0, ...overrides };
+  }
+
+  it("바이트도 원본 URL도 없으면 미리보기 URL을 읽는다", async () => {
+    const requested: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      requested.push(url);
+      return { ok: false } as Response;
+    }));
+
+    // fetch 실패로 끝나더라도, 어떤 URL을 읽으려 했는지가 이 테스트의 관심사다.
+    await expect(extractThemeImagePalette(projectFile({ previewUrl: "https://signed.test/bg.png" })))
+      .rejects.toThrow("배경 이미지를 불러오지 못했습니다.");
+    expect(requested).toEqual(["https://signed.test/bg.png"]);
+  });
+
+  it("원본 URL이 있으면 그쪽을 먼저 쓴다", async () => {
+    const requested: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      requested.push(url);
+      return { ok: false } as Response;
+    }));
+
+    await expect(extractThemeImagePalette(projectFile({ sourceUrl: "https://origin.test/bg.png", previewUrl: "https://signed.test/bg.png" })))
+      .rejects.toThrow("배경 이미지를 불러오지 못했습니다.");
+    expect(requested).toEqual(["https://origin.test/bg.png"]);
+  });
+
+  it("셋 다 없으면 분석할 이미지가 없다고 알린다", async () => {
+    await expect(extractThemeImagePalette(projectFile({}))).rejects.toThrow("분석할 배경 이미지가 없습니다.");
   });
 });
