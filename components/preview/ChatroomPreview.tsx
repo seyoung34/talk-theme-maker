@@ -4,7 +4,7 @@ import { applyPlatformColorAlpha } from "@/lib/theme/project/platformColor";
 import { ArrowLeft, SendHorizontal, Menu, Phone, Plus, Search, Smile } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getResolvedColor, type BubbleEditState, type SlotCandidateSelections } from "@/components/project/projectModel";
-import { blobForThemeFile, blobForThemePreview, findBestFile, getThemeFileSourceName, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
+import { blobForThemeFile, blobForThemePreview, findBestFile, getThemeFileSourceName, loadCrossOriginImage, themeFileCacheKey } from "@/components/preview/previewResourceUtils";
 import { loadNinePatchBlob } from "@/lib/theme/android/ninepatch";
 import { loadCachedBubbleAsset } from "@/lib/theme/preview/bubbleAssetCache";
 import { drawBubble, getAutoBubbleSize } from "@/lib/theme/preview/bubbleCanvas";
@@ -168,8 +168,15 @@ export function ChatroomPreview({
 
     async function load() {
       if (!backgroundImageUrl) return;
-      const nextBackgroundImage = await loadImage(backgroundImageUrl);
-      if (!cancelled) setBackgroundImage(nextBackgroundImage);
+      try {
+        const nextBackgroundImage = await loadCrossOriginImage(backgroundImageUrl);
+        if (!cancelled) setBackgroundImage(nextBackgroundImage);
+      } catch {
+        // 서명이 만료됐거나 CORS 헤더가 없으면 여기로 온다. 헤더 글자색은 배경 이미지가
+        // 없을 때의 경로(`getReadableTextColor`)로 떨어지면 되므로, 실패를 그대로 두고
+        // 이미지를 비운다. 막지 않으면 unhandled rejection으로 올라간다.
+        if (!cancelled) setBackgroundImage(null);
+      }
     }
 
     void load();
@@ -710,15 +717,6 @@ function selectPreviewFiles(analysis: ThemeProjectAnalysis) {
     bubble_you_1: findBestFile(analysis, "bubble_you_1"),
     bubble_you_2: findBestFile(analysis, "bubble_you_2"),
   };
-}
-
-function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Image load failed."));
-    image.src = src;
-  });
 }
 
 function hexToRgba(hex: string, alpha: number) {
