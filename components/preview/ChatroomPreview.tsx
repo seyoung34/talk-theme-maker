@@ -214,6 +214,17 @@ export function ChatroomPreview({
               const previewBlob = await blobForThemePreview(file);
               if (!previewBlob) throw new Error(`bubble preview source missing: ${file.path}`);
               const sourceName = getThemeFileSourceName(file);
+              /**
+               * 나인패치 판정은 **미리보기 바이트의 이름**으로 한다. 원본 이름으로 판정하면 안 된다 —
+               * 미리보기는 원본과 다른 파일일 수 있고(축소된 R2 webp 등), 그 바이트에 1px 마커가
+               * 온전히 남아 있다는 보장이 없다.
+               *
+               * 그래서 `.9.png` 원본을 catalog 참조로만 들고 있는 항목은 마커가 아트워크로 보일 수
+               * 있다. 현재 그 조합은 나오지 않는다 — 시스템 템플릿 말풍선 업로드는 평범한 PNG이고
+               * (마커는 `bubbleEdits`에 따로 저장된다), 추천 에셋은 선택 시 `File`을 함께 보존해
+               * previewUrl만 남지 않는다. 앞으로 `.9.png` 원본이 catalog 전용으로 들어오면 이 판정을
+               * 다시 봐야 한다.
+               */
               const previewAsset = await loadNinePatchBlob(previewBlob, file.previewName ?? sourceName, bubbleSlot);
               if (!file.previewUrl || !file.sourceUrl || !isAndroidNinePatchSourceName(sourceName)) return previewAsset;
 
