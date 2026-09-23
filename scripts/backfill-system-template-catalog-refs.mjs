@@ -1,0 +1,372 @@
+#!/usr/bin/env node
+/**
+ * 시스템 템플릿 `upload_refs`의 legacy Storage 참조를 catalog 참조로 바꾼다.
+ *
+ * 왜 필요한가
+ * -----------
+ * catalog ref는 **저장 시점에 편집기가 catalog metadata를 들고 있던 항목만** 보존된다
+ * (`supabaseRepository.ts`의 `shouldPersistCatalogReference`). 기존 템플릿은 에셋 allowlist가
+ * 1개로 묶여 있던 시기에 제작돼 전부 legacy 업로드로 구워졌다. 그래서 allowlist를 열어도
+ * 기존 템플릿 export는 계속 바이트를 올린다.
+ *
+ * 편집기에서 "다시 저장"해도 고쳐지지 않는다. hydration이 catalog 없는 ref를 catalog 없는
+ * entry로 복원하고, 저장이 다시 legacy로 굽기 때문이다. 데이터를 직접 고쳐 쓰는 수밖에 없다.
+ *
+ * 무엇을 하는가
+ * -------------
+ * 항목마다 registry(`theme_asset_objects`)의 active 행을 찾아 참조 형태로 바꾼다. 원본 바이트는
+ * 건드리지 않는다. Supabase Storage 객체도 지우지 않는다(아키텍처 §14 불변 조건).
+ *
+ *   tpl:<upload id>    시스템 템플릿 업로드
+ *   admin:<asset id>   추천 에셋에서 고른 항목
+ *
+ * 안전 장치
+ * ---------
+ * - 기본이 dry-run이다. `--apply` 없이는 절대 쓰지 않는다.
+ * - `--apply` 시 변경 전 `upload_refs` 전체를 JSON으로 백업한다.
+ * - 멱등하다. 이미 catalog인 항목은 건너뛴다.
+ * - `imageEdit`가 있는 항목은 건너뛴다. 변환본은 원본과 바이트가 다르다.
+ * - **`storagePath`를 그대로 남긴다.** 저장 경로(PR #31)가 쓰는 형태와 같게 맞춘 것이다.
+ * - `catalogMetadata.legacyStoragePath`도 함께 남겨 미리보기 굽기와 변환 fallback이 동작한다.
+ * - **`--apply`에는 `--project <ref>`가 필요하다.** 기본 env가 운영을 가리키므로 대상을 손으로 한 번 더 적게 한다.
+ * - **복원은 백업 이후의 편집을 덮어쓰지 않는다.** 항목 구성이 달라진 variant는 건너뛴다(`--force`로 해제).
+ * - **적용 직후 참조를 검증한다.** 쓰는 동안 재게시가 끼어들면 참조가 retire된 revision을 가리킬 수 있다.
+ *
+ * 동시성
+ * ------
+ * revision은 실행 시작 시점의 active 값이다. 적용 중에 같은 자산이 재게시되면 방금 쓴 참조가
+ * 어긋난다. **적용 중에는 템플릿 저장·게시를 멈춘다.** 멱등 재실행은 이것을 고치지 못한다 —
+ * 이미 catalog인 항목은 건너뛰기 때문이다. 어긋난 참조는 `--verify`로 찾고, 해당 variant를
+ * 복원하거나 자산을 다시 게시한 뒤 재실행한다.
+ *
+ * 먼저 적용했다가 되돌린 기록
+ * --------------------------
+ * 이 스크립트를 적용하자 편집기에서 탭 아이콘과 배경이 전부 비었다. 두 번 되돌렸다.
+ * 원인은 `storagePath`가 아니었다 — 남겨 둬도 같았다. hydration이 catalog 분기를 먼저 타서
+ * `storagePath`를 보지 않기 때문이고, 그 상태의 항목에는 `previewUrl` 하나만 남는데 편집기의
+ * 렌더·팔레트 경로가 그 값을 후보로 인정하지 않았다. 고친 것은 PR #32다.
+ * **그래서 이 스크립트는 PR #32가 배포된 뒤에만 적용할 수 있다.**
+ *
+ * 사용법
+ * ------
+ *   node scripts/backfill-system-template-catalog-refs.mjs
+ *   node scripts/backfill-system-template-catalog-refs.mjs --variant <id>
+ *   node scripts/backfill-system-template-catalog-refs.mjs --verify
+ *   node scripts/backfill-system-template-catalog-refs.mjs --apply --project <ref>
+ *   node scripts/backfill-system-template-catalog-refs.mjs --restore <backup.json> --apply --project <ref>
+ */
+
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { activeRefKeys, collectStaleRefs, planRestore } from "./lib/backfill-catalog-refs-core.mjs";
+
+const args = process.argv.slice(2);
+const apply = args.includes("--apply");
+const variantFilter = args.includes("--variant") ? args[args.indexOf("--variant") + 1] : undefined;
+const envFile = args.includes("--env") ? args[args.indexOf("--env") + 1] : ".env.local";
+/** 적용을 되돌릴 백업 JSON 경로. `--apply`와 함께 써야 실제로 쓴다. */
+const restorePath = args.includes("--restore") ? args[args.indexOf("--restore") + 1] : undefined;
+/** 기록된 catalog 참조가 지금도 active revision을 가리키는지만 확인하고 끝낸다. 쓰지 않는다. */
+const verifyOnly = args.includes("--verify");
+/**
+ * 쓰기 대상 프로젝트 재확인. `--apply`에는 반드시 붙인다.
+ *
+ * 기본 env 파일이 운영을 가리키므로, 어느 프로젝트에 쓰는지 한 번 더 손으로 적게 한다.
+ */
+const confirmedProject = args.includes("--project") ? args[args.indexOf("--project") + 1] : undefined;
+/** 복원 시 백업 이후의 편집을 알고도 덮어쓴다. 대조에서 걸린 variant에만 의미가 있다. */
+const force = args.includes("--force");
+/** 리포트·백업은 저장소를 더럽히지 않도록 기본적으로 임시 디렉터리에 쓴다. */
+const outDir = args.includes("--out") ? args[args.indexOf("--out") + 1] : resolve(tmpdir(), "talktheme-backfill");
+
+function readEnv(file) {
+  const fromProcess = {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
+  };
+  if (fromProcess.NEXT_PUBLIC_SUPABASE_URL && fromProcess.SUPABASE_SECRET_KEY) return fromProcess;
+
+  const text = readFileSync(resolve(process.cwd(), file), "utf8");
+  return Object.fromEntries(
+    text
+      .split(/\r?\n/)
+      .filter((line) => line && !line.startsWith("#") && line.includes("="))
+      .map((line) => {
+        const index = line.indexOf("=");
+        return [line.slice(0, index).trim(), line.slice(index + 1).trim().replace(/^["']|["']$/g, "")];
+      }),
+  );
+}
+
+const env = readEnv(envFile);
+const baseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
+const secret = env.SUPABASE_SECRET_KEY;
+if (!baseUrl || !secret) {
+  console.error("NEXT_PUBLIC_SUPABASE_URL 과 SUPABASE_SECRET_KEY 가 필요합니다.");
+  process.exit(1);
+}
+
+const headers = { apikey: secret, authorization: `Bearer ${secret}` };
+const projectRef = new URL(baseUrl).hostname.split(".")[0];
+
+if (apply && confirmedProject !== projectRef) {
+  console.error(`쓰기 대상 확인이 필요합니다.`);
+  console.error(`  대상 프로젝트: ${projectRef}  (${envFile})`);
+  console.error(`  같은 값을 --project 로 다시 지정하세요:  --project ${projectRef}`);
+  process.exit(1);
+}
+
+async function get(path) {
+  const response = await fetch(`${baseUrl}/rest/v1/${path}`, { headers });
+  if (!response.ok) throw new Error(`GET ${path} -> ${response.status} ${await response.text()}`);
+  return response.json();
+}
+
+async function patch(path, body) {
+  const response = await fetch(`${baseUrl}/rest/v1/${path}`, {
+    method: "PATCH",
+    headers: { ...headers, "content-type": "application/json", prefer: "return=minimal" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(`PATCH ${path} -> ${response.status} ${await response.text()}`);
+}
+
+async function verifyCatalogRefs(rows) {
+  const fresh = await get("theme_asset_objects?select=logical_asset_id,revision,variant_key,status&limit=5000");
+  return collectStaleRefs(rows, activeRefKeys(fresh));
+}
+
+function reportVerification({ checked, stale }) {
+  console.log(`\n참조 검증: ${checked}건 확인 · 어긋남 ${stale.length}건`);
+  for (const item of stale.slice(0, 20)) {
+    console.log(`  STALE  ${item.variantId} / ${item.slotId}  ${item.key}`);
+  }
+  if (stale.length > 20) console.log(`  … 외 ${stale.length - 20}건`);
+  if (stale.length > 0) {
+    console.log("  이 참조들은 내보내기에서 catalog_asset_revision_mismatch로 실패한다.");
+    console.log("  해당 variant를 복원하거나, 해당 자산을 다시 게시한 뒤 재실행한다.");
+  }
+}
+
+/**
+ * 백업 파일의 `upload_refs`를 되돌린다.
+ *
+ * 되돌릴 일이 세 번 있었다. 그때마다 일회성 스크립트를 썼는데, 급할 때 다시 짜는 것이
+ * 가장 나쁜 조건이라 여기에 남긴다. `--apply` 없이는 무엇이 바뀌는지만 출력한다.
+ *
+ * 백업 이후에 다른 편집이 있었으면 그 variant는 건너뛴다. 오래된 백업을 통째로 덮어쓰는 것이
+ * 이 모드의 유일한 위험이다.
+ */
+if (restorePath) {
+  const backup = JSON.parse(readFileSync(resolve(process.cwd(), restorePath), "utf8"));
+  const targets = variantFilter ? backup.filter((row) => row.id === variantFilter) : backup;
+  if (targets.length === 0) {
+    console.error(`복원 대상이 없습니다: ${restorePath}${variantFilter ? ` (variant ${variantFilter})` : ""}`);
+    process.exit(1);
+  }
+
+  const current = await get(`system_template_variants?select=id,upload_refs&id=in.(${targets.map((row) => row.id).join(",")})`);
+  const currentById = new Map(current.map((row) => [row.id, row]));
+
+  console.log(`${apply ? "RESTORE" : "RESTORE (DRY-RUN)"} — variant ${targets.length}개  출처: ${restorePath}`);
+  let blocked = 0;
+  for (const row of targets) {
+    const live = currentById.get(row.id);
+    const slots = Object.keys(row.upload_refs ?? {}).length;
+    const plan = planRestore({ backupRow: row, liveRefs: live?.upload_refs, hasLiveRow: Boolean(live), force });
+
+    if (plan.action === "skip") {
+      console.log(`  건너뜀 ${row.platform} ${row.id}  — ${plan.reason}${plan.check ? ` (--force로 덮어쓸 수 있다)` : ""}`);
+      blocked += 1;
+      continue;
+    }
+
+    const notes = [];
+    if (plan.forced) notes.push("강제: 이후 변경을 덮어쓴다");
+    // 옛 백업에는 적용 후 기대 상태가 없어 대조가 불완전하다. 조용히 넘어가면 안 된다.
+    if (plan.incomplete) notes.push("경고: appliedRefs 없는 옛 백업 — catalog 필드만 바뀐 편집은 감지하지 못한다");
+    console.log(`  ${row.platform} ${row.id}  슬롯 ${slots}개${notes.length ? `  [${notes.join(" / ")}]` : ""}`);
+    if (apply) await patch(`system_template_variants?id=eq.${row.id}`, { upload_refs: row.upload_refs });
+  }
+  if (blocked > 0) console.log(`\n건너뛴 variant ${blocked}개.`);
+  console.log(apply ? "복원 완료." : "\n실제로 되돌리려면 --apply 를 붙여 다시 실행하세요.");
+  process.exit(blocked > 0 ? 1 : 0);
+}
+
+/** 플랫폼 전용 파생물이 생기면 그것을 먼저 쓰고, 없으면 canonical로 떨어진다. */
+function pickRecord(records, platform) {
+  return records.find((record) => record.variant_key === platform) ?? records.find((record) => record.variant_key === "canonical");
+}
+
+function convertEntry(entry, activeByLogical, platform) {
+  if (entry.catalog) return { action: "skip", reason: "already-catalog" };
+  if (entry.imageEdit) return { action: "skip", reason: "image-edit" };
+
+  const logicalAssetId = [`tpl:${entry.id}`, `admin:${entry.id}`].find((key) => activeByLogical.has(key));
+  if (!logicalAssetId) return { action: "skip", reason: "no-registry-row" };
+
+  const record = pickRecord(activeByLogical.get(logicalAssetId), platform);
+  if (!record) return { action: "skip", reason: "no-usable-variant-key" };
+  if (record.mime_type !== "image/png" || record.png_signature_verified !== true) {
+    return { action: "skip", reason: "not-exportable" };
+  }
+
+  const legacyStoragePath = entry.storagePath ?? entry.catalogMetadata?.legacyStoragePath;
+  const next = {
+    ...entry,
+    id: entry.id,
+    fileName: record.file_name,
+    mimeType: record.mime_type,
+    size: record.size_bytes,
+    catalog: {
+      kind: "catalog",
+      assetId: record.logical_asset_id,
+      revision: record.revision,
+      variantKey: record.variant_key,
+    },
+    catalogMetadata: {
+      fileName: record.file_name,
+      mimeType: record.mime_type,
+      size: record.size_bytes,
+      sourceScale: record.source_scale,
+      width: record.width,
+      height: record.height,
+      pngSignatureVerified: true,
+      // 미리보기 해석과 변환 fallback이 이 경로를 쓴다. 반드시 남긴다.
+      ...(legacyStoragePath ? { legacyStoragePath } : {}),
+    },
+  };
+  return { action: "convert", entry: next, logicalAssetId };
+}
+
+const objects = await get(
+  "theme_asset_objects?select=id,logical_asset_id,revision,variant_key,status,mime_type,png_signature_verified,source_scale,width,height,size_bytes,file_name&limit=5000",
+);
+const activeByLogical = new Map();
+for (const record of objects) {
+  if (record.status !== "active") continue;
+  const list = activeByLogical.get(record.logical_asset_id) ?? [];
+  list.push(record);
+  activeByLogical.set(record.logical_asset_id, list);
+}
+
+const variantQuery = variantFilter
+  ? `system_template_variants?select=id,bundle_id,platform,upload_refs&id=eq.${variantFilter}`
+  : "system_template_variants?select=id,bundle_id,platform,upload_refs&limit=500";
+const variants = await get(variantQuery);
+const bundles = await get("system_template_bundles?select=id,title&limit=200");
+const titleById = new Map(bundles.map((bundle) => [bundle.id, bundle.title]));
+
+if (verifyOnly) {
+  console.log(`VERIFY — variant ${variants.length}개`);
+  const result = await verifyCatalogRefs(variants);
+  reportVerification(result);
+  process.exit(result.stale.length > 0 ? 1 : 0);
+}
+
+const totals = { converted: 0, skipped: {}, variantsChanged: 0 };
+const plans = [];
+
+for (const variant of variants) {
+  const refs = variant.upload_refs ?? {};
+  const nextRefs = {};
+  let changed = 0;
+  const skips = {};
+
+  for (const [slotId, entries] of Object.entries(refs)) {
+    if (!Array.isArray(entries)) {
+      nextRefs[slotId] = entries;
+      continue;
+    }
+    nextRefs[slotId] = entries.map((entry) => {
+      const result = convertEntry(entry, activeByLogical, variant.platform);
+      if (result.action === "convert") {
+        changed += 1;
+        totals.converted += 1;
+        return result.entry;
+      }
+      skips[result.reason] = (skips[result.reason] ?? 0) + 1;
+      totals.skipped[result.reason] = (totals.skipped[result.reason] ?? 0) + 1;
+      return entry;
+    });
+  }
+
+  if (changed > 0) totals.variantsChanged += 1;
+  plans.push({ variant, nextRefs, changed, skips });
+}
+
+const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+mkdirSync(outDir, { recursive: true });
+const reportPath = resolve(outDir, `backfill-report-${stamp}.json`);
+writeFileSync(
+  reportPath,
+  JSON.stringify(
+    plans.map(({ variant, changed, skips }) => ({
+      title: titleById.get(variant.bundle_id),
+      platform: variant.platform,
+      variantId: variant.id,
+      changed,
+      skips,
+    })),
+    null,
+    2,
+  ),
+);
+
+console.log(`${apply ? "APPLY" : "DRY-RUN"} — variant ${variants.length}개`);
+for (const { variant, changed, skips } of plans) {
+  const skipText = Object.entries(skips).map(([reason, count]) => `${reason}:${count}`).join(" ") || "-";
+  console.log(`  ${titleById.get(variant.bundle_id) ?? variant.bundle_id} / ${variant.platform}  변환 ${changed}  건너뜀 ${skipText}`);
+}
+console.log(`\n합계: 변환 ${totals.converted} · 변경 variant ${totals.variantsChanged}`);
+console.log(`건너뜀: ${JSON.stringify(totals.skipped)}`);
+console.log(`리포트: ${reportPath}`);
+
+if (!apply) {
+  const sample = plans.find((plan) => plan.changed > 0);
+  if (sample) {
+    const slotId = Object.keys(sample.nextRefs).find((key) => sample.nextRefs[key]?.some?.((entry) => entry.catalog));
+    console.log(`\n샘플 (${titleById.get(sample.variant.bundle_id)} / ${slotId}):`);
+    console.log("  before:", JSON.stringify((sample.variant.upload_refs?.[slotId] ?? [])[0]));
+    console.log("  after :", JSON.stringify(sample.nextRefs[slotId][0]));
+  }
+  console.log("\n실제 반영하려면 --apply 를 붙여 다시 실행하세요.");
+  process.exit(0);
+}
+
+const backupPath = resolve(outDir, `backfill-backup-${stamp}.json`);
+writeFileSync(
+  backupPath,
+  JSON.stringify(
+    // `appliedRefs`는 이 실행이 만들 기대 상태다. 복원할 때 현재 상태와 통째로 대조해,
+    // backfill 이후에 다른 변경이 있었는지 정확히 가른다. 이것이 없으면 복원 대조가
+    // "이 스크립트가 쓰는 필드를 제외한 비교"로 떨어져 catalog 필드만 바뀐 편집을 놓친다.
+    plans.map(({ variant, nextRefs, changed }) => ({
+      id: variant.id,
+      bundle_id: variant.bundle_id,
+      platform: variant.platform,
+      upload_refs: variant.upload_refs,
+      appliedRefs: changed > 0 ? nextRefs : variant.upload_refs,
+    })),
+    null,
+    2,
+  ),
+);
+console.log(`\n백업: ${backupPath}`);
+
+const written = [];
+for (const { variant, nextRefs, changed } of plans) {
+  if (changed === 0) continue;
+  await patch(`system_template_variants?id=eq.${variant.id}`, { upload_refs: nextRefs });
+  written.push({ id: variant.id, upload_refs: nextRefs });
+  console.log(`  적용 ${titleById.get(variant.bundle_id)} / ${variant.platform} (${changed}건)`);
+}
+
+// revision은 실행 시작 시점에 읽은 값이다. 쓰는 동안 재게시가 끼어들었으면 방금 쓴 참조가
+// 이미 retire됐을 수 있다. 조용히 넘어가면 내보내기 시점에야 드러난다.
+const verification = await verifyCatalogRefs(written);
+reportVerification(verification);
+
+console.log("완료.");
+if (verification.stale.length > 0) process.exit(1);
