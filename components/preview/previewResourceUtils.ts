@@ -19,7 +19,18 @@ export function findBestFile(analysis: ThemeProjectAnalysis, role: ThemeResource
   const candidates = analysis.resources
     .filter((resource) => resource.role === role && resource.filePath)
     .map((resource) => analysis.files.find((file) => file.path === resource.filePath))
-    .filter((file): file is ThemeProjectFile => Boolean(file?.file || file?.sourceUrl));
+    /**
+     * 그릴 수 있는 것의 기준은 **바이트 또는 URL이 하나라도 있는가**다.
+     *
+     * `previewUrl`을 빠뜨리면 catalog 참조로 저장된 슬롯이 통째로 사라진다. 그 항목은 바이트를
+     * 내려받지 않는 것이 목적이라 `file`이 없고, 업로드를 고른 상태라 `sourceUrl`도 없다. 남는
+     * 것은 서명된 `previewUrl` 하나뿐인데, 여기서 걸러 내면 화면에 빈 자리가 남는다. 실제로
+     * 시스템 템플릿을 catalog 참조로 바꾼 뒤 탭 아이콘이 전부 비었다.
+     *
+     * `imageUrlForThemeFile`은 이미 `previewUrl`을 우선 사용하므로, 후보 판정만 맞추면 된다.
+     * 업로드 항목의 같은 판정은 `canRenderUploadEntry`가 한다 — 기준을 둘로 나누지 않는다.
+     */
+    .filter((file): file is ThemeProjectFile => Boolean(file?.file || file?.sourceUrl || file?.previewUrl));
 
   return (
     candidates.find((file) => file.path.includes("mipmap-xxxhdpi")) ??
