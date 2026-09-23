@@ -168,8 +168,15 @@ export function ChatroomPreview({
 
     async function load() {
       if (!backgroundImageUrl) return;
-      const nextBackgroundImage = await loadCrossOriginImage(backgroundImageUrl);
-      if (!cancelled) setBackgroundImage(nextBackgroundImage);
+      try {
+        const nextBackgroundImage = await loadCrossOriginImage(backgroundImageUrl);
+        if (!cancelled) setBackgroundImage(nextBackgroundImage);
+      } catch {
+        // 서명이 만료됐거나 CORS 헤더가 없으면 여기로 온다. 헤더 글자색은 배경 이미지가
+        // 없을 때의 경로(`getReadableTextColor`)로 떨어지면 되므로, 실패를 그대로 두고
+        // 이미지를 비운다. 막지 않으면 unhandled rejection으로 올라간다.
+        if (!cancelled) setBackgroundImage(null);
+      }
     }
 
     void load();
