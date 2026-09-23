@@ -59,6 +59,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { activeRefKeys, collectStaleRefs, planRestore } from "./lib/backfill-catalog-refs-core.mjs";
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
@@ -131,63 +132,9 @@ async function patch(path, body) {
   if (!response.ok) throw new Error(`PATCH ${path} -> ${response.status} ${await response.text()}`);
 }
 
-/** 키 순서에 흔들리지 않는 직렬화. 대조용이다. */
-function stableStringify(value) {
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
-  }
-  return JSON.stringify(value ?? null);
-}
-
-/** 이 스크립트가 덮어쓰는 필드. 복원 대조에서는 제외한다 — 여기가 달라진 것은 당연하다. */
-const backfillWrittenFields = ["catalog", "catalogMetadata", "fileName", "mimeType", "size"];
-
-/**
- * "어떤 항목이 있었는가"만 남긴 지문.
- *
- * 복원은 백업을 통째로 PATCH하므로, 백업을 뜬 뒤에 그 variant를 편집했다면 그 편집까지
- * 사라진다. 이 지문이 같다면 달라진 것은 이 스크립트가 쓴 필드뿐이므로 되돌려도 안전하고,
- * 다르면 백업 이후에 다른 변경이 있었다는 뜻이다.
- */
-function refsIdentity(refs) {
-  const out = {};
-  for (const [slotId, entries] of Object.entries(refs ?? {})) {
-    out[slotId] = (entries ?? []).map((entry) => {
-      const rest = { ...entry };
-      for (const field of backfillWrittenFields) delete rest[field];
-      return rest;
-    });
-  }
-  return stableStringify(out);
-}
-
-/**
- * 기록된 catalog 참조가 지금도 active revision을 가리키는지 확인한다.
- *
- * 참조를 쓰는 동안 같은 자산이 재게시되면, 방금 쓴 참조가 retire된 revision을 가리킬 수 있다.
- * 멱등 재실행은 이것을 고치지 못한다 — 이미 catalog인 항목은 건너뛰기 때문이다. 그래서
- * 적용 직후와 `--verify`에서 따로 확인한다. 어긋난 참조는 내보내기가
- * `catalog_asset_revision_mismatch`로 실패한다.
- */
 async function verifyCatalogRefs(rows) {
   const fresh = await get("theme_asset_objects?select=logical_asset_id,revision,variant_key,status&limit=5000");
-  const activeKeys = new Set(
-    fresh.filter((record) => record.status === "active").map((record) => `${record.logical_asset_id}|${record.variant_key}|${record.revision}`),
-  );
-  const stale = [];
-  let checked = 0;
-  for (const row of rows) {
-    for (const [slotId, entries] of Object.entries(row.upload_refs ?? {})) {
-      for (const entry of entries ?? []) {
-        if (!entry.catalog) continue;
-        checked += 1;
-        const key = `${entry.catalog.assetId}|${entry.catalog.variantKey}|${entry.catalog.revision}`;
-        if (!activeKeys.has(key)) stale.push({ variantId: row.id, slotId, key });
-      }
-    }
-  }
-  return { checked, stale };
+  return collectStaleRefs(rows, activeRefKeys(fresh));
 }
 
 function reportVerification({ checked, stale }) {
@@ -227,18 +174,19 @@ if (restorePath) {
   for (const row of targets) {
     const live = currentById.get(row.id);
     const slots = Object.keys(row.upload_refs ?? {}).length;
-    if (!live) {
-      console.log(`  건너뜀 ${row.platform} ${row.id}  — 현재 DB에 없는 variant`);
+    const plan = planRestore({ backupRow: row, liveRefs: live?.upload_refs, hasLiveRow: Boolean(live), force });
+
+    if (plan.action === "skip") {
+      console.log(`  건너뜀 ${row.platform} ${row.id}  — ${plan.reason}${plan.check ? ` (--force로 덮어쓸 수 있다)` : ""}`);
       blocked += 1;
       continue;
     }
-    const drifted = refsIdentity(live.upload_refs) !== refsIdentity(row.upload_refs);
-    if (drifted && !force) {
-      console.log(`  건너뜀 ${row.platform} ${row.id}  — 백업 이후 다른 편집이 있다(--force로 덮어쓸 수 있다)`);
-      blocked += 1;
-      continue;
-    }
-    console.log(`  ${row.platform} ${row.id}  슬롯 ${slots}개${drifted ? "  [강제: 백업 이후 편집을 덮어쓴다]" : ""}`);
+
+    const notes = [];
+    if (plan.forced) notes.push("강제: 이후 변경을 덮어쓴다");
+    // 옛 백업에는 적용 후 기대 상태가 없어 대조가 불완전하다. 조용히 넘어가면 안 된다.
+    if (plan.incomplete) notes.push("경고: appliedRefs 없는 옛 백업 — catalog 필드만 바뀐 편집은 감지하지 못한다");
+    console.log(`  ${row.platform} ${row.id}  슬롯 ${slots}개${notes.length ? `  [${notes.join(" / ")}]` : ""}`);
     if (apply) await patch(`system_template_variants?id=eq.${row.id}`, { upload_refs: row.upload_refs });
   }
   if (blocked > 0) console.log(`\n건너뛴 variant ${blocked}개.`);
@@ -390,7 +338,20 @@ if (!apply) {
 const backupPath = resolve(outDir, `backfill-backup-${stamp}.json`);
 writeFileSync(
   backupPath,
-  JSON.stringify(variants.map(({ id, bundle_id, platform, upload_refs }) => ({ id, bundle_id, platform, upload_refs })), null, 2),
+  JSON.stringify(
+    // `appliedRefs`는 이 실행이 만들 기대 상태다. 복원할 때 현재 상태와 통째로 대조해,
+    // backfill 이후에 다른 변경이 있었는지 정확히 가른다. 이것이 없으면 복원 대조가
+    // "이 스크립트가 쓰는 필드를 제외한 비교"로 떨어져 catalog 필드만 바뀐 편집을 놓친다.
+    plans.map(({ variant, nextRefs, changed }) => ({
+      id: variant.id,
+      bundle_id: variant.bundle_id,
+      platform: variant.platform,
+      upload_refs: variant.upload_refs,
+      appliedRefs: changed > 0 ? nextRefs : variant.upload_refs,
+    })),
+    null,
+    2,
+  ),
 );
 console.log(`\n백업: ${backupPath}`);
 

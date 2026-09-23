@@ -11,7 +11,9 @@ export default defineConfig({
     environment: "happy-dom",
     setupFiles: ["./vitest.setup.ts"],
     globals: false,
-    include: ["**/*.{test,spec}.{ts,tsx}"],
+    // `scripts/**`는 Node 전용 `.mjs`라 TS로 옮길 수 없다. 운영 데이터를 되돌리는 판정처럼
+    // 틀리면 손실이 나는 순수 로직은 그쪽에도 있어서, `.mjs` 테스트를 함께 받는다.
+    include: ["**/*.{test,spec}.{ts,tsx,mjs}"],
     exclude: [
       "node_modules/**",
       ".next/**",
