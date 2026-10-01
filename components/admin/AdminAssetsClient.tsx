@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
+import { AdminAssetInspector } from "@/components/admin/AdminAssetInspector";
+import { fetchAdminAssetUsageIndex, type AdminAssetUsageIndex } from "@/lib/theme/adminAssetUsage";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertTriangle, ArrowDownUp, Check, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
@@ -12,7 +14,6 @@ import AdminBubbleTextPreview from "@/components/admin/AdminBubbleTextPreview";
 import { AdminAssetCard, AdminAssetDockCard, AdminAssetSkeletonGrid, BubblePlatformSummary, TRANSPARENCY_CHECKER_STYLE } from "@/components/admin/AdminAssetLibraryCards";
 import {
   deleteAdminAssetCandidate,
-  findSystemTemplatesUsingAdminAsset,
   getAdminAssetCandidate,
   adminAssetToFile,
   adminAssetBubbleDecorationToFile,
@@ -140,7 +141,11 @@ export default function AdminAssetsClient() {
   const [editingAsset, setEditingAsset] = useState<AdminAssetCandidate | null>(null);
   const [assetPendingDelete, setAssetPendingDelete] = useState<AdminAssetListItem | null>(null);
   // 삭제 확인 창에 "이 에셋을 쓰는 템플릿"을 보여 준다. `null`은 아직 조회 중이라는 뜻이다.
-  const [templatesUsingPendingDelete, setTemplatesUsingPendingDelete] = useState<string[] | null>(null);
+  const [usageIndex, setUsageIndex] = useState<AdminAssetUsageIndex | null>(null);
+  const [usageError, setUsageError] = useState<string | null>(null);
+  const [usageRevision, setUsageRevision] = useState(0);
+  const [usageFilter, setUsageFilter] = useState<"all" | "linked">("all");
+  const templatesUsingPendingDelete = assetPendingDelete && usageIndex ? (usageIndex.byAssetId[assetPendingDelete.id] ?? []).map((bundle) => bundle.title) : null;
   const [isSavingAsset, setIsSavingAsset] = useState(false);
   const [isLoadingEditAsset, setIsLoadingEditAsset] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<AdminAssetUploadProgress | null>(null);
@@ -294,11 +299,11 @@ export default function AdminAssetsClient() {
    */
   const filteredAssets = useMemo(
     () =>
-      visibleAssets.map((asset) => ({
+      visibleAssets.filter((asset) => usageFilter === "all" || !usageIndex || Boolean(usageIndex.byAssetId[asset.id]?.length)).map((asset) => ({
         asset,
         warnings: getAdminAssetGuidanceForSlots(activeKindSlots, asset.assetKind ?? assetKind, asset.analysis ?? null),
       })),
-    [activeKindSlots, assetKind, visibleAssets],
+    [activeKindSlots, assetKind, visibleAssets, usageFilter, usageIndex],
   );
   const guidanceItems = useMemo(() => getAdminAssetGuidanceForSlots(activeKindSlots, assetKind, analysis), [activeKindSlots, analysis, assetKind]);
 
@@ -619,17 +624,16 @@ export default function AdminAssetsClient() {
   };
 
   useEffect(() => {
-    if (!assetPendingDelete) {
-      setTemplatesUsingPendingDelete(null);
-      return;
-    }
-    let cancelled = false;
-    setTemplatesUsingPendingDelete(null);
-    void findSystemTemplatesUsingAdminAsset(assetPendingDelete.id).then((titles) => {
-      if (!cancelled) setTemplatesUsingPendingDelete(titles);
+    const controller = new AbortController();
+    setUsageIndex(null);
+    setUsageError(null);
+    void fetchAdminAssetUsageIndex(controller.signal).then((index) => {
+      if (!controller.signal.aborted) setUsageIndex(index);
+    }).catch(() => {
+      if (!controller.signal.aborted) setUsageError("연결 정보를 불러오지 못했습니다. 다시 조회해 주세요.");
     });
-    return () => { cancelled = true; };
-  }, [assetPendingDelete]);
+    return () => controller.abort();
+  }, [usageRevision]);
 
   /**
    * catalog registry에 빠진 에셋을 다시 게시한다.
@@ -682,7 +686,7 @@ export default function AdminAssetsClient() {
   };
 
   const remove = async (asset: AdminAssetListItem) => {
-    if (deletingAssetId) return;
+    if (deletingAssetId || !usageIndex?.complete || usageError) return;
     if (blockBubbleWorkspaceChange()) return;
     try {
       setDeletingAssetId(asset.id);
@@ -987,7 +991,7 @@ export default function AdminAssetsClient() {
               <button type="button" aria-label="우측 패널 너비 조절" title="드래그하여 우측 패널 너비 조절" onPointerDown={(event) => startSidebarResize("right", event)} className="absolute inset-y-0 left-0 z-40 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition hover:bg-blue-500/30 lg:block" />
               <div className="border-b border-[var(--color-outline-variant)] px-4 py-4">
                   <span className="min-w-0">
-                    <span className="block text-sm font-black text-[var(--color-on-surface)]">에셋 등록</span>
+                    <span className="block text-sm font-black text-[var(--color-on-surface)]">{editingAsset ? "에셋 수정" : "에셋 등록"}</span>
                     <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">
                     {pendingFiles.length > 1 ? `${pendingFiles.length}개 이미지 선택됨` : file ? file.name : `${getAdminAssetKindLabel(assetKind)} · ${formatAdminAssetScope(activeKindSlots)}`}
                   </span>
@@ -1000,7 +1004,8 @@ export default function AdminAssetsClient() {
                 </div>
               ) : null}
               {isLoadingEditAsset ? <div className="inline-flex items-center gap-2 border-t border-[var(--color-outline-variant)] px-4 py-2.5 text-xs font-bold text-[var(--color-on-surface-variant)]"><LoaderCircle size={14} className="animate-spin" /> 원본 불러오는 중</div> : null}
-                <div id="admin-asset-add-panel" className="relative grid gap-3 p-4" role="region" aria-label="에셋 등록">
+                <div id="admin-asset-add-panel" className="relative grid gap-3 p-4" role="region" aria-label={editingAsset ? "에셋 수정" : "에셋 등록"}>
+                  {editingAsset ? <AdminAssetInspector key={editingAsset.id} asset={editingAsset} usage={usageIndex} error={usageError} onRetry={() => setUsageRevision((value) => value + 1)} /> : null}
                   {isSavingAsset ? (
                     <div className="absolute inset-0 z-10 grid place-items-center bg-white/72 backdrop-blur-[1px]" role="status" aria-live="polite">
                       <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-4 py-2 text-sm font-black text-[var(--color-info-strong)] shadow-sm">
@@ -1371,12 +1376,20 @@ export default function AdminAssetsClient() {
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" />
                 </div>
               </div>
+              <div className="mb-3 flex items-center gap-2 text-xs">
+                <span>시스템 템플릿</span>
+                <select aria-label="시스템 템플릿 연결 필터" value={usageFilter} onChange={(event) => setUsageFilter(event.currentTarget.value as "all" | "linked")} className="rounded-lg border px-2 py-2">
+                  <option value="all">연결 전체</option><option value="linked" disabled={!usageIndex || Boolean(usageError)}>확인된 저장 참조 있음</option>
+                </select>
+                {!usageIndex ? <span role="status">{usageError ? "연결 조회 실패 · 전체 후보 표시 중" : "연결 조회 중 · 전체 후보 표시 중"}</span> : null}
+                {usageError ? <button type="button" onClick={() => setUsageRevision((value) => value + 1)} className="underline">연결 조회 재시도</button> : null}
+              </div>
               {isLoadingAssets && filteredAssets.length === 0 ? (
                 <AdminAssetSkeletonGrid columns={assetGridColumns} />
               ) : filteredAssets.length > 0 ? (
                 <div className={`grid gap-3 sm:grid-cols-2 ${assetGridColumns === 3 ? "xl:grid-cols-3" : assetGridColumns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
                   {filteredAssets.map(({ asset, warnings }) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} deleting={deletingAssetId === asset.id} republishing={republishingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} onRepublish={() => void republishCatalog(asset)} />
+                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} selected={editingAsset?.id === asset.id} usageLabel={usageError ? "연결 조회 실패" : !usageIndex ? "연결 확인 중" : `저장 참조 ${usageIndex.byAssetId[asset.id]?.length ?? 0}개${!usageIndex.complete || usageIndex.unknownReferences ? " · 일부 연결 미확인" : ""}`} deleting={deletingAssetId === asset.id} republishing={republishingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => { setUsageIndex(null); setUsageError(null); setAssetPendingDelete(asset); setUsageRevision((value) => value + 1); }} onRepublish={() => void republishCatalog(asset)} />
                   ))}
                 </div>
               ) : (
@@ -1500,9 +1513,12 @@ export default function AdminAssetsClient() {
               <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2.5 text-xs font-semibold leading-5 text-amber-900">
                 시스템 템플릿 {templatesUsingPendingDelete.length}개가 이 에셋을 쓰고 있습니다 ({templatesUsingPendingDelete.slice(0, 3).join(", ")}
                 {templatesUsingPendingDelete.length > 3 ? ` 외 ${templatesUsingPendingDelete.length - 3}개` : ""}).
-                {" "}이미 발행된 템플릿의 내보내기는 계속 동작하지만, 이 에셋은 피커에서 사라집니다.
+                {" "}원본 삭제는 미리보기와 내보내기에 영향을 줄 수 있습니다. 플랫폼의 catalog producer 설정과 사용자·에셋 allowlist에 따라 기존 원본을 사용합니다.
               </p>
             ) : null}
+            {!usageIndex && !usageError ? <p role="status" className="mt-3 text-xs">시스템 템플릿 연결 확인 중…</p> : null}
+            {usageError || (usageIndex && !usageIndex.complete) ? <div role="alert" className="mt-3 text-xs text-red-700">{usageError ?? "연결 조회가 일부만 완료되었습니다. 삭제할 수 없습니다."}<button type="button" onClick={() => setUsageRevision((value) => value + 1)} className="ml-2 underline">다시 조회</button></div> : null}
+            {usageIndex?.unknownReferences ? <p className="mt-3 text-xs text-amber-800">출처를 확인할 수 없는 기존 참조가 있어 모든 연결을 보장할 수 없습니다.</p> : null}
             <div className="mt-5 grid grid-cols-2 gap-2">
               <Dialog.Close asChild>
                 <button type="button" className="min-h-11 rounded-xl border border-[var(--color-outline-variant)] px-4 py-2.5 text-sm font-extrabold text-[var(--color-on-surface-variant)] focus-visible:outline-2 focus-visible:outline-[var(--color-secondary)] disabled:opacity-55" disabled={Boolean(deletingAssetId)}>취소</button>
@@ -1510,7 +1526,7 @@ export default function AdminAssetsClient() {
               <button
                 type="button"
                 className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-extrabold text-white transition hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-red-600 disabled:opacity-55"
-                disabled={Boolean(deletingAssetId)}
+                disabled={Boolean(deletingAssetId) || !usageIndex?.complete || Boolean(usageError)}
                 onClick={() => { if (assetPendingDelete) void remove(assetPendingDelete); }}
               >
                 {deletingAssetId ? <><LoaderCircle className="animate-spin" size={17} aria-hidden="true" />삭제 중</> : "삭제"}

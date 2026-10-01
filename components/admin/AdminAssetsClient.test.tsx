@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { toAdminAssetListItem } from "@/lib/theme/adminAssetList";
 import AdminAssetsClient from "./AdminAssetsClient";
+import { fetchAdminAssetUsageIndex } from "@/lib/theme/adminAssetUsage";
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), save: vi.fn(), source: vi.fn() }));
 vi.mock("@/lib/theme/adminAssets", async (importOriginal) => ({
@@ -15,6 +16,7 @@ vi.mock("@/lib/theme/adminAssets", async (importOriginal) => ({
 vi.mock("@/lib/theme/assetCatalog/shadowPublishClient", () => ({
   shadowPublishThemeAsset: vi.fn(), whenShadowPublishesSettle: vi.fn(async () => undefined),
 }));
+vi.mock("@/lib/theme/adminAssetUsage", () => ({ fetchAdminAssetUsageIndex: vi.fn(async () => ({ byAssetId: {}, complete: true, unknownReferences: 0, checkedAt: new Date().toISOString() })) }));
 vi.mock("@/components/admin/hooks/useAdminAssetLibrary", () => ({
   useAdminAssetLibrary: () => ({
     assets: [toAdminAssetListItem(asset)], visibleAssets: [toAdminAssetListItem(asset)],
@@ -57,6 +59,20 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("admin asset paste", () => {
+  it("keeps all candidates accessible when a linked-filter refresh fails", async () => {
+    vi.mocked(fetchAdminAssetUsageIndex).mockResolvedValueOnce({ byAssetId: { [asset.id]: [{ id: "bundle", title: "Linked", status: "draft", visibility: "private", variants: [] }] }, complete: true, unknownReferences: 0, checkedAt: "2026-10-02" });
+    render(<AdminAssetsClient />);
+    fireEvent.click(screen.getAllByRole("button", { name: "수정" })[0]);
+    await screen.findByRole("button", { name: "연결 다시 조회" });
+    fireEvent.change(screen.getByLabelText("시스템 템플릿 연결 필터"), { target: { value: "linked" } });
+    vi.mocked(fetchAdminAssetUsageIndex).mockRejectedValueOnce(new Error("offline"));
+    fireEvent.click(screen.getByRole("button", { name: "연결 다시 조회" }));
+    await screen.findByText("연결 조회 실패 · 전체 후보 표시 중");
+    const filter = screen.getByLabelText("시스템 템플릿 연결 필터");
+    expect(filter).not.toBeDisabled();
+    fireEvent.change(filter, { target: { value: "all" } });
+    expect(screen.getByRole("article", { name: "Existing bubble · 수정 중" })).toBeInTheDocument();
+  });
   it("ignores an old detail response after accepting a pasted image", async () => {
     let resolveDetail!: (value: AdminAssetCandidate) => void;
     mocks.get.mockReturnValue(new Promise<AdminAssetCandidate>((resolve) => { resolveDetail = resolve; }));

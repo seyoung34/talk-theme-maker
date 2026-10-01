@@ -110,6 +110,8 @@ export function AdminAssetCard({
   onEdit,
   onDelete,
   onRepublish,
+  selected = false,
+  usageLabel,
 }: {
   asset: AdminAssetListItem;
   slots: readonly ThemeAssetSlot[];
@@ -119,6 +121,8 @@ export function AdminAssetCard({
   onEdit: () => void;
   onDelete: () => void;
   onRepublish: () => void;
+  selected?: boolean;
+  usageLabel?: string;
 }) {
   // `undefined`는 "확인하지 못했다"는 뜻이라 배지를 띄우지 않는다. 조회 장애를 미등록으로
   // 보여 주면 운영자가 멀쩡한 에셋을 다시 올린다.
@@ -140,7 +144,8 @@ export function AdminAssetCard({
   const tileUrl = adminAssetListTileUrl(asset);
   const scopeLabel = getAdminAssetScopeLabel(describeAdminAssetScope(asset.targets));
   return (
-    <article className={`relative grid gap-3 overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] transition duration-200 ${deleting ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(42,103,103,0.1)]"}`}>
+    <article aria-label={`${asset.title}${selected ? " · 수정 중" : ""}`} className={`relative grid gap-3 overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] transition duration-200 ${selected ? "ring-2 ring-[var(--color-info)]" : ""} ${deleting ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(42,103,103,0.1)]"}`}>
+      {usageLabel ? <span className="text-[11px] font-bold text-[var(--color-on-surface-variant)]">{usageLabel}</span> : null}
       {deleting ? (
         <div className="absolute inset-0 z-10 grid place-items-center bg-white/70 backdrop-blur-[1px]" role="status" aria-live="polite">
           <span className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-700 shadow-sm">
