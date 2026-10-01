@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { AdminAssetInspector } from "@/components/admin/AdminAssetInspector";
-import { describeAdminAssetUsage, fetchAdminAssetUsageIndex, type AdminAssetUsageIndex } from "@/lib/theme/adminAssetUsage";
+import { AdminAssetConnections, AdminAssetInspector } from "@/components/admin/AdminAssetInspector";
+import { fetchAdminAssetUsageIndex, type AdminAssetUsageIndex } from "@/lib/theme/adminAssetUsage";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertTriangle, ArrowDownUp, Check, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
@@ -48,7 +48,7 @@ import {
 import { bubbleSlotFromRole } from "@/lib/theme/project/state";
 import { generateBubbleAsset, type BubbleFamilyDesignSpec, type GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
-import { getThemeSlots, templateStartStorageKey } from "@/lib/theme/templates";
+import { getThemeSlots } from "@/lib/theme/templates";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -144,7 +144,7 @@ export default function AdminAssetsClient() {
   const [usageIndex, setUsageIndex] = useState<AdminAssetUsageIndex | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [usageRevision, setUsageRevision] = useState(0);
-  const [usageFilter, setUsageFilter] = useState<"all" | "linked" | "applied" | "stored" | "unlinked" | "unknown">("all");
+  const [usageFilter, setUsageFilter] = useState<"all" | "linked" | "unlinked" | "unknown">("all");
   const templatesUsingPendingDelete = assetPendingDelete && usageIndex ? (usageIndex.byAssetId[assetPendingDelete.id] ?? []).map((bundle) => bundle.title) : null;
   const [isSavingAsset, setIsSavingAsset] = useState(false);
   const [isLoadingEditAsset, setIsLoadingEditAsset] = useState(false);
@@ -351,9 +351,7 @@ export default function AdminAssetsClient() {
         if (usageFilter === "all" || !usageIndex) return true;
         const variants = (usageIndex.byAssetId[asset.id] ?? []).flatMap((bundle) => bundle.variants);
         if (usageFilter === "unlinked") return !usageIndex.complete || usageIndex.unknownReferences > 0 || variants.length === 0;
-        if (usageFilter === "unknown") return !usageIndex.complete || usageIndex.unknownReferences > 0 || variants.some((variant) => variant.appliedSlots === undefined);
-        if (usageFilter === "applied") return variants.some((variant) => Boolean(variant.appliedSlots?.length));
-        if (usageFilter === "stored") return variants.length > 0 && variants.every((variant) => variant.appliedSlots?.length === 0);
+        if (usageFilter === "unknown") return variants.length === 0 && (!usageIndex.complete || usageIndex.unknownReferences > 0);
         return Boolean(usageIndex.byAssetId[asset.id]?.length);
       }).map((asset) => ({
         asset,
@@ -990,17 +988,6 @@ export default function AdminAssetsClient() {
     setNotice("새 후보 등록으로 돌아왔습니다.");
   };
 
-  const openLinkedTemplate = (bundleId: string, variant: { id: string; platform: string; baseTemplateId?: string }) => {
-    if (isSavingAsset || !variant.baseTemplateId || (variant.platform !== "android" && variant.platform !== "ios")) return;
-    if (blockBubbleWorkspaceChange()) return;
-    if (confirmWorkspaceChange(() => openLinkedTemplate(bundleId, variant))) return;
-    try {
-      localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: variant.baseTemplateId, platform: variant.platform, systemTemplateId: variant.id, systemTemplateBundleId: bundleId, editMode: "admin" }));
-      dirtyRef.current = false;
-      window.location.assign("/admin/edit");
-    } catch { setNotice("템플릿을 열지 못했습니다. 브라우저 저장 공간을 확인해 주세요."); }
-  };
-
   const applyBubbleBuilder = async (result: GeneratedBubbleDesign, decorations: Partial<Record<string, File>>) => {
     if (!bubbleAnchorSlot) return false;
     const variant = bubbleVariantFromRole(bubbleAnchorSlot.role);
@@ -1099,31 +1086,18 @@ export default function AdminAssetsClient() {
           <section className="grid min-w-0 content-start gap-0 lg:contents">
             <div className="relative min-h-0 min-w-0 overflow-hidden border-b border-[var(--color-outline-variant)] bg-white [overflow-anchor:none] lg:col-start-3 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:overscroll-y-contain lg:[scrollbar-gutter:stable] lg:border-b-0 lg:border-l">
               <button type="button" aria-label="우측 패널 너비 조절" title="드래그하여 우측 패널 너비 조절" role="separator" aria-orientation="vertical" aria-valuenow={rightSidebarWidth} aria-valuemin={MIN_RIGHT_SIDEBAR_WIDTH} aria-valuemax={MAX_RIGHT_SIDEBAR_WIDTH} onKeyDown={(event) => resizeSidebarWithKeyboard("right", event)} onPointerDown={(event) => startSidebarResize("right", event)} className="absolute inset-y-0 left-0 z-40 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition hover:bg-blue-500/30 lg:block" />
-              <div className="border-b border-[var(--color-outline-variant)] px-4 py-4">
+              <div className="flex items-center justify-between gap-2 border-b border-[var(--color-outline-variant)] px-4 py-4">
                   <span className="min-w-0">
                     <span className="block text-sm font-black text-[var(--color-on-surface)]">{editingAsset ? "에셋 수정" : "에셋 등록"}</span>
                     <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">
-                    {pendingFiles.length > 1 ? `${pendingFiles.length}개 이미지 선택됨` : file ? file.name : `${getAdminAssetKindLabel(assetKind)} · ${formatAdminAssetScope(activeKindSlots)}`}
+                    {editingAsset ? editingAsset.title : pendingFiles.length > 1 ? `${pendingFiles.length}개 이미지 선택됨` : file ? file.name : `${getAdminAssetKindLabel(assetKind)} · ${formatAdminAssetScope(activeKindSlots)}`}
                   </span>
                 </span>
+                {editingAsset ? <button type="button" disabled={isSavingAsset} onClick={exitInPlaceEdit} className="shrink-0 rounded-lg px-2.5 py-2 text-xs font-semibold text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)] disabled:opacity-50">새 후보</button> : null}
               </div>
-              {editingAsset ? (
-                <div className="flex items-center justify-between gap-2 border-t border-[var(--color-info-container-high)] bg-[var(--color-info-container)] px-4 py-2.5">
-                  <span className="min-w-0 truncate text-xs font-black text-[var(--color-info-strong)]">편집 중 · {editingAsset.title}</span>
-                  <button type="button" disabled={isSavingAsset} onClick={exitInPlaceEdit} className="rounded-md bg-white px-2.5 py-1.5 text-[11px] font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] disabled:opacity-50">새 후보</button>
-                </div>
-              ) : null}
               {isLoadingEditAsset ? <div className="inline-flex items-center gap-2 border-t border-[var(--color-outline-variant)] px-4 py-2.5 text-xs font-bold text-[var(--color-on-surface-variant)]"><LoaderCircle size={14} className="animate-spin" /> 원본 불러오는 중</div> : null}
                 <fieldset id="admin-asset-add-panel" disabled={isSavingAsset || isLoadingEditAsset} className="relative grid min-w-0 gap-3 border-0 p-4" role="region" aria-busy={isSavingAsset || isLoadingEditAsset} aria-label={editingAsset ? "에셋 수정" : "에셋 등록"}>
-                  {editingAsset ? <AdminAssetInspector key={editingAsset.id} asset={editingAsset} usage={usageIndex} error={usageError} onRetry={() => setUsageRevision((value) => value + 1)} onOpenTemplate={openLinkedTemplate} onCreate={async (platform) => {
-                    if (isSavingAsset || isLoadingEditAsset) return;
-                    const sourceAsset = editingAsset;
-                    // Clone reads do not invalidate the edit loader or its finally cleanup.
-                    const requestId = editRequestRef.current;
-                    await adminAssetToFile(withAdminAssetPlatformVariant(sourceAsset, platform)).then((source) => {
-                      if (requestId === editRequestRef.current) imageInputHandlerRef.current?.([source], { queueMode: "replace", firstOnly: true });
-                    }).catch(() => { if (requestId === editRequestRef.current) setNotice("원본 이미지를 불러오지 못했습니다."); });
-                  }} /> : null}
+                  {editingAsset ? <AdminAssetInspector key={editingAsset.id} asset={editingAsset} /> : null}
                   {editingAsset?.assetKind === "bubble" ? <p className="text-xs text-[var(--color-on-surface-variant)]">조정값은 현재 후보에 저장합니다. 이미지 변형을 적용하면 편집한 이미지로 새 후보를 만듭니다.</p> : null}
                   {isSavingAsset ? (
                     <div className="absolute inset-0 z-10 grid place-items-center bg-white/72 backdrop-blur-[1px]" role="status" aria-live="polite">
@@ -1316,7 +1290,7 @@ export default function AdminAssetsClient() {
                   <button type="button" className="rounded-lg border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]" onClick={() => { if (blockBubbleWorkspaceChange()) return; applyRecommendedBubbleAdjustment(); setBubbleWorkspaceMode("adjust"); }}>중앙에서 조정</button>
                 </div>
               ) : null}
-              <div className="grid gap-2 rounded-2xl border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 py-3">
+              <div className="grid gap-1 border-t border-[var(--color-outline-variant)] pt-3">
                 <span className="text-sm font-black text-[var(--color-on-surface)]">적용되는 슬롯</span>
                 <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">
                   {editingAsset
@@ -1324,6 +1298,7 @@ export default function AdminAssetsClient() {
                     : `${formatAdminAssetScope(activeKindSlots)}에 후보로 등록됩니다.`}
                 </p>
               </div>
+              {editingAsset ? <AdminAssetConnections assetId={editingAsset.id} usage={usageIndex} error={usageError} onRetry={() => setUsageRevision((value) => value + 1)} /> : null}
               <button className="sticky bottom-0 z-10 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] shadow-md transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={requestSave}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
                 {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : pendingFiles.length > 1 ? `${pendingFiles.length}개 후보 저장` : "관리 후보 저장"}
@@ -1532,20 +1507,20 @@ export default function AdminAssetsClient() {
               <div className="mb-3 flex items-center gap-2 text-xs">
                 <span>시스템 템플릿</span>
                 <select aria-label="시스템 템플릿 연결 필터" value={usageFilter} onChange={(event) => setUsageFilter(event.currentTarget.value as typeof usageFilter)} className="rounded-lg border px-2 py-2">
-                  <option value="all">연결 전체</option><option value="linked" disabled={!usageIndex || Boolean(usageError)}>확인된 저장 참조 있음</option>
-                  <option value="applied" disabled={!usageIndex || Boolean(usageError)}>실제 적용 중</option><option value="stored" disabled={!usageIndex || Boolean(usageError)}>후보로만 보관</option>
-                  <option value="unlinked" disabled={!usageIndex?.complete || Boolean(usageError) || Boolean(usageIndex?.unknownReferences)}>확인된 연결 없음</option><option value="unknown" disabled={!usageIndex || Boolean(usageError)}>조회·출처·적용 미확인</option>
+                  <option value="all">전체</option><option value="linked" disabled={!usageIndex || Boolean(usageError)}>연결 있음</option>
+                  <option value="unlinked" disabled={!usageIndex?.complete || Boolean(usageError) || Boolean(usageIndex?.unknownReferences)}>확인된 연결 없음</option><option value="unknown" disabled={!usageIndex || Boolean(usageError)}>확인 필요</option>
                 </select>
                 {usageFilter === "unlinked" && usageIndex && (!usageIndex.complete || usageIndex.unknownReferences > 0) ? <span role="status">미연결 판정 불가 · 전체 후보 표시 중</span> : null}
                 {!usageIndex ? <span role="status">{usageError ? "연결 조회 실패 · 전체 후보 표시 중" : "연결 조회 중 · 전체 후보 표시 중"}</span> : null}
                 {usageError ? <button type="button" onClick={() => setUsageRevision((value) => value + 1)} className="underline">연결 조회 재시도</button> : null}
               </div>
+              {usageIndex?.unknownReferences ? <details className="mb-3 text-xs text-[var(--color-on-surface-variant)]"><summary className="cursor-pointer">연결 조회 안내</summary><p className="mt-1 leading-5">전체 시스템 템플릿 중 출처를 확인할 수 없는 참조 {usageIndex.unknownReferences}개가 있습니다. 선택한 에셋의 연결 수가 아니며, 연결이 없다고 확정할 수 없는 에셋은 확인 필요로 표시합니다.</p></details> : null}
               {isLoadingAssets && filteredAssets.length === 0 ? (
                 <AdminAssetSkeletonGrid columns={assetGridColumns} />
               ) : filteredAssets.length > 0 ? (
                 <div className={`grid gap-3 sm:grid-cols-2 ${assetGridColumns === 3 ? "xl:grid-cols-3" : assetGridColumns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
                   {filteredAssets.map(({ asset, warnings }) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} selected={editingAsset?.id === asset.id} usageLabel={usageError ? "연결 조회 실패" : !usageIndex ? "연결 확인 중" : `${describeAdminAssetUsage(usageIndex.byAssetId[asset.id] ?? [])}${!usageIndex.complete || usageIndex.unknownReferences ? " · 일부 연결 미확인" : ""}`} deleting={deletingAssetId === asset.id} republishing={republishingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => { setUsageIndex(null); setUsageError(null); setAssetPendingDelete(asset); setUsageRevision((value) => value + 1); }} onRepublish={() => void republishCatalog(asset)} />
+                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} selected={editingAsset?.id === asset.id} usageState={usageIndex?.byAssetId[asset.id]?.length ? "linked" : usageError || !usageIndex || !usageIndex.complete || usageIndex.unknownReferences ? "unknown" : "unlinked"} deleting={deletingAssetId === asset.id} republishing={republishingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => { setUsageIndex(null); setUsageError(null); setAssetPendingDelete(asset); setUsageRevision((value) => value + 1); }} onRepublish={() => void republishCatalog(asset)} />
                   ))}
                 </div>
               ) : (

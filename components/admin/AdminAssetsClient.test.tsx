@@ -4,7 +4,6 @@ import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { toAdminAssetListItem } from "@/lib/theme/adminAssetList";
 import AdminAssetsClient from "./AdminAssetsClient";
 import { fetchAdminAssetUsageIndex } from "@/lib/theme/adminAssetUsage";
-import { templateStartStorageKey } from "@/lib/theme/templates";
 import { useImperativeHandle, type ComponentProps } from "react";
 import type { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import { bubbleGeometryToLegacyEdit, centeredBubbleGeometry } from "@/lib/theme/bubbleGeometry";
@@ -132,37 +131,15 @@ describe("admin asset paste", () => {
     expect(mocks.save.mock.calls[0][0].fileName).toBe("edited.png");
     expect(mocks.update).not.toHaveBeenCalled();
   });
-  it("invalidates a deferred clone when saving begins", async () => {
+  it("opens linked information from the gallery badge without extra actions", async () => {
+    vi.mocked(fetchAdminAssetUsageIndex).mockResolvedValueOnce({ byAssetId: { [asset.id]: [{ id: "bundle", title: "Linked", status: "draft", visibility: "private", variants: [{ id: "variant", platform: "ios", slots: ["slot"], appliedSlots: [] }] }] }, complete: true, unknownReferences: 0, checkedAt: "2026-10-02" });
     render(<AdminAssetsClient />);
-    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.click(screen.getByRole("button", { name: `${asset.title} 연결 정보 보기` }));
     await waitFor(() => expect(screen.getByLabelText("후보 이름")).toBeEnabled());
-    let resolveClone!: (value: File) => void;
-    mocks.source.mockReturnValueOnce(new Promise<File>((resolve) => { resolveClone = resolve; }));
-    fireEvent.click(screen.getByRole("button", { name: "이 이미지로 새 후보 만들기" }));
-    fireEvent.change(screen.getByLabelText("후보 이름"), { target: { value: "Saved title" } });
-    let resolveSave!: (value: AdminAssetCandidate) => void;
-    mocks.update.mockReturnValueOnce(new Promise<AdminAssetCandidate>((resolve) => { resolveSave = resolve; }));
-    fireEvent.click(screen.getByRole("button", { name: "변경 저장" }));
-    fireEvent.click(await screen.findByRole("button", { name: "저장하기" }));
-    await waitFor(() => expect(mocks.update).toHaveBeenCalledTimes(1));
-    resolveClone(image("cloned.png"));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "새 후보 원본 준비 중…" })).not.toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: "cloned.png 제거" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "저장하지 않은 변경이 있습니다" })).not.toBeInTheDocument();
-    resolveSave({ ...asset, title: "Saved title", updatedAt: 2 });
-    await waitFor(() => expect(screen.getByLabelText("후보 이름")).toBeEnabled());
-    expect(screen.getByLabelText("후보 이름")).toHaveValue("Saved title");
-    expect(screen.queryByRole("button", { name: "cloned.png 제거" })).not.toBeInTheDocument();
-  });
-  it("opens the exact linked variant using the existing admin bootstrap contract", async () => {
-    vi.mocked(fetchAdminAssetUsageIndex).mockResolvedValueOnce({ byAssetId: { [asset.id]: [{ id: "bundle", title: "Linked", status: "draft", visibility: "private", variants: [{ id: "variant", platform: "ios", baseTemplateId: "basic", slots: ["slot"], appliedSlots: [] }] }] }, complete: true, unknownReferences: 0, checkedAt: "2026-10-02" });
-    const navigation = vi.spyOn(window.location, "assign").mockImplementation(() => undefined);
-    render(<AdminAssetsClient />);
-    fireEvent.click(screen.getByRole("button", { name: "수정" }));
-    await waitFor(() => expect(screen.getByLabelText("후보 이름")).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: "ios 템플릿 열기" }));
-    expect(JSON.parse(localStorage.getItem(templateStartStorageKey)!)).toEqual({ templateId: "basic", platform: "ios", systemTemplateId: "variant", systemTemplateBundleId: "bundle", editMode: "admin" });
-    expect(navigation).toHaveBeenCalledWith("/admin/edit");
+    expect(screen.getByText("Linked")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `${asset.title} 연결 정보 보기` })).toHaveAccessibleDescription("연결 있음");
+    expect(screen.queryByRole("button", { name: /템플릿 열기/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "이 이미지로 새 후보 만들기" })).not.toBeInTheDocument();
   });
   it("disables edits until the source baseline is ready, then protects changes", async () => {
     let resolveSource!: (value: File) => void;
@@ -172,28 +149,13 @@ describe("admin asset paste", () => {
     fireEvent.click(screen.getByRole("button", { name: "수정" }));
     await screen.findByRole("button", { name: "원본 다시 조회" });
     expect(screen.getByLabelText("후보 이름")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "이 이미지로 새 후보 만들기" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "원본 다시 조회" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "변경 저장" })).toBeDisabled();
     resolveSource(image("old.png"));
     await waitFor(() => expect(screen.getByLabelText("후보 이름")).toBeEnabled());
     fireEvent.change(screen.getByLabelText("후보 이름"), { target: { value: "Unsaved title" } });
     fireEvent.click(screen.getAllByRole("button", { name: "새 후보" })[0]);
     expect(await screen.findByRole("button", { name: "계속 편집" })).toBeInTheDocument();
-  });
-  it("remains usable after a clone read fails following delayed source loading", async () => {
-    let resolveSource!: (value: File) => void;
-    mocks.source.mockReturnValue(new Promise<File>((resolve) => { resolveSource = resolve; }));
-    render(<AdminAssetsClient />);
-    fireEvent.click(screen.getByRole("button", { name: "수정" }));
-    await screen.findByRole("button", { name: "원본 다시 조회" });
-    expect(screen.getByRole("button", { name: "이 이미지로 새 후보 만들기" })).toBeDisabled();
-    resolveSource(image("old.png"));
-    await waitFor(() => expect(screen.getByRole("button", { name: "변경 저장" })).toBeEnabled());
-    mocks.source.mockRejectedValueOnce(new Error("offline"));
-    fireEvent.click(screen.getByRole("button", { name: "이 이미지로 새 후보 만들기" }));
-    await screen.findByText("원본 이미지를 불러오지 못했습니다.");
-    expect(screen.getByRole("button", { name: "변경 저장" })).toBeEnabled();
-    expect(screen.getByLabelText("후보 이름")).toBeEnabled();
   });
   it("keeps unsaved edits when a pasted replacement is cancelled", async () => {
     render(<AdminAssetsClient />);

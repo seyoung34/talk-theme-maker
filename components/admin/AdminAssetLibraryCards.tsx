@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, LoaderCircle, Pencil, RefreshCw } from "lucide-react";
+import { AlertTriangle, CircleHelp, Link2, Link2Off, LoaderCircle, Pencil, RefreshCw } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import {
@@ -111,7 +111,7 @@ export function AdminAssetCard({
   onDelete,
   onRepublish,
   selected = false,
-  usageLabel,
+  usageState,
 }: {
   asset: AdminAssetListItem;
   slots: readonly ThemeAssetSlot[];
@@ -122,7 +122,7 @@ export function AdminAssetCard({
   onDelete: () => void;
   onRepublish: () => void;
   selected?: boolean;
-  usageLabel?: string;
+  usageState?: "linked" | "unlinked" | "unknown";
 }) {
   // `undefined`는 "확인하지 못했다"는 뜻이라 배지를 띄우지 않는다. 조회 장애를 미등록으로
   // 보여 주면 운영자가 멀쩡한 에셋을 다시 올린다.
@@ -145,7 +145,6 @@ export function AdminAssetCard({
   const scopeLabel = getAdminAssetScopeLabel(describeAdminAssetScope(asset.targets));
   return (
     <article aria-label={`${asset.title}${selected ? " · 수정 중" : ""}`} className={`relative grid gap-3 overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] transition duration-200 ${selected ? "ring-2 ring-[var(--color-info)]" : ""} ${deleting ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(42,103,103,0.1)]"}`}>
-      {usageLabel ? <button type="button" disabled={deleting} onClick={onEdit} aria-label={`${asset.title} 연결 정보 보기`} className="text-left text-[11px] font-bold text-[var(--color-on-surface-variant)] hover:underline">{usageLabel}</button> : null}
       {deleting ? (
         <div className="absolute inset-0 z-10 grid place-items-center bg-white/70 backdrop-blur-[1px]" role="status" aria-live="polite">
           <span className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-700 shadow-sm">
@@ -154,8 +153,9 @@ export function AdminAssetCard({
           </span>
         </div>
       ) : null}
-      <div className="aspect-[4/3] overflow-hidden rounded-[18px] border border-[var(--color-outline-variant)]" style={TRANSPARENCY_CHECKER_STYLE}>
+      <div className="relative aspect-[4/3] overflow-hidden rounded-[18px] border border-[var(--color-outline-variant)]" style={TRANSPARENCY_CHECKER_STYLE}>
         <div className="size-full bg-contain bg-center bg-no-repeat" style={{ backgroundImage: tileUrl ? `url(${tileUrl})` : undefined }} />
+        {usageState ? <button type="button" disabled={deleting} onClick={onEdit} title={usageState === "linked" ? "연결된 템플릿 있음 · 상세 보기" : usageState === "unlinked" ? "확인된 연결 없음 · 상세 보기" : "연결 여부 미확인 · 상세 보기"} aria-label={`${asset.title} 연결 정보 보기`} aria-describedby={`admin-asset-usage-${asset.id}`} className={`absolute right-2 top-2 inline-flex size-9 items-center justify-center rounded-full bg-white/95 shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-info)] ${usageState === "linked" ? "text-[var(--color-info-strong)]" : "text-[var(--color-on-surface-variant)]"}`}><span id={`admin-asset-usage-${asset.id}`} className="sr-only">{usageState === "linked" ? "연결 있음" : usageState === "unlinked" ? "확인된 연결 없음" : "연결 미확인"}</span>{usageState === "linked" ? <Link2 size={16} aria-hidden="true" /> : usageState === "unlinked" ? <Link2Off size={16} aria-hidden="true" /> : <CircleHelp size={16} aria-hidden="true" />}</button> : null}
       </div>
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap gap-1.5">
