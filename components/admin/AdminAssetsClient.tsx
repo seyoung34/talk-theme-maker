@@ -3,15 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { AdminAssetInspector } from "@/components/admin/AdminAssetInspector";
-import { fetchAdminAssetUsageIndex, type AdminAssetUsageIndex } from "@/lib/theme/adminAssetUsage";
+import { describeAdminAssetUsage, fetchAdminAssetUsageIndex, type AdminAssetUsageIndex } from "@/lib/theme/adminAssetUsage";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertTriangle, ArrowDownUp, Check, ChevronDown, Edit3, ImagePlus, Library, LoaderCircle, PanelLeftClose, PanelLeftOpen, Save, Search, SlidersHorizontal, X, Trash2 } from "lucide-react";
 import { ImageEditDialog } from "@/components/image-editor/ImageEditDialog";
 import { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
 import InlineBubbleAdjuster from "@/components/editor/InlineBubbleAdjuster";
-import { BubbleBuilderEditor } from "@/components/editor/BubbleBuilderDialog";
+import { BubbleBuilderEditor, type BubbleBuilderEditorHandle } from "@/components/editor/BubbleBuilderDialog";
 import AdminBubbleTextPreview from "@/components/admin/AdminBubbleTextPreview";
-import { AdminAssetCard, AdminAssetDockCard, AdminAssetSkeletonGrid, BubblePlatformSummary, TRANSPARENCY_CHECKER_STYLE } from "@/components/admin/AdminAssetLibraryCards";
+import { AdminAssetCard, AdminAssetSkeletonGrid, BubblePlatformSummary, TRANSPARENCY_CHECKER_STYLE } from "@/components/admin/AdminAssetLibraryCards";
 import {
   deleteAdminAssetCandidate,
   getAdminAssetCandidate,
@@ -48,7 +48,7 @@ import {
 import { bubbleSlotFromRole } from "@/lib/theme/project/state";
 import { generateBubbleAsset, type BubbleFamilyDesignSpec, type GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 import type { ThemeProjectFile } from "@/lib/theme/project/types";
-import { getThemeSlots } from "@/lib/theme/templates";
+import { getThemeSlots, templateStartStorageKey } from "@/lib/theme/templates";
 import type { ThemeAssetSlot } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 
@@ -144,7 +144,7 @@ export default function AdminAssetsClient() {
   const [usageIndex, setUsageIndex] = useState<AdminAssetUsageIndex | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [usageRevision, setUsageRevision] = useState(0);
-  const [usageFilter, setUsageFilter] = useState<"all" | "linked">("all");
+  const [usageFilter, setUsageFilter] = useState<"all" | "linked" | "applied" | "stored" | "unlinked" | "unknown">("all");
   const templatesUsingPendingDelete = assetPendingDelete && usageIndex ? (usageIndex.byAssetId[assetPendingDelete.id] ?? []).map((bundle) => bundle.title) : null;
   const [isSavingAsset, setIsSavingAsset] = useState(false);
   const [isLoadingEditAsset, setIsLoadingEditAsset] = useState(false);
@@ -167,33 +167,60 @@ export default function AdminAssetsClient() {
   const imageInputHandlerRef = useRef<((files: FileList | File[] | null, options?: { queueMode?: "replace"; firstOnly?: boolean }) => void) | null>(null);
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
   const assetKindRef = useRef<AdminAssetKind>(assetKind);
+  const bubbleWorkspaceModeRef = useRef<BubbleWorkspaceMode>(bubbleWorkspaceMode);
   const editRequestRef = useRef(0);
   const bubbleDecorationReadPendingRef = useRef(false);
+  const dirtyRef = useRef(false);
+  const transitionBypassRef = useRef(false);
+  const pendingTransitionRef = useRef<(() => void) | null>(null);
+  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false);
+  const editBaselineRef = useRef<{ asset: AdminAssetCandidate; signature: string; bubbleNormalized: boolean } | null>(null);
+  const builderEditorRef = useRef<BubbleBuilderEditorHandle | null>(null);
+  const pendingBuilderTransitionRef = useRef<(() => void) | null>(null);
+  const builderTransitionBypassRef = useRef(false);
+  const confirmWorkspaceChange = useCallback((action: () => void) => {
+    if (!transitionBypassRef.current && !builderTransitionBypassRef.current && builderEditorRef.current?.hasUnsavedChanges()) {
+      pendingBuilderTransitionRef.current = action;
+      builderEditorRef.current.requestClose();
+      return true;
+    }
+    if (!dirtyRef.current || transitionBypassRef.current) return false;
+    pendingTransitionRef.current = action;
+    setUnsavedDialogOpen(true);
+    return true;
+  }, []);
 
   const handleBubbleDecorationReadPendingChange = useCallback((pending: boolean) => {
     bubbleDecorationReadPendingRef.current = pending;
     setBubbleDecorationReadPending(pending);
   }, []);
   const blockBubbleWorkspaceChange = useCallback(() => {
-    if (!bubbleDecorationReadPendingRef.current) return false;
+    if (!bubbleDecorationReadPendingRef.current && !builderEditorRef.current?.isBusy()) return false;
     setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 화면을 전환해 주세요.");
     return true;
   }, []);
   const requestBubbleWorkspaceMode = useCallback((nextMode: BubbleWorkspaceMode) => {
     if (blockBubbleWorkspaceChange()) return;
+    if (nextMode !== "builder" && builderEditorRef.current?.hasUnsavedChanges() && confirmWorkspaceChange(() => requestBubbleWorkspaceMode(nextMode))) return;
     setBubbleWorkspaceMode(nextMode);
-  }, [blockBubbleWorkspaceChange]);
+  }, [blockBubbleWorkspaceChange, confirmWorkspaceChange]);
 
   const selectAssetKind = useCallback((nextKind: AdminAssetKind) => {
     if (assetKindRef.current === nextKind) return;
     if (blockBubbleWorkspaceChange()) return;
+    if (confirmWorkspaceChange(() => selectAssetKind(nextKind))) return;
     // kind을 바꾸는 순간 진행 중인 상세 조회를 무효화한다. React effect보다 먼저 ref를
     // 바꿔야 빠르게 완료된 이전 응답도 새 분류의 편집 상태에 섞이지 않는다.
     assetKindRef.current = nextKind;
     editRequestRef.current += 1;
     setIsLoadingEditAsset(false);
+    setTitle("");
+    setFile(null);
+    for (const pending of pendingFilesRef.current) URL.revokeObjectURL(pending.previewUrl);
+    setPendingFiles([]);
+    setAnalysis(null);
     setAssetKind(nextKind);
-  }, [blockBubbleWorkspaceChange]);
+  }, [blockBubbleWorkspaceChange, confirmWorkspaceChange]);
 
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
@@ -202,6 +229,7 @@ export default function AdminAssetsClient() {
   useEffect(() => {
     assetKindRef.current = assetKind;
   }, [assetKind]);
+  useEffect(() => { bubbleWorkspaceModeRef.current = bubbleWorkspaceMode; }, [bubbleWorkspaceMode]);
 
   useEffect(() => () => {
     for (const pending of pendingFilesRef.current) URL.revokeObjectURL(pending.previewUrl);
@@ -272,6 +300,24 @@ export default function AdminAssetsClient() {
     () => assetKind === "bubble" ? bubbleAdjustmentToSpec(effectiveBubbleAdjustment, effectiveBubbleGeometry) ?? bubbleBuilderDraft?.bubbleSpec : undefined,
     [assetKind, bubbleBuilderDraft, effectiveBubbleAdjustment, effectiveBubbleGeometry],
   );
+  const editSignature = JSON.stringify({ title: title.trim(), bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined, bubbleSpec, recipe: bubbleBuilderDraft?.recipe });
+  useEffect(() => {
+    if (editingAsset && !isLoadingEditAsset && editBaselineRef.current?.asset !== editingAsset) {
+      editBaselineRef.current = { asset: editingAsset, signature: editSignature, bubbleNormalized: false };
+    }
+    dirtyRef.current = editingAsset
+      ? Boolean(editBaselineRef.current?.asset === editingAsset && editBaselineRef.current.signature !== editSignature)
+      : Boolean(title.trim() || pendingFiles.some((pending) => pending.status !== "success") || bubbleBuilderDraft);
+  }, [editingAsset, isLoadingEditAsset, editSignature, title, pendingFiles, bubbleBuilderDraft]);
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current && !builderEditorRef.current?.hasUnsavedChanges()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, []);
   const bubblePreviewEdit = useMemo(() => ({
     geometry: effectiveBubbleGeometry[bubbleEditorPlatform],
     markers: effectiveBubbleAdjustment.markers,
@@ -286,11 +332,13 @@ export default function AdminAssetsClient() {
   const canSaveAsset = Boolean(
     activeKindSlots.length > 0 &&
       !isSavingAsset &&
+      !isLoadingEditAsset &&
       (editingAsset ? title.trim() : bubbleBuilderDraft ? file : uploadableFiles.length > 0) &&
       (editingAsset || selectedSaveTargets.length > 0) &&
       (assetKind !== "bubble" || bubbleSpec) &&
       !bubbleDecorationReadPending,
   );
+  const workspaceRequestId = editRequestRef.current;
   /**
    * 카드에 얹을 경고.
    *
@@ -299,7 +347,15 @@ export default function AdminAssetsClient() {
    */
   const filteredAssets = useMemo(
     () =>
-      visibleAssets.filter((asset) => usageFilter === "all" || !usageIndex || Boolean(usageIndex.byAssetId[asset.id]?.length)).map((asset) => ({
+      visibleAssets.filter((asset) => {
+        if (usageFilter === "all" || !usageIndex) return true;
+        const variants = (usageIndex.byAssetId[asset.id] ?? []).flatMap((bundle) => bundle.variants);
+        if (usageFilter === "unlinked") return !usageIndex.complete || usageIndex.unknownReferences > 0 || variants.length === 0;
+        if (usageFilter === "unknown") return !usageIndex.complete || usageIndex.unknownReferences > 0 || variants.some((variant) => variant.appliedSlots === undefined);
+        if (usageFilter === "applied") return variants.some((variant) => Boolean(variant.appliedSlots?.length));
+        if (usageFilter === "stored") return variants.length > 0 && variants.every((variant) => variant.appliedSlots?.length === 0);
+        return Boolean(usageIndex.byAssetId[asset.id]?.length);
+      }).map((asset) => ({
         asset,
         warnings: getAdminAssetGuidanceForSlots(activeKindSlots, asset.assetKind ?? assetKind, asset.analysis ?? null),
       })),
@@ -349,7 +405,7 @@ export default function AdminAssetsClient() {
   }, [assetKind, bubbleAnchorSlot?.role]);
 
   useEffect(() => {
-    if (!notice) return;
+    if (!notice || /실패|못했|없습니다|확인해|준비 중/.test(notice)) return;
     const timer = setTimeout(() => setNotice(null), 3500);
     return () => clearTimeout(timer);
   }, [notice]);
@@ -380,6 +436,7 @@ export default function AdminAssetsClient() {
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented || bubbleWorkspaceModeRef.current === "builder") return;
       const hasImage = Array.from(event.clipboardData?.files ?? []).some((item) => item.type.startsWith("image/"));
       if (!hasImage) return;
       event.preventDefault();
@@ -434,19 +491,37 @@ export default function AdminAssetsClient() {
   };
 
   const requestSave = () => {
+    if (builderEditorRef.current?.isBusy()) { blockBubbleWorkspaceChange(); return; }
+    if (builderEditorRef.current?.hasUnsavedChanges()) {
+      setNotice("빌더의 변경을 먼저 적용한 뒤 후보를 저장해 주세요.");
+      return;
+    }
     if (bubbleDecorationReadPendingRef.current) {
       setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 저장해 주세요.");
       return;
     }
     if (canSaveAsset) setIsSaveConfirmOpen(true);
   };
+  const resizeSidebarWithKeyboard = (side: "left" | "right", event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!["ArrowLeft", "ArrowRight", "Home"].includes(event.key)) return;
+    event.preventDefault();
+    const direction = event.key === "ArrowRight" ? 1 : -1;
+    if (side === "left") setLeftSidebarWidth((current) => event.key === "Home" ? 272 : Math.min(MAX_LEFT_SIDEBAR_WIDTH, Math.max(MIN_LEFT_SIDEBAR_WIDTH, current + direction * 16)));
+    else setRightSidebarWidth((current) => event.key === "Home" ? 400 : Math.min(MAX_RIGHT_SIDEBAR_WIDTH, Math.max(MIN_RIGHT_SIDEBAR_WIDTH, current - direction * 16)));
+  };
 
   const submit = async () => {
+    if (builderEditorRef.current?.isBusy() || builderEditorRef.current?.hasUnsavedChanges()) {
+      setNotice("빌더의 변경을 먼저 적용한 뒤 후보를 저장해 주세요.");
+      return;
+    }
     if (bubbleDecorationReadPendingRef.current) {
       setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 저장해 주세요.");
       return;
     }
-    if (activeKindSlots.length === 0 || isSavingAsset || (!editingAsset && !bubbleBuilderDraft && uploadableFiles.length === 0 && !file)) return;
+    if (activeKindSlots.length === 0 || isSavingAsset || isLoadingEditAsset || (!editingAsset && !bubbleBuilderDraft && uploadableFiles.length === 0 && !file)) return;
+    // A pending clone belongs to the pre-save snapshot and must not replace it mid-mutation.
+    editRequestRef.current += 1;
     const saveKind = assetKindRef.current;
     const isCurrentSave = () => assetKindRef.current === saveKind;
     if (editingAsset && bubbleBuilderDraft) {
@@ -474,6 +549,7 @@ export default function AdminAssetsClient() {
         setUploadProgress(null);
         setBubbleBuilderInitial({ recipe: updatedAsset.bubbleDesign?.recipe ?? bubbleBuilderDraft.recipe, decorations: bubbleBuilderDraft.decorations });
         setNotice("빌더 말풍선을 다시 생성했습니다.");
+        return true;
       } catch (error) {
         console.error(error);
         setNotice("빌더 말풍선을 저장하지 못했습니다.");
@@ -494,6 +570,7 @@ export default function AdminAssetsClient() {
         applySavedAssets([updatedAsset], saveKind);
         setEditingAsset(updatedAsset);
         setNotice("에셋 정보를 저장했습니다.");
+        return true;
       } catch (error) {
         console.error(error);
         setNotice("에셋 정보를 저장하지 못했습니다.");
@@ -537,7 +614,7 @@ export default function AdminAssetsClient() {
         setUploadProgress(null);
         setNotice("관리 후보를 추가했습니다.");
         applySavedAssets([savedAsset], saveKind);
-        return;
+        return true;
       }
 
       const filesToSave = uploadableFiles;
@@ -615,6 +692,7 @@ export default function AdminAssetsClient() {
         setAnalysis(null);
         setNotice(`${savedAssets.length}개 저장 완료 · ${failedItems.length}개 저장 실패. 실패한 파일을 다시 저장할 수 있습니다.`);
       }
+      return failedItems.length === 0;
     } catch (error) {
       console.error(error);
       setNotice("관리 후보를 저장하지 못했습니다.");
@@ -634,6 +712,17 @@ export default function AdminAssetsClient() {
     });
     return () => controller.abort();
   }, [usageRevision]);
+  useEffect(() => {
+    let lastRefresh = Date.now();
+    const refreshUsage = () => {
+      if (document.visibilityState === "hidden" || Date.now() - lastRefresh < 1000) return;
+      lastRefresh = Date.now();
+      setUsageRevision((value) => value + 1);
+    };
+    window.addEventListener("focus", refreshUsage);
+    document.addEventListener("visibilitychange", refreshUsage);
+    return () => { window.removeEventListener("focus", refreshUsage); document.removeEventListener("visibilitychange", refreshUsage); };
+  }, []);
 
   /**
    * catalog registry에 빠진 에셋을 다시 게시한다.
@@ -687,6 +776,7 @@ export default function AdminAssetsClient() {
 
   const remove = async (asset: AdminAssetListItem) => {
     if (deletingAssetId || !usageIndex?.complete || usageError) return;
+    if (usageIndex.byAssetId[asset.id]?.length) return;
     if (blockBubbleWorkspaceChange()) return;
     try {
       setDeletingAssetId(asset.id);
@@ -704,7 +794,9 @@ export default function AdminAssetsClient() {
       setNotice("관리 후보를 삭제했습니다.");
     } catch (error) {
       console.error(error);
-      setNotice("관리 후보를 삭제하지 못했습니다.");
+      setNotice(error instanceof Error ? error.message : "관리 후보를 삭제하지 못했습니다.");
+      setUsageIndex(null);
+      setUsageRevision((value) => value + 1);
     } finally {
       setDeletingAssetId(null);
     }
@@ -718,6 +810,7 @@ export default function AdminAssetsClient() {
       setNotice(result.rejected[0] ?? "이미지 파일만 추가할 수 있습니다.");
       return;
     }
+    if ((editingAsset || options?.queueMode === "replace") && confirmWorkspaceChange(() => applyDroppedFiles(result.files, options))) return;
     const selectedFiles = assetKind === "bubble" || options?.firstOnly ? result.files.slice(0, 1) : result.files;
     // A new image ends the old detail/source request as well as its editing state.
     editRequestRef.current += 1;
@@ -814,8 +907,9 @@ export default function AdminAssetsClient() {
    * 보내지 않으려고 뺀 값들이다. 편집은 한 건이므로 그때 그 하나만 온전히 받는다.
    */
   const beginInPlaceEdit = async (item: AdminAssetListItem) => {
-    if (isSavingAsset || isLoadingEditAsset) return;
+    if (isSavingAsset) return;
     if (blockBubbleWorkspaceChange()) return;
+    if (confirmWorkspaceChange(() => { void beginInPlaceEdit(item); })) return;
     const requestId = ++editRequestRef.current;
     const requestedKind = assetKindRef.current;
     const isCurrentRequest = () => editRequestRef.current === requestId && assetKindRef.current === requestedKind;
@@ -885,6 +979,7 @@ export default function AdminAssetsClient() {
   const exitInPlaceEdit = () => {
     if (isSavingAsset) return;
     if (blockBubbleWorkspaceChange()) return;
+    if (confirmWorkspaceChange(exitInPlaceEdit)) return;
     editRequestRef.current += 1;
     setEditingAsset(null);
     setBubbleBuilderDraft(null);
@@ -893,6 +988,17 @@ export default function AdminAssetsClient() {
     clearFile();
     requestBubbleWorkspaceMode("library");
     setNotice("새 후보 등록으로 돌아왔습니다.");
+  };
+
+  const openLinkedTemplate = (bundleId: string, variant: { id: string; platform: string; baseTemplateId?: string }) => {
+    if (isSavingAsset || !variant.baseTemplateId || (variant.platform !== "android" && variant.platform !== "ios")) return;
+    if (blockBubbleWorkspaceChange()) return;
+    if (confirmWorkspaceChange(() => openLinkedTemplate(bundleId, variant))) return;
+    try {
+      localStorage.setItem(templateStartStorageKey, JSON.stringify({ templateId: variant.baseTemplateId, platform: variant.platform, systemTemplateId: variant.id, systemTemplateBundleId: bundleId, editMode: "admin" }));
+      dirtyRef.current = false;
+      window.location.assign("/admin/edit");
+    } catch { setNotice("템플릿을 열지 못했습니다. 브라우저 저장 공간을 확인해 주세요."); }
   };
 
   const applyBubbleBuilder = async (result: GeneratedBubbleDesign, decorations: Partial<Record<string, File>>) => {
@@ -914,6 +1020,7 @@ export default function AdminAssetsClient() {
       }
       const nextSpec = { androidMarkers: android.markers, iosInsets: ios.insets, iosStretch: ios.stretch };
       setBubbleBuilderDraft({ recipe: result.spec, decorations, variants: results, bubbleSpec: { ...nextSpec, geometry: nextGeometry } });
+      dirtyRef.current = true;
       setBubbleBuilderInitial({ recipe: result.spec, decorations });
       setBubbleAdjustment({ markers: android.markers, insets: ios.insets, stretch: ios.stretch });
       setBubbleGeometry(nextGeometry);
@@ -939,7 +1046,10 @@ export default function AdminAssetsClient() {
     <main className="grid h-[100dvh] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-slate-50 text-slate-950 [--color-background:#f8fafc] [--color-error-container:#fff1f2] [--color-info:#2563eb] [--color-info-container:#eff6ff] [--color-info-container-high:#dbeafe] [--color-info-outline:#93c5fd] [--color-info-outline-strong:#2563eb] [--color-info-strong:#1d4ed8] [--color-inverse-on-surface:#ffffff] [--color-inverse-surface:#1d4ed8] [--color-on-background:#0f172a] [--color-on-info-container:#172554] [--color-on-info-container-variant:#1e40af] [--color-on-surface:#0f172a] [--color-on-surface-variant:#475569] [--color-outline-variant:#dbeafe] [--color-surface-low:#f1f5f9]">
       <header className="flex min-h-12 items-center justify-between gap-4 border-b border-blue-100 bg-white px-4 shadow-[0_1px_0_rgba(15,23,42,0.03)]">
         <div className="flex min-w-0 items-center gap-3">
-          <Link href="/admin" onClick={(event) => { if (blockBubbleWorkspaceChange()) event.preventDefault(); }} className="rounded-full px-2 py-1 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)]">← 관리자</Link>
+          <Link href="/admin" onClick={(event) => {
+            if (isSavingAsset || blockBubbleWorkspaceChange()) { event.preventDefault(); return; }
+            if (confirmWorkspaceChange(() => { dirtyRef.current = false; window.location.assign("/admin"); })) event.preventDefault();
+          }} className="rounded-full px-2 py-1 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)]">← 관리자</Link>
           <span className="h-4 w-px bg-[var(--color-outline-variant)]" aria-hidden="true" />
           <h1 className="truncate font-[var(--font-display)] text-base font-semibold text-[var(--color-on-surface)]">에셋 워크스페이스</h1>
           <button type="button" onClick={() => setIsLeftSidebarCollapsed((current) => !current)} aria-label={isLeftSidebarCollapsed ? "좌측 패널 열기" : "좌측 패널 접기"} title={isLeftSidebarCollapsed ? "좌측 패널 열기" : "좌측 패널 접기"} className="hidden size-8 place-items-center rounded-lg border border-blue-100 text-blue-700 transition hover:bg-blue-50 lg:grid">
@@ -948,12 +1058,12 @@ export default function AdminAssetsClient() {
         </div>
         <div className="flex items-center gap-2">
           {isSavingAsset ? <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-info-container)] px-3 py-1.5 text-xs font-black text-[var(--color-info-strong)]"><LoaderCircle size={13} className="animate-spin" /> 저장 중</span> : null}
-          {notice ? <span className="max-w-[42vw] truncate rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--color-on-surface-variant)]">{notice}</span> : null}
+          {notice ? <span role="status" aria-live="polite" className="max-w-[42vw] rounded-xl border border-[var(--color-outline-variant)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--color-on-surface-variant)]">{notice}<button type="button" aria-label="알림 닫기" className="ml-2" onClick={() => setNotice(null)}>×</button></span> : null}
         </div>
       </header>
 
       <div className="min-h-0 overflow-y-auto overscroll-y-contain [overflow-anchor:none] lg:overflow-hidden">
-      <div className="grid min-h-full gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[var(--admin-left)_minmax(0,1fr)_var(--admin-right)]" style={{ "--admin-left": isLeftSidebarCollapsed ? "0px" : `${leftSidebarWidth}px`, "--admin-right": `${rightSidebarWidth}px` } as CSSProperties}>
+      <div className="grid min-h-full gap-0 lg:h-full lg:min-h-0 lg:grid-cols-[min(var(--admin-left),22vw)_minmax(0,1fr)_min(var(--admin-right),36vw)]" style={{ "--admin-left": isLeftSidebarCollapsed ? "0px" : `${leftSidebarWidth}px`, "--admin-right": `${rightSidebarWidth}px` } as CSSProperties}>
         <section className="grid min-h-0 gap-0 lg:contents">
           <aside className={`relative grid min-h-0 min-w-0 content-start gap-0 border-b border-[var(--color-outline-variant)] bg-white transition-[opacity] duration-200 [overflow-anchor:none] lg:col-start-1 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:overscroll-y-contain lg:[scrollbar-gutter:stable] lg:border-b-0 lg:border-r ${isLeftSidebarCollapsed ? "lg:pointer-events-none lg:border-r-0 lg:opacity-0" : ""}`}>
             <div className="grid gap-2 border-b border-[var(--color-outline-variant)] p-4">
@@ -983,12 +1093,12 @@ export default function AdminAssetsClient() {
                 </p>
               </div>
             </div>
-            {!isLeftSidebarCollapsed ? <button type="button" aria-label="좌측 패널 너비 조절" title="드래그하여 좌측 패널 너비 조절" onPointerDown={(event) => startSidebarResize("left", event)} className="group absolute inset-y-0 right-0 z-40 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition hover:bg-blue-500/30 lg:block"><span className="absolute left-1/2 top-1/2 h-10 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-300 opacity-0 transition group-hover:opacity-100" /></button> : null}
+            {!isLeftSidebarCollapsed ? <button type="button" aria-label="좌측 패널 너비 조절" title="드래그하여 좌측 패널 너비 조절" role="separator" aria-orientation="vertical" aria-valuenow={leftSidebarWidth} aria-valuemin={MIN_LEFT_SIDEBAR_WIDTH} aria-valuemax={MAX_LEFT_SIDEBAR_WIDTH} onKeyDown={(event) => resizeSidebarWithKeyboard("left", event)} onPointerDown={(event) => startSidebarResize("left", event)} className="group absolute inset-y-0 right-0 z-40 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition hover:bg-blue-500/30 lg:block"><span className="absolute left-1/2 top-1/2 h-10 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-300 opacity-0 transition group-hover:opacity-100" /></button> : null}
           </aside>
 
           <section className="grid min-w-0 content-start gap-0 lg:contents">
             <div className="relative min-h-0 min-w-0 overflow-hidden border-b border-[var(--color-outline-variant)] bg-white [overflow-anchor:none] lg:col-start-3 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:overscroll-y-contain lg:[scrollbar-gutter:stable] lg:border-b-0 lg:border-l">
-              <button type="button" aria-label="우측 패널 너비 조절" title="드래그하여 우측 패널 너비 조절" onPointerDown={(event) => startSidebarResize("right", event)} className="absolute inset-y-0 left-0 z-40 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition hover:bg-blue-500/30 lg:block" />
+              <button type="button" aria-label="우측 패널 너비 조절" title="드래그하여 우측 패널 너비 조절" role="separator" aria-orientation="vertical" aria-valuenow={rightSidebarWidth} aria-valuemin={MIN_RIGHT_SIDEBAR_WIDTH} aria-valuemax={MAX_RIGHT_SIDEBAR_WIDTH} onKeyDown={(event) => resizeSidebarWithKeyboard("right", event)} onPointerDown={(event) => startSidebarResize("right", event)} className="absolute inset-y-0 left-0 z-40 hidden w-2 cursor-col-resize touch-none border-0 bg-transparent transition hover:bg-blue-500/30 lg:block" />
               <div className="border-b border-[var(--color-outline-variant)] px-4 py-4">
                   <span className="min-w-0">
                     <span className="block text-sm font-black text-[var(--color-on-surface)]">{editingAsset ? "에셋 수정" : "에셋 등록"}</span>
@@ -1004,8 +1114,17 @@ export default function AdminAssetsClient() {
                 </div>
               ) : null}
               {isLoadingEditAsset ? <div className="inline-flex items-center gap-2 border-t border-[var(--color-outline-variant)] px-4 py-2.5 text-xs font-bold text-[var(--color-on-surface-variant)]"><LoaderCircle size={14} className="animate-spin" /> 원본 불러오는 중</div> : null}
-                <div id="admin-asset-add-panel" className="relative grid gap-3 p-4" role="region" aria-label={editingAsset ? "에셋 수정" : "에셋 등록"}>
-                  {editingAsset ? <AdminAssetInspector key={editingAsset.id} asset={editingAsset} usage={usageIndex} error={usageError} onRetry={() => setUsageRevision((value) => value + 1)} /> : null}
+                <fieldset id="admin-asset-add-panel" disabled={isSavingAsset || isLoadingEditAsset} className="relative grid min-w-0 gap-3 border-0 p-4" role="region" aria-busy={isSavingAsset || isLoadingEditAsset} aria-label={editingAsset ? "에셋 수정" : "에셋 등록"}>
+                  {editingAsset ? <AdminAssetInspector key={editingAsset.id} asset={editingAsset} usage={usageIndex} error={usageError} onRetry={() => setUsageRevision((value) => value + 1)} onOpenTemplate={openLinkedTemplate} onCreate={async (platform) => {
+                    if (isSavingAsset || isLoadingEditAsset) return;
+                    const sourceAsset = editingAsset;
+                    // Clone reads do not invalidate the edit loader or its finally cleanup.
+                    const requestId = editRequestRef.current;
+                    await adminAssetToFile(withAdminAssetPlatformVariant(sourceAsset, platform)).then((source) => {
+                      if (requestId === editRequestRef.current) imageInputHandlerRef.current?.([source], { queueMode: "replace", firstOnly: true });
+                    }).catch(() => { if (requestId === editRequestRef.current) setNotice("원본 이미지를 불러오지 못했습니다."); });
+                  }} /> : null}
+                  {editingAsset?.assetKind === "bubble" ? <p className="text-xs text-[var(--color-on-surface-variant)]">조정값은 현재 후보에 저장합니다. 이미지 변형을 적용하면 편집한 이미지로 새 후보를 만듭니다.</p> : null}
                   {isSavingAsset ? (
                     <div className="absolute inset-0 z-10 grid place-items-center bg-white/72 backdrop-blur-[1px]" role="status" aria-live="polite">
                       <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-4 py-2 text-sm font-black text-[var(--color-info-strong)] shadow-sm">
@@ -1028,7 +1147,7 @@ export default function AdminAssetsClient() {
                   ))}
                 </select>
               </label>
-              <div className="grid gap-2">
+              {!editingAsset ? <div className="grid gap-2">
                 <span className="text-sm font-black text-[var(--color-on-surface)]">
                   이미지 파일
                 </span>
@@ -1160,7 +1279,7 @@ export default function AdminAssetsClient() {
                     </button>
                   </div>
                 </div>
-              </div>
+              </div> : null}
               {showUploadProgress ? (
                 <section className="grid gap-2 rounded-2xl border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-4 py-3" role="status" aria-live="polite">
                   <div className="flex items-center justify-between gap-3 text-xs font-black text-[var(--color-info-strong)]">
@@ -1205,14 +1324,14 @@ export default function AdminAssetsClient() {
                     : `${formatAdminAssetScope(activeKindSlots)}에 후보로 등록됩니다.`}
                 </p>
               </div>
-              <button className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={requestSave}>
+              <button className="sticky bottom-0 z-10 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] shadow-md transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={requestSave}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
                 {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : pendingFiles.length > 1 ? `${pendingFiles.length}개 후보 저장` : "관리 후보 저장"}
               </button>
-              </div>
+                </fieldset>
             </div>
 
-            <section className="relative grid min-h-0 min-w-0 content-start gap-4 bg-[var(--color-background)] p-4 [overflow-anchor:none] lg:col-start-2 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:overscroll-y-contain lg:[scrollbar-gutter:stable]">
+            <section inert={bubbleWorkspaceMode !== "library" && (isSavingAsset || isLoadingEditAsset)} className="relative grid min-h-0 min-w-0 content-start gap-4 bg-[var(--color-background)] p-4 [overflow-anchor:none] lg:col-start-2 lg:row-start-1 lg:h-full lg:overflow-y-auto lg:overscroll-y-contain lg:[scrollbar-gutter:stable]">
               {assetKind === "bubble" ? (
                 <div className="absolute left-1/2 top-3 z-30 -translate-x-1/2">
                   <div className="pointer-events-auto inline-flex rounded-full border border-blue-200 bg-white/95 p-1 shadow-[0_8px_24px_rgba(37,99,235,0.16)] backdrop-blur">
@@ -1231,6 +1350,8 @@ export default function AdminAssetsClient() {
                   </header>
                   {bubbleWorkspaceMode === "builder" ? (
                     <BubbleBuilderEditor
+                      ref={builderEditorRef}
+                      onCloseCancelled={() => { pendingBuilderTransitionRef.current = null; }}
                       side={selectedBubbleSlot}
                       variant={bubbleVariantFromRole(bubbleAnchorSlot?.role ?? "") ?? "first"}
                       slotLabel="말풍선"
@@ -1238,7 +1359,14 @@ export default function AdminAssetsClient() {
                       initialSpec={bubbleBuilderDraft?.recipe ?? bubbleBuilderInitial?.recipe}
                       initialDecorationFiles={bubbleBuilderDraft?.decorations ?? bubbleBuilderInitial?.decorations}
                       closeOnApply={false}
-                      onClose={() => requestBubbleWorkspaceMode("library")}
+                      onClose={() => {
+                        const action = pendingBuilderTransitionRef.current;
+                        pendingBuilderTransitionRef.current = null;
+                        setBubbleWorkspaceMode("library");
+                        if (!action) return;
+                        builderTransitionBypassRef.current = true;
+                        try { if (!confirmWorkspaceChange(action)) action(); } finally { builderTransitionBypassRef.current = false; }
+                      }}
                       onApply={applyBubbleBuilder}
                       onDecorationReadPendingChange={handleBubbleDecorationReadPendingChange}
                     />
@@ -1259,6 +1387,19 @@ export default function AdminAssetsClient() {
                           showFlip={false}
                           resetGeometryOnSourceChange={!editingAsset && !bubbleBuilderDraft}
                           onApply={({ editedFile, geometry, markers, insets, stretch }) => {
+                            if (workspaceRequestId !== editRequestRef.current) return;
+                            if (editingAsset && editedFile) {
+                              const createEditedCandidate = () => {
+                                applyDroppedFiles([editedFile], { queueMode: "replace", firstOnly: true });
+                                setBubbleGeometry({ android: geometry, ios: geometry });
+                                setBubbleAdjustment({ markers, insets, stretch });
+                                setBubblePreviewEdits({});
+                                setNotice("편집한 이미지로 새 후보를 준비했습니다. 저장하면 별도 에셋으로 등록됩니다.");
+                              };
+                              if (!confirmWorkspaceChange(createEditedCandidate)) createEditedCandidate();
+                              return;
+                            }
+                            if (editBaselineRef.current) editBaselineRef.current.bubbleNormalized = true;
                             const editorPlatform = bubbleEditorPlatform;
                             if (editedFile) {
                               setBubbleVariantFiles((current) => ({ ...current, [editorPlatform]: editedFile }));
@@ -1275,7 +1416,19 @@ export default function AdminAssetsClient() {
                             setBubbleAdjustment((current) => ({ ...current, markers, insets, stretch }));
                             setBubbleGeometryMode("manual");
                           }}
-                          onPreviewChange={({ geometry, markers, insets, stretch }) => {
+                          onPreviewChange={({ geometry, markers, insets, stretch, isInitial }) => {
+                            if (workspaceRequestId !== editRequestRef.current) return;
+                            const baseline = editBaselineRef.current;
+                            if (editingAsset && baseline?.asset === editingAsset && !baseline.bubbleNormalized && isInitial) {
+                              // Normalize the first passive preview only. Preserve the saved title baseline,
+                              // and never rebase unsaved geometry when the editor remounts.
+                              const saved = JSON.parse(baseline.signature) as Record<string, unknown>;
+                              baseline.signature = JSON.stringify({ ...saved,
+                                bubbleAdjustment: { ...bubbleAdjustment, markers: bubbleAdjustment.markers ?? markers, insets: bubbleAdjustment.insets ?? insets, stretch: bubbleAdjustment.stretch ?? stretch },
+                                bubbleSpec: bubbleAdjustmentToSpec({ markers, insets, stretch }, { ...bubbleGeometry, android: geometry, ios: geometry }),
+                              });
+                              baseline.bubbleNormalized = true;
+                            } else if (baseline && isInitial === false) baseline.bubbleNormalized = true;
                             setBubbleAdjustment((current) => current.markers && current.insets && current.stretch
                               ? current
                               : { ...current, markers: current.markers ?? markers, insets: current.insets ?? insets, stretch: current.stretch ?? stretch });
@@ -1378,9 +1531,12 @@ export default function AdminAssetsClient() {
               </div>
               <div className="mb-3 flex items-center gap-2 text-xs">
                 <span>시스템 템플릿</span>
-                <select aria-label="시스템 템플릿 연결 필터" value={usageFilter} onChange={(event) => setUsageFilter(event.currentTarget.value as "all" | "linked")} className="rounded-lg border px-2 py-2">
+                <select aria-label="시스템 템플릿 연결 필터" value={usageFilter} onChange={(event) => setUsageFilter(event.currentTarget.value as typeof usageFilter)} className="rounded-lg border px-2 py-2">
                   <option value="all">연결 전체</option><option value="linked" disabled={!usageIndex || Boolean(usageError)}>확인된 저장 참조 있음</option>
+                  <option value="applied" disabled={!usageIndex || Boolean(usageError)}>실제 적용 중</option><option value="stored" disabled={!usageIndex || Boolean(usageError)}>후보로만 보관</option>
+                  <option value="unlinked" disabled={!usageIndex?.complete || Boolean(usageError) || Boolean(usageIndex?.unknownReferences)}>확인된 연결 없음</option><option value="unknown" disabled={!usageIndex || Boolean(usageError)}>조회·출처·적용 미확인</option>
                 </select>
+                {usageFilter === "unlinked" && usageIndex && (!usageIndex.complete || usageIndex.unknownReferences > 0) ? <span role="status">미연결 판정 불가 · 전체 후보 표시 중</span> : null}
                 {!usageIndex ? <span role="status">{usageError ? "연결 조회 실패 · 전체 후보 표시 중" : "연결 조회 중 · 전체 후보 표시 중"}</span> : null}
                 {usageError ? <button type="button" onClick={() => setUsageRevision((value) => value + 1)} className="underline">연결 조회 재시도</button> : null}
               </div>
@@ -1389,7 +1545,7 @@ export default function AdminAssetsClient() {
               ) : filteredAssets.length > 0 ? (
                 <div className={`grid gap-3 sm:grid-cols-2 ${assetGridColumns === 3 ? "xl:grid-cols-3" : assetGridColumns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
                   {filteredAssets.map(({ asset, warnings }) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} selected={editingAsset?.id === asset.id} usageLabel={usageError ? "연결 조회 실패" : !usageIndex ? "연결 확인 중" : `저장 참조 ${usageIndex.byAssetId[asset.id]?.length ?? 0}개${!usageIndex.complete || usageIndex.unknownReferences ? " · 일부 연결 미확인" : ""}`} deleting={deletingAssetId === asset.id} republishing={republishingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => { setUsageIndex(null); setUsageError(null); setAssetPendingDelete(asset); setUsageRevision((value) => value + 1); }} onRepublish={() => void republishCatalog(asset)} />
+                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} selected={editingAsset?.id === asset.id} usageLabel={usageError ? "연결 조회 실패" : !usageIndex ? "연결 확인 중" : `${describeAdminAssetUsage(usageIndex.byAssetId[asset.id] ?? [])}${!usageIndex.complete || usageIndex.unknownReferences ? " · 일부 연결 미확인" : ""}`} deleting={deletingAssetId === asset.id} republishing={republishingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => { setUsageIndex(null); setUsageError(null); setAssetPendingDelete(asset); setUsageRevision((value) => value + 1); }} onRepublish={() => void republishCatalog(asset)} />
                   ))}
                 </div>
               ) : (
@@ -1406,41 +1562,6 @@ export default function AdminAssetsClient() {
               )}
             </section>
             </section>
-            <aside className="hidden">
-              <div>
-                <span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Inspector</span>
-                <h2 className="mt-1 text-lg font-black text-[var(--color-on-surface)]">{getAdminAssetKindLabel(assetKind)}</h2>
-                <p className="mt-1 text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{formatAdminAssetScope(activeKindSlots)}</p>
-              </div>
-              {editingAsset ? <div className="flex items-center justify-between gap-2 rounded-2xl border border-[var(--color-info-outline)] bg-[var(--color-info-container)] px-3 py-2.5"><span className="min-w-0 truncate text-xs font-black text-[var(--color-info-strong)]">편집 중 · {editingAsset.title}</span><button type="button" disabled={isSavingAsset} onClick={exitInPlaceEdit} className="rounded-lg bg-white px-2 py-1 text-[10px] font-black text-[var(--color-on-surface-variant)] disabled:opacity-50">새로 만들기</button></div> : null}
-              {isLoadingEditAsset ? <div className="inline-flex items-center gap-2 text-xs font-bold text-[var(--color-on-surface-variant)]"><LoaderCircle size={14} className="animate-spin" /> 원본 불러오는 중</div> : null}
-              <label className="grid gap-2">
-                <span className="text-xs font-black text-[var(--color-on-surface-variant)]">후보 이름</span>
-                <input className="h-11 rounded-xl border border-[var(--color-outline-variant)] px-3 text-sm font-semibold outline-none focus:border-[var(--color-info)]" value={title} onChange={(event) => setTitle(event.currentTarget.value)} placeholder={file?.name ?? "예: 심플 말풍선"} />
-              </label>
-              <section className="grid gap-2 rounded-2xl bg-[var(--color-surface-low)] p-3">
-                <span className="text-xs font-black text-[var(--color-on-surface)]">적용되는 슬롯</span>
-                <p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{editingAsset ? formatAdminAssetTargets(editingAsset, slots) : formatAdminAssetTargetsFromInputs(selectedSaveTargets, slots, assetKind)}</p>
-              </section>
-              {file ? <section className="grid gap-2 rounded-2xl bg-[var(--color-surface-low)] p-3"><span className="text-xs font-black text-[var(--color-on-surface)]">자동 분석</span><p className="text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{describeAdminAssetAnalysis(analysis ?? undefined)}</p></section> : null}
-              {guidanceItems.length > 0 ? <section className="grid gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3"><span className="inline-flex items-center gap-1.5 text-xs font-black text-amber-950"><AlertTriangle size={14} /> 저장 전 확인</span><ul className="grid gap-1.5">{guidanceItems.map((item) => <li key={item} className="text-xs font-semibold leading-5 text-amber-900">{item}</li>)}</ul></section> : null}
-              <button className="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--color-inverse-surface)] px-5 py-3 text-sm font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={requestSave}>
-                {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : <Save size={17} aria-hidden="true" />}
-                {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : "관리 후보 저장"}
-              </button>
-            </aside>
-          </section>
-          <section className="hidden">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0"><span className="text-[11px] font-black uppercase tracking-[0.12em] text-[var(--color-info-strong)]">Library</span><p className="mt-1 truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{getAdminAssetKindLabel(assetKind)} · {assetSearch.trim() ? `검색 ${filteredAssets.length} / ` : ""}{assetsTruncated ? `${assets.length}개 이상` : `${assets.length}개`}</p></div>
-              <div className="relative min-w-[220px] flex-1 sm:max-w-sm"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--color-on-surface-variant)]" aria-hidden="true" /><input type="search" value={assetSearch} onChange={(event) => setAssetSearch(event.currentTarget.value)} placeholder="후보 검색" className="h-10 w-full rounded-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] pl-9 pr-4 text-xs font-semibold outline-none focus:bg-white" aria-label="관리 후보 검색" /></div>
-              <div className="flex flex-wrap gap-1">{([["updated", "수정순"], ["created", "등록순"], ["title", "이름순"]] as const).map(([value, label]) => <button key={value} type="button" onClick={() => { setAssetSort(value); setAssetSortDirection(getAdminAssetListDefaultSortDirection(value)); }} aria-pressed={assetSort === value} className={`rounded-full px-2.5 py-1.5 text-[11px] font-black ${assetSort === value ? "bg-[var(--color-inverse-surface)] text-[var(--color-inverse-on-surface)]" : "bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)]"}`}>{label}</button>)}</div>
-            </div>
-            <div className="flex min-h-[132px] gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
-              {isLoadingAssets && assets.length === 0 ? <span className="grid min-w-48 place-items-center rounded-2xl bg-[var(--color-surface-low)] text-xs font-bold text-[var(--color-on-surface-variant)]">후보를 불러오는 중</span> : null}
-              {!isLoadingAssets && filteredAssets.length === 0 ? <span className="grid min-w-64 place-items-center rounded-2xl border border-dashed border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] px-4 text-center text-xs font-bold text-[var(--color-on-surface-variant)]">표시할 관리 후보가 없습니다.</span> : null}
-              {filteredAssets.map(({ asset, warnings }) => <AdminAssetDockCard key={asset.id} asset={asset} slots={slots} warnings={warnings} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => setAssetPendingDelete(asset)} />)}
-            </div>
           </section>
       </div>
       </div>
@@ -1469,13 +1590,37 @@ export default function AdminAssetsClient() {
         }}
       />
       <AdminAssetEditDialog asset={null} slots={slots} onClose={() => undefined} onSaved={() => undefined} />
+      <Dialog.Root open={unsavedDialogOpen} onOpenChange={(open) => { if (!isSavingAsset) { setUnsavedDialogOpen(open); if (!open) pendingTransitionRef.current = null; } }}>
+        <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[70] bg-black/45" /><Dialog.Content className="fixed left-1/2 top-1/2 z-[70] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-5">
+          <Dialog.Title className="text-lg font-bold">저장하지 않은 변경이 있습니다</Dialog.Title>
+          <Dialog.Description className="mt-2 text-sm">변경을 저장하거나 폐기한 뒤 이동할 수 있습니다. 저장에 실패하면 현재 작업을 유지합니다.</Dialog.Description>
+          {notice ? <p role="status" className="mt-2 text-xs">{notice}</p> : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" disabled={isSavingAsset} onClick={() => { pendingTransitionRef.current = null; setUnsavedDialogOpen(false); }} className="rounded-lg border px-3 py-2">계속 편집</button>
+            <button type="button" disabled={isSavingAsset} onClick={() => {
+              const action = pendingTransitionRef.current; pendingTransitionRef.current = null; setUnsavedDialogOpen(false);
+              transitionBypassRef.current = true;
+              try { action?.(); } finally { transitionBypassRef.current = false; }
+            }} className="rounded-lg border px-3 py-2">변경 폐기</button>
+            <button type="button" disabled={!canSaveAsset} onClick={() => {
+              void submit().then((saved) => {
+                if (!saved) return;
+                const action = pendingTransitionRef.current; pendingTransitionRef.current = null; setUnsavedDialogOpen(false);
+                transitionBypassRef.current = true;
+                try { action?.(); } finally { transitionBypassRef.current = false; }
+              });
+            }} className="rounded-lg bg-[var(--color-info-container)] px-3 py-2">{isSavingAsset ? "저장 중…" : "저장 후 이동"}</button>
+          </div>
+        </Dialog.Content></Dialog.Portal>
+      </Dialog.Root>
+
       <Dialog.Root open={isSaveConfirmOpen} onOpenChange={(open) => { if (!isSavingAsset) setIsSaveConfirmOpen(open); }}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[60] bg-slate-950/35 backdrop-blur-[2px]" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-[61] w-[calc(100%-40px)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-blue-100 bg-white p-5 shadow-[0_24px_72px_rgba(15,23,42,0.22)] outline-none">
             <span className="mb-4 grid size-10 place-items-center rounded-xl bg-blue-50 text-blue-700"><Save size={20} aria-hidden="true" /></span>
-            <Dialog.Title className="text-xl font-extrabold text-slate-950">관리 후보를 저장할까요?</Dialog.Title>
-            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-slate-600">아래 정보를 확인한 뒤 저장하세요. 여러 파일을 선택하면 파일마다 하나의 관리 후보로 등록됩니다.</Dialog.Description>
+            <Dialog.Title className="text-xl font-extrabold text-slate-950">{editingAsset ? "에셋 변경을 저장할까요?" : "관리 후보를 저장할까요?"}</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm font-semibold leading-6 text-slate-600">{editingAsset ? "이름과 조정값을 저장합니다. 연결된 시스템 템플릿은 자동으로 재발행되지 않습니다." : "아래 정보를 확인한 뒤 저장하세요. 여러 파일을 선택하면 파일마다 하나의 관리 후보로 등록됩니다."}</Dialog.Description>
             <dl className="mt-4 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
               <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">후보 이름</dt><dd className="max-w-[65%] text-right font-black text-slate-900">{title.trim() || (pendingFiles.length > 1 ? `${pendingFiles.length}개 이미지` : file?.name) || getAdminAssetKindLabel(assetKind)}</dd></div>
               {pendingFiles.length > 1 ? <div className="flex items-start justify-between gap-4"><dt className="font-bold text-slate-500">등록 파일</dt><dd className="text-right font-black text-slate-900">{pendingFiles.length}개</dd></div> : null}
@@ -1513,7 +1658,7 @@ export default function AdminAssetsClient() {
               <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2.5 text-xs font-semibold leading-5 text-amber-900">
                 시스템 템플릿 {templatesUsingPendingDelete.length}개가 이 에셋을 쓰고 있습니다 ({templatesUsingPendingDelete.slice(0, 3).join(", ")}
                 {templatesUsingPendingDelete.length > 3 ? ` 외 ${templatesUsingPendingDelete.length - 3}개` : ""}).
-                {" "}원본 삭제는 미리보기와 내보내기에 영향을 줄 수 있습니다. 플랫폼의 catalog producer 설정과 사용자·에셋 allowlist에 따라 기존 원본을 사용합니다.
+                {" "}미리보기와 내보내기에 필요한 원본을 보호하기 위해 삭제를 보류합니다. 템플릿에서 저장 참조를 모두 해제한 뒤 다시 조회해 주세요.
               </p>
             ) : null}
             {!usageIndex && !usageError ? <p role="status" className="mt-3 text-xs">시스템 템플릿 연결 확인 중…</p> : null}
@@ -1526,7 +1671,7 @@ export default function AdminAssetsClient() {
               <button
                 type="button"
                 className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-extrabold text-white transition hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-red-600 disabled:opacity-55"
-                disabled={Boolean(deletingAssetId) || !usageIndex?.complete || Boolean(usageError)}
+                disabled={Boolean(deletingAssetId) || !usageIndex?.complete || Boolean(usageError) || Boolean(templatesUsingPendingDelete?.length)}
                 onClick={() => { if (assetPendingDelete) void remove(assetPendingDelete); }}
               >
                 {deletingAssetId ? <><LoaderCircle className="animate-spin" size={17} aria-hidden="true" />삭제 중</> : "삭제"}

@@ -434,16 +434,11 @@ export async function findSystemTemplatesUsingAdminAsset(id: string): Promise<st
 }
 
 export async function deleteAdminAssetCandidate(id: string): Promise<void> {
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("admin_assets")
-    .select("storage_path,admin_asset_variants(storage_path),admin_asset_bubble_designs!admin_asset_bubble_designs_asset_id_fkey(admin_asset_bubble_decorations(storage_path))")
-    .eq("id", id)
-    .maybeSingle();
-  const storagePaths = readAdminAssetStoragePaths(data);
-  const { error } = await supabase.from("admin_assets").delete().eq("id", id);
-  if (error) throw error;
-  if (storagePaths.length) await supabase.storage.from(themeAssetsBucketName).remove(storagePaths);
+  const response = await fetch(`/api/admin/theme-assets/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(payload.error ?? "관리 후보를 삭제하지 못했습니다.");
+  }
 }
 
 export async function adminAssetToFile(asset: AdminAssetCandidate): Promise<File> {
@@ -465,7 +460,7 @@ export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis): strin
   return `${analysis.width}x${analysis.height}`;
 }
 
-function readAdminAssetStoragePaths(value: unknown): string[] {
+export function readAdminAssetStoragePaths(value: unknown): string[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   const record = value as Record<string, unknown>;
   const paths = new Set<string>();

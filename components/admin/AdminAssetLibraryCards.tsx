@@ -145,7 +145,7 @@ export function AdminAssetCard({
   const scopeLabel = getAdminAssetScopeLabel(describeAdminAssetScope(asset.targets));
   return (
     <article aria-label={`${asset.title}${selected ? " · 수정 중" : ""}`} className={`relative grid gap-3 overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-white p-4 shadow-[0_12px_28px_rgba(42,103,103,0.06)] transition duration-200 ${selected ? "ring-2 ring-[var(--color-info)]" : ""} ${deleting ? "opacity-70" : "hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(42,103,103,0.1)]"}`}>
-      {usageLabel ? <span className="text-[11px] font-bold text-[var(--color-on-surface-variant)]">{usageLabel}</span> : null}
+      {usageLabel ? <button type="button" disabled={deleting} onClick={onEdit} aria-label={`${asset.title} 연결 정보 보기`} className="text-left text-[11px] font-bold text-[var(--color-on-surface-variant)] hover:underline">{usageLabel}</button> : null}
       {deleting ? (
         <div className="absolute inset-0 z-10 grid place-items-center bg-white/70 backdrop-blur-[1px]" role="status" aria-live="polite">
           <span className="inline-flex items-center gap-2 rounded-full border border-red-100 bg-red-50 px-3 py-2 text-xs font-black text-red-700 shadow-sm">

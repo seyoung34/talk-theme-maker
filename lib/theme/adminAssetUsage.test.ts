@@ -5,6 +5,11 @@ const id = "11111111-2222-4333-8444-555555555555";
 const row = (variantId: string, bundleId: string, platform: string, refs: unknown) => ({ id: variantId, platform, upload_refs: refs, system_template_bundles: { id: bundleId, title: "Same title", status: "published", visibility: "public" } });
 
 describe("admin asset usage reverse index", () => {
+  it("recognizes a copied candidate by exact saved identity present in the inventory", () => {
+    const result = buildAdminAssetUsageIndex([row("a", "one", "ios", { bg: [{ id, fileName: "copy.png", storagePath: "system-templates/copy.png" }] })], true, new Set([id]));
+    expect(result.byAssetId[id][0].variants[0].relationKinds).toEqual(["saved-id"]);
+    expect(result.unknownReferences).toBe(0);
+  });
   it("deduplicates slots and variants by bundle identity, not title", () => {
     const entry = { catalog: { assetId: `admin:${id}` } };
     const result = buildAdminAssetUsageIndex([row("a", "one", "android", { bg: [entry, entry] }), row("b", "one", "ios", { icon: [entry] }), row("c", "two", "android", { bg: [entry] })]);
