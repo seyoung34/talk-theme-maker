@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, CircleHelp, Link2, Link2Off, LoaderCircle, Pencil, RefreshCw } from "lucide-react";
+import { AlertTriangle, CircleHelp, Link2, Link2Off, LoaderCircle, RefreshCw } from "lucide-react";
 import type { CSSProperties } from "react";
 
 import {
@@ -108,7 +108,6 @@ export function AdminAssetCard({
   deleting,
   republishing,
   onEdit,
-  onDelete,
   onRepublish,
   selected = false,
   usageState,
@@ -119,7 +118,6 @@ export function AdminAssetCard({
   deleting: boolean;
   republishing: boolean;
   onEdit: () => void;
-  onDelete: () => void;
   onRepublish: () => void;
   selected?: boolean;
   usageState?: "linked" | "unlinked" | "unknown";
@@ -155,16 +153,18 @@ export function AdminAssetCard({
       ) : null}
       <div className="relative aspect-[4/3] overflow-hidden rounded-[18px] border border-[var(--color-outline-variant)]" style={TRANSPARENCY_CHECKER_STYLE}>
         <div className="size-full bg-contain bg-center bg-no-repeat" style={{ backgroundImage: tileUrl ? `url(${tileUrl})` : undefined }} />
-        {usageState ? <button type="button" disabled={deleting} onClick={onEdit} title={usageState === "linked" ? "연결된 템플릿 있음 · 상세 보기" : usageState === "unlinked" ? "확인된 연결 없음 · 상세 보기" : "연결 여부 미확인 · 상세 보기"} aria-label={`${asset.title} 연결 정보 보기`} aria-describedby={`admin-asset-usage-${asset.id}`} className={`absolute right-2 top-2 inline-flex size-9 items-center justify-center rounded-full bg-white/95 shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-info)] ${usageState === "linked" ? "text-[var(--color-info-strong)]" : "text-[var(--color-on-surface-variant)]"}`}><span id={`admin-asset-usage-${asset.id}`} className="sr-only">{usageState === "linked" ? "연결 있음" : usageState === "unlinked" ? "확인된 연결 없음" : "연결 미확인"}</span>{usageState === "linked" ? <Link2 size={16} aria-hidden="true" /> : usageState === "unlinked" ? <Link2Off size={16} aria-hidden="true" /> : <CircleHelp size={16} aria-hidden="true" />}</button> : null}
       </div>
       <div className="min-w-0">
-        <div className="mb-2 flex flex-wrap gap-1.5">
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="flex flex-wrap gap-1.5">
           <span className="rounded-full bg-[var(--color-inverse-surface)] px-2 py-0.5 text-[10px] font-black text-[var(--color-inverse-on-surface)]">{scopeLabel}</span>
           {asset.variantPlatforms.map((platform) => (
             <span key={platform} className="rounded-full bg-[var(--color-surface-low)] px-2 py-0.5 text-[10px] font-black text-[var(--color-on-surface-variant)]">{platform === "android" ? "Android 전용본" : "iOS 전용본"}</span>
           ))}
           {warnings.length > 0 ? <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-800"><AlertTriangle size={11} aria-hidden="true" />확인 {warnings.length}</span> : null}
           {needsCatalogPublish ? <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black text-red-800" title="catalog registry에 active 항목이 없습니다. 내보내기가 기존 업로드 경로로 동작합니다."><AlertTriangle size={11} aria-hidden="true" />catalog 미등록</span> : null}
+          </div>
+          {usageState ? <span className={`inline-flex shrink-0 items-center py-0.5 ${usageState === "linked" ? "text-[var(--color-info-strong)]" : "text-[var(--color-on-surface-variant)]"}`}><span id={`admin-asset-usage-${asset.id}`} className="sr-only">{usageState === "linked" ? "연결 있음" : usageState === "unlinked" ? "확인된 연결 없음" : "연결 미확인"}</span>{usageState === "linked" ? <Link2 size={16} aria-hidden="true" /> : usageState === "unlinked" ? <Link2Off size={16} aria-hidden="true" /> : <CircleHelp size={16} aria-hidden="true" />}</span> : null}
         </div>
         <strong className="block truncate text-sm font-black text-[var(--color-on-surface)]">{asset.title}</strong>
         <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">{asset.assetKind ? getAdminAssetKindLabel(asset.assetKind) : getAdminAssetSlotLabel(asset.slotRole, slots)}</span>
@@ -173,22 +173,14 @@ export function AdminAssetCard({
         {asset.hasBubbleAdjustment ? <span className="mt-1 block truncate text-xs font-semibold text-[var(--color-on-surface-variant)]">말풍선 조정값 저장됨</span> : null}
         {warnings[0] ? <span className="mt-2 block rounded-xl bg-amber-50 px-2.5 py-2 text-[11px] font-semibold leading-4 text-amber-900">{warnings[0]}</span> : null}
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:-translate-y-0.5 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" disabled={deleting} onClick={onEdit}>
-          <Pencil size={14} aria-hidden="true" /> 수정
-        </button>
-        <button type="button" className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:-translate-y-0.5 hover:border-red-200 hover:bg-red-50 hover:text-red-700 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]" disabled={deleting} onClick={onDelete}>
-          {deleting ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : null}
-          {deleting ? "삭제 중" : "삭제"}
-        </button>
-      </div>
+      <button type="button" disabled={deleting} onClick={onEdit} aria-label={`${asset.title} 에셋 상세 보기`} aria-describedby={usageState ? `admin-asset-usage-${asset.id}` : undefined} title={usageState === "linked" ? "연결된 템플릿 있음" : usageState === "unlinked" ? "확인된 연결 없음" : "연결 여부 미확인"} className="absolute inset-0 z-10 cursor-pointer rounded-[24px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-info)] disabled:cursor-wait" />
       {needsCatalogPublish && republishBlockedReason ? (
         <span className="rounded-xl bg-red-50 px-2.5 py-2 text-[11px] font-semibold leading-4 text-red-900">{republishBlockedReason}</span>
       ) : null}
       {needsCatalogPublish && !republishBlockedReason ? (
         <button
           type="button"
-          className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 transition hover:-translate-y-0.5 hover:bg-red-100 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]"
+          className="relative z-20 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 transition hover:-translate-y-0.5 hover:bg-red-100 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-[var(--color-secondary-container)]"
           disabled={deleting || republishing}
           onClick={onRepublish}
           title="원본을 다시 올려 catalog registry에 등록합니다."

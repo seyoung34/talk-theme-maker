@@ -102,15 +102,17 @@ describe("admin asset paste", () => {
   it("does not count passive preview initialization as dirty or rebase edits on remount", async () => {
     render(<AdminAssetsClient />);
     fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });
-    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.click(screen.getByRole("button", { name: /에셋 상세 보기/ }));
     await waitFor(() => expect(screen.getByLabelText("후보 이름")).toBeEnabled());
     const geometry = centeredBubbleGeometry(80, 60);
     act(() => mocks.bubbleProps!.onPreviewChange?.({ ...bubbleGeometryToLegacyEdit(geometry, 80, 60), flipX: false, isInitial: true }));
     const clean = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(clean);
     expect(clean.defaultPrevented).toBe(false);
+    expect(screen.getByRole("button", { name: "변경 저장" })).toBeDisabled();
     const changed = { ...geometry, contentInsets: { ...geometry.contentInsets, left: geometry.contentInsets.left + 1 } };
     act(() => mocks.bubbleProps!.onPreviewChange?.({ ...bubbleGeometryToLegacyEdit(changed, 80, 60), flipX: false, isInitial: false }));
+    expect(screen.getByRole("button", { name: "변경 저장" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "말풍선 후보 라이브러리 보기" }));
     fireEvent.click(screen.getByRole("button", { name: "말풍선 편집 화면 보기" }));
     act(() => mocks.bubbleProps!.onPreviewChange?.({ ...bubbleGeometryToLegacyEdit(changed, 80, 60), flipX: false, isInitial: true }));
@@ -120,7 +122,7 @@ describe("admin asset paste", () => {
   it("stores transformed artwork as a new candidate instead of losing its bytes in metadata update", async () => {
     render(<AdminAssetsClient />);
     fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });
-    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.click(screen.getByRole("button", { name: /에셋 상세 보기/ }));
     await waitFor(() => expect(screen.getByLabelText("후보 이름")).toBeEnabled());
     const geometry = centeredBubbleGeometry(80, 60);
     act(() => mocks.bubbleProps!.onApply({ ...bubbleGeometryToLegacyEdit(geometry, 80, 60), editedFile: image("edited.png"), sourceFile: image("old.png"), imageState: defaultImageEditState }));
@@ -131,13 +133,24 @@ describe("admin asset paste", () => {
     expect(mocks.save.mock.calls[0][0].fileName).toBe("edited.png");
     expect(mocks.update).not.toHaveBeenCalled();
   });
-  it("opens linked information from the gallery badge without extra actions", async () => {
+  it("activates change saving only while the title differs from the saved value", async () => {
+    render(<AdminAssetsClient />);
+    fireEvent.click(screen.getByRole("button", { name: /에셋 상세 보기/ }));
+    await waitFor(() => expect(screen.getByLabelText("후보 이름")).toBeEnabled());
+    expect(screen.getByRole("button", { name: "변경 저장" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("후보 이름"), { target: { value: "Changed" } });
+    expect(screen.getByRole("button", { name: "변경 저장" })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("후보 이름"), { target: { value: asset.title } });
+    expect(screen.getByRole("button", { name: "변경 저장" })).toBeDisabled();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+  it("opens linked information from the full card without extra actions", async () => {
     vi.mocked(fetchAdminAssetUsageIndex).mockResolvedValueOnce({ byAssetId: { [asset.id]: [{ id: "bundle", title: "Linked", status: "draft", visibility: "private", variants: [{ id: "variant", platform: "ios", slots: ["slot"], appliedSlots: [] }] }] }, complete: true, unknownReferences: 0, checkedAt: "2026-10-02" });
     render(<AdminAssetsClient />);
-    fireEvent.click(screen.getByRole("button", { name: `${asset.title} 연결 정보 보기` }));
+    fireEvent.click(screen.getByRole("button", { name: `${asset.title} 에셋 상세 보기` }));
     await waitFor(() => expect(screen.getByLabelText("후보 이름")).toBeEnabled());
     expect(screen.getByText("Linked")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: `${asset.title} 연결 정보 보기` })).toHaveAccessibleDescription("연결 있음");
+    expect(screen.getByRole("button", { name: `${asset.title} 에셋 상세 보기` })).toHaveAccessibleDescription("연결 있음");
     expect(screen.queryByRole("button", { name: /템플릿 열기/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "이 이미지로 새 후보 만들기" })).not.toBeInTheDocument();
   });
@@ -146,7 +159,7 @@ describe("admin asset paste", () => {
     mocks.source.mockReturnValue(new Promise<File>((resolve) => { resolveSource = resolve; }));
     render(<AdminAssetsClient />);
     fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });
-    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.click(screen.getByRole("button", { name: /에셋 상세 보기/ }));
     await screen.findByRole("button", { name: "원본 다시 조회" });
     expect(screen.getByLabelText("후보 이름")).toBeDisabled();
     expect(screen.getByRole("button", { name: "원본 다시 조회" })).toBeDisabled();
@@ -159,7 +172,7 @@ describe("admin asset paste", () => {
   });
   it("keeps unsaved edits when a pasted replacement is cancelled", async () => {
     render(<AdminAssetsClient />);
-    fireEvent.click(screen.getAllByRole("button", { name: "수정" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /에셋 상세 보기/ })[0]);
     await screen.findByRole("button", { name: "원본 다시 조회" });
     await waitFor(() => expect(screen.queryByText("원본 불러오는 중")).not.toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("후보 이름"), { target: { value: "Changed title" } });
@@ -171,7 +184,7 @@ describe("admin asset paste", () => {
   });
   it("keeps the transition pending and edits intact if saving fails", async () => {
     render(<AdminAssetsClient />);
-    fireEvent.click(screen.getAllByRole("button", { name: "수정" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /에셋 상세 보기/ })[0]);
     await screen.findByRole("button", { name: "원본 다시 조회" });
     await waitFor(() => expect(screen.queryByText("원본 불러오는 중")).not.toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("후보 이름"), { target: { value: "Changed title" } });
@@ -190,14 +203,16 @@ describe("admin asset paste", () => {
     vi.mocked(fetchAdminAssetUsageIndex).mockResolvedValueOnce(usage).mockResolvedValueOnce(usage);
     render(<AdminAssetsClient />);
     await waitFor(() => expect(screen.getByLabelText("시스템 템플릿 연결 필터")).toBeEnabled());
-    fireEvent.click(screen.getAllByRole("button", { name: "삭제" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /에셋 상세 보기/ }));
+    await waitFor(() => expect(screen.getByLabelText("후보 이름")).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "에셋 삭제" }));
     await screen.findByText(/미리보기와 내보내기에 필요한 원본/);
     expect(screen.getByRole("button", { name: "삭제" })).toBeDisabled();
   });
   it("keeps all candidates accessible when a linked-filter refresh fails", async () => {
     vi.mocked(fetchAdminAssetUsageIndex).mockResolvedValueOnce({ byAssetId: { [asset.id]: [{ id: "bundle", title: "Linked", status: "draft", visibility: "private", variants: [] }] }, complete: true, unknownReferences: 0, checkedAt: "2026-10-02" });
     render(<AdminAssetsClient />);
-    fireEvent.click(screen.getAllByRole("button", { name: "수정" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /에셋 상세 보기/ })[0]);
     await screen.findByRole("button", { name: "연결 다시 조회" });
     fireEvent.change(screen.getByLabelText("시스템 템플릿 연결 필터"), { target: { value: "linked" } });
     vi.mocked(fetchAdminAssetUsageIndex).mockRejectedValueOnce(new Error("offline"));
@@ -213,7 +228,7 @@ describe("admin asset paste", () => {
     mocks.get.mockReturnValue(new Promise<AdminAssetCandidate>((resolve) => { resolveDetail = resolve; }));
     render(<AdminAssetsClient />);
     fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "수정" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /에셋 상세 보기/ })[0]);
     await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(1));
     paste([image("pasted.png")]);
     resolveDetail(asset);
@@ -227,7 +242,7 @@ describe("admin asset paste", () => {
     mocks.source.mockReturnValue(new Promise<File>((resolve) => { resolveSource = resolve; }));
     render(<AdminAssetsClient />);
     fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "수정" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /에셋 상세 보기/ })[0]);
     await waitFor(() => expect(mocks.source).toHaveBeenCalledTimes(2));
     paste([image("pasted.png")]);
     resolveSource(image("old.png"));
@@ -239,7 +254,7 @@ describe("admin asset paste", () => {
   it("saves a pasted image as a new candidate rather than clearing the edited bubble", async () => {
     render(<AdminAssetsClient />);
     fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "수정" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /에셋 상세 보기/ })[0]);
     await waitFor(() => expect(screen.getAllByText("편집 중 · Existing bubble").length).toBeGreaterThan(0));
     await waitFor(() => expect(mocks.source).toHaveBeenCalledTimes(2));
     paste([image("pasted.png")]);

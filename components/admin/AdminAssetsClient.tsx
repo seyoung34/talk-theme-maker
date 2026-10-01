@@ -301,6 +301,7 @@ export default function AdminAssetsClient() {
     [assetKind, bubbleBuilderDraft, effectiveBubbleAdjustment, effectiveBubbleGeometry],
   );
   const editSignature = JSON.stringify({ title: title.trim(), bubbleAdjustment: assetKind === "bubble" ? bubbleAdjustment : undefined, bubbleSpec, recipe: bubbleBuilderDraft?.recipe });
+  const [hasUnsavedEdit, setHasUnsavedEdit] = useState(false);
   useEffect(() => {
     if (editingAsset && !isLoadingEditAsset && editBaselineRef.current?.asset !== editingAsset) {
       editBaselineRef.current = { asset: editingAsset, signature: editSignature, bubbleNormalized: false };
@@ -308,6 +309,7 @@ export default function AdminAssetsClient() {
     dirtyRef.current = editingAsset
       ? Boolean(editBaselineRef.current?.asset === editingAsset && editBaselineRef.current.signature !== editSignature)
       : Boolean(title.trim() || pendingFiles.some((pending) => pending.status !== "success") || bubbleBuilderDraft);
+    setHasUnsavedEdit(Boolean(editingAsset && dirtyRef.current));
   }, [editingAsset, isLoadingEditAsset, editSignature, title, pendingFiles, bubbleBuilderDraft]);
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -333,7 +335,7 @@ export default function AdminAssetsClient() {
     activeKindSlots.length > 0 &&
       !isSavingAsset &&
       !isLoadingEditAsset &&
-      (editingAsset ? title.trim() : bubbleBuilderDraft ? file : uploadableFiles.length > 0) &&
+      (editingAsset ? title.trim() && hasUnsavedEdit : bubbleBuilderDraft ? file : uploadableFiles.length > 0) &&
       (editingAsset || selectedSaveTargets.length > 0) &&
       (assetKind !== "bubble" || bubbleSpec) &&
       !bubbleDecorationReadPending,
@@ -1299,7 +1301,10 @@ export default function AdminAssetsClient() {
                 </p>
               </div>
               {editingAsset ? <AdminAssetConnections assetId={editingAsset.id} usage={usageIndex} error={usageError} onRetry={() => setUsageRevision((value) => value + 1)} /> : null}
-              <button className="sticky bottom-0 z-10 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] shadow-md transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:opacity-40" type="button" disabled={!canSaveAsset} onClick={requestSave}>
+              {editingAsset ? <div className="flex justify-end"><button type="button" disabled={isSavingAsset || isLoadingEditAsset || Boolean(deletingAssetId)} onClick={() => {
+                setUsageIndex(null); setUsageError(null); setAssetPendingDelete(toAdminAssetListItem(editingAsset)); setUsageRevision((value) => value + 1);
+              }} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 disabled:opacity-40"><Trash2 size={14} aria-hidden="true" />에셋 삭제</button></div> : null}
+              <button className="sticky bottom-0 z-10 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-[var(--color-inverse-surface)] px-4 py-2 text-sm font-black text-[var(--color-inverse-on-surface)] shadow-md transition hover:bg-[var(--color-on-surface)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-low)] disabled:text-[var(--color-on-surface-variant)] disabled:shadow-none" type="button" disabled={!canSaveAsset} onClick={requestSave}>
                 {isSavingAsset ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" /> : null}
                 {isSavingAsset ? "저장 중" : editingAsset ? "변경 저장" : bubbleBuilderDraft ? "빌더 후보 저장" : pendingFiles.length > 1 ? `${pendingFiles.length}개 후보 저장` : "관리 후보 저장"}
               </button>
@@ -1520,7 +1525,7 @@ export default function AdminAssetsClient() {
               ) : filteredAssets.length > 0 ? (
                 <div className={`grid gap-3 sm:grid-cols-2 ${assetGridColumns === 3 ? "xl:grid-cols-3" : assetGridColumns === 4 ? "xl:grid-cols-4" : "xl:grid-cols-5"}`}>
                   {filteredAssets.map(({ asset, warnings }) => (
-                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} selected={editingAsset?.id === asset.id} usageState={usageIndex?.byAssetId[asset.id]?.length ? "linked" : usageError || !usageIndex || !usageIndex.complete || usageIndex.unknownReferences ? "unknown" : "unlinked"} deleting={deletingAssetId === asset.id} republishing={republishingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onDelete={() => { setUsageIndex(null); setUsageError(null); setAssetPendingDelete(asset); setUsageRevision((value) => value + 1); }} onRepublish={() => void republishCatalog(asset)} />
+                    <AdminAssetCard key={asset.id} asset={asset} slots={slots} warnings={warnings} selected={editingAsset?.id === asset.id} usageState={usageIndex?.byAssetId[asset.id]?.length ? "linked" : usageError || !usageIndex || !usageIndex.complete || usageIndex.unknownReferences ? "unknown" : "unlinked"} deleting={deletingAssetId === asset.id} republishing={republishingAssetId === asset.id} onEdit={() => void beginInPlaceEdit(asset)} onRepublish={() => void republishCatalog(asset)} />
                   ))}
                 </div>
               ) : (
