@@ -159,6 +159,7 @@ export default function AdminAssetsClient() {
   const [rightSidebarWidth, setRightSidebarWidth] = useState(400);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingFilesRef = useRef<PendingAdminAssetFile[]>([]);
+  const imageInputHandlerRef = useRef<((files: FileList | File[] | null, options?: { queueMode?: "replace"; firstOnly?: boolean }) => void) | null>(null);
   const sidebarResizeRef = useRef<SidebarResize | null>(null);
   const assetKindRef = useRef<AdminAssetKind>(assetKind);
   const editRequestRef = useRef(0);
@@ -381,23 +382,7 @@ export default function AdminAssetsClient() {
         setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 다시 추가해 주세요.");
         return;
       }
-      const result = pickValidImageFiles(event.clipboardData?.files);
-      const file = result.files[0];
-      if (!file) {
-        setNotice(result.rejected[0] ?? "이미지 파일만 추가할 수 있습니다.");
-        return;
-      }
-      for (const pending of pendingFilesRef.current) URL.revokeObjectURL(pending.previewUrl);
-      const pending = createPendingAdminAssetFile(file);
-      setAnalysis(null);
-      setBubbleAdjustment({});
-      setBubbleGeometry({});
-      setBubblePreviewEdits({});
-      setBubbleVariantFiles({ android: file, ios: file });
-      setPendingFiles([pending]);
-      setUploadProgress(null);
-      setFile(file);
-      setNotice("클립보드 이미지를 추가했습니다.");
+      imageInputHandlerRef.current?.(Array.from(event.clipboardData?.files ?? []), { queueMode: "replace", firstOnly: true });
     };
 
     window.addEventListener("paste", handlePaste);
@@ -721,15 +706,20 @@ export default function AdminAssetsClient() {
     }
   };
 
-  const applyDroppedFiles = (files: FileList | File[] | null) => {
+  const applyDroppedFiles = (files: FileList | File[] | null, options?: { queueMode?: "replace"; firstOnly?: boolean }) => {
+    if (isSavingAsset) return;
     if (blockBubbleWorkspaceChange()) return;
     const result = pickValidImageFiles(files);
     if (result.files.length === 0) {
       setNotice(result.rejected[0] ?? "이미지 파일만 추가할 수 있습니다.");
       return;
     }
-    const selectedFiles = assetKind === "bubble" ? result.files.slice(0, 1) : result.files;
-    const append = !editingAsset && assetKind !== "bubble";
+    const selectedFiles = assetKind === "bubble" || options?.firstOnly ? result.files.slice(0, 1) : result.files;
+    // A new image ends the old detail/source request as well as its editing state.
+    editRequestRef.current += 1;
+    setIsLoadingEditAsset(false);
+    setBubbleBuilderInitial(null);
+    const append = options?.queueMode !== "replace" && !editingAsset && assetKind !== "bubble";
     const existingFiles = append ? pendingFiles.filter((pending) => pending.status !== "success") : [];
     const existingKeys = new Set(existingFiles.map((pending) => getAdminAssetFileKey(pending.file)));
     const nextFiles = selectedFiles.filter((item) => !existingKeys.has(getAdminAssetFileKey(item)));
@@ -761,6 +751,10 @@ export default function AdminAssetsClient() {
     if (notices.length === 0) notices.push(`${nextPendingFiles.length}개 이미지를 등록 대기열에 추가했습니다.`);
     setNotice(notices.join(" "));
   };
+
+  useEffect(() => {
+    imageInputHandlerRef.current = applyDroppedFiles;
+  });
 
   const removePendingFile = (id: string) => {
     if (isSavingAsset) return;
