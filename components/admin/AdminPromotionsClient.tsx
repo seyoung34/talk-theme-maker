@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertCircle, ArrowLeft, Check, Clipboard, Gift, LoaderCircle, Plus, RefreshCw, X } from "lucide-react";
-import SiteHeader from "@/components/layout/SiteHeader";
+import { AlertCircle, Check, Clipboard, Gift, LoaderCircle, Plus, RefreshCw, X } from "lucide-react";
 import SignupBonusControl from "@/components/admin/SignupBonusControl";
 
 type GrantCode = {
@@ -118,10 +116,8 @@ export default function AdminPromotionsClient() {
 
   return (
     <main className="min-h-screen bg-[var(--color-background)] text-[var(--color-on-background)]">
-      <SiteHeader currentPath="/admin/promotions" />
       <div className="mx-auto grid w-full max-w-7xl gap-6 px-5 py-8 md:px-8">
         <header>
-          <Link href="/admin" className="mb-4 inline-flex items-center gap-1.5 text-sm font-extrabold text-[var(--color-on-surface-variant)]"><ArrowLeft size={17} aria-hidden="true" />관리자 페이지</Link>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-secondary)]">Promotions</p>
           <h1 className="mt-1 font-[var(--font-display)] text-3xl font-semibold">크레딧 지급 코드</h1>
           <p className="mt-2 text-sm font-semibold text-[var(--color-on-surface-variant)]">캠페인 코드를 생성하고 사용량과 운영 상태를 관리합니다.</p>

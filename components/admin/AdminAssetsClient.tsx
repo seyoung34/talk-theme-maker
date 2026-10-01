@@ -34,6 +34,7 @@ import {
 } from "@/lib/theme/adminAssets";
 import { createAdminAssetSaveTargets, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs } from "@/lib/theme/adminAssetWorkspace";
 import { useAdminAssetLibrary } from "@/components/admin/hooks/useAdminAssetLibrary";
+import { useAdminNavigationGuard } from "@/components/admin/shell/AdminNavigationGuard";
 import { shadowPublishThemeAsset, whenShadowPublishesSettle } from "@/lib/theme/assetCatalog/shadowPublishClient";
 import {
   getAdminAssetListDefaultSortDirection,
@@ -173,6 +174,8 @@ export default function AdminAssetsClient() {
     setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 화면을 전환해 주세요.");
     return true;
   }, []);
+  // 셸 사이드바 링크도 헤더의 관리자 링크와 같은 이탈 보호를 거친다.
+  useAdminNavigationGuard(() => blockBubbleWorkspaceChange());
   const requestBubbleWorkspaceMode = useCallback((nextMode: BubbleWorkspaceMode) => {
     if (blockBubbleWorkspaceChange()) return;
     setBubbleWorkspaceMode(nextMode);

@@ -108,7 +108,19 @@ export default function AdminSystemTemplateList() {
     router.push("/admin/edit");
   };
 
-  const createVariant = (bundle: SystemTemplateBundle, platform: ThemePlatform) => {
+  const startNewSystemTemplate = (platform: ThemePlatform) => {
+    localStorage.setItem(
+      templateStartStorageKey,
+      JSON.stringify({
+        templateId: "basic",
+        platform,
+        editMode: "admin",
+      }),
+    );
+    router.push("/admin/edit");
+  };
+
+  const createVariant =(bundle: SystemTemplateBundle, platform: ThemePlatform) => {
     const fallback = bundle.variants.android ?? bundle.variants.ios;
     localStorage.setItem(
       templateStartStorageKey,
@@ -227,9 +239,20 @@ export default function AdminSystemTemplateList() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">System templates</p>
-          <h2 className="mt-1 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">시스템 템플릿</h2>
+          <h1 className="mt-1 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">시스템 템플릿</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {(["android", "ios"] as const).map((platform) => (
+            <button
+              key={platform}
+              type="button"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-3 py-2 text-xs font-black text-[var(--color-on-primary)] transition hover:opacity-90"
+              onClick={() => startNewSystemTemplate(platform)}
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {platform === "android" ? "Android 추가" : "iOS 추가"}
+            </button>
+          ))}
           <button
             type="button"
             className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)] disabled:opacity-50"

@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, RefreshCw, Send } from "lucide-react";
-import SiteHeader from "@/components/layout/SiteHeader";
 import { InfoTip } from "@/components/common/InfoTip";
 import { InquiryHeader, InquiryMessageList, formatInquiryDate } from "@/components/inquiry/InquiryThread";
 import { inquiryLimits, inquiryStatuses, inquiryStatusLabels, type Inquiry, type InquiryStatus } from "@/lib/inquiries/types";
@@ -87,14 +85,8 @@ export default function AdminInquiriesClient() {
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#e8f1ff_0%,#f7fbff_24%,#ffffff_58%,#edf5ff_100%)]">
-      <SiteHeader currentPath="/admin/inquiries" />
       <div className="mx-auto w-full max-w-5xl px-5 py-8 md:px-8 md:py-12">
-        <Link href="/admin" className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white px-3.5 py-2 text-xs font-black text-[#2f6bbf] transition hover:bg-[#f4f9ff]">
-          <ArrowLeft size={15} aria-hidden="true" />
-          관리자 홈
-        </Link>
-
-        <header className="mt-6">
+        <header className="">
           <h1 className="flex items-center gap-1.5 text-[26px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">
             문의 관리
             <InfoTip label="문의 관리 안내">

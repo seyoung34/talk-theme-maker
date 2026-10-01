@@ -96,7 +96,7 @@ type PendingBubbleCopy = {
 
 export default function ProjectImporterClient({ mode = "user" }: ProjectImporterClientProps) {
   const isAdminMode = mode === "admin";
-  const exitDestination = isAdminMode ? "/admin" : "/template";
+  const exitDestination = isAdminMode ? "/admin/templates" : "/template";
   const router = useRouter();
   const searchParams = useSearchParams();
   const resumeToken = searchParams.get("resume");

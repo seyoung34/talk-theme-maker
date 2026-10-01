@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { AlertCircle, ArrowLeft, RefreshCw } from "lucide-react";
-import SiteHeader from "@/components/layout/SiteHeader";
+import { AlertCircle, RefreshCw } from "lucide-react";
 import { InfoTip } from "@/components/common/InfoTip";
 import { marketingLinks } from "@/lib/marketing/links";
 import type { WeeklyMarketingReport } from "@/lib/marketing/weekly";
@@ -31,14 +29,8 @@ export default function AdminMarketingClient() {
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#e8f1ff_0%,#f7fbff_24%,#ffffff_58%,#edf5ff_100%)]">
-      <SiteHeader currentPath="/admin/marketing" />
       <div className="mx-auto w-full max-w-5xl px-5 py-8 md:px-8 md:py-12">
-        <Link href="/admin" className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white px-3.5 py-2 text-xs font-black text-[#2f6bbf] transition hover:bg-[#f4f9ff]">
-          <ArrowLeft size={15} aria-hidden="true" />
-          관리자 홈
-        </Link>
-
-        <header className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <header className=" flex flex-wrap items-center justify-between gap-3">
           <h1 className="flex items-center gap-1.5 text-[26px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">
             주간 지표
             <InfoTip label="지표 안내">
