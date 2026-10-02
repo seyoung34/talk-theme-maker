@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -103,14 +103,14 @@ function ShellFrame({ badges, children }: AdminConsoleShellProps) {
       >
         <div className={`flex h-14 shrink-0 items-center border-b border-[var(--color-outline-variant)] ${isRail ? "justify-center" : "justify-between px-4"}`}>
           {isRail ? (
-            <Link href="/admin" aria-label="관리자 개요" className="grid size-9 place-items-center rounded-xl bg-[var(--color-primary-container)] text-xs font-black text-[var(--color-on-primary-container)]">
+            <GuardedLink href="/admin" aria-label="관리자 개요" className="grid size-9 place-items-center rounded-xl bg-[var(--color-primary-container)] text-xs font-black text-[var(--color-on-primary-container)]">
               TT
-            </Link>
+            </GuardedLink>
           ) : (
-            <Link href="/admin" className="min-w-0">
+            <GuardedLink href="/admin" className="min-w-0">
               <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Talk Theme</span>
               <span className="block truncate text-sm font-black text-[var(--color-on-surface)]">관리자 콘솔</span>
-            </Link>
+            </GuardedLink>
           )}
           {mode === "standard" && !isRail ? (
             <button type="button" onClick={toggleCollapsed} aria-label="메뉴 접기" title="메뉴 접기" className="grid size-8 place-items-center rounded-lg text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]">
@@ -185,24 +185,41 @@ function NavList({ pathname, badges, rail, onNavigate }: { pathname: string; bad
   );
 }
 
-function NavLink({ item, active, badge, rail, onNavigate }: { item: AdminConsoleNavItem; active: boolean; badge?: string; rail: boolean; onNavigate?: () => void }) {
+/**
+ * 셸의 모든 링크가 거치는 링크.
+ *
+ * 화면이 등록한 이동 판정(예: 에셋의 말풍선 장식 준비 중)을 먼저 묻는다. 링크마다 판정을 손으로
+ * 붙이면 새 링크에서 빠지기 쉬워, 셸 안에서는 `next/link`를 직접 쓰지 않는다.
+ */
+function GuardedLink({ href, onClick, onNavigate, ...props }: ComponentProps<typeof Link> & { href: string; onNavigate?: () => void }) {
   const shouldBlock = useAdminNavigationGuardCheck();
-  const Icon = icons[item.icon];
-  const label = badge ? `${item.label}, 처리 필요 ${badge}건` : item.label;
-
-  const link = (
+  return (
     <Link
-      href={item.href}
-      aria-current={active ? "page" : undefined}
-      aria-label={rail ? label : undefined}
+      {...props}
+      href={href}
       onClick={(event) => {
-        if (active) return;
-        if (shouldBlock(item.href)) {
+        onClick?.(event);
+        if (event.defaultPrevented) return;
+        if (shouldBlock(href)) {
           event.preventDefault();
           return;
         }
         onNavigate?.();
       }}
+    />
+  );
+}
+
+function NavLink({ item, active, badge, rail, onNavigate }: { item: AdminConsoleNavItem; active: boolean; badge?: string; rail: boolean; onNavigate?: () => void }) {
+  const Icon = icons[item.icon];
+  const label = badge ? `${item.label}, 처리 필요 ${badge}건` : item.label;
+
+  const link = (
+    <GuardedLink
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      aria-label={rail ? label : undefined}
+      onNavigate={onNavigate}
       className={[
         "relative flex items-center rounded-xl text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]",
         rail ? "mx-auto size-10 justify-center" : "h-10 gap-3 px-3",
@@ -220,7 +237,7 @@ function NavLink({ item, active, badge, rail, onNavigate }: { item: AdminConsole
           {badge ? <span className="rounded-full bg-[var(--color-error)] px-1.5 py-0.5 text-[11px] font-black leading-none text-[var(--color-on-error)]" aria-label={`처리 필요 ${badge}건`}>{badge}</span> : null}
         </>
       )}
-    </Link>
+    </GuardedLink>
   );
 
   if (!rail) return link;
@@ -237,7 +254,6 @@ function NavLink({ item, active, badge, rail, onNavigate }: { item: AdminConsole
 }
 
 function FooterLinks({ rail }: { rail: boolean }) {
-  const shouldBlock = useAdminNavigationGuardCheck();
   const links = [
     { href: "/account", label: "내 계정", Icon: UserRound },
     { href: "/", label: "사이트로 이동", Icon: ExternalLink },
@@ -246,16 +262,15 @@ function FooterLinks({ rail }: { rail: boolean }) {
     <>
       {links.map(({ href, label, Icon }) => {
         const link = (
-          <Link
+          <GuardedLink
             key={href}
             href={href}
             aria-label={rail ? label : undefined}
-            onClick={(event) => { if (shouldBlock(href)) event.preventDefault(); }}
             className={`flex items-center rounded-xl text-sm font-bold text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)] ${rail ? "mx-auto size-10 justify-center" : "h-10 gap-3 px-3"}`}
           >
             <Icon size={18} aria-hidden="true" />
             {rail ? null : label}
-          </Link>
+          </GuardedLink>
         );
         if (!rail) return link;
         return (
