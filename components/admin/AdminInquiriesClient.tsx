@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, RefreshCw, Send } from "lucide-react";
 import { InfoTip } from "@/components/common/InfoTip";
 import AdminPageHeader, { adminPageClassName, adminPageNarrowClassName } from "@/components/admin/shell/AdminPageHeader";
@@ -15,6 +16,16 @@ export default function AdminInquiriesClient() {
   const [notice, setNotice] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const router = useRouter();
+
+  /**
+   * 사이드바 "답변 대기" 배지를 다시 센다.
+   *
+   * 배지는 콘솔 layout이 서버에서 세는데, layout은 화면 이동 사이에 유지돼 이 화면의 목록만
+   * 새로 받아서는 바뀌지 않는다. 문의 상태가 바뀔 수 있는 동작 뒤에만 서버 컴포넌트를 다시
+   * 받는다. 첫 진입은 layout이 이미 같은 시점에 셌으므로 부르지 않는다.
+   */
+  const refreshShellBadges = useCallback(() => router.refresh(), [router]);
 
   const load = useCallback(async () => {
     setNotice(null);
@@ -60,6 +71,7 @@ export default function AdminInquiriesClient() {
       setAnswer("");
       await open(selected.id);
       await load();
+      refreshShellBadges();
     } catch (error) {
       setNotice(error instanceof Error && error.message ? error.message : "답변을 저장하지 못했습니다.");
     } finally {
@@ -79,6 +91,7 @@ export default function AdminInquiriesClient() {
       if (!response.ok) throw new Error(payload.error);
       await open(selected.id);
       await load();
+      refreshShellBadges();
     } catch (error) {
       setNotice(error instanceof Error && error.message ? error.message : "상태를 변경하지 못했습니다.");
     }
@@ -107,7 +120,7 @@ export default function AdminInquiriesClient() {
                 {value === "all" ? "전체" : inquiryStatusLabels[value]}
               </button>
             ))}
-            <button type="button" onClick={() => void load()} className="inline-flex items-center gap-1.5 rounded-full border border-[#dbe8fb] px-3 py-2 text-xs font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff]">
+            <button type="button" onClick={() => { void load(); refreshShellBadges(); }} className="inline-flex items-center gap-1.5 rounded-full border border-[#dbe8fb] px-3 py-2 text-xs font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff]">
               <RefreshCw size={13} aria-hidden="true" />
               새로고침
             </button>

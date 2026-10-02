@@ -1,5 +1,5 @@
-import { createEvent, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AdminConsoleShell from "./AdminConsoleShell";
 import { useAdminNavigationGuard } from "./AdminNavigationGuard";
 
@@ -24,6 +24,10 @@ function clickAndReport(anchor: HTMLElement) {
 describe("AdminConsoleShell navigation guard", () => {
   beforeEach(() => {
     window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it.each(["/admin/assets", "/admin"])("화면이 이동을 막으면 %s 셸의 모든 링크가 이동하지 않는다", (path) => {
