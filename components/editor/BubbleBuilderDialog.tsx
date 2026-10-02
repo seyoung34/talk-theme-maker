@@ -66,7 +66,7 @@ type BubbleBuilderDialogProps = {
 };
 
 /** 바깥(다이얼로그)에서 닫기를 요청하는 통로. Esc·바깥 클릭도 ✕와 같은 확인 절차를 타야 한다. */
-export type BubbleBuilderEditorHandle = { requestClose: () => void };
+export type BubbleBuilderEditorHandle = { requestClose: () => void; hasUnsavedChanges: () => boolean; isBusy: () => boolean };
 
 type BubbleBuilderEditorProps = Omit<BubbleBuilderDialogProps, "open" | "onOpenChange"> & {
   active?: boolean;
@@ -81,6 +81,7 @@ type BubbleBuilderEditorProps = Omit<BubbleBuilderDialogProps, "open" | "onOpenC
   fill?: boolean;
   onClose?: () => void;
   closeOnApply?: boolean;
+  onCloseCancelled?: () => void;
 };
 
 const decorationMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"]);
@@ -126,7 +127,7 @@ export function getBubbleEditSignature(spec: BubbleFamilyDesignSpec, decorationF
 }
 
 
-export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, onDecorationReadPendingChange, active = true, ref, fill = false, onClose, closeOnApply = true }: BubbleBuilderEditorProps) {
+export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initialSpec, initialDecorationFiles, onApply, onDecorationReadPendingChange, active = true, ref, fill = false, onClose, closeOnApply = true, onCloseCancelled }: BubbleBuilderEditorProps) {
   const [spec, setSpec] = useState(() => initialSpec ?? createBubbleFamilyDesignSpec(side));
   const [decorationFiles, setDecorationFiles] = useState<DecorationFiles>({});
   const [decorationUrls, setDecorationUrls] = useState<Partial<Record<string, string>>>({});
@@ -432,7 +433,7 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
     if (dirty) setCloseConfirmOpen(true);
     else onClose?.();
   }, [dirty, isApplying, onClose]);
-  useImperativeHandle(ref, () => ({ requestClose }), [requestClose]);
+  useImperativeHandle(ref, () => ({ requestClose, hasUnsavedChanges: () => dirty, isBusy: () => isApplying || hasPendingDecorationReads }), [requestClose, dirty, isApplying, hasPendingDecorationReads]);
 
   const bodyScale = spec.design.bodyScale ?? 1;
   const radiusMax = getBubbleRadiusMax("rounded", variant, bodyScale);
@@ -694,9 +695,9 @@ export function BubbleBuilderEditor({ side, variant, slotLabel, platform, initia
       {closeConfirmOpen ? (
         <CloseConfirm
           busy={isApplying}
-          onKeepEditing={() => setCloseConfirmOpen(false)}
+          onKeepEditing={() => { setCloseConfirmOpen(false); onCloseCancelled?.(); }}
           onDiscard={() => { setCloseConfirmOpen(false); onClose?.(); }}
-          onApplyAndClose={() => void apply().then((ok) => { setCloseConfirmOpen(false); if (ok) onClose?.(); })}
+          onApplyAndClose={() => void apply().then((ok) => { setCloseConfirmOpen(false); if (ok) onClose?.(); else onCloseCancelled?.(); })}
         />
       ) : null}
     </>

@@ -79,7 +79,7 @@ export function MobileBubbleEditor({
   resetGeometryOnSourceChange?: boolean;
   onApply: (input: { editedFile?: File; sourceFile: File; imageState: ImageEditState; target?: ImageEditTarget; geometry: BubbleGeometry; markers: Markers; insets: Insets; stretch: StretchPoint }) => void;
   onFlipXChange?: (next: boolean) => void;
-  onPreviewChange?: (input: { geometry: BubbleGeometry; markers: Markers; insets: Insets; stretch: StretchPoint; flipX: boolean }) => void;
+  onPreviewChange?: (input: { geometry: BubbleGeometry; markers: Markers; insets: Insets; stretch: StretchPoint; flipX: boolean; isInitial?: boolean }) => void;
 }) {
   const [preparedFile, setPreparedFile] = useState<File | null>(sourceFile);
   const [imageUrl, setImageUrl] = useState("");
@@ -228,7 +228,7 @@ export function MobileBubbleEditor({
     if (!draft || !artwork || !previewChangeRef.current) return;
     const frame = window.requestAnimationFrame(() => {
       const legacy = bubbleGeometryToLegacyEdit(draft.geometry, artwork.width, artwork.height);
-      previewChangeRef.current?.({ ...legacy, flipX });
+      previewChangeRef.current?.({ ...legacy, flipX, isInitial: !isMobileBubbleEditDirty(draft, originalDraftRef.current) && flipX === originalFlipXRef.current });
     });
     return () => window.cancelAnimationFrame(frame);
   }, [artwork, draft, flipX]);

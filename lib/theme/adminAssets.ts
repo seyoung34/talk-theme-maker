@@ -420,61 +420,25 @@ export function withAdminAssetPlatformVariant(asset: AdminAssetCandidate, platfo
 }
 
 /**
- * 이 관리 에셋을 catalog 참조로 쓰고 있는 시스템 템플릿 제목들.
- *
- * 삭제는 하드 삭제라 행과 Supabase 바이트를 함께 지운다. 참조하는 템플릿의 내보내기는
- * 계속 동작하지만(발행된 템플릿이 자기 내용물의 권한 근거이고 GCS catalog 객체는 연쇄
- * 삭제되지 않는다), 운영자가 그 사실을 모른 채 지우는 것과 알고 지우는 것은 다르다.
- *
- * `upload_refs`는 슬롯 키가 동적인 jsonb라 서버 필터를 걸 수 없어 훑어서 찾는다. 관리자
- * 화면에서만 쓰고 템플릿 수가 적어 감당할 수 있다. 실패해도 던지지 않는다 — 삭제 확인을
- * 막을 만큼 중요한 정보는 아니다.
+ * Compatibility wrapper. The workspace shares one server-built reverse index instead.
+ * Lookup failure and partial results throw; neither proves an asset has no references.
+ * Removing Supabase originals can break preview and legacy export when catalog producer
+ * flags or allowlists exclude the request. Old iOS refs may also need original dimensions.
  */
 export async function findSystemTemplatesUsingAdminAsset(id: string): Promise<string[]> {
-  const logicalAssetId = `admin:${id}`;
-  try {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("system_template_variants")
-      .select("upload_refs,system_template_bundles!inner(title)")
-      .limit(500);
-    if (error) throw error;
-
-    const titles = new Set<string>();
-    for (const row of data ?? []) {
-      if (!referencesCatalogAsset((row as { upload_refs?: unknown }).upload_refs, logicalAssetId)) continue;
-      const bundle = (row as { system_template_bundles?: unknown }).system_template_bundles;
-      const record = Array.isArray(bundle) ? bundle[0] : bundle;
-      const title = (record as { title?: unknown } | undefined)?.title;
-      titles.add(typeof title === "string" && title ? title : "제목 없음");
-    }
-    return [...titles];
-  } catch (error) {
-    console.warn("Template usage lookup failed; deleting without the usage warning.", error);
-    return [];
-  }
-}
-
-function referencesCatalogAsset(value: unknown, logicalAssetId: string): boolean {
-  if (Array.isArray(value)) return value.some((item) => referencesCatalogAsset(item, logicalAssetId));
-  if (typeof value !== "object" || value === null) return false;
-  const record = value as Record<string, unknown>;
-  const catalog = record.catalog;
-  if (typeof catalog === "object" && catalog !== null && (catalog as { assetId?: unknown }).assetId === logicalAssetId) return true;
-  return Object.values(record).some((child) => referencesCatalogAsset(child, logicalAssetId));
+  const response = await fetch("/api/admin/theme-assets/usage", { cache: "no-store" });
+  if (!response.ok) throw new Error("연결 정보를 불러오지 못했습니다.");
+  const index = await response.json() as { complete: boolean; byAssetId: Record<string, { title: string }[]> };
+  if (!index.complete) throw new Error("연결 조회가 일부만 완료되었습니다.");
+  return (index.byAssetId[id] ?? []).map((bundle) => bundle.title);
 }
 
 export async function deleteAdminAssetCandidate(id: string): Promise<void> {
-  const supabase = createClient();
-  const { data } = await supabase
-    .from("admin_assets")
-    .select("storage_path,admin_asset_variants(storage_path),admin_asset_bubble_designs!admin_asset_bubble_designs_asset_id_fkey(admin_asset_bubble_decorations(storage_path))")
-    .eq("id", id)
-    .maybeSingle();
-  const storagePaths = readAdminAssetStoragePaths(data);
-  const { error } = await supabase.from("admin_assets").delete().eq("id", id);
-  if (error) throw error;
-  if (storagePaths.length) await supabase.storage.from(themeAssetsBucketName).remove(storagePaths);
+  const response = await fetch(`/api/admin/theme-assets/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as { error?: string };
+    throw new Error(payload.error ?? "관리 후보를 삭제하지 못했습니다.");
+  }
 }
 
 export async function adminAssetToFile(asset: AdminAssetCandidate): Promise<File> {
@@ -496,7 +460,7 @@ export function describeAdminAssetAnalysis(analysis?: AdminAssetAnalysis): strin
   return `${analysis.width}x${analysis.height}`;
 }
 
-function readAdminAssetStoragePaths(value: unknown): string[] {
+export function readAdminAssetStoragePaths(value: unknown): string[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   const record = value as Record<string, unknown>;
   const paths = new Set<string>();
