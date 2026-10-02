@@ -103,13 +103,16 @@ function ShellFrame({ badges, children }: AdminConsoleShellProps) {
       >
         <div className={`flex h-14 shrink-0 items-center border-b border-[var(--color-outline-variant)] ${isRail ? "justify-center" : "justify-between px-4"}`}>
           {isRail ? (
-            <GuardedLink href="/admin" aria-label="관리자 개요" className="grid size-9 place-items-center rounded-xl bg-[var(--color-primary-container)] text-xs font-black text-[var(--color-on-primary-container)]">
-              TT
+            <GuardedLink href="/admin" aria-label="관리자 개요" className="grid size-9 place-items-center rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-info)]">
+              <AppMark />
             </GuardedLink>
           ) : (
-            <GuardedLink href="/admin" className="min-w-0">
-              <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Talk Theme</span>
-              <span className="block truncate text-sm font-black text-[var(--color-on-surface)]">관리자 콘솔</span>
+            <GuardedLink href="/admin" className="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-info)]">
+              <AppMark />
+              <span className="min-w-0">
+                <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Talk Theme</span>
+                <span className="block truncate text-sm font-black text-[var(--color-on-surface)]">관리자 콘솔</span>
+              </span>
             </GuardedLink>
           )}
           {mode === "standard" && !isRail ? (
@@ -132,6 +135,7 @@ function ShellFrame({ badges, children }: AdminConsoleShellProps) {
       {mode === "standard" ? (
         <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-[var(--color-outline-variant)] bg-white/90 px-4 backdrop-blur lg:hidden">
           <DrawerTrigger onOpen={() => setIsDrawerOpen(true)} />
+          <AppMark />
           <span className="text-sm font-black text-[var(--color-on-surface)]">관리자 콘솔</span>
         </header>
       ) : (
@@ -145,7 +149,10 @@ function ShellFrame({ badges, children }: AdminConsoleShellProps) {
           <Dialog.Overlay className="radix-dialog-overlay fixed inset-0 z-[70] bg-black/40 lg:hidden" />
           <Dialog.Content className="fixed inset-y-0 left-0 z-[71] flex w-[min(280px,85vw)] flex-col bg-white shadow-2xl outline-none lg:hidden">
             <div className="flex h-14 items-center justify-between border-b border-[var(--color-outline-variant)] px-4">
-              <Dialog.Title className="text-sm font-black text-[var(--color-on-surface)]">관리자 콘솔</Dialog.Title>
+              <Dialog.Title className="flex items-center gap-2.5 text-sm font-black text-[var(--color-on-surface)]">
+                <AppMark />
+                관리자 콘솔
+              </Dialog.Title>
               <Dialog.Close aria-label="메뉴 닫기" className="grid size-8 place-items-center rounded-lg text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)]">
                 <X size={16} aria-hidden="true" />
               </Dialog.Close>
@@ -221,14 +228,16 @@ function NavLink({ item, active, badge, rail, onNavigate }: { item: AdminConsole
       aria-label={rail ? label : undefined}
       onNavigate={onNavigate}
       className={[
-        "relative flex items-center rounded-xl text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-secondary)]",
-        rail ? "mx-auto size-10 justify-center" : "h-10 gap-3 px-3",
+        "relative flex items-center rounded-lg text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-info)]",
+        rail ? "mx-auto size-10 justify-center" : "h-9 gap-3 px-3",
         active
-          ? "bg-[var(--color-primary-container)] text-[var(--color-on-primary-container)]"
-          : "text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-low)] hover:text-[var(--color-on-surface)]",
+          ? "bg-[var(--color-surface-container)] font-bold text-[var(--color-on-surface)]"
+          : "font-semibold text-[var(--color-on-surface-variant)] hover:bg-[var(--color-surface-container)] hover:text-[var(--color-on-surface)]",
       ].join(" ")}
     >
-      <Icon size={18} aria-hidden="true" className="shrink-0" />
+      {/* 활성 표시: 배경만으로는 hover와 구분되지 않아 왼쪽 표시줄과 아이콘 색을 함께 쓴다. */}
+      {active ? <span aria-hidden="true" className={`absolute top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-[var(--color-info)] ${rail ? "-left-2" : "left-0"}`} /> : null}
+      <Icon size={18} aria-hidden="true" className={`shrink-0 ${active ? "text-[var(--color-info)]" : ""}`} />
       {rail ? (
         badge ? <span className="absolute right-1 top-1 size-2 rounded-full bg-[var(--color-error)]" aria-hidden="true" /> : null
       ) : (
@@ -314,6 +323,12 @@ function DrawerTrigger({ onOpen, floating = false }: { onOpen: () => void; float
       <Menu size={18} aria-hidden="true" />
     </button>
   );
+}
+
+/** 앱 아이콘(`app/icon.svg`). 파비콘·홈 화면 아이콘과 같은 파일을 쓴다. */
+function AppMark() {
+  // eslint-disable-next-line @next/next/no-img-element -- 정적 SVG라 이미지 최적화가 필요 없다.
+  return <img src="/icon.svg" alt="" width={32} height={32} className="size-8 shrink-0 rounded-lg" />;
 }
 
 function readCollapsed() {
