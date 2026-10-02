@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import AdminPageHeader from "@/components/admin/shell/AdminPageHeader";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
@@ -236,44 +237,44 @@ export default function AdminSystemTemplateList() {
 
   return (
     <section className="grid gap-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">System templates</p>
-          <h1 className="mt-1 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">시스템 템플릿</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {(["android", "ios"] as const).map((platform) => (
+      <AdminPageHeader
+        eyebrow="System templates"
+        title="시스템 템플릿"
+        actions={(
+          <>
+            {(["android", "ios"] as const).map((platform) => (
+              <button
+                key={platform}
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-3 py-2 text-xs font-black text-[var(--color-on-primary)] transition hover:opacity-90"
+                onClick={() => startNewSystemTemplate(platform)}
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                {platform === "android" ? "Android 추가" : "iOS 추가"}
+              </button>
+            ))}
             <button
-              key={platform}
               type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-3 py-2 text-xs font-black text-[var(--color-on-primary)] transition hover:opacity-90"
-              onClick={() => startNewSystemTemplate(platform)}
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)] disabled:opacity-50"
+              onClick={() => void regenerateAllPreviews()}
+              disabled={isRegenerating || isLoading}
+              title="저장된 템플릿의 프리뷰 메타(색상·말풍선 stretch/insets)를 최신 로직으로 다시 계산합니다."
             >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              {platform === "android" ? "Android 추가" : "iOS 추가"}
+              <RefreshCw className={`h-4 w-4 ${isRegenerating ? "animate-spin" : ""}`} />
+              {isRegenerating ? "재생성 중" : "프리뷰 재생성"}
             </button>
-          ))}
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)] disabled:opacity-50"
-            onClick={() => void regenerateAllPreviews()}
-            disabled={isRegenerating || isLoading}
-            title="저장된 템플릿의 프리뷰 메타(색상·말풍선 stretch/insets)를 최신 로직으로 다시 계산합니다."
-          >
-            <RefreshCw className={`h-4 w-4 ${isRegenerating ? "animate-spin" : ""}`} />
-            {isRegenerating ? "재생성 중" : "프리뷰 재생성"}
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)]"
-            onClick={() => void loadTemplates()}
-            disabled={isLoading}
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            새로고침
-          </button>
-        </div>
-      </div>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)]"
+              onClick={() => void loadTemplates()}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              새로고침
+            </button>
+          </>
+        )}
+      />
 
       {notice ? <p className="rounded-[18px] border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{notice}</p> : null}
       {error ? <p className="rounded-[18px] border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p> : null}

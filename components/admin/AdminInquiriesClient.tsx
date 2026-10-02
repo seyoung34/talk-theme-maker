@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, RefreshCw, Send } from "lucide-react";
 import { InfoTip } from "@/components/common/InfoTip";
+import AdminPageHeader, { adminPageClassName, adminPageNarrowClassName } from "@/components/admin/shell/AdminPageHeader";
 import { InquiryHeader, InquiryMessageList, formatInquiryDate } from "@/components/inquiry/InquiryThread";
 import { inquiryLimits, inquiryStatuses, inquiryStatusLabels, type Inquiry, type InquiryStatus } from "@/lib/inquiries/types";
 
@@ -84,16 +85,18 @@ export default function AdminInquiriesClient() {
   };
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#e8f1ff_0%,#f7fbff_24%,#ffffff_58%,#edf5ff_100%)]">
-      <div className="mx-auto w-full max-w-5xl px-5 py-8 md:px-8 md:py-12">
-        <header className="">
-          <h1 className="flex items-center gap-1.5 text-[26px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">
-            문의 관리
+    <main className={adminPageClassName}>
+      <div className={adminPageNarrowClassName}>
+        <AdminPageHeader
+          eyebrow="Inquiries"
+          title="문의 관리"
+          info={(
             <InfoTip label="문의 관리 안내">
               답변을 등록해도 사용자에게 알림이 가지 않습니다. 사용자가 서비스에 들어와 확인합니다. 종료로 바꾸면 사용자는 더 이상 답신할 수 없습니다.
             </InfoTip>
-          </h1>
-          <div className="mt-4 flex flex-wrap gap-2">
+          )}
+        >
+          <div className="flex flex-wrap gap-2">
             {(["open", "answered", "closed", "all"] as const).map((value) => (
               <button
                 key={value}
@@ -109,7 +112,7 @@ export default function AdminInquiriesClient() {
               새로고침
             </button>
           </div>
-        </header>
+        </AdminPageHeader>
 
         {notice ? (
           <p className="mt-4 flex items-center gap-2 rounded-xl bg-[#fff1f0] px-4 py-3 text-xs font-bold text-[#c0392b]">

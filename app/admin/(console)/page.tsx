@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowUpRight } from "lucide-react";
 import OverviewSparkline from "@/components/admin/overview/OverviewSparkline";
+import AdminPageHeader, { adminPageClassName } from "@/components/admin/shell/AdminPageHeader";
 import { loadAdminOverview } from "@/lib/admin/loadOverview";
 import { formatCount, type OverviewCard, type OverviewHistoryRow } from "@/lib/admin/overview";
 import { requireAdmin } from "@/lib/supabase/auth";
@@ -21,16 +22,16 @@ export default async function AdminPage() {
   const attentionCount = overview.attention.filter((card) => card.emphasized).length;
 
   return (
-    <main className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-8 md:px-8">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Overview</p>
-          <h1 className="mt-1 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">개요</h1>
-        </div>
-        <p className="text-xs font-bold text-[var(--color-on-surface-variant)]">
-          {timeFormatter.format(new Date())} 기준 · 새로고침하면 다시 조회합니다
-        </p>
-      </header>
+    <main className={adminPageClassName}>
+      <AdminPageHeader
+        eyebrow="Overview"
+        title="개요"
+        actions={(
+          <p className="text-xs font-bold text-[var(--color-on-surface-variant)]">
+            {timeFormatter.format(new Date())} 기준 · 새로고침하면 다시 조회합니다
+          </p>
+        )}
+      />
 
       <section aria-labelledby="overview-attention" className="grid gap-3">
         <div className="flex items-baseline gap-2">

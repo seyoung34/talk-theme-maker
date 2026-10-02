@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, LoaderCircle, Pencil, Pin, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { InfoTip } from "@/components/common/InfoTip";
+import AdminPageHeader, { adminPageClassName, adminPageNarrowClassName } from "@/components/admin/shell/AdminPageHeader";
 import { noticeCategories, noticeCategoryLabels, type Notice, type NoticeCategory } from "@/lib/notices/types";
 
 type FormState = {
@@ -92,21 +93,23 @@ export default function AdminNoticesClient() {
   };
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#e8f1ff_0%,#f7fbff_24%,#ffffff_58%,#edf5ff_100%)]">
-      <div className="mx-auto w-full max-w-6xl px-5 py-8 md:px-8 md:py-12">
-        <header className="">
-          <h1 className="flex items-center gap-1.5 text-[26px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">
-            공지사항 관리
+    <main className={adminPageClassName}>
+      <div className={adminPageNarrowClassName}>
+        <AdminPageHeader
+          eyebrow="Notices"
+          title="공지사항 관리"
+          info={(
             <InfoTip label="공지 발행 안내">
               발행 시각을 비우면 초안으로 저장됩니다. 미래 시각을 넣으면 그때까지 노출되지 않습니다. 고정한 공지는 목록 맨 위에 표시됩니다.
             </InfoTip>
-          </h1>
-          <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-[#5b6b82]">
+          )}
+        >
+          <div className="flex flex-wrap gap-2 text-xs font-bold text-[#5b6b82]">
             <span className="rounded-full border border-[#dbe8fb] bg-[#f7fbff] px-3 py-2">전체 {summary.total}</span>
             <span className="rounded-full border border-[#dbe8fb] bg-[#f7fbff] px-3 py-2">노출 중 {summary.published}</span>
             <span className="rounded-full border border-[#dbe8fb] bg-[#f7fbff] px-3 py-2">초안 {summary.draft}</span>
           </div>
-        </header>
+        </AdminPageHeader>
 
         <section className="mt-6 rounded-[28px] border border-[#dbe8fb] bg-white/92 px-6 py-7 shadow-[0_22px_62px_rgba(47,107,191,0.09)]">
           <div className="flex items-center justify-between gap-3">

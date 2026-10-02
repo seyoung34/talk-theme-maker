@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { InfoTip } from "@/components/common/InfoTip";
+import AdminPageHeader, { adminPageClassName, adminPageNarrowClassName } from "@/components/admin/shell/AdminPageHeader";
 import { marketingLinks } from "@/lib/marketing/links";
 import type { WeeklyMarketingReport } from "@/lib/marketing/weekly";
 
@@ -28,22 +29,26 @@ export default function AdminMarketingClient() {
   useEffect(() => { void load(); }, [load]);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#e8f1ff_0%,#f7fbff_24%,#ffffff_58%,#edf5ff_100%)]">
-      <div className="mx-auto w-full max-w-5xl px-5 py-8 md:px-8 md:py-12">
-        <header className=" flex flex-wrap items-center justify-between gap-3">
-          <h1 className="flex items-center gap-1.5 text-[26px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">
-            주간 지표
+    <main className={adminPageClassName}>
+      <div className={adminPageNarrowClassName}>
+        <AdminPageHeader
+          eyebrow="Analytics"
+          title="분석"
+          description="홍보 링크 요청과 주간 전환을 봅니다."
+          info={(
             <InfoTip label="지표 안내">
               분석 쿠키 동의와 무관한 숫자입니다. 링크 요청은 단축 링크 서버가 관측한 요청 수이며
               중복 요청·봇·링크 미리보기가 섞일 수 있습니다. 나머지는 서비스 운영 기록에서 옵니다.
               요청과 전환은 서로 연결되지 않습니다 — 누가 어느 캠페인에서 왔는지는 저장하지 않습니다.
             </InfoTip>
-          </h1>
-          <button type="button" onClick={() => void load()} className="inline-flex h-10 items-center gap-1.5 rounded-full border border-[#dbe8fb] px-3.5 text-xs font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff]">
-            <RefreshCw size={13} aria-hidden="true" />
-            새로고침
-          </button>
-        </header>
+          )}
+          actions={(
+            <button type="button" onClick={() => void load()} className="inline-flex h-10 items-center gap-1.5 rounded-full border border-[#dbe8fb] bg-white px-3.5 text-xs font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff]">
+              <RefreshCw size={13} aria-hidden="true" />
+              새로고침
+            </button>
+          )}
+        />
 
         {error ? (
           <p className="mt-4 flex items-center gap-2 rounded-xl bg-[#fff1f0] px-4 py-3 text-xs font-bold text-[#c0392b]">
@@ -53,7 +58,7 @@ export default function AdminMarketingClient() {
         ) : null}
 
         <section className="mt-6 overflow-hidden rounded-[28px] border border-[#dbe8fb] bg-white/92 shadow-[0_22px_62px_rgba(47,107,191,0.09)]">
-          <h2 className="border-b border-[#e8eff8] px-5 py-4 text-sm font-extrabold text-[var(--color-on-surface)] sm:px-7">주차별</h2>
+          <h2 className="border-b border-[#e8eff8] px-5 py-4 text-sm font-extrabold text-[var(--color-on-surface)] sm:px-7">주간 지표 · 주차별</h2>
           {isLoading ? (
             <p className="px-5 py-12 text-center text-sm font-bold text-[#5b6b82]">불러오는 중입니다.</p>
           ) : (
