@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, RefreshCw, Send } from "lucide-react";
-import SiteHeader from "@/components/layout/SiteHeader";
 import { InfoTip } from "@/components/common/InfoTip";
+import AdminPageHeader, { adminPageClassName, adminPageNarrowClassName } from "@/components/admin/shell/AdminPageHeader";
 import { InquiryHeader, InquiryMessageList, formatInquiryDate } from "@/components/inquiry/InquiryThread";
 import { inquiryLimits, inquiryStatuses, inquiryStatusLabels, type Inquiry, type InquiryStatus } from "@/lib/inquiries/types";
 
@@ -16,6 +16,16 @@ export default function AdminInquiriesClient() {
   const [notice, setNotice] = useState<string | null>(null);
   const [answer, setAnswer] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const router = useRouter();
+
+  /**
+   * 사이드바 "답변 대기" 배지를 다시 센다.
+   *
+   * 배지는 콘솔 layout이 서버에서 세는데, layout은 화면 이동 사이에 유지돼 이 화면의 목록만
+   * 새로 받아서는 바뀌지 않는다. 문의 상태가 바뀔 수 있는 동작 뒤에만 서버 컴포넌트를 다시
+   * 받는다. 첫 진입은 layout이 이미 같은 시점에 셌으므로 부르지 않는다.
+   */
+  const refreshShellBadges = useCallback(() => router.refresh(), [router]);
 
   const load = useCallback(async () => {
     setNotice(null);
@@ -61,6 +71,7 @@ export default function AdminInquiriesClient() {
       setAnswer("");
       await open(selected.id);
       await load();
+      refreshShellBadges();
     } catch (error) {
       setNotice(error instanceof Error && error.message ? error.message : "답변을 저장하지 못했습니다.");
     } finally {
@@ -80,28 +91,25 @@ export default function AdminInquiriesClient() {
       if (!response.ok) throw new Error(payload.error);
       await open(selected.id);
       await load();
+      refreshShellBadges();
     } catch (error) {
       setNotice(error instanceof Error && error.message ? error.message : "상태를 변경하지 못했습니다.");
     }
   };
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#e8f1ff_0%,#f7fbff_24%,#ffffff_58%,#edf5ff_100%)]">
-      <SiteHeader currentPath="/admin/inquiries" />
-      <div className="mx-auto w-full max-w-5xl px-5 py-8 md:px-8 md:py-12">
-        <Link href="/admin" className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white px-3.5 py-2 text-xs font-black text-[#2f6bbf] transition hover:bg-[#f4f9ff]">
-          <ArrowLeft size={15} aria-hidden="true" />
-          관리자 홈
-        </Link>
-
-        <header className="mt-6">
-          <h1 className="flex items-center gap-1.5 text-[26px] font-semibold tracking-[-0.04em] text-[var(--color-on-surface)]">
-            문의 관리
+    <main className={adminPageClassName}>
+      <div className={adminPageNarrowClassName}>
+        <AdminPageHeader
+          eyebrow="Inquiries"
+          title="문의 관리"
+          info={(
             <InfoTip label="문의 관리 안내">
               답변을 등록해도 사용자에게 알림이 가지 않습니다. 사용자가 서비스에 들어와 확인합니다. 종료로 바꾸면 사용자는 더 이상 답신할 수 없습니다.
             </InfoTip>
-          </h1>
-          <div className="mt-4 flex flex-wrap gap-2">
+          )}
+        >
+          <div className="flex flex-wrap gap-2">
             {(["open", "answered", "closed", "all"] as const).map((value) => (
               <button
                 key={value}
@@ -112,12 +120,12 @@ export default function AdminInquiriesClient() {
                 {value === "all" ? "전체" : inquiryStatusLabels[value]}
               </button>
             ))}
-            <button type="button" onClick={() => void load()} className="inline-flex items-center gap-1.5 rounded-full border border-[#dbe8fb] px-3 py-2 text-xs font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff]">
+            <button type="button" onClick={() => { void load(); refreshShellBadges(); }} className="inline-flex items-center gap-1.5 rounded-full border border-[#dbe8fb] px-3 py-2 text-xs font-bold text-[#5b6b82] transition hover:bg-[#f4f9ff]">
               <RefreshCw size={13} aria-hidden="true" />
               새로고침
             </button>
           </div>
-        </header>
+        </AdminPageHeader>
 
         {notice ? (
           <p className="mt-4 flex items-center gap-2 rounded-xl bg-[#fff1f0] px-4 py-3 text-xs font-bold text-[#c0392b]">

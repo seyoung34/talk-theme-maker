@@ -35,6 +35,7 @@ import {
 } from "@/lib/theme/adminAssets";
 import { createAdminAssetSaveTargets, formatAdminAssetScope, formatAdminAssetTargets, formatAdminAssetTargetsFromInputs } from "@/lib/theme/adminAssetWorkspace";
 import { useAdminAssetLibrary } from "@/components/admin/hooks/useAdminAssetLibrary";
+import { useAdminNavigationGuard } from "@/components/admin/shell/AdminNavigationGuard";
 import { shadowPublishThemeAsset, whenShadowPublishesSettle } from "@/lib/theme/assetCatalog/shadowPublishClient";
 import {
   getAdminAssetListDefaultSortDirection,
@@ -200,6 +201,12 @@ export default function AdminAssetsClient() {
     setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 화면을 전환해 주세요.");
     return true;
   }, []);
+  // 셸 사이드바 링크도 헤더의 관리자 링크와 같은 이탈 보호를 거친다. 저장·장식 준비 중에는 막고,
+  // 저장하지 않은 변경이 있으면 확인 모달을 띄운 뒤 그 링크로 이동한다.
+  useAdminNavigationGuard((href) => {
+    if (isSavingAsset || blockBubbleWorkspaceChange()) return true;
+    return confirmWorkspaceChange(() => { dirtyRef.current = false; window.location.assign(href); });
+  });
   const requestBubbleWorkspaceMode = useCallback((nextMode: BubbleWorkspaceMode, prepareRecommended = false) => {
     if (blockBubbleWorkspaceChange()) return;
     if (nextMode !== "builder" && builderEditorRef.current?.hasUnsavedChanges() && confirmWorkspaceChange(() => requestBubbleWorkspaceMode(nextMode, prepareRecommended))) return;

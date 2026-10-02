@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createDefaultBubbleAdjustment, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { toAdminAssetListItem } from "@/lib/theme/adminAssetList";
 import AdminAssetsClient from "./AdminAssetsClient";
+import { AdminNavigationGuardProvider, useAdminNavigationGuardCheck } from "@/components/admin/shell/AdminNavigationGuard";
 import { fetchAdminAssetUsageIndex } from "@/lib/theme/adminAssetUsage";
 import { useImperativeHandle, type ComponentProps } from "react";
 import type { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor";
@@ -351,5 +352,52 @@ describe("admin asset paste", () => {
     expect(screen.queryByRole("button", { name: "first.png 제거" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "second.png 제거" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "ignored.png 제거" })).not.toBeInTheDocument();
+  });
+});
+
+describe("admin console sidebar navigation from the asset workspace", () => {
+  function renderInShell() {
+    const guard: { check: (href: string) => boolean } = { check: () => false };
+    function Probe() {
+      guard.check = useAdminNavigationGuardCheck();
+      return null;
+    }
+    render(
+      <AdminNavigationGuardProvider>
+        <AdminAssetsClient />
+        <Probe />
+      </AdminNavigationGuardProvider>,
+    );
+    return guard;
+  }
+
+  it("lets the sidebar leave a clean workspace", () => {
+    const guard = renderInShell();
+    expect(guard.check("/admin")).toBe(false);
+  });
+
+  it("asks before the sidebar discards unsaved edits, like the header link", async () => {
+    const guard = renderInShell();
+    fireEvent.click(screen.getAllByRole("button", { name: /에셋 상세 보기/ })[0]);
+    await waitFor(() => expect(screen.getByLabelText("후보 이름")).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("후보 이름"), { target: { value: "Changed title" } });
+
+    let blocked = false;
+    act(() => { blocked = guard.check("/admin/templates"); });
+    expect(blocked).toBe(true);
+    expect(await screen.findByRole("dialog", { name: "저장하지 않은 변경이 있습니다" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "계속 편집" }));
+    expect(screen.getByLabelText("후보 이름")).toHaveValue("Changed title");
+  });
+
+  it("blocks the sidebar while builder work is pending", () => {
+    const guard = renderInShell();
+    fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });
+    fireEvent.click(screen.getByRole("button", { name: "말풍선 빌더 열기" }));
+    mocks.builderBusy = true;
+    let blocked = false;
+    act(() => { blocked = guard.check("/admin"); });
+    expect(blocked).toBe(true);
+    expect(screen.queryByRole("dialog", { name: "저장하지 않은 변경이 있습니다" })).not.toBeInTheDocument();
   });
 });
