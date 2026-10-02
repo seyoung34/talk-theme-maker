@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Plus, RefreshCw, Save, Trash2, X } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import * as Popover from "@radix-ui/react-popover";
+import { ArrowRight, ChevronDown, Plus, RefreshCw, Save, Smartphone, Trash2, X } from "lucide-react";
 import AdminPageHeader from "@/components/admin/shell/AdminPageHeader";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
@@ -34,6 +36,7 @@ export default function AdminSystemTemplateList() {
   const [nextCursor, setNextCursor] = useState<string>();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isRegenerateConfirmOpen, setIsRegenerateConfirmOpen] = useState(false);
   const [selectedBundleId, setSelectedBundleId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ bundle: SystemTemplateBundle; platform?: ThemePlatform } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -242,38 +245,30 @@ export default function AdminSystemTemplateList() {
         title="시스템 템플릿"
         actions={(
           <>
-            {(["android", "ios"] as const).map((platform) => (
-              <button
-                key={platform}
-                type="button"
-                className="inline-flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-3 py-2 text-xs font-black text-[var(--color-on-primary)] transition hover:opacity-90"
-                onClick={() => startNewSystemTemplate(platform)}
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                {platform === "android" ? "Android 추가" : "iOS 추가"}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)] disabled:opacity-50"
-              onClick={() => void regenerateAllPreviews()}
-              disabled={isRegenerating || isLoading}
-              title="저장된 템플릿의 프리뷰 메타(색상·말풍선 stretch/insets)를 최신 로직으로 다시 계산합니다."
-            >
-              <RefreshCw className={`h-4 w-4 ${isRegenerating ? "animate-spin" : ""}`} />
-              {isRegenerating ? "재생성 중" : "프리뷰 재생성"}
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-3 py-2 text-xs font-black text-[var(--color-on-surface)] transition hover:bg-[var(--color-primary-container)]"
-              onClick={() => void loadTemplates()}
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            <button type="button" className={secondaryButtonClassName} onClick={() => void loadTemplates()} disabled={isLoading}>
+              <RefreshCw className={`size-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" />
               새로고침
             </button>
+            <button
+              type="button"
+              className={secondaryButtonClassName}
+              onClick={() => setIsRegenerateConfirmOpen(true)}
+              disabled={isRegenerating || isLoading}
+            >
+              <RefreshCw className={`size-4 ${isRegenerating ? "animate-spin" : ""}`} aria-hidden="true" />
+              {isRegenerating ? "재생성 중" : "프리뷰 재생성"}
+            </button>
+            <CreateSystemTemplateMenu onCreate={startNewSystemTemplate} />
           </>
         )}
+      />
+      <RegeneratePreviewsConfirmDialog
+        open={isRegenerateConfirmOpen}
+        onOpenChange={setIsRegenerateConfirmOpen}
+        onConfirm={() => {
+          setIsRegenerateConfirmOpen(false);
+          void regenerateAllPreviews();
+        }}
       />
 
       {notice ? <p className="rounded-[18px] border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">{notice}</p> : null}
@@ -698,6 +693,112 @@ function SystemTemplateManageModal({
         />
       ) : null}
     </div>
+  );
+}
+
+const secondaryButtonClassName = "inline-flex h-9 items-center gap-2 rounded-lg border border-[var(--color-outline-variant)] bg-white px-3 text-sm font-semibold text-[var(--color-on-surface)] transition hover:bg-[var(--color-surface-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-info)] disabled:cursor-not-allowed disabled:opacity-50";
+
+const createOptions: { platform: ThemePlatform; label: string; description: string }[] = [
+  { platform: "android", label: "Android 템플릿", description: "기본 템플릿에서 시작" },
+  { platform: "ios", label: "iOS 템플릿", description: "기본 템플릿에서 시작" },
+];
+
+/**
+ * 새 시스템 템플릿 시작 버튼.
+ *
+ * 플랫폼별 강조 버튼 두 개를 나란히 두면 화면에서 가장 강한 색이 반복돼 주 작업이 흐려진다.
+ * 기본 버튼 하나에서 플랫폼을 고르게 한다.
+ */
+function CreateSystemTemplateMenu({ onCreate }: { onCreate: (platform: ThemePlatform) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[var(--color-info)] pl-3 pr-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--color-info-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-info)]"
+        >
+          <Plus className="size-4" aria-hidden="true" />
+          새 템플릿
+          <ChevronDown className={`size-4 transition ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content align="end" sideOffset={6} className="z-[60] w-64 rounded-xl border border-[var(--color-outline-variant)] bg-white p-1.5 shadow-[0_12px_32px_rgba(15,23,42,0.14)]">
+          <p className="px-2.5 pb-1 pt-1.5 text-[11px] font-black uppercase tracking-[0.08em] text-[var(--color-on-surface-variant)]">플랫폼 선택</p>
+          {createOptions.map((option) => (
+            <button
+              key={option.platform}
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onCreate(option.platform);
+              }}
+              className="flex w-full items-start gap-3 rounded-lg px-2.5 py-2 text-left transition hover:bg-[var(--color-surface-container)] focus-visible:bg-[var(--color-surface-container)] focus-visible:outline-none"
+            >
+              <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-md bg-[var(--color-info-container)] text-[var(--color-info)]">
+                <Smartphone className="size-4" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold text-[var(--color-on-surface)]">{option.label}</span>
+                <span className="block text-xs font-semibold leading-5 text-[var(--color-on-surface-variant)]">{option.description}</span>
+              </span>
+            </button>
+          ))}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/**
+ * 프리뷰 일괄 재생성 확인.
+ *
+ * 재생성은 저장된 모든 시스템 템플릿 variant의 카드 썸네일을 다시 굽고 프리뷰 메타를 덮어쓴다.
+ * 운영 저장소에 쓰고 템플릿 수만큼 순서대로 요청이 나가므로, 누르자마자 시작하지 않는다.
+ */
+function RegeneratePreviewsConfirmDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="radix-dialog-overlay fixed inset-0 z-[100] bg-[rgba(15,23,42,0.48)] backdrop-blur-sm" />
+        <Dialog.Content className="radix-dialog-content fixed left-1/2 top-1/2 z-[101] grid w-[calc(100%-32px)] max-w-[480px] -translate-x-1/2 -translate-y-1/2 gap-5 rounded-2xl border border-[var(--color-outline-variant)] bg-white p-6 shadow-[0_24px_60px_rgba(15,23,42,0.2)] outline-none">
+          <div className="grid gap-2">
+            <Dialog.Title className="text-lg font-bold text-[var(--color-on-surface)]">모든 프리뷰를 다시 만들까요?</Dialog.Title>
+            <Dialog.Description className="text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">
+              저장된 모든 시스템 템플릿의 카드 썸네일과 프리뷰 메타(색상·말풍선 조정값)를 최신 로직으로 다시 만들어 저장합니다.
+            </Dialog.Description>
+          </div>
+          <ul className="grid list-disc gap-1 rounded-xl bg-[var(--color-surface-container)] py-4 pl-9 pr-4 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)] marker:text-[var(--color-outline)]">
+            <li>공개 갤러리의 템플릿 썸네일도 새 결과로 바뀝니다.</li>
+            <li>템플릿을 하나씩 순서대로 처리해 수에 따라 시간이 걸립니다.</li>
+            <li>서버 오류가 나면 그 지점에서 멈추고, 그때까지 처리한 결과는 남습니다.</li>
+            <li>템플릿 편집 내용과 게시 상태는 바뀌지 않습니다.</li>
+          </ul>
+          <div className="flex justify-end gap-2">
+            <Dialog.Close asChild>
+              <button type="button" className={secondaryButtonClassName}>취소</button>
+            </Dialog.Close>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-[var(--color-info)] px-3.5 text-sm font-semibold text-white transition hover:bg-[var(--color-info-strong)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-info)]"
+            >
+              <RefreshCw className="size-4" aria-hidden="true" />
+              재생성 시작
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
