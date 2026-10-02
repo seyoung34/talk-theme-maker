@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AdminAssetCandidate } from "@/lib/theme/adminAssets";
+import { createDefaultBubbleAdjustment, type AdminAssetCandidate } from "@/lib/theme/adminAssets";
 import { toAdminAssetListItem } from "@/lib/theme/adminAssetList";
 import AdminAssetsClient from "./AdminAssetsClient";
 import { fetchAdminAssetUsageIndex } from "@/lib/theme/adminAssetUsage";
@@ -9,8 +9,10 @@ import type { MobileBubbleEditor } from "@/components/editor/MobileBubbleEditor"
 import { bubbleGeometryToLegacyEdit, centeredBubbleGeometry } from "@/lib/theme/bubbleGeometry";
 import { defaultImageEditState } from "@/lib/theme/imageEdit";
 import type { BubbleBuilderEditor } from "@/components/editor/BubbleBuilderDialog";
+import { createBubbleFamilyDesignSpec, type GeneratedBubbleDesign } from "@/lib/theme/bubbleBuilder";
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), save: vi.fn(), source: vi.fn(), bubbleProps: null as ComponentProps<typeof MobileBubbleEditor> | null, builderProps: null as ComponentProps<typeof BubbleBuilderEditor> | null, builderDirty: false, builderBusy: false, builderRequestClose: vi.fn() }));
+const mocks = vi.hoisted(() => ({ get: vi.fn(), update: vi.fn(), save: vi.fn(), source: vi.fn(), generate: vi.fn(), bubbleProps: null as ComponentProps<typeof MobileBubbleEditor> | null, builderProps: null as ComponentProps<typeof BubbleBuilderEditor> | null, builderDirty: false, builderBusy: false, builderRequestClose: vi.fn() }));
+vi.mock("@/lib/theme/bubbleBuilder", async (original) => ({ ...await original<typeof import("@/lib/theme/bubbleBuilder")>(), generateBubbleAsset: mocks.generate }));
 vi.mock("@/lib/theme/adminAssets", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/theme/adminAssets")>(),
   getAdminAssetCandidate: mocks.get,
@@ -37,7 +39,7 @@ vi.mock("@/components/admin/AdminBubbleTextPreview", () => ({ default: () => nul
 vi.mock("@/components/editor/BubbleBuilderDialog", () => ({ BubbleBuilderEditor: (props: ComponentProps<typeof BubbleBuilderEditor>) => {
   mocks.builderProps = props;
   useImperativeHandle(props.ref, () => ({ requestClose: mocks.builderRequestClose, hasUnsavedChanges: () => mocks.builderDirty, isBusy: () => mocks.builderBusy }));
-  return null;
+  return <div data-testid="bubble-builder" />;
 } }));
 
 const asset: AdminAssetCandidate = {
@@ -71,6 +73,74 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("admin asset paste", () => {
+  it.each(["select", "drop"] as const)("protects a new adjusted bubble before replacing it via %s", async (method) => {
+    const { container } = render(<AdminAssetsClient />);
+    fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });
+    const input = container.querySelector('input[type="file"]')!;
+    const first = image("first.png");
+    const second = image("second.png");
+    fireEvent.change(input, { target: { files: [first] } });
+    fireEvent.click(screen.getByRole("button", { name: "중앙에서 조정" }));
+    const geometry = centeredBubbleGeometry(80, 60);
+    const adjusted = { ...geometry, contentInsets: { ...geometry.contentInsets, left: geometry.contentInsets.left + 2 } };
+    act(() => mocks.bubbleProps!.onApply({ ...bubbleGeometryToLegacyEdit(adjusted, 80, 60), editedFile: undefined, sourceFile: first, imageState: defaultImageEditState }));
+    const replace = () => method === "select"
+      ? fireEvent.change(input, { target: { files: [second] } })
+      : fireEvent.drop(screen.getByRole("button", { name: "이미지 파일 여러 개 선택 또는 끌어놓기" }), { dataTransfer: { files: [second] } });
+    replace();
+    expect(await screen.findByRole("dialog", { name: "저장하지 않은 변경이 있습니다" })).toBeInTheDocument();
+    expect(mocks.bubbleProps!.sourceFile).toBe(first);
+    expect(mocks.bubbleProps!.geometry).toEqual(adjusted);
+    fireEvent.click(screen.getByRole("button", { name: "계속 편집" }));
+    expect(mocks.bubbleProps!.sourceFile).toBe(first);
+    expect(mocks.bubbleProps!.geometry).toEqual(adjusted);
+    replace();
+    fireEvent.click(await screen.findByRole("button", { name: "변경 폐기" }));
+    expect(mocks.bubbleProps!.sourceFile).toBe(second);
+    expect(mocks.bubbleProps!.geometry).not.toEqual(adjusted);
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it("defers central adjustment until the dirty builder close is confirmed", () => {
+    render(<AdminAssetsClient />);
+    fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });
+    fireEvent.click(screen.getByRole("button", { name: "말풍선 빌더 열기" }));
+    mocks.builderDirty = true;
+    fireEvent.click(screen.getByRole("button", { name: "중앙에서 조정" }));
+    expect(mocks.builderRequestClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("bubble-builder")).toBeInTheDocument();
+    expect(screen.queryByText("이미지 크기 기준으로 말풍선 조정값을 다시 맞췄습니다.")).not.toBeInTheDocument();
+    act(() => mocks.builderProps!.onCloseCancelled?.());
+    expect(screen.getByTestId("bubble-builder")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "중앙에서 조정" }));
+    act(() => mocks.builderProps!.onClose?.());
+    expect(screen.queryByTestId("bubble-builder")).not.toBeInTheDocument();
+    expect(screen.getByText("이미지 크기 기준으로 말풍선 조정값을 다시 맞췄습니다.")).toBeInTheDocument();
+  });
+  it("uses the newly applied builder dimensions for deferred central adjustment", async () => {
+    const { container } = render(<AdminAssetsClient />);
+    fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [image("old.png")] } });
+    await screen.findByText("자동 분석: 80x60");
+    fireEvent.click(screen.getByRole("button", { name: "말풍선 빌더 열기" }));
+    mocks.builderDirty = true;
+    fireEvent.click(screen.getByRole("button", { name: "중앙에서 조정" }));
+    expect(mocks.builderRequestClose).toHaveBeenCalledTimes(1);
+    const adjustment = createDefaultBubbleAdjustment({ width: 240, height: 120 });
+    const generated: GeneratedBubbleDesign = { spec: createBubbleFamilyDesignSpec("me"), asset: { platform: "android", role: "bubble_me_1", variant: "first", file: image("generated.png"), ...adjustment }, warnings: [] };
+    mocks.generate.mockImplementation(async ({ platform }: { platform: "android" | "ios" }) => ({ ...generated, asset: { ...generated.asset, platform } }));
+    vi.stubGlobal("Image", class {
+      naturalWidth = 240; naturalHeight = 120; onload?: () => void;
+      set src(_value: string) { queueMicrotask(() => this.onload?.()); }
+    });
+    await act(async () => { await mocks.builderProps!.onApply!(generated, {}); });
+    await screen.findByText("자동 분석: 240x120");
+    act(() => mocks.builderProps!.onClose?.());
+    fireEvent.click(await screen.findByRole("button", { name: "변경 폐기" }));
+    expect(mocks.bubbleProps!.markers).toEqual(adjustment.markers);
+    expect(mocks.bubbleProps!.insets).toEqual(adjustment.insets);
+    expect(mocks.bubbleProps!.stretch).toEqual(adjustment.stretch);
+    expect(mocks.bubbleProps!.markers).not.toEqual(createDefaultBubbleAdjustment({ width: 80, height: 60 }).markers);
+  });
   it("delegates paste to the decoration builder instead of replacing the candidate", () => {
     render(<AdminAssetsClient />);
     fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });

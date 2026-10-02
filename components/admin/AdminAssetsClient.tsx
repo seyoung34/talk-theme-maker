@@ -178,6 +178,7 @@ export default function AdminAssetsClient() {
   const builderEditorRef = useRef<BubbleBuilderEditorHandle | null>(null);
   const pendingBuilderTransitionRef = useRef<(() => void) | null>(null);
   const builderTransitionBypassRef = useRef(false);
+  const recommendedAdjustmentRef = useRef<(() => void) | null>(null);
   const confirmWorkspaceChange = useCallback((action: () => void) => {
     if (!transitionBypassRef.current && !builderTransitionBypassRef.current && builderEditorRef.current?.hasUnsavedChanges()) {
       pendingBuilderTransitionRef.current = action;
@@ -199,9 +200,10 @@ export default function AdminAssetsClient() {
     setNotice("말풍선 장식 이미지를 준비 중입니다. 완료된 뒤 화면을 전환해 주세요.");
     return true;
   }, []);
-  const requestBubbleWorkspaceMode = useCallback((nextMode: BubbleWorkspaceMode) => {
+  const requestBubbleWorkspaceMode = useCallback((nextMode: BubbleWorkspaceMode, prepareRecommended = false) => {
     if (blockBubbleWorkspaceChange()) return;
-    if (nextMode !== "builder" && builderEditorRef.current?.hasUnsavedChanges() && confirmWorkspaceChange(() => requestBubbleWorkspaceMode(nextMode))) return;
+    if (nextMode !== "builder" && builderEditorRef.current?.hasUnsavedChanges() && confirmWorkspaceChange(() => requestBubbleWorkspaceMode(nextMode, prepareRecommended))) return;
+    if (prepareRecommended) recommendedAdjustmentRef.current?.();
     setBubbleWorkspaceMode(nextMode);
   }, [blockBubbleWorkspaceChange, confirmWorkspaceChange]);
 
@@ -810,13 +812,13 @@ export default function AdminAssetsClient() {
       setNotice(result.rejected[0] ?? "이미지 파일만 추가할 수 있습니다.");
       return;
     }
-    if ((editingAsset || options?.queueMode === "replace") && confirmWorkspaceChange(() => applyDroppedFiles(result.files, options))) return;
+    const append = options?.queueMode !== "replace" && !editingAsset && assetKind !== "bubble";
+    if (!append && confirmWorkspaceChange(() => applyDroppedFiles(result.files, options))) return;
     const selectedFiles = assetKind === "bubble" || options?.firstOnly ? result.files.slice(0, 1) : result.files;
     // A new image ends the old detail/source request as well as its editing state.
     editRequestRef.current += 1;
     setIsLoadingEditAsset(false);
     setBubbleBuilderInitial(null);
-    const append = options?.queueMode !== "replace" && !editingAsset && assetKind !== "bubble";
     const existingFiles = append ? pendingFiles.filter((pending) => pending.status !== "success") : [];
     const existingKeys = new Set(existingFiles.map((pending) => getAdminAssetFileKey(pending.file)));
     const nextFiles = selectedFiles.filter((item) => !existingKeys.has(getAdminAssetFileKey(item)));
@@ -880,6 +882,9 @@ export default function AdminAssetsClient() {
     setBubbleGeometryMode("manual");
     setNotice("이미지 크기 기준으로 말풍선 조정값을 다시 맞췄습니다.");
   };
+  useEffect(() => {
+    recommendedAdjustmentRef.current = applyRecommendedBubbleAdjustment;
+  });
 
   const clearFile = () => {
     if (filePreviewUrl) {
@@ -1214,7 +1219,7 @@ export default function AdminAssetsClient() {
                     multiple={assetKind !== "bubble"}
                     className="hidden"
                     onChange={(event) => {
-                      const files = event.currentTarget.files;
+                      const files = Array.from(event.currentTarget.files ?? []);
                       event.currentTarget.value = "";
                       applyDroppedFiles(files);
                     }}
@@ -1289,7 +1294,7 @@ export default function AdminAssetsClient() {
               {assetKind === "bubble" ? (
                 <div className="flex flex-wrap items-center gap-2">
                   <button type="button" className="rounded-lg bg-[var(--color-inverse-surface)] px-3 py-2 text-xs font-black text-[var(--color-inverse-on-surface)] transition hover:bg-[var(--color-on-surface)]" onClick={() => requestBubbleWorkspaceMode("builder")}>말풍선 빌더 열기</button>
-                  <button type="button" className="rounded-lg border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]" onClick={() => { if (blockBubbleWorkspaceChange()) return; applyRecommendedBubbleAdjustment(); setBubbleWorkspaceMode("adjust"); }}>중앙에서 조정</button>
+                  <button type="button" className="rounded-lg border border-[var(--color-outline-variant)] px-3 py-2 text-xs font-black text-[var(--color-on-surface-variant)] transition hover:bg-[var(--color-surface-low)]" onClick={() => requestBubbleWorkspaceMode("adjust", true)}>중앙에서 조정</button>
                 </div>
               ) : null}
               <div className="grid gap-1 border-t border-[var(--color-outline-variant)] pt-3">
