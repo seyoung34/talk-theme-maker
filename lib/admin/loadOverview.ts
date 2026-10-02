@@ -1,24 +1,39 @@
 import { countOpenInquiries } from "@/lib/admin/consoleBadges";
 import { buildAdminOverview, type AdminOverview, type Loaded } from "@/lib/admin/overview";
-import { getCurrentOpsDay, getOpsDayRange } from "@/lib/ops/dailySummary";
+import { getRecentOpsDayRanges } from "@/lib/admin/overviewDays";
+import { getCurrentOpsDay } from "@/lib/ops/dailySummary";
 import { getOpsDailySummary, getOpsStatusSnapshot, listRecentOpsIssues } from "@/lib/ops/repository";
 import { createAdminClient } from "@/lib/supabase/server";
+
+export const overviewTrendDays = 7;
 
 /**
  * 개요 화면 조회. 관리자 확인을 통과한 server component에서만 부른다(service role).
  *
- * 조회는 서로 독립이라 병렬로 보내고 각각 실패를 격리한다.
+ * 조회는 서로 독립이라 병렬로 보내고 각각 실패를 격리한다. 7일 추이는 일일 요약 RPC를 날짜마다
+ * 부른다 — 집계는 SQL 안에서 끝나므로 행 수 제한과 무관하고, 날짜 하나가 실패해도 그날만 빈다.
+ * 기간이 길어지면(30일 등) 날짜별 행을 돌려주는 RPC로 바꾼다.
  */
 export async function loadAdminOverview(now = new Date()): Promise<AdminOverview & { day: string }> {
-  const range = getOpsDayRange(getCurrentOpsDay(now));
-  const [snapshot, openInquiries, refundReviews, today, issues] = await Promise.all([
+  const ranges = getRecentOpsDayRanges(getCurrentOpsDay(now), overviewTrendDays);
+  const [snapshot, openInquiries, refundReviews, issues, ...days] = await Promise.all([
     settle("ops status snapshot", getOpsStatusSnapshot()),
     settle("open inquiries", countOpenInquiries()),
     settle("refund reviews", countRefundReviews()),
-    settle("today summary", getOpsDailySummary({ startAt: range.startAt, endAt: range.endAt })),
     settle("recent issues", listRecentOpsIssues({ limit: 6 }).then((result) => result.events)),
+    ...ranges.map((range) => settle(`daily summary ${range.day}`, getOpsDailySummary({ startAt: range.startAt, endAt: range.endAt }))),
   ]);
-  return { day: range.day, ...buildAdminOverview({ snapshot, openInquiries, refundReviews, today, issues }) };
+  const today = ranges[ranges.length - 1]!;
+  return {
+    day: today.day,
+    ...buildAdminOverview({
+      snapshot,
+      openInquiries,
+      refundReviews,
+      issues,
+      days: ranges.map((range, index) => ({ day: range.day, counts: days[index]! })),
+    }),
+  };
 }
 
 /**

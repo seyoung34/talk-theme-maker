@@ -15,8 +15,19 @@ export type AdminOverviewInput = {
   snapshot: Loaded<OpsStatusSnapshot>;
   openInquiries: Loaded<number>;
   refundReviews: Loaded<number>;
-  today: Loaded<OpsDailySummaryCounts>;
+  /** 오래된 날부터 오늘까지(KST). 마지막 항목이 오늘이다. 날짜별로 따로 성공/실패한다. */
+  days: OverviewDayInput[];
   issues: Loaded<OpsIssue[]>;
+};
+
+export type OverviewDayInput = { day: string; counts: Loaded<OpsDailySummaryCounts> };
+
+/** 추이의 한 점. 조회 실패한 날은 null — 0으로 그리면 "없었음"과 "모름"이 섞인다. */
+export type TrendPoint = { day: string; value: number | null };
+
+export type OverviewHistoryRow = {
+  day: string;
+  counts?: OpsDailySummaryCounts;
 };
 
 export type OverviewCard = {
@@ -29,6 +40,8 @@ export type OverviewCard = {
   /** 처리 필요 카드가 0보다 클 때 강조한다. */
   emphasized: boolean;
   unavailable: boolean;
+  /** 최근 날짜별 값. 오늘 카드에만 있다. */
+  trend?: TrendPoint[];
 };
 
 export type OverviewIssue = {
@@ -41,12 +54,17 @@ export type OverviewIssue = {
 export type AdminOverview = {
   attention: OverviewCard[];
   today: OverviewCard[];
+  /** 표 보기용. 차트와 같은 값을 그대로 읽을 수 있게 한다. */
+  history: OverviewHistoryRow[];
   issues: Loaded<OverviewIssue[]>;
 };
 
 export function buildAdminOverview(input: AdminOverviewInput): AdminOverview {
   const snapshot = input.snapshot.ok ? input.snapshot.value : undefined;
-  const today = input.today.ok ? input.today.value : undefined;
+  const lastDay = input.days.at(-1);
+  const today = lastDay?.counts.ok ? lastDay.counts.value : undefined;
+  const trend = (pick: (counts: OpsDailySummaryCounts) => number): TrendPoint[] =>
+    input.days.map(({ day, counts }) => ({ day, value: counts.ok ? pick(counts.value) : null }));
 
   return {
     attention: [
@@ -62,20 +80,25 @@ export function buildAdminOverview(input: AdminOverviewInput): AdminOverview {
       attentionCard("dead-letters", "알림 전송 실패", snapshot?.deadLetterNotifications, { hint: "재시도를 멈춘 텔레그램 알림" }),
     ],
     today: [
-      todayCard("signups", "가입", today?.signups, { href: "/admin/analytics" }),
+      todayCard("signups", "가입", today?.signups, { href: "/admin/analytics", trend: trend((counts) => counts.signups) }),
       todayCard("payments", "결제", today?.paymentsPaid, {
         hint: today ? `${formatWon(today.paymentsPaidAmount)} · 실패 ${formatCount(today.paymentFailures)}` : undefined,
+        trend: trend((counts) => counts.paymentsPaid),
       }),
       todayCard("refunds", "환불", today?.refundsCount, {
         hint: today ? formatWon(today.refundsAmount) : undefined,
+        trend: trend((counts) => counts.refundsCount),
       }),
       todayCard("exports", "export 성공", today?.exportsSucceeded, {
         hint: today ? `실패 ${formatCount(today.exportsFailed)} · 대기 ${formatCount(today.exportsPending)}` : undefined,
+        trend: trend((counts) => counts.exportsSucceeded),
       }),
       todayCard("issues", "P1·P2 이슈", today ? today.p1Issues + today.p2Issues : undefined, {
         hint: today ? `P1 ${formatCount(today.p1Issues)} · P2 ${formatCount(today.p2Issues)}` : undefined,
+        trend: trend((counts) => counts.p1Issues + counts.p2Issues),
       }),
     ],
+    history: input.days.map(({ day, counts }) => (counts.ok ? { day, counts: counts.value } : { day })),
     issues: input.issues.ok
       ? {
           ok: true,
@@ -117,7 +140,7 @@ function attentionCard(id: string, label: string, value: number | undefined, opt
   };
 }
 
-function todayCard(id: string, label: string, value: number | undefined, options: { href?: string; hint?: string }): OverviewCard {
+function todayCard(id: string, label: string, value: number | undefined, options: { href?: string; hint?: string; trend: TrendPoint[] }): OverviewCard {
   return {
     id,
     label,
@@ -126,6 +149,8 @@ function todayCard(id: string, label: string, value: number | undefined, options
     href: options.href,
     emphasized: false,
     unavailable: value === undefined,
+    // 값이 하나도 없으면 빈 선 대신 추이를 숨긴다.
+    trend: options.trend.some((point) => point.value !== null) ? options.trend : undefined,
   };
 }
 

@@ -35,7 +35,10 @@ const loaded: AdminOverviewInput = {
   snapshot: { ok: true, value: snapshot },
   openInquiries: { ok: true, value: 3 },
   refundReviews: { ok: true, value: 0 },
-  today: { ok: true, value: today },
+  days: [
+    { day: "2026-10-01", counts: { ok: true, value: { ...today, signups: 7 } } },
+    { day: "2026-10-02", counts: { ok: true, value: today } },
+  ],
   issues: { ok: true, value: [{ eventId: "e1", eventType: "export.failed", severity: "P2", occurredAt: "2026-10-02T01:00:00Z" }] },
 };
 
@@ -54,7 +57,7 @@ describe("buildAdminOverview", () => {
   });
 
   it("조회가 실패한 카드는 0이 아니라 확인 불가로 남고 다른 카드는 유지된다", () => {
-    const overview = buildAdminOverview({ ...loaded, snapshot: { ok: false }, today: { ok: false } });
+    const overview = buildAdminOverview({ ...loaded, snapshot: { ok: false }, days: [{ day: "2026-10-02", counts: { ok: false } }] });
     const stale = overview.attention.find((item) => item.id === "stale-exports");
     expect(stale?.value).toBeUndefined();
     expect(stale?.unavailable).toBe(true);
@@ -68,6 +71,28 @@ describe("buildAdminOverview", () => {
     expect(cards.find((item) => item.id === "payments")?.hint).toBe("8,000원 · 실패 1");
     expect(cards.find((item) => item.id === "exports")?.hint).toBe("실패 3 · 대기 1");
     expect(cards.find((item) => item.id === "issues")?.value).toBe("3");
+  });
+
+  it("추이는 날짜 순서를 지키고 실패한 날은 0이 아니라 빈 점으로 둔다", () => {
+    const overview = buildAdminOverview({
+      ...loaded,
+      days: [
+        { day: "2026-09-30", counts: { ok: false } },
+        ...loaded.days,
+      ],
+    });
+    const signups = overview.today.find((item) => item.id === "signups");
+    expect(signups?.trend).toEqual([
+      { day: "2026-09-30", value: null },
+      { day: "2026-10-01", value: 7 },
+      { day: "2026-10-02", value: 4 },
+    ]);
+    expect(overview.history[0]).toEqual({ day: "2026-09-30" });
+  });
+
+  it("값이 하나도 없으면 추이를 숨긴다", () => {
+    const overview = buildAdminOverview({ ...loaded, days: [{ day: "2026-10-02", counts: { ok: false } }] });
+    expect(overview.today.every((item) => item.trend === undefined)).toBe(true);
   });
 
   it("이슈는 운영자가 읽는 이름으로 바꾼다", () => {
