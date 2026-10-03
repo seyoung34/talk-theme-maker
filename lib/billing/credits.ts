@@ -130,7 +130,7 @@ export async function reserveCreditForExport({
 }) {
   const admin = createAdminClient();
   const attribution = normalizeTemplateAttribution(systemTemplateBundleId, systemTemplateVariantId);
-  const { data, error } = await admin.rpc("reserve_export_credit_with_template", {
+  const reservationArgs = {
     p_user_id: userId,
     p_platform: platform,
     p_export_mode: mode,
@@ -138,9 +138,18 @@ export async function reserveCreditForExport({
     p_input_bytes: inputBytes,
     p_referenced_asset_bytes: referencedAssetBytes,
     p_referenced_asset_file_count: referencedAssetFileCount,
+  };
+  let { data, error } = await admin.rpc("reserve_export_credit_with_template", {
+    ...reservationArgs,
     p_system_template_bundle_id: attribution.systemTemplateBundleId,
     p_system_template_variant_id: attribution.systemTemplateVariantId,
   });
+  // Missing-function errors mean the new RPC did not reserve anything. Never retry
+  // business errors or ambiguous network failures: that could charge twice.
+  if (error?.code === "PGRST202" || error?.code === "42883") {
+    console.warn("Template reservation RPC unavailable; using legacy reservation without attribution.");
+    ({ data, error } = await admin.rpc("reserve_export_credit", reservationArgs));
+  }
   if (error) throw error;
 
   const row = (Array.isArray(data) ? data[0] : data) as ReservationRow | null;
