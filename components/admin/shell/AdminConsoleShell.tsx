@@ -7,6 +7,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import {
   ExternalLink,
+  Activity,
   Gift,
   Images,
   LayoutDashboard,
@@ -41,6 +42,7 @@ const icons: Record<AdminConsoleIcon, LucideIcon> = {
   inquiries: MessageSquare,
   promotions: Gift,
   analytics: TrendingUp,
+  exports: Activity,
 };
 
 const collapsedStorageKey = "talktheme:admin-sidebar-collapsed:v1";

@@ -1,5 +1,6 @@
 import type { AdminConsoleBadges } from "@/components/admin/shell/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
+import { getOpsStatusSnapshot } from "@/lib/ops/repository";
 
 /**
  * 답변할 문의 수.
@@ -21,10 +22,9 @@ export async function countOpenInquiries(): Promise<number> {
 
 /** 사이드바 배지. 실패한 값은 비워 둔다 — 배지는 비어 있으면 숨으므로 실패가 "0건"처럼 보이지 않는다. */
 export async function getAdminConsoleBadges(): Promise<AdminConsoleBadges> {
-  try {
-    return { openInquiries: await countOpenInquiries() };
-  } catch (error) {
-    console.warn("Admin console badge lookup failed.", error);
-    return {};
-  }
+  const [inquiries, snapshot] = await Promise.allSettled([countOpenInquiries(), getOpsStatusSnapshot()]);
+  return {
+    ...(inquiries.status === "fulfilled" ? { openInquiries: inquiries.value } : {}),
+    ...(snapshot.status === "fulfilled" ? { staleExports: snapshot.value.staleExports } : {}),
+  };
 }
