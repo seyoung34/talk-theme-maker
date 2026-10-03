@@ -5,12 +5,16 @@ import type { AndroidExportPayloadOptions, ExportMode, ExportPayloadOptions, Ios
 import { parseCatalogAssetSelection, type CatalogAssetSelection } from "@/lib/theme/assetCatalog/registry";
 import type { CatalogTransform } from "@/lib/theme/export/catalogTransform";
 import type { ThemeResourceRole } from "@/lib/theme/types";
+import { normalizeTemplateAttribution } from "@/lib/theme/export/templateAttribution";
 
 export async function createExportFormData(options: ExportPayloadOptions) {
-  if (isIosExportMode(options.mode)) {
-    return createIosExportFormData({ ...options, mode: options.mode });
-  }
-  return createAndroidExportFormData({ ...options, mode: isAndroidExportMode(options.mode) ? options.mode : "apk" });
+  const form = isIosExportMode(options.mode)
+    ? await createIosExportFormData({ ...options, mode: options.mode })
+    : await createAndroidExportFormData({ ...options, mode: isAndroidExportMode(options.mode) ? options.mode : "apk" });
+  const attribution = normalizeTemplateAttribution(options.systemTemplateBundleId, options.systemTemplateVariantId);
+  if (attribution.systemTemplateBundleId) form.set("systemTemplateBundleId", attribution.systemTemplateBundleId);
+  if (attribution.systemTemplateVariantId) form.set("systemTemplateVariantId", attribution.systemTemplateVariantId);
+  return form;
 }
 
 export function isAndroidExportMode(mode: ExportMode): mode is "project" | "apk" | "apk-zip" {
