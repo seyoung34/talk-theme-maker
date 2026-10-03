@@ -594,6 +594,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     submitExport,
     cancelExport,
   } = useProjectExport({
+    systemTemplateBundleId: activeSystemTemplate && !activeUserTemplate ? (systemTemplateBundleId ?? activeSystemTemplate.bundleId) : null,
+    systemTemplateVariantId: activeUserTemplate ? null : activeSystemTemplate?.id,
     activeTemplate,
     bubbleGeometry,
     bubbleInsets,
