@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { diagnosticRate, diagnosticsFilters, diagnosticsPeriod, safeDiagnosticErrorCode } from "./exportDiagnostics";
+import { diagnosticRate, diagnosticOutcomeRate, diagnosticsFilters, diagnosticsPeriod, safeDiagnosticErrorCode } from "./exportDiagnostics";
 
 describe("export diagnostics display boundaries", () => {
+  it("excludes cancellations from the rate denominator while retaining pending", () => {
+    expect(diagnosticOutcomeRate(900, 1200, 75)).toBe("80.0%");
+    expect(diagnosticOutcomeRate(50, 1000, 50)).toBe("5.3%");
+    expect(diagnosticOutcomeRate(0, 5, 5)).toBe("—");
+    expect(diagnosticOutcomeRate(0, 0, 0)).toBe("—");
+  });
   it("never displays arbitrary error contents", () => {
     for (const input of [null, "", "Email@example.com", "a b", "한글", "a".repeat(65), "code\n", {}]) expect(safeDiagnosticErrorCode(input)).toBe("unknown");
     expect(safeDiagnosticErrorCode("a".repeat(64))).toBe("a".repeat(64));

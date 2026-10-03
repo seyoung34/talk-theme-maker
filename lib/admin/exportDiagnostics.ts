@@ -1,8 +1,13 @@
 export type DiagnosticsFilters = { days: 1 | 7 | 30; platform: "android" | "ios" | null; backend: "worker" | "cloud_run" | "unknown" | null };
-export type DiagnosticsSummary = { platform: string; total: number; succeeded: number; failed: number; pending: number; duration_count: number; duration_null_count: number; p50: number | null; p95: number | null };
+export type DiagnosticsSummary = { platform: string; total: number; succeeded: number; failed: number; cancelled: number; pending: number; duration_count: number; duration_null_count: number; p50: number | null; p95: number | null };
 export type DiagnosticsFailure = { platform: string; backend: string; stage: string; error_code: string; count: number };
 export type DiagnosticsJob = { id: string; platform: string; backend: string; stage: string; error_code?: string; created_at: string };
-export type ExportDiagnostics = { summary: DiagnosticsSummary[]; failures: DiagnosticsFailure[]; catalog: { catalog: boolean; total: number; failed: number }[]; recent: DiagnosticsJob[]; stale: DiagnosticsJob[]; stale_count: number };
+export type ExportDiagnostics = { summary: DiagnosticsSummary[]; failures: DiagnosticsFailure[]; catalog: { catalog: boolean; total: number; failed: number; cancelled: number }[]; recent: DiagnosticsJob[]; stale: DiagnosticsJob[]; stale_count: number };
+
+/** Pending remains in the denominator, while user cancellations do not. */
+export function diagnosticOutcomeRate(count: number, total: number, cancelled: number) {
+  return diagnosticRate(count, total - cancelled);
+}
 
 export function safeDiagnosticErrorCode(value: unknown): string {
   return typeof value === "string" && value.length <= 64 && /^[a-z0-9_.-]+$/.test(value) ? value : "unknown";

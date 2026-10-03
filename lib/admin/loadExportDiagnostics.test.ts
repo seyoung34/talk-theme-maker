@@ -3,6 +3,14 @@ const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createAdminClient: () => ({ rpc }) }));
 import { loadExportDiagnostics } from "./loadExportDiagnostics";
 beforeEach(() => rpc.mockReset());
+it("rejects missing or inconsistent cancellation counts instead of assuming zero", async () => {
+  for (const row of [{ total: 10, failed: 2 }, { total: 10, failed: 2, cancelled: 11 }, { total: 10, failed: 3, cancelled: 8 }]) {
+    for (const key of ["summary", "catalog"]) {
+      rpc.mockResolvedValue({ data: { summary: [], catalog: [], failures: [], recent: [], stale: [], stale_count: 0, [key]: [row] }, error: null });
+      expect(await loadExportDiagnostics({ days: 7, platform: null, backend: null }, { start: "start", end: "end" })).toEqual({ ok: false });
+    }
+  }
+});
 it("keeps a failed read distinct from an empty successful aggregate", async () => {
   rpc.mockResolvedValue({ error: new Error("private"), data: null });
   expect(await loadExportDiagnostics({ days: 7, platform: null, backend: null }, { start: "start", end: "end" })).toEqual({ ok: false });

@@ -34,7 +34,8 @@ begin
   ), summary as (
     select platform, count(*) as total,
       count(*) filter (where status = 'succeeded') as succeeded,
-      count(*) filter (where status = 'failed') as failed,
+      count(*) filter (where status = 'failed' and error_code <> 'build_cancelled') as failed,
+      count(*) filter (where status = 'failed' and error_code = 'build_cancelled') as cancelled,
       count(*) filter (where status = 'pending') as pending,
       count(duration_ms) as duration_count,
       count(*) filter (where duration_ms is null) as duration_null_count,
@@ -43,13 +44,15 @@ begin
     from jobs group by platform
   ), failures as (
     select platform, backend, stage, error_code, count(*) as count
-    from jobs where status = 'failed' group by platform, backend, stage, error_code
+    from jobs where status = 'failed' and error_code <> 'build_cancelled' group by platform, backend, stage, error_code
   ), comparison as (
-    select catalog, count(*) as total, count(*) filter (where status = 'failed') as failed
+    select catalog, count(*) as total,
+      count(*) filter (where status = 'failed' and error_code <> 'build_cancelled') as failed,
+      count(*) filter (where status = 'failed' and error_code = 'build_cancelled') as cancelled
     from jobs group by catalog
   ), recent as (
     select id, platform, backend, stage, error_code, created_at
-    from jobs where status = 'failed' order by created_at desc, id desc limit 20
+    from jobs where status = 'failed' and error_code <> 'build_cancelled' order by created_at desc, id desc limit 20
   ), stale as (
     -- Operational queue is independent of the selected period; old pending jobs must remain visible.
     select id, platform, coalesce(export_backend, 'unknown') as backend, stage, created_at
