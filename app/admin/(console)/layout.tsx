@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import AdminConsoleShell from "@/components/admin/shell/AdminConsoleShell";
-import { getAdminConsoleBadges } from "@/lib/admin/consoleBadges";
+import AdminConsoleBadgeLoader from "@/components/admin/shell/AdminConsoleBadgeLoader";
 import { getCurrentAdmin } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,10 @@ export const dynamic = "force-dynamic";
  */
 export default async function AdminConsoleLayout({ children }: { children: ReactNode }) {
   const admin = await getCurrentAdmin();
-  const badges = admin.profile ? await getAdminConsoleBadges() : {};
-
-  return <AdminConsoleShell badges={badges}>{children}</AdminConsoleShell>;
+  return (
+    <AdminConsoleShell badges={{}}>
+      {admin.profile ? <Suspense fallback={null}><AdminConsoleBadgeLoader /></Suspense> : null}
+      {children}
+    </AdminConsoleShell>
+  );
 }

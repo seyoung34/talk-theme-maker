@@ -1,6 +1,6 @@
 import { cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AdminConsoleShell from "./AdminConsoleShell";
+import AdminConsoleShell, { AdminConsoleBadgeSync } from "./AdminConsoleShell";
 import { useAdminNavigationGuard } from "./AdminNavigationGuard";
 
 const pathname = vi.hoisted(() => ({ current: "/admin/assets" }));
@@ -44,5 +44,22 @@ describe("AdminConsoleShell navigation guard", () => {
     for (const link of links) {
       expect({ href: link.getAttribute("href"), blocked: clickAndReport(link) }).toEqual({ href: link.getAttribute("href"), blocked: true });
     }
+  });
+});
+
+describe("streamed console badges", () => {
+  afterEach(cleanup);
+  it("updates the persistent sidebar when the streamed badge result changes, including failure", () => {
+    pathname.current = "/admin";
+    const shell = (badges: { openInquiries?: number; staleExports?: number }) => (
+      <AdminConsoleShell badges={{}}><AdminConsoleBadgeSync badges={badges} /><p>content</p></AdminConsoleShell>
+    );
+    const view = render(shell({ openInquiries: 3, staleExports: 2 }));
+    expect(screen.getByRole("link", { name: /Export 진단/ })).toHaveTextContent("2");
+    expect(screen.getByRole("link", { name: /문의/ })).toHaveTextContent("3");
+    view.rerender(shell({ openInquiries: 1 }));
+    expect(screen.getByRole("link", { name: /문의/ })).toHaveTextContent("1");
+    expect(screen.getByRole("link", { name: /Export 진단/ })).not.toHaveTextContent("2");
+    expect(screen.getByText("content")).toBeInTheDocument();
   });
 });

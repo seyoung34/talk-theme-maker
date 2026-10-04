@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
-import Link from "next/link";
+import { createContext, useContext, useEffect, useState, type ComponentProps, type ReactNode } from "react";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as Tooltip from "@radix-ui/react-tooltip";
@@ -46,6 +46,7 @@ const icons: Record<AdminConsoleIcon, LucideIcon> = {
 };
 
 const collapsedStorageKey = "talktheme:admin-sidebar-collapsed:v1";
+const BadgeUpdateContext = createContext<((badges: AdminConsoleBadges) => void) | null>(null);
 
 type AdminConsoleShellProps = {
   badges: AdminConsoleBadges;
@@ -62,13 +63,23 @@ type AdminConsoleShellProps = {
  * 통과한 화면에서만 그려지므로 세션을 다시 묻지 않고 바로 표시한다.
  */
 export default function AdminConsoleShell({ badges, children }: AdminConsoleShellProps) {
+  const [loadedBadges, setLoadedBadges] = useState<AdminConsoleBadges | null>(null);
   return (
-    <AdminNavigationGuardProvider>
-      <Tooltip.Provider delayDuration={150}>
-        <ShellFrame badges={badges}>{children}</ShellFrame>
-      </Tooltip.Provider>
-    </AdminNavigationGuardProvider>
+    <BadgeUpdateContext.Provider value={setLoadedBadges}>
+      <AdminNavigationGuardProvider>
+        <Tooltip.Provider delayDuration={150}>
+          <ShellFrame badges={loadedBadges ?? badges}>{children}</ShellFrame>
+        </Tooltip.Provider>
+      </AdminNavigationGuardProvider>
+    </BadgeUpdateContext.Provider>
   );
+}
+
+/** Streamed separately so badge lookups do not hold up the shell or route content. */
+export function AdminConsoleBadgeSync({ badges }: { badges: AdminConsoleBadges }) {
+  const updateBadges = useContext(BadgeUpdateContext);
+  useEffect(() => { updateBadges?.(badges); }, [badges, updateBadges]);
+  return null;
 }
 
 function ShellFrame({ badges, children }: AdminConsoleShellProps) {
@@ -200,12 +211,13 @@ function NavList({ pathname, badges, rail, onNavigate }: { pathname: string; bad
  * 화면이 등록한 이동 판정(예: 에셋의 말풍선 장식 준비 중)을 먼저 묻는다. 링크마다 판정을 손으로
  * 붙이면 새 링크에서 빠지기 쉬워, 셸 안에서는 `next/link`를 직접 쓰지 않는다.
  */
-function GuardedLink({ href, onClick, onNavigate, ...props }: ComponentProps<typeof Link> & { href: string; onNavigate?: () => void }) {
+function GuardedLink({ href, onClick, onNavigate, children, className, ...props }: ComponentProps<typeof Link> & { href: string; onNavigate?: () => void }) {
   const shouldBlock = useAdminNavigationGuardCheck();
   return (
     <Link
       {...props}
       href={href}
+      className={`relative ${className ?? ""}`}
       onClick={(event) => {
         onClick?.(event);
         if (event.defaultPrevented) return;
@@ -215,7 +227,20 @@ function GuardedLink({ href, onClick, onNavigate, ...props }: ComponentProps<typ
         }
         onNavigate?.();
       }}
-    />
+    >
+      {children}
+      <NavigationFeedback />
+    </Link>
+  );
+}
+
+function NavigationFeedback() {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return (
+    <span role="status" className="pointer-events-none absolute inset-x-1 bottom-0 h-0.5 rounded-full bg-[var(--color-info)] motion-safe:animate-pulse">
+      <span className="sr-only">페이지를 이동하는 중입니다</span>
+    </span>
   );
 }
 

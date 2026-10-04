@@ -1,8 +1,8 @@
-import { countOpenInquiries } from "@/lib/admin/consoleBadges";
-import { buildAdminOverview, type AdminOverview, type Loaded } from "@/lib/admin/overview";
+import { countOpenInquiries, getAdminOpsStatusSnapshot } from "@/lib/admin/consoleBadges";
+import { buildOverviewAttention, buildOverviewActivity, buildOverviewIssues, type AdminOverview, type Loaded } from "@/lib/admin/overview";
 import { getRecentOpsDayRanges } from "@/lib/admin/overviewDays";
 import { getCurrentOpsDay } from "@/lib/ops/dailySummary";
-import { getOpsDailySummary, getOpsStatusSnapshot, listRecentOpsIssues } from "@/lib/ops/repository";
+import { getOpsDailySummary, listRecentOpsEvents } from "@/lib/ops/repository";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export const overviewTrendDays = 7;
@@ -14,26 +14,30 @@ export const overviewTrendDays = 7;
  * 부른다 — 집계는 SQL 안에서 끝나므로 행 수 제한과 무관하고, 날짜 하나가 실패해도 그날만 빈다.
  * 기간이 길어지면(30일 등) 날짜별 행을 돌려주는 RPC로 바꾼다.
  */
-export async function loadAdminOverview(now = new Date()): Promise<AdminOverview & { day: string }> {
+export function startAdminOverview(now = new Date()) {
   const ranges = getRecentOpsDayRanges(getCurrentOpsDay(now), overviewTrendDays);
-  const [snapshot, openInquiries, refundReviews, issues, ...days] = await Promise.all([
-    settle("ops status snapshot", getOpsStatusSnapshot()),
+  const attention = Promise.all([
+    settle("ops status snapshot", getAdminOpsStatusSnapshot()),
     settle("open inquiries", countOpenInquiries()),
     settle("refund reviews", countRefundReviews()),
-    settle("recent issues", listRecentOpsIssues({ limit: 6 }).then((result) => result.events)),
-    ...ranges.map((range) => settle(`daily summary ${range.day}`, getOpsDailySummary({ startAt: range.startAt, endAt: range.endAt }))),
-  ]);
-  const today = ranges[ranges.length - 1]!;
+  ]).then(([snapshot, openInquiries, refundReviews]) => buildOverviewAttention({ snapshot, openInquiries, refundReviews }));
+  const activity = Promise.all(
+    ranges.map((range) => settle(`daily summary ${range.day}`, getOpsDailySummary({ startAt: range.startAt, endAt: range.endAt }))),
+  ).then((days) => buildOverviewActivity(ranges.map((range, index) => ({ day: range.day, counts: days[index]! }))));
+  const issues = settle("recent issues", listRecentOpsEvents({ limit: 6 })).then(buildOverviewIssues);
   return {
-    day: today.day,
-    ...buildAdminOverview({
-      snapshot,
-      openInquiries,
-      refundReviews,
-      issues,
-      days: ranges.map((range, index) => ({ day: range.day, counts: days[index]! })),
-    }),
+    day: ranges[ranges.length - 1]!.day,
+    attention,
+    activity,
+    issues,
   };
+}
+
+/** Consumers that need the complete snapshot can still wait for all three sections. */
+export async function loadAdminOverview(now = new Date()): Promise<AdminOverview & { day: string }> {
+  const sections = startAdminOverview(now);
+  const [attention, activity, issues] = await Promise.all([sections.attention, sections.activity, sections.issues]);
+  return { day: sections.day, attention, ...activity, issues };
 }
 
 /**

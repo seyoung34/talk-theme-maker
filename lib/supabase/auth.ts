@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { hasSupabaseBrowserConfig } from "@/lib/supabase/config";
 
 export type AdminRole = "admin";
 
-export async function getCurrentAdmin() {
+// Server Components share only this request's result. Route handlers still authenticate each request.
+export const getCurrentAdmin = cache(async function getCurrentAdmin() {
   if (!hasSupabaseBrowserConfig()) return { user: null, profile: null, configured: false };
 
   const supabase = await createClient();
@@ -25,7 +27,7 @@ export async function getCurrentAdmin() {
   }
 
   return { user: userData.user, profile, configured: true };
-}
+});
 
 // 로컬 QA 전용 우회. 프로덕션에서는 절대 활성화되지 않도록 NODE_ENV와 명시적 플래그를 이중으로 확인한다.
 function isAdminQaBypassEnabled() {

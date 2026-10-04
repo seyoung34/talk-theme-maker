@@ -231,13 +231,8 @@ export async function getOpsStatusSnapshot(): Promise<OpsStatusSnapshot> {
 export async function listRecentOpsIssues(input: { limit?: number } = {}) {
   const limit = Math.min(Math.max(Math.trunc(input.limit ?? 8), 1), 20);
   const admin = createAdminClient();
-  const [eventsResult, inquiriesResult] = await Promise.all([
-    admin
-      .from("ops_events")
-      .select("event_id,event_type,severity,occurred_at,entity_kind,entity_id")
-      .in("severity", ["P1", "P2"])
-      .order("occurred_at", { ascending: false })
-      .limit(limit),
+  const [events, inquiriesResult] = await Promise.all([
+    listRecentOpsEvents({ limit }),
     admin
       .from("inquiries")
       .select("id,status,created_at")
@@ -245,13 +240,26 @@ export async function listRecentOpsIssues(input: { limit?: number } = {}) {
       .order("updated_at", { ascending: false })
       .limit(limit),
   ]);
-  if (eventsResult.error) throw eventsResult.error;
   if (inquiriesResult.error) throw inquiriesResult.error;
 
   return {
-    events: (eventsResult.data as unknown[] | null ?? []).map(parseOpsIssue),
+    events,
     inquiries: (inquiriesResult.data as unknown[] | null ?? []).map(parseOpsInquiryIssue),
   };
+}
+
+/** The console overview does not need the separate inquiry list used by Telegram /issues. */
+export async function listRecentOpsEvents(input: { limit?: number } = {}): Promise<OpsIssue[]> {
+  const limit = Math.min(Math.max(Math.trunc(input.limit ?? 8), 1), 20);
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ops_events")
+    .select("event_id,event_type,severity,occurred_at,entity_kind,entity_id")
+    .in("severity", ["P1", "P2"])
+    .order("occurred_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data as unknown[] | null ?? []).map(parseOpsIssue);
 }
 
 async function updateOpsDelivery(
