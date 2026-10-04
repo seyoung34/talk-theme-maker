@@ -75,7 +75,7 @@ export function buildAdminOverview(input: AdminOverviewInput): AdminOverview {
       attentionCard("refund-reviews", "환불 검토 필요", input.refundReviews.ok ? input.refundReviews.value : undefined, {
         hint: "기간과 무관한 미처리 전체",
       }),
-      attentionCard("stale-exports", "멈춘 export", snapshot?.staleExports, { hint: "15분 넘게 대기 중" }),
+      attentionCard("stale-exports", "멈춘 export", snapshot?.staleExports, { href: "/admin/exports", hint: "15분 넘게 대기 중" }),
       attentionCard("billing-holds", "결제 보류 계정", snapshot?.billingHolds, { hint: "결제 보류로 export가 막힌 계정" }),
       attentionCard("dead-letters", "알림 전송 실패", snapshot?.deadLetterNotifications, { hint: "재시도를 멈춘 텔레그램 알림" }),
     ],

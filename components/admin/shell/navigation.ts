@@ -4,7 +4,7 @@
  * 메뉴 순서·그룹·배지 키는 여기 한 곳에만 둔다. 셸 컴포넌트는 이 값을 그리기만 한다.
  */
 
-export type AdminConsoleBadgeKey = "openInquiries";
+export type AdminConsoleBadgeKey = "openInquiries" | "staleExports";
 
 export type AdminConsoleBadges = Partial<Record<AdminConsoleBadgeKey, number>>;
 
@@ -15,7 +15,8 @@ export type AdminConsoleIcon =
   | "notices"
   | "inquiries"
   | "promotions"
-  | "analytics";
+  | "analytics"
+  | "exports";
 
 export type AdminConsoleNavItem = {
   href: string;
@@ -48,7 +49,10 @@ export const adminConsoleNavGroups: AdminConsoleNavGroup[] = [
   },
   {
     label: "성과",
-    items: [{ href: "/admin/analytics", label: "분석", icon: "analytics" }],
+    items: [
+      { href: "/admin/analytics", label: "분석", icon: "analytics" },
+      { href: "/admin/exports", label: "Export 진단", icon: "exports", badge: "staleExports" },
+    ],
   },
 ];
 
