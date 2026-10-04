@@ -43,6 +43,8 @@ export type AndroidExportPayloadOptions = {
   bubbleFlipX: Partial<Record<string, boolean>>;
   /** export dialog에서 확인한 계정으로 catalog canary 범위를 판정한다. */
   catalogExportUserId?: string;
+  systemTemplateBundleId?: string | null;
+  systemTemplateVariantId?: string | null;
 };
 
 export type IosExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {
