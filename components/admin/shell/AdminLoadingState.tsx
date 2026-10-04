@@ -1,3 +1,9 @@
+import { adminPageClassName } from "./AdminPageHeader";
+
+export function AdminPageLoadingState() {
+  return <main className={adminPageClassName} aria-busy="true"><AdminLoadingState /></main>;
+}
+
 /** A lightweight fallback; it never claims that an unfinished lookup is empty. */
 export default function AdminLoadingState({ label = "화면을 불러오는 중입니다" }: { label?: string }) {
   return (

@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AdminInquiriesClient from "./AdminInquiriesClient";
+import { StrictMode } from "react";
+import type { Inquiry } from "@/lib/inquiries/types";
 
 const refresh = vi.hoisted(() => vi.fn());
 
@@ -52,6 +54,29 @@ describe("AdminInquiriesClient shell badge refresh", () => {
     render(<AdminInquiriesClient />);
     await screen.findByText("테마가 적용되지 않아요");
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("서버 목록은 다시 요청하지 않고 필터 왕복과 새로고침은 계속 조회한다", async () => {
+    render(<StrictMode><AdminInquiriesClient initialData={{ ok: true, value: [inquiry as Inquiry] }} /></StrictMode>);
+    expect(screen.getByText("테마가 적용되지 않아요")).toBeTruthy();
+    expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "답변 완료" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/admin/inquiries?status=answered", { cache: "no-store" }));
+    fireEvent.click(screen.getByRole("button", { name: "답변 대기" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/admin/inquiries?status=open", { cache: "no-store" }));
+    vi.mocked(fetch).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: /새로고침/ }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("최초 조회 실패는 오류로 보여주고 사용자가 재시도할 수 있다", async () => {
+    render(<AdminInquiriesClient initialData={{ ok: false, error: "최초 조회 실패" }} />);
+    expect(screen.getByText("최초 조회 실패")).toBeTruthy();
+    expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /새로고침/ }));
+    await screen.findByText("테마가 적용되지 않아요");
+    expect(screen.queryByText("최초 조회 실패")).toBeNull();
   });
 
   it("답변을 등록하면 사이드바 배지를 다시 센다", async () => {

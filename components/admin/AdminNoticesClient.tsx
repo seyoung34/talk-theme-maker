@@ -5,6 +5,7 @@ import { AlertCircle, LoaderCircle, Pencil, Pin, Plus, RefreshCw, Trash2, X } fr
 import { InfoTip } from "@/components/common/InfoTip";
 import AdminPageHeader, { adminPageClassName, adminPageNarrowClassName } from "@/components/admin/shell/AdminPageHeader";
 import { noticeCategories, noticeCategoryLabels, type Notice, type NoticeCategory } from "@/lib/notices/types";
+import type { AdminInitialData } from "@/lib/admin/initialData";
 
 type FormState = {
   id: string | null;
@@ -18,10 +19,10 @@ type FormState = {
 
 const emptyForm: FormState = { id: null, title: "", body: "", category: "update", pinned: false, publishedAt: "" };
 
-export default function AdminNoticesClient() {
-  const [notices, setNotices] = useState<Notice[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+export default function AdminNoticesClient({ initialData }: { initialData?: AdminInitialData<Notice[]> }) {
+  const [notices, setNotices] = useState<Notice[]>(initialData?.ok ? initialData.value : []);
+  const [isLoading, setIsLoading] = useState(!initialData);
+  const [loadError, setLoadError] = useState<string | null>(initialData && !initialData.ok ? initialData.error : null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -41,7 +42,7 @@ export default function AdminNoticesClient() {
     }
   }, []);
 
-  useEffect(() => { void loadNotices(); }, [loadNotices]);
+  useEffect(() => { if (!initialData) void loadNotices(); }, [initialData, loadNotices]);
 
   const summary = useMemo(() => ({
     total: notices.length,

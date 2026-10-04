@@ -7,9 +7,11 @@ import {
   filterAdminAssetListItems,
   sortAdminAssetListItems,
   type AdminAssetListItem,
+  type AdminAssetListPayload,
   type AdminAssetListSortDirection,
   type AdminAssetListSortKey,
 } from "@/lib/theme/adminAssetList";
+import type { AdminInitialData } from "@/lib/admin/initialData";
 
 /**
  * `/admin/assets` 목록의 조회·검색·정렬 상태.
@@ -47,10 +49,12 @@ export type AdminAssetLibrary = {
 export function useAdminAssetLibrary(input: {
   readonly assetKind: AdminAssetKind;
   readonly onError: (message: string) => void;
+  readonly initialData?: AdminInitialData<AdminAssetListPayload>;
 }): AdminAssetLibrary {
-  const { assetKind, onError } = input;
-  const [assets, setAssets] = useState<AdminAssetListItem[]>([]);
-  const [truncated, setTruncated] = useState(false);
+  const { assetKind, onError, initialData } = input;
+  const [assets, setAssets] = useState<AdminAssetListItem[]>(initialData?.ok ? [...initialData.value.items] : []);
+  const [truncated, setTruncated] = useState(initialData?.ok ? initialData.value.truncated : false);
+  const loadedKind = useRef<AdminAssetKind | undefined>(initialData ? assetKind : undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<AdminAssetListSortKey>("created");
@@ -91,8 +95,14 @@ export function useAdminAssetLibrary(input: {
   }, [assetKind]);
 
   useEffect(() => {
+    if (loadedKind.current === assetKind) return;
+    loadedKind.current = assetKind;
     void refresh();
-  }, [refresh]);
+  }, [assetKind, refresh]);
+
+  useEffect(() => {
+    if (initialData && !initialData.ok) onErrorRef.current(initialData.error);
+  }, [initialData]);
 
   const visibleAssets = useMemo(
     () => filterAdminAssetListItems(sortAdminAssetListItems(assets, sort, sortDirection), search),

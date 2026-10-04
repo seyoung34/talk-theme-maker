@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createCreditCodePreview, generateCreditCode, hashCreditCode, isValidCreditCode, normalizeCreditCode } from "@/lib/billing/creditCodes.server";
 import { getCurrentAdmin } from "@/lib/supabase/auth";
 import { createAdminClient } from "@/lib/supabase/server";
+import { listAdminGrantCodes } from "@/lib/admin/listData";
 
 type CreateBody = {
   mode?: "manual" | "automatic";
@@ -16,10 +17,11 @@ type CreateBody = {
 export async function GET() {
   const authError = await requireAdminApi();
   if (authError) return authError;
-  const admin = createAdminClient();
-  const { data, error } = await admin.from("credit_grant_codes").select("id,code_preview,name,credits,status,starts_at,expires_at,max_redemptions,redemption_count,created_at,updated_at").order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ error: "지급 코드 목록을 불러오지 못했습니다." }, { status: 500 });
-  return NextResponse.json({ codes: data ?? [] });
+  try {
+    return NextResponse.json({ codes: await listAdminGrantCodes() });
+  } catch {
+    return NextResponse.json({ error: "지급 코드 목록을 불러오지 못했습니다." }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {

@@ -5,27 +5,20 @@ import AdminPageHeader, { adminPageClassName } from "@/components/admin/shell/Ad
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertCircle, Check, Clipboard, Gift, LoaderCircle, Plus, RefreshCw, X } from "lucide-react";
 import SignupBonusControl from "@/components/admin/SignupBonusControl";
+import type { AdminGrantCode, AdminInitialData } from "@/lib/admin/initialData";
+import type { SignupBonusCampaignDto } from "@/lib/billing/apiTypes";
 
-type GrantCode = {
-  id: string;
-  code_preview: string;
-  name: string;
-  credits: number;
-  status: "active" | "inactive";
-  starts_at: string | null;
-  expires_at: string | null;
-  max_redemptions: number | null;
-  redemption_count: number;
-  created_at: string;
-  updated_at: string;
-};
+type GrantCode = AdminGrantCode;
 
 type GenerationMode = "manual" | "automatic";
 
-export default function AdminPromotionsClient() {
-  const [codes, setCodes] = useState<GrantCode[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+export default function AdminPromotionsClient({ initialData, initialCampaign }: {
+  initialData?: AdminInitialData<GrantCode[]>;
+  initialCampaign?: Promise<AdminInitialData<SignupBonusCampaignDto>>;
+}) {
+  const [codes, setCodes] = useState<GrantCode[]>(initialData?.ok ? initialData.value : []);
+  const [isLoading, setIsLoading] = useState(!initialData);
+  const [loadError, setLoadError] = useState<string | null>(initialData && !initialData.ok ? initialData.error : null);
   const [mode, setMode] = useState<GenerationMode>("automatic");
   const [name, setName] = useState("");
   const [manualCode, setManualCode] = useState("");
@@ -53,7 +46,7 @@ export default function AdminPromotionsClient() {
     }
   }, []);
 
-  useEffect(() => { void loadCodes(); }, [loadCodes]);
+  useEffect(() => { if (!initialData) void loadCodes(); }, [initialData, loadCodes]);
 
   const summary = useMemo(() => ({
     total: codes.length,
@@ -120,7 +113,7 @@ export default function AdminPromotionsClient() {
       <div className={adminPageClassName}>
         <AdminPageHeader eyebrow="Promotions" title="크레딧 지급 코드" description="캠페인 코드를 생성하고 사용량과 운영 상태를 관리합니다." />
 
-        <SignupBonusControl />
+        <SignupBonusControl initialData={initialCampaign} />
 
         <section className="grid gap-3 sm:grid-cols-3" aria-label="지급 코드 요약">
           <Summary label="전체 코드" value={summary.total} /><Summary label="현재 사용 가능" value={summary.active} /><Summary label="누적 사용" value={summary.redemptions} />

@@ -6,11 +6,12 @@ import { InfoTip } from "@/components/common/InfoTip";
 import AdminPageHeader, { adminPageClassName, adminPageNarrowClassName } from "@/components/admin/shell/AdminPageHeader";
 import { marketingLinks } from "@/lib/marketing/links";
 import type { WeeklyMarketingReport } from "@/lib/marketing/weekly";
+import type { AdminInitialData } from "@/lib/admin/initialData";
 
-export default function AdminMarketingClient() {
-  const [report, setReport] = useState<WeeklyMarketingReport | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+export default function AdminMarketingClient({ initialData }: { initialData?: AdminInitialData<WeeklyMarketingReport> }) {
+  const [report, setReport] = useState<WeeklyMarketingReport | null>(initialData?.ok ? initialData.value : null);
+  const [isLoading, setIsLoading] = useState(!initialData);
+  const [error, setError] = useState<string | null>(initialData && !initialData.ok ? initialData.error : null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -26,7 +27,7 @@ export default function AdminMarketingClient() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (!initialData) void load(); }, [initialData, load]);
 
   return (
     <main className={adminPageClassName}>
