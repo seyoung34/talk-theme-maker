@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readTemplateAttribution } from "@/lib/theme/export/templateAttribution";
 import { createExportEnqueueFailureEvent } from "@/lib/ops/eventFactories";
 import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
 import {
@@ -72,6 +73,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
 
     await recoverStalePendingExportBeforeReservation(userId);
     const reservation = await reserveCreditForExport({
+      ...readTemplateAttribution(formData),
       userId,
       platform: "ios",
       mode,

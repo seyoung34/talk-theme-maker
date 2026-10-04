@@ -1,5 +1,6 @@
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeTemplateAttribution } from "@/lib/theme/export/templateAttribution";
 
 export const exportCreditCost = 1;
 export const signupBonusCampaignKey = "signup_bonus_v1";
@@ -106,6 +107,8 @@ export async function reserveCreditForExport({
   inputBytes,
   referencedAssetBytes = 0,
   referencedAssetFileCount = 0,
+  systemTemplateBundleId,
+  systemTemplateVariantId,
 }: {
   userId: string;
   platform: ExportPlatform;
@@ -121,9 +124,13 @@ export async function reserveCreditForExport({
    */
   referencedAssetBytes?: number;
   referencedAssetFileCount?: number;
+  /** Untrusted analytics metadata; not an entitlement or credit input. */
+  systemTemplateBundleId?: string | null;
+  systemTemplateVariantId?: string | null;
 }) {
   const admin = createAdminClient();
-  const { data, error } = await admin.rpc("reserve_export_credit", {
+  const attribution = normalizeTemplateAttribution(systemTemplateBundleId, systemTemplateVariantId);
+  const reservationArgs = {
     p_user_id: userId,
     p_platform: platform,
     p_export_mode: mode,
@@ -131,7 +138,18 @@ export async function reserveCreditForExport({
     p_input_bytes: inputBytes,
     p_referenced_asset_bytes: referencedAssetBytes,
     p_referenced_asset_file_count: referencedAssetFileCount,
+  };
+  let { data, error } = await admin.rpc("reserve_export_credit_with_template", {
+    ...reservationArgs,
+    p_system_template_bundle_id: attribution.systemTemplateBundleId,
+    p_system_template_variant_id: attribution.systemTemplateVariantId,
   });
+  // Missing-function errors mean the new RPC did not reserve anything. Never retry
+  // business errors or ambiguous network failures: that could charge twice.
+  if (error?.code === "PGRST202" || error?.code === "42883") {
+    console.warn("Template reservation RPC unavailable; using legacy reservation without attribution.");
+    ({ data, error } = await admin.rpc("reserve_export_credit", reservationArgs));
+  }
   if (error) throw error;
 
   const row = (Array.isArray(data) ? data[0] : data) as ReservationRow | null;

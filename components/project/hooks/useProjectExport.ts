@@ -36,6 +36,8 @@ type UseProjectExportOptions = {
   setNotice: Dispatch<SetStateAction<ProjectNotice | null>>;
   slots: ThemeAssetSlot[];
   templateId: ThemeTemplateId;
+  systemTemplateBundleId?: string | null;
+  systemTemplateVariantId?: string | null;
 };
 
 export function useProjectExport({
@@ -55,6 +57,8 @@ export function useProjectExport({
   setNotice,
   slots,
   templateId,
+  systemTemplateBundleId,
+  systemTemplateVariantId,
 }: UseProjectExportOptions) {
   const exportPreparingRef = useRef(false);
   const exportSubmittingRef = useRef(false);
@@ -194,6 +198,8 @@ export function useProjectExport({
         bubbleStretch,
         bubbleFlipX,
         catalogExportUserId: accountState?.user?.id,
+        systemTemplateBundleId,
+        systemTemplateVariantId,
       });
       setExportProgressStep(platform === "ios" ? 2 : 1);
 
@@ -326,6 +332,8 @@ export function useProjectExport({
     setNotice,
     slots,
     templateId,
+    systemTemplateBundleId,
+    systemTemplateVariantId,
   ]);
 
   const cancelExport = useCallback(async () => {

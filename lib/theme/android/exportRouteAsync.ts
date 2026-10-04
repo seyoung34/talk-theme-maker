@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readTemplateAttribution } from "@/lib/theme/export/templateAttribution";
 import { createExportEnqueueFailureEvent } from "@/lib/ops/eventFactories";
 import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
 import {
@@ -64,6 +65,7 @@ export async function handleAsyncAndroidExportRequest(
     const resolved = await resolveCatalogManifestForExport({ manifest, uploadedInputBytes: inputBytes, platform: "android", userId });
     await recoverStalePendingExportBeforeReservation(userId);
     const reservation = await reserveCreditForExport({
+      ...readTemplateAttribution(formData),
       userId,
       platform: "android",
       mode,
