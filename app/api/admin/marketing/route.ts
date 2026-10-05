@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/server";
+import { loadAdminMarketingReport } from "@/lib/admin/listData";
 import { denyNonAdmin } from "@/lib/notices/adminApi";
-import { buildWeeklyReport } from "@/lib/marketing/weekly";
 
 export const dynamic = "force-dynamic";
 
-const weekCount = 8;
 
 /**
  * 주간 마케팅 지표.
@@ -20,22 +18,11 @@ export async function GET() {
   const denied = await denyNonAdmin();
   if (denied) return denied;
 
-  const admin = createAdminClient();
-  const [summary, redirectRequests] = await Promise.all([
-    admin.rpc("marketing_weekly_summary", { p_weeks: weekCount }),
-    admin.rpc("marketing_weekly_clicks", { p_weeks: weekCount }),
-  ]);
-
-  const failed = [summary, redirectRequests].find((result) => result.error);
-  if (failed?.error) {
-    console.error("주간 마케팅 지표 조회 실패", failed.error);
+  try {
+    return NextResponse.json({ report: await loadAdminMarketingReport() });
+  } catch (error) {
+    console.error("주간 마케팅 지표 조회 실패", error);
     return NextResponse.json({ error: "지표를 불러오지 못했습니다." }, { status: 500 });
   }
 
-  return NextResponse.json({
-    report: buildWeeklyReport({
-      summaryRows: summary.data ?? [],
-      redirectRequestRows: redirectRequests.data ?? [],
-    }),
-  });
 }

@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { AlertTriangle, ArrowUpRight } from "lucide-react";
 import OverviewSparkline from "@/components/admin/overview/OverviewSparkline";
 import AdminPageHeader, { adminPageClassName } from "@/components/admin/shell/AdminPageHeader";
-import { loadAdminOverview } from "@/lib/admin/loadOverview";
-import { formatCount, type OverviewCard, type OverviewHistoryRow } from "@/lib/admin/overview";
+import AdminLoadingState from "@/components/admin/shell/AdminLoadingState";
+import { startAdminOverview } from "@/lib/admin/loadOverview";
+import { formatCount, type AdminOverview, type OverviewCard, type OverviewHistoryRow } from "@/lib/admin/overview";
 import { requireAdmin } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +20,8 @@ const timeFormatter = new Intl.DateTimeFormat("ko-KR", {
 
 export default async function AdminPage() {
   await requireAdmin("/admin");
-  const overview = await loadAdminOverview();
-  const attentionCount = overview.attention.filter((card) => card.emphasized).length;
+  const now = new Date();
+  const overview = startAdminOverview(now);
 
   return (
     <main className={adminPageClassName}>
@@ -28,11 +30,27 @@ export default async function AdminPage() {
         title="개요"
         actions={(
           <p className="text-xs font-bold text-[var(--color-on-surface-variant)]">
-            {timeFormatter.format(new Date())} 기준 · 새로고침하면 다시 조회합니다
+            {timeFormatter.format(now)} 기준 · 새로고침하면 다시 조회합니다
           </p>
         )}
       />
+      <Suspense fallback={<AdminLoadingState label="처리 필요 항목을 불러오는 중입니다" />}>
+        <AttentionSection data={overview.attention} />
+      </Suspense>
+      <Suspense fallback={<AdminLoadingState label="오늘과 최근 7일 지표를 불러오는 중입니다" />}>
+        <ActivitySection data={overview.activity} day={overview.day} />
+      </Suspense>
+      <Suspense fallback={<AdminLoadingState label="최근 이슈를 불러오는 중입니다" />}>
+        <IssuesSection data={overview.issues} />
+      </Suspense>
+    </main>
+  );
+}
 
+async function AttentionSection({ data }: { data: Promise<AdminOverview["attention"]> }) {
+  const attention = await data;
+  const attentionCount = attention.filter((card) => card.emphasized).length;
+  return (
       <section aria-labelledby="overview-attention" className="grid gap-3">
         <div className="flex items-baseline gap-2">
           <h2 id="overview-attention" className="text-base font-black text-[var(--color-on-surface)]">처리 필요</h2>
@@ -41,31 +59,41 @@ export default async function AdminPage() {
           </span>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {overview.attention.map((card) => <StatCard key={card.id} card={card} />)}
+          {attention.map((card) => <StatCard key={card.id} card={card} />)}
         </div>
       </section>
+  );
+}
 
+async function ActivitySection({ data, day }: { data: Promise<Pick<AdminOverview, "today" | "history">>; day: string }) {
+  const activity = await data;
+  return (
       <section aria-labelledby="overview-today" className="grid gap-3">
         <div className="flex items-baseline gap-2">
           <h2 id="overview-today" className="text-base font-black text-[var(--color-on-surface)]">오늘</h2>
-          <span className="text-xs font-bold text-[var(--color-on-surface-variant)]">{overview.day} 00:00(KST)부터 · 서비스 운영 기록 기준</span>
+          <span className="text-xs font-bold text-[var(--color-on-surface-variant)]">{day} 00:00(KST)부터 · 서비스 운영 기록 기준</span>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {overview.today.map((card) => <StatCard key={card.id} card={card} />)}
+          {activity.today.map((card) => <StatCard key={card.id} card={card} />)}
         </div>
-        <HistoryTable rows={overview.history} />
+        <HistoryTable rows={activity.history} />
       </section>
+  );
+}
 
+async function IssuesSection({ data }: { data: Promise<AdminOverview["issues"]> }) {
+  const issues = await data;
+  return (
       <section aria-labelledby="overview-issues" className="grid gap-3">
         <h2 id="overview-issues" className="text-base font-black text-[var(--color-on-surface)]">최근 P1·P2 이슈</h2>
         <div className="overflow-hidden rounded-2xl border border-[var(--color-outline-variant)] bg-white">
-          {!overview.issues.ok ? (
+          {!issues.ok ? (
             <p className="px-4 py-4 text-sm font-bold text-[var(--color-on-surface-variant)]">이슈 목록을 불러오지 못했습니다.</p>
-          ) : overview.issues.value.length === 0 ? (
+          ) : issues.value.length === 0 ? (
             <p className="px-4 py-4 text-sm font-bold text-[var(--color-on-surface-variant)]">최근 이슈가 없습니다.</p>
           ) : (
             <ul className="divide-y divide-[var(--color-outline-variant)]">
-              {overview.issues.value.map((issue) => (
+              {issues.value.map((issue) => (
                 <li key={issue.id} className="flex items-center gap-3 px-4 py-3 text-sm">
                   <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-black ${issue.severity === "P1" ? "bg-[var(--color-error)] text-[var(--color-on-error)]" : "bg-[var(--color-error-container)] text-[var(--color-on-error-container)]"}`}>
                     {issue.severity}
@@ -80,7 +108,6 @@ export default async function AdminPage() {
           )}
         </div>
       </section>
-    </main>
   );
 }
 

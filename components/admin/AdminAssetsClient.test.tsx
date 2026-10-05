@@ -74,6 +74,13 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("admin asset paste", () => {
+  it("shows the seeded library while usage loads through its separate API", () => {
+    vi.mocked(fetchAdminAssetUsageIndex).mockImplementation(() => new Promise(() => {}));
+    render(<AdminAssetsClient initialData={{ ok: true, value: { items: [toAdminAssetListItem(asset)], truncated: false } }} />);
+    expect(screen.getByText("Existing bubble")).toBeTruthy();
+    expect(fetchAdminAssetUsageIndex).toHaveBeenCalledTimes(1);
+    expect(fetchAdminAssetUsageIndex).toHaveBeenCalledWith(expect.any(AbortSignal));
+  });
   it.each(["select", "drop"] as const)("protects a new adjusted bubble before replacing it via %s", async (method) => {
     const { container } = render(<AdminAssetsClient />);
     fireEvent.change(screen.getByLabelText("에셋 분류"), { target: { value: "bubble" } });

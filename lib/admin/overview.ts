@@ -60,14 +60,16 @@ export type AdminOverview = {
 };
 
 export function buildAdminOverview(input: AdminOverviewInput): AdminOverview {
-  const snapshot = input.snapshot.ok ? input.snapshot.value : undefined;
-  const lastDay = input.days.at(-1);
-  const today = lastDay?.counts.ok ? lastDay.counts.value : undefined;
-  const trend = (pick: (counts: OpsDailySummaryCounts) => number): TrendPoint[] =>
-    input.days.map(({ day, counts }) => ({ day, value: counts.ok ? pick(counts.value) : null }));
-
   return {
-    attention: [
+    attention: buildOverviewAttention(input),
+    ...buildOverviewActivity(input.days),
+    issues: buildOverviewIssues(input.issues),
+  };
+}
+
+export function buildOverviewAttention(input: Pick<AdminOverviewInput, "snapshot" | "openInquiries" | "refundReviews">): OverviewCard[] {
+  const snapshot = input.snapshot.ok ? input.snapshot.value : undefined;
+  return [
       attentionCard("open-inquiries", "답변 대기 문의", input.openInquiries.ok ? input.openInquiries.value : undefined, {
         href: "/admin/inquiries",
         hint: "아직 답하지 않은 문의",
@@ -78,7 +80,15 @@ export function buildAdminOverview(input: AdminOverviewInput): AdminOverview {
       attentionCard("stale-exports", "멈춘 export", snapshot?.staleExports, { href: "/admin/exports", hint: "15분 넘게 대기 중" }),
       attentionCard("billing-holds", "결제 보류 계정", snapshot?.billingHolds, { hint: "결제 보류로 export가 막힌 계정" }),
       attentionCard("dead-letters", "알림 전송 실패", snapshot?.deadLetterNotifications, { hint: "재시도를 멈춘 텔레그램 알림" }),
-    ],
+  ];
+}
+
+export function buildOverviewActivity(days: OverviewDayInput[]): Pick<AdminOverview, "today" | "history"> {
+  const lastDay = days.at(-1);
+  const today = lastDay?.counts.ok ? lastDay.counts.value : undefined;
+  const trend = (pick: (counts: OpsDailySummaryCounts) => number): TrendPoint[] =>
+    days.map(({ day, counts }) => ({ day, value: counts.ok ? pick(counts.value) : null }));
+  return {
     today: [
       todayCard("signups", "가입", today?.signups, { href: "/admin/analytics", trend: trend((counts) => counts.signups) }),
       todayCard("payments", "결제", today?.paymentsPaid, {
@@ -98,19 +108,22 @@ export function buildAdminOverview(input: AdminOverviewInput): AdminOverview {
         trend: trend((counts) => counts.p1Issues + counts.p2Issues),
       }),
     ],
-    history: input.days.map(({ day, counts }) => (counts.ok ? { day, counts: counts.value } : { day })),
-    issues: input.issues.ok
+    history: days.map(({ day, counts }) => (counts.ok ? { day, counts: counts.value } : { day })),
+  };
+}
+
+export function buildOverviewIssues(issues: Loaded<OpsIssue[]>): AdminOverview["issues"] {
+  return issues.ok
       ? {
           ok: true,
-          value: input.issues.value.map((issue) => ({
+          value: issues.value.map((issue) => ({
             id: issue.eventId,
             severity: issue.severity,
             label: opsEventLabels[issue.eventType] ?? issue.eventType,
             occurredAt: issue.occurredAt,
           })),
         }
-      : { ok: false },
-  };
+      : { ok: false };
 }
 
 const opsEventLabels: Record<OpsEventType, string> = {

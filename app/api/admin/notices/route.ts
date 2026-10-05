@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentAdmin } from "@/lib/supabase/auth";
 import { createAdminClient } from "@/lib/supabase/server";
+import { listAdminNotices } from "@/lib/admin/listData";
 import { denyNonAdmin, toNoticeRow, validateNoticeBody, type NoticeWriteBody } from "@/lib/notices/adminApi";
 import { mapNoticeRow, noticeSelectColumns } from "@/lib/notices/types";
 
@@ -11,17 +12,12 @@ export async function GET() {
   const denied = await denyNonAdmin();
   if (denied) return denied;
 
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("notices")
-    .select(noticeSelectColumns)
-    .order("pinned", { ascending: false })
-    .order("created_at", { ascending: false });
-  if (error) {
+  try {
+    return NextResponse.json({ notices: await listAdminNotices() });
+  } catch (error) {
     console.error("공지 목록 조회 실패", error);
     return NextResponse.json({ error: "공지 목록을 불러오지 못했습니다." }, { status: 500 });
   }
-  return NextResponse.json({ notices: (data ?? []).map(mapNoticeRow) });
 }
 
 export async function POST(request: Request) {

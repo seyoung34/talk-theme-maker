@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { AdminInitialData } from "@/lib/admin/initialData";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowLeft, CheckCircle2, LoaderCircle, RefreshCw, Send } from "lucide-react";
 import { InfoTip } from "@/components/common/InfoTip";
@@ -8,12 +9,13 @@ import AdminPageHeader, { adminPageClassName, adminPageNarrowClassName } from "@
 import { InquiryHeader, InquiryMessageList, formatInquiryDate } from "@/components/inquiry/InquiryThread";
 import { inquiryLimits, inquiryStatuses, inquiryStatusLabels, type Inquiry, type InquiryStatus } from "@/lib/inquiries/types";
 
-export default function AdminInquiriesClient() {
-  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+export default function AdminInquiriesClient({ initialData }: { initialData?: AdminInitialData<Inquiry[]> }) {
+  const [inquiries, setInquiries] = useState<Inquiry[]>(initialData?.ok ? initialData.value : []);
   const [selected, setSelected] = useState<Inquiry | null>(null);
   const [filter, setFilter] = useState<InquiryStatus | "all">("open");
-  const [isLoading, setIsLoading] = useState(true);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(!initialData);
+  const [notice, setNotice] = useState<string | null>(initialData && !initialData.ok ? initialData.error : null);
+  const initialFilter = useRef(initialData ? "open" : null);
   const [answer, setAnswer] = useState("");
   const [isSending, setIsSending] = useState(false);
   const router = useRouter();
@@ -42,7 +44,11 @@ export default function AdminInquiriesClient() {
     }
   }, [filter]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (filter === initialFilter.current) return;
+    initialFilter.current = null;
+    void load();
+  }, [filter, load]);
 
   const summary = useMemo(() => ({ total: inquiries.length }), [inquiries]);
 

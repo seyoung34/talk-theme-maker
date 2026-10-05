@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Gift, LoaderCircle, PauseCircle, PlayCircle, RefreshCw, ShieldCheck } from "lucide-react";
 import type { SignupBonusCampaignDto } from "@/lib/billing/apiTypes";
+import type { AdminInitialData } from "@/lib/admin/initialData";
 
 type CampaignResponse = { campaign?: SignupBonusCampaignDto; error?: string };
 
-export default function SignupBonusControl() {
+export default function SignupBonusControl({ initialData }: { initialData?: Promise<AdminInitialData<SignupBonusCampaignDto>> }) {
   const [campaign, setCampaign] = useState<SignupBonusCampaignDto | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -26,7 +27,17 @@ export default function SignupBonusControl() {
     }
   }, []);
 
-  useEffect(() => { void loadCampaign(); }, [loadCampaign]);
+  useEffect(() => {
+    if (!initialData) { void loadCampaign(); return; }
+    let active = true;
+    void initialData.then((result) => {
+      if (!active) return;
+      if (result.ok) setCampaign(result.value);
+      else setError(result.error);
+      setIsLoading(false);
+    });
+    return () => { active = false; };
+  }, [initialData, loadCampaign]);
 
   const toggleStatus = async () => {
     if (!campaign || isUpdating) return;

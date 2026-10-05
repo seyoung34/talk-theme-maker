@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
+import type { AdminInitialData } from "@/lib/admin/initialData";
 import { AdminAssetConnections, AdminAssetInspector } from "@/components/admin/AdminAssetInspector";
 import { fetchAdminAssetUsageIndex, type AdminAssetUsageIndex } from "@/lib/theme/adminAssetUsage";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -43,6 +44,7 @@ import {
   toAdminAssetListItem,
   withPreviousCatalogRegistration,
   type AdminAssetListItem,
+  type AdminAssetListPayload,
   type AdminAssetListSortDirection,
   type AdminAssetListSortKey,
 } from "@/lib/theme/adminAssetList";
@@ -124,7 +126,9 @@ function getAdminAssetFileKey(file: File) {
   return `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
 }
 
-export default function AdminAssetsClient() {
+export default function AdminAssetsClient({ initialData }: {
+  initialData?: AdminInitialData<AdminAssetListPayload>;
+}) {
   const bubblePreviewPlatform: ThemePlatform = "android";
   const [title, setTitle] = useState("");
   const [assetKind, setAssetKind] = useState<AdminAssetKind>("background");
@@ -261,7 +265,7 @@ export default function AdminAssetsClient() {
     sortDirection: assetSortDirection,
     setSortDirection: setAssetSortDirection,
     refresh: refreshAssets,
-  } = useAdminAssetLibrary({ assetKind, onError: notifyLibraryError });
+  } = useAdminAssetLibrary({ assetKind, onError: notifyLibraryError, initialData });
   // 등록 화면에서는 슬롯을 선택하지 않는다. 기존 저장 계약(slot_role)과 말풍선 편집기의
   // 기준 크기를 위해 kind별 첫 슬롯만 내부 대표값으로 사용한다.
   /**
