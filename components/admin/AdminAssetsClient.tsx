@@ -126,9 +126,8 @@ function getAdminAssetFileKey(file: File) {
   return `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
 }
 
-export default function AdminAssetsClient({ initialData, initialUsage }: {
+export default function AdminAssetsClient({ initialData }: {
   initialData?: AdminInitialData<AdminAssetListPayload>;
-  initialUsage?: Promise<AdminInitialData<AdminAssetUsageIndex>>;
 }) {
   const bubblePreviewPlatform: ThemePlatform = "android";
   const [title, setTitle] = useState("");
@@ -719,21 +718,13 @@ export default function AdminAssetsClient({ initialData, initialUsage }: {
     const controller = new AbortController();
     setUsageIndex(null);
     setUsageError(null);
-    if (initialUsage && usageRevision === 0) {
-      void initialUsage.then((result) => {
-        if (controller.signal.aborted) return;
-        if (result.ok) setUsageIndex(result.value);
-        else setUsageError(result.error);
-      });
-      return () => controller.abort();
-    }
     void fetchAdminAssetUsageIndex(controller.signal).then((index) => {
       if (!controller.signal.aborted) setUsageIndex(index);
     }).catch(() => {
       if (!controller.signal.aborted) setUsageError("연결 정보를 불러오지 못했습니다. 다시 조회해 주세요.");
     });
     return () => controller.abort();
-  }, [initialUsage, usageRevision]);
+  }, [usageRevision]);
   useEffect(() => {
     let lastRefresh = Date.now();
     const refreshUsage = () => {

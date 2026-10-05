@@ -41,3 +41,14 @@ it("distinguishes a missing signup campaign from a failed query", async () => {
     });
   } finally { warning.mockRestore(); }
 });
+
+it("assets page delivers the list without scanning template usage", async () => {
+  mocks.requireAdmin.mockResolvedValue({});
+  mocks.assets.mockResolvedValue({ items: [], truncated: false });
+  const page = await AssetsPage();
+  const client = await page.props.children.type();
+  expect(client.props.initialData).toEqual({ ok: true, value: { items: [], truncated: false } });
+  expect(mocks.assets).toHaveBeenCalledWith("background");
+  expect(mocks.usage).not.toHaveBeenCalled();
+  expect(client.props).not.toHaveProperty("initialUsage");
+});
