@@ -11,11 +11,12 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPromotionsPage() {
   await requireAdmin("/admin/promotions");
-  const initialCampaign = loadAdminInitialData(async () => {
-    const campaign = await getSignupBonusCampaign();
-    if (!campaign) throw new Error("signup_bonus_campaign_missing");
-    return campaign;
-  }, "가입 혜택 캠페인을 불러오지 못했습니다.");
+  const initialCampaign = loadAdminInitialData(getSignupBonusCampaign, "가입 혜택 캠페인을 불러오지 못했습니다.")
+    .then((result): AdminInitialData<SignupBonusCampaignDto> => {
+      if (!result.ok) return result;
+      if (!result.value) return { ok: false, error: "가입 혜택 캠페인을 찾을 수 없습니다." };
+      return { ok: true, value: result.value };
+    });
   return <Suspense fallback={<AdminPageLoadingState />}><InitialPromotions initialCampaign={initialCampaign} /></Suspense>;
 }
 

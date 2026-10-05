@@ -24,3 +24,20 @@ it.each([
   expect(mocks.requireAdmin).toHaveBeenCalledWith(path);
   for (const load of [mocks.load, mocks.campaign, mocks.assets, mocks.usage]) expect(load).not.toHaveBeenCalled();
 });
+
+it("distinguishes a missing signup campaign from a failed query", async () => {
+  mocks.requireAdmin.mockResolvedValue({});
+  mocks.campaign.mockResolvedValue(null);
+  const missingPage = await PromotionsPage();
+  await expect(missingPage.props.children.props.initialCampaign).resolves.toEqual({
+    ok: false, error: "가입 혜택 캠페인을 찾을 수 없습니다.",
+  });
+  mocks.campaign.mockRejectedValue(new Error("database unavailable"));
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    const failedPage = await PromotionsPage();
+    await expect(failedPage.props.children.props.initialCampaign).resolves.toEqual({
+      ok: false, error: "가입 혜택 캠페인을 불러오지 못했습니다.",
+    });
+  } finally { warning.mockRestore(); }
+});
