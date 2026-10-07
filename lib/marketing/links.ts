@@ -86,6 +86,16 @@ export const marketingLinks: Record<string, MarketingLink> = {
     campaign: "friends_test",
     placement: "카카오톡·문자로 직접 전달",
   },
+  // 운영자 개인 인스타 계정(지인 팔로워)의 프로필 링크·스토리·공동 작업 게시물용.
+  // 공개 프로필에 노출되므로 코드만 보고 용도를 짐작하기 어렵게 이니셜로 둔다.
+  // `dm`과 나눈 이유: 같은 지인이라도 인스타로 온 것과 카톡·문자로 받은 것을 구분하기 위해서다.
+  pa: {
+    path: "/",
+    source: "instagram",
+    medium: "social",
+    campaign: "friends_test",
+    placement: "운영자 개인 인스타 계정 프로필 링크·스토리·공동 작업 게시물",
+  },
   yt: {
     path: "/",
     source: "youtube",
