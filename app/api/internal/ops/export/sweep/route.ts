@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { authorizeOpsInternalRequest } from "@/lib/ops/internalAuth";
 import { createAdminClient } from "@/lib/supabase/server";
-import { resolveExportStatus, type AsyncExportPlatform } from "@/lib/theme/export/asyncExportStatus";
+import { resolveExportSettlement, type AsyncExportPlatform } from "@/lib/theme/export/asyncExportStatus";
 
-const maxSweepJobs = 10;
+// Recovery includes paginated execution lookup and failure notification delivery.
+// Keep even a cold, two-platform recovery batch below Free's 50 subrequests.
+const maxSweepJobs = 2;
+const executionLookupPages = 5;
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +32,9 @@ export async function POST(request: Request) {
       .from("export_jobs")
       .select("id,user_id,platform")
       .eq("status", "pending")
+      .order("updated_at", { ascending: true })
       .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
       .limit(maxSweepJobs);
     data = result.data as unknown[] | null;
     if (result.error) throw result.error;
@@ -42,10 +47,21 @@ export async function POST(request: Request) {
   let terminal = 0;
   let stillPending = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (const job of jobs) {
     try {
-      const result = await resolveExportStatus(job.user_id, job.id, job.platform);
+      // Rotate before external work, including failed attempts. A concurrent
+      // settlement is preserved by this conditional update and the billing RPCs.
+      const rotation = await createAdminClient().from("export_jobs")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", job.id).eq("status", "pending").select("id").maybeSingle();
+      if (rotation.error) throw rotation.error;
+      if (!rotation.data) {
+        skipped += 1;
+        continue;
+      }
+      const result = await resolveExportSettlement(job.user_id, job.id, job.platform, { executionLookupPages });
       if (result.kind === "completed" || result.kind === "failed") terminal += 1;
       else if (result.kind === "pending") stillPending += 1;
     } catch (error) {
@@ -58,13 +74,16 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({
+  const summary = {
     scanned: jobs.length,
     terminal,
     stillPending,
     failed,
+    skipped,
     truncated: (data ?? []).length >= maxSweepJobs,
-  });
+  };
+  console.info("[export-sweep] completed", summary);
+  return NextResponse.json(summary);
 }
 
 function isPendingExportJob(value: unknown): value is PendingExportJob {

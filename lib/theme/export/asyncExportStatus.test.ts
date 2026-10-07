@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { recoverStalePendingExportBeforeReservation, resolveExportStatus } from "@/lib/theme/export/asyncExportStatus";
+import { recoverStalePendingExportBeforeReservation, resolveExportSettlement, resolveExportStatus } from "@/lib/theme/export/asyncExportStatus";
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   claimExportRecovery: vi.fn(),
   updateExportJobEnqueueState: vi.fn(),
   getBuilderAccessToken: vi.fn(),
+  invalidateBuilderAccessToken: vi.fn(),
   readBuilderConfig: vi.fn(),
   findBuilderExecution: vi.fn(),
   inspectBuilderInput: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock("@/lib/billing/credits", () => ({
 }));
 vi.mock("@/lib/theme/export/buildJobClient", () => ({
   getBuilderAccessToken: mocks.getBuilderAccessToken,
+  invalidateBuilderAccessToken: mocks.invalidateBuilderAccessToken,
   readBuilderConfig: mocks.readBuilderConfig,
   findBuilderExecution: mocks.findBuilderExecution,
   inspectBuilderInput: mocks.inspectBuilderInput,
@@ -89,6 +91,49 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
       ...overrides,
     };
   }
+
+  it("settles a successful result without authenticating again or signing a URL", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow(), error: null });
+    mocks.completeExportJob.mockResolvedValue(0);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: "success", export_job_id: "job-1", fileName: "theme.apk", bytes: 123, output_path: "job-1/theme.apk" })));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await resolveExportSettlement("user-1", "job-1", "android")).toEqual({ kind: "completed", fileName: "theme.apk" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("result.json");
+    expect(mocks.getBuilderAccessToken).toHaveBeenCalledTimes(1);
+    expect(mocks.completeExportJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a concurrently completed settlement without signing or a watchdog alert", async () => {
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow(), error: null })
+      .mockResolvedValueOnce({ data: pendingRow({ status: "succeeded", file_name: "theme.apk" }), error: null });
+    mocks.failExportJobIfPending.mockResolvedValue({ transitioned: false, status: "succeeded", balance: 0 });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await resolveExportSettlement("user-1", "job-1", "android")).toEqual({ kind: "completed", fileName: "theme.apk" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.scheduleOpsEvent).not.toHaveBeenCalled();
+  });
+
+  it("does no external work for an already completed settlement", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow({ status: "succeeded", file_name: "theme.apk" }), error: null });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await resolveExportSettlement("user-1", "job-1", "android")).toEqual({ kind: "completed", fileName: "theme.apk" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.getBuilderAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("evicts a GCS-rejected token without retrying the request or settling billing", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow(), error: null });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(resolveExportSettlement("user-1", "job-1", "android")).rejects.toThrow("gcs_result_read_failed");
+    expect(mocks.invalidateBuilderAccessToken).toHaveBeenCalledWith("builder-token");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.completeExportJob).not.toHaveBeenCalled();
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+  });
 
   it("shows a concurrently completed job without sending a watchdog alert", async () => {
     mocks.maybeSingle
