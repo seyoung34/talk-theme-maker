@@ -28,6 +28,88 @@ const metrics = async (at: number): Promise<Sample[]> => [
   { ...sample(at, "healthy", "cloudflare_runtime"), observationId: String(Math.floor((at - 120000) / 300000) * 300000), requests: 10, failures: 0 },
 ];
 describe("durable independent monitor coordinator", () => {
+  it("clears fifteen-minute collection backoff on success while preserving missed-window evidence", async () => {
+    const memory = memoryStore(), log = vi.fn(), health = async (at: number) => [sample(at, "healthy")];
+    const collect = vi.fn(metrics);
+    const run = (at: number) => runTick(config, { store: memory.store, now: () => at, health, metrics: collect, log });
+    await run(1060000);
+    collect.mockImplementation(async at => [
+      { ...sample(at, "failed", "cloudflare_collector"), code: "collection_failed" },
+      { ...sample(at, "unknown", "cloudflare_runtime"), code: "collection_unavailable" },
+    ]);
+    for (const at of [1360000, 1420000, 1540000, 1780000, 2260000]) await run(at);
+    expect(memory.read().incidents.cloudflare_collector).toMatchObject({ active: true, failures: 5 });
+    collect.mockImplementation(metrics);
+    await run(3160000);
+    expect(memory.read().incidents.cloudflare_collector).toMatchObject({ active: true, failures: 0, successes: 1 });
+    expect(memory.read().evidence).toContainEqual(expect.objectContaining({ source: "cloudflare_runtime", outcome: "unknown", code: "collection_gap" }));
+    expect(memory.read().evidence.filter(s => s.source === "cloudflare_collector").at(-1)?.code).toBe("collection_ok");
+    expect(log).toHaveBeenCalledWith(expect.objectContaining({ event: "monitor_collection_gap", missingWindows: 6 }));
+    const calls = collect.mock.calls.length;
+    await run(3220000);
+    expect(collect).toHaveBeenCalledTimes(calls); // same successful window is still queried only once
+    await run(3460000); // next window succeeds before the former 15-minute backoff
+    expect(collect).toHaveBeenCalledTimes(calls + 1);
+    expect(memory.read().incidents.cloudflare_collector).toMatchObject({ active: false, failures: 0 });
+    expect(memory.read().pending.filter(e => e.source === "cloudflare_collector").at(-1)?.phase).toBe("recovered");
+  });
+
+  it("does not join successful runtime windows across a thirty-minute observation gap", async () => {
+    const memory = memoryStore(), collect = vi.fn(async (at: number) => {
+      const samples = await metrics(at);
+      samples[1] = { ...samples[1], outcome: "failed", code: "runtime_failure_candidates", requests: 10, failures: 5 };
+      return samples;
+    });
+    const run = (at: number) => runTick(config, { store: memory.store, now: () => at, health: async now => [sample(now, "healthy")], metrics: collect, log: vi.fn() });
+    await run(1060000);
+    collect.mockImplementation(metrics);
+    await run(1360000);
+    expect(memory.read().incidents.cloudflare_runtime).toMatchObject({ active: true, successes: 1 });
+    await run(3160000);
+    expect(memory.read().incidents.cloudflare_runtime).toMatchObject({ active: true, successes: 1, failures: 0 });
+    expect(memory.read().pending.filter(e => e.source === "cloudflare_runtime").map(e => e.phase)).toEqual(["opened"]);
+    const evidence = memory.read().evidence.filter(s => s.source === "cloudflare_runtime");
+    expect(evidence.slice(-2).map(s => [s.code, s.outcome])).toEqual([["collection_gap", "unknown"], ["probe_ok", "healthy"]]);
+    await run(3460000);
+    expect(memory.read().incidents.cloudflare_runtime?.active).toBe(false);
+    expect(memory.read().pending.filter(e => e.source === "cloudflare_runtime").map(e => e.phase)).toEqual(["opened", "recovered"]);
+  });
+
+  it("uses durable incident history when prior window evidence has been evicted during long downtime", async () => {
+    const memory = memoryStore();
+    memory.seed({
+      ...emptyState(),
+      incidents: { cloudflare_runtime: {
+        active: true, successes: 1, failures: 0, openedAt: 1060000,
+        lastQueuedAt: 1060000, lastObservationId: "900000",
+      } },
+      evidence: Array.from({ length: 120 }, (_, i) => sample(2000000 + i, "healthy")),
+    });
+    await runTick(config, { store: memory.store, now: () => 7060000, health: async () => [], metrics, log: vi.fn() });
+    expect(memory.read().incidents.cloudflare_runtime).toMatchObject({ active: true, successes: 1 });
+    expect(memory.read().evidence).toContainEqual(expect.objectContaining({ code: "collection_gap", outcome: "unknown" }));
+    expect(memory.read().pending).toHaveLength(0);
+  });
+
+  it("breaks failed runtime streaks across gaps even when the collected window has unclassified outcomes", async () => {
+    const memory = memoryStore();
+    memory.seed({
+      ...emptyState(), incidents: { cloudflare_runtime: {
+        active: true, successes: 0, failures: 3, openedAt: 1060000,
+        lastQueuedAt: 3160000, lastObservationId: "900000",
+      } },
+    });
+    await runTick(config, {
+      store: memory.store, now: () => 3160000, health: async () => [], log: vi.fn(),
+      metrics: async at => [
+        { ...sample(at, "failed", "cloudflare_collector"), code: "unclassified_outcome" },
+        { ...sample(at, "failed", "cloudflare_runtime"), code: "runtime_failure_candidates", observationId: "3000000", requests: 10, failures: 5 },
+      ],
+    });
+    expect(memory.read().incidents.cloudflare_runtime).toMatchObject({ active: true, failures: 1, successes: 0 });
+    expect(memory.read().incidents.cloudflare_collector?.failures).toBe(1);
+  });
+
   it("persists incident before delivery, retries the same alert after failure, then emits recovery", async () => {
     const memory = memoryStore(), log = vi.fn(), send = vi.fn<(event: Notification) => Promise<void>>(async () => {
       expect(memory.read().pending).toHaveLength(1);

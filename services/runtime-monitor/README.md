@@ -42,7 +42,10 @@ Do not expand paths or run production load tests without revisiting Free request
 GraphQL queries **closed, disjoint 5-minute windows**, delayed by 2 minutes for ingestion,
 with an inclusive end of next boundary minus 1ms. No datetime dimension, pagination or raw paths are requested.
 Each successfully collected window is queried once; failures back off 1/2/4/8/15 minutes.
-A latest-window strategy records collection_gap on missed windows; it does **not** backfill all downtime.
+A latest-window strategy records collection_gap as separate unknown runtime evidence and a
+structured gap log on missed windows; it does **not** backfill all downtime. The new successful
+collection remains collection_ok and clears backoff immediately. Gap evidence resets runtime
+success/failure streaks before the new window, so observations across downtime are not consecutive.
 Valid empty windows/no invocations and unclassified statuses are not proof of recovery.
 CPU values above 10ms alone never alert. Known runtime failure candidates are
 exceededResources/scriptThrewException/internalError. Canceled/clientDisconnected alone do not alert.

@@ -66,22 +66,31 @@ export async function runTick(config: Config, dependencies: Dependencies) {
     return { skipped: false, pending: state.pending.length, deliveryFailed, queueBackpressure: true };
   }
   const window = metricsWindow(startedAt);
-  const lastMetrics = state.evidence.filter(s => s.source === "cloudflare_runtime" && s.code !== "collection_unavailable").at(-1);
+  const lastMetrics = state.evidence.filter(s => s.source === "cloudflare_runtime" && !["collection_unavailable", "collection_gap"].includes(s.code)).at(-1);
+  // The bounded evidence ring can evict an older window during long downtime.
+  // Its last known healthy/failed observation still lives in the incident state.
+  const previousWindow = lastMetrics?.observationId || state.incidents.cloudflare_runtime?.lastObservationId;
   const collector = state.incidents.cloudflare_collector;
   const backoffMs = collector?.failures ? Math.min(900000, 60000 * 2 ** Math.min(collector.failures - 1, 4)) : 0;
   const lastCollector = state.evidence.filter(s => s.source === "cloudflare_collector").at(-1);
-  const shouldCollect = lastMetrics?.observationId !== window.id
+  const shouldCollect = previousWindow !== window.id
     && (!lastCollector || startedAt - lastCollector.at >= backoffMs);
   const [health, metrics] = await Promise.all([
     (dependencies.health ?? (now => collectHealth(config, now)))(startedAt),
     shouldCollect ? (dependencies.metrics ?? (now => collectMetrics(config, now)))(startedAt) : Promise.resolve([]),
   ]);
-  const collected = metrics.find(s => s.source === "cloudflare_collector");
-  // A latest-window collector does not fabricate successful coverage over downtime.
-  if (collected?.outcome === "healthy" && lastMetrics && Number(window.id) - Number(lastMetrics.observationId) > 300000) {
-    collected.outcome = "failed"; collected.code = "collection_gap";
+  const observed = metrics.find(s => s.source === "cloudflare_runtime" && s.code !== "collection_unavailable");
+  const gap: Sample[] = [];
+  // Transport success clears collector backoff. Missing historical windows are
+  // separate unknown evidence, breaking runtime streaks BEFORE the new window.
+  if (observed && previousWindow && Number(window.id) - Number(previousWindow) > 300000) {
+    gap.push({ source: "cloudflare_runtime", outcome: "unknown", code: "collection_gap",
+      at: startedAt, observationId: window.id });
+    log({ event: "monitor_collection_gap", at: startedAt,
+      previousWindow: Number(previousWindow), currentWindow: Number(window.id),
+      missingWindows: (Number(window.id) - Number(previousWindow)) / 300000 - 1 });
   }
-  state = applySamples(state, [...health, ...metrics], config.policy);
+  state = applySamples(state, [...health, ...gap, ...metrics], config.policy);
   ensureLease();
   // Persist incident/outbox BEFORE sending; a process crash cannot lose a queued alert.
   generation = await dependencies.store.save(state, generation);
