@@ -1,0 +1,10 @@
+{
+  "name": "talktheme_monitor_heartbeat",
+  "description": "Independent monitor completed and persisted a tick; configure absence alert separately.",
+  "filter": "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"TALKTHEME_MONITOR_SERVICE\" AND jsonPayload.event=\"monitor_tick_completed\"",
+  "metricDescriptor": {
+    "metricKind": "DELTA",
+    "valueType": "INT64",
+    "unit": "1"
+  }
+}
