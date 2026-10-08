@@ -1,3 +1,4 @@
+import { setObservationStage } from "@/lib/ops/requestObservation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeTemplateAttribution } from "@/lib/theme/export/templateAttribution";
@@ -272,6 +273,7 @@ export async function requestExportCancellation({ userId, exportJobId }: { userI
 }
 
 export async function cancelExportJob({ userId, exportJobId, durationMs }: { userId: string; exportJobId: string; durationMs: number }) {
+  setObservationStage("settlement", "database", exportJobId);
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("cancel_export_job", {
     p_user_id: userId,
@@ -359,6 +361,7 @@ export async function completeExportJob({
   outputBytes: number;
   durationMs: number;
 }) {
+  setObservationStage("settlement", "database", exportJobId);
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("complete_export_job", {
     p_user_id: userId,
@@ -384,6 +387,7 @@ export async function failExportJob({
   errorMessage: string;
   durationMs: number;
 }) {
+  setObservationStage("settlement", "database", exportJobId);
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("fail_export_job", {
     p_user_id: userId,
@@ -409,6 +413,7 @@ export async function failExportJobIfPending({
   errorMessage: string;
   durationMs: number;
 }) {
+  setObservationStage("settlement", "database", exportJobId);
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("fail_export_job_if_pending", {
     p_user_id: userId,

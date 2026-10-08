@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { recoverStalePendingExportBeforeReservation, resolveExportSettlement, resolveExportStatus } from "@/lib/theme/export/asyncExportStatus";
 import { BuildEnqueueError } from "@/lib/theme/export/buildJobClient";
+import { setObservationStage, withRequestObservation } from "@/lib/ops/requestObservation";
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -64,6 +65,7 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -93,6 +95,32 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
       ...overrides,
     };
   }
+
+  it("captures signing authentication failures without exposing raw provider errors", async () => {
+    const jobId = "11111111-1111-1111-1111-111111111111";
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow({ id: jobId, status: "succeeded", file_name: "theme.apk" }), error: null });
+    const failure = new Error("secret-token private@example.test https://signed.test/?token=private");
+    mocks.getBuilderAccessToken.mockRejectedValue(failure);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(withRequestObservation(new Request("https://site.test/?private=yes", { headers: { "cf-ray": "0123456789abcdef-LAX" } }), "/api/export/android/status", "export.status", () => resolveExportStatus("user-private", jobId, "android"))).rejects.toBe(failure);
+    const entry = log.mock.calls[0][0] as Record<string, unknown>;
+    expect(entry).toMatchObject({ event: "operation_failed", correlationId: "0123456789abcdef-LAX", stage: "signing", dependency: "gcp_auth", exportJobId: jobId, errorCode: "signing_failed" });
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret-token|private@example|signed\.test|user-private|private=yes/);
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+  });
+
+  it("isolates stale recovery so a subsequent reservation failure never names the old job", async () => {
+    const oldJob = "11111111-1111-1111-1111-111111111111";
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow({ id: oldJob, status: "succeeded", file_name: "theme.apk" }), error: null });
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(withRequestObservation(new Request("https://site.test", { headers: { "cf-ray": "0123456789abcdef-LAX" } }), "/api/export/android", "export.enqueue", async () => {
+      await recoverStalePendingExportBeforeReservation("user-private");
+      throw new Error("reservation-secret");
+    })).rejects.toThrow("reservation-secret");
+    const entry = log.mock.calls[0][0] as Record<string, unknown>;
+    expect(entry).not.toHaveProperty("exportJobId");
+    expect(JSON.stringify(entry)).not.toContain("reservation-secret");
+  });
 
   it("keeps incomplete history pending before the deadline, then times out without re-enqueueing", async () => {
     vi.useFakeTimers();
@@ -311,6 +339,42 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
       exportJobId: "job-1",
       attempt: 1,
     }));
+  });
+
+  it.each(["cloud_run", "database"] as const)("preserves recovery %s failure before refund changes its observation", async (dependency) => {
+    const jobId = "11111111-1111-1111-1111-111111111111";
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow({
+      id: jobId, created_at: new Date(Date.now() - 11 * 60_000).toISOString(), enqueue_state: "input_ready",
+    }), error: null });
+    mocks.findBuilderExecution.mockResolvedValue(null);
+    mocks.inspectBuilderInput.mockResolvedValue({ complete: true });
+    mocks.claimExportRecovery.mockResolvedValue({ claimed: true, enqueueAttempt: 1 });
+    const error = dependency === "cloud_run"
+      ? new BuildEnqueueError("job_run_failed", "private-token")
+      : new TypeError("private-token");
+    mocks.runBuilderJob.mockResolvedValue({ operationName: "operations/recovered" });
+    if (dependency === "cloud_run") mocks.runBuilderJob.mockRejectedValue(error);
+    else mocks.updateExportJobEnqueueState.mockRejectedValue(error);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.failExportJobIfPending.mockImplementation(async () => {
+      expect(log).toHaveBeenCalledOnce();
+      setObservationStage("settlement", "database", jobId);
+      return { transitioned: true, status: "failed" };
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+    const result = await withRequestObservation(new Request("https://site.test"), "/api/export/android/status", "export.status",
+      () => resolveExportSettlement("user-private", jobId, "android"));
+    expect(result).toMatchObject({ kind: "failed", reason: "enqueue_recovery_failed" });
+    expect(log.mock.calls[0][0]).toMatchObject({
+      stage: "jobs_enqueue", dependency, exportJobId: jobId,
+      errorCode: dependency === "cloud_run" ? "job_run_failed" : "jobs_enqueue_failed",
+    });
+    expect(mocks.scheduleOpsEvent.mock.calls[0][0].details).toMatchObject({
+      stage: "jobs_enqueue", dependency, errorCode: "enqueue_recovery_failed",
+    });
+    expect(JSON.stringify([log.mock.calls, mocks.scheduleOpsEvent.mock.calls])).not.toMatch(/private-token|user-private/);
+    expect(mocks.runBuilderJob).toHaveBeenCalledOnce();
+    expect(mocks.failExportJobIfPending).toHaveBeenCalledOnce();
   });
 
   it("starts recovery at the ten-minute reservation cutoff without failing an active build", async () => {

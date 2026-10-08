@@ -1,3 +1,4 @@
+import { withObservationJob, recordOperationFailure, setObservationStage, withRequestObservation } from "@/lib/ops/requestObservation";
 import { NextResponse } from "next/server";
 import { authorizeOpsInternalRequest } from "@/lib/ops/internalAuth";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -21,6 +22,10 @@ type PendingExportJob = {
 };
 
 export async function POST(request: Request) {
+  return withRequestObservation(request, "/api/internal/ops/export/sweep", "export.sweep", () => handleRequest(request));
+}
+
+async function handleRequest(request: Request) {
   const auth = authorizeOpsInternalRequest(request);
   if (!auth.ok) {
     return NextResponse.json(
@@ -29,6 +34,7 @@ export async function POST(request: Request) {
     );
   }
 
+  setObservationStage("result_read", "database");
   let data: unknown[] | null = null;
   try {
     const admin = createAdminClient();
@@ -42,8 +48,8 @@ export async function POST(request: Request) {
       .limit(maxSweepJobs);
     data = result.data as unknown[] | null;
     if (result.error) throw result.error;
-  } catch (error) {
-    console.error("[export-sweep] query_failed", { name: error instanceof Error ? error.name : "unknown" });
+  } catch {
+    recordOperationFailure("result_read_failed", 500);
     return NextResponse.json({ error: "export sweep 대상을 읽지 못했습니다.", reason: "query_failed" }, { status: 500 });
   }
 
@@ -55,26 +61,24 @@ export async function POST(request: Request) {
 
   for (const job of jobs) {
     try {
-      // Rotate before external work, including failed attempts. A concurrent
-      // settlement is preserved by this conditional update and the billing RPCs.
-      const rotation = await createAdminClient().from("export_jobs")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", job.id).eq("status", "pending").select("id").maybeSingle();
-      if (rotation.error) throw rotation.error;
-      if (!rotation.data) {
-        skipped += 1;
-        continue;
-      }
-      const result = await resolveExportSettlement(job.user_id, job.id, job.platform, { executionLookupPages });
-      if (result.kind === "completed" || result.kind === "failed") terminal += 1;
-      else if (result.kind === "pending") stillPending += 1;
-    } catch (error) {
-      failed += 1;
-      console.error("[export-sweep] job_failed", {
-        exportJobId: job.id,
-        platform: job.platform,
-        name: error instanceof Error ? error.name : "unknown",
+      await withObservationJob(job.id, async () => {
+        // Rotate before external work, including failed attempts. A concurrent
+        // settlement is preserved by this conditional update and the billing RPCs.
+        const rotation = await createAdminClient().from("export_jobs")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", job.id).eq("status", "pending").select("id").maybeSingle();
+        if (rotation.error) throw rotation.error;
+        if (!rotation.data) {
+          skipped += 1;
+          return;
+        }
+        const result = await resolveExportSettlement(job.user_id, job.id, job.platform, { executionLookupPages });
+        if (result.kind === "completed" || result.kind === "failed") terminal += 1;
+        else if (result.kind === "pending") stillPending += 1;
       });
+    } catch {
+      failed += 1;
+      // withObservationJob already records one contextual failure.
     }
   }
 

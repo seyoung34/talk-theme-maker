@@ -39,10 +39,31 @@ export class GrobleWebhookError extends Error {
   constructor(
     public readonly code: string,
     message: string,
+    public readonly fieldPath?: string,
   ) {
     super(message);
     this.name = "GrobleWebhookError";
   }
+}
+
+const diagnosticFields = new Set([
+  "payload", "id", "version", "occurredat", "data", "data.object", "merchantuid",
+  "content", "content.id", "content.title", "content.paymenttype", "content.inputmode",
+  "options", "options[0]", "options[0].optionid", "options[0].name", "options[0].quantity", "options[0].subtotal",
+  "pricing", "pricing.currency", "pricing.finalamount", "sellerreference", "paymentid",
+  "cancelrequest", "cancelrequest.requestedat", "refund", "refund.amount", "refund.refundedat",
+]);
+
+/** Only parser-owned schema names, never the error message or payload keys/values. */
+export function safeGrobleFieldPath(error: unknown) {
+  if (!(error instanceof GrobleWebhookError) || typeof error.fieldPath !== "string") return undefined;
+  const field = error.fieldPath.toLowerCase();
+  return /^[a-z0-9_.\[\]]{1,80}$/i.test(error.fieldPath) && diagnosticFields.has(field) ? error.fieldPath : undefined;
+}
+
+/** Names only: bounded diagnostic hints; never read or log header values. */
+export function diagnosticGrobleHeaderNames(headers: Headers) {
+  return [...headers.keys()].filter((name) => name.length <= 64 && /^x-[a-z0-9-]+$/.test(name)).sort().slice(0, 30);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -50,13 +71,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function requireRecord(value: unknown, field: string) {
-  if (!isRecord(value)) throw new GrobleWebhookError("invalid_payload", `${field} must be an object`);
+  if (!isRecord(value)) throw new GrobleWebhookError("invalid_payload", `${field} must be an object`, field);
   return value;
 }
 
 function requireString(value: unknown, field: string) {
   if (typeof value !== "string" || value.length === 0) {
-    throw new GrobleWebhookError("invalid_payload", `${field} must be a non-empty string`);
+    throw new GrobleWebhookError("invalid_payload", `${field} must be a non-empty string`, field);
   }
   return value;
 }
@@ -68,7 +89,7 @@ function requireOptionalString(value: unknown, field: string, fallback: string) 
 
 function requirePositiveInteger(value: unknown, field: string) {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
-    throw new GrobleWebhookError("invalid_payload", `${field} must be a positive integer`);
+    throw new GrobleWebhookError("invalid_payload", `${field} must be a positive integer`, field);
   }
   return value;
 }
@@ -76,7 +97,7 @@ function requirePositiveInteger(value: unknown, field: string) {
 function requireIsoDate(value: unknown, field: string) {
   const text = requireString(value, field);
   if (!Number.isFinite(Date.parse(text))) {
-    throw new GrobleWebhookError("invalid_payload", `${field} must be an ISO-8601 timestamp`);
+    throw new GrobleWebhookError("invalid_payload", `${field} must be an ISO-8601 timestamp`, field);
   }
   return text;
 }
@@ -90,7 +111,7 @@ function requireUuid(value: unknown, field: string) {
     typeof value !== "string"
     || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
   ) {
-    throw new GrobleWebhookError("invalid_reference", `${field} must be a UUID`);
+    throw new GrobleWebhookError("invalid_reference", `${field} must be a UUID`, field);
   }
   return value;
 }
@@ -143,7 +164,7 @@ export function parseGrobleWebhook(rawBody: string): ParsedGrobleEvent {
   const inputMode = requireString(content.inputMode, "content.inputMode");
   const options = object.options;
   if (!Array.isArray(options) || options.length !== 1) {
-    throw new GrobleWebhookError("invalid_payload", "options must contain exactly one item");
+    throw new GrobleWebhookError("invalid_payload", "options must contain exactly one item", "options");
   }
   const option = requireRecord(options[0], "options[0]");
   const optionId = requireString(option.optionId, "options[0].optionId");

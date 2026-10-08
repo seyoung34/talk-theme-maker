@@ -1,3 +1,4 @@
+import { setObservationStage } from "@/lib/ops/requestObservation";
 import { createFixedLengthBody } from "@/lib/theme/export/fixedLengthBody";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createInputArchiveStream, INPUT_ARCHIVE_FILE_NAME, measureInputArchive } from "@/lib/theme/export/inputArchive";
@@ -163,6 +164,7 @@ export function readBuilderConfig(options: { platform?: BuilderPlatform; jobName
 }
 
 export async function enqueueBuild(bundle: ExportBuildBundle, options: EnqueueBuildOptions = {}): Promise<BuilderRunResult> {
+  setObservationStage("input_upload", "gcp_auth", bundle.exportJobId);
   const config = readBuilderConfig(options);
   const accessToken = await getBuilderAccessToken(config);
   const prefix = bundle.exportJobId;
@@ -191,6 +193,7 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: EnqueueBu
     files_archive: INPUT_ARCHIVE_FILE_NAME,
   });
 
+  setObservationStage("input_upload", "gcs", bundle.exportJobId);
   await Promise.all([
     uploadObject(config.inputBucket, `${prefix}/bundle.json`, new TextEncoder().encode(bundleJson), "application/json", accessToken),
     uploadStreamedObject(
@@ -205,6 +208,7 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: EnqueueBu
   await options.progress?.onInputReady?.();
 
   await options.progress?.onTriggering?.();
+  setObservationStage("jobs_enqueue", "cloud_run", bundle.exportJobId);
   const result = await runBuilderJob(config, accessToken, {
     inputUri: `gs://${config.inputBucket}/${prefix}`,
     outputUri: `gs://${config.outputBucket}/${prefix}`,

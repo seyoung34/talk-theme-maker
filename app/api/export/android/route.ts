@@ -1,3 +1,4 @@
+import { withRequestObservation } from "@/lib/ops/requestObservation";
 import { NextResponse } from "next/server";
 import { handleAsyncAndroidExportRequest } from "@/lib/theme/android/exportRouteAsync";
 import { themeVersionName } from "@/lib/theme/exportRequest";
@@ -9,5 +10,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  return withRequestObservation(request, "/api/export/android", "export.enqueue", () => handleRequest(request));
+}
+
+async function handleRequest(request: Request) {
   return handleAsyncAndroidExportRequest(request);
 }

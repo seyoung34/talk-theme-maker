@@ -1,3 +1,4 @@
+import { safeTelemetry, setObservationStage, recordOperationFailure, withObservationJob } from "@/lib/ops/requestObservation";
 import { createAdminClient } from "@/lib/supabase/server";
 import {
   cancelExportJob,
@@ -78,6 +79,7 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
 
 /** Cron and reservation recovery settle jobs without creating a download URL. */
 export async function resolveExportSettlement(userId: string, exportJobId: string, platform: AsyncExportPlatform, options: { executionLookupPages?: number } = {}): Promise<AsyncExportSettlementResult> {
+  setObservationStage("result_read", "database", exportJobId);
   const row = await readExportJob(userId, exportJobId, platform);
   if (!row) return { kind: "not_found" };
 
@@ -89,7 +91,9 @@ export async function resolveExportSettlement(userId: string, exportJobId: strin
   if (row.cancel_requested_at) return resolveCancellation(userId, exportJobId, platform, row);
 
   const config = readPlatformBuilderConfig(platform);
+  setObservationStage("result_read", "gcp_auth", exportJobId);
   const accessToken = await getBuilderAccessToken(config);
+  setObservationStage("result_read", "gcs", exportJobId);
   const result = await downloadResultJson(config, accessToken, exportJobId);
 
   if (!result) {
@@ -119,22 +123,18 @@ export async function resolveExportSettlement(userId: string, exportJobId: strin
         errorCode: "build_watchdog_timeout",
         errorMessage: "내보내기 작업이 시간 내에 끝나지 않았습니다.",
         durationMs,
-      }).catch((settleError) => {
-        console.error("[export-watchdog] transition_failed", {
-          exportJobId,
-          platform,
-          name: settleError instanceof Error ? settleError.name : "unknown",
-        });
+      }).catch(() => {
+        recordOperationFailure("settlement_failed");
         return null;
       });
       if (settlement?.transitioned) {
-        scheduleOpsEvent(createExportFailureEvent({
+        safeTelemetry(() => scheduleOpsEvent(createExportFailureEvent({
           platform,
           exportJobId,
           errorCode: "build_watchdog_timeout",
           durationMs,
           watchdog: true,
-        }));
+        })));
         return { kind: "failed", error: "내보내기 작업이 시간 내에 끝나지 않았습니다.", reason: "build_watchdog_timeout" };
       }
 
@@ -208,6 +208,7 @@ async function reconcileExportEnqueue({
   // source of truth for completion.
   if (row.builder_operation_name || row.builder_execution_name || row.enqueue_state === "triggered" || (row.enqueue_state === "running" && !row.builder_started_at)) {
     if (row.builder_execution_name) {
+      setObservationStage("jobs_enqueue", "database", exportJobId);
       await updateExportJobEnqueueState({
         userId,
         exportJobId,
@@ -218,8 +219,10 @@ async function reconcileExportEnqueue({
     return { kind: "continue" };
   }
 
+  setObservationStage("result_read", "cloud_run", exportJobId);
   const execution = await findBuilderExecution(config, accessToken, exportJobId, { createdAt: row.created_at, ...(executionLookupPages === undefined ? {} : { maxPages: executionLookupPages }) });
   if (execution) {
+    setObservationStage("jobs_enqueue", "database", exportJobId);
     await updateExportJobEnqueueState({
       userId,
       exportJobId,
@@ -235,6 +238,7 @@ async function reconcileExportEnqueue({
   // not carry EXPORT_JOB_ID and must not receive a speculative duplicate run.
   if (!isRecoveryEligible(row)) return { kind: "continue" };
 
+  setObservationStage("input_upload", "gcs", exportJobId);
   const inspection = await inspectBuilderInput(config, accessToken, exportJobId);
   if (!inspection.complete) {
     return settleRecoveryFailure({
@@ -248,6 +252,7 @@ async function reconcileExportEnqueue({
   }
 
   if (row.enqueue_attempt >= 1) return { kind: "continue" };
+  setObservationStage("jobs_enqueue", "database", exportJobId);
   const claim = await claimExportRecovery({ userId, exportJobId, expectedAttempt: row.enqueue_attempt });
   if (!claim.claimed) {
     const latestRow = await readExportJob(userId, exportJobId, platform);
@@ -259,6 +264,7 @@ async function reconcileExportEnqueue({
   }
 
   try {
+    setObservationStage("jobs_enqueue", "cloud_run", exportJobId);
     const run = await runBuilderJob(config, accessToken, {
       inputUri: `gs://${config.inputBucket}/${exportJobId}`,
       outputUri: `gs://${config.outputBucket}/${exportJobId}`,
@@ -266,6 +272,7 @@ async function reconcileExportEnqueue({
       attempt: claim.enqueueAttempt,
     });
     const now = new Date().toISOString();
+    setObservationStage("jobs_enqueue", "database", exportJobId);
     const updated = await updateExportJobEnqueueState({
       userId,
       exportJobId,
@@ -279,15 +286,17 @@ async function reconcileExportEnqueue({
     return { kind: "pending", stage: "queued" };
   } catch (error) {
     if (error instanceof BuildEnqueueError && error.ambiguous) {
+      setObservationStage("jobs_enqueue", "database", exportJobId);
       await updateExportJobEnqueueState({
         userId,
         exportJobId,
         state: "trigger_ambiguous",
         triggeredAt: new Date().toISOString(),
         recoveryReason: "ambiguous_cloud_run_response",
-      }).catch(() => undefined);
+      }).catch(() => { recordOperationFailure("jobs_enqueue_failed"); });
       return { kind: "pending", stage: "queued" };
     }
+    recordOperationFailure(error instanceof BuildEnqueueError ? error.code : "jobs_enqueue_failed", undefined, error);
     return settleRecoveryFailure({
       userId,
       exportJobId,
@@ -325,6 +334,11 @@ async function settleRecoveryFailure({
   errorMessage: string;
   durationMs: number;
 }): Promise<ExportEnqueueRecoveryResult> {
+  // Capture the cause before the refund RPC changes the observation to settlement/database.
+  const failureEvent = safeTelemetry(() => createExportFailureEvent({
+    platform, exportJobId, errorCode, durationMs,
+    watchdog: errorCode === "build_watchdog_timeout",
+  }));
   const settlement = await failExportJobIfPending({
     userId,
     exportJobId,
@@ -333,7 +347,7 @@ async function settleRecoveryFailure({
     durationMs,
   });
   if (settlement.transitioned) {
-    scheduleExportFailureEvent(platform, exportJobId, errorCode, durationMs);
+    if (failureEvent) safeTelemetry(() => scheduleOpsEvent(failureEvent));
     return { kind: "failed", result: { kind: "failed", error: errorMessage, reason: errorCode } };
   }
   return { kind: "settled", result: await resolveRecoverySettlement(userId, exportJobId, platform) };
@@ -359,16 +373,17 @@ async function resolveCancellation(userId: string, exportJobId: string, platform
 }
 
 function scheduleExportFailureEvent(platform: AsyncExportPlatform, exportJobId: string, errorCode: string, durationMs: number) {
-  scheduleOpsEvent(createExportFailureEvent({
+  safeTelemetry(() => scheduleOpsEvent(createExportFailureEvent({
     platform,
     exportJobId,
     errorCode,
     durationMs,
     watchdog: errorCode === "build_watchdog_timeout",
-  }));
+  })));
 }
 
 async function readExportJob(userId: string, exportJobId: string, platform: AsyncExportPlatform) {
+  setObservationStage("result_read", "database", exportJobId);
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("export_jobs")
@@ -401,7 +416,7 @@ export async function recoverStalePendingExportBeforeReservation(userId: string)
 
   const row = data as Pick<ExportJobRow, "id" | "platform" | "created_at"> | null;
   if (!row || Date.now() - new Date(row.created_at).getTime() <= enqueueRecoveryStaleMs) return;
-  await resolveExportSettlement(userId, row.id, row.platform);
+  await withObservationJob(row.id, () => resolveExportSettlement(userId, row.id, row.platform));
 }
 
 async function resolveSettledExportStatus(row: ExportJobRow, platform: AsyncExportPlatform, exportJobId: string): Promise<AsyncExportSettlementResult> {
@@ -418,6 +433,7 @@ async function resolveSettledExportStatus(row: ExportJobRow, platform: AsyncExpo
 }
 
 export async function resolveExportDownload(userId: string, exportJobId: string, platform: AsyncExportPlatform): Promise<AsyncExportDownloadResult> {
+  setObservationStage("result_read", "database", exportJobId);
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("export_jobs")
@@ -432,7 +448,9 @@ export async function resolveExportDownload(userId: string, exportJobId: string,
   if (row.status !== "succeeded" || !row.file_name) return { kind: "not_ready" };
 
   const config = readPlatformBuilderConfig(platform);
+  setObservationStage("result_read", "gcp_auth", exportJobId);
   const accessToken = await getBuilderAccessToken(config);
+  setObservationStage("result_read", "gcs", exportJobId);
   const objectPath = `${exportJobId}/${row.file_name}`;
   if (!(await outputObjectExists(config, accessToken, objectPath))) return { kind: "expired" };
 
@@ -520,6 +538,7 @@ async function outputObjectExists(config: BuilderConfig, accessToken: string, ob
 }
 
 async function signOutputUrl(platform: AsyncExportPlatform, exportJobId: string, fileName: string) {
+  setObservationStage("signing", "gcp_auth", exportJobId);
   const config = readPlatformBuilderConfig(platform);
   const accessToken = await getBuilderAccessToken(config);
   return signOutputObject(config, accessToken, `${exportJobId}/${fileName}`);
@@ -548,6 +567,7 @@ async function signOutputObject(config: BuilderConfig, accessToken: string, obje
   const canonicalRequest = ["GET", canonicalUri, canonicalQueryString, canonicalHeaders, "host", "UNSIGNED-PAYLOAD"].join("\n");
   const hashedCanonicalRequest = await sha256Hex(canonicalRequest);
   const stringToSign = ["GOOG4-RSA-SHA256", timestamp, credentialScope, hashedCanonicalRequest].join("\n");
+  setObservationStage("signing", "iam");
   const signatureHex = await signBlob(config.builderServiceAccount, accessToken, stringToSign);
   return `https://storage.googleapis.com${canonicalUri}?${canonicalQueryString}&X-Goog-Signature=${signatureHex}`;
 }

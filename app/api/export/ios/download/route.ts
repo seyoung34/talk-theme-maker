@@ -1,3 +1,4 @@
+import { recordOperationFailure, setObservationStage, withRequestObservation } from "@/lib/ops/requestObservation";
 import { NextResponse } from "next/server";
 import { getCurrentUserOrNull } from "@/lib/billing/credits";
 import { resolveIosExportDownload } from "@/lib/theme/ios/iosExportStatus";
@@ -7,6 +8,10 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  return withRequestObservation(request, "/api/export/ios/download", "export.download", () => handleRequest(request));
+}
+
+async function handleRequest(request: Request) {
   const user = await getCurrentUserOrNull();
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다.", reason: "unauthenticated" }, { status: 401 });
 
@@ -16,6 +21,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    setObservationStage("result_read", "database", jobId);
     const result = await resolveIosExportDownload(user.id, jobId);
     switch (result.kind) {
       case "not_found":
@@ -30,8 +36,8 @@ export async function GET(request: Request) {
       case "ready":
         return NextResponse.json({ downloadUrl: result.downloadUrl, fileName: result.fileName });
     }
-  } catch (error) {
-    console.error("[ios-export] download_link_failed", error);
+  } catch {
+    recordOperationFailure(undefined, 500);
     return NextResponse.json({ error: "다운로드 링크를 발급하지 못했습니다.", reason: "download_link_failed" }, { status: 500 });
   }
 }
