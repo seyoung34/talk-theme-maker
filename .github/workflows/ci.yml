@@ -46,6 +46,10 @@ jobs:
         if: '!cancelled()'
         run: npx tsc -p services/ios-builder/tsconfig.json --noEmit
 
+      - name: Typecheck independent monitor
+        if: '!cancelled()'
+        run: npx tsc -p services/runtime-monitor/tsconfig.json --noEmit
+
       # Baseline is the warning count at the time CI was introduced. Errors always fail.
       # Lower this number as warnings get cleaned up; never raise it.
       - name: Lint
