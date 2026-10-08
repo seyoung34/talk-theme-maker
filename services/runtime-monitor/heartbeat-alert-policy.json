@@ -1,0 +1,27 @@
+{
+  "displayName": "TalkTheme independent monitor heartbeat missing",
+  "enabled": false,
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "No persisted completed tick for 5 minutes",
+      "conditionAbsent": {
+        "filter": "metric.type=\"logging.googleapis.com/user/talktheme_monitor_heartbeat\" AND resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"TALKTHEME_MONITOR_SERVICE\"",
+        "duration": "300s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "60s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ],
+        "trigger": { "count": 1 }
+      }
+    }
+  ],
+  "notificationChannels": [],
+  "documentation": {
+    "mimeType": "text/markdown",
+    "content": "Monitor heartbeat missing. Check Scheduler executions, Cloud Run revision startup/config, IAM, state bucket and Telegram delivery logs. This does not by itself prove talktheme.shop is down. Requires first heartbeat, approved notification channels and a deliberate isolated monitor-stop test before activation."
+  }
+}
