@@ -95,10 +95,18 @@ export async function resolveExportSettlement(userId: string, exportJobId: strin
   if (!result) {
     const durationMs = Date.now() - new Date(row.created_at).getTime();
     if (durationMs > enqueueRecoveryStaleMs) {
-      const recovery = await reconcileExportEnqueue({ userId, exportJobId, platform, row, config, accessToken, durationMs, executionLookupPages: options.executionLookupPages });
-      if (recovery.kind === "pending") return { kind: "pending", stage: recovery.stage };
-      if (recovery.kind === "failed") return recovery.result;
-      if (recovery.kind === "settled") return recovery.result;
+      try {
+        const recovery = await reconcileExportEnqueue({ userId, exportJobId, platform, row, config, accessToken, durationMs, executionLookupPages: options.executionLookupPages });
+        if (recovery.kind === "pending") return { kind: "pending", stage: recovery.stage };
+        if (recovery.kind === "failed") return recovery.result;
+        if (recovery.kind === "settled") return recovery.result;
+      } catch (error) {
+        if (!(error instanceof BuildEnqueueError) || error.code !== "builder_execution_lookup_incomplete") throw error;
+        // Incomplete history cannot authorize another run. Before the deadline
+        // leave the job pending; after it, allow the existing conditional watchdog
+        // settlement even if every bounded search starts at the same first page.
+        if (durationMs <= getWatchdogStaleMs(platform)) return { kind: "pending", stage: row.stage };
+      }
     }
 
     // The recovery threshold is deliberately earlier than the terminal

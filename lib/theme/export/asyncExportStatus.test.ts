@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { recoverStalePendingExportBeforeReservation, resolveExportSettlement, resolveExportStatus } from "@/lib/theme/export/asyncExportStatus";
+import { BuildEnqueueError } from "@/lib/theme/export/buildJobClient";
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -29,7 +30,8 @@ vi.mock("@/lib/billing/credits", () => ({
   claimExportRecovery: mocks.claimExportRecovery,
   updateExportJobEnqueueState: mocks.updateExportJobEnqueueState,
 }));
-vi.mock("@/lib/theme/export/buildJobClient", () => ({
+vi.mock("@/lib/theme/export/buildJobClient", async (original) => ({
+  BuildEnqueueError: (await original<typeof import("@/lib/theme/export/buildJobClient")>()).BuildEnqueueError,
   getBuilderAccessToken: mocks.getBuilderAccessToken,
   invalidateBuilderAccessToken: mocks.invalidateBuilderAccessToken,
   readBuilderConfig: mocks.readBuilderConfig,
@@ -91,6 +93,49 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
       ...overrides,
     };
   }
+
+  it("keeps incomplete history pending before the deadline, then times out without re-enqueueing", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("ANDROID_EXPORT_WATCHDOG_MS", String(25 * 60_000));
+    const row = pendingRow({ created_at: new Date(Date.now() - 11 * 60_000).toISOString(), enqueue_state: "input_ready" });
+    mocks.maybeSingle.mockResolvedValue({ data: row, error: null });
+    mocks.findBuilderExecution.mockRejectedValue(new BuildEnqueueError("builder_execution_lookup_incomplete", "incomplete"));
+    mocks.failExportJobIfPending.mockResolvedValue({ transitioned: true, status: "failed", balance: 1 });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+    for (let tick = 0; tick < 2; tick++) {
+      expect(await resolveExportSettlement("user-1", "job-1", "android", { executionLookupPages: 5 })).toEqual({ kind: "pending", stage: "building" });
+      vi.setSystemTime(Date.now() + 5 * 60_000);
+    }
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+    vi.setSystemTime(Date.now() + 5 * 60_000);
+    expect(await resolveExportSettlement("user-1", "job-1", "android", { executionLookupPages: 5 })).toMatchObject({ kind: "failed", reason: "build_watchdog_timeout" });
+    expect(mocks.failExportJobIfPending).toHaveBeenCalledTimes(1);
+    expect(mocks.scheduleOpsEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.inspectBuilderInput).not.toHaveBeenCalled();
+    expect(mocks.claimExportRecovery).not.toHaveBeenCalled();
+    expect(mocks.runBuilderJob).not.toHaveBeenCalled();
+  });
+
+  it("preserves a concurrent completion when incomplete history reaches the watchdog", async () => {
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow({ created_at: new Date(Date.now() - 30 * 60_000).toISOString(), enqueue_state: "input_ready" }), error: null })
+      .mockResolvedValueOnce({ data: pendingRow({ status: "succeeded", file_name: "theme.apk" }), error: null });
+    mocks.findBuilderExecution.mockRejectedValue(new BuildEnqueueError("builder_execution_lookup_incomplete", "incomplete"));
+    mocks.failExportJobIfPending.mockResolvedValue({ transitioned: false, status: "succeeded", balance: 0 });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+    expect(await resolveExportSettlement("user-1", "job-1", "android")).toEqual({ kind: "completed", fileName: "theme.apk" });
+    expect(mocks.scheduleOpsEvent).not.toHaveBeenCalled();
+    expect(mocks.runBuilderJob).not.toHaveBeenCalled();
+  });
+
+  it("does not turn an execution lookup outage into a timeout refund", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow({ created_at: new Date(Date.now() - 30 * 60_000).toISOString(), enqueue_state: "input_ready" }), error: null });
+    const error = new BuildEnqueueError("builder_execution_lookup_failed", "unavailable");
+    mocks.findBuilderExecution.mockRejectedValue(error);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+    await expect(resolveExportSettlement("user-1", "job-1", "android")).rejects.toBe(error);
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+    expect(mocks.runBuilderJob).not.toHaveBeenCalled();
+  });
 
   it("settles a successful result without authenticating again or signing a URL", async () => {
     mocks.maybeSingle.mockResolvedValue({ data: pendingRow(), error: null });

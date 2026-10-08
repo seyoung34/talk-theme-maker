@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 import type { BuilderConfig } from "@/lib/theme/export/buildJobClient";
 
-const state = vi.hoisted(() => ({ calls: 0, recover: false, twoPlatforms: false, config: {} as BuilderConfig }));
+const state = vi.hoisted(() => ({ calls: 0, recover: false, twoPlatforms: false, incomplete: false, settled: new Set<string>(), config: {} as BuilderConfig }));
 vi.mock("@/lib/ops/internalAuth", () => ({ authorizeOpsInternalRequest: () => ({ ok: true }) }));
 vi.mock("@/lib/theme/export/buildJobClient", async (original) => ({ ...await original<typeof import("@/lib/theme/export/buildJobClient")>(), readBuilderConfig: (options: { platform: string }) => options.platform === "ios" ? { ...state.config, builderServiceAccount: "ios@example.com", jobName: "ios-builder" } : state.config }));
 vi.mock("@/lib/ops/dispatcher", () => ({
@@ -11,7 +11,7 @@ vi.mock("@/lib/ops/dispatcher", () => ({
 }));
 vi.mock("@/lib/billing/credits", () => ({
   completeExportJob: async () => { state.calls++; },
-  failExportJobIfPending: async () => { state.calls++; return { transitioned: true, status: "failed" }; },
+  failExportJobIfPending: async (input: { exportJobId: string }) => { state.calls++; const transitioned = !state.settled.has(input.exportJobId); state.settled.add(input.exportJobId); return { transitioned, status: "failed" }; },
   claimExportRecovery: async () => { state.calls++; return { claimed: true, enqueueAttempt: 1 }; },
   updateExportJobEnqueueState: async () => { state.calls++; throw new Error("update failed"); },
   cancelExportJob: vi.fn(),
@@ -23,12 +23,12 @@ vi.mock("@/lib/supabase/server", () => ({ createAdminClient: () => ({ from: () =
     select: () => query, order: () => query,
     eq: (column: string, value: string) => { if (column === "id") id = value; return query; },
     update: () => { update = true; return query; },
-    limit: async () => { state.calls++; return { data: ["job-1", "job-2"].map((id) => ({ id, user_id: "user", platform: state.twoPlatforms && id === "job-2" ? "ios" : "android" })), error: null }; },
+    limit: async () => { state.calls++; return { data: ["job-1", "job-2"].filter((id) => !state.settled.has(id)).map((id) => ({ id, user_id: "user", platform: state.twoPlatforms && id === "job-2" ? "ios" : "android" })), error: null }; },
     maybeSingle: async () => {
       state.calls++;
       return { error: null, data: update ? { id } : {
         id, user_id: "user", platform: state.twoPlatforms && id === "job-2" ? "ios" : "android", status: "pending", stage: "queued", file_name: null,
-        created_at: new Date(Date.now() - (state.recover ? 11 * 60_000 : 10_000)).toISOString(),
+        created_at: new Date(Date.now() - (state.incomplete ? 30 * 60_000 : state.recover ? 11 * 60_000 : 10_000)).toISOString(),
         enqueue_state: "input_ready", enqueue_attempt: 0,
       } };
     },
@@ -40,6 +40,8 @@ beforeEach(async () => {
   state.calls = 0;
   state.recover = false;
   state.twoPlatforms = false;
+  state.incomplete = false;
+  state.settled.clear();
   const key = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
   state.config = {
     projectId: "project", jobRegion: "region", jobName: "builder", inputBucket: "input", outputBucket: "output",
@@ -55,6 +57,7 @@ beforeEach(async () => {
     if (url.pathname.includes("result.json")) return state.recover ? new Response(null, { status: 404 }) : json({ status: "success", fileName: "theme.apk", bytes: 123 });
     if (url.pathname.endsWith("executions")) {
       const page = Number(url.searchParams.get("pageToken") ?? 1);
+      if (state.incomplete) return json({ executions: Array.from({ length: 100 }, (_, i) => ({ name: `execution-${page}-${i}`, createTime: new Date().toISOString() })), nextPageToken: String(page + 1) });
       return json({ executions: [], ...(page < 5 ? { nextPageToken: String(page + 1) } : {}) });
     }
     if (url.pathname.includes("bundle.json")) return json({ manifest: [] });
@@ -80,5 +83,22 @@ describe("sweep external request budget fixtures", () => {
     expect(await response.json()).toMatchObject({ terminal: 2, failed: 0 });
     expect(state.calls).toBe(43);
     expect(state.calls).toBeLessThan(50);
+  });
+
+  it("settles watchdog-expired jobs behind more than 500 newer executions and leaves no repeated-tick refund", async () => {
+    state.recover = true;
+    state.twoPlatforms = true;
+    state.incomplete = true;
+    const response = await POST(new Request("https://internal", { method: "POST" }));
+    expect(await response.json()).toMatchObject({ terminal: 2, failed: 0, stillPending: 0 });
+    expect(state.settled.size).toBe(2);
+    expect(state.calls).toBe(33);
+    const fetchCalls = vi.mocked(fetch).mock.calls.map(([url]) => String(url));
+    expect(fetchCalls.filter((url) => url.includes("/executions?"))).toHaveLength(10);
+    expect(fetchCalls.some((url) => url.endsWith(":run"))).toBe(false);
+    state.calls = 0;
+    const next = await POST(new Request("https://internal", { method: "POST" }));
+    expect(await next.json()).toMatchObject({ scanned: 0, terminal: 0 });
+    expect(state.calls).toBe(1);
   });
 });
