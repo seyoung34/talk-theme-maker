@@ -5,6 +5,10 @@ import { resolveExportSettlement, type AsyncExportPlatform } from "@/lib/theme/e
 
 // Recovery includes paginated execution lookup and failure notification delivery.
 // Keep even a cold, two-platform recovery batch below Free's 50 subrequests.
+// The five-minute cron processes at most 24 jobs/hour (2 * 12), down from 120.
+// This is a cron-only ceiling, not total export capacity: user status requests
+// still settle jobs. Backlogs can delay settlement/refunds after users leave;
+// observe pending age before increasing this batch or the lookup page budget.
 const maxSweepJobs = 2;
 const executionLookupPages = 5;
 
