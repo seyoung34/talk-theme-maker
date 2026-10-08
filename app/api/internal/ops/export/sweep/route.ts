@@ -78,11 +78,7 @@ async function handleRequest(request: Request) {
       });
     } catch {
       failed += 1;
-      console.error("[export-sweep] job_failed", {
-        exportJobId: job.id,
-        platform: job.platform,
-        errorCode: "result_read_failed",
-      });
+      // withObservationJob already records one contextual failure.
     }
   }
 

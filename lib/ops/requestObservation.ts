@@ -53,7 +53,7 @@ export function setObservationStage(stage: ObservationStage, dependency: Observa
 }
 
 /** Explicit codes only: an arbitrary Error.code/name/message may contain private data. */
-export function recordOperationFailure(errorCode?: string, httpStatus?: number) {
+export function recordOperationFailure(errorCode?: string, httpStatus?: number, error?: unknown) {
   try {
     const context = observations.getStore();
     // Pass an object so Workers Logs can index individual diagnostic fields.
@@ -61,6 +61,9 @@ export function recordOperationFailure(errorCode?: string, httpStatus?: number) 
       event: "operation_failed", occurredAt: new Date().toISOString(),
       ...observationDetails(),
       errorCode: safeDiagnosticErrorCode(errorCode, context?.stage),
+      ...(safeErrorClass(error) ? { errorClass: safeErrorClass(error) } : {}),
+      // Workers timers advance after I/O: this is approximate elapsed time, not CPU.
+      // Compare actual CPU/wall metrics with the Cloudflare invocation record.
       ...(context ? { wallDurationMs: Math.max(0, Math.round(performance.now() - context.startedAt)) } : {}),
       ...(context?.exportJobId ? { exportJobId: context.exportJobId } : {}),
       ...(Number.isInteger(httpStatus) && httpStatus! >= 100 && httpStatus! <= 599 ? { httpStatus } : {}),
@@ -76,7 +79,7 @@ export function withRequestObservation<T>(request: Request, route: string, opera
     correlationId, route, method: /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(request.method) ? request.method : "unknown",
     operation, stage: "authentication", dependency: "auth", startedAt: performance.now(),
   }, async () => {
-    try { return await run(); } catch (error) { recordOperationFailure(); throw error; }
+    try { return await run(); } catch (error) { recordOperationFailure(undefined, undefined, error); throw error; }
   });
 }
 
@@ -85,7 +88,7 @@ export function withObservationJob<T>(exportJobId: string, run: () => Promise<T>
   const parent = observations.getStore();
   if (!parent) return run();
   return observations.run({ ...parent, stage: "result_read", dependency: "database", exportJobId: jobPattern.test(exportJobId) ? exportJobId : undefined }, async () => {
-    try { return await run(); } catch (error) { recordOperationFailure(); throw error; }
+    try { return await run(); } catch (error) { recordOperationFailure(undefined, undefined, error); throw error; }
   });
 }
 
@@ -99,6 +102,17 @@ export function safeTelemetry<T>(run: () => T): T | undefined {
 export function safeDiagnosticErrorCode(code?: string, stage?: string) {
   const stageCode = stage ? `${stage}_failed` : "unknown_error";
   return failureCodes.has(code ?? "") ? code! : failureCodes.has(stageCode) ? stageCode : "unknown_error";
+}
+
+/** Constructor allowlist avoids trusting arbitrary Error.name/code/message strings. */
+export function safeErrorClass(error: unknown) {
+  if (error instanceof TypeError) return "TypeError";
+  if (error instanceof RangeError) return "RangeError";
+  if (error instanceof SyntaxError) return "SyntaxError";
+  if (error instanceof URIError) return "URIError";
+  if (error instanceof EvalError) return "EvalError";
+  if (error instanceof DOMException && error.name === "AbortError") return "AbortError";
+  return undefined;
 }
 
 /** Bounded labels keep the complete group identity below the DB's 240-character limit. */

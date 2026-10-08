@@ -109,13 +109,13 @@ describe("POST /api/billing/groble/webhook", () => {
     expect(processGrobleWebhookEvent).not.toHaveBeenCalled();
   });
 
-  it("서명 실패 로그에 안전한 코드만 남기고 헤더와 본문은 남기지 않는다", async () => {
+  it("서명 실패 로그에 제한된 헤더 이름만 남기고 값과 본문은 남기지 않는다", async () => {
     await deliver(completedPayload(), { "x-groble-signature": "0".repeat(64) });
 
     const logged = JSON.stringify(warn.mock.calls);
     expect(logged).toContain("invalid_signature");
-    expect(logged).not.toContain("x-groble-signature");
-    expect(logged).not.toContain("x-groble-idempotency-key");
+    expect(logged).toContain("x-groble-signature");
+    expect(logged).toContain("x-groble-idempotency-key");
     expect(logged).not.toContain("must-not-be-logged");
     expect(logged).not.toContain("01012345678");
     expect(logged).not.toContain("merchant-1");
@@ -143,6 +143,8 @@ describe("POST /api/billing/groble/webhook", () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ reason: "invalid_reference" });
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ event: "operation_rejected", fieldPath: "sellerReference", stage: "validation", dependency: "groble" }));
+    expect(JSON.stringify(warn.mock.calls)).not.toMatch(/must be a UUID|must-not-be-logged|01012345678|merchant-1/);
     expect(recordGrobleWebhookRejection).toHaveBeenCalledWith(
       expect.objectContaining({ errorCode: "invalid_reference" }),
     );

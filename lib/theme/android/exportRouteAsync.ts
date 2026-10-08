@@ -159,7 +159,7 @@ export async function handleAsyncAndroidExportRequest(
       return NextResponse.json({ exportJobId, status: "queued", recoveryPending: true }, { status: 202 });
     }
     const failure = classifyFailure(error);
-    if (failure.status >= 500) recordOperationFailure(error instanceof AndroidBuildEnqueueError ? error.code : failure.code, failure.status);
+    if (failure.status >= 500) recordOperationFailure(error instanceof AndroidBuildEnqueueError ? error.code : failure.code, failure.status, error);
     const durationMs = elapsedMs(startedAt);
     const failureEvent = failure.status >= 500 ? safeTelemetry(() => createExportEnqueueFailureEvent({ platform: "android", exportJobId, errorCode: error instanceof AndroidBuildEnqueueError ? error.code : failure.code, durationMs })) : null;
     let refunded = false;

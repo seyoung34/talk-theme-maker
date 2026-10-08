@@ -75,10 +75,9 @@ export function createGrobleWebhookRejectedEvent(input: {
   const providerEventId = input.eventId || `unknown-${Math.floor(Date.now() / 60_000)}`;
   const context = observationDetails();
   const errorCode = context.stage ? safeDiagnosticErrorCode(input.errorCode, context.stage) : input.errorCode;
-  const identity = context.operation && context.stage && context.dependency
-    ? transientFailureIdentity({ operation: context.operation, stage: context.stage, dependency: context.dependency, errorCode }) : undefined;
   return createOpsEvent({
-    eventId: identity ?? deterministicOpsEventId("billing.webhook_rejected", providerEventId, input.errorCode),
+    // Distinct payments need separate quarantine notifications; retries retain a permanent identity.
+    eventId: deterministicOpsEventId("billing.webhook_rejected", providerEventId, input.errorCode),
     type: "billing.webhook_rejected",
     severity: "P2",
     source: "billing",
@@ -90,7 +89,7 @@ export function createGrobleWebhookRejectedEvent(input: {
       providerEventType: input.eventType ?? "unknown",
       errorCode,
     },
-    dedupeKey: identity ?? `billing:webhook:rejected:${providerEventId}:${input.errorCode}`,
+    dedupeKey: `billing:webhook:rejected:${providerEventId}:${input.errorCode}`,
     adminPath: "/admin",
   });
 }

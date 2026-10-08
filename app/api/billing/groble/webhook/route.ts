@@ -7,6 +7,8 @@ import {
 import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
 import {
   describeRejectedGroblePayload,
+  diagnosticGrobleHeaderNames,
+  safeGrobleFieldPath,
   grobleWebhookMaxBodyBytes,
   GrobleWebhookError,
   isRetryableGrobleWebhookError,
@@ -34,7 +36,7 @@ async function quarantineDelivery(idempotencyKey: string, errorCode: string, raw
   } catch {
     recordOperationFailure("settlement_failed");
   } finally {
-    // Rejection grouping describes the original parser failure, not quarantine persistence.
+    // Rejection diagnostics describe the original parser failure, not quarantine persistence.
     if (cause.stage === "validation") setObservationStage("validation", "groble");
   }
   return description;
@@ -83,7 +85,7 @@ async function handleRequest(request: Request) {
     });
   } catch (error) {
     const code = error instanceof GrobleWebhookError ? error.code : "invalid_signature";
-    console.warn("Rejected unauthenticated Groble webhook", { code });
+    safeTelemetry(() => console.warn({ event: "operation_rejected", ...observationDetails(), errorCode: safeDiagnosticErrorCode(code), receivedHeaders: diagnosticGrobleHeaderNames(request.headers) }));
     return NextResponse.json({ received: false, reason: code }, { status: 401 });
   }
 
@@ -108,6 +110,7 @@ async function handleRequest(request: Request) {
       // A retryable code means our side is behind, not that the delivery was bad: answer 500 so
       // Groble keeps redelivering and a fix can still settle the payment.
       const retryable = isRetryableGrobleWebhookError(error.code);
+      safeTelemetry(() => console.warn({ event: "operation_rejected", ...observationDetails(), errorCode: safeDiagnosticErrorCode(error.code), fieldPath: safeGrobleFieldPath(error) }));
       // Use a bounded trusted code; parser messages and payload fields remain private.
       if (retryable) recordOperationFailure(safeDiagnosticErrorCode(error.code), 500);
       return NextResponse.json({ received: false, reason: error.code }, { status: retryable ? 500 : 400 });

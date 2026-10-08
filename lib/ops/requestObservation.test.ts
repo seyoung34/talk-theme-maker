@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createExportEnqueueFailureEvent, createExportFailureEvent, createExportRefundFailureEvent } from "./eventFactories";
-import { createCorrelationId, observationDetails, recordOperationFailure, safeTelemetry, setObservationStage, transientFailureIdentity, withObservationJob, withRequestObservation } from "./requestObservation";
+import { createExportEnqueueFailureEvent, createExportFailureEvent, createExportRefundFailureEvent, createGrobleWebhookRejectedEvent } from "./eventFactories";
+import { createCorrelationId, observationDetails, recordOperationFailure, safeTelemetry, safeErrorClass, setObservationStage, transientFailureIdentity, withObservationJob, withRequestObservation } from "./requestObservation";
 
 const job = "11111111-1111-1111-1111-111111111111";
 const request = (ray = "0123456789abcdef-LAX") => new Request("https://example.test/private?email=private@example.test", { headers: { "cf-ray": ray } });
@@ -8,6 +8,14 @@ const scope = <T>(run: () => Promise<T>, ray?: string) => withRequestObservation
 afterEach(() => vi.restoreAllMocks());
 
 describe("request observation privacy and isolation", () => {
+  it("identifies standard constructors without trusting arbitrary names", () => {
+    const error = new Error("secret"); error.name = "private_customer";
+    expect(safeErrorClass(error)).toBeUndefined();
+    expect(safeErrorClass({ name: "TypeError" })).toBeUndefined();
+    const typed = new TypeError("private"); typed.name = "private_customer";
+    expect(safeErrorClass(typed)).toBe("TypeError");
+    expect(safeErrorClass(new DOMException("secret", "AbortError"))).toBe("AbortError");
+  });
   it("accepts bounded rays and replaces untrusted values", () => {
     expect(createCorrelationId(request().headers)).toBe("0123456789abcdef-LAX");
     expect(createCorrelationId(request("private@example.test").headers)).toMatch(/^[a-f0-9-]{36}$/);
@@ -61,6 +69,19 @@ describe("request observation privacy and isolation", () => {
 });
 
 describe("transient alert grouping", () => {
+  it("keeps rejected payment identities distinct and permanently deduplicates retries", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(300_001);
+    await withRequestObservation(request(), "/api/billing/groble/webhook", "billing.webhook", async () => {
+      setObservationStage("validation", "groble");
+      const reject = (eventId: string) => createGrobleWebhookRejectedEvent({ eventId, errorCode: "invalid_reference", eventType: "payment.completed", occurredAt: null });
+      const first = reject("payment-a");
+      expect(reject("payment-b").eventId).not.toBe(first.eventId);
+      expect(reject("payment-a").eventId).toBe(first.eventId);
+      now.mockReturnValue(900_000);
+      expect(reject("payment-a").eventId).toBe(first.eventId);
+      expect(reject("payment-a").dedupeKey).toBe(first.dedupeKey);
+    });
+  });
   it("groups five minutes across jobs but separates safe causes and windows", async () => {
     const now = vi.spyOn(Date, "now").mockReturnValue(300_001);
     await scope(async () => {

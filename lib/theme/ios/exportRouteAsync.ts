@@ -166,7 +166,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
       return NextResponse.json({ exportJobId, status: "queued", recoveryPending: true }, { status: 202 });
     }
     const failure = classifyFailure(error);
-    if (failure.status >= 500) recordOperationFailure(error instanceof IosBuildEnqueueError ? error.code : failure.code, failure.status);
+    if (failure.status >= 500) recordOperationFailure(error instanceof IosBuildEnqueueError ? error.code : failure.code, failure.status, error);
     const durationMs = elapsedMs(startedAt);
     const failureEvent = failure.status >= 500 ? safeTelemetry(() => createExportEnqueueFailureEvent({ platform: "ios", exportJobId, errorCode: error instanceof IosBuildEnqueueError ? error.code : failure.code, durationMs })) : null;
     let refunded = false;

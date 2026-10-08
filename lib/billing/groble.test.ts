@@ -1,12 +1,46 @@
 import { describe, expect, it } from "vitest";
 import {
   createGrobleCheckoutUrl,
+  diagnosticGrobleHeaderNames,
+  GrobleWebhookError,
+  safeGrobleFieldPath,
   describeRejectedGroblePayload,
   isRetryableGrobleWebhookError,
   parseGrobleWebhook,
   verifyGrobleWebhookSignature,
 } from "@/lib/billing/groble";
 import { creditProducts } from "@/lib/billing/products";
+
+describe("bounded Groble diagnostics", () => {
+  it("keeps trusted schema paths while rejecting arbitrary values and overflow", () => {
+    expect(safeGrobleFieldPath(new GrobleWebhookError("invalid_payload", "private", "options[0].optionId"))).toBe("options[0].optionId");
+    expect(safeGrobleFieldPath(new GrobleWebhookError("invalid_payload", "private", "options[0].name"))).toBe("options[0].name");
+    for (const field of ["private_customer", "https://private.test", "a".repeat(81), "content[email]"]) {
+      expect(safeGrobleFieldPath(new GrobleWebhookError("invalid_payload", "private", field))).toBeUndefined();
+    }
+    expect(safeGrobleFieldPath(new Error("sellerReference must be a UUID"))).toBeUndefined();
+  });
+
+  it("limits arbitrary x-header names and never includes values", () => {
+    const headers = new Headers({ "x-groble-signature": "secret", "x-test_bad": "secret", [`x-${"a".repeat(65)}`]: "secret", "authorization": "secret" });
+    for (let i = 0; i < 40; i++) headers.set(`x-observed-${i}`, "private-value");
+    const names = diagnosticGrobleHeaderNames(headers);
+    expect(names).toHaveLength(30);
+    expect(names).toContain("x-groble-signature");
+    expect(names).not.toContain("x-test_bad");
+    expect(names.every((name) => name.length <= 64)).toBe(true);
+    expect(JSON.stringify(names)).not.toMatch(/secret|private-value|authorization/);
+  });
+
+  it("records field identity separately from the parser message", () => {
+    try { parseGrobleWebhook(JSON.stringify({ id: 123 })); } catch (error) {
+      expect(safeGrobleFieldPath(error)).toBe("id");
+      expect((error as Error).message).toBe("id must be a non-empty string");
+      return;
+    }
+    throw new Error("Expected invalid payload");
+  });
+});
 
 const paymentId = "90df4ea9-dd9f-4f5a-91cc-b4c09344f96a";
 
