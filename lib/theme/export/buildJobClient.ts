@@ -1,4 +1,5 @@
 import { createFixedLengthBody } from "@/lib/theme/export/fixedLengthBody";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createInputArchiveStream, INPUT_ARCHIVE_FILE_NAME, measureInputArchive } from "@/lib/theme/export/inputArchive";
 import type { ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
 
@@ -10,6 +11,17 @@ const defaultCloudflareSubject = "cloudflare-worker-prod";
 const oidcTokenTtlSeconds = 5 * 60;
 const gcpRequestTimeoutMs = 30_000;
 const cloudRunRequestTimeoutMs = 15_000;
+const builderTokens = new Map<string, { token: string; expiresAt: number }>();
+// Only completed token strings may cross requests. In-flight I/O belongs to the
+// initiating Worker request, so deduplication is keyed by its ExecutionContext.
+const builderTokenRequests = new WeakMap<object, Map<string, Promise<string>>>();
+
+/** Evict only the rejected token; never replay a possibly mutating request. */
+export function invalidateBuilderAccessToken(accessToken: string) {
+  for (const [key, entry] of builderTokens) {
+    if (entry.token === accessToken) builderTokens.delete(key);
+  }
+}
 
 type OidcPrivateJwk = JsonWebKey & { kid?: string; d?: string; n?: string; e?: string };
 
@@ -205,7 +217,40 @@ export async function enqueueBuild(bundle: ExportBuildBundle, options: EnqueueBu
 
 // 자체 OIDC JWT → STS 토큰 교환 → 대상 SA impersonation 순으로 단명 액세스 토큰을 얻는다.
 export async function getBuilderAccessToken(config: BuilderConfig) {
-  return getImpersonatedAccessToken(config.builderServiceAccount, config);
+  const key = JSON.stringify([config.builderServiceAccount, config.wifAudience, config.oidcIssuer, config.oidcSubject, GCP_SCOPE, config.oidcPrivateJwk.n, config.oidcPrivateJwk.e, readKeyId(config.oidcPrivateJwk)]);
+  const cached = builderTokens.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.token;
+  builderTokens.delete(key);
+  let requests: Map<string, Promise<string>> | undefined;
+  try {
+    const context = getCloudflareContext().ctx;
+    requests = builderTokenRequests.get(context);
+    if (!requests) {
+      requests = new Map();
+      builderTokenRequests.set(context, requests);
+    }
+  } catch {
+    // Local Node callers have no Worker request context; don't share in-flight I/O.
+  }
+  const existing = requests?.get(key);
+  if (existing) return existing;
+  const task = (async () => {
+    const oidcToken = await signCloudflareOidcToken(config);
+    const federatedToken = await exchangeStsToken(config.wifAudience, oidcToken);
+    const result = await impersonateServiceAccount(config.builderServiceAccount, federatedToken, [GCP_SCOPE]);
+    const expiresAt = Math.min(Date.now() + 60_000, Date.parse(result.expireTime ?? "") - 30_000);
+    if (Number.isFinite(expiresAt) && expiresAt > Date.now()) {
+      if (builderTokens.size >= 16) builderTokens.delete(builderTokens.keys().next().value!);
+      builderTokens.set(key, { token: result.accessToken, expiresAt });
+    }
+    return result.accessToken;
+  })();
+  requests?.set(key, task);
+  try {
+    return await task;
+  } finally {
+    requests?.delete(key);
+  }
 }
 
 /**
@@ -221,7 +266,7 @@ export async function getImpersonatedAccessToken(
 ) {
   const oidcToken = await signCloudflareOidcToken(config);
   const federatedToken = await exchangeStsToken(config.wifAudience, oidcToken, options.signal);
-  return impersonateServiceAccount(serviceAccount, federatedToken, options.scopes ?? [GCP_SCOPE], options.signal);
+  return (await impersonateServiceAccount(serviceAccount, federatedToken, options.scopes ?? [GCP_SCOPE], options.signal)).accessToken;
 }
 
 async function signCloudflareOidcToken(config: GcpOidcConfig) {
@@ -301,13 +346,13 @@ async function impersonateServiceAccount(
     },
     async (response) => ({
       response,
-      payload: await readJsonOrNull<{ accessToken?: string }>(response),
+      payload: await readJsonOrNull<{ accessToken?: string; expireTime?: string }>(response),
     }),
   );
   if (!response.ok || !payload?.accessToken) {
     throw new BuildEnqueueError("impersonation_failed", "빌더 서비스 계정 인증에 실패했습니다.");
   }
-  return payload.accessToken;
+  return { accessToken: payload.accessToken, expireTime: payload.expireTime };
 }
 
 /**
@@ -521,13 +566,14 @@ export async function findBuilderExecution(
   config: BuilderConfig,
   accessToken: string,
   exportJobId: string,
-  options: { createdAt?: string } = {},
+  options: { createdAt?: string; maxPages?: number } = {},
 ): Promise<BuilderExecution | null> {
   const projectId = validatePathSegment(config.projectId, "GCP_PROJECT_ID");
   const jobRegion = validatePathSegment(config.jobRegion, "GCP_BUILD_JOB_REGION");
   const jobName = validatePathSegment(config.jobName, config.jobNameEnv ?? "GCP_BUILD_JOB_NAME");
   let pageToken: string | undefined;
-  for (let page = 0; page < 10; page += 1) {
+  const maxPages = Math.min(10, Math.max(1, Math.floor(options.maxPages ?? 10)));
+  for (let page = 0; page < maxPages; page += 1) {
     const query = new URLSearchParams({ pageSize: "100" });
     if (pageToken) query.set("pageToken", pageToken);
     const url = `https://run.googleapis.com/v2/projects/${encodeURIComponent(projectId)}/locations/${encodeURIComponent(jobRegion)}/jobs/${encodeURIComponent(jobName)}/executions?${query.toString()}`;
@@ -575,7 +621,9 @@ export async function findBuilderExecution(
 
     pageToken = nextPageToken;
   }
-  return null;
+  // An incomplete search is not evidence that no execution exists. In particular,
+  // never trigger another job after exhausting the request's lookup budget.
+  throw new BuildEnqueueError("builder_execution_lookup_incomplete", "빌드 실행 상태 조회를 다음 요청에서 다시 시도합니다.");
 }
 
 function requireEnv(name: string) {
@@ -631,6 +679,10 @@ async function fetchWithTimeout<T>(
   }
   try {
     const response = await fetch(input, { ...init, signal: controller.signal });
+    if (response.status === 401) {
+      const authorization = new Headers(init.headers).get("Authorization");
+      if (authorization?.startsWith("Bearer ")) invalidateBuilderAccessToken(authorization.slice(7));
+    }
     return consumeResponse
       ? await awaitWithAbort(consumeResponse(response), controller.signal)
       : response;

@@ -16,6 +16,12 @@ const builderConfig: BuilderConfig = {
 };
 
 describe("Cloud Run builder enqueue", () => {
+  it("does not treat a truncated execution search as absence", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ executions: [], nextPageToken: "next" })));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(findBuilderExecution(builderConfig, "token", "job", { maxPages: 2 })).rejects.toMatchObject({ code: "builder_execution_lookup_incomplete" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();

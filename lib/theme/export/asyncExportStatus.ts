@@ -13,6 +13,7 @@ import {
   BuildEnqueueError,
   findBuilderExecution,
   getBuilderAccessToken,
+  invalidateBuilderAccessToken,
   inspectBuilderInput,
   readBuilderConfig,
   runBuilderJob,
@@ -32,6 +33,10 @@ export type AsyncExportStatusResult =
   | { kind: "pending"; stage: string }
   | { kind: "completed"; downloadUrl: string; fileName: string }
   | { kind: "failed"; error: string; reason: string };
+
+export type AsyncExportSettlementResult =
+  | Exclude<AsyncExportStatusResult, { kind: "completed" }>
+  | { kind: "completed"; fileName: string };
 
 export type AsyncExportDownloadResult =
   | { kind: "not_found" }
@@ -66,6 +71,13 @@ type ResultJson =
   | { status: "failed"; export_job_id?: string; errorCode: string };
 
 export async function resolveExportStatus(userId: string, exportJobId: string, platform: AsyncExportPlatform): Promise<AsyncExportStatusResult> {
+  const result = await resolveExportSettlement(userId, exportJobId, platform);
+  if (result.kind !== "completed") return result;
+  return { ...result, downloadUrl: await signOutputUrl(platform, exportJobId, result.fileName) };
+}
+
+/** Cron and reservation recovery settle jobs without creating a download URL. */
+export async function resolveExportSettlement(userId: string, exportJobId: string, platform: AsyncExportPlatform, options: { executionLookupPages?: number } = {}): Promise<AsyncExportSettlementResult> {
   const row = await readExportJob(userId, exportJobId, platform);
   if (!row) return { kind: "not_found" };
 
@@ -83,10 +95,18 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
   if (!result) {
     const durationMs = Date.now() - new Date(row.created_at).getTime();
     if (durationMs > enqueueRecoveryStaleMs) {
-      const recovery = await reconcileExportEnqueue({ userId, exportJobId, platform, row, config, accessToken, durationMs });
-      if (recovery.kind === "pending") return { kind: "pending", stage: recovery.stage };
-      if (recovery.kind === "failed") return recovery.result;
-      if (recovery.kind === "settled") return recovery.result;
+      try {
+        const recovery = await reconcileExportEnqueue({ userId, exportJobId, platform, row, config, accessToken, durationMs, executionLookupPages: options.executionLookupPages });
+        if (recovery.kind === "pending") return { kind: "pending", stage: recovery.stage };
+        if (recovery.kind === "failed") return recovery.result;
+        if (recovery.kind === "settled") return recovery.result;
+      } catch (error) {
+        if (!(error instanceof BuildEnqueueError) || error.code !== "builder_execution_lookup_incomplete") throw error;
+        // Incomplete history cannot authorize another run. Before the deadline
+        // leave the job pending; after it, allow the existing conditional watchdog
+        // settlement even if every bounded search starts at the same first page.
+        if (durationMs <= getWatchdogStaleMs(platform)) return { kind: "pending", stage: row.stage };
+      }
     }
 
     // The recovery threshold is deliberately earlier than the terminal
@@ -141,7 +161,7 @@ export async function resolveExportStatus(userId: string, exportJobId: string, p
       if (latestRow.status === "failed") return resolveSettledExportStatus(latestRow, platform, exportJobId);
       if (latestRow.status !== "succeeded") return { kind: "pending", stage: latestRow.stage };
     }
-    return { kind: "completed", downloadUrl: await signOutputUrl(platform, exportJobId, result.fileName), fileName: result.fileName };
+    return { kind: "completed", fileName: result.fileName };
   }
 
   const errorMessage = "내보내기 작업에 실패했습니다.";
@@ -162,7 +182,7 @@ type ExportEnqueueRecoveryResult =
   | { kind: "pending"; stage: string }
   | { kind: "continue" }
   | { kind: "failed"; result: Extract<AsyncExportStatusResult, { kind: "failed" }> }
-  | { kind: "settled"; result: AsyncExportStatusResult };
+  | { kind: "settled"; result: AsyncExportSettlementResult };
 
 async function reconcileExportEnqueue({
   userId,
@@ -172,6 +192,7 @@ async function reconcileExportEnqueue({
   config,
   accessToken,
   durationMs,
+  executionLookupPages,
 }: {
   userId: string;
   exportJobId: string;
@@ -180,6 +201,7 @@ async function reconcileExportEnqueue({
   config: BuilderConfig;
   accessToken: string;
   durationMs: number;
+  executionLookupPages?: number;
 }): Promise<ExportEnqueueRecoveryResult> {
   // A stored operation/execution means the original trigger reached Cloud Run.
   // Never issue another run request in that case; result.json remains the
@@ -196,7 +218,7 @@ async function reconcileExportEnqueue({
     return { kind: "continue" };
   }
 
-  const execution = await findBuilderExecution(config, accessToken, exportJobId, { createdAt: row.created_at });
+  const execution = await findBuilderExecution(config, accessToken, exportJobId, { createdAt: row.created_at, ...(executionLookupPages === undefined ? {} : { maxPages: executionLookupPages }) });
   if (execution) {
     await updateExportJobEnqueueState({
       userId,
@@ -317,7 +339,7 @@ async function settleRecoveryFailure({
   return { kind: "settled", result: await resolveRecoverySettlement(userId, exportJobId, platform) };
 }
 
-async function resolveRecoverySettlement(userId: string, exportJobId: string, platform: AsyncExportPlatform): Promise<AsyncExportStatusResult> {
+async function resolveRecoverySettlement(userId: string, exportJobId: string, platform: AsyncExportPlatform): Promise<AsyncExportSettlementResult> {
   const latestRow = await readExportJob(userId, exportJobId, platform);
   if (!latestRow) return { kind: "not_found" };
   if (latestRow.status === "pending") return { kind: "pending", stage: latestRow.stage };
@@ -379,13 +401,13 @@ export async function recoverStalePendingExportBeforeReservation(userId: string)
 
   const row = data as Pick<ExportJobRow, "id" | "platform" | "created_at"> | null;
   if (!row || Date.now() - new Date(row.created_at).getTime() <= enqueueRecoveryStaleMs) return;
-  await resolveExportStatus(userId, row.id, row.platform);
+  await resolveExportSettlement(userId, row.id, row.platform);
 }
 
-async function resolveSettledExportStatus(row: ExportJobRow, platform: AsyncExportPlatform, exportJobId: string): Promise<AsyncExportStatusResult> {
+async function resolveSettledExportStatus(row: ExportJobRow, platform: AsyncExportPlatform, exportJobId: string): Promise<AsyncExportSettlementResult> {
   if (row.status === "succeeded") {
     if (!row.file_name) return { kind: "failed", error: "내보내기 결과 파일을 찾지 못했습니다.", reason: "server_error" };
-    return { kind: "completed", downloadUrl: await signOutputUrl(platform, exportJobId, row.file_name), fileName: row.file_name };
+    return { kind: "completed", fileName: row.file_name };
   }
 
   const errorCode = row.error_code ?? fallbackBuildFailureReason(platform);
@@ -443,6 +465,7 @@ async function downloadResultJson(config: BuilderConfig, accessToken: string, ex
       `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(config.outputBucket)}/o/${encodeURIComponent(objectName)}?alt=media`,
       { headers: { Authorization: `Bearer ${accessToken}` }, signal: controller.signal },
     );
+    if (response.status === 401) invalidateBuilderAccessToken(accessToken);
     if (response.status === 404) return null;
     if (!response.ok) throw new Error("gcs_result_read_failed");
     return (await awaitWithAbort(response.json(), controller.signal)) as ResultJson;
@@ -490,6 +513,7 @@ async function outputObjectExists(config: BuilderConfig, accessToken: string, ob
     `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(config.outputBucket)}/o/${encodeURIComponent(objectPath)}`,
     { headers: { Authorization: `Bearer ${accessToken}` } },
   );
+  if (response.status === 401) invalidateBuilderAccessToken(accessToken);
   if (response.status === 404) return false;
   if (!response.ok) throw new Error("gcs_output_lookup_failed");
   return true;
@@ -537,6 +561,7 @@ async function signBlob(serviceAccount: string, accessToken: string, payload: st
       body: JSON.stringify({ payload: base64Encode(new TextEncoder().encode(payload)) }),
     },
   );
+  if (response.status === 401) invalidateBuilderAccessToken(accessToken);
   const body = (await response.json().catch(() => null)) as { signedBlob?: string } | null;
   if (!response.ok || !body?.signedBlob) throw new Error("sign_blob_failed");
   return toHex(base64Decode(body.signedBlob));

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { recoverStalePendingExportBeforeReservation, resolveExportStatus } from "@/lib/theme/export/asyncExportStatus";
+import { recoverStalePendingExportBeforeReservation, resolveExportSettlement, resolveExportStatus } from "@/lib/theme/export/asyncExportStatus";
+import { BuildEnqueueError } from "@/lib/theme/export/buildJobClient";
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   claimExportRecovery: vi.fn(),
   updateExportJobEnqueueState: vi.fn(),
   getBuilderAccessToken: vi.fn(),
+  invalidateBuilderAccessToken: vi.fn(),
   readBuilderConfig: vi.fn(),
   findBuilderExecution: vi.fn(),
   inspectBuilderInput: vi.fn(),
@@ -28,8 +30,10 @@ vi.mock("@/lib/billing/credits", () => ({
   claimExportRecovery: mocks.claimExportRecovery,
   updateExportJobEnqueueState: mocks.updateExportJobEnqueueState,
 }));
-vi.mock("@/lib/theme/export/buildJobClient", () => ({
+vi.mock("@/lib/theme/export/buildJobClient", async (original) => ({
+  BuildEnqueueError: (await original<typeof import("@/lib/theme/export/buildJobClient")>()).BuildEnqueueError,
   getBuilderAccessToken: mocks.getBuilderAccessToken,
+  invalidateBuilderAccessToken: mocks.invalidateBuilderAccessToken,
   readBuilderConfig: mocks.readBuilderConfig,
   findBuilderExecution: mocks.findBuilderExecution,
   inspectBuilderInput: mocks.inspectBuilderInput,
@@ -89,6 +93,92 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
       ...overrides,
     };
   }
+
+  it("keeps incomplete history pending before the deadline, then times out without re-enqueueing", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("ANDROID_EXPORT_WATCHDOG_MS", String(25 * 60_000));
+    const row = pendingRow({ created_at: new Date(Date.now() - 11 * 60_000).toISOString(), enqueue_state: "input_ready" });
+    mocks.maybeSingle.mockResolvedValue({ data: row, error: null });
+    mocks.findBuilderExecution.mockRejectedValue(new BuildEnqueueError("builder_execution_lookup_incomplete", "incomplete"));
+    mocks.failExportJobIfPending.mockResolvedValue({ transitioned: true, status: "failed", balance: 1 });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+    for (let tick = 0; tick < 2; tick++) {
+      expect(await resolveExportSettlement("user-1", "job-1", "android", { executionLookupPages: 5 })).toEqual({ kind: "pending", stage: "building" });
+      vi.setSystemTime(Date.now() + 5 * 60_000);
+    }
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+    vi.setSystemTime(Date.now() + 5 * 60_000);
+    expect(await resolveExportSettlement("user-1", "job-1", "android", { executionLookupPages: 5 })).toMatchObject({ kind: "failed", reason: "build_watchdog_timeout" });
+    expect(mocks.failExportJobIfPending).toHaveBeenCalledTimes(1);
+    expect(mocks.scheduleOpsEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.inspectBuilderInput).not.toHaveBeenCalled();
+    expect(mocks.claimExportRecovery).not.toHaveBeenCalled();
+    expect(mocks.runBuilderJob).not.toHaveBeenCalled();
+  });
+
+  it("preserves a concurrent completion when incomplete history reaches the watchdog", async () => {
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow({ created_at: new Date(Date.now() - 30 * 60_000).toISOString(), enqueue_state: "input_ready" }), error: null })
+      .mockResolvedValueOnce({ data: pendingRow({ status: "succeeded", file_name: "theme.apk" }), error: null });
+    mocks.findBuilderExecution.mockRejectedValue(new BuildEnqueueError("builder_execution_lookup_incomplete", "incomplete"));
+    mocks.failExportJobIfPending.mockResolvedValue({ transitioned: false, status: "succeeded", balance: 0 });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+    expect(await resolveExportSettlement("user-1", "job-1", "android")).toEqual({ kind: "completed", fileName: "theme.apk" });
+    expect(mocks.scheduleOpsEvent).not.toHaveBeenCalled();
+    expect(mocks.runBuilderJob).not.toHaveBeenCalled();
+  });
+
+  it("does not turn an execution lookup outage into a timeout refund", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow({ created_at: new Date(Date.now() - 30 * 60_000).toISOString(), enqueue_state: "input_ready" }), error: null });
+    const error = new BuildEnqueueError("builder_execution_lookup_failed", "unavailable");
+    mocks.findBuilderExecution.mockRejectedValue(error);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+    await expect(resolveExportSettlement("user-1", "job-1", "android")).rejects.toBe(error);
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+    expect(mocks.runBuilderJob).not.toHaveBeenCalled();
+  });
+
+  it("settles a successful result without authenticating again or signing a URL", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow(), error: null });
+    mocks.completeExportJob.mockResolvedValue(0);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: "success", export_job_id: "job-1", fileName: "theme.apk", bytes: 123, output_path: "job-1/theme.apk" })));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await resolveExportSettlement("user-1", "job-1", "android")).toEqual({ kind: "completed", fileName: "theme.apk" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("result.json");
+    expect(mocks.getBuilderAccessToken).toHaveBeenCalledTimes(1);
+    expect(mocks.completeExportJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a concurrently completed settlement without signing or a watchdog alert", async () => {
+    mocks.maybeSingle.mockResolvedValueOnce({ data: pendingRow(), error: null })
+      .mockResolvedValueOnce({ data: pendingRow({ status: "succeeded", file_name: "theme.apk" }), error: null });
+    mocks.failExportJobIfPending.mockResolvedValue({ transitioned: false, status: "succeeded", balance: 0 });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await resolveExportSettlement("user-1", "job-1", "android")).toEqual({ kind: "completed", fileName: "theme.apk" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.scheduleOpsEvent).not.toHaveBeenCalled();
+  });
+
+  it("does no external work for an already completed settlement", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow({ status: "succeeded", file_name: "theme.apk" }), error: null });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await resolveExportSettlement("user-1", "job-1", "android")).toEqual({ kind: "completed", fileName: "theme.apk" });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mocks.getBuilderAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("evicts a GCS-rejected token without retrying the request or settling billing", async () => {
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow(), error: null });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(resolveExportSettlement("user-1", "job-1", "android")).rejects.toThrow("gcs_result_read_failed");
+    expect(mocks.invalidateBuilderAccessToken).toHaveBeenCalledWith("builder-token");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mocks.completeExportJob).not.toHaveBeenCalled();
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+  });
 
   it("shows a concurrently completed job without sending a watchdog alert", async () => {
     mocks.maybeSingle
