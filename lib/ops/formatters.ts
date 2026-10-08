@@ -10,6 +10,11 @@ const severityIcon: Record<OpsEvent["severity"], string> = {
 };
 
 const detailLabels: Record<string, string> = {
+  correlationId: "요청 상관 ID",
+  operation: "작업",
+  stage: "단계",
+  route: "경로",
+  deploymentVersion: "배포 버전",
   platform: "플랫폼",
   errorCode: "오류 코드",
   durationMs: "소요 시간(ms)",

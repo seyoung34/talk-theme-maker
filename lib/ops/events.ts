@@ -2,10 +2,12 @@ export const opsEventTypes = [
   "export.enqueue_failed",
   "export.failed",
   "export.watchdog_timeout",
+  // Reserved for the future independently collected PR3 signal; no PR2 producer.
   "export.failure_spike",
   "billing.webhook_rejected",
   "billing.webhook_processing_failed",
   "billing.refund_failed",
+  // Reserved for the future independent PR3 health monitor; no PR2 producer.
   "runtime.health_failed",
   "admin.template_published",
   "inquiry.created",

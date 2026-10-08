@@ -5,6 +5,7 @@ import {
   type OpsSeverity,
 } from "@/lib/ops/events";
 import type { OpsDailySummary } from "@/lib/ops/dailySummary";
+import { observationDetails, transientFailureIdentity, safeDiagnosticErrorCode } from "./requestObservation";
 
 export function createExportFailureEvent(input: {
   platform: "android" | "ios";
@@ -13,6 +14,7 @@ export function createExportFailureEvent(input: {
   durationMs?: number;
   watchdog?: boolean;
 }) {
+  // Terminal jobs are read repeatedly: retain their permanent identity across buckets.
   const type = input.watchdog ? "export.watchdog_timeout" : "export.failed";
   const severity: OpsSeverity = input.watchdog ? "P1" : "P2";
   return createOpsEvent({
@@ -23,6 +25,7 @@ export function createExportFailureEvent(input: {
     entity: { kind: "export_job", id: input.exportJobId },
     summary: `${capitalize(input.platform)} export 작업이 ${input.watchdog ? "시간 초과" : "실패"}했습니다.`,
     details: {
+      ...observationDetails(),
       platform: input.platform,
       errorCode: input.errorCode,
       ...(typeof input.durationMs === "number" ? { durationMs: Math.max(0, Math.round(input.durationMs)) } : {}),
@@ -37,22 +40,28 @@ export function createExportEnqueueFailureEvent(input: {
   exportJobId?: string | null;
   errorCode: string;
   durationMs?: number;
+  context?: ReturnType<typeof observationDetails>;
 }) {
   const bucket = Math.floor(Date.now() / 60_000);
   const stablePart = input.exportJobId || `${input.errorCode}:${bucket}`;
+  const context = input.context ?? observationDetails();
+  const errorCode = context.stage ? safeDiagnosticErrorCode(input.errorCode, context.stage) : input.errorCode;
+  const identity = context.operation && context.stage && context.dependency
+    ? transientFailureIdentity({ operation: context.operation, stage: context.stage, dependency: context.dependency, errorCode }) : undefined;
   return createOpsEvent({
-    eventId: deterministicOpsEventId("export.enqueue_failed", input.platform, stablePart),
+    eventId: identity ?? deterministicOpsEventId("export.enqueue_failed", input.platform, stablePart),
     type: "export.enqueue_failed",
     severity: "P2",
     source: "export",
     ...(input.exportJobId ? { entity: { kind: "export_job", id: input.exportJobId } } : {}),
     summary: `${capitalize(input.platform)} export 작업을 시작하지 못했습니다.`,
     details: {
+      ...context,
       platform: input.platform,
-      errorCode: input.errorCode,
+      errorCode,
       ...(typeof input.durationMs === "number" ? { durationMs: Math.max(0, Math.round(input.durationMs)) } : {}),
     },
-    dedupeKey: `export:enqueue:${input.platform}:${stablePart}`,
+    dedupeKey: identity ?? `export:enqueue:${input.platform}:${stablePart}`,
     adminPath: "/admin",
   });
 }
@@ -64,19 +73,24 @@ export function createGrobleWebhookRejectedEvent(input: {
   occurredAt: string | null;
 }) {
   const providerEventId = input.eventId || `unknown-${Math.floor(Date.now() / 60_000)}`;
+  const context = observationDetails();
+  const errorCode = context.stage ? safeDiagnosticErrorCode(input.errorCode, context.stage) : input.errorCode;
+  const identity = context.operation && context.stage && context.dependency
+    ? transientFailureIdentity({ operation: context.operation, stage: context.stage, dependency: context.dependency, errorCode }) : undefined;
   return createOpsEvent({
-    eventId: deterministicOpsEventId("billing.webhook_rejected", providerEventId, input.errorCode),
+    eventId: identity ?? deterministicOpsEventId("billing.webhook_rejected", providerEventId, input.errorCode),
     type: "billing.webhook_rejected",
     severity: "P2",
     source: "billing",
     summary: "Groble 결제 웹훅이 격리되었습니다.",
     occurredAt: input.occurredAt ?? undefined,
     details: {
+      ...observationDetails(),
       providerEventId,
       providerEventType: input.eventType ?? "unknown",
-      errorCode: input.errorCode,
+      errorCode,
     },
-    dedupeKey: `billing:webhook:rejected:${providerEventId}:${input.errorCode}`,
+    dedupeKey: identity ?? `billing:webhook:rejected:${providerEventId}:${input.errorCode}`,
     adminPath: "/admin",
   });
 }
@@ -96,6 +110,7 @@ export function createGrobleWebhookProcessingEvent(input: {
     summary: reviewRequired ? "결제 이벤트가 운영자 검토 상태가 되었습니다." : "결제 웹훅 정산이 거절되었습니다.",
     occurredAt: input.occurredAt,
     details: {
+      ...observationDetails(),
       providerEventId: input.eventId,
       providerEventType: input.eventType,
       result: input.result,
@@ -120,6 +135,7 @@ export function createGrobleWebhookTemporaryFailureEvent(input: {
     summary: "결제 웹훅 처리 중 서버 오류가 발생했습니다.",
     occurredAt: input.occurredAt ?? undefined,
     details: {
+      ...observationDetails(),
       providerEventId,
       providerEventType: input.eventType ?? "unknown",
       errorCode: input.errorCode,
@@ -134,6 +150,7 @@ export function createExportRefundFailureEvent(input: {
   exportJobId: string;
   errorCode: string;
 }) {
+  // Financial P1 incidents must remain distinct per job, never grouped by infrastructure cause.
   return createOpsEvent({
     eventId: deterministicOpsEventId("billing.refund_failed", input.platform, input.exportJobId, input.errorCode),
     type: "billing.refund_failed",
@@ -142,6 +159,7 @@ export function createExportRefundFailureEvent(input: {
     entity: { kind: "export_job", id: input.exportJobId },
     summary: "export 실패 후 크레딧 환불 정산에 실패했습니다.",
     details: {
+      ...observationDetails(),
       platform: input.platform,
       errorCode: input.errorCode,
     },
