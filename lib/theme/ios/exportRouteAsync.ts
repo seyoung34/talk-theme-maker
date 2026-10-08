@@ -1,3 +1,4 @@
+import { safeTelemetry, recordOperationFailure, setObservationStage } from "@/lib/ops/requestObservation";
 import { NextResponse } from "next/server";
 import { readTemplateAttribution } from "@/lib/theme/export/templateAttribution";
 import { createExportEnqueueFailureEvent } from "@/lib/ops/eventFactories";
@@ -13,7 +14,7 @@ import {
   updateExportJobEnqueueState,
   updateExportJobStage,
 } from "@/lib/billing/credits";
-import { elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
+import { elapsedMs } from "@/lib/theme/export/http";
 import { settleFailedExportJob } from "@/lib/theme/export/asyncExportRoute";
 import { recoverStalePendingExportBeforeReservation } from "@/lib/theme/export/asyncExportStatus";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
@@ -29,12 +30,14 @@ export async function handleAsyncIosExportRequest(request: Request) {
   let mode: "theme-zip" | "ktheme" = "ktheme";
 
   try {
+    setObservationStage("authentication", "auth");
     const user = await getCurrentUserOrNull();
     if (!user) return NextResponse.json({ error: "로그인이 필요합니다.", reason: "unauthenticated" }, { status: 401 });
     userId = user.id;
 
     if (isExportRequestTooLarge(request)) return NextResponse.json(getExportRequestTooLargePayload(), { status: 413 });
 
+    setObservationStage("validation", "application");
     const formData = await readIosFormData(request);
     const manifestRaw = formData.get("manifest");
     if (typeof manifestRaw !== "string") throw new IosExportRequestError("missing_manifest", "내보내기 파일 목록이 없습니다.");
@@ -71,7 +74,9 @@ export async function handleAsyncIosExportRequest(request: Request) {
       return { path: entry.path, bytes: new Uint8Array(), pngSignatureVerified: catalogObject?.pngSignatureVerified === true };
     }));
 
+    setObservationStage("reservation", "database");
     await recoverStalePendingExportBeforeReservation(userId);
+    setObservationStage("reservation", "database");
     const reservation = await reserveCreditForExport({
       ...readTemplateAttribution(formData),
       userId,
@@ -83,6 +88,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
       referencedAssetFileCount: resolved.referencedAssetFileCount,
     });
     exportJobId = reservation.exportJobId;
+    setObservationStage("reservation", "database", exportJobId);
     await markExportJobBackend({ userId, exportJobId, backend: "cloud_run" });
 
     const identity = await prepareExportJobIdentity({ userId, exportJobId, exportName });
@@ -111,6 +117,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
           await requirePendingEnqueueState({ userId: userId!, exportJobId: exportJobId!, state: "triggering" });
         },
         onTriggered: async (result) => {
+          setObservationStage("jobs_enqueue", "database", exportJobId);
           await updateExportJobEnqueueState({
             userId: userId!,
             exportJobId: exportJobId!,
@@ -119,9 +126,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
             triggeredAt: new Date().toISOString(),
             lastHeartbeatAt: new Date().toISOString(),
             recoveryReason: result.operationName ? null : "missing_cloud_run_operation_name",
-          }).catch((stateError) => {
-            console.error("[ios-export] triggered_state_update_failed", { name: stateError instanceof Error ? stateError.name : "unknown" });
-          });
+          }).catch(() => { recordOperationFailure("jobs_enqueue_failed"); });
         },
       },
     });
@@ -156,12 +161,14 @@ export async function handleAsyncIosExportRequest(request: Request) {
         state: "trigger_ambiguous",
         triggeredAt: new Date().toISOString(),
         recoveryReason: "ambiguous_cloud_run_response",
-      }).catch(() => undefined);
+      }).catch(() => { recordOperationFailure("jobs_enqueue_failed"); });
       console.warn(`[ios-export] ${JSON.stringify({ event: "enqueue_ambiguous", exportJobId, mode })}`);
       return NextResponse.json({ exportJobId, status: "queued", recoveryPending: true }, { status: 202 });
     }
-    const durationMs = elapsedMs(startedAt);
     const failure = classifyFailure(error);
+    if (failure.status >= 500) recordOperationFailure(error instanceof IosBuildEnqueueError ? error.code : failure.code, failure.status);
+    const durationMs = elapsedMs(startedAt);
+    const failureEvent = failure.status >= 500 ? safeTelemetry(() => createExportEnqueueFailureEvent({ platform: "ios", exportJobId, errorCode: error instanceof IosBuildEnqueueError ? error.code : failure.code, durationMs })) : null;
     let refunded = false;
 
     if (userId && exportJobId) {
@@ -174,22 +181,14 @@ export async function handleAsyncIosExportRequest(request: Request) {
       }, "ios-export");
     }
 
-    console.error(`[ios-export] ${JSON.stringify({
+    console[failure.status >= 500 ? "error" : "warn"](`[ios-export] ${JSON.stringify({
       event: "failed",
       exportJobId,
       mode,
       durationMs,
       errorCode: failure.code,
-      error: safeErrorSummary(error),
     })}`);
-    if (failure.status >= 500) {
-      scheduleOpsEvent(createExportEnqueueFailureEvent({
-        platform: "ios",
-        exportJobId,
-        errorCode: failure.code,
-        durationMs,
-      }));
-    }
+    if (failureEvent) safeTelemetry(() => scheduleOpsEvent(failureEvent));
     return NextResponse.json({ error: failure.message, reason: failure.code, ...(refunded ? { refunded: true } : {}) }, { status: failure.status });
   }
 }
@@ -205,6 +204,7 @@ async function requirePendingEnqueueState({
   state: Parameters<typeof updateExportJobEnqueueState>[0]["state"];
   inputCompletedAt?: string | null;
 }) {
+  setObservationStage("jobs_enqueue", "database", exportJobId);
   const updated = await updateExportJobEnqueueState({ userId, exportJobId, state, inputCompletedAt });
   if (!updated) throw new IosBuildEnqueueError("build_cancelled", "내보내기 작업이 취소되었습니다.");
 }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { recoverStalePendingExportBeforeReservation, resolveExportSettlement, resolveExportStatus } from "@/lib/theme/export/asyncExportStatus";
 import { BuildEnqueueError } from "@/lib/theme/export/buildJobClient";
+import { withRequestObservation } from "@/lib/ops/requestObservation";
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -64,6 +65,7 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -93,6 +95,32 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
       ...overrides,
     };
   }
+
+  it("captures signing authentication failures without exposing raw provider errors", async () => {
+    const jobId = "11111111-1111-1111-1111-111111111111";
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow({ id: jobId, status: "succeeded", file_name: "theme.apk" }), error: null });
+    const failure = new Error("secret-token private@example.test https://signed.test/?token=private");
+    mocks.getBuilderAccessToken.mockRejectedValue(failure);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(withRequestObservation(new Request("https://site.test/?private=yes", { headers: { "cf-ray": "0123456789abcdef-LAX" } }), "/api/export/android/status", "export.status", () => resolveExportStatus("user-private", jobId, "android"))).rejects.toBe(failure);
+    const entry = JSON.parse(log.mock.calls[0][0] as string);
+    expect(entry).toMatchObject({ event: "operation_failed", correlationId: "0123456789abcdef-LAX", stage: "signing", dependency: "gcp_auth", exportJobId: jobId, errorCode: "signing_failed" });
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret-token|private@example|signed\.test|user-private|private=yes/);
+    expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
+  });
+
+  it("isolates stale recovery so a subsequent reservation failure never names the old job", async () => {
+    const oldJob = "11111111-1111-1111-1111-111111111111";
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow({ id: oldJob, status: "succeeded", file_name: "theme.apk" }), error: null });
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(withRequestObservation(new Request("https://site.test", { headers: { "cf-ray": "0123456789abcdef-LAX" } }), "/api/export/android", "export.enqueue", async () => {
+      await recoverStalePendingExportBeforeReservation("user-private");
+      throw new Error("reservation-secret");
+    })).rejects.toThrow("reservation-secret");
+    const entry = JSON.parse(log.mock.calls[0][0] as string);
+    expect(entry).not.toHaveProperty("exportJobId");
+    expect(JSON.stringify(entry)).not.toContain("reservation-secret");
+  });
 
   it("keeps incomplete history pending before the deadline, then times out without re-enqueueing", async () => {
     vi.useFakeTimers();

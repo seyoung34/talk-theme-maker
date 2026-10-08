@@ -1,3 +1,4 @@
+import { recordOperationFailure, setObservationStage, withRequestObservation } from "@/lib/ops/requestObservation";
 import { NextResponse } from "next/server";
 import { getCurrentUserOrNull } from "@/lib/billing/credits";
 import { resolveAndroidExportStatus } from "@/lib/theme/android/androidExportStatus";
@@ -5,6 +6,10 @@ import { resolveAndroidExportStatus } from "@/lib/theme/android/androidExportSta
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(request: Request) {
+  return withRequestObservation(request, "/api/export/android/status", "export.status", () => handleRequest(request));
+}
+
+async function handleRequest(request: Request) {
   const user = await getCurrentUserOrNull();
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다.", reason: "unauthenticated" }, { status: 401 });
 
@@ -14,6 +19,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    setObservationStage("result_read", "database", jobId);
     const result = await resolveAndroidExportStatus(user.id, jobId);
     switch (result.kind) {
       case "not_found":
@@ -25,8 +31,8 @@ export async function GET(request: Request) {
       case "failed":
         return NextResponse.json({ status: "failed", error: result.error, reason: result.reason });
     }
-  } catch (error) {
-    console.error("[android-export] status_check_failed", error);
+  } catch {
+    recordOperationFailure(undefined, 500);
     return NextResponse.json({ error: "내보내기 상태를 확인하지 못했습니다.", reason: "status_check_failed" }, { status: 500 });
   }
 }

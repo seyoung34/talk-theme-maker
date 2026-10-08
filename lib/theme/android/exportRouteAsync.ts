@@ -1,3 +1,4 @@
+import { safeTelemetry, recordOperationFailure, setObservationStage } from "@/lib/ops/requestObservation";
 import { NextResponse } from "next/server";
 import { readTemplateAttribution } from "@/lib/theme/export/templateAttribution";
 import { createExportEnqueueFailureEvent } from "@/lib/ops/eventFactories";
@@ -19,7 +20,7 @@ import { AndroidExportRequestError, readAndroidBundleUpload } from "@/lib/theme/
 import { AndroidValidationError, validateAndroidApplicationId, validateAndroidVersionName } from "@/lib/theme/android/validation";
 import { settleFailedExportJob } from "@/lib/theme/export/asyncExportRoute";
 import { recoverStalePendingExportBeforeReservation } from "@/lib/theme/export/asyncExportStatus";
-import { elapsedMs, safeErrorSummary } from "@/lib/theme/export/http";
+import { elapsedMs } from "@/lib/theme/export/http";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
 import { CatalogExportResolutionError, resolveCatalogManifestForExport } from "@/lib/theme/assetCatalog/workerResolve";
 
@@ -35,12 +36,14 @@ export async function handleAsyncAndroidExportRequest(
   let exportJobId: string | null = null;
 
   try {
+    setObservationStage("authentication", "auth");
     const user = await getCurrentUserOrNull();
     if (!user) return NextResponse.json({ error: "로그인이 필요합니다.", reason: "unauthenticated" }, { status: 401 });
     userId = user.id;
 
     if (isExportRequestTooLarge(request)) return NextResponse.json(getExportRequestTooLargePayload(), { status: 413 });
 
+    setObservationStage("validation", "application");
     const formData = await readFormData(request);
     const manifestRaw = formData.get("manifest");
     if (typeof manifestRaw !== "string") {
@@ -63,7 +66,9 @@ export async function handleAsyncAndroidExportRequest(
     const themeId = typeof themeIdRaw === "string" && themeIdRaw.trim() ? themeIdRaw.trim().slice(0, 120) : "unknown";
     const { manifest, files, inputBytes } = await readAndroidBundleUpload(formData, manifestRaw);
     const resolved = await resolveCatalogManifestForExport({ manifest, uploadedInputBytes: inputBytes, platform: "android", userId });
+    setObservationStage("reservation", "database");
     await recoverStalePendingExportBeforeReservation(userId);
+    setObservationStage("reservation", "database");
     const reservation = await reserveCreditForExport({
       ...readTemplateAttribution(formData),
       userId,
@@ -75,6 +80,7 @@ export async function handleAsyncAndroidExportRequest(
       referencedAssetFileCount: resolved.referencedAssetFileCount,
     });
     exportJobId = reservation.exportJobId;
+    setObservationStage("reservation", "database", exportJobId);
     await markExportJobBackend({ userId, exportJobId, backend: "cloud_run" });
 
     const identity = await prepareExportJobIdentity({ userId, exportJobId, exportName });
@@ -101,6 +107,7 @@ export async function handleAsyncAndroidExportRequest(
         },
         onTriggered: async (result) => {
           const now = new Date().toISOString();
+          setObservationStage("jobs_enqueue", "database", exportJobId);
           await updateExportJobEnqueueState({
             userId: userId!,
             exportJobId: exportJobId!,
@@ -109,9 +116,7 @@ export async function handleAsyncAndroidExportRequest(
             triggeredAt: now,
             lastHeartbeatAt: now,
             recoveryReason: result.operationName ? null : "missing_cloud_run_operation_name",
-          }).catch((stateError) => {
-            console.error("[android-export] triggered_state_update_failed", { name: stateError instanceof Error ? stateError.name : "unknown" });
-          });
+          }).catch(() => { recordOperationFailure("jobs_enqueue_failed"); });
         },
       },
     });
@@ -144,12 +149,7 @@ export async function handleAsyncAndroidExportRequest(
         state: "trigger_ambiguous",
         triggeredAt: new Date().toISOString(),
         recoveryReason: "ambiguous_cloud_run_response",
-      }).catch((stateError) => {
-        console.error("[android-export] ambiguous_state_update_failed", {
-          exportJobId,
-          name: stateError instanceof Error ? stateError.name : "unknown",
-        });
-      });
+      }).catch(() => { recordOperationFailure("jobs_enqueue_failed"); });
       logAndroidExport("warn", "enqueue_ambiguous", {
         exportJobId,
         mode,
@@ -159,7 +159,9 @@ export async function handleAsyncAndroidExportRequest(
       return NextResponse.json({ exportJobId, status: "queued", recoveryPending: true }, { status: 202 });
     }
     const failure = classifyFailure(error);
+    if (failure.status >= 500) recordOperationFailure(error instanceof AndroidBuildEnqueueError ? error.code : failure.code, failure.status);
     const durationMs = elapsedMs(startedAt);
+    const failureEvent = failure.status >= 500 ? safeTelemetry(() => createExportEnqueueFailureEvent({ platform: "android", exportJobId, errorCode: error instanceof AndroidBuildEnqueueError ? error.code : failure.code, durationMs })) : null;
     let refunded = false;
     if (userId && exportJobId) {
       refunded = await settleFailedExportJob({
@@ -170,21 +172,13 @@ export async function handleAsyncAndroidExportRequest(
         durationMs,
       }, "android-export");
     }
-    logAndroidExport("error", "failed", {
+    logAndroidExport(failure.status >= 500 ? "error" : "warn", "failed", {
       exportJobId,
       mode,
       durationMs,
       errorCode: failure.code,
-      error: safeErrorSummary(error),
     });
-    if (failure.status >= 500) {
-      scheduleOpsEvent(createExportEnqueueFailureEvent({
-        platform: "android",
-        exportJobId,
-        errorCode: failure.code,
-        durationMs,
-      }));
-    }
+    if (failureEvent) safeTelemetry(() => scheduleOpsEvent(failureEvent));
     return NextResponse.json({ error: failure.message, reason: failure.code, ...(refunded ? { refunded: true } : {}) }, { status: failure.status });
   }
 }
@@ -206,6 +200,7 @@ async function requirePendingEnqueueState({
   triggeredAt?: string | null;
   lastHeartbeatAt?: string | null;
 }) {
+  setObservationStage("jobs_enqueue", "database", exportJobId);
   const updated = await updateExportJobEnqueueState({
     userId,
     exportJobId,

@@ -109,12 +109,13 @@ describe("POST /api/billing/groble/webhook", () => {
     expect(processGrobleWebhookEvent).not.toHaveBeenCalled();
   });
 
-  it("서명 실패 로그에 헤더 이름만 남기고 값과 본문은 남기지 않는다", async () => {
+  it("서명 실패 로그에 안전한 코드만 남기고 헤더와 본문은 남기지 않는다", async () => {
     await deliver(completedPayload(), { "x-groble-signature": "0".repeat(64) });
 
     const logged = JSON.stringify(warn.mock.calls);
-    expect(logged).toContain("x-groble-signature");
-    expect(logged).toContain("x-groble-idempotency-key");
+    expect(logged).toContain("invalid_signature");
+    expect(logged).not.toContain("x-groble-signature");
+    expect(logged).not.toContain("x-groble-idempotency-key");
     expect(logged).not.toContain("must-not-be-logged");
     expect(logged).not.toContain("01012345678");
     expect(logged).not.toContain("merchant-1");

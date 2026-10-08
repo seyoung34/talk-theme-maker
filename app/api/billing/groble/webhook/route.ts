@@ -1,3 +1,4 @@
+import { safeTelemetry, recordOperationFailure, setObservationStage, withRequestObservation, observationDetails, safeDiagnosticErrorCode } from "@/lib/ops/requestObservation";
 import { NextResponse } from "next/server";
 import {
   createGrobleWebhookRejectedEvent,
@@ -20,30 +21,30 @@ import { requireGrobleServerConfig } from "@/lib/supabase/config";
 // runtime; the whole app already runs on workerd through the Node.js runtime with nodejs_compat.
 // crypto.subtle and TextEncoder used below are available there.
 
-// Names only, never values. A failed test delivery is often the only chance to learn which headers
-// Groble actually sends, and header names carry no buyer data.
-function listProviderHeaderNames(headers: Headers) {
-  return [...headers.keys()].filter((name) => name.startsWith("x-")).sort().slice(0, 30);
-}
-
 async function quarantineDelivery(idempotencyKey: string, errorCode: string, rawBody: string) {
   const description = describeRejectedGroblePayload(rawBody);
+  const cause = observationDetails();
   try {
+    setObservationStage("settlement", "database");
     await recordGrobleWebhookRejection({
       idempotencyKey,
       errorCode,
       description,
     });
-  } catch (error) {
-    console.error("Failed to record Groble webhook rejection", {
-      errorCode,
-      name: error instanceof Error ? error.name : "unknown",
-    });
+  } catch {
+    recordOperationFailure("settlement_failed");
+  } finally {
+    // Rejection grouping describes the original parser failure, not quarantine persistence.
+    if (cause.stage === "validation") setObservationStage("validation", "groble");
   }
   return description;
 }
 
 export async function POST(request: Request) {
+  return withRequestObservation(request, "/api/billing/groble/webhook", "billing.webhook", () => handleRequest(request));
+}
+
+async function handleRequest(request: Request) {
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
     return NextResponse.json({ received: false, reason: "invalid_content_type" }, { status: 400 });
   }
@@ -66,10 +67,11 @@ export async function POST(request: Request) {
   try {
     secrets = requireGrobleServerConfig();
   } catch {
-    console.error("Failed to process Groble webhook", { configurationMissing: true });
+    recordOperationFailure("webhook_processing_failed", 500);
     return NextResponse.json({ received: false, reason: "configuration_missing" }, { status: 500 });
   }
 
+  setObservationStage("authentication", "groble");
   try {
     await verifyGrobleWebhookSignature({
       rawBody: rawBodyBytes,
@@ -81,46 +83,42 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const code = error instanceof GrobleWebhookError ? error.code : "invalid_signature";
-    console.warn("Rejected unauthenticated Groble webhook", {
-      code,
-      receivedHeaders: listProviderHeaderNames(request.headers),
-    });
+    console.warn("Rejected unauthenticated Groble webhook", { code });
     return NextResponse.json({ received: false, reason: code }, { status: 401 });
   }
 
   // The delivery is authentic from here, so anything we refuse is quarantined rather than dropped.
   let parsedEvent: ParsedGrobleEvent | null = null;
   try {
+    setObservationStage("validation", "groble");
     const event = parseGrobleWebhook(rawBody);
     parsedEvent = event;
+    setObservationStage("settlement", "database");
     const result = await processGrobleWebhookEvent(event, idempotencyKey);
     return NextResponse.json({ received: true, result: result?.result ?? "processed" });
   } catch (error) {
     if (error instanceof GrobleWebhookError) {
       const description = await quarantineDelivery(idempotencyKey, error.code, rawBody);
-      scheduleOpsEvent(createGrobleWebhookRejectedEvent({
+      safeTelemetry(() => scheduleOpsEvent(createGrobleWebhookRejectedEvent({
         errorCode: error.code,
         eventId: description.eventId,
         eventType: description.eventType,
         occurredAt: description.occurredAt,
-      }));
+      })));
       // A retryable code means our side is behind, not that the delivery was bad: answer 500 so
       // Groble keeps redelivering and a fix can still settle the payment.
       const retryable = isRetryableGrobleWebhookError(error.code);
-      // The parser error only contains a field path and is safe to log. It makes a provider
-      // schema drift diagnosable without logging the signed body or buyer data.
-      console.warn("Quarantined Groble webhook", { code: error.code, retryable, detail: error.message });
+      // Use a bounded trusted code; parser messages and payload fields remain private.
+      if (retryable) recordOperationFailure(safeDiagnosticErrorCode(error.code), 500);
       return NextResponse.json({ received: false, reason: error.code }, { status: retryable ? 500 : 400 });
     }
-    scheduleOpsEvent(createGrobleWebhookTemporaryFailureEvent({
+    safeTelemetry(() => scheduleOpsEvent(createGrobleWebhookTemporaryFailureEvent({
       eventId: parsedEvent?.eventId ?? null,
       eventType: parsedEvent?.eventType ?? null,
-      errorCode: error instanceof Error ? error.name : "unknown_error",
+      errorCode: "webhook_processing_failed",
       occurredAt: parsedEvent?.occurredAt ?? null,
-    }));
-    console.error("Failed to process Groble webhook", {
-      name: error instanceof Error ? error.name : "unknown",
-    });
+    })));
+    recordOperationFailure("webhook_processing_failed", 500);
     return NextResponse.json({ received: false, reason: "temporary_failure" }, { status: 500 });
   }
 }

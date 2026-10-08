@@ -1,3 +1,4 @@
+import { recordOperationFailure, setObservationStage, withRequestObservation } from "@/lib/ops/requestObservation";
 import { NextResponse } from "next/server";
 import {
   cancelExportJob,
@@ -7,6 +8,10 @@ import {
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function POST(request: Request) {
+  return withRequestObservation(request, "/api/export/android/cancel", "export.cancel", () => handleRequest(request));
+}
+
+async function handleRequest(request: Request) {
   const user = await getCurrentUserOrNull();
   if (!user) return NextResponse.json({ error: "로그인이 필요합니다.", reason: "unauthenticated" }, { status: 401 });
 
@@ -17,6 +22,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    setObservationStage("settlement", "database", exportJobId);
     const settlement = await cancelExportJob({
       userId: user.id,
       exportJobId,
@@ -30,7 +36,7 @@ export async function POST(request: Request) {
     if (hasErrorMessage(error, "export_job_not_found")) {
       return NextResponse.json({ error: "내보내기 작업을 찾을 수 없습니다.", reason: "not_found" }, { status: 404 });
     }
-    console.error("[export-cancel] failed", { exportJobId, name: error instanceof Error ? error.name : "unknown" });
+    recordOperationFailure("settlement_failed", 503);
     return NextResponse.json({ error: "내보내기 취소를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.", reason: "cancel_failed" }, { status: 503 });
   }
 }

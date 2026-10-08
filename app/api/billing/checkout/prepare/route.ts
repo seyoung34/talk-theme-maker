@@ -1,3 +1,4 @@
+import { recordOperationFailure, setObservationStage, withRequestObservation } from "@/lib/ops/requestObservation";
 import { NextResponse } from "next/server";
 import { getCurrentUserOrNull, isBillingHoldError } from "@/lib/billing/credits";
 import { getCreditProduct } from "@/lib/billing/products";
@@ -7,6 +8,10 @@ import { isGrobleCheckoutEnabled } from "@/lib/supabase/config";
 type PrepareBody = { productId?: string };
 
 export async function POST(request: Request) {
+  return withRequestObservation(request, "/api/billing/checkout/prepare", "billing.checkout", () => handleRequest(request));
+}
+
+async function handleRequest(request: Request) {
   const user = await getCurrentUserOrNull();
   if (!user) {
     return NextResponse.json({ error: "로그인이 필요합니다.", reason: "unauthenticated" }, { status: 401 });
@@ -25,6 +30,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    setObservationStage("reservation", "database");
     return NextResponse.json(await prepareGroblePayment({ userId: user.id, productId: product.id }));
   } catch (error) {
     if (isBillingHoldError(error)) {
@@ -33,7 +39,7 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
-    console.error("Failed to prepare Groble checkout", error);
+    recordOperationFailure("checkout_failed", 500);
     return NextResponse.json(
       { error: "결제 요청을 준비하지 못했습니다.", reason: "checkout_prepare_failed" },
       { status: 500 },
