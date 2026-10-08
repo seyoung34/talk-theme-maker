@@ -155,6 +155,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
       return NextResponse.json({ exportJobId, status: "cancelled" }, { status: 202 });
     }
     if (error instanceof IosBuildEnqueueError && error.ambiguous && userId && exportJobId) {
+      setObservationStage("jobs_enqueue", "database", exportJobId);
       await updateExportJobEnqueueState({
         userId,
         exportJobId,

@@ -296,6 +296,7 @@ async function reconcileExportEnqueue({
       }).catch(() => { recordOperationFailure("jobs_enqueue_failed"); });
       return { kind: "pending", stage: "queued" };
     }
+    recordOperationFailure(error instanceof BuildEnqueueError ? error.code : "jobs_enqueue_failed", undefined, error);
     return settleRecoveryFailure({
       userId,
       exportJobId,
@@ -333,6 +334,11 @@ async function settleRecoveryFailure({
   errorMessage: string;
   durationMs: number;
 }): Promise<ExportEnqueueRecoveryResult> {
+  // Capture the cause before the refund RPC changes the observation to settlement/database.
+  const failureEvent = safeTelemetry(() => createExportFailureEvent({
+    platform, exportJobId, errorCode, durationMs,
+    watchdog: errorCode === "build_watchdog_timeout",
+  }));
   const settlement = await failExportJobIfPending({
     userId,
     exportJobId,
@@ -341,7 +347,7 @@ async function settleRecoveryFailure({
     durationMs,
   });
   if (settlement.transitioned) {
-    scheduleExportFailureEvent(platform, exportJobId, errorCode, durationMs);
+    if (failureEvent) safeTelemetry(() => scheduleOpsEvent(failureEvent));
     return { kind: "failed", result: { kind: "failed", error: errorMessage, reason: errorCode } };
   }
   return { kind: "settled", result: await resolveRecoverySettlement(userId, exportJobId, platform) };

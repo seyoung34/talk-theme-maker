@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { recoverStalePendingExportBeforeReservation, resolveExportSettlement, resolveExportStatus } from "@/lib/theme/export/asyncExportStatus";
 import { BuildEnqueueError } from "@/lib/theme/export/buildJobClient";
-import { withRequestObservation } from "@/lib/ops/requestObservation";
+import { setObservationStage, withRequestObservation } from "@/lib/ops/requestObservation";
 
 const mocks = vi.hoisted(() => ({
   from: vi.fn(),
@@ -339,6 +339,42 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
       exportJobId: "job-1",
       attempt: 1,
     }));
+  });
+
+  it.each(["cloud_run", "database"] as const)("preserves recovery %s failure before refund changes its observation", async (dependency) => {
+    const jobId = "11111111-1111-1111-1111-111111111111";
+    mocks.maybeSingle.mockResolvedValue({ data: pendingRow({
+      id: jobId, created_at: new Date(Date.now() - 11 * 60_000).toISOString(), enqueue_state: "input_ready",
+    }), error: null });
+    mocks.findBuilderExecution.mockResolvedValue(null);
+    mocks.inspectBuilderInput.mockResolvedValue({ complete: true });
+    mocks.claimExportRecovery.mockResolvedValue({ claimed: true, enqueueAttempt: 1 });
+    const error = dependency === "cloud_run"
+      ? new BuildEnqueueError("job_run_failed", "private-token")
+      : new TypeError("private-token");
+    mocks.runBuilderJob.mockResolvedValue({ operationName: "operations/recovered" });
+    if (dependency === "cloud_run") mocks.runBuilderJob.mockRejectedValue(error);
+    else mocks.updateExportJobEnqueueState.mockRejectedValue(error);
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.failExportJobIfPending.mockImplementation(async () => {
+      expect(log).toHaveBeenCalledOnce();
+      setObservationStage("settlement", "database", jobId);
+      return { transitioned: true, status: "failed" };
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
+    const result = await withRequestObservation(new Request("https://site.test"), "/api/export/android/status", "export.status",
+      () => resolveExportSettlement("user-private", jobId, "android"));
+    expect(result).toMatchObject({ kind: "failed", reason: "enqueue_recovery_failed" });
+    expect(log.mock.calls[0][0]).toMatchObject({
+      stage: "jobs_enqueue", dependency, exportJobId: jobId,
+      errorCode: dependency === "cloud_run" ? "job_run_failed" : "jobs_enqueue_failed",
+    });
+    expect(mocks.scheduleOpsEvent.mock.calls[0][0].details).toMatchObject({
+      stage: "jobs_enqueue", dependency, errorCode: "enqueue_recovery_failed",
+    });
+    expect(JSON.stringify([log.mock.calls, mocks.scheduleOpsEvent.mock.calls])).not.toMatch(/private-token|user-private/);
+    expect(mocks.runBuilderJob).toHaveBeenCalledOnce();
+    expect(mocks.failExportJobIfPending).toHaveBeenCalledOnce();
   });
 
   it("starts recovery at the ten-minute reservation cutoff without failing an active build", async () => {

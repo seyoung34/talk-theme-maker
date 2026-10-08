@@ -143,6 +143,7 @@ export async function handleAsyncAndroidExportRequest(
       return NextResponse.json({ exportJobId, status: "cancelled" }, { status: 202 });
     }
     if (error instanceof AndroidBuildEnqueueError && error.ambiguous && userId && exportJobId) {
+      setObservationStage("jobs_enqueue", "database", exportJobId);
       await updateExportJobEnqueueState({
         userId,
         exportJobId,
