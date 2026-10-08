@@ -103,7 +103,7 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
     mocks.getBuilderAccessToken.mockRejectedValue(failure);
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     await expect(withRequestObservation(new Request("https://site.test/?private=yes", { headers: { "cf-ray": "0123456789abcdef-LAX" } }), "/api/export/android/status", "export.status", () => resolveExportStatus("user-private", jobId, "android"))).rejects.toBe(failure);
-    const entry = JSON.parse(log.mock.calls[0][0] as string);
+    const entry = log.mock.calls[0][0] as Record<string, unknown>;
     expect(entry).toMatchObject({ event: "operation_failed", correlationId: "0123456789abcdef-LAX", stage: "signing", dependency: "gcp_auth", exportJobId: jobId, errorCode: "signing_failed" });
     expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret-token|private@example|signed\.test|user-private|private=yes/);
     expect(mocks.failExportJobIfPending).not.toHaveBeenCalled();
@@ -117,7 +117,7 @@ describe("resolveExportStatus watchdog transition and enqueue recovery", () => {
       await recoverStalePendingExportBeforeReservation("user-private");
       throw new Error("reservation-secret");
     })).rejects.toThrow("reservation-secret");
-    const entry = JSON.parse(log.mock.calls[0][0] as string);
+    const entry = log.mock.calls[0][0] as Record<string, unknown>;
     expect(entry).not.toHaveProperty("exportJobId");
     expect(JSON.stringify(entry)).not.toContain("reservation-secret");
   });

@@ -56,14 +56,15 @@ export function setObservationStage(stage: ObservationStage, dependency: Observa
 export function recordOperationFailure(errorCode?: string, httpStatus?: number) {
   try {
     const context = observations.getStore();
-    console.error(JSON.stringify({
+    // Pass an object so Workers Logs can index individual diagnostic fields.
+    console.error({
       event: "operation_failed", occurredAt: new Date().toISOString(),
       ...observationDetails(),
       errorCode: safeDiagnosticErrorCode(errorCode, context?.stage),
       ...(context ? { wallDurationMs: Math.max(0, Math.round(performance.now() - context.startedAt)) } : {}),
       ...(context?.exportJobId ? { exportJobId: context.exportJobId } : {}),
       ...(Number.isInteger(httpStatus) && httpStatus! >= 100 && httpStatus! <= 599 ? { httpStatus } : {}),
-    }));
+    });
   } catch { /* Observability must never change the operation result. */ }
 }
 
@@ -91,7 +92,7 @@ export function withObservationJob<T>(exportJobId: string, run: () => Promise<T>
 /** Includes event construction: a broken alert formatter/factory cannot break billing. */
 export function safeTelemetry<T>(run: () => T): T | undefined {
   try { return run(); } catch {
-    try { console.error(JSON.stringify({ event: "telemetry_failed", phase: "alert_construction_or_dispatch", ...observationDetails() })); } catch { /* Best effort only. */ }
+    try { console.error({ event: "telemetry_failed", phase: "alert_construction_or_dispatch", ...observationDetails() }); } catch { /* Best effort only. */ }
   }
 }
 

@@ -41,7 +41,7 @@ describe("request observation privacy and isolation", () => {
       expect(event.details).toMatchObject({ stage: "input_upload", dependency: "gcs", errorCode: "gcs_upload_failed" });
       recordOperationFailure("private_customer", 500);
     });
-    const entry = JSON.parse(log.mock.calls[0][0] as string);
+    const entry = log.mock.calls[0][0] as Record<string, unknown>;
     expect(entry).toMatchObject({ stage: "settlement", dependency: "database", errorCode: "settlement_failed", exportJobId: job, httpStatus: 500 });
     expect(entry.wallDurationMs).toBeGreaterThanOrEqual(0);
     expect(JSON.stringify(entry)).not.toMatch(/private|email|example\.test/);
@@ -52,7 +52,7 @@ describe("request observation privacy and isolation", () => {
     await scope(async () => {
       expect(safeTelemetry(() => { throw new Error("secret"); })).toBeUndefined();
     });
-    expect(JSON.parse(log.mock.calls[0][0] as string)).toMatchObject({ event: "telemetry_failed" });
+    expect(log.mock.calls[0][0]).toMatchObject({ event: "telemetry_failed" });
     log.mockImplementation(() => { throw new Error("broken logger"); });
     await expect(scope(async () => { recordOperationFailure(); return "ok"; })).resolves.toBe("ok");
     const failure = new Error("original");
