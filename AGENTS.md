@@ -19,6 +19,13 @@
 - Preserve admin/system template persistence separately from user-local template persistence.
 - Keep focused changes focused. Avoid broad reformatting and large TSX rewrites unless the task requires it.
 
+## TalkTheme Blog Writing
+
+- For blog research, drafting, revision, or editorial review, read the available `docs/blog/README.md` and use `talktheme-blog-writing` (shared local source: `~/.agents/skills/talktheme-blog-writing/SKILL.md`). For revisions, read the target pair; for new posts, start from source material. Claude reads these rules through `CLAUDE.md`'s existing `@AGENTS.md` import.
+- Core fallback if docs/skill are absent: write concise Korean plain form (`했다`, `였다`, `한다`), a relevant title and short opening summary; answer the reader's question with concrete experience or implementation, decision reasons, and useful explanations/checks. Adapt to how-to, reflection, or implementation topics without inventing an incident. Title/intro-only edits do not fix missing substance. Distinguish source comments, actual implementation, historical/local/production checks, and measured outcomes; do not invent feelings or completion.
+- Keep one research/draft pair per topic under `docs/blog/` and update its index when needed, unless the user specifies another output. Detailed editorial and completion criteria live in the skill. `docs/` is ignored and not automatically shared across worktrees; locate needed files without claiming missing sources were read, and never force-add them or publish externally as part of writing.
+- Use the Agent Control Layer handoff format below when delegating, including actual document/skill paths and writer or read-only ownership in `Scope`. Choose Claude/Codex and effort by task; small edits do not require orchestration. Follow the skill's delegation reference only when useful.
+
 ## Git Branching and Release
 
 - Treat `main` as the service and deployment branch. Do not develop new application code, tests, migrations, or configuration changes directly on `main`.
