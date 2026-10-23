@@ -1,7 +1,31 @@
 import { getSiteUrl } from "@/lib/supabase/config";
 import type { OpsEvent, OpsDetailValue } from "@/lib/ops/events";
-import type { OpsDailySummary } from "@/lib/ops/dailySummary";
-import type { OpsIssue, OpsInquiryIssue, OpsStatusSnapshot } from "@/lib/ops/repository";
+import type { OpsDailySummary, OpsWeekSummary } from "@/lib/ops/dailySummary";
+import type { OpsIssue, OpsInquiryIssue, OpsRecentExport, OpsStatusSnapshot } from "@/lib/ops/repository";
+
+/** 운영자가 읽는 이름. 원래 타입 코드는 메시지 맨 아래 `코드:` 줄에 남는다. */
+const eventTypeLabels: Partial<Record<OpsEvent["type"], string>> = {
+  "export.enqueue_failed": "Export 접수 실패",
+  "export.failed": "Export 실패",
+  "export.watchdog_timeout": "Export 시간 초과",
+  "export.failure_spike": "Export 실패 급증",
+  "billing.webhook_rejected": "결제 웹훅 거부",
+  "billing.webhook_processing_failed": "결제 웹훅 처리 실패",
+  "billing.refund_failed": "환불 실패",
+  "runtime.health_failed": "런타임 점검 실패",
+  "admin.template_published": "템플릿 게시",
+  "inquiry.created": "새 문의",
+  "inquiry.user_replied": "문의 답장",
+  "ops.daily_summary": "일일 요약",
+};
+
+const entityKindLabels: Record<NonNullable<OpsEvent["entity"]>["kind"], string> = {
+  export_job: "Export 작업",
+  payment: "결제",
+  template: "템플릿",
+  runtime: "런타임",
+  inquiry: "문의",
+};
 
 const severityIcon: Record<OpsEvent["severity"], string> = {
   P1: "🚨",
@@ -20,8 +44,8 @@ const detailLabels: Record<string, string> = {
   durationMs: "소요 시간(ms)",
   elapsedMs: "경과 시간(ms)",
   attemptCount: "시도 횟수",
-  providerEventType: "Provider 이벤트",
-  providerEventId: "Provider 이벤트 ID",
+  providerEventType: "결제사 이벤트",
+  providerEventId: "결제사 이벤트 ID",
   failureCount: "실패 횟수",
   windowMinutes: "집계 구간(분)",
   dependency: "의존성",
@@ -46,7 +70,7 @@ const detailLabels: Record<string, string> = {
   inquiriesOpen: "미종결 문의",
   p1Issues: "P1 이슈",
   p2Issues: "P2 이슈",
-  deadLetterNotifications: "Dead-letter 알림",
+  deadLetterNotifications: "전송 포기 알림",
   inquiryId: "문의 ID",
   messageId: "메시지 ID",
   category: "문의 분류",
@@ -58,21 +82,21 @@ export function formatOpsEventForTelegram(event: OpsEvent, options: { siteUrl?: 
   const lines = [
     `${severityIcon[event.severity]} [${event.severity}] ${event.summary}`,
     "",
-    `이벤트: ${event.type}`,
-    `발생 시각: ${formatKoreanTime(event.occurredAt)}`,
+    `발생: ${formatKoreanTime(event.occurredAt)}`,
   ];
 
-  if (event.entity) lines.push(`${event.entity.kind}: ${event.entity.id}`);
+  if (event.entity) lines.push(`${entityKindLabels[event.entity.kind]}: ${event.entity.id}`);
 
   for (const [key, value] of Object.entries(event.details)) {
     if (!(key in detailLabels)) continue;
-    lines.push(`${detailLabels[key] ?? key}: ${formatValue(value)}`);
+    lines.push(`${detailLabels[key] ?? key}: ${formatDetailValue(key, value)}`);
   }
 
   const adminUrl = buildAdminUrl(event.adminPath, options.siteUrl ?? getSiteUrl());
-  if (adminUrl) {
-    lines.push("", `관리자 확인: ${adminUrl}`);
-  }
+  lines.push("");
+  if (adminUrl) lines.push(`관리자 확인: ${adminUrl}`);
+  // 제목(summary)이 이미 무슨 일인지 말하므로, 타입 코드는 로그 검색용으로 맨 아래에 둔다.
+  lines.push(`코드: ${event.type}`);
 
   return lines.join("\n");
 }
@@ -111,12 +135,23 @@ export function formatOpsStatusForTelegram(status: OpsStatusSnapshot) {
     "📌 TalkTheme 운영 상태",
     "",
     `Export 대기: ${status.pendingExports}건 (15분 초과 ${status.staleExports}건)`,
-    `알림 대기: ${status.pendingNotifications}건 · 재시도 ${status.retryNotifications}건 · dead-letter ${status.deadLetterNotifications}건`,
+    `알림 대기: ${status.pendingNotifications}건 · 재시도 ${status.retryNotifications}건 · 전송 포기 ${status.deadLetterNotifications}건`,
     `미종결 문의: ${status.openInquiries}건`,
-    `Billing hold: ${status.billingHolds}건`,
+    `결제 보류: ${status.billingHolds}건`,
     `최근 P1: ${status.lastP1At ? formatKoreanTime(status.lastP1At) : "없음"}`,
   ].join("\n");
 }
+
+const inquiryStatusLabels: Record<OpsInquiryIssue["status"], string> = {
+  open: "답변 대기",
+  answered: "답변함",
+};
+
+/**
+ * `sendTelegramMessage`는 3,800자에서 말없이 자른다. 목록이 그 안에서 끝나도록 여기서 먼저 멈추고,
+ * 생략한 건수를 적는다. 잘린 줄 없이 끝나야 운영자가 "이게 전부"라고 오해하지 않는다.
+ */
+const telegramListBudget = 3_600;
 
 export function formatOpsIssuesForTelegram(input: { events: OpsIssue[]; inquiries: OpsInquiryIssue[] }) {
   const lines = ["🧭 TalkTheme 최근 운영 이슈", ""];
@@ -125,26 +160,37 @@ export function formatOpsIssuesForTelegram(input: { events: OpsIssue[]; inquirie
     return lines.join("\n");
   }
 
+  let length = lines.join("\n").length;
+  let omitted = 0;
+  const append = (block: string[]) => {
+    const added = block.join("\n").length + 1;
+    if (omitted > 0 || length + added > telegramListBudget) return false;
+    lines.push(...block);
+    length += added;
+    return true;
+  };
+
   if (input.events.length > 0) {
-    lines.push("이벤트");
+    append(["이벤트"]);
     for (const event of input.events) {
       const icon = event.severity === "P1" ? "🚨" : "⚠️";
       const entity = event.entityId ? ` · ${event.entityId}` : "";
-      lines.push(
-        `${icon} [${event.severity}] ${event.eventType}${entity}`,
+      if (!append([
+        `${icon} [${event.severity}] ${eventTypeLabels[event.eventType] ?? event.eventType}${entity}`,
         `  이벤트 ID: ${formatOpsIdentifier(event.eventId)}`,
         `  ${formatKoreanTime(event.occurredAt)}`,
-      );
+      ])) omitted += 1;
     }
   }
 
   if (input.inquiries.length > 0) {
-    if (input.events.length > 0) lines.push("");
-    lines.push("미종결 문의");
+    append([...(input.events.length > 0 ? [""] : []), "미종결 문의"]);
     for (const inquiry of input.inquiries) {
-      lines.push(`💬 ${inquiry.id} · ${inquiry.status} · ${formatKoreanTime(inquiry.createdAt)}`);
+      if (!append([`💬 ${inquiry.id} · ${inquiryStatusLabels[inquiry.status]} · ${formatKoreanTime(inquiry.createdAt)}`])) omitted += 1;
     }
   }
+
+  if (omitted > 0) lines.push("", `… 메시지 길이 제한으로 ${omitted}건을 생략했습니다. 숫자를 줄여 /issues N 으로 다시 조회하세요.`);
   return lines.join("\n");
 }
 
@@ -163,7 +209,82 @@ export function formatOpsHealthForTelegram(input: {
     `DB: ${databaseLabel}`,
     `Telegram: ${telegramLabel}`,
     `GA4 방문자 API: ${ga4Label}`,
-    ...(input.status ? [`대기 Export: ${input.status.pendingExports}건 · 알림 dead-letter: ${input.status.deadLetterNotifications}건`] : []),
+    ...(input.status ? [`대기 Export: ${input.status.pendingExports}건 · 알림 전송 포기: ${input.status.deadLetterNotifications}건`] : []),
+  ].join("\n");
+}
+
+const exportStatusLabels: Record<string, { icon: string; label: string }> = {
+  succeeded: { icon: "✅", label: "성공" },
+  failed: { icon: "❌", label: "실패" },
+  pending: { icon: "⏳", label: "진행 중" },
+};
+
+const exportStageLabels: Record<string, string> = {
+  queued: "대기",
+  preparing: "준비",
+  building: "빌드",
+  packaging: "패키징",
+  finalizing: "마무리",
+  completed: "완료",
+  failed: "실패",
+};
+
+const exportPlatformLabels: Record<string, string> = { android: "Android", ios: "iOS" };
+
+/**
+ * `/exports` 응답. 값은 알려진 라벨로만 바꾸고, 모르는 값은 원문 대신 "알 수 없음"으로 쓴다 —
+ * 운영 채팅으로 나가는 문자열에 DB 텍스트를 그대로 흘리지 않는다. 오류 코드는 조회 시점에 이미
+ * 코드 문자만 남겼다(`parseOpsRecentExport`).
+ */
+export function formatOpsExportsForTelegram(jobs: OpsRecentExport[]) {
+  const lines = [`📦 TalkTheme 최근 Export ${jobs.length}건`, ""];
+  if (jobs.length === 0) {
+    lines.push("최근 Export가 없습니다.");
+    return lines.join("\n");
+  }
+
+  for (const job of jobs) {
+    const status = exportStatusLabels[job.status] ?? { icon: "❔", label: "알 수 없음" };
+    const platform = exportPlatformLabels[job.platform] ?? "알 수 없음";
+    // 성공은 단계가 항상 "완료"라 생략한다. 실패·진행 중은 어디서 멈췄는지가 핵심이다.
+    const stage = job.status === "succeeded" ? "" : ` (${exportStageLabels[job.stage] ?? "알 수 없음"})`;
+    const facts = [
+      formatOpsIdentifier(job.id).slice(0, 8),
+      job.durationMs === null ? "-" : formatExportDuration(job.durationMs),
+      ...(job.errorCode ? [`오류 ${job.errorCode}`] : []),
+      ...(job.referencedFileCount > 0 ? [`참조 ${job.referencedFileCount}개`] : []),
+    ];
+    lines.push(
+      `${status.icon} ${formatKoreanTime(job.createdAt)} · ${platform} · ${status.label}${stage}`,
+      `   ${facts.join(" · ")}`,
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
+ * `/week` 응답. **기간 값과 현재 값을 섞지 않는다.** RPC는 `exportsPending`·`openInquiries`를 구간과
+ * 무관하게 조회 시점 값으로 돌려준다(`readOpsWeekSummary` 참고).
+ */
+export function formatOpsWeekSummaryForTelegram(summary: OpsWeekSummary) {
+  const refundReview = summary.refundsReviewRequired > 0 ? ` · 검토 ${summary.refundsReviewRequired}건` : "";
+  return [
+    "🗓 TalkTheme 주간 요약",
+    `기간: ${formatKoreanDay(summary.firstDay)} ~ ${formatKoreanDay(summary.lastDay)} (KST, 오늘 제외)`,
+    "",
+    "방문자(GA4): 미집계",
+    `가입: ${summary.signups}건`,
+    `결제: ${summary.paymentsPaid}건 · ${formatWon(summary.paymentsPaidAmount)} · 실패/취소 ${summary.paymentFailures}건`,
+    `환불: ${summary.refundsCount}건 · ${formatWon(summary.refundsAmount)}${refundReview}`,
+    `Export: 성공 ${summary.exportsSucceeded}건 · 실패 ${summary.exportsFailed}건`,
+    `문의: 신규 ${summary.newInquiries}건`,
+    `운영 이슈: P1 ${summary.p1Issues}건 · P2 ${summary.p2Issues}건`,
+    `알림 전송 포기: ${summary.deadLetterNotifications}건`,
+    "",
+    "지금 기준",
+    `Export 대기: ${summary.exportsPending}건 · 미종결 문의: ${summary.openInquiries}건`,
+    "",
+    "결제·환불·전송 포기는 현재 상태로 다시 센 값이라 일일 요약 7개의 합과 다를 수 있습니다.",
   ].join("\n");
 }
 
@@ -174,18 +295,53 @@ export function formatTelegramTestMessage(options: { environment?: string; now?:
     "✅ TalkTheme Telegram 알림 테스트",
     "",
     `환경: ${environment}`,
-    `발생 시각: ${formatKoreanTime(now.toISOString())}`,
+    `발생: ${formatKoreanTime(now.toISOString())}`,
   ].join("\n");
 }
 
-function formatKoreanTime(value: string) {
+const kstParts = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  month: "2-digit",
+  day: "2-digit",
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  // h23: 자정을 "24:00"이 아니라 "00:00"으로 쓴다.
+  hourCycle: "h23",
+});
+
+/**
+ * `10/23(금) 23:05:02 KST`.
+ *
+ * 독립 감시기(`services/runtime-monitor/format.ts`)와 같은 형식이다. 감시기는 앱과 따로 빌드되는
+ * 서비스라 코드를 공유하지 않고 형식만 맞춘다 — 한쪽을 바꾸면 다른 쪽도 함께 바꾼다.
+ */
+export function formatKoreanTime(value: string) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return value;
-  return new Intl.DateTimeFormat("ko-KR", {
-    timeZone: "Asia/Seoul",
-    dateStyle: "medium",
-    timeStyle: "medium",
-  }).format(date);
+  const parts = readKstParts(date);
+  return `${parts.date} ${parts.time} KST`;
+}
+
+function readKstParts(date: Date) {
+  const parts = Object.fromEntries(kstParts.formatToParts(date).map((part) => [part.type, part.value]));
+  return {
+    date: `${parts.month}/${parts.day}(${parts.weekday})`,
+    time: `${parts.hour}:${parts.minute}:${parts.second}`,
+  };
+}
+
+/**
+ * 값이 정해진 몇 가지 상세 항목만 한글로 바꾼다. 모르는 값은 원문을 남긴다 — 이벤트 상세는 앱이
+ * 직접 만들어 `createOpsEvent`가 이미 걸렀으므로, 버리기보다 그대로 보이는 편이 진단에 낫다.
+ */
+function formatDetailValue(key: string, value: OpsDetailValue) {
+  if (typeof value === "string") {
+    if (key === "platform") return exportPlatformLabels[value] ?? value;
+    if (key === "stage") return exportStageLabels[value] ?? value;
+  }
+  return formatValue(value);
 }
 
 function formatValue(value: OpsDetailValue) {
@@ -269,8 +425,22 @@ function formatDailySummaryValues(input: {
     `Export: 성공 ${input.exportsSucceeded}건 · 실패 ${input.exportsFailed}건 · 현재 대기 ${input.exportsPending}건`,
     `문의: 신규 ${input.inquiriesNew}건 · 미종결 ${input.inquiriesOpen}건`,
     `운영 이슈: P1 ${input.p1Issues}건 · P2 ${input.p2Issues}건`,
-    `알림 dead-letter: ${input.deadLetterNotifications}건`,
+    `알림 전송 포기: ${input.deadLetterNotifications}건`,
   ].join("\n");
+}
+
+/** `2026-10-16` → `10/16(금)`. 날짜 문자열은 KST 날짜다. */
+function formatKoreanDay(day: string) {
+  // 정오로 잡아 어느 시간대에서 해석해도 같은 KST 날짜가 나오게 한다.
+  const date = new Date(`${day}T12:00:00+09:00`);
+  return Number.isFinite(date.getTime()) ? readKstParts(date).date : day;
+}
+
+/** 소요 시간. 1분 미만은 소수 한 자리 초, 그 이상은 분·초. */
+function formatExportDuration(ms: number) {
+  if (ms < 60_000) return `${(ms / 1_000).toFixed(1)}초`;
+  const seconds = Math.round(ms / 1_000);
+  return `${Math.floor(seconds / 60)}분 ${seconds % 60}초`;
 }
 
 function formatWon(value: number) {

@@ -1,14 +1,32 @@
 import { getGa4VisitorConfigStatus } from "@/lib/analytics/ga4DataApi";
 import {
   formatOpsDailySummaryForTelegram,
+  formatOpsExportsForTelegram,
   formatOpsHealthForTelegram,
   formatOpsIssuesForTelegram,
   formatOpsStatusForTelegram,
+  formatOpsWeekSummaryForTelegram,
 } from "@/lib/ops/formatters";
-import { getOpsStatusSnapshot, listRecentOpsIssues } from "@/lib/ops/repository";
-import { getCurrentOpsDay, getPreviousOpsDay, readOpsDailySummary } from "@/lib/ops/dailySummary";
+import { getOpsStatusSnapshot, listRecentExportJobs, listRecentOpsIssues } from "@/lib/ops/repository";
+import { getCurrentOpsDay, getPreviousOpsDay, readOpsDailySummary, readOpsWeekSummary } from "@/lib/ops/dailySummary";
 
-export const opsCommandNames = ["help", "today", "yesterday", "status", "health", "issues"] as const;
+export const opsCommandNames = ["help", "today", "yesterday", "week", "status", "exports", "health", "issues"] as const;
+
+const defaultIssueLimit = 8;
+const maxIssueLimit = 20;
+
+/**
+ * `/issues`의 개수 인자. 1~20 정수 하나만 받는다.
+ *
+ * 인자를 받는 명령은 이것 하나다. 나머지는 계속 인자를 거부한다 — 오타로 붙은 단어를 조용히 무시하면
+ * 운영자가 원하지 않은 조회 결과를 원한 결과로 오해한다.
+ */
+export function parseIssueLimit(args: string[]): number | undefined {
+  if (args.length === 0) return defaultIssueLimit;
+  if (args.length !== 1 || !/^\d{1,2}$/.test(args[0] ?? "")) return undefined;
+  const limit = Number(args[0]);
+  return limit >= 1 && limit <= maxIssueLimit ? limit : undefined;
+}
 export type OpsCommandName = (typeof opsCommandNames)[number];
 export type ParsedOpsCommand = {
   name: OpsCommandName | "unknown";
@@ -37,7 +55,11 @@ export async function getOpsCommandReply(
   } = {},
 ) {
   if (parsed.name === "unknown") return formatOpsHelpForTelegram("알 수 없는 명령입니다.");
-  if (parsed.args.length > 0) return formatOpsHelpForTelegram("인자가 없는 읽기 전용 명령입니다.");
+  const issueLimit = parsed.name === "issues" ? parseIssueLimit(parsed.args) : undefined;
+  if (parsed.name === "issues" && issueLimit === undefined) {
+    return formatOpsHelpForTelegram(`/issues 뒤에는 1~${maxIssueLimit} 사이 숫자 하나만 쓸 수 있습니다.`);
+  }
+  if (parsed.name !== "issues" && parsed.args.length > 0) return formatOpsHelpForTelegram("인자가 없는 읽기 전용 명령입니다.");
   if (parsed.name === "help") return formatOpsHelpForTelegram();
 
   try {
@@ -50,8 +72,12 @@ export async function getOpsCommandReply(
         const summary = await readOpsDailySummary(getPreviousOpsDay(options.now));
         return formatOpsDailySummaryForTelegram(summary, { title: "TalkTheme 전일 운영 요약" });
       }
+      case "week":
+        return formatOpsWeekSummaryForTelegram(await readOpsWeekSummary(options.now));
       case "status":
         return formatOpsStatusForTelegram(await getOpsStatusSnapshot());
+      case "exports":
+        return formatOpsExportsForTelegram(await listRecentExportJobs({ limit: 10 }));
       case "health": {
         let database: "ok" | "error" = "ok";
         let status;
@@ -69,7 +95,7 @@ export async function getOpsCommandReply(
         });
       }
       case "issues":
-        return formatOpsIssuesForTelegram(await listRecentOpsIssues({ limit: 8 }));
+        return formatOpsIssuesForTelegram(await listRecentOpsIssues({ limit: issueLimit ?? defaultIssueLimit }));
     }
   } catch (error) {
     console.error("[ops-command] query_failed", {
@@ -87,9 +113,11 @@ export function formatOpsHelpForTelegram(prefix?: string) {
     "",
     "/today — 오늘 누적 현황",
     "/yesterday — 전일 운영 요약",
+    "/week — 최근 7일 요약 (오늘 제외)",
     "/status — 현재 대기·재시도 상태",
+    "/exports — 최근 Export 10건",
     "/health — DB·Telegram·GA4 설정 점검",
-    "/issues — 최근 P1/P2 이슈와 미종결 문의",
+    `/issues [N] — 최근 P1/P2 이슈 N건 + 미종결 문의 N건 (기본 ${defaultIssueLimit}, 최대 ${maxIssueLimit})`,
     "/help — 이 도움말",
     "",
     "모든 명령은 조회 전용이며 고객에게 알림을 보내거나 데이터를 변경하지 않습니다.",
