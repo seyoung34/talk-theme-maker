@@ -1,3 +1,4 @@
+import { safeDiagnosticErrorCode } from "@/lib/admin/exportDiagnostics";
 import { createAdminClient } from "@/lib/supabase/server";
 import {
   createOpsEvent,
@@ -60,6 +61,24 @@ export type OpsInquiryIssue = {
   id: string;
   status: "open" | "answered";
   createdAt: string;
+};
+
+/**
+ * 텔레그램 `/exports`가 보여 주는 Export 작업 한 건.
+ *
+ * 운영 채팅으로 나가는 값이라 **필요한 칸만 고르고, 고른 칸도 다시 거른다.** 사용자가 지은 테마 이름
+ * (`file_name`, `export_name`), `user_id`, 자유 텍스트 `error`, 앱 식별자, builder 실행 이름은 조회조차
+ * 하지 않는다. `error_code`는 텍스트 칸이라 저장 함수가 길이만 자르므로 코드 문자만 통과시킨다.
+ */
+export type OpsRecentExport = {
+  id: string;
+  createdAt: string;
+  platform: string;
+  status: string;
+  stage: string;
+  errorCode: string | null;
+  durationMs: number | null;
+  referencedFileCount: number;
 };
 
 const telegramDeliveryLeaseSeconds = 180;
@@ -260,6 +279,37 @@ export async function listRecentOpsEvents(input: { limit?: number } = {}): Promi
     .limit(limit);
   if (error) throw error;
   return (data as unknown[] | null ?? []).map(parseOpsIssue);
+}
+
+/** 이 목록 밖의 칸은 select하지 않는다 — 위 `OpsRecentExport` 설명 참고. */
+export const opsRecentExportColumns = "id,created_at,platform,status,stage,error_code,duration_ms,referenced_asset_file_count";
+
+export async function listRecentExportJobs(input: { limit?: number } = {}): Promise<OpsRecentExport[]> {
+  const limit = Math.min(Math.max(Math.trunc(input.limit ?? 10), 1), 10);
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("export_jobs")
+    .select(opsRecentExportColumns)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data as unknown[] | null ?? []).map(parseOpsRecentExport);
+}
+
+export function parseOpsRecentExport(row: unknown): OpsRecentExport {
+  if (!isRecord(row)) throw new Error("invalid_ops_export_row");
+  return {
+    id: requireString(row.id, "export_id"),
+    createdAt: requireTimestamp(row.created_at, "export_created_at"),
+    platform: requireString(row.platform, "export_platform"),
+    status: requireString(row.status, "export_status"),
+    stage: requireString(row.stage, "export_stage"),
+    errorCode: row.error_code === null || row.error_code === undefined ? null : safeDiagnosticErrorCode(row.error_code),
+    durationMs: row.duration_ms === null || row.duration_ms === undefined ? null : parseCount(row.duration_ms, "export_duration_ms"),
+    referencedFileCount: row.referenced_asset_file_count === null || row.referenced_asset_file_count === undefined
+      ? 0
+      : parseCount(row.referenced_asset_file_count, "export_referenced_asset_file_count"),
+  };
 }
 
 async function updateOpsDelivery(

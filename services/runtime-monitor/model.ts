@@ -71,20 +71,5 @@ export function applySamples(state: MonitorState, samples: Sample[], policy: Pol
   return next;
 }
 
-export function formatNotification(event: Notification) {
-  const labels = { opened: "장애 감지", repeat: "장애 지속", recovered: "복구 확인" };
-  return [
-    `TalkTheme 독립 감시 · ${labels[event.phase]}`,
-    `분류: ${event.source} / ${event.sample.code}`,
-    `시각: ${new Date(event.at).toISOString()}`,
-    `사건: ${event.id}`,
-    ...(event.sample.requests !== undefined ? [
-      `관측 invocation: ${event.sample.requests}, 런타임 오류 후보: ${event.sample.failures ?? 0}`,
-      `집계 시간창: ${new Date(Number(event.sample.observationId) - 300000).toISOString()} ~ ${new Date(Number(event.sample.observationId)).toISOString()} (끝 제외)`,
-      "GraphQL 표본 집계이며 사용자 수/HTTP 실패율이 아닙니다.",
-    ] : []),
-    event.source === "cloudflare_runtime"
-      ? "Workers Logs에서 시간창·outcome·operation/stage/dependency를 대조하세요. exceededResources는 CPU 원인 확정이 아닙니다."
-      : "HTTP/수집 상태 신호이며 원인은 별도 로그로 확인하세요.",
-  ].join("\n");
-}
+// 문구는 사람이 읽는 영역이라 상태 전이와 따로 둔다. runner는 계속 여기서 가져간다.
+export { formatNotification } from "./format.js";

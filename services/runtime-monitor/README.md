@@ -1,9 +1,14 @@
 # Independent runtime monitor (PR3)
 
-**Code preparation only. Not deployed or a running 24-hour monitor.**
+**Operational status (observed 2026-10-23): running in production with Telegram alerts enabled.**
+The operator received a `cloudflare_collector / request_timeout` incident at 2026-10-23T14:05:02Z and its
+recovery notice shortly after. That proves the deployed service sends alerts; it does not by itself record which
+D4 thresholds, budget, retention, IAM or Secret bindings were approved. Check the deployed Cloud Run revision and
+its env for those values instead of inferring them from this file.
+
+The text below was written when the code was prepared (PR3) and is kept as the design reference.
 User selected GCP Scheduler + Cloud Run and GraphQL aggregates + Observability investigation.
-Production wiring, D4 thresholds/budget/retention/notification recipient, Secrets and IAM require separate approval.
-No migration and no operational setup commands are executed by this PR.
+Changing this code does not redeploy the monitor: rebuild the image and roll out a new Cloud Run revision separately.
 
 ## Boundaries
 
