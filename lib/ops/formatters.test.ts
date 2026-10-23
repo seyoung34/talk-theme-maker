@@ -10,6 +10,7 @@ import {
   formatTelegramTestMessage,
 } from "@/lib/ops/formatters";
 import { opsRecentExportColumns, parseOpsRecentExport, type OpsRecentExport } from "@/lib/ops/repository";
+import { formatKstDateTime } from "@/services/runtime-monitor/format";
 
 describe("Telegram message formatter", () => {
   it("renders severity, entity, safe details, and an admin link", () => {
@@ -173,6 +174,18 @@ describe("KST 시각 형식", () => {
 
   it("keeps the input for an invalid date", () => {
     expect(formatKoreanTime("not-a-date")).toBe("not-a-date");
+  });
+
+  /**
+   * 감시기는 독립 서비스라 앱 코드를 import하지 않고 같은 형식을 따로 구현한다. 방향을 거꾸로 해서
+   * 앱 테스트가 감시기 함수를 가져와 비교한다 — 감시기 실행 코드는 그대로 독립이고, 한쪽만 바뀌면 여기서 멈춘다.
+   */
+  it("produces exactly the same string as the independent monitor", () => {
+    const start = Date.UTC(2026, 11, 29, 0, 0, 0);
+    for (let hour = 0; hour < 24 * 6; hour += 1) {
+      const at = start + hour * 60 * 60 * 1000 + 37_123;
+      expect(formatKoreanTime(new Date(at).toISOString())).toBe(formatKstDateTime(at));
+    }
   });
 
   it("is used by the test message", () => {
