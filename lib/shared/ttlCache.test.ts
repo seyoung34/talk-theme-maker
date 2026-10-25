@@ -38,4 +38,13 @@ describe("createTtlCache", () => {
     cache.clear();
     expect(cache.get("a")).toBeUndefined();
   });
+
+  it("큰 snapshot의 쓰기 시 만료 정리는 아직 신선한 LRU 항목을 보존한다", () => {
+    vi.useFakeTimers();vi.setSystemTime(0);
+    const cache=createTtlCache<number>({ttlMs:1000,maxEntries:2,pruneExpiredOnSet:true});
+    cache.set("a",1);vi.setSystemTime(500);cache.set("b",2);
+    vi.setSystemTime(900);expect(cache.get("a")).toBe(1);
+    vi.setSystemTime(1000);cache.set("c",3);
+    expect(cache.get("a")).toBeUndefined();expect(cache.get("b")).toBe(2);expect(cache.get("c")).toBe(3);
+  });
 });

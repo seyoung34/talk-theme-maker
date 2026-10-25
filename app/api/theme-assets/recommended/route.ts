@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { createTtlCache } from "@/lib/shared/ttlCache";
+import { createSingleFlight } from "@/lib/shared/singleFlight";
 import { createAdminClient } from "@/lib/supabase/server";
 import { canonicalAdminAssetToCandidate, mapCanonicalAdminAssetRow, withAdminAssetPlatformVariant, type AdminAssetCandidate, type AdminAssetKind, type AdminAssetTarget } from "@/lib/theme/adminAssets";
 import {
@@ -20,7 +21,7 @@ import { createRegistryStore } from "@/lib/theme/assetCatalog/registryStore";
 const bucketName = "theme-assets";
 const allowedAssetKinds = new Set(["background", "icon", "bubble", "profile", "launcher", "passcode"]);
 /** 한 번의 PostgREST 요청 크기. 추천 결과를 정확히 정렬하려면 모든 source를 읽어야 한다. */
-const sourceBatchSize = 200;
+const sourceBatchSize = 1000;
 const recommendedPageCacheTtlSeconds = 30;
 /**
  * cursor 형식 버전.
@@ -38,7 +39,6 @@ const recommendedAssetSelect = [
   "platform",
   "asset_kind",
   "analysis",
-  "bubble_adjustment",
   "title",
   "note",
   "tags",
@@ -49,9 +49,10 @@ const recommendedAssetSelect = [
   "enabled",
   "created_at",
   "updated_at",
-  "admin_asset_targets(id,asset_id,platform,slot_role,target_kind,priority,enabled)",
-  "admin_asset_bubble_specs(asset_id,android_markers,ios_insets,ios_stretch,geometry)",
-  "admin_asset_variants(id,asset_id,platform,storage_path,asset_object_id,file_name,mime_type,analysis)",
+  // Child asset_id repeats the parent id; the canonical mapper restores it.
+  "admin_asset_targets(id,platform,slot_role,target_kind,priority,enabled)",
+  "admin_asset_bubble_specs(android_markers,ios_insets,ios_stretch,geometry)",
+  "admin_asset_variants(id,platform,storage_path,asset_object_id,file_name,mime_type,analysis)",
 ].join(",");
 
 type RecommendedResponseItem = AdminAssetCandidate & {
@@ -97,6 +98,8 @@ type RecommendedPagePayload = {
  * 보유하는 동안에는 함께 재사용되므로, 그 신선도 상한은 각 캐시의 hard expiry가 정한다.
  */
 type RecommendedPageBase = {
+  // A page made from a reused source must not extend its 30-second freshness.
+  readonly expiresAt: number;
   readonly entries: readonly {
     readonly assetId: string;
     readonly candidate: AdminAssetCandidate;
@@ -108,7 +111,14 @@ type RecommendedPageBase = {
   readonly nextCursor?: string;
 };
 
-const recommendedPageCache = createTtlCache<RecommendedPageBase>({ ttlMs: recommendedPageCacheTtlSeconds * 1000, maxEntries: 128 });
+const recommendedPageCache = createTtlCache<RecommendedPageBase>({ ttlMs: recommendedPageCacheTtlSeconds * 1000, maxEntries: 128, pruneExpiredOnSet: true });
+type SourceSnapshot = { assets: readonly ReturnType<typeof mapCanonicalAdminAssetRow>[]; expiresAt: number };
+type RankedSnapshot = { ranked: readonly RankedAsset[]; expiresAt: number };
+const sourceCache = createTtlCache<SourceSnapshot>({ ttlMs: recommendedPageCacheTtlSeconds * 1000, maxEntries: allowedAssetKinds.size, pruneExpiredOnSet: true });
+const rankedCache = createTtlCache<RankedSnapshot>({ ttlMs: recommendedPageCacheTtlSeconds * 1000, maxEntries: 128, pruneExpiredOnSet: true });
+const sourceFlights = createSingleFlight<SourceSnapshot>(allowedAssetKinds.size);
+const rankedFlights = createSingleFlight<RankedSnapshot>();
+const pageFlights = createSingleFlight<RecommendedPageBase>();
 
 export const dynamic = "force-dynamic";
 
@@ -130,62 +140,87 @@ export async function GET(request: NextRequest) {
     // 편집기에서 슬롯을 고를 때마다 호출되는 경로다. 등록 후보 집합을 짧게 재사용해
     // 슬롯 클릭마다 원본 전체를 다시 읽지 않게 한다.
     const recommendationPool = slotRole ? getAdminAssetRecommendationPool({ role: slotRole, kind: assetKind }, platform) : undefined;
-    const cacheKey = [recommendationPool?.key ?? `${platform}|${assetKind}|all`, limit, cursor ? cursorParam : ""].join("|");
+    const poolKey = recommendationPool?.key ?? `${platform}|${assetKind}|all`;
+    const cacheKey = [poolKey, limit, cursor ? cursorParam : ""].join("|");
     const admin = createAdminClient();
     const cached = recommendedPageCache.get(cacheKey);
-    if (cached) return jsonRecommendedPage(await attachCatalogRefs(admin, cached, platform));
+    if (cached && cached.expiresAt > Date.now()) return jsonRecommendedPage(await attachCatalogRefs(admin, cached, platform));
 
-    const data = await readRecommendedSourceRows(admin, assetKind);
-
-    const ranked = (data)
-      .map((row: unknown) => mapCanonicalAdminAssetRow(row))
-      .flatMap((asset) => rankAsset(asset, platform, assetKind, recommendationPool))
-      .sort(compareRankedAssets);
-    const cursorFiltered = cursor ? ranked.filter((item) => compareRankedAssetToCursor(item, cursor) > 0) : ranked;
-    const page = cursorFiltered.slice(0, limit);
-    const hasMore = cursorFiltered.length > limit;
-    const signedUrls = await createSignedUrlMap(admin, page.map((item) => item.asset.variants.find((variant) => variant.platform === platform)?.storagePath ?? item.asset.storagePath));
-    const signedUrlRecord = Object.fromEntries(signedUrls);
-    const prepared = page.map((item) => {
-      const candidate = canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord);
-      const withVariant = withAdminAssetPlatformVariant(candidate, platform);
-      return { item, candidate, withVariant };
-    });
-    const thumbnailIndex = await readPickerThumbnailIndex(admin, prepared.map(({ withVariant }) => withVariant));
-
-    const entries = prepared.map(({ item, candidate, withVariant }) => {
-      /**
-       * 플랫폼 원본으로 바뀌었는지 본다.
-       *
-       * 바뀌었다면 canonical 썸네일은 **다른 그림**이다. 그대로 보여 주면 화면과 선택 결과가
-       * 어긋나므로, 대응하는 variant 썸네일이 없을 때는 `thumbnailUrl`을 주지 않고 같은 플랫폼의
-       * `previewUrl`로 떨어뜨린다.
-       */
-      const usesPlatformVariant = withVariant.storagePath !== candidate.storagePath;
-      const thumbnailUrl = selectPickerThumbnailUrl({
-        index: thumbnailIndex,
-        adminAssetId: item.asset.id,
-        platform,
-        usesPlatformVariant,
+    const base = await pageFlights.run(cacheKey, async () => {
+      const { ranked, expiresAt } = await readRankedPool(admin, poolKey, platform, assetKind, recommendationPool);
+      const cursorFiltered = cursor ? ranked.filter((item) => compareRankedAssetToCursor(item, cursor) > 0) : ranked;
+      const page = cursorFiltered.slice(0, limit);
+      const hasMore = cursorFiltered.length > limit;
+      const signedUrls = await createSignedUrlMap(admin, page.map((item) => item.asset.variants.find((variant) => variant.platform === platform)?.storagePath ?? item.asset.storagePath));
+      const signedUrlRecord = Object.fromEntries(signedUrls);
+      const prepared = page.map((item) => {
+        const candidate = canonicalAdminAssetToCandidate(item.asset, signedUrls.get(item.asset.storagePath), signedUrlRecord);
+        const withVariant = withAdminAssetPlatformVariant(candidate, platform);
+        return { item, candidate, withVariant };
       });
-      return {
-        assetId: item.asset.id,
-        candidate: withVariant,
-        usesPlatformVariant,
-        target: item.target,
-        matchRank: item.matchRank,
-        ...(thumbnailUrl ? { thumbnailUrl } : {}),
-      };
-    });
-    const last = page.at(-1);
-    const base: RecommendedPageBase = { entries, nextCursor: hasMore && last ? encodeCursor(last) : undefined };
+      const thumbnailIndex = await readPickerThumbnailIndex(admin, prepared.map(({ withVariant }) => withVariant));
 
-    recommendedPageCache.set(cacheKey, base);
+      const entries = prepared.map(({ item, candidate, withVariant }) => {
+        /**
+         * 플랫폼 원본으로 바뀌었는지 본다.
+         *
+         * 바뀌었다면 canonical 썸네일은 **다른 그림**이다. 그대로 보여 주면 화면과 선택 결과가
+         * 어긋나므로, 대응하는 variant 썸네일이 없을 때는 `thumbnailUrl`을 주지 않고 같은 플랫폼의
+         * `previewUrl`로 떨어뜨린다.
+         */
+        const usesPlatformVariant = withVariant.storagePath !== candidate.storagePath;
+        const thumbnailUrl = selectPickerThumbnailUrl({
+          index: thumbnailIndex,
+          adminAssetId: item.asset.id,
+          platform,
+          usesPlatformVariant,
+        });
+        return {
+          assetId: item.asset.id,
+          candidate: withVariant,
+          usesPlatformVariant,
+          target: item.target,
+          matchRank: item.matchRank,
+          ...(thumbnailUrl ? { thumbnailUrl } : {}),
+        };
+      });
+      const last = page.at(-1);
+      const base: RecommendedPageBase = { entries, expiresAt, nextCursor: hasMore && last ? encodeCursor(last) : undefined };
+
+      recommendedPageCache.set(cacheKey, base);
+      return base;
+    });
     return jsonRecommendedPage(await attachCatalogRefs(admin, base, platform));
   } catch (error) {
     console.error("Recommended asset listing failed", JSON.stringify(serializeError(error)));
     return NextResponse.json({ error: "Failed to load recommended assets." }, { status: 500 });
   }
+}
+
+async function readRankedPool(
+  admin: ReturnType<typeof createAdminClient>,
+  poolKey: string,
+  platform: "android" | "ios",
+  assetKind: AdminAssetKind,
+  recommendationPool: AdminAssetRecommendationPool | undefined,
+): Promise<RankedSnapshot> {
+  const cached = rankedCache.get(poolKey);
+  if (cached && cached.expiresAt > Date.now()) return cached;
+  return rankedFlights.run(poolKey, async () => {
+    const cachedSource = sourceCache.get(assetKind);
+    const source = cachedSource && cachedSource.expiresAt > Date.now() ? cachedSource : await sourceFlights.run(assetKind, async () => {
+      const assets = await readRecommendedSourceRows(admin, assetKind);
+      const snapshot = { assets, expiresAt: Date.now() + recommendedPageCacheTtlSeconds * 1000 };
+      sourceCache.set(assetKind, snapshot);
+      return snapshot;
+    });
+    const snapshot = {
+      ranked: source.assets.flatMap(asset => rankAsset(asset, platform, assetKind, recommendationPool)).sort(compareRankedAssets),
+      expiresAt: source.expiresAt,
+    };
+    rankedCache.set(poolKey, snapshot);
+    return snapshot;
+  });
 }
 
 /**
@@ -196,8 +231,8 @@ export async function GET(request: NextRequest) {
 async function readRecommendedSourceRows(
   admin: ReturnType<typeof createAdminClient>,
   assetKind: AdminAssetKind,
-): Promise<unknown[]> {
-  const rows: unknown[] = [];
+): Promise<ReturnType<typeof mapCanonicalAdminAssetRow>[]> {
+  const rows: ReturnType<typeof mapCanonicalAdminAssetRow>[] = [];
   let offset = 0;
 
   while (true) {
@@ -211,8 +246,10 @@ async function readRecommendedSourceRows(
 
     if (error) throw error;
     const batch = Array.isArray(data) ? data : [];
-    rows.push(...batch);
-    if (batch.length < sourceBatchSize) break;
+    // Do not assume a short batch is EOF: PostgREST can cap below our range size.
+    // An empty follow-up proves completion without COUNT/RPC/schema changes.
+    if (!batch.length) break;
+    rows.push(...batch.map((row: unknown) => mapCanonicalAdminAssetRow(row)));
     offset += batch.length;
   }
 

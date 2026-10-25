@@ -7,7 +7,7 @@ export type TtlCache<T> = {
   clear: () => void;
 };
 
-export function createTtlCache<T>({ ttlMs, maxEntries = 64 }: { ttlMs: number; maxEntries?: number }): TtlCache<T> {
+export function createTtlCache<T>({ ttlMs, maxEntries = 64, pruneExpiredOnSet = false }: { ttlMs: number; maxEntries?: number; pruneExpiredOnSet?: boolean }): TtlCache<T> {
   const entries = new Map<string, { value: T; expiresAt: number }>();
 
   return {
@@ -24,6 +24,12 @@ export function createTtlCache<T>({ ttlMs, maxEntries = 64 }: { ttlMs: number; m
       return entry.value;
     },
     set(key, value) {
+      // Large source/ranked snapshots must not retain old generations until LRU
+      // capacity is reached. Existing small-cache callers keep their O(1) writes.
+      if (pruneExpiredOnSet) {
+        const now = Date.now();
+        for (const [key, entry] of entries) if (entry.expiresAt <= now) entries.delete(key);
+      }
       entries.delete(key);
       entries.set(key, { value, expiresAt: Date.now() + ttlMs });
       while (entries.size > maxEntries) {

@@ -59,19 +59,29 @@ describe("GET /api/theme-assets/recommended", () => {
   let findActiveByKeys: ReturnType<typeof vi.fn>;
   let rangeStarts: number[];
   let signedPaths: string[][];
+  let signTtls: number[];
+  let sourceFailures: number;
+  let thumbnailRows: unknown[];
+  let previewOrigin: string | undefined;
 
-  async function load(rows: readonly unknown[][]) {
+  async function load(rows: readonly unknown[][], cap = 1000) {
     vi.resetModules();
+    const source = rows.flat();
     const admin = {
       from: vi.fn((table: string) => {
+        if (table === "theme_asset_objects") {
+          const query = {select:()=>query,eq:()=>query,in:async()=>({data:thumbnailRows,error:null})};
+          return query;
+        }
         if (table === "admin_assets") {
           const query = {
             select: vi.fn(() => query),
             eq: vi.fn(() => query),
             order: vi.fn(() => query),
-            range: vi.fn(async (start: number) => {
+            range: vi.fn(async (start: number, end: number) => {
               rangeStarts.push(start);
-              return { data: rows[rangeStarts.length - 1] ?? [], error: null };
+              if (sourceFailures-- > 0) return {data:null,error:{message:"fixture source error"}};
+              return { data: source.slice(start, start + Math.min(cap, end - start + 1)), error: null };
             }),
           };
           return query;
@@ -80,8 +90,9 @@ describe("GET /api/theme-assets/recommended", () => {
       }),
       storage: {
         from: vi.fn(() => ({
-          createSignedUrls: vi.fn(async (paths: string[]) => {
+          createSignedUrls: vi.fn(async (paths: string[], ttl: number) => {
             signedPaths.push(paths);
+            signTtls.push(ttl);
             return {
               data: paths.map((path) => ({ path, signedUrl: `https://signed.test/${encodeURIComponent(path)}` })),
               error: null,
@@ -95,7 +106,10 @@ describe("GET /api/theme-assets/recommended", () => {
     createRegistryStore = vi.fn(() => ({ findActiveByKeys }));
     vi.doMock("@/lib/supabase/server", () => ({ createAdminClient }));
     vi.doMock("@/lib/theme/assetCatalog/registryStore", () => ({ createRegistryStore }));
-    vi.doMock("@/lib/theme/assetCatalog/previewUrl", () => ({ getR2PreviewOrigin: vi.fn(() => undefined) }));
+    vi.doMock("@/lib/theme/assetCatalog/previewUrl", () => ({
+      getR2PreviewOrigin: () => previewOrigin,
+      previewUrlOf: ({r2ObjectKey}: {r2ObjectKey?:string}) => previewOrigin && r2ObjectKey ? `${previewOrigin}/${r2ObjectKey}` : undefined,
+    }));
     vi.doMock("@/lib/theme/assetCatalog/exportGate", () => ({
       isCatalogExportAssetAllowed: vi.fn(() => true),
       warnOnCatalogExportScopeDrift: vi.fn(),
@@ -106,9 +120,15 @@ describe("GET /api/theme-assets/recommended", () => {
   beforeEach(() => {
     rangeStarts = [];
     signedPaths = [];
+    signTtls = [];
+    sourceFailures = 0;
+    thumbnailRows = [];
+    previewOrigin = undefined;
   });
 
   afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
     for (const moduleName of [
       "@/lib/supabase/server",
       "@/lib/theme/assetCatalog/registryStore",
@@ -131,7 +151,7 @@ describe("GET /api/theme-assets/recommended", () => {
       sourceRow(exactAssetId, [{ targetKind: "exact_role", slotRole: "main_background", priority: 10 }]),
       sourceRow("tail-asset", [{ targetKind: "asset_kind", priority: 0 }]),
     ];
-    const GET = await load([firstBatch, secondBatch]);
+    const GET = await load([firstBatch, secondBatch], 200);
 
     const response = await GET({
       nextUrl: new URL("http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=main_background&limit=50"),
@@ -140,7 +160,7 @@ describe("GET /api/theme-assets/recommended", () => {
     const ids = payload.items.map((item: { id: string }) => item.id);
 
     expect(response.status).toBe(200);
-    expect(rangeStarts).toEqual([0, 200]);
+    expect(rangeStarts).toEqual([0, 200, 202]);
     expect(ids[0]).toBe(exactAssetId);
     expect(ids.filter((id: string) => id === duplicateAssetId)).toHaveLength(1);
     expect(new Set(ids).size).toBe(ids.length);
@@ -195,7 +215,7 @@ describe("GET /api/theme-assets/recommended", () => {
         { targetKind: "asset_kind", priority: 3 },
       ]),
     ];
-    const GET = await load([rows, rows]);
+    const GET = await load([rows]);
     const request = (role: string, cursor?: string) => GET({
       nextUrl: new URL(`http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=${role}&limit=2${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`),
     } as never);
@@ -209,7 +229,7 @@ describe("GET /api/theme-assets/recommended", () => {
     const secondMain = await (await request("main_background", firstMain.nextCursor)).json();
     expect(secondTab.items.map((item: { id: string }) => item.id)).toEqual(secondMain.items.map((item: { id: string }) => item.id));
     expect(secondTab.nextCursor).toBe(secondMain.nextCursor);
-    expect(rangeStarts).toEqual([0, 0]);
+    expect(rangeStarts).toEqual([0, 3]);
     expect(signedPaths).toHaveLength(2);
     expect(findActiveByKeys).toHaveBeenCalledTimes(4);
   });
@@ -240,7 +260,7 @@ describe("GET /api/theme-assets/recommended", () => {
 
     expect(second.items.map((item: { id: string }) => item.id)).toEqual(first.items.map((item: { id: string }) => item.id));
     expect(second.nextCursor).toBe(first.nextCursor);
-    expect(rangeStarts).toEqual([0]);
+    expect(rangeStarts).toEqual([0, 3]);
   });
 
   it("family 밖 icon 역할은 서로 다른 추천 풀을 유지한다", async () => {
@@ -252,7 +272,7 @@ describe("GET /api/theme-assets/recommended", () => {
         { targetKind: "exact_role", slotRole: "splash", priority: 2 },
       ]),
     ];
-    const GET = await load([rows, rows]);
+    const GET = await load([rows]);
 
     const family = await (await GET({
       nextUrl: new URL("http://localhost/api/theme-assets/recommended?platform=android&assetKind=icon&slotRole=theme_icon"),
@@ -263,7 +283,7 @@ describe("GET /api/theme-assets/recommended", () => {
 
     expect(family.items.map((item: { id: string }) => item.id)).toEqual(["44444444-4444-4444-8444-444444444444"]);
     expect(splash.items.map((item: { id: string }) => item.id)).toEqual(["55555555-5555-4555-8555-555555555555"]);
-    expect(rangeStarts).toEqual([0, 0]);
+    expect(rangeStarts).toEqual([0, 2]);
   });
 
   /**
@@ -288,7 +308,7 @@ describe("GET /api/theme-assets/recommended", () => {
       sourceRow("11111111-1111-4111-8111-111111111111", [{ targetKind: "exact_role", slotRole: "main_background", priority: 5 }]),
       sourceRow("22222222-2222-4222-8222-222222222222", [{ targetKind: "asset_kind", priority: 3 }]),
     ];
-    const GET = await load([rows, rows]);
+    const GET = await load([rows]);
     const request = (cursor?: string) => GET({
       nextUrl: new URL(`http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=main_background&limit=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`),
     } as never);
@@ -325,5 +345,89 @@ describe("GET /api/theme-assets/recommended", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: "Valid platform and assetKind are required." });
     expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("1207개 source의 동률 정렬과 v2 cursor가 모든 페이지를 누락·중복 없이 잇는다", async () => {
+    const rows=Array.from({length:1207},(_,i)=>({
+      ...sourceRow(`00000000-0000-4000-8000-${String(i).padStart(12,"0")}`,[{targetKind:i%3?"asset_kind":"exact_role",slotRole:i%3?undefined:"main_background",priority:i%5}]),
+      updated_at:i%2?"2026-08-23T00:00:00.000Z":"2026-08-22T00:00:00.000Z",
+    }));
+    const GET=await load([rows]);
+    const request=(cursor?:string)=>GET({nextUrl:new URL(`http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=main_background&limit=50${cursor?`&cursor=${encodeURIComponent(cursor)}`:""}`)} as never);
+    const expected=rows.toSorted((a,b)=>{
+      const x=a.admin_asset_targets[0],y=b.admin_asset_targets[0];
+      return Number(x.target_kind==="asset_kind")-Number(y.target_kind==="asset_kind")||y.priority-x.priority||Date.parse(b.updated_at)-Date.parse(a.updated_at)||b.id.localeCompare(a.id);
+    }).map(row=>row.id);
+    const ids:string[]=[];let cursor:string|undefined;
+    do {
+      const payload=await (await request(cursor)).json();
+      ids.push(...payload.items.map((item:{id:string})=>item.id));cursor=payload.nextCursor;
+      if(cursor)expect(cursor).toMatch(/^v2\|/);
+    }while(cursor);
+    expect(ids).toEqual(expected);expect(new Set(ids).size).toBe(1207);
+    expect(rangeStarts).toEqual([0,1000,1207]);
+    expect(signTtls.every(ttl=>ttl===600)).toBe(true);
+    expect(findActiveByKeys).toHaveBeenCalledTimes(25);
+    const reset=await (await request("v2|invalid|0|0|bad")).json();
+    expect(reset.items.map((item:{id:string})=>item.id)).toEqual(expected.slice(0,50));
+    expect(rangeStarts).toEqual([0,1000,1207]);
+  });
+
+  it("동시 같은 페이지 miss를 합치고 각 응답의 registry는 새로 읽는다", async () => {
+    const GET=await load([[sourceRow(exactAssetId,[{targetKind:"asset_kind",priority:0}])]]);
+    const request=()=>GET({nextUrl:new URL("http://localhost/api/theme-assets/recommended?platform=android&assetKind=background")} as never);
+    const payloads=await Promise.all(Array.from({length:8},async()=>{const response=await request();expect(response.headers.get("cache-control")).toBe("private, max-age=30");return response.json();}));
+    for(const payload of payloads)expect(payload).toEqual(payloads[0]);
+    expect(rangeStarts).toEqual([0,1]);expect(signedPaths).toHaveLength(1);
+    expect(findActiveByKeys).toHaveBeenCalledTimes(8);
+  });
+
+  it("서로 다른 페이지·풀의 동시 miss도 source를 공유한다", async () => {
+    const GET=await load([[sourceRow(exactAssetId,[{targetKind:"asset_kind",priority:0}])]]);
+    await Promise.all([1,2,3,4].map(limit=>GET({nextUrl:new URL(`http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=unknown_${limit}&limit=${limit}`)} as never)));
+    expect(rangeStarts).toEqual([0,1]);expect(signedPaths).toHaveLength(4);expect(findActiveByKeys).toHaveBeenCalledTimes(4);
+  });
+
+  it("source의 만료를 새 페이지가 연장하지 않고 실패 후 재시도한다", async () => {
+    vi.useFakeTimers({toFake:["Date"]});vi.setSystemTime(1_000_000);
+    const row=sourceRow(exactAssetId,[{targetKind:"asset_kind",priority:0}]);
+    const GET=await load([[row]]);
+    const request=(limit:number)=>GET({nextUrl:new URL(`http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&limit=${limit}`)} as never);
+    expect((await (await request(1)).json()).items[0].title).toBe(exactAssetId);
+    row.title="changed";vi.setSystemTime(1_029_999);
+    expect((await (await request(2)).json()).items[0].title).toBe(exactAssetId);
+    expect(rangeStarts).toEqual([0,1]);
+    vi.setSystemTime(1_030_000);sourceFailures=1;
+    const failed=await request(2);expect(failed.status).toBe(500);
+    expect(await failed.json()).toEqual({error:"Failed to load recommended assets."});
+    expect((await (await request(2)).json()).items[0].title).toBe("changed");
+    expect(rangeStarts).toEqual([0,1,0,0,1]);
+  });
+
+  it("128페이지 상한에서 오래된 페이지를 내보내고 source는 재사용한다", async () => {
+    const GET=await load([[sourceRow(exactAssetId,[{targetKind:"asset_kind",priority:0}])]]);
+    const request=(index:number)=>GET({nextUrl:new URL(`http://localhost/api/theme-assets/recommended?platform=android&assetKind=background&slotRole=unknown_${index}`)} as never);
+    for(let i=0;i<129;i++)await request(i);
+    expect(signedPaths).toHaveLength(129);await request(0);expect(signedPaths).toHaveLength(130);
+    expect(rangeStarts).toEqual([0,1]);
+  });
+
+  it("동률 target 선택과 플랫폼 variant·thumbnail·registry freshness를 보존한다", async () => {
+    const row=sourceRow(exactAssetId,[{targetKind:"exact_role",slotRole:"main_background",priority:7},{targetKind:"exact_role",slotRole:"chat_background",priority:7}]);
+    const GET=await load([[{
+      ...row,asset_object_id:"canonical-object",
+      admin_asset_targets:row.admin_asset_targets.map((target,index)=>({...target,id:index?"z-target":"a-target"})),
+      admin_asset_variants:[{id:"variant",platform:"ios",storage_path:"ios.png",asset_object_id:"ios-object",file_name:"ios.png",mime_type:"image/png",analysis:{width:400,height:800}}],
+    }]]);
+    previewOrigin="https://preview.test";
+    thumbnailRows=[{id:"canonical-object",logical_asset_id:`admin:${exactAssetId}`,variant_key:"canonical",r2_previews:{picker:{objectKey:"wrong.webp"}}},{id:"ios-object",logical_asset_id:`admin:${exactAssetId}`,variant_key:"ios",r2_previews:{picker:{objectKey:"ios.webp"}}}];
+    findActiveByKeys.mockResolvedValue([{id:"ios-object",logicalAssetId:`admin:${exactAssetId}`,variantKey:"ios",revision:1,fileName:"ios.png",mimeType:"image/png",sizeBytes:10,sourceScale:1,width:400,height:800,pngSignatureVerified:true}]);
+    const request=()=>GET({nextUrl:new URL("http://localhost/api/theme-assets/recommended?platform=ios&assetKind=background&slotRole=main_background")} as never);
+    const first=(await (await request()).json()).items[0];
+    expect(first).toMatchObject({storagePath:"ios.png",previewUrl:"https://signed.test/ios.png",thumbnailUrl:"https://preview.test/ios.webp",target:{id:"a-target"},catalog:{selection:{variantKey:"ios",revision:1}}});
+    expect(first.variants[0].assetId).toBe(exactAssetId);
+    findActiveByKeys.mockResolvedValue([]);
+    const second=(await (await request()).json()).items[0];expect(second.catalog).toBeUndefined();expect(second.thumbnailUrl).toBe(first.thumbnailUrl);
+    expect(signedPaths).toHaveLength(1);expect(signTtls).toEqual([600]);expect(findActiveByKeys).toHaveBeenCalledTimes(2);
   });
 });

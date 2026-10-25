@@ -186,6 +186,7 @@ async function connect(mf) {
 async function runtime(count, startup = false, assetsEnabled = process.env.CPU_ASSETS === '1') {
   const rows = sourceRows(count);
   const calls = [];
+  const sourceResponses = [];
   const assetCalls = [];
   const unexpected = [];
   const outboundService = async request => {
@@ -197,7 +198,15 @@ async function runtime(count, startup = false, assetsEnabled = process.env.CPU_A
     else if (url.pathname === '/rest/v1/admin_assets') {
       const offset = Number(url.searchParams.get('offset') || 0);
       const limit = Number(url.searchParams.get('limit') || 200);
-      data = rows.slice(offset,offset+limit);
+      data = rows.slice(offset,offset+limit).map(row=>{
+        // Model the projection actually requested, not a fixed full-row payload.
+        const selected = {...row};
+        const select = url.searchParams.get('select') ?? '';
+        if(!select.split(',').includes('bubble_adjustment')) delete selected.bubble_adjustment;
+        if(!select.includes('id,asset_id,platform')) selected.admin_asset_targets = row.admin_asset_targets.map(({asset_id,...target})=>target);
+        return selected;
+      });
+      sourceResponses.push(Buffer.byteLength(JSON.stringify(data)));
     } else if (url.pathname.startsWith('/storage/v1/object/sign/')) {
       const body = await request.json();
       data = body.paths.map(p=>({path:p,signedURL:`/object/sign/theme-assets/${p}?token=fixture`,error:null}));
@@ -240,7 +249,7 @@ async function runtime(count, startup = false, assetsEnabled = process.env.CPU_A
     }},
   }));
   await mf.ready;
-  return {mf,calls,unexpected,assetCalls};
+  return {mf,calls,unexpected,assetCalls,sourceResponses};
 }
 
 if(process.argv[2] === 'startup') {
@@ -262,6 +271,11 @@ const routes = [
   {name:'home',path:'/'},
   {name:'session-anon',path:'/api/session'},
   {name:'session-auth',path:'/api/session',auth:true},
+  // Used only with the explicit local fault-injection CPU_ENTRY.
+  {name:'session-unexpected-error',path:'/api/session',status:500,fixtureOnly:true},
+  {name:'readiness-unexpected-error',path:'/api/internal/ops/readiness',headers:{authorization:`Bearer ${fixtureBindings.MONITOR_READINESS_TOKEN}`},status:500,fixtureOnly:true},
+  {name:'session-fast-unexpected-error',path:'/api/session?fast=1',status:500,fixtureOnly:true},
+  {name:'readiness-fast-unexpected-error',path:'/api/internal/ops/readiness?fast=1',headers:{authorization:`Bearer ${fixtureBindings.MONITOR_READINESS_TOKEN}`},status:500,fixtureOnly:true},
   {name:'me-anon',path:'/api/me'},
   {name:'next-after-session',path:'/api/me',preheat:true},
   {name:'me-auth',path:'/api/me',auth:true},
@@ -280,6 +294,8 @@ const routes = [
   {name:'recommended-1000',path:'/api/theme-assets/recommended?platform=android&assetKind=background&limit=24',count:1000},
   ...[24,200,1000,5000].map(count=>({name:`recommended-${count}-loaded`,
     path:'/api/theme-assets/recommended?platform=android&assetKind=background&limit=24',count,preheat:true})),
+  ...[24,200,1000,5000].map(count=>({name:`recommended-${count}-concurrent`,
+    path:'/api/theme-assets/recommended?platform=android&assetKind=background&limit=24',count,preheat:true,concurrency:4})),
 ];
 const filter = process.env.CPU_ROUTES?.split(',');
 const repeats = Number(process.env.CPU_COLD_REPEATS || 3);
@@ -323,7 +339,7 @@ if(process.argv[2] === 'privacy-contract') {
 }
 if(process.argv[2] === 'verify') {
   const verified=[];
-  for(const route of routes.filter(r=>!filter || filter.includes(r.name))) {
+  for(const route of routes.filter(r=>filter ? filter.includes(r.name) : !r.fixtureOnly)) {
     const {mf,calls,unexpected,assetCalls}=await runtime(route.count ?? 0);
     try {
       const response=await mf.dispatchFetch(`https://cpu-local.invalid${route.path}`,{method:route.method ?? 'GET',headers:{...route.headers,...(route.auth?{cookie}:{})}});
@@ -337,7 +353,7 @@ if(process.argv[2] === 'verify') {
       if(route.name==='me-auth' && JSON.parse(body).user?.id!==userId) throw new Error('Authentication fixture did not reach account reads');
       if(route.name==='bonus-auth' && JSON.parse(body).creditsGranted!==3) throw new Error('Bonus fixture did not reach RPC');
       const result={route:route.name,status:response.status,contentType,bytes:Buffer.byteLength(body),prefix:body.slice(0,35),calls,assetCalls,headers:Object.fromEntries(response.headers)};
-      if(route.name.startsWith('privacy-')) await writeFile(path.join(output,`${route.name}.body`),body);
+      await writeFile(path.join(output,`${route.name}.body`),body);
       verified.push(result);console.log(JSON.stringify(result));
     } finally {await mf.dispose();}
   }
@@ -348,7 +364,7 @@ if(process.argv[2] === 'os-cpu') {
   if(process.platform !== 'win32') throw new Error('os-cpu mode uses Windows process CPU accounting');
   const powershell = command => execFileSync('pwsh',['-NoProfile','-NonInteractive','-Command',command],{encoding:'utf8'}).trim();
   const data = [];
-  for(const route of routes.filter(r=>!filter || filter.includes(r.name))) {
+  for(const route of routes.filter(r=>filter ? filter.includes(r.name) : !r.fixtureOnly)) {
     for(let repeat=0;repeat<repeats;repeat++) {
       const {mf,calls,unexpected} = await runtime(route.count ?? 0);
       try {
@@ -356,11 +372,13 @@ if(process.argv[2] === 'os-cpu') {
         if(!Number.isInteger(pid) || pid <= 0) throw new Error('Cannot identify owned workerd process');
         const cpu = () => Number(powershell(`(Get-Process -Id ${pid}).TotalProcessorTime.TotalMilliseconds`));
         async function request() {
+          await Promise.all(Array.from({length:route.concurrency ?? 1}, async () => {
           const response = await mf.dispatchFetch(`https://cpu-local.invalid${route.path}`,{method:route.method ?? 'GET',headers:{...route.headers,...(route.auth?{cookie}:{})}});
           await response.text();
           if(response.status !== (route.status ?? 200) || unexpected.length) throw new Error(`Unexpected status or outbound call: ${route.name}`);
+          }));
         }
-        if(route.preheat) await (await mf.dispatchFetch('https://cpu-local.invalid/api/session')).text();
+        if(route.preheat) await (await mf.dispatchFetch(`https://cpu-local.invalid${process.env.CPU_PREHEAT_PATH ?? '/api/session'}`)).text();
         const c0=cpu(); await request(); const c1=cpu();
         // Let the same route settle before the unprofiled warm batch.
         for(let i=0;i<10;i++) await request();
@@ -368,9 +386,10 @@ if(process.argv[2] === 'os-cpu') {
         const c2=cpu(), start=performance.now();
         for(let i=0;i<100;i++) await request();
         const wallMs=performance.now()-start, c3=cpu();
-        const result={route:route.name,repeat,sourceRows:route.count ?? null,coldCpuMs:c1-c0,warmBatchCpuMs:c3-c2,warmRequests:100,warmMeanCpuMs:(c3-c2)/100,warmBatchWallMs:wallMs,warmCalls:calls.length-beforeCalls,pid};
+        const requestCount=100*(route.concurrency ?? 1);
+        const result={route:route.name,repeat,sourceRows:route.count ?? null,coldCpuMs:c1-c0,coldRequests:route.concurrency ?? 1,warmBatchCpuMs:c3-c2,warmRequests:requestCount,warmMeanCpuMs:(c3-c2)/requestCount,warmBatchWallMs:wallMs,warmCalls:calls.length-beforeCalls,pid};
         data.push(result);console.log(JSON.stringify(result));
-        await writeFile(path.join(output,'process-cpu.json'),JSON.stringify({environment:{node:process.version,cpu:os.cpus()[0].model,metric:'owned workerd process user+kernel CPU; includes all runtime threads; 100-request warm batch; no profiler'},results:data},null,2));
+        await writeFile(path.join(output,'process-cpu.json'),JSON.stringify({environment:{node:process.version,cpu:os.cpus()[0].model,metric:'owned workerd process user+kernel CPU; includes all runtime threads; 100 warm batches with recorded request count; no profiler'},results:data},null,2));
       } finally {await mf.dispose();}
     }
   }
@@ -380,26 +399,32 @@ const results = [];
 const envInfo = {timestamp:new Date().toISOString(),node:process.version,platform:process.platform,
   cpu:os.cpus()[0].model,logicalCpus:os.cpus().length,commit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),
   repeats,warm,samplingIntervalUs:100,metric:'V8 sampled non-idle time; not production cpuTimeMs'};
-for (const route of routes.filter(r=>!filter || filter.includes(r.name))) {
+for (const route of routes.filter(r=>filter ? filter.includes(r.name) : !r.fixtureOnly)) {
   for (let repeat=0; repeat<repeats; repeat++) {
-    const {mf,calls,unexpected} = await runtime(route.count ?? 0);
+    const {mf,calls,unexpected,sourceResponses} = await runtime(route.count ?? 0);
     const cdp = await connect(mf);
     try {
       if(route.preheat) await (await mf.dispatchFetch(`https://cpu-local.invalid${process.env.CPU_PREHEAT_PATH ?? '/api/session'}`)).text();
       for (let i=0; i<=warm; i++) {
         const before = calls.length;
+        const sourceBefore = sourceResponses.length;
         await cdp.send('Profiler.start');
         const start = performance.now();
-        const response = await mf.dispatchFetch(`https://cpu-local.invalid${route.path}`,{
-          method:route.method ?? 'GET',headers:{...route.headers,...(route.auth?{cookie}:{})},
-        });
-        const body = await response.text();
+        const responses = await Promise.all(Array.from({length:route.concurrency ?? 1},async()=>{
+          const response = await mf.dispatchFetch(`https://cpu-local.invalid${route.path}`,{
+            method:route.method ?? 'GET',headers:{...route.headers,...(route.auth?{cookie}:{})},
+          });
+          return {response,body:await response.text()};
+        }));
+        const {response,body} = responses[0];
+        if(responses.some(r=>r.response.status!==response.status || r.body!==body)) throw new Error('Concurrent responses differ');
         const wallMs = performance.now()-start;
         const {profile} = await cdp.send('Profiler.stop');
         const filename = `${route.name}-${repeat}-${i===0?'cold':`warm-${i}`}.cpuprofile`;
         await writeFile(path.join(output,filename),JSON.stringify(profile));
         const result = {route:route.name,path:route.path,repeat,index:i,phase:i===0?(route.preheat?'route-cold-cache-miss':'first-request'):'warm',
           sourceRows:route.count ?? null,status:response.status,bytes:Buffer.byteLength(body),wallMs,
+          concurrency:route.concurrency ?? 1,sourceResponseBytes:sourceResponses.slice(sourceBefore).reduce((a,b)=>a+b,0),
           calls:calls.slice(before),...summarize(profile)};
         results.push(result);
         if(response.status !== (route.status ?? 200)) throw new Error(`${route.name} status ${response.status}: ${body.slice(0,500)}`);
