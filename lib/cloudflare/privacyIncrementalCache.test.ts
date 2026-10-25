@@ -7,21 +7,22 @@ const caches = vi.hoisted(() => ({
 vi.mock("@opennextjs/cloudflare/overrides/incremental-cache/static-assets-incremental-cache", () => ({ default: caches.static }));
 vi.mock("@opennextjs/aws/overrides/incrementalCache/dummy.js", () => ({ default: caches.dummy }));
 import cache from "./privacyIncrementalCache";
+import { policyCachePaths } from "./policyCachePaths.mjs";
 
 describe("privacy SSG opt-in", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("serves only the exact privacy page cache through static assets", async () => {
+  it.each(policyCachePaths)("serves the exact approved page %s through static assets", async (route) => {
     const entry = { value: { type: "app", html: "policy", rsc: "flight" } };
     caches.static.get.mockResolvedValue(entry);
-    expect(await cache.get("/privacy")).toBe(entry);
-    expect(caches.static.get).toHaveBeenCalledWith("/privacy", undefined);
+    expect(await cache.get(route)).toBe(entry);
+    expect(caches.static.get).toHaveBeenCalledWith(route, undefined);
     expect(cache.name).toBe(caches.static.name);
     expect(caches.dummy.get).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["/", undefined], ["/terms", "cache"], ["/admin", undefined],
+    ["/", undefined], ["/guide", "cache"], ["/admin", undefined],
     ["/api/me", undefined], ["/privacy/child", undefined],
     ["/privacy", "fetch"], ["/privacy", "composable"],
   ] as const)("retains dummy behavior for %s %s", async (key, type) => {

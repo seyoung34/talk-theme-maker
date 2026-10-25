@@ -152,8 +152,18 @@ function sourceRows(count) {
 
 async function connect(mf) {
   const base = await mf.getInspectorURL();
-  const ws = new WebSocket(new URL('/core:user:cpu-local',base));
-  await new Promise((resolve,reject) => {ws.onopen=resolve;ws.onerror=reject;});
+  let ws;
+  for(let attempt=0;attempt<5;attempt++) {
+    ws = new WebSocket(new URL('/core:user:cpu-local',base));
+    try {
+      await new Promise((resolve,reject) => {ws.onopen=resolve;ws.onerror=reject;});
+      break;
+    } catch(error) {
+      ws.close();
+      if(attempt===4) throw error;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+  }
   let id = 0;
   const pending = new Map();
   ws.onmessage = e => {
@@ -256,6 +266,10 @@ const routes = [
   {name:'bonus-auth',path:'/api/credits/signup-bonus',method:'POST',auth:true},
   {name:'privacy-rsc',path:'/privacy?_rsc=cpu',headers:{RSC:'1'}},
   {name:'privacy-html',path:'/privacy'},
+  ...['terms','refund','support','copyright'].flatMap(name=>[
+    {name:`${name}-html`,path:`/${name}`},
+    {name:`${name}-rsc`,path:`/${name}?_rsc=cpu`,headers:{RSC:'1'}},
+  ]),
   {name:'login',path:'/login'},
   {name:'readiness',path:'/api/internal/ops/readiness',headers:{authorization:`Bearer ${fixtureBindings.MONITOR_READINESS_TOKEN}`}},
   {name:'recommended-24',path:'/api/theme-assets/recommended?platform=android&assetKind=background&limit=24',count:24},
@@ -268,6 +282,8 @@ const filter = process.env.CPU_ROUTES?.split(',');
 const repeats = Number(process.env.CPU_COLD_REPEATS || 3);
 const warm = Number(process.env.CPU_WARM_REPEATS || 20);
 if(process.argv[2] === 'privacy-contract') {
+  const policyPath = process.env.CPU_POLICY_PATH ?? '/privacy';
+  const policyName = policyPath.slice(1);
   const results = [];
   const tree = encodeURIComponent(JSON.stringify(['', {children:['terms', {children:['__PAGE__', {}]}]}, null, null, true]));
   const cases = [
@@ -287,18 +303,18 @@ if(process.argv[2] === 'privacy-contract') {
     const {mf,calls,unexpected,assetCalls} = await runtime(0,false,enabled);
     try {
       for(const test of cases) {
-        const response = await mf.dispatchFetch(`https://cpu-local.invalid/privacy?contract=1${test.headers.RSC?'&_rsc=contract':''}`,{method:test.method ?? 'GET',headers:test.headers});
+        const response = await mf.dispatchFetch(`https://cpu-local.invalid${policyPath}?contract=1${test.headers.RSC?'&_rsc=contract':''}`,{method:test.method ?? 'GET',headers:test.headers});
         const body = await response.text();
         if((!test.method && response.status!==200) || unexpected.length || calls.length) throw new Error(`Privacy contract failed: ${test.name}`);
         // Invalid draft cookies are cleared by Next on the fallback path.
         if(response.headers.has('set-cookie') && test.name !== 'draft') throw new Error('Personalized policy response');
         const headers=Object.fromEntries(response.headers);
-        await writeFile(path.join(output,`contract-${enabled?'hit':'miss'}-${test.name}.body`),body);
+        await writeFile(path.join(output,`${policyName}-contract-${enabled?'hit':'miss'}-${test.name}.body`),body);
         results.push({enabled,name:test.name,status:response.status,headers,bytes:Buffer.byteLength(body),assetCalls:[...assetCalls]});
       }
     } finally {await mf.dispose();}
   }
-  await writeFile(path.join(output,'privacy-contract.json'),JSON.stringify(results,null,2));
+  await writeFile(path.join(output,`${policyName}-contract.json`),JSON.stringify(results,null,2));
   console.log(JSON.stringify(results,null,2));
   process.exit(0);
 }

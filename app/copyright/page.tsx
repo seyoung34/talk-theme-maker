@@ -3,6 +3,7 @@ import { createPublicPageMetadata } from "@/lib/seo/site";
 import PolicyDocumentPage from "@/components/policy/PolicyDocumentPage";
 import { getPolicyDocument } from "@/lib/policies/documents";
 import { getPublicBusinessInfo } from "@/lib/policies/publicConfig";
+export const dynamic = "force-static";
 
 export const metadata: Metadata = createPublicPageMetadata({
   title: "저작권·권리침해 신고",
