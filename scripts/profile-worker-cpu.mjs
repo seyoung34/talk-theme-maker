@@ -8,11 +8,11 @@ import { maxHeaderSize } from 'node:http';
 import { Miniflare, Response as MFResponse, convertV4MiniflareOptions } from 'miniflare';
 
 const root = process.cwd();
-if(!['prepare','bundle','measure','startup','os-cpu','summarize','report','verify'].includes(process.argv[2])) {
-  console.error('Usage: node --max-http-header-size=131072 scripts/profile-worker-cpu.mjs prepare|bundle|startup|measure|os-cpu|report|verify|summarize [profiles...]');
+if(!['prepare','bundle','measure','startup','os-cpu','summarize','report','verify','privacy-contract'].includes(process.argv[2])) {
+  console.error('Usage: node --max-http-header-size=131072 scripts/profile-worker-cpu.mjs prepare|bundle|startup|measure|os-cpu|report|verify|privacy-contract|summarize [profiles...]');
   process.exit(1);
 }
-if(['measure','os-cpu','verify'].includes(process.argv[2]) && maxHeaderSize < 131072) {
+if(['measure','os-cpu','verify','privacy-contract'].includes(process.argv[2]) && maxHeaderSize < 131072) {
   throw new Error('Run Node with --max-http-header-size=131072; otherwise the local bridge can silently break registry requests.');
 }
 const output = path.resolve(process.env.CPU_OUTPUT ?? 'docs/report/cpu-baseline-2026-10-25');
@@ -37,7 +37,7 @@ if (process.argv[2] === 'prepare') {
   // before bundling; never retain real credentials in profiling artifacts.
   await writeFile('.open-next/cloudflare/next-env.mjs', fixtureEnvModule);
   await writeFile(configPath, JSON.stringify({
-    name: 'cpu-local', main: path.join(root, 'worker.ts'),
+    name: 'cpu-local', main: path.resolve(process.env.CPU_ENTRY ?? path.join(root, 'worker.ts')),
     compatibility_date: '2026-07-07',
     compatibility_flags: ['nodejs_compat', 'global_fetch_strictly_public'],
     vars: fixtureBindings,
@@ -121,7 +121,8 @@ if(process.argv[2] === 'report') {
   const raw=await readFile(path.join(output,'worker.bundle'));
   const boundary=raw.subarray(2,raw.indexOf(10)).toString().trim();
   const form=await new Response(raw,{headers:{'content-type':`multipart/form-data; boundary=${boundary}`}}).formData();
-  const text=await form.get('worker.js').text();
+  const metadata=JSON.parse(form.get('metadata'));
+  const text=await form.get(metadata.main_module).text();
   await writeFile(path.join(output,'worker.js'),text);
   const bytes=Buffer.byteLength(text),gzipBytes=gzipSync(text).length;
   const summary={environment:requestData.environment,rows,startup,bundle:{bytes,gzipBytes}};
@@ -170,9 +171,10 @@ async function connect(mf) {
   return {send, close:()=>ws.close()};
 }
 
-async function runtime(count, startup = false) {
+async function runtime(count, startup = false, assetsEnabled = process.env.CPU_ASSETS === '1') {
   const rows = sourceRows(count);
   const calls = [];
+  const assetCalls = [];
   const unexpected = [];
   const outboundService = async request => {
     const url = new URL(request.url);
@@ -214,10 +216,19 @@ async function runtime(count, startup = false) {
   const mf = new Miniflare(convertV4MiniflareOptions({name:'cpu-local',modules,modulesRoot:'/',
     compatibilityDate:'2026-07-07',compatibilityFlags:['nodejs_compat','global_fetch_strictly_public'],
     bindings:fixtureBindings,outboundService,inspectorPort:0,port:0,
-    serviceBindings:{ASSETS:async()=>new MFResponse('missing',{status:404})},
+    serviceBindings:{ASSETS:async request=>{
+      const pathname = new URL(request.url).pathname;
+      assetCalls.push(pathname);
+      if(!assetsEnabled) return new MFResponse('missing',{status:404});
+      const assetsRoot = path.resolve('.open-next/assets');
+      const assetPath = path.resolve(assetsRoot, `.${pathname}`);
+      if(!assetPath.startsWith(`${assetsRoot}${path.sep}`)) throw new Error('Invalid asset path');
+      try {return new MFResponse(await readFile(assetPath),{headers:{'content-type':'application/json'}});}
+      catch(error) {if(error.code === 'ENOENT') return new MFResponse('missing',{status:404});throw error;}
+    }},
   }));
   await mf.ready;
-  return {mf,calls,unexpected};
+  return {mf,calls,unexpected,assetCalls};
 }
 
 if(process.argv[2] === 'startup') {
@@ -244,6 +255,7 @@ const routes = [
   {name:'bonus-anon',path:'/api/credits/signup-bonus',method:'POST',status:401},
   {name:'bonus-auth',path:'/api/credits/signup-bonus',method:'POST',auth:true},
   {name:'privacy-rsc',path:'/privacy?_rsc=cpu',headers:{RSC:'1'}},
+  {name:'privacy-html',path:'/privacy'},
   {name:'login',path:'/login'},
   {name:'readiness',path:'/api/internal/ops/readiness',headers:{authorization:`Bearer ${fixtureBindings.MONITOR_READINESS_TOKEN}`}},
   {name:'recommended-24',path:'/api/theme-assets/recommended?platform=android&assetKind=background&limit=24',count:24},
@@ -255,10 +267,45 @@ const routes = [
 const filter = process.env.CPU_ROUTES?.split(',');
 const repeats = Number(process.env.CPU_COLD_REPEATS || 3);
 const warm = Number(process.env.CPU_WARM_REPEATS || 20);
+if(process.argv[2] === 'privacy-contract') {
+  const results = [];
+  const tree = encodeURIComponent(JSON.stringify(['', {children:['terms', {children:['__PAGE__', {}]}]}, null, null, true]));
+  const cases = [
+    {name:'html',headers:{}},
+    {name:'rsc',headers:{RSC:'1'}},
+    {name:'navigation',headers:{RSC:'1','Next-Router-State-Tree':tree,'Next-Url':'/terms'}},
+    {name:'prefetch',headers:{RSC:'1','Next-Router-Prefetch':'1','Next-Router-State-Tree':tree}},
+    {name:'segment-prefetch',headers:{RSC:'1','Next-Router-Segment-Prefetch':'/_tree'}},
+    {name:'auth-html',headers:{cookie}},
+    {name:'auth-rsc',headers:{RSC:'1',cookie}},
+    {name:'draft',headers:{cookie:'__prerender_bypass=invalid'}},
+    {name:'head',method:'HEAD',headers:{}},
+    {name:'post',method:'POST',headers:{}},
+    {name:'next-action',method:'POST',headers:{'Next-Action':'invalid'}},
+  ];
+  for(const enabled of [false,true]) {
+    const {mf,calls,unexpected,assetCalls} = await runtime(0,false,enabled);
+    try {
+      for(const test of cases) {
+        const response = await mf.dispatchFetch(`https://cpu-local.invalid/privacy?contract=1${test.headers.RSC?'&_rsc=contract':''}`,{method:test.method ?? 'GET',headers:test.headers});
+        const body = await response.text();
+        if((!test.method && response.status!==200) || unexpected.length || calls.length) throw new Error(`Privacy contract failed: ${test.name}`);
+        // Invalid draft cookies are cleared by Next on the fallback path.
+        if(response.headers.has('set-cookie') && test.name !== 'draft') throw new Error('Personalized policy response');
+        const headers=Object.fromEntries(response.headers);
+        await writeFile(path.join(output,`contract-${enabled?'hit':'miss'}-${test.name}.body`),body);
+        results.push({enabled,name:test.name,status:response.status,headers,bytes:Buffer.byteLength(body),assetCalls:[...assetCalls]});
+      }
+    } finally {await mf.dispose();}
+  }
+  await writeFile(path.join(output,'privacy-contract.json'),JSON.stringify(results,null,2));
+  console.log(JSON.stringify(results,null,2));
+  process.exit(0);
+}
 if(process.argv[2] === 'verify') {
   const verified=[];
   for(const route of routes.filter(r=>!filter || filter.includes(r.name))) {
-    const {mf,calls,unexpected}=await runtime(route.count ?? 0);
+    const {mf,calls,unexpected,assetCalls}=await runtime(route.count ?? 0);
     try {
       const response=await mf.dispatchFetch(`https://cpu-local.invalid${route.path}`,{method:route.method ?? 'GET',headers:{...route.headers,...(route.auth?{cookie}:{})}});
       const body=await response.text();
@@ -270,7 +317,8 @@ if(process.argv[2] === 'verify') {
       }
       if(route.name==='me-auth' && JSON.parse(body).user?.id!==userId) throw new Error('Authentication fixture did not reach account reads');
       if(route.name==='bonus-auth' && JSON.parse(body).creditsGranted!==3) throw new Error('Bonus fixture did not reach RPC');
-      const result={route:route.name,status:response.status,contentType,bytes:Buffer.byteLength(body),prefix:body.slice(0,35),calls};
+      const result={route:route.name,status:response.status,contentType,bytes:Buffer.byteLength(body),prefix:body.slice(0,35),calls,assetCalls,headers:Object.fromEntries(response.headers)};
+      if(route.name.startsWith('privacy-')) await writeFile(path.join(output,`${route.name}.body`),body);
       verified.push(result);console.log(JSON.stringify(result));
     } finally {await mf.dispose();}
   }
