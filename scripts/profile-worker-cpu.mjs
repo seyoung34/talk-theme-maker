@@ -36,6 +36,8 @@ if (process.argv[2] === 'prepare') {
   // OpenNext copies server .env values to this GENERATED file. Replace all of them
   // before bundling; never retain real credentials in profiling artifacts.
   await writeFile('.open-next/cloudflare/next-env.mjs', fixtureEnvModule);
+  // The independent fast path consumes the same sanitized public build values.
+  execFileSync(process.execPath, ['scripts/prepare-worker-public-config.mjs']);
   await writeFile(configPath, JSON.stringify({
     name: 'cpu-local', main: path.resolve(process.env.CPU_ENTRY ?? path.join(root, 'worker.ts')),
     compatibility_date: '2026-07-07',
@@ -261,6 +263,7 @@ const routes = [
   {name:'session-anon',path:'/api/session'},
   {name:'session-auth',path:'/api/session',auth:true},
   {name:'me-anon',path:'/api/me'},
+  {name:'next-after-session',path:'/api/me',preheat:true},
   {name:'me-auth',path:'/api/me',auth:true},
   {name:'bonus-anon',path:'/api/credits/signup-bonus',method:'POST',status:401},
   {name:'bonus-auth',path:'/api/credits/signup-bonus',method:'POST',auth:true},
@@ -382,7 +385,7 @@ for (const route of routes.filter(r=>!filter || filter.includes(r.name))) {
     const {mf,calls,unexpected} = await runtime(route.count ?? 0);
     const cdp = await connect(mf);
     try {
-      if(route.preheat) await (await mf.dispatchFetch('https://cpu-local.invalid/api/session')).text();
+      if(route.preheat) await (await mf.dispatchFetch(`https://cpu-local.invalid${process.env.CPU_PREHEAT_PATH ?? '/api/session'}`)).text();
       for (let i=0; i<=warm; i++) {
         const before = calls.length;
         await cdp.send('Profiler.start');
