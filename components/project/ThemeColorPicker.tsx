@@ -81,6 +81,7 @@ export function ThemeColorPicker({ value, label, onChange, children }: ThemeColo
           align="start"
           sideOffset={8}
           collisionPadding={16}
+          onEscapeKeyDown={(event) => event.stopPropagation()}
           className="radix-popover-content z-[111] w-[min(248px,calc(100vw-32px))] rounded-2xl border border-[var(--color-outline-variant)] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.22)] outline-none"
         >
           <span className="sr-only" id={titleId}>{title}</span>
