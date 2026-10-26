@@ -41,6 +41,10 @@ it("follows Next's env-file order and cross-file expansion",()=>{
   });
   expect(run(root).config).toEqual({NEXT_PUBLIC_SUPABASE_URL:"https://local.invalid",NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:"local-key"});
 });
+it("defaults NODE_ENV to production before loading, as next build does",()=>{
+  const root=fixture({".env.production":"NEXT_PUBLIC_SUPABASE_URL=https://${NODE_ENV:-fallback}.invalid\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=key\n"});
+  expect(run(root).config.NEXT_PUBLIC_SUPABASE_URL).toBe("https://production.invalid");
+});
 it.each([
   [{".env":"NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=key\n"},{}],
   [{".env":"NEXT_PUBLIC_SUPABASE_URL=http://fixture.invalid\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=key\n"},{}],

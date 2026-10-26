@@ -6,6 +6,8 @@ import { writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { loadEnvConfig } = require(require.resolve('@next/env', { paths: [require.resolve('next/package.json')] }));
+// `next build` defaults NODE_ENV to production before loading env files.
+process.env.NODE_ENV ||= 'production';
 const { combinedEnv } = loadEnvConfig(process.cwd(), false, { info() {}, error: console.error });
 const url = combinedEnv.NEXT_PUBLIC_SUPABASE_URL;
 const key = combinedEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
