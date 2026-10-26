@@ -1,6 +1,9 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore `.open-next/worker.js` is generated at build time.
 import { default as openNextWorker } from "./.open-next/worker.js";
+import { guardPrivacyMethod } from "./lib/cloudflare/privacyRequestGuard";
+import { apiFastPath, type FastPathEnvironment } from "./lib/cloudflare/apiFastPath";
+import { workerPublicConfig } from "./.worker-public-config.mjs";
 import {
   runScheduledOps,
   type ScheduledOpsController,
@@ -8,7 +11,9 @@ import {
 } from "./lib/ops/exportSweepScheduler";
 
 const worker = {
-  fetch: openNextWorker.fetch,
+  fetch(request: Request, ...args: unknown[]) {
+    return guardPrivacyMethod(request) ?? apiFastPath(request, { ...args[0] as FastPathEnvironment, ...workerPublicConfig }) ?? openNextWorker.fetch(request, ...args);
+  },
   scheduled(controller: ScheduledOpsController, env: ScheduledOpsEnvironment) {
     return runScheduledOps(controller, env);
   },

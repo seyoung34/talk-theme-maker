@@ -77,3 +77,4 @@ scripts/setup-ga4-definitions.mjs
 .vercel
 .env*
 !.env.example
+.worker-public-config.mjs
