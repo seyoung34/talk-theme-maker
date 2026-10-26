@@ -1,9 +1,12 @@
-import { cookies } from "next/headers";
+import { workerRequestEnvironment } from "@/lib/cloudflare/workerRequestEnvironment";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseBrowserConfig, requireSupabaseServerConfig } from "@/lib/supabase/config";
 
 export async function createClient() {
+  // Maintenance uses only createAdminClient; don't initialize Next's request
+  // runtime when a Worker fast path imports the shared database helpers.
+  const { cookies } = await import("next/headers");
   const { supabaseUrl, supabasePublishableKey } = requireSupabaseBrowserConfig();
   const cookieStore = await cookies();
 
@@ -24,11 +27,22 @@ export async function createClient() {
 }
 
 export function createAdminClient() {
-  const { supabaseUrl, supabaseSecretKey } = requireSupabaseServerConfig();
+  const env = workerRequestEnvironment();
+  const { supabaseUrl, supabaseSecretKey } = env ? workerAdminConfig(env) : requireSupabaseServerConfig();
   return createSupabaseClient(supabaseUrl, supabaseSecretKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
     },
   });
+}
+
+function workerAdminConfig(env: Record<string, string | undefined>) {
+  if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+    throw new Error("Supabase browser configuration is missing. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.");
+  }
+  if (!env.SUPABASE_SECRET_KEY) {
+    throw new Error("Supabase server configuration is missing. Set SUPABASE_SECRET_KEY.");
+  }
+  return { supabaseUrl: env.NEXT_PUBLIC_SUPABASE_URL, supabaseSecretKey: env.SUPABASE_SECRET_KEY };
 }

@@ -1,5 +1,6 @@
 import { safeTelemetry, setObservationStage, recordOperationFailure, withObservationJob } from "@/lib/ops/requestObservation";
 import { createAdminClient } from "@/lib/supabase/server";
+import { requestEnvironment } from "@/lib/cloudflare/workerRequestEnvironment";
 import {
   cancelExportJob,
   claimExportRecovery,
@@ -463,7 +464,8 @@ function readPlatformBuilderConfig(platform: AsyncExportPlatform) {
 
 function getWatchdogStaleMs(platform: AsyncExportPlatform) {
   const envName = platform === "ios" ? "IOS_EXPORT_WATCHDOG_MS" : "ANDROID_EXPORT_WATCHDOG_MS";
-  return Number.parseInt(process.env[envName] ?? process.env.EXPORT_WATCHDOG_MS ?? "", 10) || 25 * 60 * 1000;
+  const env = requestEnvironment();
+  return Number.parseInt(env[envName] ?? env.EXPORT_WATCHDOG_MS ?? "", 10) || 25 * 60 * 1000;
 }
 
 function fallbackBuildFailureReason(platform: AsyncExportPlatform) {

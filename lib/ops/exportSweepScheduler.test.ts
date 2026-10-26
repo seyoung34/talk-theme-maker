@@ -6,6 +6,38 @@ function createController() {
 }
 
 describe("scheduled ops", () => {
+  it("reads each response through EOF without cancelling it, including disabled drain and HTTP failures", async () => {
+    const order: string[] = [];
+    const cancelled = vi.fn();
+    const fetch = vi.fn(async (request: Request) => {
+      const drain = request.url.includes("telegram/drain");
+      order.push(drain ? "drain" : "sweep");
+      return new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new TextEncoder().encode(drain ? '{"reason":"disabled"}' : '{"reason":"query_failed"}')); },
+        async pull(controller) {
+          await Promise.resolve();
+          order.push(drain ? "drain_eof" : "sweep_eof");
+          controller.close();
+        },
+        cancel: cancelled,
+      }), {status: drain ? 503 : 500});
+    });
+    await expect(runScheduledOps(createController(), {
+      OPS_NOTIFICATIONS_DRAIN_TOKEN: "token", WORKER_SELF_REFERENCE: { fetch },
+    })).rejects.toThrow("export_sweep_failed_http_500");
+    expect(order).toEqual(["drain", "drain_eof", "sweep", "sweep_eof"]);
+    expect(cancelled).not.toHaveBeenCalled();
+  });
+
+  it("reports a body read failure and still runs the next operation", async () => {
+    const fetch = vi.fn(async (request: Request) => request.url.includes("telegram/drain")
+      ? new Response(new ReadableStream({ start(controller) { controller.error(new Error("stream_failed")); } }))
+      : Response.json({scanned:0}));
+    await expect(runScheduledOps(createController(), {
+      OPS_NOTIFICATIONS_DRAIN_TOKEN: "token", WORKER_SELF_REFERENCE: { fetch },
+    })).rejects.toThrow(/telegram_drain_failed_.*stream_failed/);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
   it("does not retry when the scheduler is not configured", async () => {
     const controller = createController();
 

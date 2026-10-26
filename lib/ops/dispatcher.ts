@@ -1,4 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { workerRequestContext, workerRequestEnvironment } from "@/lib/cloudflare/workerRequestEnvironment";
 import { formatOpsEventForTelegram } from "@/lib/ops/formatters";
 import { isTelegramNotificationsEnabled, readTelegramConfig, sendTelegramMessage, TelegramError } from "@/lib/ops/telegram";
 import {
@@ -62,7 +63,7 @@ export async function tryPublishOpsEvent(event: OpsEvent, options: TryPublishOps
 export function scheduleOpsEvent(event: OpsEvent) {
   const task = tryPublishOpsEvent(event);
   try {
-    getCloudflareContext().ctx.waitUntil(task);
+    (workerRequestContext() ?? getCloudflareContext().ctx).waitUntil(task);
   } catch {
     void task;
   }
@@ -79,7 +80,7 @@ export async function drainTelegramNotifications(options: { limit?: number } = {
 
   for (const delivery of claimed) {
     try {
-      const message = formatOpsEventForTelegram(delivery.event);
+      const message = formatOpsEventForTelegram(delivery.event, { siteUrl: workerRequestEnvironment()?.NEXT_PUBLIC_SITE_URL });
       const result = await sendTelegramMessage(config, message);
       const marked = await markOpsNotificationSent({
         eventId: delivery.event.eventId,
