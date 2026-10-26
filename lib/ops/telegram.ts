@@ -1,3 +1,5 @@
+import { requestEnvironment } from "@/lib/cloudflare/workerRequestEnvironment";
+
 export type TelegramEnvironment = Record<string, string | undefined>;
 
 export type TelegramConfig = {
@@ -31,11 +33,11 @@ export class TelegramError extends Error {
   }
 }
 
-export function isTelegramNotificationsEnabled(env: TelegramEnvironment = process.env) {
+export function isTelegramNotificationsEnabled(env: TelegramEnvironment = requestEnvironment()) {
   return env.TELEGRAM_NOTIFICATIONS_ENABLED === "1";
 }
 
-export function readTelegramConfig(env: TelegramEnvironment = process.env): TelegramConfig | null {
+export function readTelegramConfig(env: TelegramEnvironment = requestEnvironment()): TelegramConfig | null {
   if (!isTelegramNotificationsEnabled(env)) return null;
 
   const botToken = env.TELEGRAM_BOT_TOKEN?.trim();

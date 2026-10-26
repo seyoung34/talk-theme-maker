@@ -1,6 +1,7 @@
 import { setObservationStage } from "@/lib/ops/requestObservation";
 import { createFixedLengthBody } from "@/lib/theme/export/fixedLengthBody";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { requestEnvironment, workerRequestContext } from "@/lib/cloudflare/workerRequestEnvironment";
 import { createInputArchiveStream, INPUT_ARCHIVE_FILE_NAME, measureInputArchive } from "@/lib/theme/export/inputArchive";
 import type { ResolvedCatalogManifestItem } from "@/lib/theme/assetCatalog/registry";
 
@@ -227,7 +228,7 @@ export async function getBuilderAccessToken(config: BuilderConfig) {
   builderTokens.delete(key);
   let requests: Map<string, Promise<string>> | undefined;
   try {
-    const context = getCloudflareContext().ctx;
+    const context = workerRequestContext() ?? getCloudflareContext().ctx;
     requests = builderTokenRequests.get(context);
     if (!requests) {
       requests = new Map();
@@ -637,7 +638,7 @@ function requireEnv(name: string) {
 }
 
 function optionalEnv(name: string) {
-  const value = process.env[name]?.trim();
+  const value = requestEnvironment()[name]?.trim();
   return value || undefined;
 }
 
@@ -802,7 +803,7 @@ function readPrivateJwk() {
 }
 
 function readKeyId(jwk: OidcPrivateJwk) {
-  const kid = typeof jwk.kid === "string" && jwk.kid.trim() ? jwk.kid.trim() : process.env.CLOUDFLARE_OIDC_KEY_ID;
+  const kid = typeof jwk.kid === "string" && jwk.kid.trim() ? jwk.kid.trim() : requestEnvironment().CLOUDFLARE_OIDC_KEY_ID;
   if (!kid) throw new BuildEnqueueError("missing_oidc_key_id", "OIDC 서명 키 ID 설정이 없습니다.");
   return kid;
 }

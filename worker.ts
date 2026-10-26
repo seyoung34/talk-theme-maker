@@ -3,6 +3,7 @@
 import { default as openNextWorker } from "./.open-next/worker.js";
 import { guardPrivacyMethod } from "./lib/cloudflare/privacyRequestGuard";
 import { apiFastPath, type FastPathEnvironment } from "./lib/cloudflare/apiFastPath";
+import type { WorkerRequestContext } from "./lib/cloudflare/workerRequestEnvironment";
 import { workerPublicConfig } from "./.worker-public-config.mjs";
 import {
   runScheduledOps,
@@ -12,7 +13,7 @@ import {
 
 const worker = {
   fetch(request: Request, ...args: unknown[]) {
-    return guardPrivacyMethod(request) ?? apiFastPath(request, { ...args[0] as FastPathEnvironment, ...workerPublicConfig }) ?? openNextWorker.fetch(request, ...args);
+    return guardPrivacyMethod(request) ?? apiFastPath(request, { ...args[0] as FastPathEnvironment, ...workerPublicConfig }, args[1] as WorkerRequestContext) ?? openNextWorker.fetch(request, ...args);
   },
   scheduled(controller: ScheduledOpsController, env: ScheduledOpsEnvironment) {
     return runScheduledOps(controller, env);

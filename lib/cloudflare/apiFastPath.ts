@@ -2,12 +2,20 @@ import { createServerClient, parseCookieHeader, serializeCookieHeader, type Cook
 import { createClient } from "@supabase/supabase-js";
 import { readinessResponse } from "../ops/readiness";
 import { sessionResponse } from "../supabase/sessionResponse";
+import { exportSweepResponse } from "../ops/exportSweepResponse";
+import { telegramDrainResponse } from "../ops/telegramDrainResponse";
+import { withWorkerRequestEnvironment, type WorkerRequestContext } from "./workerRequestEnvironment";
 
 export type FastPathEnvironment = {
   NEXT_PUBLIC_SUPABASE_URL?: string;
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;
   MONITOR_READINESS_TOKEN?: string;
+  OPS_NOTIFICATIONS_DRAIN_TOKEN?: string;
+  TELEGRAM_NOTIFICATIONS_ENABLED?: string;
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
+  [name: string]: string | undefined;
 };
 
 function browserConfig(env: FastPathEnvironment) {
@@ -42,9 +50,16 @@ async function session(request: Request, env: FastPathEnvironment) {
   return response;
 }
 
-// No next/*, React, generated Next code, or request-scoped globals.
-// Other methods retain Next's HEAD/OPTIONS/405 and routing behavior.
-export function apiFastPath(request: Request, env: FastPathEnvironment): Promise<Response> | undefined {
+// No Next request runtime, React or generated handler executes on these paths.
+// Unhandled methods retain Next's HEAD/OPTIONS/405 and routing behavior.
+export function apiFastPath(request: Request, env: FastPathEnvironment, ctx?: WorkerRequestContext): Promise<Response> | undefined {
+  if (request.method === "POST") {
+    const pathname = new URL(request.url).pathname;
+    const handle = pathname === "/api/internal/ops/telegram/drain" ? telegramDrainResponse
+      : pathname === "/api/internal/ops/export/sweep" ? exportSweepResponse : undefined;
+    if (!handle) return undefined;
+    return withWorkerRequestEnvironment(env, ctx, () => handle(request, env));
+  }
   if (request.method !== "GET") return undefined;
   const pathname = new URL(request.url).pathname;
   let response: Promise<Response>;

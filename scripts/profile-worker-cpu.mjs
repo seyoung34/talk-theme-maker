@@ -23,7 +23,10 @@ const fixtureBindings = {
   SUPABASE_SECRET_KEY: 'fixture-service-key',
   NEXT_PUBLIC_SITE_URL: 'https://cpu-local.invalid',
   MONITOR_READINESS_TOKEN: 'cpu_fixture_readiness_token_1234567890',
-  TELEGRAM_NOTIFICATIONS_ENABLED: '0',
+  TELEGRAM_NOTIFICATIONS_ENABLED: process.env.CPU_OPS_FIXTURES === '1' ? '1' : '0',
+  OPS_NOTIFICATIONS_DRAIN_TOKEN: 'fixture-ops-token',
+  TELEGRAM_BOT_TOKEN: '123456:abcdefghijklmnopqrstuvwxyz',
+  TELEGRAM_CHAT_ID: 'fixture-chat',
   GROBLE_CHECKOUT_ENABLED: '0',
   ASSET_CATALOG_EXPORT_ENABLED_ANDROID: '1',
   ASSET_CATALOG_EXPORT_ENABLED_IOS: '1',
@@ -189,9 +192,24 @@ async function runtime(count, startup = false, assetsEnabled = process.env.CPU_A
   const sourceResponses = [];
   const assetCalls = [];
   const unexpected = [];
+  let fixtureJobCancelled = false;
   const outboundService = async request => {
     const url = new URL(request.url);
     calls.push(`${request.method} ${url.pathname}`);
+    if (process.env.CPU_OPS_FIXTURES === '1') {
+      const jobId = '11111111-2222-4333-8444-555555555556';
+      const job = {id:jobId,user_id:userId,platform:'android',status:fixtureJobCancelled ? 'failed' : 'pending',stage:'queued',error_code:'build_cancelled',created_at:new Date().toISOString(),cancel_requested_at:new Date().toISOString()};
+      let opsData;
+      if (url.hostname === 'api.telegram.org' && url.pathname === `/bot${fixtureBindings.TELEGRAM_BOT_TOKEN}/sendMessage`) opsData = {ok:true,result:{message_id:1}};
+      else if (url.hostname === 'cpu-fixture.invalid' && url.pathname === '/rest/v1/rpc/claim_ops_notification_batch') opsData = count ? [{event_id:'fixture-event',event_type:'export.failed',severity:'P2',source:'export',occurred_at:'2026-10-26T00:00:00Z',dedupe_key:'fixture',attempt_count:1,lease_id:'fixture-lease',payload:{summary:'Fixture',details:{},adminPath:'/admin/exports'}}] : [];
+      else if (url.hostname === 'cpu-fixture.invalid' && url.pathname === '/rest/v1/rpc/mark_ops_notification_sent') opsData = true;
+      else if (url.hostname === 'cpu-fixture.invalid' && url.pathname === '/rest/v1/rpc/cancel_export_job') {fixtureJobCancelled = true; opsData = {transitioned:true,status:'failed',balance:1};}
+      else if (url.hostname === 'cpu-fixture.invalid' && url.pathname === '/rest/v1/export_jobs') {
+        if (!url.searchParams.has('id')) fixtureJobCancelled = false;
+        opsData = request.method === 'PATCH' ? {id:jobId} : url.searchParams.has('id') ? job : count ? [{...job,status:'pending'}] : [];
+      }
+      if (opsData !== undefined) return new MFResponse(JSON.stringify(opsData),{headers:{'content-type':'application/json'}});
+    }
     if (url.hostname !== 'cpu-fixture.invalid') {unexpected.push(request.url); return new MFResponse('blocked',{status:502});}
     let data;
     if (url.pathname === '/auth/v1/user') data = user;
@@ -268,6 +286,10 @@ if(process.argv[2] === 'startup') {
 }
 
 const routes = [
+  ...[0,1].flatMap(count=>[
+    {name:`telegram-${count ? 'work' : 'empty'}`,path:'/api/internal/ops/telegram/drain',method:'POST',headers:{'x-ops-notifications-token':fixtureBindings.OPS_NOTIFICATIONS_DRAIN_TOKEN},count,fixtureOnly:true},
+    {name:`sweep-${count ? 'work' : 'empty'}`,path:'/api/internal/ops/export/sweep',method:'POST',headers:{'x-ops-notifications-token':fixtureBindings.OPS_NOTIFICATIONS_DRAIN_TOKEN},count,fixtureOnly:true},
+  ]),
   {name:'home',path:'/'},
   {name:'session-anon',path:'/api/session'},
   {name:'session-auth',path:'/api/session',auth:true},
@@ -298,6 +320,14 @@ const routes = [
     path:'/api/theme-assets/recommended?platform=android&assetKind=background&limit=24',count,preheat:true,concurrency:4})),
 ];
 const filter = process.env.CPU_ROUTES?.split(',');
+function verifyOpsResult(route, body) {
+  if (!['telegram-empty','telegram-work','sweep-empty','sweep-work'].includes(route.name)) return;
+  const data = JSON.parse(body);
+  const work = route.count === 1;
+  if (route.name.startsWith('telegram-')) {
+    if (data.status !== 'drained' || data.claimed !== Number(work) || data.sent !== Number(work) || data.retried || data.deadLettered) throw new Error('Telegram fixture did not deliver');
+  } else if (data.scanned !== Number(work) || data.terminal !== Number(work) || data.failed || data.stillPending) throw new Error('Sweep fixture did not settle');
+}
 const repeats = Number(process.env.CPU_COLD_REPEATS || 3);
 const warm = Number(process.env.CPU_WARM_REPEATS || 20);
 if(process.argv[2] === 'privacy-contract') {
@@ -344,9 +374,10 @@ if(process.argv[2] === 'verify') {
     try {
       const response=await mf.dispatchFetch(`https://cpu-local.invalid${route.path}`,{method:route.method ?? 'GET',headers:{...route.headers,...(route.auth?{cookie}:{})}});
       const body=await response.text();
+      verifyOpsResult(route, body);
       const contentType=response.headers.get('content-type');
       if(response.status !== (route.status ?? 200) || unexpected.length) throw new Error(`Unexpected result: ${route.name}`);
-      if(route.count !== undefined) {
+      if(route.count !== undefined && route.name.startsWith('recommended-')) {
         const data=JSON.parse(body);
         if(data.items?.length !== Math.min(24,route.count) || Boolean(data.nextCursor) !== (route.count>24)) throw new Error('Invalid recommendation fixture');
       }
@@ -374,7 +405,7 @@ if(process.argv[2] === 'os-cpu') {
         async function request() {
           await Promise.all(Array.from({length:route.concurrency ?? 1}, async () => {
           const response = await mf.dispatchFetch(`https://cpu-local.invalid${route.path}`,{method:route.method ?? 'GET',headers:{...route.headers,...(route.auth?{cookie}:{})}});
-          await response.text();
+          verifyOpsResult(route, await response.text());
           if(response.status !== (route.status ?? 200) || unexpected.length) throw new Error(`Unexpected status or outbound call: ${route.name}`);
           }));
         }
@@ -417,6 +448,7 @@ for (const route of routes.filter(r=>filter ? filter.includes(r.name) : !r.fixtu
           return {response,body:await response.text()};
         }));
         const {response,body} = responses[0];
+        verifyOpsResult(route, body);
         if(responses.some(r=>r.response.status!==response.status || r.body!==body)) throw new Error('Concurrent responses differ');
         const wallMs = performance.now()-start;
         const {profile} = await cdp.send('Profiler.stop');

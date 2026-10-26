@@ -1,0 +1,103 @@
+import { withObservationJob, recordOperationFailure, setObservationStage, withRequestObservation } from "@/lib/ops/requestObservation";
+import { authorizeOpsInternalRequest } from "@/lib/ops/internalAuth";
+import { createAdminClient } from "@/lib/supabase/server";
+import { resolveExportSettlement, type AsyncExportPlatform } from "@/lib/theme/export/asyncExportStatus";
+
+// Recovery includes paginated execution lookup and failure notification delivery.
+// Keep even a cold, two-platform recovery batch below Free's 50 subrequests.
+// The five-minute cron processes at most 24 jobs/hour (2 * 12), down from 120.
+// This is a cron-only ceiling, not total export capacity: user status requests
+// still settle jobs. Backlogs can delay settlement/refunds after users leave;
+// observe pending age before increasing this batch or the lookup page budget.
+const maxSweepJobs = 2;
+const executionLookupPages = 5;
+
+type PendingExportJob = {
+  id: string;
+  user_id: string;
+  platform: AsyncExportPlatform;
+};
+
+export async function exportSweepResponse(request: Request, env: Record<string, string | undefined> = process.env) {
+  return withRequestObservation(request, "/api/internal/ops/export/sweep", "export.sweep", () => handleRequest(request, env));
+}
+
+async function handleRequest(request: Request, env: Record<string, string | undefined>) {
+  const auth = authorizeOpsInternalRequest(request, env);
+  if (!auth.ok) {
+    return Response.json(
+      { error: auth.reason === "configuration_missing" ? "export sweep이 설정되지 않았습니다." : "인증에 실패했습니다.", reason: auth.reason },
+      { status: auth.reason === "configuration_missing" ? 503 : 401 },
+    );
+  }
+
+  setObservationStage("result_read", "database");
+  let data: unknown[] | null = null;
+  try {
+    const admin = createAdminClient();
+    const result = await admin
+      .from("export_jobs")
+      .select("id,user_id,platform")
+      .eq("status", "pending")
+      .order("updated_at", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .limit(maxSweepJobs);
+    data = result.data as unknown[] | null;
+    if (result.error) throw result.error;
+  } catch {
+    recordOperationFailure("result_read_failed", 500);
+    return Response.json({ error: "export sweep 대상을 읽지 못했습니다.", reason: "query_failed" }, { status: 500 });
+  }
+
+  const jobs = (data ?? []).filter(isPendingExportJob);
+  let terminal = 0;
+  let stillPending = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (const job of jobs) {
+    try {
+      await withObservationJob(job.id, async () => {
+        // Rotate before external work, including failed attempts. A concurrent
+        // settlement is preserved by this conditional update and the billing RPCs.
+        const rotation = await createAdminClient().from("export_jobs")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", job.id).eq("status", "pending").select("id").maybeSingle();
+        if (rotation.error) throw rotation.error;
+        if (!rotation.data) {
+          skipped += 1;
+          return;
+        }
+        const result = await resolveExportSettlement(job.user_id, job.id, job.platform, { executionLookupPages });
+        if (result.kind === "completed" || result.kind === "failed") terminal += 1;
+        else if (result.kind === "pending") stillPending += 1;
+      });
+    } catch {
+      failed += 1;
+      // withObservationJob already records one contextual failure.
+    }
+  }
+
+  const summary = {
+    scanned: jobs.length,
+    terminal,
+    stillPending,
+    failed,
+    skipped,
+    truncated: (data ?? []).length >= maxSweepJobs,
+  };
+  console.info("[export-sweep] completed", summary);
+  return Response.json(summary);
+}
+
+function isPendingExportJob(value: unknown): value is PendingExportJob {
+  if (!isRecord(value)) return false;
+  return typeof value.id === "string"
+    && typeof value.user_id === "string"
+    && (value.platform === "android" || value.platform === "ios");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

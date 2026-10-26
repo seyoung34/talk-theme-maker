@@ -58,8 +58,11 @@ export async function runScheduledOps(
         method: "POST",
         headers: { [opsTokenHeader]: token },
       }));
-      const disabledTelegramDrain = await isDisabledTelegramDrain(operation, response);
-      await response.body?.cancel();
+      // These internal JSON responses are small and bounded. Read through EOF
+      // before ending this invocation: cancel disconnects the callee's response
+      // and can record completed maintenance as a canceled invocation.
+      const body = await response.text();
+      const disabledTelegramDrain = isDisabledTelegramDrain(operation, response, body);
 
       if (!response.ok && !disabledTelegramDrain) {
         failures.push(`${operation.event}_failed_http_${response.status}`);
@@ -103,11 +106,11 @@ function getGa4CorrectionUrls(scheduledTime: number) {
   });
 }
 
-async function isDisabledTelegramDrain(operation: ScheduledOperation, response: Response) {
+function isDisabledTelegramDrain(operation: ScheduledOperation, response: Response, text: string) {
   if (operation.event !== "telegram_drain" || response.status !== 503) return false;
 
   try {
-    const body: unknown = await response.clone().json();
+    const body: unknown = JSON.parse(text);
     return typeof body === "object" && body !== null && "reason" in body && body.reason === "disabled";
   } catch {
     return false;
