@@ -18,13 +18,22 @@
 - Shared project reads belong in `lib/theme/project`; platform quirks belong in `lib/theme/android` or `lib/theme/ios`; API routes should delegate domain and billing work to `lib`.
 - Preserve admin/system template persistence separately from user-local template persistence.
 - Keep focused changes focused. Avoid broad reformatting and large TSX rewrites unless the task requires it.
+- During maintenance/development, preserve a short evidence-backed note for meaningful decisions, unexpected results, or user feedback in the relevant existing blog research or task document; skip routine edits. See `docs/blog/README.md` → `유지보수·개발 중 기록` when available. Record only known reasons/results, leave personal motivation to actual user input, and keep the note within the development task's scope.
 
 ## TalkTheme Blog Writing
 
 - For blog research, drafting, revision, or editorial review, read the available `docs/blog/README.md` and use `talktheme-blog-writing` (shared local source: `~/.agents/skills/talktheme-blog-writing/SKILL.md`). For revisions, read the target pair; for new posts, start from source material. Claude reads these rules through `CLAUDE.md`'s existing `@AGENTS.md` import.
 - Core fallback if docs/skill are absent: write concise Korean plain form (`했다`, `였다`, `한다`), a relevant title and short opening summary; answer the reader's question with concrete experience or implementation, decision reasons, and useful explanations/checks. Adapt to how-to, reflection, or implementation topics without inventing an incident. Title/intro-only edits do not fix missing substance. Distinguish source comments, actual implementation, historical/local/production checks, and measured outcomes; do not invent feelings or completion.
 - Keep one research/draft pair per topic under `docs/blog/` and update its index when needed, unless the user specifies another output. Detailed editorial and completion criteria live in the skill. `docs/` is ignored and not automatically shared across worktrees; locate needed files without claiming missing sources were read, and never force-add them or publish externally as part of writing.
+- Each post must include at least one of the author's own thoughts, feelings, or changes in judgment, grounded in attributable conversation, commits, comments, or documents. If none can be found, interview the user; do not invent a personal reflection or mark the post complete or publish it before that gap is filled.
 - Use the Agent Control Layer handoff format below when delegating, including actual document/skill paths and writer or read-only ownership in `Scope`. Choose Claude/Codex and effort by task; small edits do not require orchestration. Follow the skill's delegation reference only when useful.
+- For blog collaboration, choose persistent main sessions or independent workers autonomously based on continuity, context cost and review independence. User-designated main session identifiers and verified contact state live in `docs/blog/README.md`; a UI tab id alone is not proof of a live messaging address. Keep one writer per file and pass scoped evidence explicitly.
+
+## Operational Evidence With Aside
+
+- Prefer APIs and CLIs for operational checks. When they cannot expose a needed value or usable evidence, try Aside's logged-in browser through its CLI or MCP before leaving the item estimated or unverified. This applies to current plans, billing/credits, deployed settings, usage and performance dashboards; a dashboard observation is not a benchmark.
+- Local CLI: `C:/Users/jupi4/AppData/Local/Aside/CLI/current/aside.exe`; MCP stdio entry: `aside mcp --host local`. Read `aside guide repl` and applicable built-in skills, inspect open tabs, reuse the relevant logged-in tab, and verify through snapshots. CLI/MCP connectivity does not imply every service is authenticated. If the current session lacks an Aside MCP tool, the CLI remains available; do not silently change global agent settings.
+- Record observation time, selected account/project/resource, date range, filters, units and aggregation with the result in the relevant report. Distinguish current UI observations, local records, assumptions and actual measurements. If login/permissions/data prevent verification, record the attempted route and remaining gap. Do not export cookies/tokens or include secrets in evidence. Read-only inspection does not authorize paid benchmarks, plan upgrades, deployments or production mutations.
 
 ## Git Branching and Release
 
