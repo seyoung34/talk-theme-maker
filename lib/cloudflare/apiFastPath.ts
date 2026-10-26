@@ -47,13 +47,26 @@ async function session(request: Request, env: FastPathEnvironment) {
 export function apiFastPath(request: Request, env: FastPathEnvironment): Promise<Response> | undefined {
   if (request.method !== "GET") return undefined;
   const pathname = new URL(request.url).pathname;
+  let response: Promise<Response>;
   if (pathname === "/api/internal/ops/readiness") {
-    return readinessResponse(request, env.MONITOR_READINESS_TOKEN, () => {
+    response = readinessResponse(request, env.MONITOR_READINESS_TOKEN, () => {
       const { url } = browserConfig(env);
       if (!env.SUPABASE_SECRET_KEY) throw new Error("Supabase server configuration is missing. Set SUPABASE_SECRET_KEY.");
       return createClient(url, env.SUPABASE_SECRET_KEY, {auth:{persistSession:false,autoRefreshToken:false}});
     });
-  }
-  if (pathname === "/api/session") return session(request, env);
-  return undefined;
+  } else if (pathname === "/api/session") {
+    response = session(request, env);
+  } else return undefined;
+  return response.catch(() => {
+    // Match the measured production-mode Next route error contract. Never retry
+    // through Next: a failed session request may already have rotated tokens.
+    console.error(pathname === "/api/session" ? "Session request failed" : "Readiness request failed");
+    return new Response(null, {
+      status: 500,
+      headers: {
+        "cache-control": "private, no-cache, no-store, max-age=0, must-revalidate",
+        vary: "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+      },
+    });
+  });
 }

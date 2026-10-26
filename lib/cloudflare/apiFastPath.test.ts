@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { apiFastPath } from "./apiFastPath";
+import nextError from "./fixtures/next-route-error.json";
 
 const env = {
   NEXT_PUBLIC_SUPABASE_URL: "https://fixture.invalid",
@@ -16,7 +17,7 @@ function sessionCookie(expired = false) {
   const value = `base64-${Buffer.from(JSON.stringify({access_token:token,refresh_token:"refresh",expires_at:exp,user})).toString("base64url")}`;
   return `sb-fixture-auth-token=${value}`;
 }
-afterEach(() => {vi.unstubAllGlobals();vi.unstubAllEnvs();vi.doUnmock("next/headers");vi.resetModules();});
+afterEach(() => {vi.restoreAllMocks();vi.unstubAllGlobals();vi.unstubAllEnvs();vi.doUnmock("next/headers");vi.resetModules();});
 
 describe("session Next fallback / Worker HTTP contract with real Supabase SDK", () => {
   it.each(["anon","auth","admin","profile-error","admin-error","invalid","refresh","expired","missing-name","duplicate-cookie"])("matches %s", async scenario => {
@@ -78,4 +79,23 @@ it.each(["ok","unauthorized","unconfigured","error","throw"])("readiness matches
   expect(fast.status).toBe(next.status);expect(await fast.text()).toBe(await next.text());
   expect(fast.headers.get("cache-control")).toBe("no-store");
   for(const call of calls){expect(call.method).toBe("HEAD");expect(new URL(call.url).searchParams.get("limit")).toBe("1");expect(call.signal).toBeInstanceOf(AbortSignal);}
+});
+
+it.each(["/api/session","/api/internal/ops/readiness"])("bounds unexpected %s errors to the captured Next 500 without rerunning", async path => {
+  const error = new Error("fixture-cookie-token-user-id-must-not-log");
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  const request = new Request(`https://local.invalid${path}`);
+  const injection = path === "/api/session"
+    ? vi.spyOn(Response, "json").mockImplementation(() => { throw error; })
+    : vi.spyOn(request.headers, "get").mockImplementation(() => { throw error; });
+  // Await must resolve: a rejection would otherwise escape Worker fetch as 1101.
+  const response = await apiFastPath(request, env)!;
+  expect(response.status).toBe(nextError.status);
+  expect(await response.text()).toBe(nextError.body);
+  expect(response.headers.get("cache-control")).toBe(nextError.cacheControl);
+  expect(response.headers.get("content-type")).toBe(nextError.contentType);
+  expect(response.headers.get("vary")).toBe(nextError.vary);
+  expect(response.headers.getSetCookie()).toEqual([]);
+  expect(injection).toHaveBeenCalledTimes(1);
+  expect(log).toHaveBeenCalledExactlyOnceWith(path === "/api/session" ? "Session request failed" : "Readiness request failed");
 });

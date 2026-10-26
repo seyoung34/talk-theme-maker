@@ -1,0 +1,7 @@
+{
+  "status": 500,
+  "body": "",
+  "cacheControl": "private, no-cache, no-store, max-age=0, must-revalidate",
+  "contentType": null,
+  "vary": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch"
+}
