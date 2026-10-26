@@ -11,6 +11,29 @@ import { createSolidPng } from "./fixtures/image";
  * 데스크톱 스펙이 담당한다.
  */
 test.describe("모바일 편집기", () => {
+  for (const width of [320, 412]) {
+    test(`${width}px 색상 팝오버가 화면 안에 열리고 Escape로 닫힌다`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 740 });
+      await page.goto("/edit");
+      await page.getByRole("button", { name: "편집 패널 펼치기" }).click();
+      await page.getByRole("button", { name: "색상으로 설정" }).click();
+      const trigger = page.getByRole("button", { name: /색상 선택 열기/ }).first();
+      await trigger.click();
+      const picker = page.getByRole("dialog", { name: /색상 선택/ });
+      await expect(picker).toBeVisible();
+      await expect(picker).toHaveAttribute("aria-modal", "false");
+      const bounds = await picker.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      await page.keyboard.press("Escape");
+      await expect(picker).toBeHidden();
+      await expect(trigger).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("button", { name: "편집 패널 펼치기" })).toBeVisible();
+    });
+  }
+
   test("좁은 화면에서 편집기가 열리고 핵심 동작이 가려지지 않는다", async ({ page }) => {
     await page.goto("/edit");
 
