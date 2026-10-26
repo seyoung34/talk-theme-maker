@@ -64,7 +64,7 @@ export default function PolicyDocumentPage({ document, businessInfo }: { documen
 function BusinessInfoPanel({ businessInfo, missing }: { businessInfo: PublicBusinessInfo; missing: boolean }) {
   const entries = [
     ["운영자/상호", businessInfo.operatorName], ["대표자", businessInfo.representativeName], ["사업자등록번호", businessInfo.businessRegistrationNumber],
-    ["통신판매업 신고번호", businessInfo.ecommerceRegistrationNumber], ["사업장 주소", businessInfo.businessAddress], ["고객지원 이메일", businessInfo.supportEmail], ["고객지원 전화", businessInfo.supportPhone], ["운영 시간", businessInfo.supportHours],
+    ["통신판매업 신고번호", businessInfo.ecommerceRegistrationNumber], ["사업장 주소", businessInfo.businessAddress], ["고객지원 이메일", businessInfo.supportEmail], ["고객지원 전화", businessInfo.supportPhone],
   ];
   return (
     <section className="mt-7 rounded-[28px] border border-[#dbe8fb] bg-white/90 p-5 shadow-[0_18px_48px_rgba(47,107,191,0.08)] sm:p-7" aria-labelledby="business-info-title">
