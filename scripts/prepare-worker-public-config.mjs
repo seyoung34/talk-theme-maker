@@ -1,13 +1,15 @@
 // Extract ONLY public settings from the exact environment Next built with.
-// Next inlines NEXT_PUBLIC_* from process.env first and falls back to .env files;
-// OpenNext's next-env.mjs holds only the .env file values (empty in Workers Builds).
+// Use Next's own @next/env loader: process.env wins, then .env files in Next's
+// order with the same ${VAR} expansion. OpenNext's next-env.mjs holds only
+// env-file values (empty in Workers Builds), so it is not a faithful source.
 import { writeFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
-import path from 'node:path';
-const { production } = await import(pathToFileURL(path.resolve('.open-next/cloudflare/next-env.mjs')).href);
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? production.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? production.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-if (typeof url !== 'string' || new URL(url).protocol !== 'https:' || typeof key !== 'string' || !key.trim()) {
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { loadEnvConfig } = require(require.resolve('@next/env', { paths: [require.resolve('next/package.json')] }));
+const { combinedEnv } = loadEnvConfig(process.cwd(), false, { info() {}, error: console.error });
+const url = combinedEnv.NEXT_PUBLIC_SUPABASE_URL;
+const key = combinedEnv.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+if (typeof url !== 'string' || !URL.canParse(url) || new URL(url).protocol !== 'https:' || typeof key !== 'string' || !key.trim()) {
   throw new Error('Worker public Supabase configuration requires an HTTPS URL and nonempty publishable key');
 }
 await writeFile('.worker-public-config.mjs', `export const workerPublicConfig = ${JSON.stringify({
