@@ -27,6 +27,30 @@ async function builderEnvironment() {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe("maintenance fast paths", () => {
+  it("uses the built site URL for drain links without a runtime SITE_URL binding", async () => {
+    expect(baseEnv).not.toHaveProperty("NEXT_PUBLIC_SITE_URL");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000");
+    let text = "";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.hostname === "api.telegram.org") {
+        text = JSON.parse(String(options?.body)).text;
+        return Response.json({ok:true,result:{message_id:1}});
+      }
+      if (url.pathname.endsWith("claim_ops_notification_batch")) return Response.json([
+        {event_id:"fixture",event_type:"export.failed",severity:"P2",source:"export",occurred_at:"2026-10-26T00:00:00Z",dedupe_key:"fixture",attempt_count:1,lease_id:"fixture",payload:{summary:"fixture",details:{},adminPath:"/admin/exports"}},
+      ]);
+      expect(url.pathname).toBe("/rest/v1/rpc/mark_ops_notification_sent");
+      return Response.json(true);
+    }));
+    // Same build-config merge as worker.ts; no public site runtime binding.
+    const buildConfig = {NEXT_PUBLIC_SITE_URL:"https://build-site.invalid"};
+    const response = await apiFastPath(request(paths[0]), {...baseEnv,...buildConfig})!;
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({sent:1});
+    expect(text).toContain("https://build-site.invalid/admin/exports");
+    expect(text).not.toContain("localhost");
+  });
   it("preserves method and exact path fallback", () => {
     for (const path of paths) {
       for (const method of ["GET", "HEAD", "OPTIONS", "PUT"]) expect(apiFastPath(new Request(`https://local.invalid${path}`, {method}), baseEnv)).toBeUndefined();
@@ -100,16 +124,17 @@ describe("maintenance fast paths", () => {
       return Response.json(true);
     });
     vi.stubGlobal("fetch", outbound);
-    const env = (tenant: string) => ({...baseEnv, NEXT_PUBLIC_SUPABASE_URL:`https://${tenant}.invalid`,SUPABASE_SECRET_KEY:`${tenant}-secret`,TELEGRAM_BOT_TOKEN:`123:${tenant.padEnd(24,"x")}`,TELEGRAM_CHAT_ID:tenant,NEXT_PUBLIC_SITE_URL:`https://${tenant}.invalid`});
-    const first = apiFastPath(request(paths[0]), env("first"))!;
+    const env = (tenant: string) => ({...baseEnv, NEXT_PUBLIC_SUPABASE_URL:`https://${tenant}.invalid`,SUPABASE_SECRET_KEY:`${tenant}-secret`,TELEGRAM_BOT_TOKEN:`123:${tenant.padEnd(24,"x")}`,TELEGRAM_CHAT_ID:tenant});
+    const buildConfig = {NEXT_PUBLIC_SITE_URL:"https://built.invalid"};
+    const first = apiFastPath(request(paths[0]), {...env("first"),...buildConfig})!;
     await firstStarted;
-    expect((await (await apiFastPath(request(paths[0]), env("second"))!).json()).sent).toBe(1);
+    expect((await (await apiFastPath(request(paths[0]), {...env("second"),...buildConfig})!).json()).sent).toBe(1);
     release();
     expect((await (await first).json()).sent).toBe(1);
     expect(deliveries.map(d => d.chat)).toEqual(["second","first"]);
     for (const delivery of deliveries) {
       expect(delivery.token).toContain(delivery.chat);
-      expect(delivery.text).toContain(`https://${delivery.chat}.invalid/admin/exports`);
+      expect(delivery.text).toContain("https://built.invalid/admin/exports");
       expect(delivery.text).not.toContain(delivery.chat === "first" ? "second.invalid" : "first.invalid");
     }
     expect(workerRequestEnvironment()).toBeUndefined();
