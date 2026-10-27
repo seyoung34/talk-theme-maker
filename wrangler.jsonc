@@ -26,9 +26,13 @@
     // 관리자 저장의 catalog write-shadow는 기존 운영 동작을 유지한다.
     "ASSET_CATALOG_WRITE_ENABLED": "1",
     // catalog export는 Android/iOS 모든 사용자에게 열려 있다. 서버 플래그가 1이고 아래 allowlist가
-    // 비어 있으면 추천 에셋은 바이트 대신 assetId+revision 참조로 전달된다. 같은 템플릿을 관리자·일반
-    // 계정으로 내보낸 쌍 비교에서 업로드가 Android 약 80%, iOS 약 99.95% 줄었고(2026-10-27)
-    // 결과물은 화면상 같았다. 근거는 계획 문서의 "계정별 쌍 비교" 절을 본다.
+    // 비어 있으면, 참조로 보낼 수 있는 추천 에셋(유효한 catalog 정보·PNG·지원되는 출력 경로와 변환,
+    // 편집되지 않은 업로드 — `clientRef.ts`, `android/export.ts`, `ios/export.ts`)은 바이트 대신
+    // assetId+revision 참조로 전달된다. 조건을 만족하지 않는 에셋은 기존 File 경로를 그대로 쓴다.
+    // 같은 템플릿을 관리자·일반 계정으로 내보낸 쌍 비교에서 업로드가 Android 약 80%, iOS 약 99.95%
+    // 줄었고(2026-10-27) 결과물은 화면상 같았다. 근거는 로컬 문서
+    // docs/plans/in-progress/three-track-asset-storage-implementation-plan.md §0.2의
+    // "계정별 쌍 비교"와 "결과물 동일성과 iOS 쌍 비교" 절을 본다.
     // 빈 문자열은 "제한 없음"이다(`exportGate.ts`의 readAllowlist). 변수를 지우지 않는 이유는
     // 긴급 축소 수단을 남겨 두기 위해서다.
     "ASSET_CATALOG_EXPORT_ANDROID_ASSET_ALLOWLIST": "",
