@@ -1,4 +1,8 @@
+FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS node-runtime
 FROM eclipse-temurin:17-jdk
+
+COPY --from=node-runtime /usr/local/ /usr/local/
+RUN node -e "const [major, minor, patch] = process.versions.node.split('.').map(Number); if (major !== 22 || minor < 23 || (minor === 23 && patch < 4)) process.exit(1)"
 
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
 ENV ANDROID_HOME=/opt/android-sdk
@@ -9,7 +13,7 @@ ENV TEMPLATE_ASSETS_ROOT=/workspace/public/template-assets
 ENV NODE_OPTIONS=--no-deprecation
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl unzip bash nodejs npm \
+  && apt-get install -y --no-install-recommends ca-certificates curl unzip bash \
   && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p "${ANDROID_SDK_ROOT}/cmdline-tools" \
