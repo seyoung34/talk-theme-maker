@@ -24,7 +24,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          check-latest: true
           cache: npm
+
+      - name: Verify Node security baseline
+        run: node -e "const [major, minor, patch] = process.versions.node.split('.').map(Number); console.log('Node', process.versions.node); if (major !== 24 || minor < 22 || (minor === 22 && patch < 1)) process.exit(1)"
 
       - name: Install dependencies
         run: npm ci
@@ -104,7 +108,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          check-latest: true
           cache: npm
+
+      - name: Verify Node security baseline
+        run: node -e "const [major, minor, patch] = process.versions.node.split('.').map(Number); console.log('Node', process.versions.node); if (major !== 24 || minor < 22 || (minor === 22 && patch < 1)) process.exit(1)"
 
       - name: Install dependencies
         run: npm ci
