@@ -23,9 +23,9 @@ vi.mock("@/lib/supabase/client", () => ({
     auth: { signUp: mocks.signUp, signInWithPassword: mocks.signInWithPassword, verifyOtp: mocks.verifyOtp, getUser: mocks.getUser, resend: vi.fn() },
   }),
 }));
-vi.mock("@/lib/policies/consent", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/policies/consent")>()),
-  recordCurrentPolicyConsents: mocks.recordConsents,
+vi.mock("@/lib/policies/signupConsentClient", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/policies/signupConsentClient")>()),
+  recordSignupConsentFromClient: mocks.recordConsents,
 }));
 vi.mock("@/lib/billing/signupBonusClient", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/billing/signupBonusClient")>()), claimSignupBonusFromClient: mocks.claimBonus }));
 vi.mock("@/lib/analytics/ga4", () => ({ trackAnalyticsEvent: mocks.track }));
@@ -174,28 +174,28 @@ describe("LoginClient email signup consent failure", () => {
     expect(trackedNames().filter((name) => name === "signup_failed")).toHaveLength(1);
   });
 
-  it("does not write consent when the account changed before the retry", async () => {
+  it("does not complete when the server refuses the retry write because the account changed", async () => {
     mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
-    mocks.recordConsents.mockRejectedValueOnce(new Error("rls"));
+    const { SignupConsentSessionChangedError } = await import("@/lib/policies/signupConsentClient");
+    mocks.recordConsents.mockRejectedValueOnce(new Error("rls")).mockRejectedValueOnce(new SignupConsentSessionChangedError());
 
     await submitEmailSignup();
-    mocks.getUser.mockResolvedValue({ data: { user: { id: "other" } }, error: null });
     fireEvent.click(await retryButton());
 
     expect(await screen.findByRole("alert")).toHaveTextContent("계정이 달라");
-    expect(mocks.recordConsents).toHaveBeenCalledTimes(1);
+    // 계정 확인은 서버가 쓰기와 같은 요청에서 하므로 클라이언트는 항상 가입 계정 id만 보낸다.
+    expect(mocks.recordConsents).toHaveBeenCalledTimes(2);
+    expect(mocks.recordConsents).toHaveBeenNthCalledWith(2, "u1");
     expect(mocks.claimBonus).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(trackedNames()).not.toContain("signup_completed");
     expect(mocks.track).toHaveBeenCalledWith("signup_failed", { provider: "email", reason: "session_changed" });
   });
 
-  it("does not claim the bonus or complete when the account changes during the consent write", async () => {
+  it("does not claim the bonus or complete when the server refuses the first consent write", async () => {
+    const { SignupConsentSessionChangedError } = await import("@/lib/policies/signupConsentClient");
     mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
-    mocks.getUser
-      .mockResolvedValueOnce({ data: { user: { id: "u1" } }, error: null })
-      .mockResolvedValue({ data: { user: { id: "other" } }, error: null });
-    mocks.recordConsents.mockResolvedValue(undefined);
+    mocks.recordConsents.mockRejectedValue(new SignupConsentSessionChangedError());
 
     await submitEmailSignup();
 
