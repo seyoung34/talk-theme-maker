@@ -8,4 +8,4 @@ SQL 파일을 열어 그대로 실행하면 KST 어제를 종료일로 하는 30
 
 계정 삭제 시 관련 내보내기 기록도 삭제되므로, 과거 기간을 나중에 다시 조회하면 당시 실제 접수 계정 수보다 적어질 수 있다. 과거 관리자 여부도 현재 목록으로는 복원할 수 없다. 결과에는 조회 시각과 제외 기준을 함께 기록한다.
 
-로컬 검증은 `node scripts/export-account-activity.test.mjs`로 실행한다. 실행 중인 로컬 Supabase Docker Postgres 컨테이너가 필요하며, 테스트는 임시 테이블만 사용하고 트랜잭션을 롤백한다. 운영 DB에 테스트를 실행하지 않는다.
+로컬 검증은 `node scripts/verify-export-account-activity-local.mjs`로 실행한다. 실행 중인 로컬 Supabase Docker Postgres 컨테이너가 필요하며, 테스트는 임시 테이블만 사용하고 트랜잭션을 롤백한다. 운영 DB에 테스트를 실행하지 않는다.
