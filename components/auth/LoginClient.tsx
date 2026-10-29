@@ -14,7 +14,7 @@ import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 
 type AuthMode = "signin" | "signup";
 type Message = { tone: "error" | "success"; text: string } | null;
-type AuthStage = "form" | "check-email";
+type AuthStage = "form" | "check-email" | "consent-retry";
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -29,6 +29,8 @@ function getAuthErrorMessage(error: unknown) {
   if (message.includes("network") || message.includes("fetch")) return "네트워크 연결을 확인하고 다시 시도해 주세요.";
   return "인증을 완료하지 못했습니다. 입력 내용을 확인하고 다시 시도해 주세요.";
 }
+
+const consentFailureMessage = "정책 동의 내용을 저장하지 못했습니다. 로그인 상태는 유지되어 있으니, 아래 버튼으로 동의 기록만 다시 시도해 주세요.";
 
 async function claimSignupBonusAfterSignup() {
   const claim = await claimSignupBonusFromClient().catch(() => null);
@@ -135,22 +137,55 @@ export default function LoginClient() {
         ? await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
         : await supabase.auth.signUp({ email: normalizedEmail, password });
       if (result.error) throw result.error;
-      if (mode === "signup" && result.data.session) {
-        await recordCurrentPolicyConsents(supabase, "email_signup");
-        await claimSignupBonusAfterSignup();
-      }
       if (mode === "signup" && !result.data.session) {
         setStage("check-email");
         setResendCooldown(60);
         setMessage(null);
         return;
       }
-      trackAnalyticsEvent(mode === "signup" ? "signup_completed" : "login_completed", { provider: "email" });
+      if (mode === "signup") {
+        // 세션은 이미 만들어졌다. 동의 기록이 실패해도 signUp은 다시 부르지 않고 동의 기록만 재시도한다.
+        await finishSignupConsent(supabase);
+        return;
+      }
+      trackAnalyticsEvent("login_completed", { provider: "email" });
       router.replace(returnTo);
       router.refresh();
     } catch (error) {
       trackAnalyticsEvent(mode === "signup" ? "signup_failed" : "login_failed", { provider: "email", reason: "auth_error" });
       setMessage({ tone: "error", text: getAuthErrorMessage(error) });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // 인증 직후 필수 동의 기록을 남긴다. 실패하면 가입 완료로 보이지 않게 재시도 단계로 전환하고 false를 반환한다.
+  const recordConsentsOrAskRetry = async (supabase: ReturnType<typeof createClient>) => {
+    try {
+      await recordCurrentPolicyConsents(supabase, "email_signup");
+      return true;
+    } catch {
+      trackAnalyticsEvent("signup_failed", { provider: "email", reason: "consent_error" });
+      setStage("consent-retry");
+      setMessage({ tone: "error", text: consentFailureMessage });
+      return false;
+    }
+  };
+
+  const finishSignupConsent = async (supabase: ReturnType<typeof createClient>) => {
+    if (!(await recordConsentsOrAskRetry(supabase))) return;
+    await claimSignupBonusAfterSignup();
+    trackAnalyticsEvent("signup_completed", { provider: "email" });
+    router.replace(returnTo);
+    router.refresh();
+  };
+
+  const retrySignupConsent = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setMessage(null);
+    try {
+      await finishSignupConsent(createClient());
     } finally {
       setIsSubmitting(false);
     }
@@ -194,12 +229,12 @@ export default function LoginClient() {
         token,
         type: "email",
       });
-      if (error) throw error;
-      await recordCurrentPolicyConsents(supabase, "email_signup").catch(() => undefined);
-      await claimSignupBonusAfterSignup();
-      trackAnalyticsEvent("signup_completed", { provider: "email" });
-      router.replace(returnTo);
-      router.refresh();
+      if (error) {
+        setMessage({ tone: "error", text: getAuthErrorMessage(error) });
+        return;
+      }
+      // verifyOtp는 일회용이다. 여기서부터의 실패는 인증 오류가 아니므로 동의 기록만 재시도 대상으로 둔다.
+      await finishSignupConsent(supabase);
     } catch (error) {
       setMessage({ tone: "error", text: getAuthErrorMessage(error) });
     } finally {
@@ -302,7 +337,19 @@ export default function LoginClient() {
             <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">{context.description}</p>
           </div>
 
-          {stage === "check-email" ? (
+          {stage === "consent-retry" ? (
+            <div className="grid gap-5 rounded-[24px] border border-[#cfe0ff] bg-white/80 p-5 text-center">
+              <AlertCircle className="mx-auto text-[#b3261e]" size={36} aria-hidden="true" />
+              <div>
+                <h2 className="text-xl font-black text-[var(--color-on-surface)]">정책 동의 기록이 필요합니다</h2>
+                <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">이메일 인증은 확인됐지만 필수 정책 동의가 아직 저장되지 않았습니다. 저장이 끝나야 다음 단계로 이동합니다.</p>
+              </div>
+              {message ? <AuthMessage message={message} /> : null}
+              <button type="button" className="min-h-11 rounded-full bg-[var(--color-secondary)] px-4 text-sm font-extrabold text-white disabled:opacity-50" onClick={() => void retrySignupConsent()} disabled={isSubmitting}>
+                {isSubmitting ? "저장 중" : "동의 기록 다시 저장"}
+              </button>
+            </div>
+          ) : stage === "check-email" ? (
             <div className="grid gap-5 rounded-[24px] border border-[#cfe0ff] bg-white/80 p-5 text-center">
               <CheckCircle2 className="mx-auto text-[#2f6bbf]" size={36} aria-hidden="true" />
               <div>

@@ -1,0 +1,160 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+
+const mocks = vi.hoisted(() => ({
+  signUp: vi.fn(),
+  signInWithPassword: vi.fn(),
+  verifyOtp: vi.fn(),
+  recordConsents: vi.fn(),
+  claimBonus: vi.fn(),
+  track: vi.fn(),
+  replace: vi.fn(),
+  refresh: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: mocks.replace, refresh: mocks.refresh }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock("@/components/layout/SiteHeader", () => ({ default: () => null }));
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({
+    auth: { signUp: mocks.signUp, signInWithPassword: mocks.signInWithPassword, verifyOtp: mocks.verifyOtp, resend: vi.fn() },
+  }),
+}));
+vi.mock("@/lib/policies/consent", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/policies/consent")>()),
+  recordCurrentPolicyConsents: mocks.recordConsents,
+}));
+vi.mock("@/lib/billing/signupBonusClient", () => ({ claimSignupBonusFromClient: mocks.claimBonus }));
+vi.mock("@/lib/analytics/ga4", () => ({ trackAnalyticsEvent: mocks.track }));
+
+import LoginClient from "@/components/auth/LoginClient";
+
+const retryButton = () => screen.findByRole("button", { name: "동의 기록 다시 저장" });
+const trackedNames = () => mocks.track.mock.calls.map(([name]) => name);
+
+async function submitEmailSignup() {
+  render(<LoginClient />);
+  fireEvent.click(screen.getByRole("tab", { name: "회원가입" }));
+  fireEvent.click(screen.getByLabelText(/만 14세/));
+  fireEvent.click(screen.getByLabelText(/이용약관에 동의/));
+  fireEvent.click(screen.getByLabelText(/개인정보 처리방침에 동의/));
+  fireEvent.click(screen.getByRole("button", { name: /이메일로 가입/ }));
+  const [emailInput] = screen.getAllByPlaceholderText("name@example.com");
+  fireEvent.change(emailInput, { target: { value: "new@example.com" } });
+  const [password, confirm] = screen.getAllByPlaceholderText(/8자 이상|비밀번호 다시 입력/);
+  fireEvent.change(password, { target: { value: "password123" } });
+  fireEvent.change(confirm, { target: { value: "password123" } });
+  fireEvent.submit(emailInput.closest("form")!);
+}
+
+describe("LoginClient email signup consent failure", () => {
+  beforeEach(() => {
+    Object.values(mocks).forEach((mock) => mock.mockReset());
+    mocks.claimBonus.mockResolvedValue({ granted: true, campaignKey: "signup_bonus_v1", creditsGranted: 1 });
+  });
+  afterEach(cleanup);
+
+  it("keeps the immediate-session signup unfinished and retries only the consent write", async () => {
+    mocks.signUp.mockResolvedValue({ data: { session: { access_token: "t" } }, error: null });
+    mocks.recordConsents.mockRejectedValueOnce(new Error("rls")).mockResolvedValueOnce(undefined);
+
+    await submitEmailSignup();
+
+    expect(await retryButton()).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("정책 동의 내용을 저장하지 못했습니다");
+    expect(mocks.claimBonus).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(trackedNames()).not.toContain("signup_completed");
+    expect(mocks.track).toHaveBeenCalledWith("signup_failed", { provider: "email", reason: "consent_error" });
+
+    fireEvent.click(await retryButton());
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+    expect(mocks.signUp).toHaveBeenCalledTimes(1);
+    expect(mocks.recordConsents).toHaveBeenCalledTimes(2);
+    expect(mocks.claimBonus).toHaveBeenCalledTimes(1);
+    expect(trackedNames().filter((name) => name === "signup_completed")).toHaveLength(1);
+    expect(trackedNames().filter((name) => name === "signup_bonus_granted")).toHaveLength(1);
+  });
+
+  it("stays on the retry step when the retry fails again", async () => {
+    mocks.signUp.mockResolvedValue({ data: { session: { access_token: "t" } }, error: null });
+    mocks.recordConsents.mockRejectedValue(new Error("down"));
+
+    await submitEmailSignup();
+    fireEvent.click(await retryButton());
+
+    await waitFor(() => expect(mocks.recordConsents).toHaveBeenCalledTimes(2));
+    expect(await retryButton()).not.toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent("정책 동의 내용을 저장하지 못했습니다");
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.claimBonus).not.toHaveBeenCalled();
+    expect(mocks.signUp).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not repeat the one-time OTP verification when its consent write fails", async () => {
+    mocks.signUp.mockResolvedValue({ data: { session: null }, error: null });
+    mocks.verifyOtp.mockResolvedValue({ error: null });
+    mocks.recordConsents.mockRejectedValueOnce(new Error("rls")).mockResolvedValueOnce(undefined);
+
+    await submitEmailSignup();
+    fireEvent.change(await screen.findByPlaceholderText("12345678"), { target: { value: "12345678" } });
+    fireEvent.click(screen.getByRole("button", { name: "인증번호 확인" }));
+
+    expect(await retryButton()).toBeInTheDocument();
+    // OTP 자체는 성공했으므로 인증 실패 문구가 아니라 동의 기록 문구여야 한다.
+    expect(screen.getByRole("alert")).not.toHaveTextContent("인증번호가 만료");
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.claimBonus).not.toHaveBeenCalled();
+
+    fireEvent.click(await retryButton());
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+    expect(mocks.verifyOtp).toHaveBeenCalledTimes(1);
+    expect(mocks.signUp).toHaveBeenCalledTimes(1);
+    expect(mocks.claimBonus).toHaveBeenCalledTimes(1);
+    expect(trackedNames().filter((name) => name === "signup_completed")).toHaveLength(1);
+  });
+
+  it("still reports an invalid OTP as an authentication error without touching consent", async () => {
+    mocks.signUp.mockResolvedValue({ data: { session: null }, error: null });
+    mocks.verifyOtp.mockResolvedValue({ error: new Error("Token has expired or is invalid") });
+
+    await submitEmailSignup();
+    fireEvent.change(await screen.findByPlaceholderText("12345678"), { target: { value: "12345678" } });
+    fireEvent.click(screen.getByRole("button", { name: "인증번호 확인" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("인증번호가 만료됐거나 올바르지 않습니다");
+    expect(screen.queryByRole("button", { name: "동의 기록 다시 저장" })).toBeNull();
+    expect(mocks.recordConsents).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("completes the immediate-session signup once when consent succeeds first time", async () => {
+    mocks.signUp.mockResolvedValue({ data: { session: { access_token: "t" } }, error: null });
+    mocks.recordConsents.mockResolvedValue(undefined);
+
+    await submitEmailSignup();
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+    expect(mocks.claimBonus).toHaveBeenCalledTimes(1);
+    expect(trackedNames().filter((name) => name === "signup_completed")).toHaveLength(1);
+    expect(trackedNames()).not.toContain("signup_failed");
+  });
+
+  it("does not record signup consent for password sign-in", async () => {
+    mocks.signInWithPassword.mockResolvedValue({ data: { session: { access_token: "t" } }, error: null });
+    render(<LoginClient />);
+    const [emailInput] = screen.getAllByPlaceholderText("name@example.com");
+    fireEvent.change(emailInput, { target: { value: "old@example.com" } });
+    fireEvent.change(screen.getByPlaceholderText("8자 이상"), { target: { value: "password123" } });
+    fireEvent.submit(emailInput.closest("form")!);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+    expect(mocks.recordConsents).not.toHaveBeenCalled();
+    expect(mocks.claimBonus).not.toHaveBeenCalled();
+    expect(mocks.track).toHaveBeenCalledWith("login_completed", { provider: "email" });
+  });
+});

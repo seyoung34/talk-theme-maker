@@ -91,7 +91,7 @@ type AnalyticsEventMap = {
   auth_prompt_viewed: { reason: "export" | "general"; mode: "signin" | "signup" };
   signup_started: { provider: "email" | "kakao" };
   signup_completed: { provider: "email" | "kakao" };
-  signup_failed: { provider: "email" | "kakao"; reason: "auth_error" };
+  signup_failed: { provider: "email" | "kakao"; reason: "auth_error" | "consent_error" };
   signup_bonus_granted: { campaign_key: string; credits_granted: number };
   login_started: { provider: "email" | "kakao" };
   login_completed: { provider: "email" | "kakao" };
