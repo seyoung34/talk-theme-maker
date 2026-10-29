@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 
 const mocks = vi.hoisted(() => ({
   signUp: vi.fn(),
+  getUser: vi.fn(),
   signInWithPassword: vi.fn(),
   verifyOtp: vi.fn(),
   recordConsents: vi.fn(),
@@ -19,14 +20,14 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/layout/SiteHeader", () => ({ default: () => null }));
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
-    auth: { signUp: mocks.signUp, signInWithPassword: mocks.signInWithPassword, verifyOtp: mocks.verifyOtp, resend: vi.fn() },
+    auth: { signUp: mocks.signUp, signInWithPassword: mocks.signInWithPassword, verifyOtp: mocks.verifyOtp, getUser: mocks.getUser, resend: vi.fn() },
   }),
 }));
 vi.mock("@/lib/policies/consent", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/policies/consent")>()),
   recordCurrentPolicyConsents: mocks.recordConsents,
 }));
-vi.mock("@/lib/billing/signupBonusClient", () => ({ claimSignupBonusFromClient: mocks.claimBonus }));
+vi.mock("@/lib/billing/signupBonusClient", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/billing/signupBonusClient")>()), claimSignupBonusFromClient: mocks.claimBonus }));
 vi.mock("@/lib/analytics/ga4", () => ({ trackAnalyticsEvent: mocks.track }));
 
 import LoginClient from "@/components/auth/LoginClient";
@@ -52,12 +53,13 @@ async function submitEmailSignup() {
 describe("LoginClient email signup consent failure", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
+    mocks.getUser.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
     mocks.claimBonus.mockResolvedValue({ granted: true, campaignKey: "signup_bonus_v1", creditsGranted: 1 });
   });
   afterEach(cleanup);
 
   it("keeps the immediate-session signup unfinished and retries only the consent write", async () => {
-    mocks.signUp.mockResolvedValue({ data: { session: { access_token: "t" } }, error: null });
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
     mocks.recordConsents.mockRejectedValueOnce(new Error("rls")).mockResolvedValueOnce(undefined);
 
     await submitEmailSignup();
@@ -75,12 +77,13 @@ describe("LoginClient email signup consent failure", () => {
     expect(mocks.signUp).toHaveBeenCalledTimes(1);
     expect(mocks.recordConsents).toHaveBeenCalledTimes(2);
     expect(mocks.claimBonus).toHaveBeenCalledTimes(1);
+    expect(mocks.claimBonus).toHaveBeenCalledWith("u1");
     expect(trackedNames().filter((name) => name === "signup_completed")).toHaveLength(1);
     expect(trackedNames().filter((name) => name === "signup_bonus_granted")).toHaveLength(1);
   });
 
   it("stays on the retry step when the retry fails again", async () => {
-    mocks.signUp.mockResolvedValue({ data: { session: { access_token: "t" } }, error: null });
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
     mocks.recordConsents.mockRejectedValue(new Error("down"));
 
     await submitEmailSignup();
@@ -95,8 +98,8 @@ describe("LoginClient email signup consent failure", () => {
   });
 
   it("does not repeat the one-time OTP verification when its consent write fails", async () => {
-    mocks.signUp.mockResolvedValue({ data: { session: null }, error: null });
-    mocks.verifyOtp.mockResolvedValue({ error: null });
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: null }, error: null });
+    mocks.verifyOtp.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
     mocks.recordConsents.mockRejectedValueOnce(new Error("rls")).mockResolvedValueOnce(undefined);
 
     await submitEmailSignup();
@@ -119,7 +122,7 @@ describe("LoginClient email signup consent failure", () => {
   });
 
   it("still reports an invalid OTP as an authentication error without touching consent", async () => {
-    mocks.signUp.mockResolvedValue({ data: { session: null }, error: null });
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: null }, error: null });
     mocks.verifyOtp.mockResolvedValue({ error: new Error("Token has expired or is invalid") });
 
     await submitEmailSignup();
@@ -133,7 +136,7 @@ describe("LoginClient email signup consent failure", () => {
   });
 
   it("completes the immediate-session signup once when consent succeeds first time", async () => {
-    mocks.signUp.mockResolvedValue({ data: { session: { access_token: "t" } }, error: null });
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
     mocks.recordConsents.mockResolvedValue(undefined);
 
     await submitEmailSignup();
@@ -145,7 +148,7 @@ describe("LoginClient email signup consent failure", () => {
   });
 
   it("does not record signup consent for password sign-in", async () => {
-    mocks.signInWithPassword.mockResolvedValue({ data: { session: { access_token: "t" } }, error: null });
+    mocks.signInWithPassword.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
     render(<LoginClient />);
     const [emailInput] = screen.getAllByPlaceholderText("name@example.com");
     fireEvent.change(emailInput, { target: { value: "old@example.com" } });
@@ -156,5 +159,63 @@ describe("LoginClient email signup consent failure", () => {
     expect(mocks.recordConsents).not.toHaveBeenCalled();
     expect(mocks.claimBonus).not.toHaveBeenCalled();
     expect(mocks.track).toHaveBeenCalledWith("login_completed", { provider: "email" });
+  });
+
+  it("emits signup_failed for consent only once across repeated retry failures", async () => {
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+    mocks.recordConsents.mockRejectedValue(new Error("down"));
+
+    await submitEmailSignup();
+    fireEvent.click(await retryButton());
+    await waitFor(() => expect(mocks.recordConsents).toHaveBeenCalledTimes(2));
+    fireEvent.click(await retryButton());
+    await waitFor(() => expect(mocks.recordConsents).toHaveBeenCalledTimes(3));
+
+    expect(trackedNames().filter((name) => name === "signup_failed")).toHaveLength(1);
+  });
+
+  it("does not write consent when the account changed before the retry", async () => {
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+    mocks.recordConsents.mockRejectedValueOnce(new Error("rls"));
+
+    await submitEmailSignup();
+    mocks.getUser.mockResolvedValue({ data: { user: { id: "other" } }, error: null });
+    fireEvent.click(await retryButton());
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("계정이 달라");
+    expect(mocks.recordConsents).toHaveBeenCalledTimes(1);
+    expect(mocks.claimBonus).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(trackedNames()).not.toContain("signup_completed");
+    expect(mocks.track).toHaveBeenCalledWith("signup_failed", { provider: "email", reason: "session_changed" });
+  });
+
+  it("does not claim the bonus or complete when the account changes during the consent write", async () => {
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+    mocks.getUser
+      .mockResolvedValueOnce({ data: { user: { id: "u1" } }, error: null })
+      .mockResolvedValue({ data: { user: { id: "other" } }, error: null });
+    mocks.recordConsents.mockResolvedValue(undefined);
+
+    await submitEmailSignup();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("계정이 달라");
+    expect(mocks.claimBonus).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(trackedNames()).not.toContain("signup_completed");
+  });
+
+  it("does not complete when the server rejects the bonus claim for a different account", async () => {
+    const { SignupBonusSessionChangedError } = await import("@/lib/billing/signupBonusClient");
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+    mocks.recordConsents.mockResolvedValue(undefined);
+    mocks.claimBonus.mockRejectedValue(new SignupBonusSessionChangedError());
+
+    await submitEmailSignup();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("계정이 달라");
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(trackedNames()).not.toContain("signup_completed");
+    expect(trackedNames()).not.toContain("signup_bonus_granted");
   });
 });

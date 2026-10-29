@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, Eye, EyeOff, LoaderCircle, LockKeyhole, MessageCircle, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
 import { addPolicyConsentToCallbackUrl, recordCurrentPolicyConsents } from "@/lib/policies/consent";
-import { claimSignupBonusFromClient } from "@/lib/billing/signupBonusClient";
+import { claimSignupBonusFromClient, SignupBonusSessionChangedError } from "@/lib/billing/signupBonusClient";
 import { createClient } from "@/lib/supabase/client";
 import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
@@ -31,9 +31,26 @@ function getAuthErrorMessage(error: unknown) {
 }
 
 const consentFailureMessage = "정책 동의 내용을 저장하지 못했습니다. 로그인 상태는 유지되어 있으니, 아래 버튼으로 동의 기록만 다시 시도해 주세요.";
+const sessionChangedMessage = "가입을 진행하던 계정과 현재 로그인된 계정이 달라 가입을 마치지 않았습니다. 다른 탭에서 계정이 바뀌었는지 확인하고 다시 로그인해 주세요.";
 
-async function claimSignupBonusAfterSignup() {
-  const claim = await claimSignupBonusFromClient().catch(() => null);
+class SignupSessionChangedError extends Error {}
+
+// 가입을 시작한 계정(expectedUserId)이 지금도 서버가 확인하는 현재 계정인지 검사한다.
+// 다른 계정이면 SignupSessionChangedError, 확인 자체가 실패하면(네트워크 등) 일반 오류로 던져 동의 재시도 대상으로 둔다.
+async function assertSameSignupUser(supabase: ReturnType<typeof createClient>, expectedUserId: string) {
+  const { data, error } = await supabase.auth.getUser();
+  if (error && !data?.user) {
+    if (/session|jwt|not authenticated/i.test(error.message)) throw new SignupSessionChangedError();
+    throw error;
+  }
+  if (data.user?.id !== expectedUserId) throw new SignupSessionChangedError();
+}
+
+async function claimSignupBonusAfterSignup(expectedUserId: string) {
+  const claim = await claimSignupBonusFromClient(expectedUserId).catch((error) => {
+    if (error instanceof SignupBonusSessionChangedError) throw new SignupSessionChangedError();
+    return null;
+  });
   if (claim?.granted) {
     trackAnalyticsEvent("signup_bonus_granted", {
       campaign_key: claim.campaignKey ?? "signup_bonus_v1",
@@ -64,6 +81,9 @@ export default function LoginClient() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [verificationCode, setVerificationCode] = useState("");
+  // 가입 세션의 사용자 id. 동의 재시도·보너스 지급은 이 계정에만 한다(다른 탭에서 계정이 바뀌어도 추정해서 바꾸지 않는다).
+  const signupUserIdRef = useRef<string | null>(null);
+  const consentFailureTrackedRef = useRef(false);
   const hasAcceptedRequiredPolicies = hasAcceptedTerms && hasAcceptedPrivacy;
   const hasAcceptedSignupRequirements = hasAcceptedRequiredPolicies && hasConfirmedMinimumAge;
 
@@ -145,6 +165,7 @@ export default function LoginClient() {
       }
       if (mode === "signup") {
         // 세션은 이미 만들어졌다. 동의 기록이 실패해도 signUp은 다시 부르지 않고 동의 기록만 재시도한다.
+        beginSignupFinish(result.data.user?.id ?? result.data.session?.user?.id);
         await finishSignupConsent(supabase);
         return;
       }
@@ -159,13 +180,32 @@ export default function LoginClient() {
     }
   };
 
+  const beginSignupFinish = (userId: string | undefined) => {
+    signupUserIdRef.current = userId ?? null;
+    consentFailureTrackedRef.current = false;
+  };
+
+  const abortSignupForSessionChange = () => {
+    signupUserIdRef.current = null;
+    trackAnalyticsEvent("signup_failed", { provider: "email", reason: "session_changed" });
+    setStage("form");
+    setMessage({ tone: "error", text: sessionChangedMessage });
+  };
+
   // 인증 직후 필수 동의 기록을 남긴다. 실패하면 가입 완료로 보이지 않게 재시도 단계로 전환하고 false를 반환한다.
-  const recordConsentsOrAskRetry = async (supabase: ReturnType<typeof createClient>) => {
+  // 동의 쓰기는 현재 쿠키 세션의 사용자로 기록되므로(user_id 기본값) 쓰기 전후로 가입 계정과 같은지 확인한다.
+  const recordConsentsOrAskRetry = async (supabase: ReturnType<typeof createClient>, expectedUserId: string) => {
     try {
+      await assertSameSignupUser(supabase, expectedUserId);
       await recordCurrentPolicyConsents(supabase, "email_signup");
+      await assertSameSignupUser(supabase, expectedUserId);
       return true;
-    } catch {
-      trackAnalyticsEvent("signup_failed", { provider: "email", reason: "consent_error" });
+    } catch (error) {
+      if (error instanceof SignupSessionChangedError) throw error;
+      if (!consentFailureTrackedRef.current) {
+        consentFailureTrackedRef.current = true;
+        trackAnalyticsEvent("signup_failed", { provider: "email", reason: "consent_error" });
+      }
       setStage("consent-retry");
       setMessage({ tone: "error", text: consentFailureMessage });
       return false;
@@ -173,8 +213,20 @@ export default function LoginClient() {
   };
 
   const finishSignupConsent = async (supabase: ReturnType<typeof createClient>) => {
-    if (!(await recordConsentsOrAskRetry(supabase))) return;
-    await claimSignupBonusAfterSignup();
+    const expectedUserId = signupUserIdRef.current;
+    if (!expectedUserId) {
+      abortSignupForSessionChange();
+      return;
+    }
+    try {
+      if (!(await recordConsentsOrAskRetry(supabase, expectedUserId))) return;
+      await claimSignupBonusAfterSignup(expectedUserId);
+    } catch (error) {
+      if (!(error instanceof SignupSessionChangedError)) throw error;
+      abortSignupForSessionChange();
+      return;
+    }
+    signupUserIdRef.current = null;
     trackAnalyticsEvent("signup_completed", { provider: "email" });
     router.replace(returnTo);
     router.refresh();
@@ -224,7 +276,7 @@ export default function LoginClient() {
     setMessage(null);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         email: email.trim().toLowerCase(),
         token,
         type: "email",
@@ -234,6 +286,7 @@ export default function LoginClient() {
         return;
       }
       // verifyOtp는 일회용이다. 여기서부터의 실패는 인증 오류가 아니므로 동의 기록만 재시도 대상으로 둔다.
+      beginSignupFinish(data?.user?.id ?? data?.session?.user?.id);
       await finishSignupConsent(supabase);
     } catch (error) {
       setMessage({ tone: "error", text: getAuthErrorMessage(error) });
@@ -342,7 +395,7 @@ export default function LoginClient() {
               <AlertCircle className="mx-auto text-[#b3261e]" size={36} aria-hidden="true" />
               <div>
                 <h2 className="text-xl font-black text-[var(--color-on-surface)]">정책 동의 기록이 필요합니다</h2>
-                <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">이메일 인증은 확인됐지만 필수 정책 동의가 아직 저장되지 않았습니다. 저장이 끝나야 다음 단계로 이동합니다.</p>
+                <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">계정은 만들어졌지만 필수 정책 동의가 아직 저장되지 않았습니다. 저장이 끝나야 다음 단계로 이동합니다.</p>
               </div>
               {message ? <AuthMessage message={message} /> : null}
               <button type="button" className="min-h-11 rounded-full bg-[var(--color-secondary)] px-4 text-sm font-extrabold text-white disabled:opacity-50" onClick={() => void retrySignupConsent()} disabled={isSubmitting}>
