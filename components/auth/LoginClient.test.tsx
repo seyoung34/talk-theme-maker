@@ -53,6 +53,7 @@ async function submitEmailSignup() {
 describe("LoginClient email signup consent failure", () => {
   beforeEach(() => {
     Object.values(mocks).forEach((mock) => mock.mockReset());
+    window.localStorage.clear();
     mocks.getUser.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
     mocks.claimBonus.mockResolvedValue({ granted: true, campaignKey: "signup_bonus_v1", creditsGranted: 1 });
   });
@@ -217,5 +218,90 @@ describe("LoginClient email signup consent failure", () => {
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(trackedNames()).not.toContain("signup_completed");
     expect(trackedNames()).not.toContain("signup_bonus_granted");
+  });
+
+  describe("persisted consent retry", () => {
+    const pendingKey = "talktheme.pendingSignupConsent";
+    const markPending = (userId: string, createdAt = Date.now()) => window.localStorage.setItem(pendingKey, JSON.stringify({ userId, createdAt }));
+    const submitPasswordSignIn = () => {
+      const [emailInput] = screen.getAllByPlaceholderText("name@example.com");
+      fireEvent.change(emailInput, { target: { value: "old@example.com" } });
+      fireEvent.change(screen.getByPlaceholderText("8자 이상"), { target: { value: "password123" } });
+      fireEvent.submit(emailInput.closest("form")!);
+    };
+
+    it("restores the retry step after reload and finishes only the consent write", async () => {
+      mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+      mocks.recordConsents.mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce(undefined);
+      await submitEmailSignup();
+      await retryButton();
+      expect(window.localStorage.getItem(pendingKey)).toContain("u1");
+
+      cleanup(); // 새로고침: 메모리 상태 소실, localStorage 유지
+      render(<LoginClient />);
+
+      fireEvent.click(await retryButton());
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+      expect(mocks.recordConsents).toHaveBeenLastCalledWith("u1");
+      expect(mocks.signUp).toHaveBeenCalledTimes(1);
+      expect(window.localStorage.getItem(pendingKey)).toBeNull();
+    });
+
+    it("does not restore the retry step when the logged-in account differs from the pending one", async () => {
+      markPending("u1");
+      mocks.getUser.mockResolvedValue({ data: { user: { id: "u2" } }, error: null });
+      render(<LoginClient />);
+
+      await waitFor(() => expect(mocks.getUser).toHaveBeenCalled());
+      expect(screen.queryByRole("button", { name: "동의 기록 다시 저장" })).toBeNull();
+      expect(mocks.recordConsents).not.toHaveBeenCalled();
+      expect(window.localStorage.getItem(pendingKey)).toContain("u1");
+    });
+
+    it("never checks the session or writes consent when nothing is pending", async () => {
+      render(<LoginClient />);
+      await Promise.resolve();
+      expect(mocks.getUser).not.toHaveBeenCalled();
+      expect(mocks.recordConsents).not.toHaveBeenCalled();
+    });
+
+    it("drops an expired pending marker without restoring anything", async () => {
+      markPending("u1", Date.now() - 25 * 60 * 60 * 1000);
+      render(<LoginClient />);
+      await Promise.resolve();
+      expect(mocks.getUser).not.toHaveBeenCalled();
+      expect(window.localStorage.getItem(pendingKey)).toBeNull();
+    });
+
+    it("keeps the retry step on password sign-in of the pending account instead of completing login", async () => {
+      markPending("u1");
+      mocks.getUser.mockResolvedValue({ data: { user: null }, error: new Error("no session") });
+      mocks.signInWithPassword.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+      mocks.recordConsents.mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce(undefined);
+      render(<LoginClient />);
+      submitPasswordSignIn();
+
+      expect(await retryButton()).toBeInTheDocument();
+      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(trackedNames()).not.toContain("login_completed");
+
+      fireEvent.click(await retryButton());
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+      expect(mocks.recordConsents).toHaveBeenLastCalledWith("u1");
+      expect(window.localStorage.getItem(pendingKey)).toBeNull();
+    });
+
+    it("lets other accounts and existing users without a pending marker sign in without consent writes", async () => {
+      markPending("u1");
+      mocks.getUser.mockResolvedValue({ data: { user: null }, error: new Error("no session") });
+      mocks.signInWithPassword.mockResolvedValue({ data: { user: { id: "u2" }, session: { access_token: "t" } }, error: null });
+      render(<LoginClient />);
+      submitPasswordSignIn();
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+      expect(mocks.recordConsents).not.toHaveBeenCalled();
+      expect(mocks.claimBonus).not.toHaveBeenCalled();
+      expect(window.localStorage.getItem(pendingKey)).toContain("u1");
+    });
   });
 });

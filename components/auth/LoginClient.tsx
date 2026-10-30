@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
 import { addPolicyConsentToCallbackUrl } from "@/lib/policies/consent";
+import { clearPendingSignupConsent, markPendingSignupConsent, readPendingSignupConsentUserId } from "@/lib/policies/pendingSignupConsent";
 import { recordSignupConsentFromClient, SignupConsentSessionChangedError } from "@/lib/policies/signupConsentClient";
 import { claimSignupBonusFromClient, SignupBonusSessionChangedError } from "@/lib/billing/signupBonusClient";
 import { createClient } from "@/lib/supabase/client";
@@ -82,6 +83,20 @@ export default function LoginClient() {
     const timer = window.setInterval(() => setResendCooldown((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearInterval(timer);
   }, [resendCooldown]);
+
+  // 새로고침·재방문: 동의 기록이 끝나지 않은 가입 계정으로 아직 로그인돼 있으면 재시도 단계로 복원한다.
+  // 표식이 있을 때만 getUser(서버 검증)를 부르고, 사용자 id가 표식과 같을 때만 복원한다(다른 계정·표식 없음은 건드리지 않음).
+  useEffect(() => {
+    const pendingUserId = readPendingSignupConsentUserId();
+    if (!pendingUserId) return;
+    let cancelled = false;
+    void createClient().auth.getUser().then(({ data, error }) => {
+      if (cancelled || error || data.user?.id !== pendingUserId) return;
+      resumePendingSignupConsent(pendingUserId);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+    // 마운트 시 한 번만 확인한다.
+  }, []);
 
   useEffect(() => {
     trackAnalyticsEvent("auth_prompt_viewed", { reason: reason === "export" ? "export" : "general", mode });
@@ -159,6 +174,13 @@ export default function LoginClient() {
         await finishSignupConsent();
         return;
       }
+      // 가입 직후 동의 기록이 끝나지 않은 계정이 다시 로그인한 경우, 동의 기록을 마치기 전에는 로그인 완료로 넘기지 않는다.
+      const signedInUserId = result.data.user?.id;
+      if (signedInUserId && readPendingSignupConsentUserId() === signedInUserId) {
+        resumePendingSignupConsent(signedInUserId);
+        await finishSignupConsent();
+        return;
+      }
       trackAnalyticsEvent("login_completed", { provider: "email" });
       router.replace(returnTo);
       router.refresh();
@@ -173,6 +195,15 @@ export default function LoginClient() {
   const beginSignupFinish = (userId: string | undefined) => {
     signupUserIdRef.current = userId ?? null;
     consentFailureTrackedRef.current = false;
+    // 가입 폼 동의 직후에만 표식을 남긴다. 성공하면 finishSignupConsent가 지운다.
+    if (userId) markPendingSignupConsent(userId);
+  };
+
+  const resumePendingSignupConsent = (userId: string) => {
+    signupUserIdRef.current = userId;
+    consentFailureTrackedRef.current = false;
+    setStage("consent-retry");
+    setMessage({ tone: "error", text: consentFailureMessage });
   };
 
   const abortSignupForSessionChange = () => {
@@ -215,6 +246,7 @@ export default function LoginClient() {
       return;
     }
     signupUserIdRef.current = null;
+    clearPendingSignupConsent(expectedUserId);
     trackAnalyticsEvent("signup_completed", { provider: "email" });
     router.replace(returnTo);
     router.refresh();

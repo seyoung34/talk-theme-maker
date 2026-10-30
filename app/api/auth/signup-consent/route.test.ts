@@ -28,6 +28,13 @@ describe("POST /api/auth/signup-consent", () => {
     expect(mocks.record).not.toHaveBeenCalled();
   });
 
+  it("accepts an origin matching the Host header when request.url was normalized", async () => {
+    mocks.record.mockResolvedValue({ status: "recorded" });
+    expect((await post({ "x-expected-user-id": id, origin: "http://127.0.0.1:3000", host: "127.0.0.1:3000" })).status).toBe(200);
+    expect((await post({ "x-expected-user-id": id, origin: "http://evil.example", host: "127.0.0.1:3000" })).status).toBe(403);
+    expect((await post({ "x-expected-user-id": id, origin: "https://127.0.0.1:3000", host: "127.0.0.1:3000" })).status).toBe(403);
+  });
+
   it("maps outcomes to status codes", async () => {
     mocks.record.mockResolvedValue({ status: "recorded" });
     expect((await post({ "x-expected-user-id": id, origin: "http://localhost" })).status).toBe(200);
