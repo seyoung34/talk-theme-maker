@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
-import { claimSignupBonusForCurrentUser, getCurrentUserOrNull, isSignupBonusUnavailableError, signupBonusCampaignKey } from "@/lib/billing/credits";
+import { claimSignupBonusForCurrentUser, isSignupBonusUnavailableError, lookupCurrentUser, signupBonusCampaignKey } from "@/lib/billing/credits";
 
-export async function POST() {
-  const user = await getCurrentUserOrNull();
-  if (!user) return NextResponse.json({ error: "로그인이 필요합니다.", reason: "unauthenticated" }, { status: 401 });
+export async function POST(request: Request) {
+  const lookup = await lookupCurrentUser();
+  if (lookup.status === "unavailable") {
+    return NextResponse.json({ error: "로그인 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.", reason: "auth_unavailable" }, { status: 503 });
+  }
+  if (lookup.status === "unauthenticated") return NextResponse.json({ error: "로그인이 필요합니다.", reason: "unauthenticated" }, { status: 401 });
+  const user = lookup.user;
+
+  const expectedUserId = request.headers.get("x-expected-user-id");
+  if (expectedUserId && expectedUserId !== user.id) {
+    return NextResponse.json({ error: "로그인한 계정이 바뀌었습니다.", reason: "session_changed" }, { status: 409 });
+  }
 
   try {
     const claim = await claimSignupBonusForCurrentUser();

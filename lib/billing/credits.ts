@@ -1,6 +1,6 @@
 import { setObservationStage } from "@/lib/ops/requestObservation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { normalizeTemplateAttribution } from "@/lib/theme/export/templateAttribution";
 
 export const exportCreditCost = 1;
@@ -34,11 +34,31 @@ export type ExportEnqueueState =
 type ReservationRow = { export_job_id: string; balance: number };
 type ExportIdentityRow = { export_number: number; application_id: string | null; theme_identifier: string | null; export_name: string | null };
 
-export async function getCurrentUserOrNull() {
+export type CurrentUserLookup =
+  | { status: "authenticated"; user: User }
+  | { status: "unauthenticated" }
+  | { status: "unavailable" };
+
+/**
+ * 세션 없음·만료·무효(401/403)는 unauthenticated, 네트워크 실패·429·5xx 등은 unavailable로 구분한다.
+ * unavailable을 로그아웃으로 오해하면 호출자가 진행 중인 가입 복구 상태를 지워 버린다.
+ */
+export async function lookupCurrentUser(): Promise<CurrentUserLookup> {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) return null;
-  return data.user;
+  if (!error && data.user) return { status: "authenticated", user: data.user };
+  if (!error) return { status: "unauthenticated" };
+  const status = (error as { status?: number }).status;
+  // 429(요청 제한)·408·기타 4xx는 세션이 무효라는 뜻이 아니므로 unavailable로 둔다.
+  if (error.name === "AuthSessionMissingError" || status === 401 || status === 403) {
+    return { status: "unauthenticated" };
+  }
+  return { status: "unavailable" };
+}
+
+export async function getCurrentUserOrNull() {
+  const lookup = await lookupCurrentUser();
+  return lookup.status === "authenticated" ? lookup.user : null;
 }
 
 export async function getCreditBalance(userId: string) {
