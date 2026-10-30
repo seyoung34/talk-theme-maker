@@ -11,7 +11,7 @@ function fakeClient(sessionUserId: string | null, upsert = vi.fn().mockResolvedV
   return { client, from, upsert };
 }
 
-import { recordEmailSignupConsentForUser } from "@/lib/policies/signupConsentServer";
+import { checkSignupConsentAcceptance, currentSignupConsentAcceptance, recordEmailSignupConsentForUser } from "@/lib/policies/signupConsentServer";
 
 describe("recordEmailSignupConsentForUser", () => {
   it("records for the verified signup user only", async () => {
@@ -58,5 +58,20 @@ describe("recordEmailSignupConsentForUser", () => {
     expect(results.map((r) => r.status)).toEqual(["recorded", "session_changed"]);
     expect(a.upsert).toHaveBeenCalledTimes(1);
     expect(b.from).not.toHaveBeenCalled();
+  });
+});
+
+describe("checkSignupConsentAcceptance", () => {
+  it("accepts only the current versions", () => {
+    const current = currentSignupConsentAcceptance();
+    expect(checkSignupConsentAcceptance(current)).toBe("ok");
+    expect(checkSignupConsentAcceptance({ ...current, privacyVersion: "2000-01-01" })).toBe("version_mismatch");
+    expect(checkSignupConsentAcceptance({ ...current, minimumAgeVersion: "2000-01-01" })).toBe("version_mismatch");
+  });
+
+  it("rejects missing or malformed bodies", () => {
+    expect(checkSignupConsentAcceptance(null)).toBe("malformed");
+    expect(checkSignupConsentAcceptance("x")).toBe("malformed");
+    expect(checkSignupConsentAcceptance({ termsVersion: "a", privacyVersion: 1, minimumAgeVersion: "c" })).toBe("malformed");
   });
 });

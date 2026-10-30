@@ -6,9 +6,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
-import { addPolicyConsentToCallbackUrl } from "@/lib/policies/consent";
+import { addPolicyConsentToCallbackUrl, currentPolicyVersions, minimumAgeConfirmationVersion } from "@/lib/policies/consent";
 import { clearPendingSignupConsent, markPendingSignupConsent, readPendingSignupConsentUserId } from "@/lib/policies/pendingSignupConsent";
-import { recordSignupConsentFromClient, SignupConsentSessionChangedError } from "@/lib/policies/signupConsentClient";
+import { recordSignupConsentFromClient, SignupConsentSessionChangedError, SignupConsentVersionChangedError } from "@/lib/policies/signupConsentClient";
 import { claimSignupBonusFromClient, SignupBonusSessionChangedError } from "@/lib/billing/signupBonusClient";
 import { createClient } from "@/lib/supabase/client";
 import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
@@ -33,6 +33,9 @@ function getAuthErrorMessage(error: unknown) {
 }
 
 const consentFailureMessage = "정책 동의 내용을 저장하지 못했습니다. 로그인 상태는 유지되어 있으니, 아래 버튼으로 동의 기록만 다시 시도해 주세요.";
+const consentRecoveryMessage = "가입을 마치지 못한 계정입니다. 현재 약관과 개인정보 처리방침, 만 14세 이상 확인에 아래에서 다시 동의해야 가입이 완료됩니다.";
+const policyVersionChangedMessage = "정책이 갱신되었습니다. 화면을 새로고침한 뒤 최신 내용에 다시 동의해 주세요.";
+const consentUncheckedMessage = "만 14세 이상 확인과 이용약관·개인정보 처리방침 동의에 모두 체크해 주세요.";
 const sessionChangedMessage = "가입을 진행하던 계정과 현재 로그인된 계정이 달라 가입을 마치지 않았습니다. 다른 탭에서 계정이 바뀌었는지 확인하고 다시 로그인해 주세요.";
 
 class SignupSessionChangedError extends Error {}
@@ -84,7 +87,8 @@ export default function LoginClient() {
     return () => window.clearInterval(timer);
   }, [resendCooldown]);
 
-  // 새로고침·재방문: 동의 기록이 끝나지 않은 가입 계정으로 아직 로그인돼 있으면 재시도 단계로 복원한다.
+  // 새로고침·재방문: 동의 기록이 끝나지 않은 가입 계정으로 아직 로그인돼 있으면 동의 단계를 다시 보여 준다.
+  // 표식은 화면 힌트일 뿐이라 여기서 동의를 기록하지 않는다. 사용자가 현재 버전을 다시 체크해 제출해야 서버로 간다.
   // 표식이 있을 때만 getUser(서버 검증)를 부르고, 사용자 id가 표식과 같을 때만 복원한다(다른 계정·표식 없음은 건드리지 않음).
   useEffect(() => {
     const pendingUserId = readPendingSignupConsentUserId();
@@ -178,7 +182,6 @@ export default function LoginClient() {
       const signedInUserId = result.data.user?.id;
       if (signedInUserId && readPendingSignupConsentUserId() === signedInUserId) {
         resumePendingSignupConsent(signedInUserId);
-        await finishSignupConsent();
         return;
       }
       trackAnalyticsEvent("login_completed", { provider: "email" });
@@ -202,8 +205,12 @@ export default function LoginClient() {
   const resumePendingSignupConsent = (userId: string) => {
     signupUserIdRef.current = userId;
     consentFailureTrackedRef.current = false;
+    // 이전 화면의 체크 상태를 이어받지 않는다. 복원된 경우 사용자가 직접 다시 체크해야 한다.
+    setHasAcceptedTerms(false);
+    setHasAcceptedPrivacy(false);
+    setHasConfirmedMinimumAge(false);
     setStage("consent-retry");
-    setMessage({ tone: "error", text: consentFailureMessage });
+    setMessage({ tone: "error", text: consentRecoveryMessage });
   };
 
   const abortSignupForSessionChange = () => {
@@ -221,6 +228,11 @@ export default function LoginClient() {
       return true;
     } catch (error) {
       if (error instanceof SignupConsentSessionChangedError) throw new SignupSessionChangedError();
+      if (error instanceof SignupConsentVersionChangedError) {
+        setStage("consent-retry");
+        setMessage({ tone: "error", text: policyVersionChangedMessage });
+        return false;
+      }
       if (!consentFailureTrackedRef.current) {
         consentFailureTrackedRef.current = true;
         trackAnalyticsEvent("signup_failed", { provider: "email", reason: "consent_error" });
@@ -235,6 +247,12 @@ export default function LoginClient() {
     const expectedUserId = signupUserIdRef.current;
     if (!expectedUserId) {
       abortSignupForSessionChange();
+      return;
+    }
+    // 체크하지 않은 상태에서는 서버에 보내지 않는다(복원·재로그인 뒤에는 항상 다시 체크해야 한다).
+    if (!hasAcceptedSignupRequirements) {
+      setStage("consent-retry");
+      setMessage({ tone: "error", text: consentUncheckedMessage });
       return;
     }
     try {
@@ -415,11 +433,18 @@ export default function LoginClient() {
               <AlertCircle className="mx-auto text-[#b3261e]" size={36} aria-hidden="true" />
               <div>
                 <h2 className="text-xl font-black text-[var(--color-on-surface)]">정책 동의 기록이 필요합니다</h2>
-                <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">계정은 만들어졌지만 필수 정책 동의가 아직 저장되지 않았습니다. 저장이 끝나야 다음 단계로 이동합니다.</p>
+                <p className="mt-2 text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)]">계정은 만들어졌지만 필수 정책 동의가 아직 저장되지 않았습니다. 아래 현재 버전에 동의해야 다음 단계로 이동합니다.</p>
               </div>
+              <fieldset className="grid gap-2.5 rounded-[18px] border border-[#dbe8fb] bg-[#f7fbff] p-3.5 text-left">
+                <legend className="px-1 text-xs font-extrabold text-[var(--color-on-surface)]">필수 정책 동의</legend>
+                <MinimumAgeConfirmationCheck checked={hasConfirmedMinimumAge} onChange={setHasConfirmedMinimumAge} disabled={isSubmitting} />
+                <PolicyConsentCheck id="accept-terms" checked={hasAcceptedTerms} onChange={setHasAcceptedTerms} label={`이용약관(${currentPolicyVersions.terms} 버전)에 동의합니다.`} href="/terms" linkLabel="약관 보기" disabled={isSubmitting} />
+                <PolicyConsentCheck id="accept-privacy" checked={hasAcceptedPrivacy} onChange={setHasAcceptedPrivacy} label={`개인정보 처리방침(${currentPolicyVersions.privacy} 버전)에 동의합니다.`} href="/privacy" linkLabel="내용 보기" disabled={isSubmitting} />
+                <p className="pl-7 text-[11px] font-semibold leading-4 text-[var(--color-on-surface-variant)]">동의한 정책 버전(만 14세 확인 {minimumAgeConfirmationVersion})과 시각은 계정에 기록됩니다.</p>
+              </fieldset>
               {message ? <AuthMessage message={message} /> : null}
-              <button type="button" className="min-h-11 rounded-full bg-[var(--color-secondary)] px-4 text-sm font-extrabold text-white disabled:opacity-50" onClick={() => void retrySignupConsent()} disabled={isSubmitting}>
-                {isSubmitting ? "저장 중" : "동의 기록 다시 저장"}
+              <button type="button" className="min-h-11 rounded-full bg-[var(--color-secondary)] px-4 text-sm font-extrabold text-white disabled:opacity-50" onClick={() => void retrySignupConsent()} disabled={isSubmitting || !hasAcceptedSignupRequirements}>
+                {isSubmitting ? "저장 중" : "동의하고 기록 저장"}
               </button>
             </div>
           ) : stage === "check-email" ? (

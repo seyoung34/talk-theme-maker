@@ -30,9 +30,10 @@ vi.mock("@/lib/policies/signupConsentClient", async (importOriginal) => ({
 vi.mock("@/lib/billing/signupBonusClient", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/billing/signupBonusClient")>()), claimSignupBonusFromClient: mocks.claimBonus }));
 vi.mock("@/lib/analytics/ga4", () => ({ trackAnalyticsEvent: mocks.track }));
 
+import { SignupConsentVersionChangedError } from "@/lib/policies/signupConsentClient";
 import LoginClient from "@/components/auth/LoginClient";
 
-const retryButton = () => screen.findByRole("button", { name: "동의 기록 다시 저장" });
+const retryButton = () => screen.findByRole("button", { name: "동의하고 기록 저장" });
 const trackedNames = () => mocks.track.mock.calls.map(([name]) => name);
 
 async function submitEmailSignup() {
@@ -131,7 +132,7 @@ describe("LoginClient email signup consent failure", () => {
     fireEvent.click(screen.getByRole("button", { name: "인증번호 확인" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("인증번호가 만료됐거나 올바르지 않습니다");
-    expect(screen.queryByRole("button", { name: "동의 기록 다시 저장" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "동의하고 기록 저장" })).toBeNull();
     expect(mocks.recordConsents).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalled();
   });
@@ -230,21 +231,65 @@ describe("LoginClient email signup consent failure", () => {
       fireEvent.submit(emailInput.closest("form")!);
     };
 
-    it("restores the retry step after reload and finishes only the consent write", async () => {
+    const checkAll = () => {
+      fireEvent.click(screen.getByLabelText(/만 14세/));
+      fireEvent.click(screen.getByLabelText(/이용약관.*동의/));
+      fireEvent.click(screen.getByLabelText(/개인정보 처리방침.*동의/));
+    };
+
+    it("restores the retry step after reload but requires fresh acceptance before any write", async () => {
       mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
       mocks.recordConsents.mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce(undefined);
       await submitEmailSignup();
       await retryButton();
       expect(window.localStorage.getItem(pendingKey)).toContain("u1");
+      expect(mocks.recordConsents).toHaveBeenCalledTimes(1);
 
       cleanup(); // 새로고침: 메모리 상태 소실, localStorage 유지
       render(<LoginClient />);
 
+      const button = await retryButton();
+      expect(button).toBeDisabled();
+      expect(screen.getByLabelText(/이용약관\(2026-07-30 버전\)/)).not.toBeChecked();
+      expect(mocks.recordConsents).toHaveBeenCalledTimes(1);
+
+      checkAll();
       fireEvent.click(await retryButton());
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
       expect(mocks.recordConsents).toHaveBeenLastCalledWith("u1");
       expect(mocks.signUp).toHaveBeenCalledTimes(1);
       expect(window.localStorage.getItem(pendingKey)).toBeNull();
+    });
+
+    it("a forged marker for the signed-in user only shows the consent step and never records automatically", async () => {
+      markPending("u1");
+      render(<LoginClient />);
+      const button = await retryButton();
+      expect(button).toBeDisabled();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(mocks.recordConsents).not.toHaveBeenCalled();
+      expect(mocks.claimBonus).not.toHaveBeenCalled();
+      expect(mocks.replace).not.toHaveBeenCalled();
+    });
+
+    it("keeps an old pending marker instead of discarding it after 24 hours and still asks for fresh acceptance", async () => {
+      markPending("u1", Date.now() - 30 * 24 * 60 * 60 * 1000);
+      render(<LoginClient />);
+      expect(await retryButton()).toBeDisabled();
+      expect(window.localStorage.getItem(pendingKey)).toContain("u1");
+      expect(mocks.recordConsents).not.toHaveBeenCalled();
+    });
+
+    it("asks again with the current versions when the server reports a policy rollover", async () => {
+      markPending("u1");
+      mocks.recordConsents.mockRejectedValueOnce(new SignupConsentVersionChangedError());
+      render(<LoginClient />);
+      await retryButton();
+      checkAll();
+      fireEvent.click(await retryButton());
+      expect(await screen.findByText(/정책이 갱신되었습니다/)).toBeInTheDocument();
+      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(window.localStorage.getItem(pendingKey)).toContain("u1");
     });
 
     it("does not restore the retry step when the logged-in account differs from the pending one", async () => {
@@ -253,7 +298,7 @@ describe("LoginClient email signup consent failure", () => {
       render(<LoginClient />);
 
       await waitFor(() => expect(mocks.getUser).toHaveBeenCalled());
-      expect(screen.queryByRole("button", { name: "동의 기록 다시 저장" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "동의하고 기록 저장" })).toBeNull();
       expect(mocks.recordConsents).not.toHaveBeenCalled();
       expect(window.localStorage.getItem(pendingKey)).toContain("u1");
     });
@@ -265,26 +310,20 @@ describe("LoginClient email signup consent failure", () => {
       expect(mocks.recordConsents).not.toHaveBeenCalled();
     });
 
-    it("drops an expired pending marker without restoring anything", async () => {
-      markPending("u1", Date.now() - 25 * 60 * 60 * 1000);
-      render(<LoginClient />);
-      await Promise.resolve();
-      expect(mocks.getUser).not.toHaveBeenCalled();
-      expect(window.localStorage.getItem(pendingKey)).toBeNull();
-    });
-
     it("keeps the retry step on password sign-in of the pending account instead of completing login", async () => {
       markPending("u1");
       mocks.getUser.mockResolvedValue({ data: { user: null }, error: new Error("no session") });
       mocks.signInWithPassword.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
-      mocks.recordConsents.mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce(undefined);
+      mocks.recordConsents.mockResolvedValueOnce(undefined);
       render(<LoginClient />);
       submitPasswordSignIn();
 
-      expect(await retryButton()).toBeInTheDocument();
+      expect(await retryButton()).toBeDisabled();
       expect(mocks.replace).not.toHaveBeenCalled();
+      expect(mocks.recordConsents).not.toHaveBeenCalled();
       expect(trackedNames()).not.toContain("login_completed");
 
+      checkAll();
       fireEvent.click(await retryButton());
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
       expect(mocks.recordConsents).toHaveBeenLastCalledWith("u1");
