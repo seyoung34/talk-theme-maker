@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { claimSignupBonusFromClient, expectedUserIdHeader, SignupBonusSessionChangedError } from "@/lib/billing/signupBonusClient";
+import { claimSignupBonusFromClient, expectedUserIdHeader, SignupBonusAuthUnavailableError, SignupBonusSessionChangedError } from "@/lib/billing/signupBonusClient";
 
 function stubFetch(status: number, body: unknown = {}) {
   const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
@@ -24,6 +24,13 @@ describe("claimSignupBonusFromClient", () => {
   it("throws session-changed on 409", async () => {
     stubFetch(409);
     await expect(claimSignupBonusFromClient("u1")).rejects.toBeInstanceOf(SignupBonusSessionChangedError);
+  });
+
+  it("throws auth-unavailable on 503 only when an expected user id is supplied", async () => {
+    stubFetch(503, { reason: "auth_unavailable" });
+    await expect(claimSignupBonusFromClient("u1")).rejects.toBeInstanceOf(SignupBonusAuthUnavailableError);
+    stubFetch(503, { error: "x" });
+    await expect(claimSignupBonusFromClient()).rejects.not.toBeInstanceOf(SignupBonusAuthUnavailableError);
   });
 
   it("returns the payload on success", async () => {

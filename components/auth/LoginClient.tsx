@@ -9,7 +9,7 @@ import { getSafeReturnTarget } from "@/lib/auth/redirectTarget";
 import { addPolicyConsentToCallbackUrl, currentPolicyVersions, minimumAgeConfirmationVersion } from "@/lib/policies/consent";
 import { clearPendingSignupConsent, markPendingSignupConsent, readPendingSignupConsentUserId } from "@/lib/policies/pendingSignupConsent";
 import { recordSignupConsentFromClient, SignupConsentSessionChangedError, SignupConsentVersionChangedError } from "@/lib/policies/signupConsentClient";
-import { claimSignupBonusFromClient, SignupBonusSessionChangedError } from "@/lib/billing/signupBonusClient";
+import { claimSignupBonusFromClient, SignupBonusAuthUnavailableError, SignupBonusSessionChangedError } from "@/lib/billing/signupBonusClient";
 import { createClient } from "@/lib/supabase/client";
 import { persistenceNotice } from "@/lib/theme/project/persistenceNotice";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
@@ -38,11 +38,15 @@ const policyVersionChangedMessage = "정책이 갱신되었습니다. 화면을 
 const consentUncheckedMessage = "만 14세 이상 확인과 이용약관·개인정보 처리방침 동의에 모두 체크해 주세요.";
 const sessionChangedMessage = "가입을 진행하던 계정과 현재 로그인된 계정이 달라 가입을 마치지 않았습니다. 다른 탭에서 계정이 바뀌었는지 확인하고 다시 로그인해 주세요.";
 
+const authUnavailableMessage = "로그인 상태를 확인하지 못해 가입을 마치지 못했습니다. 동의 내용은 저장되어 있으니, 잠시 후 아래 버튼으로 다시 시도해 주세요.";
+
 class SignupSessionChangedError extends Error {}
+class SignupAuthUnavailableError extends Error {}
 
 async function claimSignupBonusAfterSignup(expectedUserId: string) {
   const claim = await claimSignupBonusFromClient(expectedUserId).catch((error) => {
     if (error instanceof SignupBonusSessionChangedError) throw new SignupSessionChangedError();
+    if (error instanceof SignupBonusAuthUnavailableError) throw new SignupAuthUnavailableError();
     return null;
   });
   if (claim?.granted) {
@@ -259,6 +263,12 @@ export default function LoginClient() {
       if (!(await recordConsentsOrAskRetry(expectedUserId))) return;
       await claimSignupBonusAfterSignup(expectedUserId);
     } catch (error) {
+      if (error instanceof SignupAuthUnavailableError) {
+        // 세션이 사라졌다고 확인된 것이 아니므로 가입 복구 상태(pending, signupUserIdRef)를 유지하고 완료로 처리하지 않는다.
+        setStage("consent-retry");
+        setMessage({ tone: "error", text: authUnavailableMessage });
+        return;
+      }
       if (!(error instanceof SignupSessionChangedError)) throw error;
       abortSignupForSessionChange();
       return;

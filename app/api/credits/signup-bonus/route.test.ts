@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ getUser: vi.fn(), claim: vi.fn() }));
 
 vi.mock("@/lib/billing/credits", () => ({
-  getCurrentUserOrNull: mocks.getUser,
+  lookupCurrentUser: async () => { const user = await mocks.getUser(); return user ? { status: "authenticated", user } : { status: "unauthenticated" }; },
   claimSignupBonusForCurrentUser: mocks.claim,
   isSignupBonusUnavailableError: () => false,
   signupBonusCampaignKey: "signup_bonus_v1",

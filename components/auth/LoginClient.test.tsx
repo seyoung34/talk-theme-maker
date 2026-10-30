@@ -221,6 +221,28 @@ describe("LoginClient email signup consent failure", () => {
     expect(trackedNames()).not.toContain("signup_bonus_granted");
   });
 
+  it("keeps the retry state and does not complete when the bonus claim hits a transient auth error, then recovers on retry", async () => {
+    const { SignupBonusAuthUnavailableError } = await import("@/lib/billing/signupBonusClient");
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+    mocks.recordConsents.mockResolvedValue(undefined);
+    mocks.claimBonus.mockRejectedValueOnce(new SignupBonusAuthUnavailableError()).mockResolvedValueOnce({ granted: true, campaignKey: "signup_bonus_v1", creditsGranted: 1 });
+
+    await submitEmailSignup();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("로그인 상태를 확인하지 못해");
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(trackedNames()).not.toContain("signup_completed");
+    expect(trackedNames()).not.toContain("signup_failed");
+    expect(window.localStorage.getItem("talktheme.pendingSignupConsent")).toContain("u1");
+
+    fireEvent.click(await retryButton());
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+    expect(mocks.claimBonus).toHaveBeenNthCalledWith(2, "u1");
+    expect(trackedNames().filter((name) => name === "signup_completed")).toHaveLength(1);
+    expect(window.localStorage.getItem("talktheme.pendingSignupConsent")).toBeNull();
+  });
+
   describe("persisted consent retry", () => {
     const pendingKey = "talktheme.pendingSignupConsent";
     const markPending = (userId: string, createdAt = Date.now()) => window.localStorage.setItem(pendingKey, JSON.stringify({ userId, createdAt }));
