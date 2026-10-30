@@ -137,6 +137,59 @@ describe("LoginClient email signup consent failure", () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
+  it("keeps retry and skips signup_completed when the consent API returns an unconfirmed 204", async () => {
+    const actualConsent = await vi.importActual<typeof import("@/lib/policies/signupConsentClient")>("@/lib/policies/signupConsentClient");
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+    mocks.recordConsents.mockImplementation(actualConsent.recordSignupConsentFromClient);
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 })).mockResolvedValueOnce(new Response(JSON.stringify({ recorded: true }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      await submitEmailSignup();
+
+      expect(await retryButton()).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toHaveTextContent("정책 동의 내용을 저장하지 못했습니다");
+      expect(mocks.claimBonus).not.toHaveBeenCalled();
+      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(trackedNames()).not.toContain("signup_completed");
+
+      fireEvent.click(await retryButton());
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(trackedNames().filter((name) => name === "signup_completed")).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps retry and skips signup_completed when the bonus API returns a malformed 200", async () => {
+    const actualBonus = await vi.importActual<typeof import("@/lib/billing/signupBonusClient")>("@/lib/billing/signupBonusClient");
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+    mocks.recordConsents.mockResolvedValue(undefined);
+    mocks.claimBonus.mockImplementation(actualBonus.claimSignupBonusFromClient);
+    const valid = { campaignKey: "signup_bonus_v1", creditsGranted: 1, balance: 1, alreadyClaimed: false, granted: true };
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } })).mockResolvedValueOnce(new Response(JSON.stringify(valid), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      await submitEmailSignup();
+
+      expect(await retryButton()).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toHaveTextContent("로그인 상태를 확인하지 못해");
+      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(trackedNames()).not.toContain("signup_completed");
+
+      fireEvent.click(await retryButton());
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+      expect(trackedNames().filter((name) => name === "signup_completed")).toHaveLength(1);
+      expect(trackedNames().filter((name) => name === "signup_bonus_granted")).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("completes the immediate-session signup once when consent succeeds first time", async () => {
     mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
     mocks.recordConsents.mockResolvedValue(undefined);

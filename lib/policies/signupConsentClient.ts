@@ -26,4 +26,7 @@ export async function recordSignupConsentFromClient(expectedUserId: string) {
   if (response.status === 409 && (await response.clone().json().catch(() => null))?.reason === "policy_version_changed") throw new SignupConsentVersionChangedError();
   if (response.status === 409 || response.status === 401) throw new SignupConsentSessionChangedError();
   if (!response.ok) throw new Error("consent_record_failed");
+  // 2xx라도 서버가 기록을 확인해 준 본문({ recorded: true })이 아니면(204, HTML 대체 응답, 빈/다른 JSON) 저장된 것으로 보지 않는다.
+  const payload = await response.json().catch(() => null);
+  if (!payload || typeof payload !== "object" || (payload as { recorded?: unknown }).recorded !== true) throw new Error("consent_record_unconfirmed");
 }

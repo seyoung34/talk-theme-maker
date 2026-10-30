@@ -46,9 +46,28 @@ export async function claimSignupBonusFromClient(expectedUserId?: string): Promi
   // expectedUserId가 있으면 503·429·500 등 확인되지 않은 실패는 계정 일치 여부를 알 수 없으므로 완료로 보지 않는다.
   if (expectedUserId && !response.ok) throw new SignupBonusAuthUnavailableError();
 
+  if (expectedUserId) {
+    // 200이어도 라우트 계약(campaignKey·creditsGranted·alreadyClaimed·granted)을 갖춘 본문이 아니면(204, HTML, 빈 JSON) 지급·계정 일치를 확인한 것이 아니다.
+    const body: unknown = await response.json().catch(() => null);
+    if (!isSignupBonusClaimSuccess(body)) throw new SignupBonusAuthUnavailableError();
+    return body;
+  }
+
   const payload = await readJsonResponse<SignupBonusClaimResponse>(response);
-  // 200이어도 본문을 읽지 못하면(readJsonResponse가 error로 대체) 지급·계정 일치를 확인한 것이 아니다.
-  if (expectedUserId && payload.error) throw new SignupBonusAuthUnavailableError();
   if (!response.ok) throw new Error(payload.error ?? "가입 혜택을 확인하지 못했습니다.");
   return payload;
+}
+
+function isSignupBonusClaimSuccess(body: unknown): body is SignupBonusClaimResponse {
+  if (!body || typeof body !== "object") return false;
+  const value = body as Record<string, unknown>;
+  return (
+    typeof value.campaignKey === "string" &&
+    value.campaignKey.length > 0 &&
+    typeof value.creditsGranted === "number" &&
+    Number.isFinite(value.creditsGranted) &&
+    typeof value.alreadyClaimed === "boolean" &&
+    typeof value.granted === "boolean" &&
+    !("error" in value)
+  );
 }

@@ -51,8 +51,34 @@ describe("claimSignupBonusFromClient", () => {
     await expect(claimSignupBonusFromClient()).rejects.not.toBeInstanceOf(SignupBonusAuthUnavailableError);
   });
 
-  it("returns the payload on success", async () => {
+  const validClaim = { campaignKey: "signup_bonus_v1", creditsGranted: 1, balance: 1, alreadyClaimed: false, granted: true };
+
+  it("returns the payload on a valid route response", async () => {
+    stubFetch(200, validClaim);
+    await expect(claimSignupBonusFromClient("u1")).resolves.toEqual(validClaim);
+  });
+
+  it("accepts the route's bonus-unavailable 200 (granted false with a reason)", async () => {
+    const unavailable = { campaignKey: "signup_bonus_v1", creditsGranted: 0, alreadyClaimed: false, granted: false, reason: "campaign_ended" };
+    stubFetch(200, unavailable);
+    await expect(claimSignupBonusFromClient("u1")).resolves.toEqual(unavailable);
+  });
+
+  it.each([
+    ["empty JSON", () => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } })],
+    ["JSON null", () => new Response("null", { status: 200, headers: { "Content-Type": "application/json" } })],
+    ["wrong field types", () => new Response(JSON.stringify({ ...validClaim, granted: "yes" }), { status: 200, headers: { "Content-Type": "application/json" } })],
+    ["error body", () => new Response(JSON.stringify({ ...validClaim, error: "x" }), { status: 200, headers: { "Content-Type": "application/json" } })],
+    ["HTML", () => new Response("<html>ok</html>", { status: 200, headers: { "Content-Type": "text/html" } })],
+    ["HTML labelled JSON", () => new Response("<html>", { status: 200, headers: { "Content-Type": "application/json" } })],
+    ["204", () => new Response(null, { status: 204 })],
+  ])("treats a malformed 2xx (%s) as retryable with an expected user id", async (_name, make) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(make()));
+    await expect(claimSignupBonusFromClient("u1")).rejects.toBeInstanceOf(SignupBonusAuthUnavailableError);
+  });
+
+  it("keeps legacy callers lenient about the success body", async () => {
     stubFetch(200, { granted: true });
-    await expect(claimSignupBonusFromClient("u1")).resolves.toEqual({ granted: true });
+    await expect(claimSignupBonusFromClient()).resolves.toEqual({ granted: true });
   });
 });
