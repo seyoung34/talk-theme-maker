@@ -18,7 +18,7 @@ export class SignupBonusAuthUnavailableError extends Error {
 }
 
 /**
- * 서버가 일시적인 인증 오류(503 auth_unavailable)를 알리면 expectedUserId가 있을 때 SignupBonusAuthUnavailableError로 던져
+ * expectedUserId가 있을 때 네트워크 실패·503·429·500 등 세션 일치를 확인하지 못한 실패는 SignupBonusAuthUnavailableError로 던져
  * 호출자가 가입 복구 상태를 지우지 않고 재시도하게 한다. 기존 호출자는 일반 오류 처리를 유지한다.
  *
  * expectedUserId를 주면 서버가 현재 세션 사용자와 다를 때 지급하지 않고 409로 거절한다.
@@ -26,19 +26,29 @@ export class SignupBonusAuthUnavailableError extends Error {
  * expectedUserId가 없는 기존 호출자는 401이면 null(조용히 건너뜀)을 유지한다.
  */
 export async function claimSignupBonusFromClient(expectedUserId?: string): Promise<SignupBonusClaimResponse | null> {
-  const response = await fetch("/api/credits/signup-bonus", {
-    method: "POST",
-    cache: "no-store",
-    headers: expectedUserId ? { [expectedUserIdHeader]: expectedUserId } : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch("/api/credits/signup-bonus", {
+      method: "POST",
+      cache: "no-store",
+      headers: expectedUserId ? { [expectedUserIdHeader]: expectedUserId } : undefined,
+    });
+  } catch (error) {
+    // 네트워크 실패는 세션 확인 자체가 안 된 것이므로 expectedUserId가 있으면 재시도 가능한 오류로 알린다.
+    if (expectedUserId) throw new SignupBonusAuthUnavailableError();
+    throw error;
+  }
   if (response.status === 401) {
     if (expectedUserId) throw new SignupBonusSessionChangedError();
     return null;
   }
   if (response.status === 409) throw new SignupBonusSessionChangedError();
-  if (response.status === 503 && expectedUserId) throw new SignupBonusAuthUnavailableError();
+  // expectedUserId가 있으면 503·429·500 등 확인되지 않은 실패는 계정 일치 여부를 알 수 없으므로 완료로 보지 않는다.
+  if (expectedUserId && !response.ok) throw new SignupBonusAuthUnavailableError();
 
   const payload = await readJsonResponse<SignupBonusClaimResponse>(response);
+  // 200이어도 본문을 읽지 못하면(readJsonResponse가 error로 대체) 지급·계정 일치를 확인한 것이 아니다.
+  if (expectedUserId && payload.error) throw new SignupBonusAuthUnavailableError();
   if (!response.ok) throw new Error(payload.error ?? "가입 혜택을 확인하지 못했습니다.");
   return payload;
 }

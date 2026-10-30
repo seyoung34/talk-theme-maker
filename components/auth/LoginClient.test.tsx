@@ -243,6 +243,26 @@ describe("LoginClient email signup consent failure", () => {
     expect(window.localStorage.getItem("talktheme.pendingSignupConsent")).toBeNull();
   });
 
+  it.each([
+    ["network failure", () => new TypeError("Failed to fetch")],
+    ["429/500 response", () => new Error("가입 혜택을 처리하지 못했습니다.")],
+  ])("keeps the retry state and does not complete on %s from the bonus claim", async (_name, makeError) => {
+    mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+    mocks.recordConsents.mockResolvedValue(undefined);
+    mocks.claimBonus.mockRejectedValueOnce(makeError()).mockResolvedValueOnce({ granted: false });
+
+    await submitEmailSignup();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("로그인 상태를 확인하지 못해");
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(trackedNames()).not.toContain("signup_completed");
+    expect(window.localStorage.getItem("talktheme.pendingSignupConsent")).toContain("u1");
+
+    fireEvent.click(await retryButton());
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
+    expect(window.localStorage.getItem("talktheme.pendingSignupConsent")).toBeNull();
+  });
+
   describe("persisted consent retry", () => {
     const pendingKey = "talktheme.pendingSignupConsent";
     const markPending = (userId: string, createdAt = Date.now()) => window.localStorage.setItem(pendingKey, JSON.stringify({ userId, createdAt }));
@@ -280,6 +300,29 @@ describe("LoginClient email signup consent failure", () => {
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
       expect(mocks.recordConsents).toHaveBeenLastCalledWith("u1");
       expect(mocks.signUp).toHaveBeenCalledTimes(1);
+      expect(window.localStorage.getItem(pendingKey)).toBeNull();
+    });
+
+    it("after reload, a network failure on the bonus claim keeps the pending marker and does not complete", async () => {
+      mocks.signUp.mockResolvedValue({ data: { user: { id: "u1" }, session: { access_token: "t" } }, error: null });
+      mocks.recordConsents.mockRejectedValueOnce(new Error("down")).mockResolvedValue(undefined);
+      mocks.claimBonus.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce({ granted: false });
+      await submitEmailSignup();
+      await retryButton();
+
+      cleanup();
+      render(<LoginClient />);
+      await retryButton();
+      checkAll();
+      fireEvent.click(await retryButton());
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("로그인 상태를 확인하지 못해");
+      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(trackedNames()).not.toContain("signup_completed");
+      expect(window.localStorage.getItem(pendingKey)).toContain("u1");
+
+      fireEvent.click(await retryButton());
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/account"));
       expect(window.localStorage.getItem(pendingKey)).toBeNull();
     });
 

@@ -46,8 +46,9 @@ class SignupAuthUnavailableError extends Error {}
 async function claimSignupBonusAfterSignup(expectedUserId: string) {
   const claim = await claimSignupBonusFromClient(expectedUserId).catch((error) => {
     if (error instanceof SignupBonusSessionChangedError) throw new SignupSessionChangedError();
+    // 알 수 없는 실패도 계정 일치를 확인하지 못한 것이므로 완료로 넘기지 않고 재시도로 돌린다.
     if (error instanceof SignupBonusAuthUnavailableError) throw new SignupAuthUnavailableError();
-    return null;
+    throw new SignupAuthUnavailableError();
   });
   if (claim?.granted) {
     trackAnalyticsEvent("signup_bonus_granted", {

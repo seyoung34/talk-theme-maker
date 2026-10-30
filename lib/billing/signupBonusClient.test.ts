@@ -33,6 +33,24 @@ describe("claimSignupBonusFromClient", () => {
     await expect(claimSignupBonusFromClient()).rejects.not.toBeInstanceOf(SignupBonusAuthUnavailableError);
   });
 
+  it.each([429, 500, 502])("throws auth-unavailable on %i when an expected user id is supplied", async (status) => {
+    stubFetch(status, { error: "x" });
+    await expect(claimSignupBonusFromClient("u1")).rejects.toBeInstanceOf(SignupBonusAuthUnavailableError);
+  });
+
+  it("throws auth-unavailable when fetch rejects or the body is unreadable, only with an expected user id", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    await expect(claimSignupBonusFromClient("u1")).rejects.toBeInstanceOf(SignupBonusAuthUnavailableError);
+    await expect(claimSignupBonusFromClient()).rejects.toBeInstanceOf(TypeError);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("<html>", { status: 200 })));
+    await expect(claimSignupBonusFromClient("u1")).rejects.toBeInstanceOf(SignupBonusAuthUnavailableError);
+  });
+
+  it("keeps the generic error for legacy callers on 500", async () => {
+    stubFetch(500, { error: "x" });
+    await expect(claimSignupBonusFromClient()).rejects.not.toBeInstanceOf(SignupBonusAuthUnavailableError);
+  });
+
   it("returns the payload on success", async () => {
     stubFetch(200, { granted: true });
     await expect(claimSignupBonusFromClient("u1")).resolves.toEqual({ granted: true });

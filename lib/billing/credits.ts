@@ -40,7 +40,7 @@ export type CurrentUserLookup =
   | { status: "unavailable" };
 
 /**
- * 세션 없음·만료·무효(4xx)는 unauthenticated, 네트워크 실패나 인증 서버 5xx는 unavailable로 구분한다.
+ * 세션 없음·만료·무효(401/403)는 unauthenticated, 네트워크 실패·429·5xx 등은 unavailable로 구분한다.
  * unavailable을 로그아웃으로 오해하면 호출자가 진행 중인 가입 복구 상태를 지워 버린다.
  */
 export async function lookupCurrentUser(): Promise<CurrentUserLookup> {
@@ -49,7 +49,8 @@ export async function lookupCurrentUser(): Promise<CurrentUserLookup> {
   if (!error && data.user) return { status: "authenticated", user: data.user };
   if (!error) return { status: "unauthenticated" };
   const status = (error as { status?: number }).status;
-  if (error.name === "AuthSessionMissingError" || (typeof status === "number" && status >= 400 && status < 500)) {
+  // 429(요청 제한)·408·기타 4xx는 세션이 무효라는 뜻이 아니므로 unavailable로 둔다.
+  if (error.name === "AuthSessionMissingError" || status === 401 || status === 403) {
     return { status: "unauthenticated" };
   }
   return { status: "unavailable" };

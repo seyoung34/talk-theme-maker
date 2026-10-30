@@ -22,6 +22,7 @@ describe("POST /api/credits/signup-bonus auth error mapping (real supabase-js er
   it.each([
     ["missing session", new AuthSessionMissingError()],
     ["invalid/expired JWT", new AuthApiError("invalid JWT", 401, "bad_jwt")],
+    ["deleted user / forbidden JWT", new AuthApiError("user not found", 403, "user_not_found")],
   ])("returns 401 for %s", async (_name, error) => {
     mocks.getUser.mockResolvedValue({ data: { user: null }, error });
     const response = await post();
@@ -33,12 +34,22 @@ describe("POST /api/credits/signup-bonus auth error mapping (real supabase-js er
   it.each([
     ["network failure", new AuthRetryableFetchError("fetch failed", 0)],
     ["auth server 5xx", new AuthApiError("upstream", 503, "unexpected_failure")],
+    ["auth rate limit 429", new AuthApiError("rate limited", 429, "over_request_rate_limit")],
+    ["other 4xx (408)", new AuthApiError("timeout", 408, "request_timeout")],
   ])("returns 503 auth_unavailable for %s without claiming", async (_name, error) => {
     mocks.getUser.mockResolvedValue({ data: { user: null }, error });
     const response = await post();
     expect(response.status).toBe(503);
     expect((await response.json()).reason).toBe("auth_unavailable");
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it("returns 500 without auth_unavailable when the claim itself fails", async () => {
+    mocks.getUser.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: "boom" } });
+    const response = await post();
+    expect(response.status).toBe(500);
+    expect((await response.json()).reason).toBe("signup_bonus_claim_failed");
   });
 
   it("claims for an authenticated user", async () => {
@@ -49,6 +60,8 @@ describe("POST /api/credits/signup-bonus auth error mapping (real supabase-js er
 
   it("keeps getCurrentUserOrNull returning null for both missing and transient errors (other callers unchanged)", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: null }, error: new AuthRetryableFetchError("down", 0) });
+    await expect(getCurrentUserOrNull()).resolves.toBeNull();
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error: new AuthApiError("rate limited", 429, "over_request_rate_limit") });
     await expect(getCurrentUserOrNull()).resolves.toBeNull();
     mocks.getUser.mockResolvedValue({ data: { user: null }, error: new AuthSessionMissingError() });
     await expect(getCurrentUserOrNull()).resolves.toBeNull();
