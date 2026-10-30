@@ -10,14 +10,21 @@ export class SignupBonusSessionChangedError extends Error {
   }
 }
 
-/** expectedUserId를 주면 서버가 현재 세션 사용자와 다를 때 지급하지 않고 409로 거절한다. */
+/**
+ * expectedUserId를 주면 서버가 현재 세션 사용자와 다를 때 지급하지 않고 409로 거절한다.
+ * 이때 401(세션 만료·로그아웃)도 가입 완료로 볼 수 없으므로 SignupBonusSessionChangedError로 던진다.
+ * expectedUserId가 없는 기존 호출자는 401이면 null(조용히 건너뜀)을 유지한다.
+ */
 export async function claimSignupBonusFromClient(expectedUserId?: string): Promise<SignupBonusClaimResponse | null> {
   const response = await fetch("/api/credits/signup-bonus", {
     method: "POST",
     cache: "no-store",
     headers: expectedUserId ? { [expectedUserIdHeader]: expectedUserId } : undefined,
   });
-  if (response.status === 401) return null;
+  if (response.status === 401) {
+    if (expectedUserId) throw new SignupBonusSessionChangedError();
+    return null;
+  }
   if (response.status === 409) throw new SignupBonusSessionChangedError();
 
   const payload = await readJsonResponse<SignupBonusClaimResponse>(response);

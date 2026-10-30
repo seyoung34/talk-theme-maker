@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAuthApiError, isAuthSessionMissingError, type SupabaseClient } from "@supabase/supabase-js";
 import { recordCurrentPolicyConsents } from "@/lib/policies/consent";
 
 export const signupConsentExpectedUserHeader = "x-expected-user-id";
@@ -13,7 +13,12 @@ export type SignupConsentResult = { status: "recorded" } | { status: "unauthenti
  */
 export async function recordEmailSignupConsentForUser(supabase: SupabaseClient, expectedUserId: string): Promise<SignupConsentResult> {
   const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) return { status: "unauthenticated" };
+  if (error) {
+    // 세션 없음/무효 토큰만 인증 실패다. 네트워크·서비스 일시 오류는 던져 500으로 보내야 일회용 OTP 이후에도 재시도할 수 있다.
+    if (isAuthSessionMissingError(error) || (isAuthApiError(error) && (error.status === 401 || error.status === 403))) return { status: "unauthenticated" };
+    throw error;
+  }
+  if (!data.user) return { status: "unauthenticated" };
   if (data.user.id !== expectedUserId) return { status: "session_changed" };
   await recordCurrentPolicyConsents(supabase, "email_signup");
   return { status: "recorded" };
