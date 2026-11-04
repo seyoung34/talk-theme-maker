@@ -30,14 +30,14 @@ type Subject = {
 // 강조는 옐로우 포인트 하나로만 유지한다. (카테고리별 색상 변화 X)
 const subjects: Subject[] = [
   {
-    keyword: "연인",
-    image: "/landing/couple_mockup.webp",
-    glow: "rgba(96, 165, 250, 0.30)",
-  },
-  {
     keyword: "캐릭터",
     image: "/landing/character_mockup.webp",
     glow: "rgba(129, 190, 255, 0.30)",
+  },
+  {
+    keyword: "연인",
+    image: "/landing/couple_mockup.webp",
+    glow: "rgba(96, 165, 250, 0.30)",
   },
   {
     keyword: "반려동물",
@@ -46,22 +46,21 @@ const subjects: Subject[] = [
   },
 ];
 
+// 캐릭터 → 연인 → 반려동물 순서. 데스크톱에서는 가운데 카드(연인)를 살짝 띄운다.
 const showcaseThemes = [
-  {
-    src: "/landing/couple_mockup.webp",
-    label: "연인 테마",
-    desc: "우리 사진과 하늘 배경으로 채운 채팅방",
-    accent: "#ff7aa6",
-    glow: "rgba(255, 122, 166, 0.30)",
-    tilt: "-4deg",
-    raised: false,
-  },
   {
     src: "/landing/character_mockup.webp",
     label: "캐릭터 테마",
     desc: "직접 그린 캐릭터로 완성한 파스텔 무드",
-    accent: "#fbbf24",
     glow: "rgba(251, 191, 36, 0.30)",
+    tilt: "-4deg",
+    raised: false,
+  },
+  {
+    src: "/landing/couple_mockup.webp",
+    label: "연인 테마",
+    desc: "우리 사진과 하늘 배경으로 채운 채팅방",
+    glow: "rgba(255, 122, 166, 0.30)",
     tilt: "0deg",
     raised: true,
   },
@@ -69,25 +68,24 @@ const showcaseThemes = [
     src: "/landing/pet_mockup.webp",
     label: "반려동물 테마",
     desc: "우리집 강아지를 프로필과 배경에",
-    accent: "#fb923c",
     glow: "rgba(251, 146, 60, 0.28)",
     tilt: "4deg",
     raised: false,
   },
 ];
 
+// 카드마다 파스텔 틴트 + 같은 색 계열 아이콘. 틴트 채움이 카드의 구분 수단이다(테두리 없음).
+// 이모지는 되살리지 않는다(아이콘과 중복).
 const useCases = [
   {
     icon: Gift,
-    emoji: "🎁",
     title: "선물하기 좋아요",
-    body: "기프티콘 말고, 세상에 하나뿐인 카톡을 선물하세요. 생일·기념일에 오래 기억에 남는 특별한 선물이 됩니다.",
+    body: "기프티콘 말고, 받는 사람 사진으로 만든 카톡 테마를 선물하세요. 생일·기념일에 오래 남는 선물이 됩니다.",
     tint: "#fff6d6",
     accent: "#f2b705",
   },
   {
     icon: Laugh,
-    emoji: "😆",
     title: "친구랑 놀기 좋아요",
     body: "우리끼리만 아는 드립과 짤로 웃긴 테마를 만들어 공유하세요. 단톡방 놀이가 하나 더 늘어납니다.",
     tint: "#e3efff",
@@ -95,7 +93,6 @@ const useCases = [
   },
   {
     icon: Heart,
-    emoji: "💙",
     title: "최애·커플과 매일",
     body: "연인 사진이나 최애로 채운 채팅방. 매일 여는 카톡이 설레는 공간으로 바뀝니다.",
     tint: "#ffe9ef",
@@ -103,9 +100,8 @@ const useCases = [
   },
   {
     icon: Sparkles,
-    emoji: "✨",
     title: "나만 가질 수 있어요",
-    body: "반려동물, 우리 아기, 좋아하는 캐릭터까지. 세상에 딱 하나뿐인 내 취향으로 꾸밉니다.",
+    body: "반려동물, 우리 아기, 좋아하는 캐릭터까지. 내가 아끼는 대상으로 채팅방을 채웁니다.",
     tint: "#eafaf1",
     accent: "#34c98a",
   },
@@ -210,12 +206,7 @@ export default function LandingClient() {
 
         <div className="mx-auto grid w-full max-w-7xl items-center gap-6 px-5 py-8 md:gap-8 md:px-8 md:py-12 lg:min-h-[calc(100svh-73px)] lg:grid-cols-[minmax(0,0.94fr)_minmax(420px,1.06fr)] lg:py-14">
           <div className="hero-anim hero-anim-title relative z-10 max-w-3xl text-center lg:text-left">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-1.5 text-[12px] font-black text-[#3d7bd6] shadow-sm backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
-              세상에 하나뿐인 카카오톡 테마
-            </span>
-
-            <h1 className="mt-4 text-[34px] font-black leading-[1.14] text-[var(--color-on-background)] sm:mt-5 sm:text-[58px] lg:text-[74px]">
+            <h1 className="text-[34px] font-black leading-[1.14] text-[var(--color-on-background)] sm:text-[58px] lg:text-[74px]">
               <span className="block">내가 좋아하는</span>
               <span className="mt-1 block">
                 <span className="relative inline-block align-baseline">
@@ -244,7 +235,7 @@ export default function LandingClient() {
             {/*
               히어로는 제목·목업·CTA만 남긴다. 가입 혜택과 지원 환경은 하단 SignupOfferSection이 맡는다.
             */}
-            <p className="mx-auto mt-5 max-w-xl text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:text-[17px] sm:leading-8 lg:mx-0">
+            <p className="mx-auto mt-5 max-w-xl text-[14px] font-medium leading-7 text-[var(--color-on-surface-variant)] sm:text-[17px] sm:leading-8 lg:mx-0">
               좋아하는 사진을 고르고 미리보면서, 카카오톡에 그대로 적용할 테마를 만들어보세요.
             </p>
 
@@ -297,11 +288,7 @@ export default function LandingClient() {
         <Heart className="pointer-events-none absolute right-[14%] bottom-[24%] -z-0 hidden h-6 w-6 rotate-6 fill-[#ffd6df] text-[#ffb3c2] lg:block" />
         <div className="max-w-4xl px-5 pt-6 pb-12 mx-auto text-center md:px-8 md:pt-12 md:pb-24">
           <Reveal>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#cfe0ff] bg-white/80 px-3.5 py-1.5 text-[12px] font-black text-[#3d7bd6] shadow-sm backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5 text-[#fbbf24]" />
-              세상에 하나뿐인 카톡, 지금 시작
-            </span>
-            <h2 className="mt-4 text-[28px] font-black leading-tight sm:mt-5 sm:text-[52px]">
+            <h2 className="text-[28px] font-black leading-tight sm:text-[52px]">
               <span className="block">세상에 하나뿐인</span>
               {/* "나만의 테마"만 글자별로 순차 bounce. 원문은 aria-label로 읽히고 각 글자는 aria-hidden */}
               <span className="mt-1 block text-[#2f6bbf]" aria-label="나만의 테마">
@@ -321,7 +308,7 @@ export default function LandingClient() {
                 )}
               </span>
             </h2>
-            <p className="mx-auto mt-3 max-w-xl text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[17px] sm:leading-8">
+            <p className="mx-auto mt-3 max-w-xl text-[14px] font-medium leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[17px] sm:leading-8">
               좋아하는 사진 한 장이면 충분해요. 나만 쓰든, 선물하든, 친구랑 웃긴 테마로 놀든
               — 여기서 세상에 하나뿐인 카톡이 시작됩니다.
             </p>
@@ -531,13 +518,10 @@ function UseCaseSection() {
 
       <div className="px-5 py-10 mx-auto max-w-7xl md:px-8 md:py-20">
         <Reveal className="max-w-2xl mx-auto text-center">
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#3d7bd6]">
-            Why TalkTheme
-          </p>
-          <h2 className="mt-3 text-balance text-[26px] font-black leading-tight sm:text-[44px]">
+          <h2 className="text-balance text-[26px] font-black leading-tight sm:text-[44px]">
             내 취향을 담고, 카카오톡에서 써요
           </h2>
-          <p className="mt-3 text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
+          <p className="mt-3 text-[14px] font-medium leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
             사진·색상·말풍선을 바꾸는 재미부터 Android·iPhone용 파일로 받는 과정까지,
             한 곳에서 이어집니다.
           </p>
@@ -549,25 +533,19 @@ function UseCaseSection() {
             const Icon = item.icon;
             return (
               <Reveal key={item.title} delay={(index % 4) * 90}>
-                {/* 카드 자체에 파스텔 톤을 입혀, 뒤따르는 흐름 섹션과 화면 인상이 겹치지 않게 한다 */}
+                {/* 파스텔 틴트 채움이 카드의 구분 수단이다. 테두리는 두지 않고 부드러운 그림자만 둔다 */}
                 <article
-                  className="group relative h-full overflow-hidden rounded-[20px] border border-white p-4 shadow-[0_18px_42px_rgba(47,107,191,0.06)] transition hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(47,107,191,0.14)] sm:rounded-[28px] sm:p-6"
+                  className="group relative h-full overflow-hidden rounded-[20px] p-4 shadow-[0_18px_42px_rgba(47,107,191,0.06)] transition hover:-translate-y-1.5 hover:shadow-[0_28px_60px_rgba(47,107,191,0.14)] sm:rounded-[28px] sm:p-6"
                   style={{ background: item.tint }}
                 >
-                  <span
-                    className="absolute text-lg transition right-3 top-3 opacity-90 group-hover:scale-110 sm:right-4 sm:top-4 sm:text-2xl"
-                    aria-hidden="true"
-                  >
-                    {item.emoji}
-                  </span>
                   <span
                     className="grid h-10 w-10 place-items-center rounded-xl bg-white/85 sm:h-12 sm:w-12 sm:rounded-2xl"
                     style={{ color: item.accent }}
                   >
                     <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
                   </span>
-                  <h3 className="mt-3 text-[15px] font-black sm:mt-5 sm:text-lg">{item.title}</h3>
-                  <p className="mt-1.5 text-[13px] font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:mt-2 sm:text-[14px] sm:leading-7">
+                  <h3 className="mt-3 text-[15px] font-bold sm:mt-5 sm:text-lg">{item.title}</h3>
+                  <p className="mt-1.5 text-[13px] font-medium leading-6 text-[var(--color-on-surface-variant)] sm:mt-2 sm:text-[14px] sm:leading-7">
                     {item.body}
                   </p>
                 </article>
@@ -590,13 +568,10 @@ function ShowcaseSection() {
 
       <div className="py-10 mx-auto max-w-7xl md:py-20">
         <Reveal className="max-w-2xl px-5 mx-auto text-center md:px-8">
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]">
-            Real Result
-          </p>
-          <h2 className="mt-3 text-balance text-[26px] font-black leading-tight sm:text-[44px]">
+          <h2 className="text-balance text-[26px] font-black leading-tight sm:text-[44px]">
             매일 여는 카톡이 달라져요
           </h2>
-          <p className="mt-3 text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
+          <p className="mt-3 text-[14px] font-medium leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
             연인, 캐릭터, 반려동물까지. 내 사진과 색으로 만든 테마가 실제 카카오톡 채팅방에서
             이렇게 보입니다.
           </p>
@@ -647,11 +622,9 @@ function ShowcaseSection() {
                   />
                 </div>
                 <figcaption className="mt-4 flex flex-col items-center text-center sm:mt-7">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white/85 px-3 py-1 text-[12px] font-black text-[var(--color-on-surface)] shadow-sm backdrop-blur sm:px-3.5 sm:py-1.5 sm:text-[13px]">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: theme.accent }} />
-                    {theme.label}
-                  </span>
-                  <p className="mt-2 line-clamp-2 max-w-[230px] text-[12px] font-semibold leading-5 text-[var(--color-on-surface-variant)] sm:mt-2.5 sm:line-clamp-none sm:text-[13px] sm:leading-6">
+                  {/* 알약 배지 대신 텍스트 제목만 둔다(색 점·테두리·그림자 없음) */}
+                  <h3 className="text-[16px] font-bold text-[var(--color-on-surface)] sm:text-[17px]">{theme.label}</h3>
+                  <p className="mt-1.5 line-clamp-2 max-w-[230px] text-[13px] font-medium leading-5 text-[var(--color-on-surface-variant)] sm:line-clamp-none sm:leading-6">
                     {theme.desc}
                   </p>
                 </figcaption>
@@ -716,16 +689,13 @@ function FlowSection() {
     <section className="relative">
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-10 md:px-8 md:py-20 lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:gap-16">
         <Reveal>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[var(--color-on-surface-variant)]">
-            Simple Flow
-          </p>
           {/* 폭에 따라 "고르고 바꾸 / 면,"으로 끊기지 않도록 줄바꿈 위치를 고정한다 */}
-          <h2 className="mt-3 text-[26px] font-black leading-tight sm:text-[44px]">
+          <h2 className="text-[26px] font-black leading-tight sm:text-[44px]">
             고르고 바꾸면,
             <br />
             바로 보여요
           </h2>
-          <p className="mt-3 max-w-md text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
+          <p className="mt-3 max-w-md text-[14px] font-medium leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
             템플릿을 고르고 이미지를 교체하면 미리보기에서 바로 결과가 보입니다. 마음에 들면 그대로
             다운로드하면 됩니다.
           </p>
@@ -752,12 +722,12 @@ function FlowSection() {
                       </span>
                       <div className="min-w-0 pt-1 sm:pt-1.5">
                         <div className="flex items-baseline gap-2">
-                          <span className="text-[11px] font-black tracking-[0.08em] text-[#9fb4d0] sm:text-[12px]">
+                          <span className="text-[13px] font-bold tracking-[0.08em] text-[#5b7396]">
                             0{index + 1}
                           </span>
-                          <h3 className="text-[15px] font-black sm:text-xl">{step.title}</h3>
+                          <h3 className="text-[15px] font-bold sm:text-xl">{step.title}</h3>
                         </div>
-                        <p className="mt-1 max-w-md text-[13px] font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:mt-1.5 sm:text-sm sm:leading-7">
+                        <p className="mt-1 max-w-md text-[13px] font-medium leading-6 text-[var(--color-on-surface-variant)] sm:mt-1.5 sm:text-sm sm:leading-7">
                           {step.body}
                         </p>
                       </div>
@@ -830,9 +800,9 @@ function SignupOfferSection() {
             카드는 페이지 공통인 흰/하늘 베이스를 쓰고, 옐로우는 배지·제목 하이라이트·주 버튼에만 남긴다.
             패널 전체를 노랗게 칠하면 바로 위 파스텔 카드 섹션과 색이 부딪힌다.
           */}
-          <div className="overflow-hidden rounded-[28px] border border-[#e3ecf7] bg-white/85 p-6 shadow-[0_24px_60px_rgba(47,107,191,0.08)] backdrop-blur sm:rounded-[36px] sm:p-10">
+          <div className="overflow-hidden rounded-[28px] bg-white p-6 shadow-[0_24px_60px_rgba(47,107,191,0.08)] sm:rounded-[36px] sm:p-10">
             <div className="text-center">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fee500] px-3 py-1.5 text-[12px] font-black text-[#191600]">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fee500] px-3 py-1.5 text-[13px] font-black text-[#191600]">
                 <Gift className="h-3.5 w-3.5" aria-hidden="true" />
                 가입 혜택
               </span>
@@ -850,7 +820,7 @@ function SignupOfferSection() {
                 ,
                 <br />첫 테마 파일은 무료예요
               </h2>
-              <p className="mx-auto mt-3 max-w-xl text-[14px] font-semibold leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
+              <p className="mx-auto mt-3 max-w-xl text-[14px] font-medium leading-7 text-[var(--color-on-surface-variant)] sm:mt-4 sm:text-[16px] sm:leading-8">
                 카카오나 이메일로 가입하면 크레딧 1개가 바로 지급됩니다. 이후 테마 파일은 크레딧 1개부터이고,
                 결제는 크레딧을 충전할 때만 발생해요.
               </p>

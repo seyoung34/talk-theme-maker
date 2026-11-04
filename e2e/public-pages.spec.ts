@@ -14,7 +14,7 @@ test.describe("공개 페이지", () => {
     await page.getByRole("link", { name: /무료로 시작하기/ }).first().click();
 
     await expect(page).toHaveURL(/\/template$/);
-    await expect(page.getByRole("heading", { level: 1, name: /원하는 템플릿을 골라/ })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "템플릿 갤러리" })).toBeVisible();
   });
 
   test("데스크톱 랜딩 CTA가 첫 화면의 메인 텍스트 아래에 보인다", async ({ page }) => {
