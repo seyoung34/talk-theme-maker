@@ -89,6 +89,7 @@ export default function TemplateGalleryClient() {
   const [isUserTemplateInfoOpen, setIsUserTemplateInfoOpen] = useState(false);
   const [recentWork, setRecentWork] = useState<EditorAutosaveDraft | null>(null);
   const [isRecentWorkResolved, setIsRecentWorkResolved] = useState(false);
+  const [isUserTemplatesResolved, setIsUserTemplatesResolved] = useState(false);
   const [recentWorkVisual, setRecentWorkVisual] = useState<TemplatePreviewVisual | null>(null);
   const [pendingTemplateStart, setPendingTemplateStart] = useState<PendingTemplateStart | null>(null);
   const userTemplateCardPreviewUrlsRef = useRef<Record<string, Record<string, string>>>({});
@@ -117,6 +118,8 @@ export default function TemplateGalleryClient() {
   const userPreviewModel = selectedUserTemplateRecord ? createUserTemplatePreviewModel(selectedUserTemplateRecord, userTemplatePreviewUrls, startUserTemplate, handleDeleteUserTemplate) : null;
   const previewModel = selectedGalleryTemplate ? createGalleryTemplatePreviewModel(selectedGalleryTemplate, selectedGalleryTemplate.onStart) : userPreviewModel;
   const hasPersonalItems = Boolean(recentWork) || userTemplates.length > 0;
+  // 최근 작업과 저장 목록이 모두 읽힌 뒤에야 "내 템플릿" 구역을 그린다(순서가 바뀌며 흔들리지 않게).
+  const isPersonalResolved = isRecentWorkResolved && isUserTemplatesResolved;
 
   // 카드 목록은 cardPreviewPath만 받아 두므로, 모달을 열면 채팅 배경·말풍선 같은 상세 에셋의
   // 서명 URL을 그때 발급한다. 그 사이 프리뷰를 그리면 URL이 없는 슬롯이 base 템플릿 기본
@@ -243,6 +246,7 @@ export default function TemplateGalleryClient() {
         const records = await listUserTemplateRecords();
         if (!active) return;
         setUserTemplates(records.map(toUserTemplateSummary));
+        setIsUserTemplatesResolved(true);
         const nextUrls: Record<string, Record<string, string>> = {};
         const nextVisuals: Record<string, TemplatePreviewVisual> = {};
         for (const record of records) {
@@ -285,6 +289,7 @@ export default function TemplateGalleryClient() {
           });
           setUserTemplateCardVisuals({});
           setNotice("내 템플릿 목록을 불러오지 못했습니다.");
+          setIsUserTemplatesResolved(true);
         }
       }
     };
@@ -502,40 +507,36 @@ export default function TemplateGalleryClient() {
       <SiteHeader currentPath="/template" />
 
       <div className="grid gap-8 px-5 py-8 mx-auto max-w-7xl md:px-8 md:py-10">
-        <section className="grid gap-3 border-b border-[var(--color-outline-variant)] pb-7 md:pb-8">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-[var(--color-on-surface-variant)]">Theme maker</p>
-          <h1 className="max-w-3xl font-[var(--font-display)] text-3xl font-semibold leading-tight tracking-[-0.025em] text-[var(--color-on-surface)] md:text-4xl">
-            원하는 템플릿을 골라 나만의 테마로 만들어 보세요
-          </h1>
-          <p className="max-w-2xl text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)] md:text-base">
-            템플릿을 선택하고 Android 또는 iOS로 시작하면 이미지와 색상을 바로 편집할 수 있습니다.
-          </p>
-        </section>
-
         <InAppBrowserNotice ready={isRecentWorkResolved} hasRecentWork={Boolean(recentWork)} />
 
 
         {notice ? (
-          <div className="rounded-[18px] border border-[var(--color-outline-variant)] bg-white px-4 py-3 text-sm font-bold text-[var(--color-on-surface-variant)] shadow-[0_12px_28px_rgba(42,103,103,0.06)]">
+          <div className="rounded-[18px] border border-[var(--color-outline-variant)] bg-white px-4 py-3 text-sm font-bold text-[var(--color-on-surface-variant)] shadow-[0_12px_28px_rgba(47,107,191,0.06)]">
             {notice}
           </div>
         ) : null}
 
-        <section className={`grid rounded-[32px] border border-[var(--color-outline-variant)] ${hasPersonalItems ? "gap-5 bg-white/92 p-5 shadow-[0_18px_48px_rgba(42,103,103,0.08)] md:p-6" : "gap-3 bg-white/70 p-4 md:p-5"}`}>
+        {/*
+          저장한 템플릿이 없으면 갤러리를 먼저 보여 준다(order). 저장 목록이 읽히기 전에는 이 구역을 그리지 않아
+          처음 온 사용자의 갤러리가 "비어 있는 내 템플릿" 안내 뒤로 밀렸다가 돌아오는 흔들림이 없다.
+          테두리·배경 박스는 두지 않는다 — 안쪽 카드와 겹쳐 선과 층이 늘어나기 때문이다.
+        */}
+        {isPersonalResolved ? (
+        <section className={`grid ${hasPersonalItems ? "order-1 gap-5 p-0 md:p-0" : "order-2 gap-3"}`}>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="mt-2 flex items-center gap-1.5">
-                <h2 className="font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">내 템플릿</h2>
+              <div className="flex items-center gap-1.5">
+                <h2 className="font-[var(--font-display)] text-2xl font-black text-[var(--color-on-surface)] md:text-3xl">내 템플릿</h2>
                 <button
                   type="button"
                   aria-label="내 템플릿 안내"
-                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-[var(--color-outline-variant)] bg-white text-[var(--color-on-surface-variant)] sm:hidden"
+                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-low)] text-[var(--color-on-surface-variant)] sm:hidden"
                   onClick={() => setIsUserTemplateInfoOpen(true)}
                 >
                   <Info className="size-3.5" aria-hidden="true" />
                 </button>
               </div>
-              <p className="mt-2 hidden max-w-2xl text-sm font-semibold leading-6 text-[var(--color-on-surface-variant)] sm:block">
+              <p className="mt-2 hidden max-w-2xl text-sm font-medium leading-6 text-[var(--color-on-surface-variant)] sm:block">
                 편집 상태와 직접 올린 이미지는 이 브라우저에 저장됩니다. 내보내기를 시작하면 파일 생성에 필요한 데이터가 서버로 일시 전송됩니다.
               </p>
             </div>
@@ -597,12 +598,6 @@ export default function TemplateGalleryClient() {
                   }
                   desktopVisual={<UserTemplateDesktopVisual template={template} visual={userTemplateCardVisuals[template.id]} />}
                   desktopContent={<UserTemplateDesktopContent template={template} />}
-                  desktopFooter={
-                    <span className="mt-4 inline-flex w-fit items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
-                      템플릿 확인
-                      <ArrowRight className="w-4 h-4" />
-                    </span>
-                  }
                 />
               ))}
             </div>
@@ -620,12 +615,14 @@ export default function TemplateGalleryClient() {
             </p>
           )}
         </section>
+        ) : null}
 
         {/* ===========템플릿 갤러리=========== */}
-        <section className="grid gap-5">
+        <section className={`grid gap-5 ${hasPersonalItems ? "order-2" : "order-1"}`}>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h2 className="mt-2 font-[var(--font-display)] text-3xl font-semibold text-[var(--color-on-surface)]">템플릿 갤러리</h2>
+              {/* 상단 소개 문구를 없앴으므로 갤러리 제목이 페이지의 h1이다 */}
+              <h1 className="font-[var(--font-display)] text-2xl font-black text-[var(--color-on-surface)] md:text-3xl">템플릿 갤러리</h1>
             </div>
           </div>
 
@@ -639,7 +636,6 @@ export default function TemplateGalleryClient() {
                 mobileVisual={<TemplateVisualPreview visual={template.visual} size="thumb" />}
                 desktopVisual={<TemplateVisualPreview visual={template.visual} size="card" />}
                 desktopContent={<GalleryTemplateDesktopContent template={template} />}
-                desktopFooter={<GalleryTemplateDesktopFooter template={template} />}
               />
             ))}
             {isSystemTemplatesLoading ? <TemplateGallerySkeletonCards count={5} /> : null}
@@ -938,41 +934,28 @@ function hasEveryScreenImage(screenImages: Partial<Record<PreviewScreenId, strin
   return Boolean(screenImages) && previewScreens.every(({ id }) => screenImages?.[id]);
 }
 
-function getGalleryPlatforms(template: GalleryTemplateItem): ThemePlatform[] {
-  return template.kind === "system" ? (Object.keys(template.variants) as ThemePlatform[]) : ["android", "ios"];
+// 제목 오른쪽 화살표. 카드 전체가 눌리므로 "템플릿 확인" 같은 문구 없이 방향만 알려 준다.
+function CardTitleArrow() {
+  return <ArrowRight className="size-5 shrink-0 text-[var(--color-on-surface-variant)] transition group-hover:translate-x-0.5 group-hover:text-[#2f6bbf]" aria-hidden="true" />;
 }
 
+// 시스템 템플릿은 모두 Android/iOS를 지원하므로 플랫폼 표기는 두지 않는다.
 function GalleryTemplateDesktopContent({ template }: { template: GalleryTemplateItem }) {
   return (
     <div className="grid gap-1">
-      <strong className="font-[var(--font-display)] text-[22px] font-semibold leading-tight text-[var(--color-on-surface)]">{template.title}</strong>
-      {template.description ? <span className="line-clamp-1 text-xs leading-5 text-[var(--color-on-surface-variant)]">{template.description}</span> : null}
-    </div>
-  );
-}
-
-// 하단 행: 플랫폼 태그(좌) + 확인 버튼(우)을 한 줄에 배치
-function GalleryTemplateDesktopFooter({ template }: { template: GalleryTemplateItem }) {
-  return (
-    <div className="mt-4 flex items-center justify-between gap-2">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {getGalleryPlatforms(template).map((platform) => (
-          <span key={platform} className="rounded-full bg-[var(--color-surface-low)] px-2.5 py-1 text-[11px] font-black uppercase text-[var(--color-on-surface-variant)]">
-            {platform === "android" ? "Android" : "iOS"}
-          </span>
-        ))}
+      <div className="flex items-center justify-between gap-3">
+        <strong className="min-w-0 truncate font-[var(--font-display)] text-[22px] font-bold leading-tight text-[var(--color-on-surface)]">{template.title}</strong>
+        <CardTitleArrow />
       </div>
-      <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-[var(--color-outline-variant)] bg-white px-4 py-2.5 text-sm font-black text-[var(--color-on-surface)] transition group-hover:bg-[var(--color-primary-container)] group-hover:text-[var(--color-on-primary-container)]">
-        템플릿 확인
-        <ArrowRight className="w-4 h-4" />
-      </span>
+      {/* 제목과 같은 설명은 반복이라 숨긴다 */}
+      {template.description && template.description.trim() !== template.title.trim() ? <span className="line-clamp-1 text-[13px] leading-5 text-[var(--color-on-surface-variant)]">{template.description}</span> : null}
     </div>
   );
 }
 
 function UserTemplateDesktopVisual({ template, visual }: { template: UserTemplateSummary; visual?: TemplatePreviewVisual }) {
   return (
-    <div className="relative overflow-hidden rounded-[24px] border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] p-3">
+    <div className="relative overflow-hidden bg-white">
       {visual ? <TemplateVisualPreview visual={visual} size="card" /> : <UserMiniPreviewSkeleton />}
       <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-black text-[var(--color-on-surface-variant)] shadow-sm">
         <Eye className="size-3" aria-hidden="true" />
@@ -988,7 +971,10 @@ function UserTemplateDesktopVisual({ template, visual }: { template: UserTemplat
 function UserTemplateDesktopContent({ template }: { template: UserTemplateSummary }) {
   return (
     <div className="min-w-0">
-      <strong className="block truncate text-lg font-black text-[var(--color-on-surface)]">{template.name}</strong>
+      <div className="flex items-center justify-between gap-3">
+        <strong className="min-w-0 truncate text-lg font-bold text-[var(--color-on-surface)]">{template.name}</strong>
+        <CardTitleArrow />
+      </div>
       <p className="mt-1 text-sm leading-6 text-[var(--color-on-surface-variant)]">최근 수정 {formatDate(template.updatedAt)}</p>
     </div>
   );
@@ -1013,7 +999,7 @@ function RecentWorkDesktopContent({ record }: { record: EditorAutosaveDraft }) {
 function UserMiniPreviewSkeleton() {
   return (
     <div className="grid aspect-[16/15] grid-cols-[0.8fr_1fr] gap-2">
-      <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white shadow-[0_10px_24px_rgba(42,103,103,0.08)]">
+      <div className="grid grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white shadow-[0_10px_24px_rgba(47,107,191,0.08)]">
         <div className="flex items-center justify-between h-8 px-3">
           <span className="w-12 h-3 rounded-full bg-black/12" />
           <span className="grid rounded-full size-4 place-items-center bg-black/10" />
@@ -1029,7 +1015,7 @@ function UserMiniPreviewSkeleton() {
           ))}
         </div>
       </div>
-      <div className="grid content-between overflow-hidden rounded-[18px] bg-[linear-gradient(160deg,var(--color-secondary-container),white)] p-2 shadow-[0_10px_24px_rgba(42,103,103,0.08)]">
+      <div className="grid content-between overflow-hidden rounded-[18px] bg-[linear-gradient(160deg,var(--color-secondary-container),white)] p-2 shadow-[0_10px_24px_rgba(47,107,191,0.08)]">
         <span className="w-20 h-6 rounded-full bg-white/80" />
         <div className="grid gap-2">
           <span className="h-8 w-4/5 animate-pulse rounded-[14px] bg-white" />
@@ -1045,7 +1031,7 @@ function TemplateGallerySkeletonCards({ count }: { count: number }) {
   return (
     <>
       {Array.from({ length: count }).map((_, index) => (
-        <div key={index} className="grid min-h-0 content-between gap-2 overflow-hidden rounded-[16px] border border-[var(--color-outline-variant)] bg-white/70 p-2 shadow-[0_16px_36px_rgba(42,103,103,0.04)] sm:min-h-[360px] sm:gap-4 sm:rounded-[28px] sm:p-4">
+        <div key={index} className="grid min-h-0 content-between gap-2 overflow-hidden rounded-[16px] border border-[var(--color-outline-variant)] bg-white/70 p-2 shadow-[0_16px_36px_rgba(47,107,191,0.04)] sm:min-h-[360px] sm:gap-4 sm:rounded-[28px] sm:p-4">
           <div className="grid gap-1.5 sm:hidden">
             <div className="aspect-[16/15] animate-pulse rounded-[12px] bg-[var(--color-surface-low)]" />
             <div className="flex items-center justify-between gap-2">
@@ -1124,7 +1110,7 @@ function TemplatePreviewModal({ preview, isPreviewLoading = false, onClose }: { 
         if (event.target === event.currentTarget && backdropPressRef.current) onClose();
       }}
     >
-      <section className="grid h-[min(92dvh,780px)] w-full max-w-3xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(42,103,103,0.2)] sm:rounded-[32px]">
+      <section className="grid h-[min(92dvh,780px)] w-full max-w-3xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[28px] bg-white shadow-[0_28px_64px_rgba(47,107,191,0.2)] sm:rounded-[32px]">
         <header className="flex items-start justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4">
           <div>
             <h2 className="mt-1 font-[var(--font-display)] text-2xl font-semibold leading-tight text-[var(--color-on-surface)] sm:text-3xl">{preview.title}</h2>
@@ -1262,7 +1248,7 @@ function ScreenPreviewSkeleton() {
 
 function ModalScreenFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="relative aspect-9/19.5 h-[min(calc(74vw*19.5/9),62dvh,540px)] w-auto shrink-0 overflow-hidden rounded-[32px] border border-[var(--color-outline-variant)] bg-white shadow-[0_18px_40px_rgba(42,103,103,0.12)]">
+    <div className="relative aspect-9/19.5 h-[min(calc(74vw*19.5/9),62dvh,540px)] w-auto shrink-0 overflow-hidden rounded-[32px] border border-[var(--color-outline-variant)] bg-white shadow-[0_18px_40px_rgba(47,107,191,0.12)]">
       {children}
     </div>
   );
@@ -1540,7 +1526,7 @@ function RecentWorkConflictDialog({
 function UserTemplateInfoModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.55)] p-4" role="dialog" aria-modal="true" aria-label="내 템플릿 안내" onClick={onClose}>
-      <div className="max-w-sm rounded-[24px] bg-white p-5 shadow-[0_28px_64px_rgba(42,103,103,0.2)]" onClick={(event) => event.stopPropagation()}>
+      <div className="max-w-sm rounded-[24px] bg-white p-5 shadow-[0_28px_64px_rgba(47,107,191,0.2)]" onClick={(event) => event.stopPropagation()}>
         <strong className="block text-lg font-black text-[var(--color-on-surface)]">내 템플릿 안내</strong>
         <p className="mt-2 text-sm leading-6 text-[var(--color-on-surface-variant)]">
           편집 상태와 직접 올린 이미지는 이 브라우저에 저장됩니다. 내보내기를 시작하면 파일 생성에 필요한 데이터가 서버로 일시 전송됩니다.
@@ -1560,7 +1546,7 @@ function UserTemplateInfoModal({ onClose }: { onClose: () => void }) {
 function TemplatePreviewLoadingOverlay() {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-[color:rgba(27,28,25,0.28)] p-4" role="status" aria-live="polite">
-      <div className="rounded-[24px] border border-[var(--color-outline-variant)] bg-white px-5 py-4 text-sm font-black text-[var(--color-on-surface)] shadow-[0_22px_52px_rgba(42,103,103,0.18)]">
+      <div className="rounded-[24px] border border-[var(--color-outline-variant)] bg-white px-5 py-4 text-sm font-black text-[var(--color-on-surface)] shadow-[0_22px_52px_rgba(47,107,191,0.18)]">
         내 템플릿 미리보기를 준비하는 중
       </div>
     </div>
@@ -1571,7 +1557,7 @@ function TemplatePreviewLoadingOverlay() {
 function TemplatePhonePreview({ template, visual }: { template: ThemeTemplate; visual: TemplatePreviewVisual }) {
   return (
     <div
-      className="mx-auto grid h-[min(48dvh,500px)] min-h-[250px] w-full max-w-[310px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[28px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[0_22px_52px_rgba(42,103,103,0.14)] sm:h-[min(68dvh,540px)] sm:max-w-[330px] sm:rounded-[32px] lg:max-w-[340px]"
+      className="mx-auto grid h-[min(48dvh,500px)] min-h-[250px] w-full max-w-[310px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[28px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[0_22px_52px_rgba(47,107,191,0.14)] sm:h-[min(68dvh,540px)] sm:max-w-[330px] sm:rounded-[32px] lg:max-w-[340px]"
       style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
     >
       <div className="flex h-12 items-center justify-between bg-white/60 px-4 text-xs font-black text-[var(--color-on-surface)] sm:h-14 sm:px-5 sm:text-sm">
