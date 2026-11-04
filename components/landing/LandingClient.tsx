@@ -833,10 +833,10 @@ function SignupOfferSection() {
                   preserveUtmNavigation(event, "/login");
                   trackAnalyticsEvent("landing_signup_cta_clicked", { destination: "login" });
                 }}
-                className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#fee500] px-7 py-4 text-base font-black text-[#191600] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] hover:shadow-[0_10px_24px_rgba(47,107,191,0.14)] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:w-auto"
+                className="group inline-flex w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-full bg-[#fee500] px-4 py-4 text-[15px] font-black sm:gap-2 sm:px-7 sm:text-base text-[#191600] transition hover:-translate-y-0.5 hover:bg-[#ffe93a] hover:shadow-[0_10px_24px_rgba(47,107,191,0.14)] focus:outline-none focus:ring-4 focus:ring-[#fff2a8] sm:w-auto"
               >
                 무료로 가입하고 크레딧 1개 받기
-                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                <ArrowRight className="h-4 w-4 shrink-0 transition group-hover:translate-x-0.5 max-[340px]:hidden" />
               </Link>
               {/* 보조 동선이므로 주 버튼보다 한 단계 낮은 무게로 둔다 */}
               <Link
