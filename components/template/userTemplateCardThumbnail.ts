@@ -30,7 +30,12 @@ export async function bakeUserTemplateCardThumbnail(record: UserTemplateRecord):
 }
 
 export function getUserTemplateCardThumbnailBlob(record: UserTemplateRecord): Promise<Blob | null> {
-  const key = `${record.id}:${record.updatedAt}`;
+  // 같은 저장본이라도 원격 이미지 복원이 실패했다가 성공하면 다른 결과를 구워야 한다.
+  const sources = Object.entries(record.uploads).sort(([a], [b]) => a.localeCompare(b)).map(([slot, entries]) => [
+    slot,
+    (entries ?? []).map((entry) => [entry.id, Boolean(entry.file || entry.catalog?.previewUrl)]),
+  ]);
+  const key = JSON.stringify([record.id, record.updatedAt, sources]);
   const cached = thumbnailCache.get(record.id);
   if (cached?.key === key) return cached.pending;
 

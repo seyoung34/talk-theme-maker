@@ -61,6 +61,18 @@ describe("getUserTemplateCardThumbnailBlob", () => {
     expect(generateSystemTemplateThumbnail).toHaveBeenCalledTimes(2);
   });
 
+  it("이미지 복원이 실패한 뒤 성공하면 같은 저장본도 다시 굽는다", async () => {
+    const fallback = new Blob(["fallback"]);
+    const restored = new Blob(["restored"]);
+    generateSystemTemplateThumbnail.mockResolvedValueOnce(fallback).mockResolvedValueOnce(restored);
+    const missing = makeRecord({ uploads: { slot: [{ id: "asset" }] } });
+    const ready = makeRecord({ uploads: { slot: [{ id: "asset", file: new File(["image"], "image.png") }] } });
+
+    expect(await getUserTemplateCardThumbnailBlob(missing)).toBe(fallback);
+    expect(await getUserTemplateCardThumbnailBlob(ready)).toBe(restored);
+    expect(generateSystemTemplateThumbnail).toHaveBeenCalledTimes(2);
+  });
+
   it("동시에 요청해도 한 번만 굽는다", async () => {
     // 최근 작업 카드와 목록 카드가 같은 레코드를 동시에 요구할 수 있다.
     const blob = new Blob(["a"]);
