@@ -18,14 +18,14 @@ export default function TemplateVisualPreview({
         alt=""
         loading="lazy"
         decoding="async"
-        className={`aspect-[16/15] w-full border border-[var(--color-outline-variant)] bg-[var(--color-surface-low)] object-cover ${radiusClass}`}
+        className={`aspect-[16/15] w-full bg-white object-cover ${radiusClass}`}
       />
     );
   }
 
   if (isThumb) {
     return (
-      <div className="relative aspect-[16/15] overflow-hidden rounded-[12px] border border-[var(--color-outline-variant)] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+      <div className="relative aspect-[16/15] overflow-hidden rounded-[12px] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
         <div className="grid h-full grid-cols-[0.84fr_1fr] gap-1 p-1">
           <div
             className="rounded-[8px] bg-cover bg-center"
@@ -45,10 +45,10 @@ export default function TemplateVisualPreview({
   }
 
   return (
-    <div className="relative aspect-[16/15] overflow-hidden rounded-[22px] border border-[var(--color-outline-variant)] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+    <div className="relative aspect-[16/15] overflow-hidden rounded-[22px] bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
       <div className="relative grid h-full grid-cols-[0.84fr_1fr] gap-2.5 p-3">
         <div
-          className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white/70 bg-contain bg-center bg-no-repeat shadow-[0_12px_26px_rgba(42,103,103,0.08)]"
+          className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-[18px] bg-white/70 bg-contain bg-center bg-no-repeat shadow-[0_12px_26px_rgba(47,107,191,0.08)]"
           style={{ backgroundColor: visual.mainBackgroundColor, backgroundImage: visual.mainBackgroundImage ? `url(${visual.mainBackgroundImage})` : undefined }}
         >
           <div className="flex h-9 items-center justify-between px-3">
@@ -65,7 +65,7 @@ export default function TemplateVisualPreview({
           <MiniTabBar visual={visual} />
         </div>
         <div
-          className="relative grid min-h-0 content-between overflow-hidden rounded-[18px] bg-cover bg-center p-2.5 shadow-[0_12px_26px_rgba(42,103,103,0.08)]"
+          className="relative grid min-h-0 content-between overflow-hidden rounded-[18px] bg-cover bg-center p-2.5 shadow-[0_12px_26px_rgba(47,107,191,0.08)]"
           style={{ backgroundColor: visual.chatBackgroundColor, backgroundImage: visual.chatBackgroundImage ? `url(${visual.chatBackgroundImage})` : undefined }}
         >
           <div className="grid h-full w-full grid-rows-3 gap-1.5">

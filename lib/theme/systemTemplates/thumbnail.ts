@@ -133,8 +133,12 @@ export async function generateSystemTemplateThumbnail(
     const leftX = outerPad;
     const rightX = leftX + leftWidth + columnGap;
 
-    context.fillStyle = "#eef3f2";
+    context.fillStyle = "#ffffff";
     context.fillRect(0, 0, width, height);
+
+    // 두 화면 아래에 부드러운 그림자를 깔아 회색 바탕 위에서 화면이 떠 보이게 한다.
+    drawPanelShadow(context, leftX, contentTop, leftWidth, contentHeight, cornerRadius);
+    drawPanelShadow(context, rightX, contentTop, rightWidth, contentHeight, cornerRadius);
 
     // 좌측(메인 화면): 메인 배경 + 프로필 리스트 + 하단 탭 아이콘
     drawPanel(context, leftX, contentTop, leftWidth, contentHeight, cornerRadius, color("main_background_color", template.defaults.mainBackground), images.get("main_background"));
@@ -177,6 +181,20 @@ function loadImage(src: string) {
     image.onerror = () => reject(new Error("Thumbnail image load failed."));
     image.src = src;
   });
+}
+
+// 화면 패널 뒤에 그림자만 남긴다. 불투명 흰색으로 채운 뒤 패널 내용이 위에 덮이므로 색에는 영향이 없다.
+// 그림자는 outerPad(24px) 안쪽에 들어가도록 blur 18 / 아래로 6px로 제한한다.
+function drawPanelShadow(context: CanvasRenderingContext2D, x: number, y: number, panelWidth: number, panelHeight: number, radius: number) {
+  context.save();
+  context.shadowColor = "rgba(31, 52, 55, 0.20)";
+  context.shadowBlur = 18;
+  context.shadowOffsetX = 0;
+  context.shadowOffsetY = 6;
+  roundRect(context, x, y, panelWidth, panelHeight, radius);
+  context.fillStyle = "#ffffff";
+  context.fill();
+  context.restore();
 }
 
 function drawPanel(context: CanvasRenderingContext2D, x: number, y: number, panelWidth: number, panelHeight: number, radius: number, background: string, image?: HTMLImageElement) {
