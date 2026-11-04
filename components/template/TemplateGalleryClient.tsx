@@ -9,6 +9,7 @@ import BubbleCanvasPreview from "@/components/preview/BubbleCanvasPreview";
 import TemplateCard from "@/components/template/TemplateCard";
 import TemplateVisualPreview from "@/components/template/TemplateVisualPreview";
 import { bakeUserTemplateCardThumbnail } from "@/components/template/userTemplateCardThumbnail";
+import { preparePersonalPreviewUploads } from "@/components/template/personalPreviewUploads";
 import { getResolvedAssetUrl, getResolvedColor, getSelectedCandidate, getSelectedUpload } from "@/lib/theme/project/state";
 import { resolvePlatformPreviewColor } from "@/lib/theme/project/platformColor";
 import { buildTabIconUrls, createSystemTemplatePreviewUrls, createSystemTemplatePreviewVisual, getCorePreviewImageUrls, type SignedUrlCache, type TemplatePreviewVisual } from "@/lib/theme/systemTemplates/preview";
@@ -202,12 +203,14 @@ export default function TemplateGalleryClient() {
     let active = true;
     let previewUrls: Record<string, string> = {};
     void readAutosaveDraft("user")
-      .then((record) => {
+      .then(async (record) => {
         if (!active || !record) return;
         const previewRecord = autosaveToUserTemplateRecord(record);
+        setRecentWork(record);
+        previewRecord.uploads = await preparePersonalPreviewUploads(previewRecord.uploads, record.draft.remoteUploadRefs);
+        if (!active) return;
         previewUrls = createUserTemplatePreviewUrls(previewRecord);
         const baseTemplate = themeTemplates.find((template) => template.id === previewRecord.templateId) ?? themeTemplates[0];
-        setRecentWork(record);
         setRecentWorkVisual(createUserTemplatePreviewVisual(previewRecord, baseTemplate, previewUrls));
         // CSS 목업을 먼저 보여 준 뒤, 갤러리 카드와 같은 합성 썸네일을 구워지는 대로 얹는다.
         void bakeUserTemplateCardThumbnail(previewRecord).then((objectUrl) => {
@@ -249,7 +252,9 @@ export default function TemplateGalleryClient() {
         setIsUserTemplatesResolved(true);
         const nextUrls: Record<string, Record<string, string>> = {};
         const nextVisuals: Record<string, TemplatePreviewVisual> = {};
-        for (const record of records) {
+        const previewRecords = await Promise.all(records.map(async (record) => ({ ...record, uploads: await preparePersonalPreviewUploads(record.uploads) })));
+        if (!active) return;
+        for (const record of previewRecords) {
           const baseTemplate = themeTemplates.find((template) => template.id === record.templateId) ?? themeTemplates[0];
           const urls = createUserTemplatePreviewUrls(record);
           nextUrls[record.id] = urls;
@@ -266,7 +271,7 @@ export default function TemplateGalleryClient() {
         userTemplateCardThumbnailUrlsRef.current = {};
         // CSS 목업을 먼저 보여 준 뒤, 갤러리 카드와 같은 합성 썸네일을 구워지는 대로 하나씩 얹는다.
         void Promise.all(
-          records.map(async (record) => {
+          previewRecords.map(async (record) => {
             const objectUrl = await bakeUserTemplateCardThumbnail(record);
             if (!objectUrl) return;
             // 화면을 이미 떠났으면 이 URL은 아무도 쓰지 않는다. 그대로 두면 해제되지 않는다.
@@ -393,9 +398,10 @@ export default function TemplateGalleryClient() {
         setNotice("내 템플릿을 찾지 못했습니다.");
         return;
       }
+      const previewRecord = { ...record, uploads: await preparePersonalPreviewUploads(record.uploads) };
       setSelectedGalleryTemplateId(null);
-      setSelectedUserTemplateRecord(record);
-      setUserTemplatePreviewUrls(createUserTemplatePreviewUrls(record));
+      setSelectedUserTemplateRecord(previewRecord);
+      setUserTemplatePreviewUrls(createUserTemplatePreviewUrls(previewRecord));
     } catch (error) {
       console.error(error);
       setNotice("내 템플릿 미리보기를 불러오지 못했습니다.");
