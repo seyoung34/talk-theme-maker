@@ -59,6 +59,21 @@ describe("GA4 analytics", () => {
     expect(gtag).not.toHaveBeenCalledWith("event", "page_view", expect.anything());
   });
 
+  it("keeps candidate_selected backward compatible and forwards asset_key only when given", () => {
+    saveAnalyticsConsent("granted");
+    trackAnalyticsEvent("candidate_selected", { slot_role: "main_background", section: "main", asset_source: "template" });
+    expect(gtag).toHaveBeenLastCalledWith("event", "candidate_selected", expect.not.objectContaining({ asset_key: expect.anything() }));
+
+    trackAnalyticsEvent("candidate_selected", { slot_role: "main_background", section: "main", asset_source: "admin", asset_key: "abcdef01-2345-6789-abcd-ef0123456789" });
+    expect(gtag).toHaveBeenLastCalledWith("event", "candidate_selected", expect.objectContaining({ asset_source: "admin", asset_key: "abcdef01-2345-6789-abcd-ef0123456789" }));
+  });
+
+  it("does not send candidate_selected with asset_key before consent", () => {
+    trackAnalyticsEvent("candidate_selected", { slot_role: "main_background", section: "main", asset_source: "admin", asset_key: "abcdef01-2345-6789-abcd-ef0123456789" });
+
+    expect(gtag).not.toHaveBeenCalled();
+  });
+
   it("adds the saved template context to downstream events", () => {
     saveAnalyticsConsent("granted");
     trackAnalyticsEvent("template_started", { template_key: "basic", template_source: "base", platform: "android" });
