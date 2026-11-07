@@ -142,6 +142,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   const [activeUserTemplate, setActiveUserTemplate] = useState<ActiveUserTemplate | null>(null);
   const [activeSystemTemplate, setActiveSystemTemplate] = useState<ActiveSystemTemplate | null>(null);
   const [systemTemplateBundleId, setSystemTemplateBundleId] = useState<string | null>(null);
+  // 내 템플릿 작업이 시작된 시스템 템플릿(집계용 출처). systemTemplateBundleId와 섞지 않는다 — 그쪽은
+  // 편집 중인 시스템 템플릿의 저장·직접 사용 export가 읽는다.
+  const [sourceSystemTemplateBundleId, setSourceSystemTemplateBundleId] = useState<string | null>(null);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveMode, setSaveMode] = useState<"overwrite" | "saveAs">("saveAs");
   const [saveName, setSaveName] = useState("");
@@ -363,6 +366,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           ? { ...activeSystemTemplate, bundleId: activeSystemTemplate.bundleId ?? activeSystemTemplate.id }
           : undefined,
         systemTemplateBundleId: systemTemplateBundleId ?? undefined,
+        sourceSystemTemplateBundleId: sourceSystemTemplateBundleId ?? undefined,
       },
       editor: { activeSection, activeGroup, selectedSlotId, systemTemplateMetadata: systemTemplateMetadata ?? undefined },
       draft,
@@ -414,6 +418,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
           activeUserTemplate: activeUserTemplate ?? undefined,
           activeSystemTemplate: activeSystemTemplate ? { ...activeSystemTemplate, bundleId: activeSystemTemplate.bundleId ?? activeSystemTemplate.id } : undefined,
           systemTemplateBundleId: systemTemplateBundleId ?? undefined,
+          sourceSystemTemplateBundleId: sourceSystemTemplateBundleId ?? undefined,
           activeSection,
           activeGroup,
           selectedSlotId,
@@ -431,7 +436,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       if (!continueWithoutRecovery) return;
       router.push(destination === "login" ? "/login?returnTo=%2Fedit&reason=export" : "/credits?entry=export_block&returnTo=%2Fedit");
     }
-  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, blockWhileMaterializationPending, bubbleDecorationSources, bubbleDesigns, bubbleFlipX, bubbleGeometry, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, systemTemplateBundleId, templateId, uploads]);
+  }, [activeGroup, activeSection, activeSystemTemplate, activeUserTemplate, blockWhileMaterializationPending, bubbleDecorationSources, bubbleDesigns, bubbleFlipX, bubbleGeometry, bubbleInsets, bubbleMarkers, bubbleStretch, candidateSelections, colors, mode, platform, remoteUploadRefs, router, selectedSlotId, sourceSystemTemplateBundleId, systemTemplateBundleId, templateId, uploads]);
 
   useEffect(() => {
     if (skipDefaultSelectionResetRef.current) {
@@ -562,6 +567,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setSaveDialogOpen,
     setSystemSaveDialogOpen,
     setSystemTemplateBundleId,
+    setSourceSystemTemplateBundleId,
+    sourceSystemTemplateBundleId,
     systemCreditCost,
     systemDescription,
     systemPriceAmount,
@@ -752,6 +759,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setSystemStatus,
     setSystemTags,
     setSystemTemplateBundleId,
+    setSourceSystemTemplateBundleId,
     setSystemTitle,
     setSystemVisibility,
     setTemplateId,
@@ -857,6 +865,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setActiveUserTemplate(null);
     setActiveSystemTemplate(null);
     setSystemTemplateBundleId(null);
+    setSourceSystemTemplateBundleId(null);
     setInitialLoadState({ status: "ready" });
   };
 

@@ -16,6 +16,7 @@ import { getSelectedSharedSlotEntry } from "@/lib/theme/project/state";
 import { getUserTemplate } from "@/lib/theme/userTemplates";
 import { hydrateCatalogPreviewUrls } from "@/lib/theme/project/catalogPreviewHydration";
 import { getThemeSlots, getThemeTemplate, type ThemeTemplateId } from "@/lib/theme/templates";
+import { normalizeSourceSystemTemplateBundleId } from "@/lib/theme/templateOrigin";
 import type { ThemePlatform, ThemeResourceRole, ThemeSection, ThemeSlotGroup } from "@/lib/theme/types";
 
 type UseEditorBootstrapOptions = {
@@ -44,6 +45,8 @@ type UseEditorBootstrapOptions = {
   setSystemStatus: Dispatch<SetStateAction<"draft" | "published" | "archived">>;
   setSystemTags: Dispatch<SetStateAction<string>>;
   setSystemTemplateBundleId: Dispatch<SetStateAction<string | null>>;
+  /** 내 템플릿 작업의 시작 시스템 템플릿(집계용 출처). 근거가 없으면 null이다. */
+  setSourceSystemTemplateBundleId: Dispatch<SetStateAction<string | null>>;
   setSystemTitle: Dispatch<SetStateAction<string>>;
   setSystemVisibility: Dispatch<SetStateAction<"private" | "public">>;
   setTemplateId: Dispatch<SetStateAction<ThemeTemplateId>>;
@@ -75,6 +78,7 @@ export function useEditorBootstrap({
   setSystemStatus,
   setSystemTags,
   setSystemTemplateBundleId,
+  setSourceSystemTemplateBundleId,
   setSystemTitle,
   setSystemVisibility,
   setTemplateId,
@@ -105,6 +109,8 @@ export function useEditorBootstrap({
       setActiveUserTemplate(record.source.activeUserTemplate ?? null);
       setActiveSystemTemplate(record.source.activeSystemTemplate ?? null);
       setSystemTemplateBundleId(record.source.systemTemplateBundleId ?? record.source.activeSystemTemplate?.bundleId ?? null);
+      // 필드가 없는 기존 자동 저장은 출처 미기록이다. 다른 상태에서 추정해 채우지 않는다.
+      setSourceSystemTemplateBundleId(normalizeSourceSystemTemplateBundleId(record.source.sourceSystemTemplateBundleId));
       const systemTemplate = record.source.activeSystemTemplate;
       if (systemTemplate) {
         setSystemTitle(systemTemplate.title);
@@ -161,6 +167,7 @@ export function useEditorBootstrap({
             setActiveUserTemplate(recovery.editor.activeUserTemplate ?? null);
             setActiveSystemTemplate(recovery.editor.activeSystemTemplate ?? null);
             setSystemTemplateBundleId(recovery.editor.systemTemplateBundleId ?? recovery.editor.activeSystemTemplate?.bundleId ?? null);
+            setSourceSystemTemplateBundleId(normalizeSourceSystemTemplateBundleId(recovery.editor.sourceSystemTemplateBundleId));
             if (recovery.editor.activeSystemTemplate) {
               const systemTemplate = recovery.editor.activeSystemTemplate;
               setSystemTitle(systemTemplate.title);
@@ -242,6 +249,8 @@ export function useEditorBootstrap({
       setActiveUserTemplate(null);
       setActiveSystemTemplate(null);
       setSystemTemplateBundleId(payload.systemTemplateBundleId ?? null);
+      // 새 작업은 이전 작업의 출처를 이어받지 않는다. 내 템플릿을 불러오는 경로만 아래에서 레코드 값으로 채운다.
+      setSourceSystemTemplateBundleId(null);
 
       if (payload.systemTemplateId) {
         try {
@@ -382,6 +391,7 @@ export function useEditorBootstrap({
           bubbleDecorationSources: savedTemplate.bubbleDecorationSources ?? {},
         });
         setActiveUserTemplate({ id: savedTemplate.id, name: savedTemplate.name, createdAt: savedTemplate.createdAt });
+        setSourceSystemTemplateBundleId(normalizeSourceSystemTemplateBundleId(savedTemplate.sourceSystemTemplateBundleId));
         setNotice({ tone: "success", message: `${savedTemplate.name} 템플릿을 불러왔습니다.` });
       } catch (error) {
         console.error(error);
@@ -404,7 +414,7 @@ export function useEditorBootstrap({
     requestAutosaveDecision, resumeToken, setActiveGroup, setActiveSection,
     setActiveSystemTemplate, setActiveUserTemplate, setInitialLoadState, setNotice, setPlatform,
     setSelectedSlotId, setSystemCreditCost, setSystemDescription, setSystemPriceAmount, setSystemPricingType,
-    setSystemStatus, setSystemTags, setSystemTemplateBundleId, setSystemTitle, setSystemVisibility, setTemplateId,
+    setSourceSystemTemplateBundleId, setSystemStatus, setSystemTags, setSystemTemplateBundleId, setSystemTitle, setSystemVisibility, setTemplateId,
     replaceDraft, skipDefaultSelectionReset,
   ]);
 }

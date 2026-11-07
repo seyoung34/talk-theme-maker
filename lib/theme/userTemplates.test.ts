@@ -101,3 +101,55 @@ describe("saveUserTemplate 업로드 정규화", () => {
     expect((await getUserTemplate(saved.id))?.uploads["slot-a"]).toBeUndefined();
   });
 });
+
+describe("saveUserTemplate 시스템 템플릿 출처", () => {
+  const bundleA = "abcdef01-2345-6789-abcd-ef0123456789";
+  const bundleB = "abcdef02-2345-6789-abcd-ef0123456789";
+
+  it("출처 bundle을 저장하고 다시 읽는다", async () => {
+    const saved = await saveUserTemplate({ ...baseRecord({}), sourceSystemTemplateBundleId: bundleA.toUpperCase() });
+    expect(saved.sourceSystemTemplateBundleId).toBe(bundleA);
+    expect((await getUserTemplate(saved.id))?.sourceSystemTemplateBundleId).toBe(bundleA);
+  });
+
+  it("필드가 없는 기존 레코드는 null로 읽고 특정 템플릿에 배정하지 않는다", async () => {
+    const saved = await saveUserTemplate(baseRecord({}));
+    expect(saved.sourceSystemTemplateBundleId).toBeNull();
+    expect((await getUserTemplate(saved.id))?.sourceSystemTemplateBundleId).toBeNull();
+  });
+
+  it("형식이 잘못된 값은 null로 저장한다", async () => {
+    const saved = await saveUserTemplate({ ...baseRecord({}), sourceSystemTemplateBundleId: "pastel-glass" });
+    expect(saved.sourceSystemTemplateBundleId).toBeNull();
+  });
+
+  it("덮어쓰기에서 필드를 전달하지 않으면(undefined) 연결이 확인되지 않은 것이므로 기존 출처를 이어받지 않는다", async () => {
+    const first = await saveUserTemplate({ ...baseRecord({}), sourceSystemTemplateBundleId: bundleA });
+    const overwritten = await saveUserTemplate({ ...baseRecord({}), id: first.id, createdAt: first.createdAt });
+    expect(overwritten.sourceSystemTemplateBundleId).toBeNull();
+  });
+
+  it("덮어쓰기에서 같은 출처를 명시하면 유지한다", async () => {
+    const first = await saveUserTemplate({ ...baseRecord({}), sourceSystemTemplateBundleId: bundleA });
+    const overwritten = await saveUserTemplate({ ...baseRecord({}), id: first.id, createdAt: first.createdAt, sourceSystemTemplateBundleId: first.sourceSystemTemplateBundleId });
+    expect(overwritten.sourceSystemTemplateBundleId).toBe(bundleA);
+  });
+
+  it("덮어쓰기에서 null을 명시하면 기존 출처를 지운다", async () => {
+    const first = await saveUserTemplate({ ...baseRecord({}), sourceSystemTemplateBundleId: bundleA });
+    const overwritten = await saveUserTemplate({ ...baseRecord({}), id: first.id, createdAt: first.createdAt, sourceSystemTemplateBundleId: null });
+    expect(overwritten.sourceSystemTemplateBundleId).toBeNull();
+  });
+
+  it("덮어쓰기에서 다른 bundle을 명시하면 그 값으로 바꾼다", async () => {
+    const first = await saveUserTemplate({ ...baseRecord({}), sourceSystemTemplateBundleId: bundleA });
+    const overwritten = await saveUserTemplate({ ...baseRecord({}), id: first.id, createdAt: first.createdAt, sourceSystemTemplateBundleId: bundleB });
+    expect(overwritten.sourceSystemTemplateBundleId).toBe(bundleB);
+  });
+
+  it("새 레코드를 undefined로 저장하면 다른 레코드의 출처를 이어받지 않는다", async () => {
+    await saveUserTemplate({ ...baseRecord({}), sourceSystemTemplateBundleId: bundleA });
+    const other = await saveUserTemplate({ ...baseRecord({}), name: "다른 템플릿" });
+    expect(other.sourceSystemTemplateBundleId).toBeNull();
+  });
+});
