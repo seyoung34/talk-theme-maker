@@ -39,7 +39,7 @@ import { useViewportMode } from "@/components/project/hooks/useViewportMode";
 import { useProjectAutoColors } from "@/components/project/hooks/useProjectAutoColors";
 import { useProjectAssetUploads } from "@/components/project/hooks/useProjectAssetUploads";
 import { useProjectExport } from "@/components/project/hooks/useProjectExport";
-import { toRecommendedAssetKey } from "@/lib/analytics/assetKey";
+import { buildCandidateSelectedParams } from "@/lib/analytics/assetKey";
 import { trackAnalyticsEvent } from "@/lib/analytics/ga4";
 import { useEditorBootstrap } from "@/components/project/hooks/useEditorBootstrap";
 import { useTemplatePersistence } from "@/components/project/hooks/useTemplatePersistence";
@@ -1115,9 +1115,9 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
       setLiveBubblePreview(null);
     }
     const assetSource = candidateId.startsWith(`${slot.id}:`) ? "user" : adminAssetsWithPreview.some((asset) => asset.id === candidateId) ? "admin" : "template";
-    // 이미 올라와 있는 추천 에셋을 다시 고르는 경로다. candidateId가 추천 목록의 ID와 일치할 때만 키를 붙인다.
-    const assetKey = assetSource === "admin" ? toRecommendedAssetKey(candidateId) : undefined;
-    trackAnalyticsEvent("candidate_selected", { slot_role: slot.role, section: slot.section, asset_source: assetSource, ...(assetKey ? { asset_key: assetKey } : {}) });
+    // 일반 후보 경로에는 asset_key를 붙이지 않는다. 템플릿 사본이 추천 에셋과 같은 UUID를 가질 수 있어
+    // 목록 일치만으로는 추천 선택이 아니다. 추천 카드는 selectAdminAsset 경로에서만 키를 보낸다.
+    trackAnalyticsEvent("candidate_selected", buildCandidateSelectedParams({ slotRole: slot.role, section: slot.section, assetSource }));
   };
 
   const copyBubbleToPair = async (sourceSlot: ThemeAssetSlot, targetSlot: ThemeAssetSlot) => {
@@ -1232,8 +1232,7 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
     setCandidateSelections((current) => ({ ...current, [slot.id]: asset.id }));
     focusSlot(slot.id);
     revealSlot(slot);
-    const assetKey = toRecommendedAssetKey(asset.id);
-    trackAnalyticsEvent("candidate_selected", { slot_role: slot.role, section: slot.section, asset_source: "admin", ...(assetKey ? { asset_key: assetKey } : {}) });
+    trackAnalyticsEvent("candidate_selected", buildCandidateSelectedParams({ slotRole: slot.role, section: slot.section, assetSource: "admin", recommendedAssetId: asset.id }));
   };
 
   const applyBubbleDesign = (result: GeneratedBubbleDesign, decorationFiles: Partial<Record<string, File>>) => {
