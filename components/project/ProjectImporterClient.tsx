@@ -604,6 +604,8 @@ export default function ProjectImporterClient({ mode = "user" }: ProjectImporter
   } = useProjectExport({
     systemTemplateBundleId: activeSystemTemplate && !activeUserTemplate ? (systemTemplateBundleId ?? activeSystemTemplate.bundleId) : null,
     systemTemplateVariantId: activeUserTemplate ? null : activeSystemTemplate?.id,
+    // 내 템플릿 작업만 파생 출처를 보낸다. 직접 사용 경로와 한 export에 함께 실리지 않는다.
+    sourceSystemTemplateBundleId: activeUserTemplate ? sourceSystemTemplateBundleId : null,
     activeTemplate,
     bubbleGeometry,
     bubbleInsets,

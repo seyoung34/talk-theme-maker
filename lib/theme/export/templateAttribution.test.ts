@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { normalizeTemplateAttribution, readTemplateAttribution } from "./templateAttribution";
+import { normalizeTemplateAttribution, readSourceTemplateBundleId, readTemplateAttribution } from "./templateAttribution";
 const bundle = "abcdef01-2345-6789-abcd-ef0123456789";
 const variant = "abcdef02-2345-6789-abcd-ef0123456789";
 it("normalizes UUIDs and suppresses orphan variant IDs", () => {
@@ -14,4 +14,17 @@ it("treats absent fields and file fields as null metadata", () => {
   expect(readTemplateAttribution(form)).toEqual({ systemTemplateBundleId: null, systemTemplateVariantId: null });
   form.set("systemTemplateBundleId", new Blob([bundle]));
   expect(readTemplateAttribution(form).systemTemplateBundleId).toBeNull();
+});
+
+it("reads the derived source bundle separately and rejects non-UUID or file fields", () => {
+  const form = new FormData();
+  expect(readSourceTemplateBundleId(form)).toBeNull();
+  form.set("sourceSystemTemplateBundleId", bundle.toUpperCase());
+  expect(readSourceTemplateBundleId(form)).toBe(bundle);
+  form.set("sourceSystemTemplateBundleId", "pastel-glass");
+  expect(readSourceTemplateBundleId(form)).toBeNull();
+  form.set("sourceSystemTemplateBundleId", new Blob([bundle]));
+  expect(readSourceTemplateBundleId(form)).toBeNull();
+  // 기존 직접 사용 필드의 반환 형태는 바뀌지 않는다.
+  expect(readTemplateAttribution(form)).toEqual({ systemTemplateBundleId: null, systemTemplateVariantId: null });
 });

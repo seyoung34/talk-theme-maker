@@ -2,6 +2,7 @@ import { setObservationStage } from "@/lib/ops/requestObservation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { normalizeTemplateAttribution } from "@/lib/theme/export/templateAttribution";
+import { normalizeSourceSystemTemplateBundleId } from "@/lib/theme/templateOrigin";
 
 export const exportCreditCost = 1;
 export const signupBonusCampaignKey = "signup_bonus_v1";
@@ -130,6 +131,7 @@ export async function reserveCreditForExport({
   referencedAssetFileCount = 0,
   systemTemplateBundleId,
   systemTemplateVariantId,
+  sourceSystemTemplateBundleId,
 }: {
   userId: string;
   platform: ExportPlatform;
@@ -148,6 +150,8 @@ export async function reserveCreditForExport({
   /** Untrusted analytics metadata; not an entitlement or credit input. */
   systemTemplateBundleId?: string | null;
   systemTemplateVariantId?: string | null;
+  /** Untrusted analytics metadata: the system template a "My templates" work started from. Never an entitlement or credit input. */
+  sourceSystemTemplateBundleId?: string | null;
 }) {
   const admin = createAdminClient();
   const attribution = normalizeTemplateAttribution(systemTemplateBundleId, systemTemplateVariantId);
@@ -160,11 +164,24 @@ export async function reserveCreditForExport({
     p_referenced_asset_bytes: referencedAssetBytes,
     p_referenced_asset_file_count: referencedAssetFileCount,
   };
-  let { data, error } = await admin.rpc("reserve_export_credit_with_template", {
+  const templateArgs = {
     ...reservationArgs,
     p_system_template_bundle_id: attribution.systemTemplateBundleId,
     p_system_template_variant_id: attribution.systemTemplateVariantId,
-  });
+  };
+  // 파생 출처는 직접 사용 출처와 함께 기록하지 않는다. 직접 사용이면 bundle이 이미 출처를 담고 있다.
+  const sourceId = attribution.systemTemplateBundleId ? null : normalizeSourceSystemTemplateBundleId(sourceSystemTemplateBundleId);
+  let data: unknown;
+  let error: { code?: string } | null = null;
+  if (sourceId) {
+    ({ data, error } = await admin.rpc("reserve_export_credit_with_template_source", { ...templateArgs, p_source_system_template_bundle_id: sourceId }));
+    if (error?.code === "PGRST202" || error?.code === "42883") {
+      console.warn("Source template reservation RPC unavailable; using reservation without the derived origin.");
+      ({ data, error } = await admin.rpc("reserve_export_credit_with_template", templateArgs));
+    }
+  } else {
+    ({ data, error } = await admin.rpc("reserve_export_credit_with_template", templateArgs));
+  }
   // Missing-function errors mean the new RPC did not reserve anything. Never retry
   // business errors or ambiguous network failures: that could charge twice.
   if (error?.code === "PGRST202" || error?.code === "42883") {

@@ -1,6 +1,6 @@
 import { safeTelemetry, recordOperationFailure, setObservationStage } from "@/lib/ops/requestObservation";
 import { NextResponse } from "next/server";
-import { readTemplateAttribution } from "@/lib/theme/export/templateAttribution";
+import { readSourceTemplateBundleId, readTemplateAttribution } from "@/lib/theme/export/templateAttribution";
 import { createExportEnqueueFailureEvent } from "@/lib/ops/eventFactories";
 import { scheduleOpsEvent } from "@/lib/ops/dispatcher";
 import {
@@ -71,6 +71,7 @@ export async function handleAsyncAndroidExportRequest(
     setObservationStage("reservation", "database");
     const reservation = await reserveCreditForExport({
       ...readTemplateAttribution(formData),
+      sourceSystemTemplateBundleId: readSourceTemplateBundleId(formData),
       userId,
       platform: "android",
       mode,
