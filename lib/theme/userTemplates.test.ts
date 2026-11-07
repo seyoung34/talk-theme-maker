@@ -123,9 +123,15 @@ describe("saveUserTemplate 시스템 템플릿 출처", () => {
     expect(saved.sourceSystemTemplateBundleId).toBeNull();
   });
 
-  it("덮어쓰기에서 필드를 전달하지 않으면(undefined) 같은 레코드의 기존 출처를 유지한다", async () => {
+  it("덮어쓰기에서 필드를 전달하지 않으면(undefined) 연결이 확인되지 않은 것이므로 기존 출처를 이어받지 않는다", async () => {
     const first = await saveUserTemplate({ ...baseRecord({}), sourceSystemTemplateBundleId: bundleA });
     const overwritten = await saveUserTemplate({ ...baseRecord({}), id: first.id, createdAt: first.createdAt });
+    expect(overwritten.sourceSystemTemplateBundleId).toBeNull();
+  });
+
+  it("덮어쓰기에서 같은 출처를 명시하면 유지한다", async () => {
+    const first = await saveUserTemplate({ ...baseRecord({}), sourceSystemTemplateBundleId: bundleA });
+    const overwritten = await saveUserTemplate({ ...baseRecord({}), id: first.id, createdAt: first.createdAt, sourceSystemTemplateBundleId: first.sourceSystemTemplateBundleId });
     expect(overwritten.sourceSystemTemplateBundleId).toBe(bundleA);
   });
 
