@@ -58,3 +58,17 @@ it.each([["android", android, mocks.enqueueAndroid, AndroidBuildEnqueueError], [
     mocks.updateEnqueue.mockReset();
   }
 });
+
+it.each([["android", android, mocks.enqueueAndroid], ["ios", ios, mocks.enqueueIos]] as const)("%s route records the derived source without extending builder payload", async (platform, POST, enqueue) => {
+  for (const valid of [true, false]) {
+    const form = new FormData();
+    form.set("manifest", "[]"); form.set("mode", platform === "android" ? "apk" : "ktheme");
+    form.set("sourceSystemTemplateBundleId", valid ? bundle : "invalid");
+    const response = await POST(new Request(`https://local.invalid/api/export/${platform}`, { method: "POST", body: form }));
+    expect(response.status).toBe(202);
+    expect(mocks.reserve).toHaveBeenLastCalledWith(expect.objectContaining({ sourceSystemTemplateBundleId: valid ? bundle : null, systemTemplateBundleId: null }));
+    const builderRequest = enqueue.mock.calls.at(-1)?.[0];
+    expect(JSON.stringify(builderRequest)).not.toContain(bundle);
+    expect(JSON.stringify(builderRequest)).not.toContain("sourceSystemTemplate");
+  }
+});

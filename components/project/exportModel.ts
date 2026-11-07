@@ -45,6 +45,8 @@ export type AndroidExportPayloadOptions = {
   catalogExportUserId?: string;
   systemTemplateBundleId?: string | null;
   systemTemplateVariantId?: string | null;
+  /** "내 템플릿" 작업이 시작된 시스템 템플릿 bundle(집계용 출처). 직접 사용 bundle과 함께 보내지 않는다. */
+  sourceSystemTemplateBundleId?: string | null;
 };
 
 export type IosExportPayloadOptions = Omit<AndroidExportPayloadOptions, "mode"> & {

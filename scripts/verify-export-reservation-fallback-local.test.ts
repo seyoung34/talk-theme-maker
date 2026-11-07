@@ -5,6 +5,26 @@ const { getAdmin } = vi.hoisted(() => ({ getAdmin: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createAdminClient: getAdmin }));
 import { reserveCreditForExport } from "../lib/billing/credits";
 
+// 순서 주의: 이 테스트는 `_source` 함수만 지운다. 아래 테스트가 `reserve_export_credit_with_template`을 지우므로
+// 이 테스트가 먼저 와야 한다. 둘 다 LOCAL RPC를 지우므로 실행 후 `npx supabase db reset --local`로 복원한다.
+it.skipIf(process.env.RUN_LOCAL_EXPORT_FALLBACK !== "1")("reserves once through the direct-use RPC when the local source RPC is missing", async () => {
+  const config = JSON.parse(execFileSync(process.platform === "win32" ? "npx.cmd" : "npx", ["supabase", "status", "-o", "json"], { encoding: "utf8", shell: process.platform === "win32" }));
+  const sql = (input: string) => execFileSync("docker", ["exec", "-i", "supabase_db_kakaotalk-theme-maker", "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-tA"], { input, encoding: "utf8" });
+  const admin = createClient("http://127.0.0.1:54321", config.SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  getAdmin.mockReturnValue(admin);
+  const user = "00000000-0000-0000-0000-000000000005";
+  sql(`insert into auth.users (id,email) values ('${user}', 'source-fallback-fixture@local.invalid'); update public.credit_balances set balance = 10 where user_id = '${user}'; drop function public.reserve_export_credit_with_template_source(uuid,text,text,integer,bigint,bigint,integer,text,text,text); notify pgrst, 'reload schema';`);
+  try {
+    const result = await reserveCreditForExport({ userId: user, platform: "ios", mode: "ktheme", inputFileCount: 0, inputBytes: 0, sourceSystemTemplateBundleId: "abcdef01-2345-6789-abcd-ef0123456789" });
+    expect(result.balance).toBe(9);
+    const stored = sql(`select count(*) || '|' || count(source_system_template_bundle_id) from public.export_jobs where user_id = '${user}'; select balance from public.credit_balances where user_id = '${user}'; select count(*) from public.credit_ledger where user_id = '${user}' and reason = 'export_credit_reserved';`).trim().split(/\r?\n/);
+    expect(stored).toEqual(["1|0", "9", "1"]);
+    process.stdout.write("Local source fallback: one job, null derived origin, balance 9, one reservation ledger entry.\n");
+  } finally {
+    sql(`delete from auth.users where id = '${user}';`);
+  }
+}, 30_000);
+
 // Explicit opt-in; only fixed localhost and the known local Docker container are reachable.
 // Drops the new LOCAL RPC. Run `npx supabase db reset --local` after this test to restore it.
 it.skipIf(process.env.RUN_LOCAL_EXPORT_FALLBACK !== "1")("reserves once through legacy RPC when the local template RPC is missing", async () => {

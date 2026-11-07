@@ -38,6 +38,7 @@ type UseProjectExportOptions = {
   templateId: ThemeTemplateId;
   systemTemplateBundleId?: string | null;
   systemTemplateVariantId?: string | null;
+  sourceSystemTemplateBundleId?: string | null;
 };
 
 export function useProjectExport({
@@ -59,6 +60,7 @@ export function useProjectExport({
   templateId,
   systemTemplateBundleId,
   systemTemplateVariantId,
+  sourceSystemTemplateBundleId,
 }: UseProjectExportOptions) {
   const exportPreparingRef = useRef(false);
   const exportSubmittingRef = useRef(false);
@@ -200,6 +202,7 @@ export function useProjectExport({
         catalogExportUserId: accountState?.user?.id,
         systemTemplateBundleId,
         systemTemplateVariantId,
+        sourceSystemTemplateBundleId,
       });
       setExportProgressStep(platform === "ios" ? 2 : 1);
 
@@ -334,6 +337,7 @@ export function useProjectExport({
     templateId,
     systemTemplateBundleId,
     systemTemplateVariantId,
+    sourceSystemTemplateBundleId,
   ]);
 
   const cancelExport = useCallback(async () => {

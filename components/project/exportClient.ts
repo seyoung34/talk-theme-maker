@@ -6,6 +6,7 @@ import { parseCatalogAssetSelection, type CatalogAssetSelection } from "@/lib/th
 import type { CatalogTransform } from "@/lib/theme/export/catalogTransform";
 import type { ThemeResourceRole } from "@/lib/theme/types";
 import { normalizeTemplateAttribution } from "@/lib/theme/export/templateAttribution";
+import { normalizeSourceSystemTemplateBundleId } from "@/lib/theme/templateOrigin";
 
 export async function createExportFormData(options: ExportPayloadOptions) {
   const form = isIosExportMode(options.mode)
@@ -14,6 +15,9 @@ export async function createExportFormData(options: ExportPayloadOptions) {
   const attribution = normalizeTemplateAttribution(options.systemTemplateBundleId, options.systemTemplateVariantId);
   if (attribution.systemTemplateBundleId) form.set("systemTemplateBundleId", attribution.systemTemplateBundleId);
   if (attribution.systemTemplateVariantId) form.set("systemTemplateVariantId", attribution.systemTemplateVariantId);
+  // 직접 사용 출처가 있으면 파생 출처는 보내지 않는다. 서버도 둘을 함께 기록하지 않는다.
+  const sourceBundleId = attribution.systemTemplateBundleId ? null : normalizeSourceSystemTemplateBundleId(options.sourceSystemTemplateBundleId);
+  if (sourceBundleId) form.set("sourceSystemTemplateBundleId", sourceBundleId);
   return form;
 }
 
