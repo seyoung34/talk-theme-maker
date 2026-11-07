@@ -107,7 +107,8 @@ type AnalyticsEventMap = {
   template_started: { template_key: string; template_source: string; platform: string };
   editor_ready: { template_key: string; template_source: string; platform: string };
   slot_upload_completed: { slot_role: string; section: string; asset_source: string };
-  candidate_selected: { slot_role: string; section: string; asset_source: string };
+  // asset_key는 공개 추천 에셋(admin_assets.id, UUID)을 선택했을 때만 붙는다. 사용자 업로드·템플릿 기본 후보에는 없다.
+  candidate_selected: { slot_role: string; section: string; asset_source: string; asset_key?: string };
   color_changed: { slot_role: string; section: string };
   bubble_edit_completed: { slot_role: string; section: string; edit_type?: string };
   template_save_completed: { save_mode: string; platform: string };
