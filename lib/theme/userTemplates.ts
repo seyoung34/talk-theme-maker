@@ -6,6 +6,7 @@ import { parseBubbleGeometryMap } from "@/lib/theme/bubbleGeometry";
 import { themeDatabaseStores, withThemeDatabaseStore } from "@/lib/theme/localDatabase";
 import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
 import { assertValidTemplateName } from "@/lib/theme/templateName";
+import { normalizeSourceSystemTemplateBundleId } from "@/lib/theme/templateOrigin";
 
 const storeName = themeDatabaseStores.userTemplates;
 
@@ -31,6 +32,12 @@ export type UserTemplateRecord = {
   bubbleEdits: UserTemplateBubbleEdits;
   bubbleDesigns?: BubbleDesigns;
   bubbleDecorationSources?: BubbleDecorationSources;
+  /**
+   * 이 작업이 시작된 시스템 템플릿의 bundle ID(집계용 출처). 원본을 수정 없이 썼다는 뜻이 아니다.
+   * `undefined`는 필드가 전달되지 않음(이 필드를 모르는 구버전 레코드·호출), `null`은 출처가 없거나
+   * 알 수 없음이다. 근거 없는 기존 레코드를 특정 템플릿에 배정하지 않는다.
+   */
+  sourceSystemTemplateBundleId?: string | null;
 };
 
 export type UserTemplateSummary = Pick<UserTemplateRecord, "id" | "name" | "templateId" | "platform" | "createdAt" | "updatedAt"> & {
@@ -45,8 +52,14 @@ export async function saveUserTemplate(record: Omit<UserTemplateRecord, "id" | "
     : undefined;
   const name = assertValidTemplateName(record.name, existing?.name);
   const now = Date.now();
+  // undefined(전달되지 않음)는 같은 id의 기존 레코드를 덮어쓸 때만 그 값을 이어받는다. 호출자가 null을
+  // 명시하면 지운다. 새 레코드이거나 기존 레코드가 없으면 근거가 없으므로 null이다.
+  const sourceSystemTemplateBundleId = record.sourceSystemTemplateBundleId === undefined
+    ? normalizeSourceSystemTemplateBundleId(existing?.sourceSystemTemplateBundleId)
+    : normalizeSourceSystemTemplateBundleId(record.sourceSystemTemplateBundleId);
   const next: UserTemplateRecord = {
     ...record,
+    sourceSystemTemplateBundleId,
     name,
     id: record.id ?? `user-template:${now}`,
     createdAt: record.createdAt ?? now,
@@ -102,6 +115,8 @@ function normalizeUserTemplateRecord(record: UserTemplateRecord): UserTemplateRe
     },
     bubbleDesigns: record.bubbleDesigns ?? {},
     bubbleDecorationSources: normalizeDecorationSources(record.bubbleDecorationSources),
+    // 필드가 없는 기존 레코드는 null(출처 미기록)로 읽는다. 다른 값으로 추정해 채우지 않는다.
+    sourceSystemTemplateBundleId: normalizeSourceSystemTemplateBundleId(record.sourceSystemTemplateBundleId),
   };
 }
 

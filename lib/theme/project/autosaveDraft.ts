@@ -33,6 +33,8 @@ export type EditorAutosaveDraft = {
     activeUserTemplate?: EditorActiveUserTemplate;
     activeSystemTemplate?: EditorActiveSystemTemplate;
     systemTemplateBundleId?: string;
+    /** 내 템플릿 작업의 시작 시스템 템플릿 bundle(집계용 출처). 없으면 출처 미기록이다. */
+    sourceSystemTemplateBundleId?: string;
   };
   editor: {
     activeSection: ThemeSection;

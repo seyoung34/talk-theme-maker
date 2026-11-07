@@ -11,6 +11,7 @@ import type { ThemeTemplateId } from "@/lib/theme/templates";
 import type { BubbleGeometry, Insets, Markers, StretchPoint, ThemePlatform } from "@/lib/theme/types";
 import type { BubbleDecorationSources, BubbleDesigns } from "@/lib/theme/bubbleBuilder";
 import { validateTemplateName } from "@/lib/theme/templateName";
+import { resolveWorkOriginBundleId } from "@/lib/theme/templateOrigin";
 
 type UseTemplatePersistenceOptions = {
   activeSystemTemplate: ActiveSystemTemplate | null;
@@ -38,6 +39,9 @@ type UseTemplatePersistenceOptions = {
   setSaveDialogOpen: Dispatch<SetStateAction<boolean>>;
   setSystemSaveDialogOpen: Dispatch<SetStateAction<boolean>>;
   setSystemTemplateBundleId: Dispatch<SetStateAction<string | null>>;
+  setSourceSystemTemplateBundleId: Dispatch<SetStateAction<string | null>>;
+  /** 열려 있는 내 템플릿 작업의 시작 시스템 템플릿(집계용 출처). */
+  sourceSystemTemplateBundleId: string | null;
   systemCreditCost: string;
   systemDescription: string;
   systemPriceAmount: string;
@@ -66,6 +70,14 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
       setIsSavingTemplate(true);
       options.setNotice({ tone: "info", message: "현재 편집 상태를 내 템플릿으로 저장하는 중입니다." });
       const uploads = await options.ensureSystemTemplateUploadsHydrated();
+      // 저장하는 작업이 어디서 시작됐는지를 항상 명시적으로 넘긴다(null = 출처 없음/알 수 없음).
+      // 다른 이름으로 저장도 현재 작업의 출처를 이어받고, 기존 레코드의 값은 쓰지 않는다.
+      const originBundleId = resolveWorkOriginBundleId({
+        hasActiveUserTemplate: Boolean(options.activeUserTemplate),
+        sourceSystemTemplateBundleId: options.sourceSystemTemplateBundleId,
+        activeSystemTemplateBundleId: options.activeSystemTemplate ? options.activeSystemTemplate.bundleId ?? options.activeSystemTemplate.id : null,
+        systemTemplateBundleId: options.systemTemplateBundleId,
+      });
       const savedTemplate = await saveUserTemplate({
         id: options.saveMode === "overwrite" ? options.activeUserTemplate?.id : undefined,
         createdAt: options.saveMode === "overwrite" ? options.activeUserTemplate?.createdAt : undefined,
@@ -78,7 +90,9 @@ export function useTemplatePersistence(options: UseTemplatePersistenceOptions) {
         bubbleEdits: { geometry: options.bubbleGeometry, markers: options.bubbleMarkers, insets: options.bubbleInsets, stretch: options.bubbleStretch, flipX: options.bubbleFlipX },
         bubbleDesigns: options.bubbleDesigns,
         bubbleDecorationSources: options.bubbleDecorationSources,
+        sourceSystemTemplateBundleId: originBundleId,
       });
+      options.setSourceSystemTemplateBundleId(savedTemplate.sourceSystemTemplateBundleId ?? null);
       options.setActiveUserTemplate({ id: savedTemplate.id, name: savedTemplate.name, createdAt: savedTemplate.createdAt });
       persistEditorSession(options.mode, { templateId: savedTemplate.templateId, platform: savedTemplate.platform, userTemplateId: savedTemplate.id, editMode: options.mode });
       options.setSaveDialogOpen(false);
