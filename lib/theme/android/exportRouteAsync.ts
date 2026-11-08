@@ -23,6 +23,7 @@ import { recoverStalePendingExportBeforeReservation } from "@/lib/theme/export/a
 import { elapsedMs } from "@/lib/theme/export/http";
 import { getExportRequestTooLargePayload, isExportRequestTooLarge } from "@/lib/theme/exportRequest";
 import { CatalogExportResolutionError, resolveCatalogManifestForExport } from "@/lib/theme/assetCatalog/workerResolve";
+import { recordExportCatalogObservation } from "@/lib/theme/assetCatalog/recordExportObservation";
 
 type AndroidExportMode = Extract<ExportMode, "project" | "apk" | "apk-zip">;
 
@@ -81,6 +82,7 @@ export async function handleAsyncAndroidExportRequest(
       referencedAssetFileCount: resolved.referencedAssetFileCount,
     });
     exportJobId = reservation.exportJobId;
+    await recordExportCatalogObservation(exportJobId, resolved.observedAdminAssetIds, resolved.hasUnobservedSources);
     setObservationStage("reservation", "database", exportJobId);
     await markExportJobBackend({ userId, exportJobId, backend: "cloud_run" });
 

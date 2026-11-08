@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ reserve: vi.fn(), enqueueAndroid: vi.fn(), enqueueIos: vi.fn(), updateEnqueue: vi.fn() }));
+const mocks = vi.hoisted(() => ({ reserve: vi.fn(), enqueueAndroid: vi.fn(), enqueueIos: vi.fn(), updateEnqueue: vi.fn(), observationRpc: vi.fn() }));
+vi.mock("@/lib/supabase/server", () => ({ createAdminClient: () => ({ rpc: mocks.observationRpc }) }));
 vi.mock("@/lib/billing/credits", () => ({
   getCurrentUserOrNull: async () => ({ id: "user" }), reserveCreditForExport: mocks.reserve,
   prepareExportJobIdentity: async () => ({ applicationId: "com.kakao.talk.theme.u0123456789abcdef.e000001", themeIdentifier: "com.kakao.talk.theme.u0123456789abcdef.i000001", exportNumber: 1 }),
@@ -12,7 +13,7 @@ vi.mock("@/lib/theme/export/asyncExportRoute", () => ({ settleFailedExportJob: v
 vi.mock("@/lib/theme/android/requestShared", () => ({ readAndroidBundleUpload: async () => ({ manifest: [], files: [], inputBytes: 0 }), AndroidExportRequestError: class extends Error {} }));
 vi.mock("@/lib/theme/ios/requestShared", () => ({ readIosFormData: (request: Request) => request.formData(), readIosEntries: async () => ({ entries: [], inputBytes: 0 }), isIosExportMode: (value: string) => value === "ktheme" }));
 vi.mock("@/lib/theme/ios/packageValidation", () => ({ validateExportName: () => "fixture", validateIosPackage: vi.fn(), IosExportRequestError: class extends Error {} }));
-vi.mock("@/lib/theme/assetCatalog/workerResolve", () => ({ resolveCatalogManifestForExport: async () => ({ manifest: [], referencedAssetBytes: 0, referencedAssetFileCount: 0, uniqueReferencedAssetBytes: 0 }), CatalogExportResolutionError: class extends Error {} }));
+vi.mock("@/lib/theme/assetCatalog/workerResolve", () => ({ resolveCatalogManifestForExport: async () => ({ manifest: [], observedAdminAssetIds: [], hasUnobservedSources: false, referencedAssetBytes: 0, referencedAssetFileCount: 0, uniqueReferencedAssetBytes: 0 }), CatalogExportResolutionError: class extends Error {} }));
 vi.mock("@/lib/theme/android/buildJobClient", () => ({ enqueueAndroidBuild: mocks.enqueueAndroid, AndroidBuildEnqueueError: class extends Error { ambiguous = true; code = "job_run_failed"; } }));
 vi.mock("@/lib/theme/ios/buildJobClient", () => ({ enqueueIosBuild: mocks.enqueueIos, IosBuildEnqueueError: class extends Error { ambiguous = true; code = "job_run_failed"; } }));
 import { AndroidBuildEnqueueError } from "@/lib/theme/android/buildJobClient";
@@ -21,7 +22,19 @@ import { POST as android } from "./android/route";
 import { POST as ios } from "./ios/route";
 const bundle = "abcdef01-2345-6789-abcd-ef0123456789";
 const variant = "abcdef02-2345-6789-abcd-ef0123456789";
-beforeEach(() => { vi.clearAllMocks(); mocks.reserve.mockResolvedValue({ exportJobId: "job", balance: 9 }); });
+beforeEach(() => { vi.clearAllMocks(); mocks.reserve.mockResolvedValue({ exportJobId: "job", balance: 9 }); mocks.observationRpc.mockReturnValue({ abortSignal: async () => ({ error: null }) }); });
+it.each([["android", android, mocks.enqueueAndroid], ["ios", ios, mocks.enqueueIos]] as const)("%s enqueues even if observation fails", async (platform, POST, enqueue) => {
+  mocks.observationRpc.mockReturnValue({ abortSignal: async () => ({ error: { code: "unavailable" } }) });
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    const form = new FormData();
+    form.set("manifest", "[]"); form.set("mode", platform === "android" ? "apk" : "ktheme");
+    const response = await POST(new Request(`https://local.invalid/api/export/${platform}`, { method: "POST", body: form }));
+    expect(response.status).toBe(202);
+    expect(mocks.reserve).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  } finally { warn.mockRestore(); }
+});
 it.each([["android", android, mocks.enqueueAndroid], ["ios", ios, mocks.enqueueIos]] as const)("%s route records metadata without extending builder payload", async (platform, POST, enqueue) => {
   for (const valid of [true, false]) {
     const form = new FormData();
