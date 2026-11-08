@@ -22,6 +22,7 @@ import { IosExportRequestError, validateExportName, validateIosPackage } from "@
 import { enqueueIosBuild, IosBuildEnqueueError } from "@/lib/theme/ios/buildJobClient";
 import { isIosExportMode, readIosEntries, readIosFormData, type IosRequestedEntry } from "@/lib/theme/ios/requestShared";
 import { CatalogExportResolutionError, resolveCatalogManifestForExport } from "@/lib/theme/assetCatalog/workerResolve";
+import { recordExportCatalogObservation } from "@/lib/theme/assetCatalog/recordExportObservation";
 
 export async function handleAsyncIosExportRequest(request: Request) {
   const startedAt = performance.now();
@@ -89,6 +90,7 @@ export async function handleAsyncIosExportRequest(request: Request) {
       referencedAssetFileCount: resolved.referencedAssetFileCount,
     });
     exportJobId = reservation.exportJobId;
+    await recordExportCatalogObservation(exportJobId, resolved.observedAdminAssetIds, resolved.hasUnobservedSources);
     setObservationStage("reservation", "database", exportJobId);
     await markExportJobBackend({ userId, exportJobId, backend: "cloud_run" });
 

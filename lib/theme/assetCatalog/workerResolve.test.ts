@@ -52,6 +52,8 @@ describe("resolveCatalogManifestForExport", () => {
 
     expect(result.manifest).toEqual([{ path: "a.png", field: "file-0" }]);
     expect(result.referencedAssetBytes).toBe(0);
+    expect(result.observedAdminAssetIds).toEqual([]);
+    expect(result.hasUnobservedSources).toBe(true);
     expect(findActiveByKeys).not.toHaveBeenCalled();
   });
 
@@ -89,6 +91,8 @@ describe("resolveCatalogManifestForExport", () => {
     expect(result.manifest[1]).toEqual({ path: "src/main/theme/drawable-xxhdpi/other.png", field: "file-0" });
     expect(result.referencedAssetBytes).toBe(1024);
     expect(result.referencedAssetFileCount).toBe(1);
+    expect(result.observedAdminAssetIds).toEqual([adminAssetId]);
+    expect(result.hasUnobservedSources).toBe(true);
   });
 
   it("active revision이 달라지면 최신으로 바꾸지 않고 명시적인 오류를 낸다", async () => {

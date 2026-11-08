@@ -63,6 +63,8 @@ export async function resolveCatalogManifestForExport(input: {
     });
     return {
       manifest,
+      observedAdminAssetIds: [] as string[],
+      hasUnobservedSources: manifest.length > 0,
       referencedAssetBytes: 0,
       uniqueReferencedAssetBytes: 0,
       referencedAssetFileCount: 0,
@@ -147,10 +149,26 @@ export async function resolveCatalogManifestForExport(input: {
 
   return {
     manifest,
+    // All selections have passed registry, revision, access and transform validation.
+    // Keep the identifiers in the Worker only; they are not builder inputs.
+    observedAdminAssetIds: [...new Set(collected.selections.flatMap(({ selection }) => {
+      const id = observedAdminId(selection.assetId);
+      return id ? [id] : [];
+    }))],
+    hasUnobservedSources: input.manifest.some((item) => !hasCatalogAsset(item)) || collected.selections.some(({ selection }) => !observedAdminId(selection.assetId)),
     referencedAssetBytes: resolution.totals.referencedAssetBytes,
     uniqueReferencedAssetBytes: resolution.totals.uniqueReferencedAssetBytes,
     referencedAssetFileCount: resolution.totals.referencedAssetFileCount,
   };
+}
+
+function observedAdminId(logicalId: string): string | null {
+  try {
+    const parsed = parseLogicalAssetId(logicalId);
+    return parsed.kind === "admin" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parsed.sourceId) ? parsed.sourceId.toLowerCase() : null;
+  } catch {
+    return null;
+  }
 }
 
 function createCatalogResolutionError(failure: CatalogResolutionFailure): CatalogExportResolutionError {
