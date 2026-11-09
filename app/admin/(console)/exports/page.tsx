@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import AdminPageHeader, { adminPageClassName } from "@/components/admin/shell/AdminPageHeader";
 import { catalogAssetLabel } from "@/lib/admin/exportCatalogObservation";
+import { templateUsageLabel, type TemplateUsageRow } from "@/lib/admin/exportTemplateUsage";
 import { diagnosticOutcomeRate, diagnosticRate, diagnosticsFilters, diagnosticsPeriod, type DiagnosticsJob } from "@/lib/admin/exportDiagnostics";
 import { loadExportCatalogObservation } from "@/lib/admin/loadExportCatalogObservation";
 import { loadExportDiagnostics } from "@/lib/admin/loadExportDiagnostics";
+import { loadExportTemplateUsage } from "@/lib/admin/loadExportTemplateUsage";
 import { requireAdmin } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
@@ -13,12 +15,16 @@ const selectClassName = "h-9 rounded-lg border border-[var(--color-outline-varia
 
 export default async function AdminExportsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   await requireAdmin("/admin/exports");
-  const filters = diagnosticsFilters(await searchParams);
+  const params = await searchParams;
+  const filters = diagnosticsFilters(params);
+  // 관리자 계정의 테스트 export가 순위를 부풀리지 않도록 기본은 제외한다.
+  const includeAdmins = params.admins === "1";
   const period = diagnosticsPeriod(filters.days);
   // 두 조회는 서로 독립이다. 한쪽이 실패해도 다른 쪽 화면을 숨기지 않는다.
-  const [loaded, observationLoaded] = await Promise.all([loadExportDiagnostics(filters, period), loadExportCatalogObservation(period)]);
+  const [loaded, observationLoaded, usageLoaded] = await Promise.all([loadExportDiagnostics(filters, period), loadExportCatalogObservation(period), loadExportTemplateUsage(period, includeAdmins)]);
   const data = loaded.ok ? loaded.value : null;
   const observation = observationLoaded.ok ? observationLoaded.value : null;
+  const usage = usageLoaded.ok ? usageLoaded.value : null;
   const maxAssetJobs = Math.max(1, ...(observation?.assets.map((item) => item.job_count) ?? []));
   return (
     <main className={adminPageClassName}>
@@ -27,6 +33,7 @@ export default async function AdminExportsPage({ searchParams }: { searchParams:
           <label className="grid gap-1">기간<select name="days" defaultValue={filters.days} className={selectClassName}>{[1, 7, 30].map((days) => <option key={days} value={days}>최근 {days}일</option>)}</select></label>
           <label className="grid gap-1">플랫폼<select name="platform" defaultValue={filters.platform ?? ""} className={selectClassName}><option value="">전체</option><option value="android">Android</option><option value="ios">iOS</option></select></label>
           <label className="grid gap-1">Backend<select name="backend" defaultValue={filters.backend ?? ""} className={selectClassName}><option value="">전체</option><option value="worker">Worker</option><option value="cloud_run">Cloud Run</option><option value="unknown">미기록</option></select></label>
+          <label className="flex h-9 items-center gap-2"><input type="checkbox" name="admins" value="1" defaultChecked={includeAdmins} />관리자 계정 포함(템플릿 순위)</label>
           <button type="submit" className="h-9 rounded-lg bg-[var(--color-info)] px-4 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-info)]">조회·새로고침</button>
         </form>
         <p className="text-xs text-[var(--color-on-surface-variant)]">{time.format(new Date(period.start))} 이상 ~ {time.format(new Date(period.end))} 미만(KST) · 접수 시각 기준 · 현재 시각부터 최근 {filters.days}일</p>
@@ -56,6 +63,16 @@ export default async function AdminExportsPage({ searchParams }: { searchParams:
         <Section title="최근 실패 20건"><JobTable jobs={data.recent} showError /></Section>
         <Section title={`15분 초과 pending · ${data.stale_count}건`}><p className="px-4 py-3 text-xs">기간과 무관한 현재 대기 작업 · 선택한 플랫폼·Backend 적용 · 오래된 순 최대 100건</p><JobTable jobs={data.stale} /></Section>
       </>}
+      <Section title="템플릿별 export · 성공 job 기준">
+        {!usage ? <p role="alert" className="px-4 py-4 text-sm">템플릿 집계를 불러오지 못했습니다. 새로고침해 다시 조회해 주세요. 불러오지 못한 값은 0이 아닙니다.</p> : <>
+          <Table headings={["성공 job", "직접 사용(시스템 템플릿)", "내 템플릿 파생", "출처 미기록(알 수 없음)"]}>
+            <tr>{[usage.succeeded_jobs, usage.direct_jobs, usage.derived_jobs, usage.unrecorded_jobs].map((value, index) => <td key={index} className="px-4 py-3 tabular-nums">{value.toLocaleString("ko-KR")}{index > 0 && <span className="ml-2 text-xs text-[var(--color-on-surface-variant)]">{diagnosticRate(value, usage.succeeded_jobs)}</span>}</td>)}</tr>
+          </Table>
+          <UsageTable title="직접 사용" rows={usage.direct} total={usage.direct_bundle_count} />
+          <UsageTable title="내 템플릿 파생(시작한 시스템 템플릿)" rows={usage.derived} total={usage.derived_bundle_count} />
+          <p className="px-4 py-2 text-xs">두 표는 서로 다른 의미라 합산하지 않고 하나의 순위로 만들지 않습니다. 파생은 그 템플릿에서 시작한 작업이며 수정 없이 사용했다는 뜻이 아닙니다. 출처 미기록은 기본 템플릿이 아니라 알 수 없음입니다(기록 시작 이전 작업, 구버전 앱·열린 구 탭, 기록 실패 포함). 템플릿 ID는 클라이언트가 보낸 집계용 값이고 권한·과금에 쓰지 않습니다. 계정 수는 표마다 중복을 제거한 값이라 합산할 수 없습니다. {usage.include_admins ? "관리자 계정을 포함한 집계입니다." : "현재 관리자 목록에 있는 계정은 제외했습니다(작업 당시 권한이 아닌 현재 기준)."} 플랫폼·Backend 필터는 이 표에 적용되지 않고 기간만 적용됩니다. 기본 선택·노출 위치·유입의 영향을 보정하지 않았으므로 디자인 선호도 순위가 아니라 관측된 성공 작업 수입니다. 이름을 찾지 못한 템플릿(삭제 등)은 ID만 남깁니다.</p>
+        </>}
+      </Section>
       <Section title="추천 catalog 참조 관측 · 성공 job 기준">
         {!observation ? <p role="alert" className="px-4 py-4 text-sm">관측 데이터를 불러오지 못했습니다. 새로고침해 다시 조회해 주세요. 불러오지 못한 값은 0이 아닙니다.</p> : <>
           <Table headings={["성공 job", "관측된 job", "미관측(unknown) job", "관측 비율 · 성공 job 기준", "제출 manifest에 미관측 소스가 있는 job"]}>
@@ -78,6 +95,17 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 function Table({ headings, children }: { headings: string[]; children: ReactNode }) {
   return <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-[var(--color-surface-low)]"><tr>{headings.map((heading) => <th scope="col" key={heading} className="whitespace-nowrap px-4 py-3 text-xs font-bold">{heading}</th>)}</tr></thead><tbody className="divide-y divide-[var(--color-outline-variant)]">{children}</tbody></table></div>;
+}
+function UsageTable({ title, rows, total }: { title: string; rows: TemplateUsageRow[]; total: number }) {
+  const max = Math.max(1, ...rows.map((row) => row.jobs));
+  return <>
+    <h3 className="px-4 pt-3 text-sm font-bold">{title}</h3>
+    <Table headings={["순위", "템플릿", "템플릿 ID", "job 수", "계정 수", "Android", "iOS", "분포 막대"]}>
+      {rows.map((row, index) => <tr key={row.bundle_id}><td className="px-4 py-3 tabular-nums">{index + 1}</td><td className="px-4 py-3">{templateUsageLabel(row)}</td><td className="px-4 py-3 font-mono text-xs">{row.bundle_id}</td><td className="px-4 py-3 tabular-nums">{row.jobs.toLocaleString("ko-KR")}</td><td className="px-4 py-3 tabular-nums">{row.accounts.toLocaleString("ko-KR")}</td><td className="px-4 py-3 tabular-nums">{row.android.toLocaleString("ko-KR")}</td><td className="px-4 py-3 tabular-nums">{row.ios.toLocaleString("ko-KR")}</td><td className="px-4 py-3"><div aria-hidden="true" className="h-2 w-32 overflow-hidden rounded-full bg-[var(--color-surface-low)]"><div className="h-full rounded-full bg-[var(--color-info)]" style={{ width: `${row.jobs / max * 100}%` }} /></div></td></tr>)}
+    </Table>
+    {rows.length === 0 && <Empty />}
+    {total > rows.length && <p className="px-4 py-2 text-xs" role="status">전체 {total.toLocaleString("ko-KR")}개 템플릿 ID 중 job 수가 많은 상위 {rows.length.toLocaleString("ko-KR")}개만 표시합니다. 나머지는 잘려 있으며 0건이 아닙니다.</p>}
+  </>;
 }
 function Empty() { return <p className="px-4 py-4 text-sm text-[var(--color-on-surface-variant)]">해당 작업이 없습니다.</p>; }
 function JobTable({ jobs, showError = false }: { jobs: DiagnosticsJob[]; showError?: boolean }) {
