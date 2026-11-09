@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import AdminPageHeader, { adminPageClassName } from "@/components/admin/shell/AdminPageHeader";
-import { diagnosticOutcomeRate, diagnosticsFilters, diagnosticsPeriod, type DiagnosticsJob } from "@/lib/admin/exportDiagnostics";
+import { catalogAssetLabel } from "@/lib/admin/exportCatalogObservation";
+import { diagnosticOutcomeRate, diagnosticRate, diagnosticsFilters, diagnosticsPeriod, type DiagnosticsJob } from "@/lib/admin/exportDiagnostics";
+import { loadExportCatalogObservation } from "@/lib/admin/loadExportCatalogObservation";
 import { loadExportDiagnostics } from "@/lib/admin/loadExportDiagnostics";
 import { requireAdmin } from "@/lib/supabase/auth";
 
@@ -13,8 +15,10 @@ export default async function AdminExportsPage({ searchParams }: { searchParams:
   await requireAdmin("/admin/exports");
   const filters = diagnosticsFilters(await searchParams);
   const period = diagnosticsPeriod(filters.days);
-  const loaded = await loadExportDiagnostics(filters, period);
+  // 두 조회는 서로 독립이다. 한쪽이 실패해도 다른 쪽 화면을 숨기지 않는다.
+  const [loaded, observationLoaded] = await Promise.all([loadExportDiagnostics(filters, period), loadExportCatalogObservation(period)]);
   const data = loaded.ok ? loaded.value : null;
+  const observation = observationLoaded.ok ? observationLoaded.value : null;
   return (
     <main className={adminPageClassName}>
       <AdminPageHeader eyebrow="Export diagnostics" title="Export 진단" description="접수된 job 기준 · catalog 해석·권한·revision 검증 등 접수 전 실패는 포함하지 않습니다.">
@@ -51,6 +55,18 @@ export default async function AdminExportsPage({ searchParams }: { searchParams:
         <Section title="최근 실패 20건"><JobTable jobs={data.recent} showError /></Section>
         <Section title={`15분 초과 pending · ${data.stale_count}건`}><p className="px-4 py-3 text-xs">기간과 무관한 현재 대기 작업 · 선택한 플랫폼·Backend 적용 · 오래된 순 최대 100건</p><JobTable jobs={data.stale} /></Section>
       </>}
+      <Section title="추천 catalog 참조 관측 · 성공 job 기준">
+        {!observation ? <p role="alert" className="px-4 py-4 text-sm">관측 데이터를 불러오지 못했습니다. 새로고침해 다시 조회해 주세요. 불러오지 못한 값은 0이 아닙니다.</p> : <>
+          <Table headings={["성공 job", "관측된 job", "미관측(unknown) job", "관측 비율 · 성공 job 기준", "제출 manifest에 미관측 소스가 있는 job"]}>
+            <tr>{[observation.succeeded_jobs, observation.observed_jobs, observation.unknown_jobs, diagnosticRate(observation.observed_jobs, observation.succeeded_jobs), observation.jobs_with_unobserved_manifest_sources].map((value, index) => <td key={index} className="px-4 py-3 tabular-nums">{typeof value === "number" ? value.toLocaleString("ko-KR") : value}</td>)}</tr>
+          </Table>
+          <Table headings={["순위", "에셋", "에셋 ID", "job 수", "관측된 성공 job 중 비율", "분포 막대"]}>
+            {observation.assets.map((asset, index) => <tr key={asset.asset_id}><td className="px-4 py-3 tabular-nums">{index + 1}</td><td className="px-4 py-3">{catalogAssetLabel(asset)}</td><td className="px-4 py-3 font-mono text-xs">{asset.asset_id}</td><td className="px-4 py-3 tabular-nums">{asset.job_count.toLocaleString("ko-KR")}</td><td className="px-4 py-3 tabular-nums">{diagnosticRate(asset.job_count, observation.observed_jobs)}</td><td className="px-4 py-3"><div aria-hidden="true" className="h-2 w-32 overflow-hidden rounded-full bg-[var(--color-surface-low)]"><div className="h-full rounded-full bg-[var(--color-info)]" style={{ width: `${asset.job_count / Math.max(1, ...observation.assets.map((item) => item.job_count)) * 100}%` }} /></div></td></tr>)}
+          </Table>
+          {observation.assets.length === 0 && <Empty />}
+          <p className="px-4 py-2 text-xs">성공한 job에서 서버가 검증해 수락한 추천 catalog 참조를 job·에셋당 1건으로 셉니다. 추천 카드를 직접 골랐다는 뜻도, 최종 패키지에 모두 반영됐다는 뜻도, 설치·사용했다는 뜻도 아닙니다. 기록이 없는 job은 미관측(unknown)이며 0건이 아닙니다. 관측 기록은 migration 적용 이후 접수된 job부터 쌓이고 소급되지 않습니다. 기록 실패·구버전 요청도 미관측입니다. 이름을 찾지 못한 에셋(삭제 등)은 ID만 남깁니다. 플랫폼·Backend 필터는 이 표에 적용되지 않으며 기간만 적용됩니다. 템플릿 내장 파일과 업로드 등 catalog 밖 경로는 포함하지 않습니다.</p>
+        </>}
+      </Section>
     </main>
   );
 }
