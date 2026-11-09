@@ -6,6 +6,12 @@ import { loadExportCatalogObservation } from "./loadExportCatalogObservation";
 
 const a = "abcdef01-2345-6789-abcd-ef0123456789";
 const b = "abcdef02-2345-6789-abcd-ef0123456789";
+function manyIds(count: number) {
+  return Array.from({ length: count }, (_, index) => `abcdef01-2345-6789-abcd-${String(index).padStart(12, "0")}`);
+}
+function manyAggregate(ids: string[]) {
+  return { succeeded_jobs: 500, observed_jobs: 400, unknown_jobs: 100, jobs_with_unobserved_manifest_sources: 0, assets: ids.map((asset_id, index) => ({ asset_id, job_count: 300 - index })) };
+}
 const period = { start: "2026-11-01T00:00:00.000Z", end: "2026-11-08T00:00:00.000Z" };
 const aggregate = { succeeded_jobs: 10, observed_jobs: 6, unknown_jobs: 4, jobs_with_unobserved_manifest_sources: 2, assets: [{ asset_id: a, job_count: 5 }, { asset_id: b, job_count: 1 }] };
 
@@ -56,6 +62,46 @@ describe("loadExportCatalogObservation", () => {
     expect(result.ok && result.value.assets.every((asset) => asset.title === null)).toBe(true);
     expect(JSON.stringify(warn.mock.calls)).not.toContain("private");
     warn.mockRestore();
+  });
+
+  it("keeps the counts when the name lookup rejects or throws", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    rpc.mockResolvedValue({ data: aggregate, error: null });
+    inQuery.mockRejectedValue(new Error("private-network-error"));
+    const rejected = await loadExportCatalogObservation(period);
+    expect(rejected.ok && rejected.value.observed_jobs).toBe(6);
+    expect(rejected.ok && rejected.value.assets.map((asset) => asset.title)).toEqual([null, null]);
+    inQuery.mockImplementation(() => { throw new Error("private-sync-error"); });
+    const thrown = await loadExportCatalogObservation(period);
+    expect(thrown.ok && thrown.value.succeeded_jobs).toBe(10);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("private");
+    warn.mockRestore();
+  });
+
+  it("looks names up in batches and drops partial names when a later batch fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const ids = manyIds(85);
+    rpc.mockResolvedValue({ data: manyAggregate(ids), error: null });
+    inQuery.mockResolvedValueOnce({ data: [{ id: ids[0], title: "첫 배치", asset_kind: "icon" }], error: null })
+      .mockRejectedValueOnce(new Error("private-network-error"));
+    const result = await loadExportCatalogObservation(period);
+
+    expect(inQuery.mock.calls.map(([, batch]) => (batch as string[]).length)).toEqual([40, 40]);
+    expect(result.ok && result.value.assets.every((asset) => asset.title === null)).toBe(true);
+    warn.mockRestore();
+  });
+
+  it("caps the displayed assets, reports the full count and batches the lookup", async () => {
+    const ids = manyIds(130);
+    rpc.mockResolvedValue({ data: manyAggregate(ids), error: null });
+    inQuery.mockImplementation(async (_column: string, batch: string[]) => ({ data: batch.map((id) => ({ id, title: `에셋 ${id.slice(-4)}`, asset_kind: "icon" })), error: null }));
+    const result = await loadExportCatalogObservation(period);
+
+    expect(result.ok && result.value.totalAssetCount).toBe(130);
+    expect(result.ok && result.value.assets).toHaveLength(100);
+    expect(result.ok && result.value.assets[0].asset_id).toBe(ids[0]);
+    expect(result.ok && result.value.assets[0].title).toBe(`에셋 ${ids[0].slice(-4)}`);
+    expect(inQuery.mock.calls.map(([, batch]) => (batch as string[]).length)).toEqual([40, 40, 20]);
   });
 
   it("keeps a failed aggregate distinct from an empty successful one", async () => {

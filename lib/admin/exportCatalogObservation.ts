@@ -16,7 +16,16 @@ export type CatalogObservationAsset = CatalogObservationAssetRow & {
   title: string | null;
   assetKind: string | null;
 };
-export type CatalogObservation = Omit<CatalogObservationAggregate, "assets"> & { assets: CatalogObservationAsset[] };
+export type CatalogObservation = Omit<CatalogObservationAggregate, "assets"> & {
+  /** 화면에 표시하는 상위 에셋. 총수가 상한을 넘으면 잘려 있으므로 `totalAssetCount`와 함께 표시한다. */
+  assets: CatalogObservationAsset[];
+  totalAssetCount: number;
+};
+
+/** 표시 행 수와 이름 조회 대상의 상한. 넘는 부분은 잘렸다고 화면에 알린다. */
+export const catalogObservationDisplayLimit = 100;
+/** PostgREST `in` 필터의 URL 길이를 제한하기 위한 이름 조회 배치 크기. */
+export const catalogObservationNameBatchSize = 40;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isCount = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0;

@@ -19,6 +19,7 @@ export default async function AdminExportsPage({ searchParams }: { searchParams:
   const [loaded, observationLoaded] = await Promise.all([loadExportDiagnostics(filters, period), loadExportCatalogObservation(period)]);
   const data = loaded.ok ? loaded.value : null;
   const observation = observationLoaded.ok ? observationLoaded.value : null;
+  const maxAssetJobs = Math.max(1, ...(observation?.assets.map((item) => item.job_count) ?? []));
   return (
     <main className={adminPageClassName}>
       <AdminPageHeader eyebrow="Export diagnostics" title="Export 진단" description="접수된 job 기준 · catalog 해석·권한·revision 검증 등 접수 전 실패는 포함하지 않습니다.">
@@ -61,9 +62,10 @@ export default async function AdminExportsPage({ searchParams }: { searchParams:
             <tr>{[observation.succeeded_jobs, observation.observed_jobs, observation.unknown_jobs, diagnosticRate(observation.observed_jobs, observation.succeeded_jobs), observation.jobs_with_unobserved_manifest_sources].map((value, index) => <td key={index} className="px-4 py-3 tabular-nums">{typeof value === "number" ? value.toLocaleString("ko-KR") : value}</td>)}</tr>
           </Table>
           <Table headings={["순위", "에셋", "에셋 ID", "job 수", "관측된 성공 job 중 비율", "분포 막대"]}>
-            {observation.assets.map((asset, index) => <tr key={asset.asset_id}><td className="px-4 py-3 tabular-nums">{index + 1}</td><td className="px-4 py-3">{catalogAssetLabel(asset)}</td><td className="px-4 py-3 font-mono text-xs">{asset.asset_id}</td><td className="px-4 py-3 tabular-nums">{asset.job_count.toLocaleString("ko-KR")}</td><td className="px-4 py-3 tabular-nums">{diagnosticRate(asset.job_count, observation.observed_jobs)}</td><td className="px-4 py-3"><div aria-hidden="true" className="h-2 w-32 overflow-hidden rounded-full bg-[var(--color-surface-low)]"><div className="h-full rounded-full bg-[var(--color-info)]" style={{ width: `${asset.job_count / Math.max(1, ...observation.assets.map((item) => item.job_count)) * 100}%` }} /></div></td></tr>)}
+            {observation.assets.map((asset, index) => <tr key={asset.asset_id}><td className="px-4 py-3 tabular-nums">{index + 1}</td><td className="px-4 py-3">{catalogAssetLabel(asset)}</td><td className="px-4 py-3 font-mono text-xs">{asset.asset_id}</td><td className="px-4 py-3 tabular-nums">{asset.job_count.toLocaleString("ko-KR")}</td><td className="px-4 py-3 tabular-nums">{diagnosticRate(asset.job_count, observation.observed_jobs)}</td><td className="px-4 py-3"><div aria-hidden="true" className="h-2 w-32 overflow-hidden rounded-full bg-[var(--color-surface-low)]"><div className="h-full rounded-full bg-[var(--color-info)]" style={{ width: `${asset.job_count / maxAssetJobs * 100}%` }} /></div></td></tr>)}
           </Table>
           {observation.assets.length === 0 && <Empty />}
+          {observation.totalAssetCount > observation.assets.length && <p className="px-4 py-2 text-xs" role="status">전체 {observation.totalAssetCount.toLocaleString("ko-KR")}개 에셋 중 job 수가 많은 상위 {observation.assets.length.toLocaleString("ko-KR")}개만 표시합니다. 나머지는 잘려 있으며 0건이 아닙니다.</p>}
           <p className="px-4 py-2 text-xs">성공한 job에서 서버가 검증해 수락한 추천 catalog 참조를 job·에셋당 1건으로 셉니다. 추천 카드를 직접 골랐다는 뜻도, 최종 패키지에 모두 반영됐다는 뜻도, 설치·사용했다는 뜻도 아닙니다. 기록이 없는 job은 미관측(unknown)이며 0건이 아닙니다. 관측 기록은 migration 적용 이후 접수된 job부터 쌓이고 소급되지 않습니다. 기록 실패·구버전 요청도 미관측입니다. 이름을 찾지 못한 에셋(삭제 등)은 ID만 남깁니다. 플랫폼·Backend 필터는 이 표에 적용되지 않으며 기간만 적용됩니다. 템플릿 내장 파일과 업로드 등 catalog 밖 경로는 포함하지 않습니다.</p>
         </>}
       </Section>
