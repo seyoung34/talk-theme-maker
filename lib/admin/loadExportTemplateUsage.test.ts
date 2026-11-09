@@ -42,6 +42,11 @@ describe("parseTemplateUsage", () => {
     expect(parseTemplateUsage(value)).toBeNull();
   });
 
+  it("rejects a list above the row cap even when the bundle count is large enough", () => {
+    const rows = Array.from({ length: templateUsageRowLimit + 1 }, (_, index) => ({ bundle_id: `abcdef10-0000-4000-8000-${String(index).padStart(12, "0")}`, title: null, jobs: 1, accounts: 1, android: 1, ios: 0 }));
+    expect(parseTemplateUsage({ succeeded_jobs: 200, direct_jobs: 200, derived_jobs: 0, unrecorded_jobs: 0, include_admins: false, direct_bundle_count: 200, derived_bundle_count: 0, direct: rows, derived: [] })).toBeNull();
+  });
+
   it("allows a list truncated exactly at the cap", () => {
     const rows = Array.from({ length: templateUsageRowLimit }, (_, index) => ({ bundle_id: `abcdef10-0000-4000-8000-${String(index).padStart(12, "0")}`, title: null, jobs: 1, accounts: 1, android: 1, ios: 0 }));
     const truncated = { succeeded_jobs: 130, direct_jobs: 130, derived_jobs: 0, unrecorded_jobs: 0, include_admins: false, direct_bundle_count: 130, derived_bundle_count: 0, direct: rows, derived: [] };

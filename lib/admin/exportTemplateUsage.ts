@@ -24,7 +24,7 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 const isCount = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0;
 
 function parseRows(value: unknown, kindJobs: number, bundleCount: number): TemplateUsageRow[] | null {
-  if (!Array.isArray(value) || value.length > bundleCount) return null;
+  if (!Array.isArray(value) || value.length > bundleCount || value.length > templateUsageRowLimit) return null;
   if (bundleCount > value.length && value.length !== templateUsageRowLimit) return null;
   const rows: TemplateUsageRow[] = [];
   let total = 0;
