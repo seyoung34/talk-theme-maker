@@ -29,14 +29,18 @@ gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$BUIL
 gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:service-779222832316@gcp-sa-cloudbuild.iam.gserviceaccount.com" --role=roles/secretmanager.admin --condition=None
 ```
 
-`storage.objectAdmin` is needed because replacing an existing template requires delete as well as create permission (`storage.objectCreator` cannot overwrite it). An IAM condition limits it to `monitor/messages-v1.json`, so the build account cannot read or modify `monitor/state-v1.json`. The first production build (2026-11-16) failed at `upload-messages` with only the conditional grant: `gcloud storage cp` needs bucket-level `storage.objects.list`, hence `legacyBucketReader`. The service account running a manual build needs these same permissions; the operator creating or invoking a build must have the appropriate Cloud Build and service-account impersonation permissions.
+`storage.objectAdmin` is needed because replacing an existing template requires delete as well as create permission (`storage.objectCreator` cannot overwrite it). An IAM condition limits its *direct* storage access to `monitor/messages-v1.json`; it cannot read or overwrite `monitor/state-v1.json` through Storage APIs. This is not an isolation boundary: `run.developer` on the service plus `iam.serviceAccountUser` on the runtime account let the build account deploy any image that then runs as `runtime-monitor-run`, which reads and writes the state and reads the monitor secrets. Treat the build account (and anyone who can change `main` under `services/runtime-monitor/**`) as able to control the production monitor.
+
+The Cloud Build service agent's `roles/secretmanager.admin` is project-wide: it can create, read and manage every secret in the project, not only the GitHub token. Google requires it to create the connection secret. To narrow it after setup, grant `roles/secretmanager.secretAccessor` on the created connection token secret only and remove the project-level admin binding; recreating the connection then needs the admin grant again. The first production build (2026-11-16) failed at `upload-messages` with only the conditional grant: `gcloud storage cp` needs bucket-level `storage.objects.list`, hence `legacyBucketReader`. The service account running a manual build needs these same permissions; the operator creating or invoking a build must have the appropriate Cloud Build and service-account impersonation permissions.
 
 The trigger uses a 2nd-gen Cloud Build GitHub connection. Creating the connection prints an OAuth link that a person must open while signed in to GitHub, then press **Authorize** (GitHub disables that button for automated clicks) and install the Google Cloud Build app for this repository. Production setup (2026-11-16): connection `talktheme-github`, repository `talk-theme-maker`, trigger `runtime-monitor-main`, all in asia-northeast3.
 
 ```bash
 gcloud builds connections create github talktheme-github --region="$REGION" --project="$PROJECT"
-# Open the printed link, authorize, then confirm stage COMPLETE:
-gcloud builds connections describe talktheme-github --region="$REGION" --project="$PROJECT" --format="value(installationState.stage)"
+# Open the printed link and authorize. Then describe again WITHOUT a format filter: while the stage is
+# PENDING_INSTALL_APP, installationState.actionUri is the GitHub app installation link (select only this repository).
+# Repeat until installationState.stage is COMPLETE.
+gcloud builds connections describe talktheme-github --region="$REGION" --project="$PROJECT"
 
 gcloud builds repositories create talk-theme-maker --remote-uri=https://github.com/seyoung34/talk-theme-maker.git --connection=talktheme-github --region="$REGION" --project="$PROJECT"
 
@@ -50,7 +54,7 @@ The path filter covers monitor files, not root dependency or shared configuratio
 After production approval, from a clean checkout at the intended commit, this submits the same pipeline without local Docker:
 
 ```bash
-gcloud builds submit --config services/runtime-monitor/cloudbuild.yaml --substitutions=COMMIT_SHA=$(git rev-parse HEAD) .
+gcloud builds submit --project=project-78d94000-bff9-4358-821 --config=services/runtime-monitor/cloudbuild.yaml --substitutions=COMMIT_SHA=$(git rev-parse HEAD) --service-account=projects/project-78d94000-bff9-4358-821/serviceAccounts/runtime-monitor-build@project-78d94000-bff9-4358-821.iam.gserviceaccount.com .
 ```
 
 Select the intended project and ensure the submit build's service account has the scoped permissions above; the command deploys to production. Confirm the submitted working tree matches the commit used as the image tag.
