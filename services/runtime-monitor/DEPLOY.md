@@ -18,23 +18,29 @@ gcloud iam service-accounts create runtime-monitor-build --project="$PROJECT" --
 gcloud artifacts repositories add-iam-policy-binding runtime-monitor --project="$PROJECT" --location="$REGION" --member="serviceAccount:$BUILD_SA" --role=roles/artifactregistry.writer
 gcloud run services add-iam-policy-binding talktheme-runtime-monitor --project="$PROJECT" --region="$REGION" --member="serviceAccount:$BUILD_SA" --role=roles/run.developer
 gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" --project="$PROJECT" --member="serviceAccount:$BUILD_SA" --role=roles/iam.serviceAccountUser
-gcloud storage buckets add-iam-policy-binding gs://kt-theme-runtime-monitor-state --member="serviceAccount:$BUILD_SA" --role=roles/storage.objectAdmin
-gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$BUILD_SA" --role=roles/logging.logWriter
+# Write access only to the template object, never to monitor/state-v1.json.
+gcloud storage buckets add-iam-policy-binding gs://kt-theme-runtime-monitor-state --member="serviceAccount:$BUILD_SA" --role=roles/storage.objectAdmin --condition='expression=resource.name == "projects/_/buckets/kt-theme-runtime-monitor-state/objects/monitor/messages-v1.json",title=monitor-messages-template-only'
+# gcloud storage cp lists the bucket first; this role lists names but cannot read object content.
+gcloud storage buckets add-iam-policy-binding gs://kt-theme-runtime-monitor-state --member="serviceAccount:$BUILD_SA" --role=roles/storage.legacyBucketReader --condition=None
+# Manual `gcloud builds submit` uploads source here; the build account must read it.
+gcloud storage buckets add-iam-policy-binding "gs://${PROJECT}_cloudbuild" --member="serviceAccount:$BUILD_SA" --role=roles/storage.objectViewer
+gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$BUILD_SA" --role=roles/logging.logWriter --condition=None
+# Cloud Build service agent stores the GitHub connection token in Secret Manager (Google-documented requirement).
+gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:service-779222832316@gcp-sa-cloudbuild.iam.gserviceaccount.com" --role=roles/secretmanager.admin --condition=None
 ```
 
-`storage.objectAdmin` is scoped to the dedicated state bucket because replacing an existing template requires delete as well as create permission; `storage.objectCreator` cannot overwrite it. The build account can therefore also modify the monitor state object in that bucket. The service account running a manual build needs these same permissions; the operator creating or invoking a build must have the appropriate Cloud Build and service-account impersonation permissions.
+`storage.objectAdmin` is needed because replacing an existing template requires delete as well as create permission (`storage.objectCreator` cannot overwrite it). An IAM condition limits it to `monitor/messages-v1.json`, so the build account cannot read or modify `monitor/state-v1.json`. The first production build (2026-11-16) failed at `upload-messages` with only the conditional grant: `gcloud storage cp` needs bucket-level `storage.objects.list`, hence `legacyBucketReader`. The service account running a manual build needs these same permissions; the operator creating or invoking a build must have the appropriate Cloud Build and service-account impersonation permissions.
 
-Connect the GitHub repository to Cloud Build first using the supported GitHub connection for the selected trigger; the command below uses the GitHub trigger integration and requires that connection and access to the repository. Verify the project and connection in the Cloud Build console before creating the trigger.
+The trigger uses a 2nd-gen Cloud Build GitHub connection. Creating the connection prints an OAuth link that a person must open while signed in to GitHub, then press **Authorize** (GitHub disables that button for automated clicks) and install the Google Cloud Build app for this repository. Production setup (2026-11-16): connection `talktheme-github`, repository `talk-theme-maker`, trigger `runtime-monitor-main`, all in asia-northeast3.
 
 ```bash
-gcloud builds triggers create github \
-  --project="$PROJECT" --region="$REGION" \
-  --name=runtime-monitor-main \
-  --repo-owner=GITHUB_OWNER --repo-name=GITHUB_REPO \
-  --branch-pattern='^main$' \
-  --included-files='services/runtime-monitor/**' \
-  --build-config=services/runtime-monitor/cloudbuild.yaml \
-  --service-account="projects/$PROJECT/serviceAccounts/$BUILD_SA"
+gcloud builds connections create github talktheme-github --region="$REGION" --project="$PROJECT"
+# Open the printed link, authorize, then confirm stage COMPLETE:
+gcloud builds connections describe talktheme-github --region="$REGION" --project="$PROJECT" --format="value(installationState.stage)"
+
+gcloud builds repositories create talk-theme-maker --remote-uri=https://github.com/seyoung34/talk-theme-maker.git --connection=talktheme-github --region="$REGION" --project="$PROJECT"
+
+gcloud builds triggers create github --project="$PROJECT" --region="$REGION" --name=runtime-monitor-main --repository="projects/$PROJECT/locations/$REGION/connections/talktheme-github/repositories/talk-theme-maker" --branch-pattern='^main$' --included-files='services/runtime-monitor/**' --build-config=services/runtime-monitor/cloudbuild.yaml --service-account="projects/$PROJECT/serviceAccounts/$BUILD_SA"
 ```
 
 The path filter covers monitor files, not root dependency or shared configuration changes; assess and run a manual build when those affect the monitor.
