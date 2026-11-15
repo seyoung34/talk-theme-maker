@@ -1,6 +1,6 @@
 import type { Config } from "./config.js";
 import { collectHealth, collectMetrics, metricsWindow } from "./collect.js";
-import { applySamples, formatNotification, type Notification, type Sample } from "./model.js";
+import { applySamples, formatNotification, threadLimit, type Notification, type Sample, type Thread } from "./model.js";
 import { MonitorHttpError, object, readBoundedJson, requestData } from "./http.js";
 import { defaultCatalog, type MessageCatalog } from "./messages.js";
 import type { StateStore } from "./store.js";
@@ -10,6 +10,7 @@ type Dependencies = {
   health?: (now: number) => Promise<Sample[]>; metrics?: (now: number) => Promise<Sample[]>;
   /** 알림 한 건을 보낸다. 새 메시지를 보냈으면 그 텔레그램 message_id를 돌려준다. */
   send?: (event: Notification, context: DeliveryContext) => Promise<number | void>;
+  close?: (event: Notification, messageId: number, catalog: MessageCatalog) => Promise<void>;
   messages?: () => Promise<MessageCatalog>;
   log?: (value: Record<string, string | number>) => void;
 };
@@ -58,11 +59,12 @@ export async function sendNotification(config: Config, event: Notification, cont
     ...(messageId !== undefined && event.phase !== "opened"
       ? { reply_parameters: { message_id: messageId, allow_sending_without_reply: true } } : {}),
   }, fetcher);
-  if (event.phase === "recovered" && messageId !== undefined) {
-    // 복구 알림은 이미 전달됐다. 처음 메시지를 종료 상태로 바꾸는 일은 실패해도 다시 보내지 않는다.
-    await editMessage(config, messageId, formatNotification(event, catalog, "closed"), fetcher).catch(() => undefined);
-  }
   return typeof result.message_id === "number" && Number.isSafeInteger(result.message_id) ? result.message_id : undefined;
+}
+
+/** 복구가 전달된 뒤 처음 "장애 감지" 메시지를 종료 상태로 고쳐 쓴다. 실패해도 다시 시도하지 않는다. */
+export async function closeIncidentMessage(config: Config, event: Notification, messageId: number, catalog: MessageCatalog = defaultCatalog, fetcher: typeof fetch = fetch) {
+  await editMessage(config, messageId, formatNotification(event, catalog, "closed"), fetcher);
 }
 
 export async function runTick(config: Config, dependencies: Dependencies) {
@@ -88,8 +90,8 @@ export async function runTick(config: Config, dependencies: Dependencies) {
       const event = state.pending[0];
       catalog ??= await (dependencies.messages?.() ?? Promise.resolve(defaultCatalog));
       ensureLease();
-      const incident = state.incidents[event.source];
-      const messageId = incident?.messageOpenedAt === event.openedAt ? incident.messageId : undefined;
+      const sameIncident = (thread: Thread) => thread.source === event.source && thread.openedAt === event.openedAt;
+      const messageId = state.threads?.find(sameIncident)?.messageId;
       let sentId: number | void;
       try {
         sentId = await (dependencies.send ?? ((notification, context) => sendNotification(config, notification, context)))(event, { catalog, messageId });
@@ -99,14 +101,24 @@ export async function runTick(config: Config, dependencies: Dependencies) {
       }
       ensureLease();
       state.pending.shift();
-      // 사건의 첫 메시지만 고쳐 쓰기 대상이다. 그 사이 사건이 다시 열렸다면 옛 메시지를 붙이지 않는다.
-      const current = state.incidents[event.source];
-      if (event.phase === "opened" && typeof sentId === "number" && current && current.openedAt === event.openedAt) {
-        current.messageId = sentId; current.messageOpenedAt = event.openedAt;
+      // 사건마다 첫 메시지를 기억한다. 큐에 옛 사건의 알림이 남은 채 새 사건이 열려도 섞이지 않는다.
+      const others = (state.threads ?? []).filter(thread => !sameIncident(thread));
+      if (event.phase === "opened" && typeof sentId === "number") {
+        state.threads = [...others, { source: event.source, openedAt: event.openedAt, messageId: sentId }].slice(-threadLimit);
+      } else if (event.phase === "recovered") {
+        // 복구로 사건이 끝났다. 연결은 전송 확인과 같은 저장에서 지운다.
+        state.threads = others;
       }
+      if (state.threads?.length === 0) delete state.threads;
       // Telegram has no idempotency key. An ack crash can duplicate this event ID.
       generation = await dependencies.store.save(state, generation);
       deliveryCount++;
+      // 처음 메시지를 종료 상태로 바꾸는 일은 전송 확인 뒤의 덤이다. 5초 요청이 안전 여유(15초)를
+      // 침범하지 않을 때만 하고, 결과는 저장하지 않는다.
+      if (event.phase === "recovered" && messageId !== undefined && clock() + 20000 < state.lease!.until) {
+        await (dependencies.close ?? ((notification, id, copy) => closeIncidentMessage(config, notification, id, copy)))(event, messageId, catalog)
+          .catch(() => log({ event: "monitor_close_edit_failed", errorCode: "notification_close_failed" }));
+      }
     }
   };
   // Drain committed alerts first, even when new observations would fill the queue.

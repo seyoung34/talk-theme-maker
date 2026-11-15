@@ -60,11 +60,13 @@ it("accepts old samples and validates optional HTTP diagnostics", () => {
 it("accepts edit notifications and message bindings, rejecting malformed bindings", () => {
   const sample = { source: "public_http", outcome: "failed", code: "http_failed", observationId: "2", at: 2 };
   const incident = { active: true, failures: 3, successes: 0, openedAt: 1, lastQueuedAt: 2, lastObservationId: "2" };
-  const state = { ...emptyState(), incidents: { public_http: { ...incident, reminders: 1, lastRemindedAt: 2, messageId: 41, messageOpenedAt: 1 } },
-    pending: [{ id: "public_http:1:update:2", source: "public_http", phase: "update", at: 2, openedAt: 1, sample }] };
+  const state = { ...emptyState(), incidents: { public_http: { ...incident, reminders: 1, lastRemindedAt: 2 } },
+    threads: [{ source: "public_http", openedAt: 1, messageId: 41 }], pending: [{ id: "public_http:1:update:2", source: "public_http", phase: "update", at: 2, openedAt: 1, sample }] };
   expect(validateState(state).pending[0].phase).toBe("update");
   expect(validateState({ ...emptyState(), incidents: { public_http: incident } }).incidents.public_http).toBeDefined();
-  for (const invalid of [{ messageId: -1 }, { messageId: 1.5 }, { reminders: "1" }]) {
-    expect(() => validateState({ ...emptyState(), incidents: { public_http: { ...incident, ...invalid } } })).toThrow("state_invalid");
+  expect(() => validateState({ ...emptyState(), incidents: { public_http: { ...incident, reminders: "1" } } })).toThrow("state_invalid");
+  const thread = { source: "public_http", openedAt: 1, messageId: 41 };
+  for (const threads of [[{ ...thread, messageId: -1 }], [{ ...thread, messageId: 1.5 }], [{ ...thread, source: "other" }], Array(21).fill(thread), {}]) {
+    expect(() => validateState({ ...emptyState(), threads })).toThrow("state_invalid");
   }
 });

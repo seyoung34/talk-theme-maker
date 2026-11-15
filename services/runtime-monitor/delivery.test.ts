@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { readConfig } from "./config";
 import { emptyState, type MonitorState, type Notification, type Sample } from "./model";
-import { defaultCatalog } from "./messages";
-import { runTick, sendNotification, type DeliveryContext } from "./runner";
+import { defaultCatalog, type MessageCatalog } from "./messages";
+import { closeIncidentMessage, runTick, sendNotification, type DeliveryContext } from "./runner";
 import type { StateStore } from "./store";
 
 const config = readConfig({
@@ -79,45 +79,81 @@ describe("텔레그램 전달", () => {
     expect(api.calls()[0].body.reply_parameters).toEqual({ message_id: 41, allow_sending_without_reply: true });
   });
 
-  it("복구는 답장으로 알리고 첫 메시지를 종료 상태로 고쳐 쓴다. 고쳐 쓰기 실패는 복구 전달을 되돌리지 않는다", async () => {
-    const api = telegram([{}, { status: 500, body: { ok: false } }]);
+  it("복구는 첫 메시지에 답장만 보내고, 종료 표시는 별도 함수가 맡는다", async () => {
+    const api = telegram([{}]);
     await expect(sendNotification(config, event("recovered"), context(41), api.fetcher)).resolves.toBe(41);
-    const [sent, edited] = api.calls();
-    expect(sent).toMatchObject({ method: "sendMessage", body: { reply_parameters: { message_id: 41 } } });
-    expect(edited).toMatchObject({ method: "editMessageText", body: { message_id: 41 } });
-    expect(edited.body.text).toContain("종료 · 복구 확인");
+    expect(api.calls()).toEqual([expect.objectContaining({ method: "sendMessage", body: expect.objectContaining({ reply_parameters: { message_id: 41, allow_sending_without_reply: true } }) })]);
+    const close = telegram([{}]);
+    await closeIncidentMessage(config, event("recovered"), 41, defaultCatalog, close.fetcher);
+    expect(close.calls()[0]).toMatchObject({ method: "editMessageText", body: { message_id: 41 } });
+    expect(close.calls()[0].body.text).toContain("종료 · 복구 확인");
+  });
+
+  it("운영 템플릿이 빈 메시지를 만들면 원본 문구로 보낸다", async () => {
+    const custom = structuredClone(defaultCatalog);
+    custom.layouts.opened = ["HTTP 상태: {httpStatus}"];
+    const api = telegram([{}]);
+    await sendNotification(config, event("opened"), { catalog: custom }, api.fetcher);
+    expect(String(api.calls()[0].body.text)).toContain("사이트 접속 실패");
   });
 });
 
 describe("사건과 메시지 연결", () => {
-  it("첫 메시지 id를 사건에 저장하고 이후 고쳐 쓰기·복구에 넘긴다", async () => {
+  function harness() {
     const memory = memoryStore();
-    const send = vi.fn<(notification: Notification, context: DeliveryContext) => Promise<number | undefined>>(async notification => notification.phase === "opened" ? 41 : undefined);
+    let nextId = 40;
+    const send = vi.fn<(notification: Notification, context: DeliveryContext) => Promise<number | undefined>>(async () => ++nextId);
+    const close = vi.fn<(notification: Notification, messageId: number, catalog: MessageCatalog) => Promise<void>>(async () => undefined);
     const messages = vi.fn(async () => defaultCatalog);
     let outcome: Sample["outcome"] = "failed";
-    const run = (at: number) => runTick(config, {
-      store: memory.store, now: () => at, health: async now => [sample(now, outcome)], metrics: async () => [], send, messages,
+    const run = (at: number, extra: Partial<Parameters<typeof runTick>[1]> = {}) => runTick(config, {
+      store: memory.store, now: () => at, health: async now => [sample(now, outcome)], metrics: async () => [], send, close, messages, ...extra,
     });
-    await run(0); await run(5 * minute);
-    expect(memory.read().incidents.public_http).toMatchObject({ messageId: 41, messageOpenedAt: 5 * minute });
-    await run(10 * minute);
-    expect(send.mock.calls.at(-1)).toEqual([expect.objectContaining({ phase: "update" }), expect.objectContaining({ messageId: 41 })]);
-    outcome = "healthy";
-    await run(15 * minute); await run(20 * minute);
-    expect(send.mock.calls.at(-1)).toEqual([expect.objectContaining({ phase: "recovered" }), expect.objectContaining({ messageId: 41 })]);
+    return { memory, send, close, messages, run, set: (value: Sample["outcome"]) => { outcome = value; } };
+  }
+
+  it("첫 메시지 id를 사건별로 저장하고 고쳐 쓰기·복구·종료 표시에 쓴 뒤 지운다", async () => {
+    const h = harness();
+    await h.run(0); await h.run(5 * minute);
+    expect(h.memory.read().threads).toEqual([{ source: "public_http", openedAt: 5 * minute, messageId: 41 }]);
+    await h.run(10 * minute);
+    expect(h.send.mock.calls.at(-1)).toEqual([expect.objectContaining({ phase: "update" }), expect.objectContaining({ messageId: 41 })]);
+    h.set("healthy");
+    await h.run(15 * minute); await h.run(20 * minute);
+    expect(h.send.mock.calls.at(-1)).toEqual([expect.objectContaining({ phase: "recovered" }), expect.objectContaining({ messageId: 41 })]);
+    expect(h.close).toHaveBeenCalledWith(expect.objectContaining({ phase: "recovered" }), 41, defaultCatalog);
+    expect(h.memory.read().threads).toBeUndefined();
     // 문구 템플릿은 실제로 보낼 알림이 있는 tick에서 한 번만 읽는다.
-    expect(messages).toHaveBeenCalledTimes(3);
+    expect(h.messages).toHaveBeenCalledTimes(3);
   });
 
-  it("다른 사건의 메시지에 고쳐 쓰기를 붙이지 않는다", async () => {
-    const memory = memoryStore();
-    const state = emptyState();
-    state.incidents.public_http = { active: true, failures: 3, successes: 0, openedAt: 9 * minute, lastQueuedAt: 9 * minute, lastObservationId: "1", messageId: 41, messageOpenedAt: 1 * minute };
-    state.pending = [event("update")];
-    await memory.store.save(state, "0");
-    const send = vi.fn(async () => undefined);
-    await runTick(config, { store: memory.store, now: () => 11 * minute, health: async () => [], metrics: async () => [], send });
-    expect(send).toHaveBeenCalledWith(expect.objectContaining({ phase: "update" }), expect.objectContaining({ messageId: undefined }));
+  it("옛 사건 알림이 밀려 있는 동안 새 사건이 열려도 각자 자기 메시지에 이어진다", async () => {
+    const h = harness();
+    const down = vi.fn(async () => { throw new Error("telegram_down"); });
+    // 텔레그램 장애 중에 사건 A가 열리고 닫힌 뒤 사건 B가 열린다.
+    await h.run(0, { send: down }); await h.run(5 * minute, { send: down });
+    h.set("healthy"); await h.run(10 * minute, { send: down }); await h.run(15 * minute, { send: down });
+    h.set("failed"); await h.run(20 * minute, { send: down }); await h.run(25 * minute, { send: down });
+    expect(h.memory.read().pending.map(e => [e.phase, e.openedAt])).toEqual([["opened", 5 * minute], ["recovered", 5 * minute], ["opened", 25 * minute]]);
+    await h.run(30 * minute);
+    const delivered = h.send.mock.calls.map(([notification, context]) => [notification.phase, notification.openedAt, context.messageId]);
+    expect(delivered.slice(0, 3)).toEqual([["opened", 5 * minute, undefined], ["recovered", 5 * minute, 41], ["opened", 25 * minute, undefined]]);
+    expect(h.close).toHaveBeenCalledWith(expect.objectContaining({ openedAt: 5 * minute }), 41, defaultCatalog);
+    expect(h.memory.read().threads).toEqual([{ source: "public_http", openedAt: 25 * minute, messageId: 43 }]);
+  });
+
+  it("종료 표시는 lease 안전 여유를 침범할 것 같으면 건너뛴다", async () => {
+    const h = harness();
+    await h.run(0); await h.run(5 * minute);
+    h.set("healthy"); await h.run(10 * minute);
+    let now = 15 * minute;
+    // 복구 전송이 lease(120초) 시작 후 101초에 끝났다. 전송 확인(15초 여유)은 되지만,
+    // 5초짜리 고쳐 쓰기를 더하면 여유 안으로 들어가므로 건너뛴다.
+    const slowSend = vi.fn(async (notification: Notification) => { now += 101_000; return notification.phase === "opened" ? 41 : undefined; });
+    await runTick(config, { store: h.memory.store, now: () => now, health: async at => [sample(at, "healthy")], metrics: async () => [], send: slowSend, close: h.close, messages: h.messages });
+    expect(slowSend).toHaveBeenCalledWith(expect.objectContaining({ phase: "recovered" }), expect.anything());
+    expect(h.close).not.toHaveBeenCalled();
+    expect(h.memory.read().pending).toHaveLength(0);
   });
 });
 

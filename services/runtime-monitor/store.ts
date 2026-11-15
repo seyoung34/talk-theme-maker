@@ -1,5 +1,5 @@
 import { Storage } from "@google-cloud/storage";
-import { emptyState, phases, sources, type MonitorState, type Phase } from "./model.js";
+import { emptyState, phases, sources, threadLimit, type MonitorState, type Phase } from "./model.js";
 import { catalogByteLimit, defaultCatalog, parseMessageCatalog, type MessageCatalog } from "./messages.js";
 import { object } from "./http.js";
 
@@ -38,8 +38,16 @@ export function validateState(value: unknown): MonitorState {
       typeof incident[key] === "number" && Number.isSafeInteger(incident[key]) && Number(incident[key]) >= 0)
       || typeof incident.lastObservationId !== "string" || !/^\d{0,16}$/.test(incident.lastObservationId)
       // 아래 항목은 재알림·고쳐 쓰기 도입 뒤에 생겼다. 옛 상태 파일에는 없어도 된다.
-      || ["reminders", "lastRemindedAt", "messageId", "messageOpenedAt"].some(key => incident[key] !== undefined
+      || ["reminders", "lastRemindedAt"].some(key => incident[key] !== undefined
         && (typeof incident[key] !== "number" || !Number.isSafeInteger(incident[key]) || Number(incident[key]) < 0))) throw new Error("state_invalid");
+  }
+  if (state.threads !== undefined) {
+    if (!Array.isArray(state.threads) || state.threads.length > threadLimit) throw new Error("state_invalid");
+    for (const raw of state.threads) {
+      const thread = object(raw);
+      if (!sources.includes(thread.source as typeof sources[number])
+        || !["openedAt", "messageId"].every(key => typeof thread[key] === "number" && Number.isSafeInteger(thread[key]) && Number(thread[key]) >= 0)) throw new Error("state_invalid");
+    }
   }
   if (state.lease !== undefined) {
     const lease = object(state.lease);

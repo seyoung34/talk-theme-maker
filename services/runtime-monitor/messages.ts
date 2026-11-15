@@ -31,6 +31,19 @@ export const layoutPlaceholders = [
 ] as const;
 export type LayoutValues = Partial<Record<typeof layoutPlaceholders[number], string>>;
 const failurePlaceholders = ["target", "subject"] as const;
+/** 모든 알림에서 항상 값이 있는 치환자. 이것만 쓴 줄은 렌더링 결과에서 빠지지 않는다. */
+const guaranteedPlaceholders: readonly string[] = [
+  "header", "phase", "icon", "title", "failureTitle", "recoveryTitle", "impact", "action", "recovered",
+  "target", "detectedAt", "checkedAt", "elapsed", "range", "source", "code", "id",
+];
+
+/** 레이아웃이 어떤 알림에서도 빈 메시지가 되지 않도록, 항상 남는 줄이 하나는 있어야 한다. */
+function alwaysRenders(line: LayoutLine) {
+  if (typeof line !== "string") return false;
+  const names = [...line.matchAll(placeholderPattern)].map(([, name]) => name);
+  if (!names.every(name => guaranteedPlaceholders.includes(name))) return false;
+  return names.length > 0 || line.trim().length > 0;
+}
 
 export type LayoutLine = string | { when: typeof layoutPlaceholders[number]; lines: string[] };
 export type MessageCatalog = {
@@ -114,6 +127,7 @@ export function parseMessageCatalog(value: unknown): MessageCatalog {
       if (!Array.isArray(group.lines) || group.lines.length === 0 || group.lines.length > 20) fail(`${path}.lines`);
       group.lines.forEach((inner, innerIndex) => text(inner, `${path}.lines[${innerIndex}]`, layoutPlaceholders, { empty: true }));
     });
+    if (!(lines as LayoutLine[]).some(alwaysRenders)) fail(`layouts.${name} (항상 표시되는 줄이 없음)`);
   }
   return value as MessageCatalog;
 }

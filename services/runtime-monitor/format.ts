@@ -20,7 +20,14 @@ export function describeFailure(source: Source, code: string, catalog: MessageCa
  * 알림 한 건을 문장으로 바꾼다. `layout`을 주지 않으면 알림 단계(phase)와 같은 이름의 레이아웃을 쓴다.
  * `closed`는 복구 알림을 보낸 뒤 처음 장애 메시지를 종료 상태로 고쳐 쓸 때 쓴다.
  */
-export function formatNotification(event: Notification, catalog: MessageCatalog = defaultCatalog, layout: LayoutName = event.phase) {
+export function formatNotification(event: Notification, catalog: MessageCatalog = defaultCatalog, layout: LayoutName = event.phase): string {
+  const text = renderNotification(event, catalog, layout);
+  // 운영 템플릿이 이 알림에서 빈 문장이 되면 텔레그램이 400으로 거부하고 같은 알림을 계속 다시 보낸다.
+  // 검증이 대부분 막지만, 마지막 방어선으로 원본 문구를 쓴다.
+  return text.trim() || catalog === defaultCatalog ? text : renderNotification(event, defaultCatalog, layout);
+}
+
+function renderNotification(event: Notification, catalog: MessageCatalog, layout: LayoutName) {
   const copy = catalog.sources[event.source];
   const recoveredLayout = layout === "recovered" || layout === "closed";
   const { sample } = event;

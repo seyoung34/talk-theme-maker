@@ -28,6 +28,7 @@ describe("문구 카탈로그 검증", () => {
     ["모르는 최상위 항목", (c: Record<string, any>) => { c.extra = 1; }, "$.extra"],
     ["버전 불일치", (c: Record<string, any>) => { c.version = 2; }, "version"],
     ["빈 레이아웃", (c: Record<string, any>) => { c.layouts.update = []; }, "layouts.update"],
+    ["항상 표시되는 줄이 없는 레이아웃", (c: Record<string, any>) => { c.layouts.opened = ["{cfRay}", { when: "requests", lines: ["{requests}"] }, ""]; }, "항상 표시되는 줄이 없음"],
     ["모르는 when", (c: Record<string, any>) => { c.layouts.opened.push({ when: "secret", lines: ["x"] }); }, ".when"],
   ])("%s는 거부하고 위치를 알려 준다", (_, mutate, message) => {
     const catalog = clone();

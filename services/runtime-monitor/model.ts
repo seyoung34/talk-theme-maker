@@ -22,9 +22,13 @@ export type Incident = {
   lastQueuedAt: number; lastObservationId: string;
   /** 이 사건에서 보낸 "장애 지속" 메시지 수와 마지막 시각. 옛 상태 파일에는 없다. */
   reminders?: number; lastRemindedAt?: number;
-  /** 고쳐 쓸 텔레그램 메시지. 이 사건(openedAt)의 "장애 감지" 메시지가 전송된 뒤에만 생긴다. */
-  messageId?: number; messageOpenedAt?: number;
 };
+/**
+ * 사건(출처 + openedAt)과 그 "장애 감지" 텔레그램 메시지의 연결. 출처마다 하나만 두면, 옛 사건의 알림이
+ * 큐에 남은 채 새 사건이 열릴 때 연결이 덮어써진다. 그래서 사건 단위로 따로 둔다.
+ */
+export type Thread = { source: Source; openedAt: number; messageId: number };
+export const threadLimit = 20;
 export type Phase = "opened" | "repeat" | "update" | "recovered";
 export const phases: readonly Phase[] = ["opened", "repeat", "update", "recovered"];
 export type Notification = {
@@ -36,6 +40,7 @@ export const updateQueueLimit = 16;
 export type MonitorState = {
   version: 1; incidents: Partial<Record<Source, Incident>>; pending: Notification[];
   evidence: Sample[]; lastCompletedAt: number; lease?: { owner: string; until: number };
+  threads?: Thread[];
 };
 
 export function emptyState(): MonitorState {
@@ -67,7 +72,6 @@ export function applySamples(state: MonitorState, samples: Sample[], policy: Pol
       if (!incident.active && incident.failures >= (sample.source === "cloudflare_runtime" ? 1 : policy.failureChecks)) {
         incident.active = true; incident.openedAt = sample.at; phase = "opened";
         incident.reminders = 0; incident.lastRemindedAt = sample.at;
-        delete incident.messageId; delete incident.messageOpenedAt;
       } else if (incident.active) {
         const reminders = incident.reminders ?? 0;
         const schedule = policy.repeatScheduleMs;

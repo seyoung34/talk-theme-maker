@@ -30,12 +30,11 @@ describe("independent incident state", () => {
     expect(state.pending.at(-1)?.phase).toBe("repeat");
     expect(state.incidents.public_http).toMatchObject({ reminders: 3, lastRemindedAt: at(150) });
   });
-  it("resets reminder count and message binding when a new incident opens", () => {
+  it("resets the reminder count when a new incident opens", () => {
     let state = applySamples(emptyState(), [sample(1, "failed"), sample(2, "failed")], policy);
-    state.incidents.public_http = { ...state.incidents.public_http!, reminders: 4, messageId: 77, messageOpenedAt: 2 };
+    state.incidents.public_http = { ...state.incidents.public_http!, reminders: 4 };
     state = applySamples(state, [sample(3, "healthy"), sample(4, "healthy"), sample(5, "failed"), sample(6, "failed")], policy);
-    expect(state.incidents.public_http).toMatchObject({ active: true, openedAt: 6, reminders: 0 });
-    expect(state.incidents.public_http?.messageId).toBeUndefined();
+    expect(state.incidents.public_http).toMatchObject({ active: true, openedAt: 6, reminders: 0, lastRemindedAt: 6 });
   });
   it("drops edits instead of crowding out incident transitions when the queue is backed up", () => {
     let state = applySamples(emptyState(), [sample(1, "failed"), sample(2, "failed")], policy);

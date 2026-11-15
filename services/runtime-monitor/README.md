@@ -101,10 +101,10 @@ One incident is one conversation thread, not one message per tick:
 
 | Phase | Telegram call | When |
 | --- | --- | --- |
-| opened | new message; its `message_id` is stored on the incident | failure threshold reached |
+| opened | new message; its `message_id` is stored in `threads`, keyed by source + openedAt (max 20) | failure threshold reached |
 | update | `editMessageText` of the opened message (silent) | still failing, at most every MONITOR_COOLDOWN_SECONDS |
 | repeat | new message, replying to the opened message | MONITOR_REPEAT_MINUTES schedule (30m, then 60m, 120m, 240m…) |
-| recovered | new message replying to the opened message, then a best-effort edit of the opened message to a closed state | recovery threshold reached |
+| recovered | new message replying to the opened message; after that send is acknowledged, a best-effort edit marks the opened message closed only if it fits before the lease safety margin | recovery threshold reached |
 
 Edits are disposable: only the latest pending edit per incident is kept, none is queued while 16+ notifications wait,
 and a Telegram 400 on an edit (unchanged text, deleted or too-old message) is treated as delivered. 429/5xx are retried like
@@ -116,7 +116,7 @@ edits are dropped and its repeat/recovery messages are sent without a reply link
 All wording and line layout live in `messages.ko.json` (placeholders such as `{failure}`, `{elapsed}`, `{httpStatus}`;
 a line whose placeholder has no value is omitted, and `{ "when": "requests", "lines": [...] }` groups lines).
 Each tick that delivers something reads `gs://<state bucket>/monitor/messages-v1.json`. A missing object uses the
-copy built into the image; an unreadable or invalid one also falls back and logs `monitor_messages_fallback`
+copy built into the image; an unreadable or invalid one also falls back (every layout must keep at least one line that always renders, and a message that still renders empty is sent with the built-in copy) and logs `monitor_messages_fallback`
 with the failing path (never the text). Only a fixed placeholder set is accepted; templates cannot reach state, config or secrets.
 
 ```bash
