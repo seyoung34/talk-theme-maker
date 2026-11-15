@@ -4,6 +4,7 @@ export type Outcome = "healthy" | "failed" | "unknown";
 export type Sample = {
   source: Source; outcome: Outcome; code: string; observationId: string; at: number;
   requests?: number; failures?: number;
+  httpStatus?: number; cfRay?: string;
 };
 export type Policy = {
   failureChecks: number; recoveryChecks: number; cooldownMs: number;

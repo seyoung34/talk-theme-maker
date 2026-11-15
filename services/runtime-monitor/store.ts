@@ -21,6 +21,8 @@ export function validateState(value: unknown): MonitorState {
       || typeof s.code !== "string" || !/^[a-z_]{1,64}$/.test(s.code)
       || typeof s.observationId !== "string" || !/^\d{1,16}$/.test(s.observationId)
       || typeof s.at !== "number" || !Number.isSafeInteger(s.at) || s.at < 0
+      || (s.httpStatus !== undefined && (!Number.isInteger(s.httpStatus) || Number(s.httpStatus) < 100 || Number(s.httpStatus) > 599))
+      || (s.cfRay !== undefined && (typeof s.cfRay !== "string" || !/^[a-f0-9]{16}-[A-Z]{3}$/i.test(s.cfRay)))
       || ["requests", "failures"].some(key => s[key] !== undefined && (typeof s[key] !== "number" || !Number.isFinite(s[key]) || Number(s[key]) < 0))) throw new Error("state_invalid");
   }
   for (const raw of state.pending) {

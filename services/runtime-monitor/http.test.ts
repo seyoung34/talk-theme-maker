@@ -20,3 +20,9 @@ it("redirect responses are rejected without forwarding authorization", async () 
   expect(fetcher).toHaveBeenCalledOnce();
   expect(fetcher.mock.calls[0][1]?.redirect).toBe("manual");
 });
+it("records only the status and a validated Cloudflare ray on an HTTP error", async () => {
+  for (const [ray, expected] of [["a5acfa3dddc919f8-KIX", "a5acfa3dddc919f8-KIX"], ["private@example.com", undefined]] as const) {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("secret body", { status: 500, headers: { "cf-ray": ray } }));
+    await expect(requestData("https://fixture.test", {}, readBoundedJson, fetcher)).rejects.toMatchObject({ code: "http_failed", httpStatus: 500, cfRay: expected });
+  }
+});

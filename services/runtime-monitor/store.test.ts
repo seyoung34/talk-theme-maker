@@ -49,3 +49,11 @@ it("rejects corrupt or oversized incident, lease and message data", () => {
     { ...emptyState(), pending: [{ sample: { source: "public_http", outcome: "failed", code: "private@email", observationId: "1", at: 1 } }] },
   ]) expect(() => validateState(value)).toThrow();
 });
+it("accepts old samples and validates optional HTTP diagnostics", () => {
+  const sample = { source: "public_http", outcome: "failed", code: "http_failed", observationId: "1", at: 1 };
+  expect(validateState({ ...emptyState(), evidence: [sample] }).evidence).toHaveLength(1);
+  expect(validateState({ ...emptyState(), evidence: [{ ...sample, httpStatus: 500, cfRay: "a5acfa3dddc919f8-KIX" }] }).evidence).toHaveLength(1);
+  for (const invalid of [{ httpStatus: 600 }, { httpStatus: 500.1 }, { cfRay: "private@example.com" }]) {
+    expect(() => validateState({ ...emptyState(), evidence: [{ ...sample, ...invalid }] })).toThrow("state_invalid");
+  }
+});

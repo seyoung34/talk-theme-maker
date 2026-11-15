@@ -1,7 +1,16 @@
 export class MonitorHttpError extends Error {
-  constructor(public readonly code: "request_timeout" | "network_failed" | "http_failed" | "invalid_response" | "response_too_large" | "database_unavailable") {
+  constructor(public readonly code: "request_timeout" | "network_failed" | "http_failed" | "invalid_response" | "response_too_large" | "database_unavailable", public readonly httpStatus?: number, public readonly cfRay?: string) {
     super(code);
   }
+}
+
+/** Only fixed-format Cloudflare request identifiers may leave the probe. */
+export function responseDiagnostics(response: Response) {
+  const ray = response.headers.get("cf-ray");
+  return {
+    httpStatus: Number.isInteger(response.status) && response.status >= 100 && response.status <= 599 ? response.status : undefined,
+    cfRay: ray && /^[a-f0-9]{16}-[A-Z]{3}$/i.test(ray) ? ray : undefined,
+  };
 }
 
 // Deadline covers headers AND streaming body. Redirects never forward a credential.
@@ -15,8 +24,9 @@ export async function requestData<T>(
   try {
     const response = await fetcher(url, { ...init, redirect: "manual", signal: controller.signal });
     if (!response.ok && !acceptedStatuses.includes(response.status)) {
-      await response.body?.cancel();
-      throw new MonitorHttpError("http_failed");
+      const { httpStatus, cfRay } = responseDiagnostics(response);
+      await response.body?.cancel().catch(() => undefined);
+      throw new MonitorHttpError("http_failed", httpStatus, cfRay);
     }
     return await read(response);
   } catch (error) {

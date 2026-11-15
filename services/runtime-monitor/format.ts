@@ -146,6 +146,9 @@ export function formatNotification(event: Notification) {
     );
   }
 
+  if (!recovered && event.sample.httpStatus !== undefined) lines.push(`HTTP 상태: ${event.sample.httpStatus}`);
+  if (!recovered && event.sample.cfRay) lines.push(`Cloudflare Ray ID: ${event.sample.cfRay}`);
+
   if (!recovered) lines.push("", `할 일: ${copy.action}`);
 
   lines.push("", `코드: ${event.source} / ${event.sample.code}`, `ID: ${event.id}`);

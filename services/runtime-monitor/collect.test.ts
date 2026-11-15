@@ -47,12 +47,13 @@ describe("bounded HTTP and GraphQL evidence", () => {
   });
   it("probes fixed URLs, sends readiness credential only to its own endpoint and isolates probe failures", async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async url => {
-      if (String(url).endsWith("/api/session")) return new Response("private-provider-error", { status: 500 });
+      if (String(url).endsWith("/api/session")) return new Response("private-provider-error", { status: 500, headers: { "cf-ray": "a5acfa3dddc919f8-KIX" } });
       if (String(url).endsWith("/readiness")) return Response.json({ ready: true });
       return new Response("<html>fixture</html>", { headers: { "content-type": "text/html" } });
     });
     const samples = await collectHealth(config, 1000000, fetcher);
     expect(samples.map(s => s.outcome)).toEqual(["healthy", "failed", "healthy"]);
+    expect(samples[1]).toMatchObject({ httpStatus: 500, cfRay: "a5acfa3dddc919f8-KIX" });
     expect(fetcher.mock.calls.slice(0, 2).every(([, init]) => !new Headers(init?.headers).has("authorization"))).toBe(true);
     expect(new Headers(fetcher.mock.calls[2][1]?.headers).get("authorization")).toContain(config.readinessToken);
     expect(JSON.stringify(samples)).not.toContain("private-provider");
@@ -61,12 +62,21 @@ describe("bounded HTTP and GraphQL evidence", () => {
     for (const reason of ["database_unavailable", "other"]) {
       const fetcher = vi.fn<typeof fetch>().mockImplementation(async url =>
         String(url).endsWith("/readiness")
-          ? Response.json({ ready: false, reason }, { status: 503 })
+          ? Response.json({ ready: false, reason }, { status: 503, headers: { "cf-ray": "a5acfa3dddc919f8-KIX" } })
           : String(url).endsWith("/api/session")
             ? Response.json({ user: null, isAdmin: false })
             : new Response("<html>fixture</html>", { headers: { "content-type": "text/html" } }));
       const samples = await collectHealth(config, 1000000, fetcher);
       expect(samples[2]).toMatchObject({ source: "readiness", outcome: "failed", code: reason === "database_unavailable" ? reason : "invalid_response" });
+      if (reason === "database_unavailable") expect(samples[2]).toMatchObject({ httpStatus: 503, cfRay: "a5acfa3dddc919f8-KIX" });
     }
+  });
+  it("does not keep malformed ray headers or diagnostics for successful probes", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response("secret", { status: 403, headers: { "cf-ray": "sensitive-data" } }));
+    const samples = await collectHealth(config, 1000000, fetcher);
+    expect(samples[0]).toMatchObject({ code: "http_failed", httpStatus: 403 });
+    expect(samples[0].cfRay).toBeUndefined();
+    expect(JSON.stringify(samples)).not.toContain("sensitive-data");
+    expect(JSON.stringify(samples)).not.toContain("secret");
   });
 });

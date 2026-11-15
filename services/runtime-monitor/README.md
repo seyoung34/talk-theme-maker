@@ -130,6 +130,9 @@ No claim this is free; free allowances are shared with existing resources.
 ## Investigation runbook
 
 1. Identify source/phase/UTC time and incident ID. Collector/Telegram/heartbeat faults are not automatically site downtime.
+   For HTTP probe failures, notifications include the response status and a validated Cloudflare Ray ID when
+   available. Timeouts and network failures may have neither; response bodies and arbitrary headers are not included.
+   Use the Ray ID to find the corresponding request in Workers Observability, then inspect its exception details.
 2. GraphQL window in GCS evidence gives invocation candidates. Open Workers Observability Logs/MCP
    for the same service/window; check actual exceededCpu/exceededMemory/outcome, request ID and PR2
    operation/stage/dependency/errorCode. GraphQL does not provide route/Ray IDs in this collector.
