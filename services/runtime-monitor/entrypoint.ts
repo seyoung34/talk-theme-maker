@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
-import { createGcsStore } from "./store.js";
+import { createGcsMessageSource, createGcsStore } from "./store.js";
 import { runTick } from "./runner.js";
 
 // Cloud Run IAM validates Scheduler OIDC BEFORE this handler. Never grant allUsers
@@ -8,6 +8,8 @@ import { runTick } from "./runner.js";
 const enabled = process.env.MONITOR_ENABLED === "1";
 const config = enabled ? readConfig(process.env) : null;
 const store = config ? createGcsStore(config.bucket, config.object) : null;
+// 문구 템플릿은 상태와 같은 버킷의 별도 객체다. 못 읽으면 이미지에 든 원본 문구를 쓴다.
+const messages = config ? createGcsMessageSource(config.bucket, config.messagesObject, value => console.log(JSON.stringify(value))) : undefined;
 const server = createServer(async (request, response) => {
   response.setHeader("content-type", "application/json");
   response.setHeader("cache-control", "no-store");
@@ -18,7 +20,7 @@ const server = createServer(async (request, response) => {
   request.resume();
   if (!config || !store) { response.writeHead(503).end('{"ok":false}'); return; }
   try {
-    const result = await runTick(config, { store });
+    const result = await runTick(config, { store, messages });
     const ok = !result.deliveryFailed && !("queueBackpressure" in result && result.queueBackpressure);
     response.writeHead(ok ? 200 : 503).end(JSON.stringify({ ok, skipped: result.skipped }));
   } catch (error) {

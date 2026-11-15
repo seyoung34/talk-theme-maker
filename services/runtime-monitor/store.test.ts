@@ -49,3 +49,24 @@ it("rejects corrupt or oversized incident, lease and message data", () => {
     { ...emptyState(), pending: [{ sample: { source: "public_http", outcome: "failed", code: "private@email", observationId: "1", at: 1 } }] },
   ]) expect(() => validateState(value)).toThrow();
 });
+it("accepts old samples and validates optional HTTP diagnostics", () => {
+  const sample = { source: "public_http", outcome: "failed", code: "http_failed", observationId: "1", at: 1 };
+  expect(validateState({ ...emptyState(), evidence: [sample] }).evidence).toHaveLength(1);
+  expect(validateState({ ...emptyState(), evidence: [{ ...sample, httpStatus: 500, cfRay: "a5acfa3dddc919f8-KIX" }] }).evidence).toHaveLength(1);
+  for (const invalid of [{ httpStatus: 600 }, { httpStatus: 500.1 }, { cfRay: "private@example.com" }]) {
+    expect(() => validateState({ ...emptyState(), evidence: [{ ...sample, ...invalid }] })).toThrow("state_invalid");
+  }
+});
+it("accepts edit notifications and message bindings, rejecting malformed bindings", () => {
+  const sample = { source: "public_http", outcome: "failed", code: "http_failed", observationId: "2", at: 2 };
+  const incident = { active: true, failures: 3, successes: 0, openedAt: 1, lastQueuedAt: 2, lastObservationId: "2" };
+  const state = { ...emptyState(), incidents: { public_http: { ...incident, reminders: 1, lastRemindedAt: 2 } },
+    threads: [{ source: "public_http", openedAt: 1, messageId: 41 }], pending: [{ id: "public_http:1:update:2", source: "public_http", phase: "update", at: 2, openedAt: 1, sample }] };
+  expect(validateState(state).pending[0].phase).toBe("update");
+  expect(validateState({ ...emptyState(), incidents: { public_http: incident } }).incidents.public_http).toBeDefined();
+  expect(() => validateState({ ...emptyState(), incidents: { public_http: { ...incident, reminders: "1" } } })).toThrow("state_invalid");
+  const thread = { source: "public_http", openedAt: 1, messageId: 41 };
+  for (const threads of [[{ ...thread, messageId: -1 }], [{ ...thread, messageId: 1.5 }], [{ ...thread, source: "other" }], Array(21).fill(thread), {}]) {
+    expect(() => validateState({ ...emptyState(), threads })).toThrow("state_invalid");
+  }
+});

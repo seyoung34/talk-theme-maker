@@ -8,7 +8,7 @@ its env for those values instead of inferring them from this file.
 
 The text below was written when the code was prepared (PR3) and is kept as the design reference.
 User selected GCP Scheduler + Cloud Run and GraphQL aggregates + Observability investigation.
-Changing this code does not redeploy the monitor: rebuild the image and roll out a new Cloud Run revision separately.
+Changing this code does not redeploy the monitor by itself. Code changes ship through the Cloud Build pipeline in DEPLOY.md (no local Docker); text changes ship with `npm run monitor:messages:push` and need no new revision.
 
 ## Boundaries
 
@@ -88,11 +88,46 @@ Enable only after approval, preflight and configuration.
 | MONITOR_ALERTS_ENABLED=1 | Run env, direct Telegram activation |
 | MONITOR_TELEGRAM_BOT_TOKEN / MONITOR_TELEGRAM_CHAT_ID | Run Secrets, existing credentials only by approved binding/reuse |
 | MONITOR_FAILURE_CHECKS / MONITOR_RECOVERY_CHECKS | Required Run env, proposed2/2 |
-| MONITOR_COOLDOWN_SECONDS | Required Run env, proposed300 |
+| MONITOR_COOLDOWN_SECONDS | Required Run env (300). Minimum interval between in-place edits of an open incident message; it no longer sends new messages |
+| MONITOR_REPEAT_MINUTES | Optional Run env, default `30,60,120,240`. Gaps before each new "장애 지속" message; the last gap repeats. Ascending, 5–1440 minutes, at most 8 values |
 | MONITOR_RUNTIME_FAILURE_COUNT / MONITOR_RUNTIME_FAILURE_PERCENT | Required Run env, proposed5/5; invocation estimates, not business conversion/error rate |
 
 Threshold proposals are **unapproved D4**. No Secret values belong in repo, image, command logs or Handoff.
 Examples above are variable names/proposals; this PR does not set them in production.
+
+## Telegram messages
+
+One incident is one conversation thread, not one message per tick:
+
+| Phase | Telegram call | When |
+| --- | --- | --- |
+| opened | new message; its `message_id` is stored in `threads`, keyed by source + openedAt (max 20) | failure threshold reached |
+| update | `editMessageText` of the opened message (silent) | still failing, at most every MONITOR_COOLDOWN_SECONDS |
+| repeat | new message, replying to the opened message | MONITOR_REPEAT_MINUTES schedule (30m, then 60m, 120m, 240m…) |
+| recovered | new message replying to the opened message; after that send is acknowledged, a best-effort edit marks the opened message closed only if it fits before the lease safety margin | recovery threshold reached |
+
+Edits are disposable: only the latest pending edit per incident is kept, none is queued while 16+ notifications wait,
+and a Telegram 400 on an edit (unchanged text, deleted or too-old message) is treated as delivered. 429/5xx are retried like
+sends. An incident opened before this change, or whose opened message was never delivered, has no stored message id; its
+edits are dropped and its repeat/recovery messages are sent without a reply link.
+
+### Editing the text without a rebuild
+
+All wording and line layout live in `messages.ko.json` (placeholders such as `{failure}`, `{elapsed}`, `{httpStatus}`;
+a line whose placeholder has no value is omitted, and `{ "when": "requests", "lines": [...] }` groups lines).
+Each tick that delivers something reads `gs://<state bucket>/monitor/messages-v1.json`. A missing object uses the
+copy built into the image; an unreadable or invalid one also falls back (every layout must keep at least one line that always renders, and a message that still renders empty is sent with the built-in copy) and logs `monitor_messages_fallback`
+with the failing path (never the text). Only a fixed placeholder set is accepted; templates cannot reach state, config or secrets.
+
+```bash
+npm run monitor:messages:check          # same validation as the monitor
+npm run monitor:messages:preview        # every source × phase rendered as Telegram would show it
+npm run monitor:messages:push -- --yes  # upload; applied from the next tick (≤5 min). Without --yes it is a dry run.
+npm run monitor:messages:pull           # compare the uploaded template with the repository copy
+```
+
+The repository file is the source of truth; the Cloud Build pipeline re-uploads it on every monitor deploy
+(see DEPLOY.md). Uploading is a production change.
 
 ## Deployment proposal and independent heartbeat gate
 
@@ -130,6 +165,9 @@ No claim this is free; free allowances are shared with existing resources.
 ## Investigation runbook
 
 1. Identify source/phase/UTC time and incident ID. Collector/Telegram/heartbeat faults are not automatically site downtime.
+   For HTTP probe failures, notifications include the response status and a validated Cloudflare Ray ID when
+   available. Timeouts and network failures may have neither; response bodies and arbitrary headers are not included.
+   Use the Ray ID to find the corresponding request in Workers Observability, then inspect its exception details.
 2. GraphQL window in GCS evidence gives invocation candidates. Open Workers Observability Logs/MCP
    for the same service/window; check actual exceededCpu/exceededMemory/outcome, request ID and PR2
    operation/stage/dependency/errorCode. GraphQL does not provide route/Ray IDs in this collector.

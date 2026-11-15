@@ -6,6 +6,17 @@ import { sources, type Notification, type Sample, type Source } from "./model";
 const firstAlertAt = 1792764302877;
 const minute = 60_000;
 
+it("includes bounded HTTP diagnostics in an incident without changing recovery copy", () => {
+  const failure = event({ source: "public_http", phase: "opened", code: "http_failed" });
+  failure.sample.httpStatus = 500;
+  failure.sample.cfRay = "a5acfa3dddc919f8-KIX";
+  expect(formatNotification(failure)).toContain("HTTP 상태: 500");
+  expect(formatNotification(failure)).toContain("Cloudflare Ray ID: a5acfa3dddc919f8-KIX");
+  const recovered = { ...failure, phase: "recovered" as const };
+  expect(formatNotification(recovered)).not.toContain("HTTP 상태:");
+  expect(formatNotification(recovered)).not.toContain("Ray ID:");
+});
+
 const event = (input: { source: Source; phase: Notification["phase"]; code: string; at?: number; openedAt?: number; requests?: number }): Notification => {
   const at = input.at ?? firstAlertAt;
   const openedAt = input.openedAt ?? firstAlertAt;

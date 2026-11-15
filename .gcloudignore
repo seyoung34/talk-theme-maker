@@ -1,0 +1,12 @@
+# gcloud builds submit 업로드 제외 목록. 감시기 빌드에는 저장소 소스만 필요하다.
+# 로컬 비밀값(.env*)과 빌드 산출물이 Cloud Build 소스 버킷에 올라가지 않게 한다.
+#!include:.gitignore
+.git
+.gitignore
+.env*
+node_modules/
+.next/
+.open-next/
+.wrangler/
+dist/
+docs/

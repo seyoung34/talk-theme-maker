@@ -1,0 +1,161 @@
+{
+  "version": 1,
+  "header": "TalkTheme 독립 감시",
+  "phases": {
+    "opened": "장애 감지",
+    "repeat": "장애 지속",
+    "update": "장애 진행 중",
+    "recovered": "복구 확인",
+    "closed": "종료 · 복구 확인"
+  },
+  "sources": {
+    "public_http": {
+      "target": "사이트 첫 화면",
+      "subject": "사이트 첫 화면이",
+      "icon": "🚨",
+      "failureTitle": "사이트 접속 실패",
+      "recoveryTitle": "사이트 접속 복구",
+      "impact": "가능 — 방문자가 첫 화면을 열지 못할 수 있습니다",
+      "action": "talktheme.shop 직접 접속 → Cloudflare 상태 페이지 → Workers 로그에서 같은 시각 오류 확인",
+      "recovered": "사이트 첫 화면이 다시 정상 응답합니다"
+    },
+    "session_http": {
+      "target": "세션 API",
+      "subject": "세션 API가",
+      "icon": "🚨",
+      "failureTitle": "세션 API 응답 실패",
+      "recoveryTitle": "세션 API 복구",
+      "impact": "가능 — 로그인 상태 확인이 실패할 수 있습니다",
+      "action": "/api/session 직접 호출 → Workers 로그에서 /api/session 오류 확인",
+      "recovered": "세션 API가 다시 정상 응답합니다"
+    },
+    "readiness": {
+      "target": "DB 준비 상태 API",
+      "subject": "DB 준비 상태 API가",
+      "icon": "🚨",
+      "failureTitle": "DB 준비 상태 확인 실패",
+      "recoveryTitle": "DB 준비 상태 복구",
+      "impact": "가능 — DB를 쓰는 기능(Export·결제)이 실패할 수 있습니다",
+      "action": "Supabase 상태 확인 → Workers 로그에서 /api/internal/ops/readiness 오류 확인",
+      "recovered": "DB 준비 상태 API가 다시 정상 응답합니다"
+    },
+    "cloudflare_runtime": {
+      "target": "Worker 실행 통계",
+      "subject": "Worker 실행 통계가",
+      "icon": "⚠️",
+      "failureTitle": "Worker 실행 실패 증가",
+      "recoveryTitle": "Worker 실행 실패 해소",
+      "impact": "가능 — 일부 요청이 실패했을 수 있습니다",
+      "action": "Workers Logs에서 시간창·outcome·operation/stage/dependency를 대조하세요. exceededResources는 CPU 원인 확정이 아닙니다.",
+      "recovered": "Worker 실행 실패 후보가 기준 아래로 내려왔습니다"
+    },
+    "cloudflare_collector": {
+      "target": "Cloudflare 통계 API",
+      "subject": "Cloudflare 통계 API가",
+      "icon": "🟡",
+      "failureTitle": "Cloudflare 통계 수집 실패",
+      "recoveryTitle": "Cloudflare 통계 수집 복구",
+      "impact": "미확인 — 통계 수집·해석 문제입니다. 사이트 접속 장애는 별도 감시 항목이 따로 알립니다",
+      "action": "대기. '복구 확인'이 오면 끝입니다. '장애 지속'이 이어지면 감시기의 Cloudflare API 토큰·권한과 Cloudflare 상태 페이지를 확인하세요.",
+      "recovered": "Cloudflare 통계를 다시 받아옵니다"
+    }
+  },
+  "failures": {
+    "request_timeout": "{subject} 5초 안에 응답하지 않았습니다",
+    "network_failed": "{target}에 네트워크로 연결하지 못했습니다",
+    "http_failed": "{subject} 오류 응답을 보냈습니다",
+    "invalid_response": "{subject} 예상과 다른 응답을 보냈습니다",
+    "response_too_large": "{target}의 응답이 너무 큽니다",
+    "database_unavailable": "DB에 연결하지 못했습니다",
+    "probe_failed": "{target} 확인 중 알 수 없는 오류가 났습니다",
+    "collection_failed": "{target} 확인 중 알 수 없는 오류가 났습니다",
+    "unclassified_outcome": "Cloudflare가 분류할 수 없는 실행 결과를 보고했습니다",
+    "runtime_failure_candidates": "Worker 실행 실패 후보가 기준을 넘었습니다"
+  },
+  "unknownFailure": "{target} 확인 중 알 수 없는 문제가 생겼습니다",
+  "layouts": {
+    "opened": [
+      "{icon} {title}",
+      "{header} · {phase}",
+      "",
+      "무슨 일: {failure}",
+      "사이트 영향: {impact}",
+      "감지: {detectedAt}",
+      { "when": "requests", "lines": [
+        "",
+        "관측 invocation: {requests}, 런타임 오류 후보: {runtimeFailures}",
+        "집계 시간창: {window} (끝 제외)",
+        "GraphQL 표본 집계이며 사용자 수/HTTP 실패율이 아닙니다."
+      ] },
+      "HTTP 상태: {httpStatus}",
+      "Cloudflare Ray ID: {cfRay}",
+      "",
+      "할 일: {action}",
+      "",
+      "코드: {source} / {code}",
+      "ID: {id}"
+    ],
+    "repeat": [
+      "{icon} {title}",
+      "{header} · {phase}",
+      "",
+      "무슨 일: {failure}",
+      "사이트 영향: {impact}",
+      "확인: {checkedAt} · 감지 후 경과 {elapsed}",
+      { "when": "requests", "lines": [
+        "",
+        "관측 invocation: {requests}, 런타임 오류 후보: {runtimeFailures}",
+        "집계 시간창: {window} (끝 제외)",
+        "GraphQL 표본 집계이며 사용자 수/HTTP 실패율이 아닙니다."
+      ] },
+      "HTTP 상태: {httpStatus}",
+      "Cloudflare Ray ID: {cfRay}",
+      "",
+      "할 일: {action}",
+      "",
+      "코드: {source} / {code}",
+      "ID: {id}"
+    ],
+    "update": [
+      "{icon} {title}",
+      "{header} · {phase}",
+      "",
+      "무슨 일: {failure}",
+      "사이트 영향: {impact}",
+      "감지: {detectedAt}",
+      "최근 확인: {checkedAt} · 감지 후 경과 {elapsed}",
+      { "when": "requests", "lines": [
+        "",
+        "관측 invocation: {requests}, 런타임 오류 후보: {runtimeFailures}",
+        "집계 시간창: {window} (끝 제외)",
+        "GraphQL 표본 집계이며 사용자 수/HTTP 실패율이 아닙니다."
+      ] },
+      "HTTP 상태: {httpStatus}",
+      "Cloudflare Ray ID: {cfRay}",
+      "",
+      "할 일: {action}",
+      "",
+      "코드: {source} / {code}",
+      "ID: {id}"
+    ],
+    "recovered": [
+      "✅ {title}",
+      "{header} · {phase}",
+      "",
+      "상태: {recovered}",
+      "감지~복구 확인: {elapsed} ({range})",
+      "",
+      "코드: {source} / {code}",
+      "ID: {id}"
+    ],
+    "closed": [
+      "☑️ {failureTitle} → {title}",
+      "{header} · {phase}",
+      "",
+      "감지~복구 확인: {elapsed} ({range})",
+      "",
+      "코드: {source}",
+      "ID: {id}"
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 import type { Config } from "./config.js";
 import type { Sample } from "./model.js";
-import { MonitorHttpError, object, readBoundedJson, requestData } from "./http.js";
+import { MonitorHttpError, object, readBoundedJson, requestData, responseDiagnostics } from "./http.js";
 
 const query = `query MonitorWorkers($accountTag: string, $start: string, $end: string, $scriptName: string) {
   viewer { accounts(filter: {accountTag: $accountTag}) {
@@ -85,7 +85,10 @@ export async function collectHealth(config: Config, now: number, fetcher: typeof
     } },
     { source: "readiness" as const, path: "/api/internal/ops/readiness", headers: { authorization: `Bearer ${config.readinessToken}` }, read: async (response: Response) => {
       const value = object(await readBoundedJson(response));
-      if (response.status === 503 && value.ready === false && value.reason === "database_unavailable") throw new MonitorHttpError("database_unavailable");
+      if (response.status === 503 && value.ready === false && value.reason === "database_unavailable") {
+        const { httpStatus, cfRay } = responseDiagnostics(response);
+        throw new MonitorHttpError("database_unavailable", httpStatus, cfRay);
+      }
       if (value.ready !== true) throw new MonitorHttpError("invalid_response");
     } },
   ];
@@ -94,7 +97,9 @@ export async function collectHealth(config: Config, now: number, fetcher: typeof
       await requestData(config.origin + probe.path, { headers: probe.headers, cache: "no-store" }, probe.read, fetcher, 5000, probe.source === "readiness" ? [503] : []);
       return { source: probe.source, outcome: "healthy" as const, code: "probe_ok", observationId: String(now), at: now };
     } catch (error) {
-      return { source: probe.source, outcome: "failed" as const, code: error instanceof MonitorHttpError ? error.code : "probe_failed", observationId: String(now), at: now };
+      return { source: probe.source, outcome: "failed" as const, code: error instanceof MonitorHttpError ? error.code : "probe_failed", observationId: String(now), at: now,
+        ...(error instanceof MonitorHttpError && error.httpStatus !== undefined ? { httpStatus: error.httpStatus } : {}),
+        ...(error instanceof MonitorHttpError && error.cfRay ? { cfRay: error.cfRay } : {}) };
     }
   }));
 }
