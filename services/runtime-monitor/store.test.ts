@@ -57,3 +57,14 @@ it("accepts old samples and validates optional HTTP diagnostics", () => {
     expect(() => validateState({ ...emptyState(), evidence: [{ ...sample, ...invalid }] })).toThrow("state_invalid");
   }
 });
+it("accepts edit notifications and message bindings, rejecting malformed bindings", () => {
+  const sample = { source: "public_http", outcome: "failed", code: "http_failed", observationId: "2", at: 2 };
+  const incident = { active: true, failures: 3, successes: 0, openedAt: 1, lastQueuedAt: 2, lastObservationId: "2" };
+  const state = { ...emptyState(), incidents: { public_http: { ...incident, reminders: 1, lastRemindedAt: 2, messageId: 41, messageOpenedAt: 1 } },
+    pending: [{ id: "public_http:1:update:2", source: "public_http", phase: "update", at: 2, openedAt: 1, sample }] };
+  expect(validateState(state).pending[0].phase).toBe("update");
+  expect(validateState({ ...emptyState(), incidents: { public_http: incident } }).incidents.public_http).toBeDefined();
+  for (const invalid of [{ messageId: -1 }, { messageId: 1.5 }, { reminders: "1" }]) {
+    expect(() => validateState({ ...emptyState(), incidents: { public_http: { ...incident, ...invalid } } })).toThrow("state_invalid");
+  }
+});

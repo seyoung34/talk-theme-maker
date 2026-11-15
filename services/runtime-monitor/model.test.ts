@@ -1,17 +1,48 @@
 import { describe, expect, it } from "vitest";
 import { applySamples, emptyState, formatNotification, type Policy, type Sample } from "./model";
-const policy: Policy = { failureChecks: 2, recoveryChecks: 2, cooldownMs: 300000, runtimeFailureCount: 5, runtimeFailureRate: .05 };
+const minute = 60000;
+const policy: Policy = { failureChecks: 2, recoveryChecks: 2, cooldownMs: 5 * minute, repeatScheduleMs: [30 * minute, 60 * minute], runtimeFailureCount: 5, runtimeFailureRate: .05 };
 const sample = (at: number, outcome: Sample["outcome"], source: Sample["source"] = "public_http"): Sample =>
   ({ source, outcome, at, code: "probe_ok", observationId: String(at) });
 describe("independent incident state", () => {
-  it("opens after consecutive failures, repeats only after cooldown, and recovers after consecutive success", () => {
+  it("opens after consecutive failures, edits during cooldown windows, and recovers after consecutive success", () => {
     let state = applySamples(emptyState(), [sample(1, "failed"), sample(2, "failed")], policy);
     expect(state.pending.map(e => e.phase)).toEqual(["opened"]);
-    state = applySamples(state, [sample(3, "failed"), sample(300002, "failed")], policy);
-    expect(state.pending.map(e => e.phase)).toEqual(["opened", "repeat"]);
-    state = applySamples(state, [sample(300003, "healthy"), sample(300004, "healthy")], policy);
-    expect(state.pending.map(e => e.phase)).toEqual(["opened", "repeat", "recovered"]);
+    // 고쳐 쓰기 간격(5분) 전에는 아무것도 쌓지 않는다.
+    state = applySamples(state, [sample(3, "failed"), sample(5 * minute + 1, "failed")], policy);
+    expect(state.pending.map(e => e.phase)).toEqual(["opened"]);
+    state = applySamples(state, [sample(5 * minute + 2, "failed")], policy);
+    expect(state.pending.map(e => e.phase)).toEqual(["opened", "update"]);
+    state = applySamples(state, [sample(5 * minute + 3, "healthy"), sample(5 * minute + 4, "healthy")], policy);
+    // 복구가 들어오면 아직 못 보낸 고쳐 쓰기는 의미가 없다.
+    expect(state.pending.map(e => e.phase)).toEqual(["opened", "recovered"]);
     expect(state.incidents.public_http?.active).toBe(false);
+  });
+  it("sends new repeat messages on the escalating schedule and only edits in between", () => {
+    const at = (m: number) => 2 + m * minute;
+    let state = applySamples(emptyState(), [sample(1, "failed"), sample(2, "failed")], policy);
+    for (let m = 5; m <= 150; m += 5) state = applySamples(state, [sample(at(m), "failed")], policy);
+    const repeats = state.pending.filter(e => e.phase === "repeat").map(e => (e.at - 2) / minute);
+    // 30분 뒤, 그 뒤 60분, 이후 마지막 간격(60분) 반복.
+    expect(repeats).toEqual([30, 90, 150]);
+    // 고쳐 쓰기는 같은 사건에 하나만 대기한다(최신 상태로 대체).
+    expect(state.pending.filter(e => e.phase === "update")).toHaveLength(1);
+    expect(state.pending.at(-1)?.phase).toBe("repeat");
+    expect(state.incidents.public_http).toMatchObject({ reminders: 3, lastRemindedAt: at(150) });
+  });
+  it("resets reminder count and message binding when a new incident opens", () => {
+    let state = applySamples(emptyState(), [sample(1, "failed"), sample(2, "failed")], policy);
+    state.incidents.public_http = { ...state.incidents.public_http!, reminders: 4, messageId: 77, messageOpenedAt: 2 };
+    state = applySamples(state, [sample(3, "healthy"), sample(4, "healthy"), sample(5, "failed"), sample(6, "failed")], policy);
+    expect(state.incidents.public_http).toMatchObject({ active: true, openedAt: 6, reminders: 0 });
+    expect(state.incidents.public_http?.messageId).toBeUndefined();
+  });
+  it("drops edits instead of crowding out incident transitions when the queue is backed up", () => {
+    let state = applySamples(emptyState(), [sample(1, "failed"), sample(2, "failed")], policy);
+    state.pending = Array.from({ length: 16 }, (_, i) => ({ id: String(i), source: "readiness" as const, phase: "opened" as const, at: i, openedAt: i, sample: sample(i, "failed", "readiness") }));
+    state = applySamples(state, [sample(2 + 5 * minute, "failed")], policy);
+    expect(state.pending.some(e => e.phase === "update")).toBe(false);
+    expect(state.incidents.public_http?.lastQueuedAt).toBe(2);
   });
   it("does not count repeated GraphQL windows as separate failures", () => {
     const s = sample(100, "failed", "cloudflare_runtime");

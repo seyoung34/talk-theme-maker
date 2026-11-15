@@ -2,7 +2,7 @@
 
 The pipeline installs dependencies, runs monitor tests and type checking, validates the message template, builds and pushes a commit-tagged image, uploads the template, then updates only the Cloud Run image. Existing service environment and secret references are preserved. Steps run sequentially and stop on failure.
 
-The monitor reads `monitor/messages-v1.json` from the state bucket at runtime and falls back to its built-in copy. Uploading before the image update makes the template available when the new revision starts; text-only edits can instead be applied without rebuilding. After validation, `npm run monitor:messages:push` uploads the template, and the next scheduled tick (every five minutes) reads it. The upload and deployment are separate operations: a failed deployment does not roll back the uploaded text.
+The monitor reads `monitor/messages-v1.json` from the state bucket at runtime and falls back to its built-in copy. Uploading before the image update makes the template available when the new revision starts; text-only edits can instead be applied without rebuilding. After validation, `npm run monitor:messages:push` uploads the template, and the next scheduled tick (every five minutes) reads it. The upload and deployment are separate operations: a failed deployment does not roll back the uploaded text. The repository file is the source of truth: every pipeline run overwrites the bucket copy, so a text edit made directly in the bucket (or with `monitor:messages:push` from an unmerged branch) is replaced at the next monitor deploy.
 
 ## One-time operator setup
 
@@ -49,16 +49,7 @@ gcloud builds submit --config services/runtime-monitor/cloudbuild.yaml --substit
 
 Select the intended project and ensure the submit build's service account has the scoped permissions above; the command deploys to production. Confirm the submitted working tree matches the commit used as the image tag.
 
-There is currently no root `.gcloudignore`. The existing `.gitignore` excludes common local environment files and build output, but an explicit `.gcloudignore` is a follow-up before manual submission: exclude `.env*`, `node_modules`, `.next`, and `.open-next` at minimum, and review the complete upload list with `gcloud meta list-files-for-upload` before submitting. Proposed content (extend it for other local secrets and generated files):
-
-```gitignore
-#!include:.gitignore
-.git
-.env*
-node_modules/
-.next/
-.open-next/
-```
+The repository root `.gcloudignore` keeps local secrets and build output out of the uploaded source (`.env*`, `node_modules`, `.next`, `.open-next`, `.wrangler`, `dist`, `docs`, plus everything in `.gitignore`). Review the upload list with `gcloud meta list-files-for-upload` before the first manual submission.
 
 ## Rollback
 
